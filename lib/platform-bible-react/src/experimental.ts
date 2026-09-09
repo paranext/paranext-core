@@ -13,13 +13,6 @@ import './index.css';
 // ManageBooksDialog moved to extensions/src/platform-scripture/src/manage-books-dialog/ (FN-009).
 // The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
 export {
-  default as ProjectSelector,
-  type ProjectSelectorProject,
-  type ProjectSelectorOpenTab,
-  type ProjectSelectorProjectPair,
-  type ProjectSelectorLocalizedStrings,
-} from './components/advanced/project-selector/project-selector.component';
-export {
   default as ResourcePickerDialog,
   type ResourcePickerDialogProps,
   type ResourcePickerDialogLocalizedStrings,

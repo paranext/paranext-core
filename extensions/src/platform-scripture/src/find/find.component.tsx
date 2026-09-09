@@ -22,6 +22,10 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  ProjectSelector,
+  ProjectSelectorLocalizedStrings,
+  ProjectSelectorOpenTab,
+  ProjectSelectorProject,
   Progress,
   RecentSearches,
   Scope,
@@ -38,10 +42,6 @@ import {
 } from 'platform-bible-react';
 import {
   getAvailableBookIds,
-  ProjectSelector,
-  ProjectSelectorLocalizedStrings,
-  ProjectSelectorOpenTab,
-  ProjectSelectorProject,
   ScopeWithRange,
   summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';

@@ -313,6 +313,16 @@ export {
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
 export type { Scope } from './components/utils/scripture.util';
+export {
+  default as ProjectSelector,
+  type ProjectSelectorProps,
+  type ProjectSelectorProject,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProjectPair,
+  type ProjectSelectorLocalizedStrings,
+  type ProjectSelectorSection,
+  type ProjectSelectorGroupingOption,
+} from './components/advanced/project-selector/project-selector.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

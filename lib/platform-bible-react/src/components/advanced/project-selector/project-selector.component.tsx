@@ -334,6 +334,7 @@ export type ProjectSelectorProps =
   | (CommonProps & {
       mode: 'project';
       selection: ProjectSelection;
+      /** Called when the user picks a project. */
       onChangeSelection: (selection: { projectId: string }) => void;
       /**
        * Trigger label format. `'shortName'` (the default) renders just the selected project's short
@@ -348,6 +349,7 @@ export type ProjectSelectorProps =
   | (CommonProps & {
       mode: 'project-multi';
       selection: ProjectMultiSelection;
+      /** Called when the user changes the set of selected project/scroll-group pairs. */
       onChangeSelection: (selection: { pairs: ProjectSelectorProjectPair[] }) => void;
       /**
        * Called when the user clicks the "Open" button on a bound-but-closed row (or the row
@@ -369,6 +371,7 @@ export type ProjectSelectorProps =
   | (CommonProps & {
       mode: 'projectScrollGroup';
       selection: ProjectScrollGroupSelection;
+      /** Called when the user picks a project for the given scroll group. */
       onChangeSelection: (selection: { projectId: string; scrollGroupId: ScrollGroupId }) => void;
       /**
        * Called when the user picks a not-open-project row OR clicks the "Open" button on a

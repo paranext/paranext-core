@@ -3,17 +3,15 @@ import papi, { logger, network } from '@papi/frontend';
 import { useData, useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
 import {
   useEvent,
-  ScopeSelector,
-  SCOPE_SELECTOR_STRING_KEYS,
-  usePromise,
-} from 'platform-bible-react';
-import {
   ProjectSelector,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
-  type ScopeWithRange,
-} from 'platform-bible-react/experimental';
+  ScopeSelector,
+  SCOPE_SELECTOR_STRING_KEYS,
+  usePromise,
+} from 'platform-bible-react';
+import { type ScopeWithRange } from 'platform-bible-react/experimental';
 import {
   defaultScrRef,
   formatReplacementString,
