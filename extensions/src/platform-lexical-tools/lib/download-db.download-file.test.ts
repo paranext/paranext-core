@@ -5,7 +5,7 @@ import https from 'https';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { downloadFile } from './download-db';
+import { downloadFile, fetchRemoteChecksum } from './download-db';
 
 /**
  * A destination that already holds a good file is the normal state these downloads run against:
@@ -141,15 +141,20 @@ describe('downloadFile', () => {
     expect(fs.existsSync(`${destination}.part`)).toBe(false);
   });
 
-  it('rejects rather than crashing when a redirect hop drops its connection', async () => {
+  it('finishes the download when the hop it abandoned drops its connection afterwards', async () => {
     const dir = makeTempDir();
     const destination = path.join(dir, 'LICENSE.md');
-    fs.writeFileSync(destination, GOOD_TEXT);
+    fs.writeFileSync(destination, 'stale');
 
-    // The redirect response is abandoned by design - nothing pipes it anywhere. Without an error
-    // listener attached BEFORE the redirect branch returns, this `error` is unhandled, which Node
-    // raises process-wide and which would take the whole `postinstall` down rather than failing
-    // this one fetch.
+    // Two things have to be true of an abandoned hop at once, and they pull in opposite directions.
+    // It must keep an `error` listener, because a response with none raises the error process-wide
+    // and takes the whole `postinstall` down rather than failing one fetch. And that listener must
+    // not be the one that abandons the download, because by this point the download belongs to the
+    // NEXT hop: a reset arriving late on the drained socket would otherwise close that hop's write
+    // stream, unlink its staging file and reject a transfer that is still running.
+    //
+    // GitHub raw and LFS 302-redirect on every real download, so this is the ordinary path rather
+    // than a corner: hop 0 is abandoned on every single fetch this function performs.
     stubHttpsGetSequence([
       (response) => {
         Object.assign(response, {
@@ -158,11 +163,12 @@ describe('downloadFile', () => {
         });
         setImmediate(() => response.emit('error', new Error('socket hang up on the redirect')));
       },
+      (response) => {
+        setImmediate(() => response.end(GOOD_TEXT));
+      },
     ]);
 
-    await expect(downloadFile('https://example.invalid/LICENSE.md', destination)).rejects.toThrow(
-      'socket hang up on the redirect',
-    );
+    await downloadFile('https://example.invalid/LICENSE.md', destination);
 
     expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
     expect(fs.existsSync(`${destination}.part`)).toBe(false);
@@ -344,5 +350,51 @@ describe('downloadFile', () => {
 
     expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
     expect(fs.existsSync(`${destination}.part`)).toBe(false);
+  });
+});
+
+/**
+ * The sibling of `downloadFile` on the same `postinstall` path, and the one that decides whether
+ * the database downloads at all: `runDownload` compares its answer against the local file's hash.
+ *
+ * Its redirect handling is a copy of `downloadFile`'s, so the defect that reaches one reaches both.
+ * That is why it is exercised here, beside that harness, rather than described only by the mocked
+ * `DownloadDeps` the orchestrator tests supply.
+ */
+describe('fetchRemoteChecksum', () => {
+  it('returns the checksum from the hop that carries it, through a redirect', async () => {
+    stubHttpsGetSequence([
+      redirectTo('https://media.invalid/lexical.db.xz.sha256'),
+      (response) => {
+        setImmediate(() => response.end(`${'a'.repeat(64)}  lexical.db.xz\n`));
+      },
+    ]);
+
+    await expect(fetchRemoteChecksum('https://example.invalid/lexical.db.xz.sha256')).resolves.toBe(
+      'a'.repeat(64),
+    );
+  });
+
+  it('still answers when the hop it abandoned drops its connection afterwards', async () => {
+    // The same defect `downloadFile` carried, in the function whose answer gates the whole download.
+    // This promise has no `settled` flag, so `reject` left subscribed to the abandoned hop would
+    // settle the fetch as failed while the hop that replaced it is still delivering - and a failed
+    // checksum fetch is not a degraded download, it is `runDownload` hard-failing an `npm install`.
+    stubHttpsGetSequence([
+      (response) => {
+        Object.assign(response, {
+          statusCode: 302,
+          headers: { location: 'https://media.invalid/lexical.db.xz.sha256' },
+        });
+        setImmediate(() => response.emit('error', new Error('socket hang up on the redirect')));
+      },
+      (response) => {
+        setImmediate(() => response.end(`${'b'.repeat(64)}  lexical.db.xz\n`));
+      },
+    ]);
+
+    await expect(fetchRemoteChecksum('https://example.invalid/lexical.db.xz.sha256')).resolves.toBe(
+      'b'.repeat(64),
+    );
   });
 });

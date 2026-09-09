@@ -246,6 +246,20 @@ export function downloadFile(url: string, destination: string): Promise<void> {
         }
         console.log(`Redirecting to ${response.headers.location}`);
 
+        // From here this response is abandoned, and `fail` must not be what hears from it again: a
+        // reset arriving on the drained socket would run `fail` with `settled` still false, closing
+        // the NEXT hop's write stream, unlinking its staging file and rejecting a download that is
+        // still in flight. The listener is SWAPPED rather than removed, because a response with no
+        // `error` listener is precisely the unhandled error described above - Node raises it and
+        // takes the whole `postinstall` down. Nothing is left to deliver on this hop, so the only
+        // thing its failure is worth is a line in the log.
+        response.off('error', fail);
+        response.on('error', (error: Error) =>
+          console.warn(
+            `Ignoring a late error on the abandoned redirect from ${requestUrl}: ${error.message}`,
+          ),
+        );
+
         // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
         response.resume();
         // Resolved against `requestUrl` - the URL of the request this response answered, which is
@@ -424,10 +438,14 @@ async function extractXzFile(filePath: string): Promise<string> {
 /**
  * Fetch the checksum from the remote repository
  *
+ * Exported for the same reason `downloadFile` is: it carries the redirect handling this module's
+ * network behaviour actually turns on, and reaching it only through `DEFAULT_DEPS` leaves that
+ * behaviour testable exclusively by mocking the thing under test.
+ *
  * @param url URL of the checksum file to fetch
  * @returns Promise resolving to the SHA-256 checksum string
  */
-async function fetchRemoteChecksum(url: string): Promise<string> {
+export async function fetchRemoteChecksum(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     // Don't spoil the AI's vibes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -447,6 +465,18 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
           return;
         }
         console.log(`Redirecting to ${response.headers.location}`);
+
+        // Swapped for a log-and-swallow listener before the hop is abandoned, for the reason
+        // `downloadFile`'s copy of this branch documents: `reject` must not stay subscribed to a
+        // response nothing is waiting on. This promise has no `settled` flag to protect it - a late
+        // reset on the drained socket would reject the fetch while the hop that replaced it is
+        // still in flight, and the checksum is what decides whether the database downloads at all.
+        response.off('error', reject);
+        response.on('error', (error: Error) =>
+          console.warn(
+            `Ignoring a late error on the abandoned redirect from ${requestUrl}: ${error.message}`,
+          ),
+        );
 
         // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
         response.resume();
