@@ -231,7 +231,8 @@ describe("openWebView's '?' reuse search", () => {
   test('a view reused in a window the user has not activated is raised without document focus', async () => {
     // A reuse raises an existing tab rather than docking a new one, so it reaches the dock by a
     // different door than a fresh open. Both doors open into the same window, and a raise that
-    // takes document focus focuses the tab's iframe, which asks the browser for the foreground.
+    // takes document focus focuses the tab's iframe — latently, until the window itself is raised,
+    // so an uncontrolled focus here carries the same caret-ownership risk as a fresh open.
     globalThis.wasWindowCreatedWithoutActivation = true;
     const updateWebViewDefinition = vi.fn(() => true);
     const module = await openWebViewOver([testTypeWebView('view-a', 'A')], updateWebViewDefinition);

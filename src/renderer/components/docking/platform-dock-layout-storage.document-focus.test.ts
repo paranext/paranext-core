@@ -79,8 +79,9 @@ describe('taking document focus when a web view is docked', () => {
    * `focusTab` is not only reached from a deliberate focus request. Every mounted panel and every
    * loaded web view asks the window service to focus itself, and that lands here — after the iframe
    * has loaded, so unlike the docking paths it really can reach `contentWindow.focus()`. A window
-   * still waiting for its first activation must not be pulled forward by its own content saying it
-   * has arrived.
+   * still waiting for its first activation must not have its caret claimed by its own content
+   * saying it has arrived — whichever call lands last would otherwise win the caret the moment the
+   * window is raised, regardless of what the raise is actually showing.
    */
   it('focuses the tab when a focus request names it', () => {
     focusTab(instance(localMockDockLayout), TAB_ID);

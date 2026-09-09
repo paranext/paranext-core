@@ -74,8 +74,10 @@ globalThis.windowId = requestedWindowId || undefined;
 globalThis.isMainWindow = searchParams.get(IS_MAIN_WINDOW_QUERY_PARAMETER) !== null;
 
 // Whether main created this window without activating it. Content arriving in such a window must
-// not focus itself, since focusing a tab focuses its web view's iframe and that asks the browser to
-// activate the window.
+// not focus itself: focusing a tab focuses its web view's iframe, and a `focus()` call inside a
+// window that does not hold OS focus only sets that document's active element without raising the
+// window — so whichever call lands last would claim the caret the moment the window is raised,
+// regardless of which tab the raise is actually showing.
 globalThis.wasWindowCreatedWithoutActivation = searchParams.has(
   WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
 );
