@@ -1175,6 +1175,12 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
     expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}0>`);
     expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}1>`);
     expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}2>`);
+    // Literal checks alongside the interpolated ones above: if SEARCH_WHITESPACE_GROUP_PREFIX ever
+    // resolved to undefined (e.g. an unbuilt platform-bible-utils package), the interpolated
+    // checks above would pass vacuously against `(?<undefined0>` — these pin the real value.
+    expect(regex.source).toContain('(?<ws0>');
+    expect(regex.source).toContain('(?<ws1>');
+    expect(regex.source).toContain('(?<ws2>');
     expect(regex.flags).toContain('d');
   });
 
@@ -1188,6 +1194,9 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
   it('keeps a whitespace-only query matching whitespace', () => {
     const regex = buildSearchRegex({ ...baseOptions, searchString: ' ' }, categorizer);
     expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    // Literal check alongside the interpolated one above: pins the real group-name prefix rather
+    // than whatever SEARCH_WHITESPACE_GROUP_PREFIX happens to resolve to.
+    expect(regex.source).not.toContain('(?<ws');
     expect('a b'.match(regex)?.length).toBe(1);
   });
 
@@ -1215,6 +1224,9 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
       categorizer,
     );
     expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    // Literal check alongside the interpolated one above: pins the real group-name prefix rather
+    // than whatever SEARCH_WHITESPACE_GROUP_PREFIX happens to resolve to.
+    expect(regex.source).not.toContain('(?<ws');
     expect(regex.flags).not.toContain('d');
   });
 });
