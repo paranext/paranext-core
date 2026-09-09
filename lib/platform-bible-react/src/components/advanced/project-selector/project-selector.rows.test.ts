@@ -9,6 +9,7 @@ import {
   computeRows,
   partitionAndSort,
   partitionByCustomSections,
+  type ProjectRow,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from './project-selector.rows';
@@ -623,20 +624,25 @@ describe('partitionByCustomSections', () => {
     expect(match).toHaveBeenCalledTimes(1);
   });
 
-  it('matches a project whose id differs only in case from the row id', () => {
-    // Canonical project ids are UPPERCASE; open-tab ids arrive lowercased. The lookup must
-    // normalize or every row falls through to the unmatched section.
-    const list: ProjectSelectorProject[] = [{ id: 'ABC123', shortName: 'A', fullName: 'Apple' }];
-    const rows = computeRows({
-      mode: 'project',
-      projects: list,
-      openTabs: [{ projectId: 'abc123', scrollGroupId: A }],
-      selection: {},
-    });
+  it('normalizes projectId casing when looking up a project in the map', () => {
+    // Callers key the map by canonical project id; a row's projectId may arrive in any casing.
+    // The lookup must normalize or the row falls through to the unmatched section.
+    const project: ProjectSelectorProject = { id: 'ABC123', shortName: 'A', fullName: 'Apple' };
+    const row: ProjectRow = {
+      rowKey: 'test-key',
+      projectId: 'abc123',
+      shortName: 'A',
+      fullName: 'Apple',
+      openGroups: [],
+      isSelected: false,
+      isMuted: false,
+      isBoundButClosed: false,
+      isDisabled: false,
+    };
     const sections = partitionByCustomSections(
-      rows,
+      [row],
       [{ id: 'mine', label: 'Mine', match: (p) => p.id === 'ABC123' }],
-      byId(list),
+      byId([project]),
     );
     expect(sections).toHaveLength(1);
     expect(sections[0].label).toBe('Mine');
