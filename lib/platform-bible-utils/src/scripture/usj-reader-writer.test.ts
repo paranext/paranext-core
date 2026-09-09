@@ -1253,6 +1253,94 @@ describe('Find USJ details for text searches', () => {
       flexibleWhitespaceAtBlockBoundaries: true,
     });
     expect(matches.length).toBe(0);
+
+    // A char marker (\nd) sits inside the same paragraph as its surrounding text, so the two
+    // sides of the marker share one block ancestor: the transition is not a block boundary, and
+    // the gap between "the" and "LORD" is genuinely zero characters either way.
+    const charMarkerUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: ['the', { type: 'char', marker: 'nd', content: ['LORD'] }, ' said'],
+        },
+      ],
+    };
+    const charMarkerDoc = new UsjReaderWriter(charMarkerUsj);
+    const acrossACharMarker = /(the(?<ws0>(?: )?)LORD)/dg;
+    expect(
+      charMarkerDoc.search(acrossACharMarker, { flexibleWhitespaceAtBlockBoundaries: true }).length,
+    ).toBe(0);
+  });
+
+  test('search treats findNearestBlockAncestor as walking past char markers to the enclosing para 3.0', () => {
+    const usjDoc = new UsjReaderWriter(webMatthew5Usj);
+
+    // MAT 5:6's \q2 ("...children of God.") and 5:10's \q1 ("Blessed are those...") both nest
+    // their text one level deeper inside a \wj char marker. The boundary between them is only
+    // visible if findNearestBlockAncestor walks past that char marker to the enclosing para.
+    const acrossCharNestedBoundary = /(of God\.(?<ws0>(?: )?)Blessed are those)/dg;
+    const matches = usjDoc.search(acrossCharNestedBoundary, {
+      flexibleWhitespaceAtBlockBoundaries: true,
+    });
+    expect(matches.length).toBe(1);
+  });
+
+  test('search boundaries reflect the filtered chunk set when markerStylesToInclude skips notes 3.0', () => {
+    const usjDoc = new UsjReaderWriter(webMatthew5Usj);
+
+    // Unfiltered, "for they shall inherit the earth." and "Blessed are those who hunger" are
+    // separated by two notes' worth of text — far more than a single optional group can bridge.
+    const acrossTheNotes = /(inherit the earth\.(?<ws0>(?: )?)Blessed are those who hunger)/dg;
+    expect(
+      usjDoc.search(acrossTheNotes, { flexibleWhitespaceAtBlockBoundaries: true }).length,
+    ).toBe(0);
+
+    // Verse-text-only filtering skips the notes entirely, so the two paragraphs become adjacent
+    // pushed chunks and the boundary between them collapses to zero characters. A minimal,
+    // locally-scoped set is used here rather than the full production verse-text-marker list
+    // (defined further down this describe block): it only needs to include the two paragraph
+    // markers in play and exclude the note markers, to isolate what this test is pinning.
+    const verseTextOnlyMarkers = new Set(['p', 'q1', 'q2']);
+    acrossTheNotes.lastIndex = 0;
+    expect(
+      usjDoc.search(acrossTheNotes, {
+        markerStylesToInclude: verseTextOnlyMarkers,
+        flexibleWhitespaceAtBlockBoundaries: true,
+      }).length,
+    ).toBe(1);
+  });
+
+  test('search applies the NFD-to-original position map before comparing a group offset to a boundary 3.0', () => {
+    // Two paragraphs whose boundary sits right after an NFD-decomposing accented character. In
+    // the NFD-normalized search text, each precomposed 'é' expands to 'e' + a combining mark, so
+    // the boundary position in the normalized text is 2 characters later than its position in the
+    // original text. Only a correct nfdToOriginalMap lookup finds the boundary; comparing the raw
+    // (unmapped) NFD offset against blockBoundaryOffsets — which is built from original-text
+    // offsets — would look up the wrong position and reject the match.
+    const nfdBoundaryUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        { type: 'para', marker: 'p', content: ['résumé.'] },
+        { type: 'para', marker: 'p', content: ['Suite'] },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(nfdBoundaryUsj);
+
+    const acrossAccentedBoundary = /(re\p{Mn}?sume\p{Mn}?\.(?<ws0>(?: )?)Suite)/dgu;
+    const matches = usjDoc.search(acrossAccentedBoundary, {
+      normalizationForm: 'NFD',
+      flexibleWhitespaceAtBlockBoundaries: true,
+    });
+    expect(matches.length).toBe(1);
+    expect(matches[0].text).toBe('résumé.Suite');
   });
 
   test('search terminates on a pattern that can match the empty string 3.0', () => {

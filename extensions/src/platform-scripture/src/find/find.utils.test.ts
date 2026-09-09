@@ -1262,4 +1262,24 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
     expect(regex.source).not.toContain('(?<ws');
     expect(regex.flags).not.toContain('d');
   });
+
+  it('drops a diacritic mark sitting inside an interior whitespace run rather than tolerating it mid-run', () => {
+    // ignoreDiacritics emits one trailing diacritic class after a whole whitespace run, not one
+    // between every whitespace code point in that run — a combining mark placed between two
+    // spaces in the query is dropped from the compiled pattern entirely, so text carrying that
+    // same mark between two spaces is not matched by the resulting run.
+    const regex = buildSearchRegex(
+      {
+        ...baseOptions,
+        searchString: 'a \u0301 b',
+        ignoreDiacritics: true,
+        ignoreWhitespaceDifferences: true,
+      },
+      categorizer,
+    );
+    regex.lastIndex = 0;
+    expect(regex.test('a   b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a \u0301 b')).toBe(false);
+  });
 });

@@ -231,15 +231,22 @@ example, MAT 1 (`\p` boundary between verse 1 and verse 2), whose searched form 
 | -------------------------------------------------------------------- | --------- | --------- |
 | `of Abraham. Abraham became` (what copy-paste from the editor gives) | 0 results | 1 result  |
 | `of Abraham.Abraham became`                                          | 1 result  | 1 result  |
-| `of David,the son` (mid-paragraph, no boundary)                      | 0 results | 0 results |
+| `in to` (mid-paragraph, no boundary — the text only has "into")      | 0 results | 0 results |
 
 `web-matthew-1-and-2.usj` offers 22 further note-free zero-whitespace boundaries if another phrase is
 wanted (`the exile to Babylon.After the exile…`, `fourteen generations.Now the birth…`, and so on).
 
-**Negative control:** the third row. A query missing a space _mid-paragraph_ must return nothing
-before and after — that is what demonstrates the change is boundary-scoped rather than global
-whitespace looseness. (A whole-corpus "no results change" control is **not** available: the bundled
-text has boundary-spanning matches everywhere, so results legitimately change in many places.)
+**Negative control:** the third row. `in to` exists in the bundled WEB text only as the substring
+"into", never as two words separated by a real space, so it is a query the boundary gate can
+actually fail: with the gate engaged, the interior space may only match zero characters at a break
+boundary, and none of the "into" occurrences sit at one, giving 0 results; with the gate removed
+(measured by disabling `flexibleWhitespaceAtBlockBoundaries`), the same zero-length group is
+accepted anywhere and matches all 6 "into" occurrences. A query whose space is missing from the text
+everywhere, at a boundary or not (e.g. `of David,the son`), is not a control: the tolerance only ever
+lets query whitespace shrink to zero, never grow, so that kind of query matches nothing whether or
+not the gate exists, and the test would still pass with the gate deleted. (A whole-corpus "no results
+change" control is **not** available: the bundled text has boundary-spanning matches everywhere, so
+results legitimately change in many places.)
 
 ## Testing
 
@@ -309,29 +316,50 @@ conversion, boundary-spanning matches become available at nearly every paragraph
 project — a broad change, not a narrow one. PT-4336's problem statement is precisely that Replace can
 silently strip USFM markers.
 
-For **paragraph** boundaries the existing guard holds: `usfmChangesStructure`
-(`extensions/src/platform-scripture/src/find/structure-protection.util.ts`) compares the ordered
-structural-marker sequence, and the PDP throws `STRUCTURE_PROTECTED_ERROR`. A replace dropping a `\p`
-or `\q1` is refused with a localized message.
+For **paragraph** boundaries the existing guard holds **when structure protection is engaged**:
+`usfmChangesStructure` (`extensions/src/platform-scripture/src/find/structure-protection.util.ts`)
+compares the ordered structural-marker sequence, and the PDP throws `STRUCTURE_PROTECTED_ERROR`. A
+replace dropping a `\p` or `\q1` is refused with a localized message while the guard is active. It is
+not always active: `platform-scripture-finder-pdpe.model.ts` gates the whole check on
+`isStructureProtected`, which is **off by default in Power mode** — the mode's own test asserts that
+Power mode with the protection setting unset resolves to `false`. So a Power-mode Replace All with
+protection off is unguarded, and this change makes boundary-spanning matches available at nearly
+every paragraph boundary for it to act on — a Power-mode replace will now strip `\p`/`\q1` markers
+noticeably more often than it did before this change, not just at the same rate the pre-existing gap
+already allowed.
 
-**The guard does not hold for notes**, and the spec must not claim otherwise. Structure protection
-keys off `isBlockMarker`, and note markers are not block markers — verified against the built
-library: `isBlockMarker('f')`, `('fe')`, `('x')`, `('fr')`, `('ft')` are all `false`, while `('p')`,
-`('q1')`, `('v')` are `true`. So `extractStructuralMarkers` finds nothing structural in a
-`\f + \fr … \ft … \f*` span and a replace spanning a footnote deletes it silently, with protection
-engaged.
+**This adds no new note-spanning matches only when note text is included in the search.** Structure
+protection keys off `isBlockMarker`, and note markers are not block markers — verified against the
+built library: `isBlockMarker('f')`, `('fe')`, `('x')`, `('fr')`, `('ft')` are all `false`, while
+`('p')`, `('q1')`, `('v')` are `true`. So `extractStructuralMarkers` finds nothing structural in a
+`\f + \fr … \ft … \f*` span, and a replace spanning a footnote deletes it silently, with protection
+engaged — a **pre-existing** data-loss bug, not one this change introduces: the no-separator
+concatenation already produces note-spanning matches today, and excluding `note` from the block-level
+set keeps that gap at its existing size rather than growing it.
 
-That is a **pre-existing** data-loss bug, not one this change introduces: the no-separator
-concatenation already produces note-spanning matches today. This design deliberately keeps it that
-way by excluding `note` from the block-level set, so it adds no new note-spanning matches. The gap
-itself is filed as a follow-up and belongs to PT-4336's problem space.
+That claim does not extend to _Verse text only_ (`markerStylesToInclude` filtering note content out
+of the searched text) — the very setting this design's [Known limitations](#known-limitations)
+section recommends as a workaround for note-terminated boundaries. Excluding `note` from the
+block-level set only stops a note _transition_ from being counted as a boundary; once notes are
+removed from the searched text entirely, the paragraph boundary on either side of where the note used
+to sit becomes a **zero-gap** boundary, and a match spanning it covers the note in the underlying
+USFM. Measured: `inherit the earth. Blessed` against `web-matthew-5-section-header.usj` returns 1
+match under _Verse text only_ filtering (0 without it). The gap this exposes is narrower than it
+looks, though: every such match also crosses the paragraph's own `\p`/`\q1` boundary, and
+`isBlockMarker` is `true` for both, so structure protection — when engaged — refuses the replace on
+that ground. The gap made newly _reachable_ by this change is a match a user can now construct that
+spans a footnote; the note content inside that match was never _protected_ by structure protection in
+the first place, engaged or not.
 
-**Decision:** accept the increase at paragraph boundaries and rely on the guard that covers them,
-with the Layer 4 test asserting that refusal, and an explicit callout in the PR description — both
-the breadth and the note gap — so a human reviewer scrutinizes this deliberately rather than having
-to spot it in the diff.
+**Decision:** accept the increase at paragraph boundaries, rely on the guard that covers them when
+structure protection is engaged, and accept that Power mode with protection off (the default) has no
+guard at all — with the Layer 4 test asserting the engaged-guard refusal, and an explicit callout in
+the PR description — the breadth, the Power-mode-default gap, the _Verse text only_ note-boundary
+reachability, and the pre-existing note gap itself — so a human reviewer scrutinizes all four
+deliberately rather than having to spot them in the diff.
 
-**Note:** Replace is removed from the Simple UI (NN-1E), so this exposure is Power-mode only.
+**Note:** Replace is removed from the Simple UI (NN-1E), so the guarded case is Power-mode-with-
+protection-on only; Power mode's default (protection off) has no guard regardless of this change.
 
 ## Known limitations
 

@@ -2354,6 +2354,46 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
       expect.objectContaining({ flexibleWhitespaceAtBlockBoundaries: false }),
     );
   });
+
+  it('runs the real buildSearchRegex/UsjReaderWriter.search pipeline across a paragraph boundary and rejects a false mid-word gap', async () => {
+    // Compact (no inter-element whitespace) USX: a pretty-printed USX inserts "\n  " text nodes
+    // between elements, which would fill the paragraph-boundary gap this test needs and defeat
+    // the assertion below regardless of whether the boundary-whitespace option works.
+    const COMPACT_TWO_PARAGRAPH_USX =
+      '<?xml version="1.0" encoding="utf-8"?><usx version="3.0">' +
+      '<book code="MAT" style="id">Matthew</book>' +
+      '<chapter number="1" style="c" sid="MAT 1"/>' +
+      '<para style="p"><verse number="1" style="v" sid="MAT 1:1"/>The son of Abraham.' +
+      '<verse eid="MAT 1:1"/></para>' +
+      '<para style="p"><verse number="2" style="v" sid="MAT 1:2"/>Abraham was the father.' +
+      '<verse eid="MAT 1:2"/></para>' +
+      '<chapter eid="MAT 1"/></usx>';
+    const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+      createSingleUsxMockPdps(COMPACT_TWO_PARAGRAPH_USX),
+    );
+
+    // Concatenated text is "The son of Abraham.Abraham was the father.". The query's interior
+    // space sits exactly at the paragraph boundary, so a plain (non-regex) search through the
+    // full PDPE pipeline must find it.
+    const bridged = await pollFindJobTexts(boundaryEngine, {
+      searchString: 'of Abraham. Abraham',
+      useRegex: false,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+    expect(bridged.length).toBe(1);
+
+    // "Abraham was" is one continuous text node with no boundary inside it, so a space inserted
+    // mid-word is not a break boundary and must not be tolerated even though it is nominally
+    // interior to the query.
+    const midWord = await pollFindJobTexts(boundaryEngine, {
+      searchString: 'Abraha m was',
+      useRegex: false,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+    expect(midWord.length).toBe(0);
+  });
 });
 
 describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {

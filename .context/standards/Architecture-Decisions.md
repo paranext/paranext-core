@@ -646,13 +646,26 @@ step, no automation. Just a record.
   matches become available at nearly every paragraph boundary in every project — a broad change, not
   a narrow one. Replace's structure protection (`usfmChangesStructure`, keyed off `isBlockMarker`)
   covers a match that spans a **paragraph** marker (`isBlockMarker('p')`, `('q1')`, `('v')` are all
-  `true`): such a replace is refused with `STRUCTURE_PROTECTED_ERROR`. It does **not** cover a match
-  that spans a **note** (`isBlockMarker('f')`, `('fe')`, `('x')`, `('fr')`, `('ft')` are all `false`),
-  so a replace spanning a footnote can silently delete it while structure protection is engaged. This
-  is a pre-existing gap — the no-separator concatenation already produced note-spanning matches
-  before this change — and this decision does not widen it: `note` is excluded from the block-level
-  set precisely so it adds no new note-spanning matches. The gap itself is filed as a follow-up
-  outside this work.
+  `true`): such a replace is refused with `STRUCTURE_PROTECTED_ERROR` **while the guard is engaged**.
+  It is not always engaged: `platform-scripture-finder-pdpe.model.ts` gates the whole check on
+  `isStructureProtected`, which is off by default in Power mode, so a Power-mode Replace All with
+  protection off is unguarded and will strip `\p`/`\q1` markers at the newly-common boundary matches
+  with nothing to stop it.
+
+  The guard does **not** cover a match that spans a **note** (`isBlockMarker('f')`, `('fe')`, `('x')`,
+  `('fr')`, `('ft')` are all `false`), so a replace spanning a footnote can silently delete it while
+  structure protection is engaged. This is a pre-existing gap — the no-separator concatenation
+  already produced note-spanning matches before this change — and excluding `note` from the
+  block-level set keeps that gap at its existing size rather than growing it, **provided note text is
+  part of the searched text**. Under *Verse text only* filtering (`markerStylesToInclude` excluding
+  note styles), a paragraph boundary that used to have a note's worth of gap on one side becomes a
+  zero-gap boundary once the note is filtered out of the searched text, so a match newly spans the
+  note in the underlying USFM (measured: `inherit the earth. Blessed` against
+  `web-matthew-5-section-header.usj` returns 1 match under verse-text-only filtering, 0 without it).
+  This does not create a *new* protection failure, since such a match also crosses the paragraph's own
+  `\p`/`\q1` boundary and structure protection — when engaged — refuses it on that ground regardless;
+  it makes a match spanning a footnote newly *reachable* by an ordinary Find query, not newly
+  unprotected. The underlying note-boundary gap itself is filed as a follow-up outside this work.
 - **Source:** PT-3609, `docs/specs/2026-09-09-find-block-boundary-whitespace-design.md`.
 
 ## adr-find-follows-editor-to-read-only: Find follows the editor onto read-only resources, with replace withheld

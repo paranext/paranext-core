@@ -1713,6 +1713,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       markerStylesOrSearchOptions instanceof Set
         ? undefined
         : markerStylesOrSearchOptions?.normalizationForm;
+    const isBoundaryFilterOn =
+      markerStylesOrSearchOptions instanceof Set
+        ? false
+        : !!markerStylesOrSearchOptions?.flexibleWhitespaceAtBlockBoundaries;
     const retVal: UsjSearchResult[] = [];
     if (this.usj.content.length === 0) return retVal;
 
@@ -1776,11 +1780,15 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             }
           }
 
-          const blockAncestor = UsjReaderWriter.findNearestBlockAncestor(workingStack);
-          if (hasPushedAChunk && blockAncestor !== previousBlockAncestor)
-            blockBoundaryOffsets.add(currentIndex);
-          previousBlockAncestor = blockAncestor;
-          hasPushedAChunk = true;
+          // Block-boundary bookkeeping is pure overhead for a caller that never asked for the
+          // filter, so skip it entirely when the option is off.
+          if (isBoundaryFilterOn) {
+            const blockAncestor = UsjReaderWriter.findNearestBlockAncestor(workingStack);
+            if (hasPushedAChunk && blockAncestor !== previousBlockAncestor)
+              blockBoundaryOffsets.add(currentIndex);
+            previousBlockAncestor = blockAncestor;
+            hasPushedAChunk = true;
+          }
 
           textChunks.push(node);
           fullTextIndexMap.set(currentIndex, {
@@ -1811,14 +1819,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         : undefined;
     const searchText = nfdToOriginalMap ? fullText.normalize('NFD') : fullText;
 
-    const isBoundaryFilterOn =
-      markerStylesOrSearchOptions instanceof Set
-        ? false
-        : !!markerStylesOrSearchOptions?.flexibleWhitespaceAtBlockBoundaries;
-    // Group offsets require the `d` flag. Rebuilding resets `lastIndex`, so only do it for a search
-    // that asked for the filter — a caller's own regex must be left exactly as they compiled it.
+    // Group offsets require the `d` flag, but only a pattern that actually carries a whitespace
+    // group can ever be rejected by the boundary filter — a plain pattern with no such group would
+    // pay for a rebuild (and the `d`-flag bookkeeping V8 does on every match) for nothing.
+    // Rebuilding also resets `lastIndex`, so it must not happen for a search that didn't ask for
+    // the filter — a caller's own regex must be left exactly as they compiled it.
+    const hasWhitespaceGroup = regex.source.includes(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
     const searchRegex =
-      isBoundaryFilterOn && !regex.flags.includes('d')
+      isBoundaryFilterOn && hasWhitespaceGroup && !regex.flags.includes('d')
         ? new RegExp(regex.source, `${regex.flags}d`)
         : regex;
 
