@@ -84,6 +84,26 @@ export type ProjectSelectorProject = {
   lastUsedAt?: number;
 };
 
+/**
+ * One consumer-defined section of the project list, used when the active grouping is `'custom'`.
+ * Sections are evaluated in the order supplied and a project lands in the first one whose `match`
+ * accepts it, so a trailing `match: () => true` reads as "everything else".
+ */
+export type ProjectSelectorSection = {
+  /** Stable unique key. Becomes the rendered section's React key. */
+  id: string;
+  /** Localized section heading. Omit for a section with no header row. */
+  label?: string;
+  /** Whether a project belongs in this section. Called once per project, never per row. */
+  match: (project: ProjectSelectorProject) => boolean;
+  /**
+   * Row order within this section. Omit to use the selector's canonical order (alphabetical by
+   * `shortName`). Supply one when the section's meaning implies an order the selector cannot know
+   * — a "Recent" section is the motivating case, since alphabetical order defeats its purpose.
+   */
+  compare?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
+};
+
 /** A project that is currently open in a specific scroll group. */
 export type ProjectSelectorOpenTab = {
   projectId: string;
@@ -385,17 +405,21 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 
 export type RowSection = {
   /**
-   * 'flat' means no section header (grouping toggle off). 'versification', 'language', 'type', and
-   * 'lastUsed' are custom-labeled sections whose header comes from `label`; the priority
-   * versification group (typically the active project's versification) is pinned to the top by
+   * 'flat' means no section header (grouping off). 'versification', 'language', 'type', 'lastUsed'
+   * and 'custom' are labeled sections whose header comes from `label`; the priority versification
+   * group (typically the active project's versification) is pinned to the top by
    * `partitionByVersification`.
    */
-  kind: 'openTabs' | 'other' | 'flat' | 'versification' | 'language' | 'type' | 'lastUsed';
+  kind: 'openTabs' | 'other' | 'flat' | 'versification' | 'language' | 'type' | 'lastUsed' | 'custom';
   rows: ProjectRow[];
   /**
-   * Set on `versification`, `language`, `type`, and `lastUsed` sections — the localized label to
-   * render as the section header. `undefined` for `flat`, `openTabs`, and `other` (whose labels
-   * come from ProjectSelector's strings map instead).
+   * Stable identity for the section, used as its React key. Set on `custom` sections, where two
+   * sections can share a `kind` AND an absent `label` and would otherwise collide.
+   */
+  id?: string;
+  /**
+   * The localized label to render as the section header. `undefined` for `flat`, `openTabs` and
+   * `other`, whose headings come from ProjectSelector's strings map instead.
    */
   label?: string;
   /** Set on `versification` sections — true for the consumer-supplied priority bucket. */
@@ -626,6 +650,88 @@ export function partitionByLastUsed(
   if (recent.length > 0) sections.push({ kind: 'lastUsed', rows: recent, label: recentLabel });
   if (other.length > 0) sections.push({ kind: 'lastUsed', rows: other, label: otherLabel });
   return sections;
+}
+
+/** Section id for the trailing bucket holding rows no caller-supplied section claimed. */
+const UNMATCHED_SECTION_ID = '__unmatched__';
+
+/**
+ * Bucket rows into caller-supplied sections, in the order supplied. A project lands in the first
+ * section whose `match` accepts it; rows whose project matched nothing (or is absent from
+ * `projectsById`) collect into a single trailing unlabeled section. Sections that end up empty are
+ * omitted.
+ *
+ * `match` is evaluated once per *project*, and the verdict applies to every row that project
+ * produced — `project-multi` and `projectScrollGroup` fan one project out into a row per scroll
+ * group plus synthetic bound-but-closed rows, and those must not be split across sections.
+ *
+ * `projectsById` must be keyed by `normalizeProjectId(project.id)`: canonical project ids are
+ * uppercase while open-tab ids can arrive lowercased, so an un-normalized lookup silently drops
+ * every row into the unmatched bucket.
+ */
+export function partitionByCustomSections(
+  rows: readonly ProjectRow[],
+  sections: readonly ProjectSelectorSection[],
+  projectsById: ReadonlyMap<string, ProjectSelectorProject>,
+): RowSection[] {
+  if (sections.length === 0) {
+    return [{ kind: 'flat', rows: [...rows].sort(compareRows) }];
+  }
+
+  // Resolve each project once, then reuse the verdict for all of its rows.
+  const sectionIndexByProjectKey = new Map<string, number>();
+  const resolveSectionIndex = (key: string): number => {
+    const cached = sectionIndexByProjectKey.get(key);
+    if (cached !== undefined) return cached;
+    const project = projectsById.get(key);
+    const index = project ? sections.findIndex((section) => section.match(project)) : -1;
+    sectionIndexByProjectKey.set(key, index);
+    return index;
+  };
+
+  const buckets: ProjectRow[][] = sections.map(() => []);
+  const unmatched: ProjectRow[] = [];
+  rows.forEach((row) => {
+    const index = resolveSectionIndex(normalizeProjectId(row.projectId));
+    if (index < 0) unmatched.push(row);
+    else buckets[index].push(row);
+  });
+
+  const sortRows = (bucket: ProjectRow[], section: ProjectSelectorSection): ProjectRow[] => {
+    const { compare } = section;
+    if (!compare) return [...bucket].sort(compareRows);
+    return [...bucket].sort((a, b) => {
+      const projectA = projectsById.get(normalizeProjectId(a.projectId));
+      const projectB = projectsById.get(normalizeProjectId(b.projectId));
+      // A row in this bucket always resolved to a project, but guard the lookup anyway so a
+      // caller's compare never receives undefined.
+      if (!projectA || !projectB) return compareRows(a, b);
+      const byCaller = compare(projectA, projectB);
+      // Same project in two scroll groups compares equal; fall back to the canonical tie-break
+      // so those rows keep a stable, predictable order.
+      return byCaller !== 0 ? byCaller : compareRows(a, b);
+    });
+  };
+
+  const result: RowSection[] = [];
+  sections.forEach((section, index) => {
+    const bucket = buckets[index];
+    if (bucket.length === 0) return;
+    result.push({
+      kind: 'custom',
+      id: section.id,
+      rows: sortRows(bucket, section),
+      label: section.label,
+    });
+  });
+  if (unmatched.length > 0) {
+    result.push({
+      kind: 'custom',
+      id: UNMATCHED_SECTION_ID,
+      rows: [...unmatched].sort(compareRows),
+    });
+  }
+  return result;
 }
 
 // #endregion

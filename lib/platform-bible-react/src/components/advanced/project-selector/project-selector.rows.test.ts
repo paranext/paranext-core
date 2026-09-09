@@ -3,11 +3,12 @@
 // just-asserted value. Both are idiomatic for test code; the lint rule's strict prohibition fits
 // production code better than test fixtures.
 /* eslint-disable no-type-assertion/no-type-assertion */
-import { describe, it, expect } from 'vitest';
-import type { ScrollGroupId } from 'platform-bible-utils';
+import { describe, it, expect, vi } from 'vitest';
+import { normalizeProjectId, type ScrollGroupId } from 'platform-bible-utils';
 import {
   computeRows,
   partitionAndSort,
+  partitionByCustomSections,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from './project-selector.rows';
@@ -520,5 +521,177 @@ describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
     const sections = partitionAndSort(rows, true);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
+  });
+});
+
+describe('partitionByCustomSections', () => {
+  const byId = (list: ProjectSelectorProject[]) =>
+    new Map(list.map((p) => [normalizeProjectId(p.id), p]));
+
+  const rowsFor = (list: ProjectSelectorProject[], tabs: ProjectSelectorOpenTab[] = []) =>
+    computeRows({ mode: 'project', projects: list, openTabs: tabs, selection: {} });
+
+  it('renders sections in the supplied order, not alphabetically', () => {
+    const list: ProjectSelectorProject[] = [
+      { id: 'z', shortName: 'Z', fullName: 'Zebra' },
+      { id: 'a', shortName: 'A', fullName: 'Apple' },
+    ];
+    const sections = partitionByCustomSections(
+      rowsFor(list),
+      [
+        { id: 'second', label: 'Second', match: (p) => p.id === 'a' },
+        { id: 'first', label: 'First', match: () => true },
+      ],
+      byId(list),
+    );
+    expect(sections.map((s) => s.label)).toEqual(['Second', 'First']);
+  });
+
+  it('assigns each project to the first matching section', () => {
+    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+    const sections = partitionByCustomSections(
+      rowsFor(list),
+      [
+        { id: 'one', label: 'One', match: () => true },
+        { id: 'two', label: 'Two', match: () => true },
+      ],
+      byId(list),
+    );
+    expect(sections).toHaveLength(1);
+    expect(sections[0].label).toBe('One');
+  });
+
+  it('collects unmatched rows into a trailing unlabeled section', () => {
+    const list: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'Apple' },
+      { id: 'b', shortName: 'B', fullName: 'Banana' },
+    ];
+    const sections = partitionByCustomSections(
+      rowsFor(list),
+      [{ id: 'only-a', label: 'Only A', match: (p) => p.id === 'a' }],
+      byId(list),
+    );
+    expect(sections).toHaveLength(2);
+    expect(sections[0].label).toBe('Only A');
+    expect(sections[1].label).toBeUndefined();
+    expect(sections[1].rows.map((r) => r.shortName)).toEqual(['B']);
+  });
+
+  it('elides sections that match no rows', () => {
+    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+    const sections = partitionByCustomSections(
+      rowsFor(list),
+      [
+        { id: 'empty', label: 'Empty', match: () => false },
+        { id: 'all', label: 'All', match: () => true },
+      ],
+      byId(list),
+    );
+    expect(sections.map((s) => s.label)).toEqual(['All']);
+  });
+
+  it('falls back to a single flat section when no sections are supplied', () => {
+    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+    const sections = partitionByCustomSections(rowsFor(list), [], byId(list));
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+  });
+
+  it('applies one match verdict to every row a project produces', () => {
+    // project-multi fans one project out into one row per scroll group. All of those rows must
+    // land in the same section, and `match` must be consulted once per project, not per row.
+    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+    const tabs: ProjectSelectorOpenTab[] = [
+      { projectId: 'a', scrollGroupId: A },
+      { projectId: 'a', scrollGroupId: B },
+    ];
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: list,
+      openTabs: tabs,
+      selection: { pairs: [] },
+    });
+    expect(rows.length).toBeGreaterThan(1);
+    const match = vi.fn(() => true);
+    const sections = partitionByCustomSections(
+      rows,
+      [{ id: 'all', label: 'All', match }],
+      byId(list),
+    );
+    expect(sections).toHaveLength(1);
+    expect(sections[0].rows).toHaveLength(rows.length);
+    expect(match).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches a project whose id differs only in case from the row id', () => {
+    // Canonical project ids are UPPERCASE; open-tab ids arrive lowercased. The lookup must
+    // normalize or every row falls through to the unmatched section.
+    const list: ProjectSelectorProject[] = [{ id: 'ABC123', shortName: 'A', fullName: 'Apple' }];
+    const rows = computeRows({
+      mode: 'project',
+      projects: list,
+      openTabs: [{ projectId: 'abc123', scrollGroupId: A }],
+      selection: {},
+    });
+    const sections = partitionByCustomSections(
+      rows,
+      [{ id: 'mine', label: 'Mine', match: (p) => p.id === 'ABC123' }],
+      byId(list),
+    );
+    expect(sections).toHaveLength(1);
+    expect(sections[0].label).toBe('Mine');
+  });
+
+  it('uses a per-section compare when supplied, overriding alphabetical order', () => {
+    // The canonical order is alphabetical by shortName, which would render a "Recent" section
+    // alphabetically — useless. A section may impose its own order.
+    const list: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'Apple' },
+      { id: 'b', shortName: 'B', fullName: 'Banana' },
+      { id: 'c', shortName: 'C', fullName: 'Cherry' },
+    ];
+    const recency = ['c', 'a', 'b'];
+    const sections = partitionByCustomSections(
+      rowsFor(list),
+      [
+        {
+          id: 'recent',
+          label: 'Recent',
+          match: () => true,
+          compare: (x, y) => recency.indexOf(x.id) - recency.indexOf(y.id),
+        },
+      ],
+      byId(list),
+    );
+    expect(sections[0].rows.map((r) => r.shortName)).toEqual(['C', 'A', 'B']);
+  });
+
+  it('gives two unlabeled sections distinct ids so React keys stay stable', () => {
+    const list: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'Apple' },
+      { id: 'b', shortName: 'B', fullName: 'Banana' },
+    ];
+    const sections = partitionByCustomSections(
+      rowsFor(list),
+      [{ id: 'just-a', match: (p) => p.id === 'a' }],
+      byId(list),
+    );
+    // One caller-supplied unlabeled section plus the trailing unmatched one.
+    expect(sections).toHaveLength(2);
+    expect(sections[0].label).toBeUndefined();
+    expect(sections[1].label).toBeUndefined();
+    expect(sections[0].id).not.toBe(sections[1].id);
+  });
+
+  it('keeps rows whose project is missing from the map in the unmatched section', () => {
+    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+    const sections = partitionByCustomSections(
+      rowsFor(list),
+      [{ id: 'all', label: 'All', match: () => true }],
+      new Map(), // deliberately empty
+    );
+    expect(sections).toHaveLength(1);
+    expect(sections[0].label).toBeUndefined();
+    expect(sections[0].rows).toHaveLength(1);
   });
 });
