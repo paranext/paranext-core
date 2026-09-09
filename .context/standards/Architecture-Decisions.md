@@ -475,7 +475,8 @@ step, no automation. Just a record.
   `paratext-10-studio` becomes the sole distributor, which makes the notices document it packs
   (this repository's, describing this repository's shipping set rather than the patched clone's)
   the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
-  public audience.
+  public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
+  generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
@@ -1838,6 +1839,41 @@ step, no automation. Just a record.
   (checked-in canonical texts; a regex import scan; a copyleft denylist), none of which reached
   `main`.
 
+## adr-notices-overlay-for-downstream-products: A downstream product runs this generator with its own policy overlay
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** `adr-core-does-not-distribute-a-binary` made `paratext-10-studio` the sole distributor
+  of anything built from this source, and the document its installers packed was this repository's,
+  describing this repository's shipping set rather than the patched clone's: it named
+  Platform.Bible, said of itself that it was "a reference, not the notices for any shipped product",
+  and had no row for the Mercurial builds, the `hgWindows-6.3.1` package or the private extensions
+  that clone adds. `adr-package-verifies-the-document-not-the-shipping-set` had deferred exactly
+  this: revisit if notices generation ever moves downstream.
+- **Decision:** The generator accepts a second policy file from `NOTICES_POLICY_OVERLAY`, merged
+  over the committed one with a key collision refused, so a downstream repository's determinations
+  live beside its build rather than in a patch to this file. The overlay carries a `product` block,
+  checked against `electron-builder.json5`'s `productName`, that switches the product-specific
+  prose; a `separatePrograms` table for third-party programs redistributed as separate executables,
+  whose entries are reviewed determinations pinned to evidence in the tree; and an
+  `externalExtensions` table that records, as a stated omission, extension zips packed from another
+  repository. This repository ships both tables empty and its own document is byte-identical.
+- **Alternatives:** A downstream generator - rejected: it would either duplicate this pipeline or
+  depend on its internal module API across a clone boundary. Carrying the downstream entries in
+  the downstream patch to this policy file - rejected: every change to this file would conflict
+  with it. A hand-maintained addendum downstream - rejected on
+  `adr-notices-derived-from-what-ships`.
+- **Consequences:** `paratext-10-studio` generates and commits its own pair, copies it over this
+  repository's in its clone before packaging, and runs `--verify-shipping-set` on every platform
+  and `--verify` on Linux against its own lock. The overlay cannot extend the committed corpus
+  index, so an identifier a downstream entry needs (`PSF-2.0`, `OpenSSL` and `blessing` today) is
+  added to `allowed` here.
+  The omission direction for a separate program has no generic source: a copyleft override with no
+  `separateProgram` link still blocks, and a program added by any other route with no entry is the
+  gap PT-4560 records for static content. **Revisit** when the extension template emits module
+  manifests, which is what lets `externalExtensions` become `itemized: true`.
+- **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
 - **Formerly:** ADR-0017
@@ -1925,7 +1961,10 @@ step, no automation. Just a record.
   the committed lock) rather than as a derivation from that build's own graph; the derivation is
   checked on the Linux leg of `test.yml` and at release time in `publish.yml` and
   `package-main.yml`. **Revisit** if notices generation ever moves into `paratext-10-studio`, which
-  would give the patched build a shipping set of its own to verify against.
+  would give the patched build a shipping set of its own to verify against. **Amended 2026-09-09:**
+  revisited by adr-notices-overlay-for-downstream-products - the patched build now has a lock of its
+  own, and its packaging runs `--verify-shipping-set` against it; this repository's `package` script
+  keeps `--verify-document` for the reason above.
 - **Source:** the multi-agent review of #2654, finding 22.
 
 ## adr-packaged-extensions-are-discovered: `InstalledExtensions.packaged` reports discovered extensions, not activated ones
