@@ -502,3 +502,49 @@ describe('customSections', () => {
     expect(screen.getByText('Your projects')).toBeInTheDocument();
   });
 });
+
+describe('renderProjectIndicator', () => {
+  it('renders projects and resources distinguishably from data alone', async () => {
+    const user = setupUser();
+    const mixed: ProjectSelectorProject[] = [
+      { id: 'p1', shortName: 'P1', fullName: 'A project', type: 'Standard' },
+      { id: 'r1', shortName: 'R1', fullName: 'A resource', type: 'ScriptureResource' },
+    ];
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        renderProjectIndicator={(project) => (
+          <span data-testid={`indicator-${project.type}`} aria-hidden />
+        )}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByTestId('indicator-Standard')).toBeInTheDocument();
+    expect(screen.getByTestId('indicator-ScriptureResource')).toBeInTheDocument();
+  });
+
+  it('renders no indicator element when the prop is absent', async () => {
+    const user = setupUser();
+    const projects: ProjectSelectorProject[] = [
+      { id: 'p1', shortName: 'P1', fullName: 'A project', type: 'Standard' },
+      { id: 'r1', shortName: 'R1', fullName: 'A resource', type: 'ScriptureResource' },
+    ];
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.queryByTestId(/^indicator-/)).not.toBeInTheDocument();
+  });
+});

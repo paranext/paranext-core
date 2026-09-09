@@ -4,6 +4,7 @@
 /* eslint-disable no-type-assertion/no-type-assertion */
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import { BookOpen, FileText } from 'lucide-react';
 import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   ProjectSelector,
@@ -711,6 +712,43 @@ export const RestrictedGroupingOptions: Story = {
       description: {
         story:
           '`availableGroupings={["language", "type"]}` narrows the filter menu to just those two. `defaultGrouping="type"` opens with type-grouping active. Pass this when the calling surface doesn\'t have data for "By open tabs" or "By last used", or when you want the picker constrained to a specific mental model.',
+      },
+    },
+  },
+};
+
+// #endregion
+
+// #region type indicators
+
+export const ProjectAndResourceIndicators: Story = {
+  name: 'Type indicators (projects vs resources)',
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={typedProjects}
+        openTabs={[]}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        buttonPlaceholder="Select a project or resource"
+        ariaLabel="Project or resource"
+        renderProjectIndicator={(project) =>
+          project.type === 'ScriptureResource' ? (
+            <BookOpen className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+          ) : (
+            <FileText className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+          )
+        }
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon for resources, a document icon for everything else. The selector renders whatever node the caller returns and treats it as decorative — the icons here are `aria-hidden` because the row text already names the project.",
       },
     },
   },

@@ -317,6 +317,17 @@ type CommonProps = {
    * control.
    */
   customSections?: readonly ProjectSelectorSection[];
+  /**
+   * Render an indicator for a row — typically a small icon distinguishing a project from a
+   * resource, derived from the caller's own `type` values.
+   *
+   * The selector ships no taxonomy and no default mapping: `type` is a free-form string whose
+   * meaning belongs to whoever produced the list (Paratext project types and DBL resource types are
+   * two different vocabularies, neither owned by this library), so the caller decides what a value
+   * looks like. Output is treated as decorative — give it an accessible name yourself, or mark it
+   * `aria-hidden`, since the selector cannot know what the glyph means.
+   */
+  renderProjectIndicator?: (project: ProjectSelectorProject) => ReactNode;
 };
 
 export type ProjectSelectorProps =
@@ -409,9 +420,19 @@ type RowRenderProps = {
   onOpen: ((row: ProjectRow) => void) | undefined;
   /** Forwarded by the parent so it can scroll the selected row into view when the popover opens. */
   selectedRowRef?: RefObject<HTMLDivElement | null>;
+  /** Resolved by the parent from `renderProjectIndicator`. */
+  indicator?: ReactNode;
 };
 
-function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }: RowRenderProps) {
+function ProjectRowView({
+  row,
+  mode,
+  strings,
+  onClick,
+  onOpen,
+  selectedRowRef,
+  indicator,
+}: RowRenderProps) {
   // We control Radix Tooltip's `open` prop manually because Radix's built-in pointer/focus
   // auto-detection does not fire on cmdk's `<CommandItem>` trigger (data-state stays "closed"
   // even after pointerenter / pointermove / focus). Tracking hover ourselves bypasses that
@@ -521,6 +542,9 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
       </span>
+      {indicator && (
+        <span className="tw:flex tw:shrink-0 tw:items-center tw:justify-center">{indicator}</span>
+      )}
       {/* Row label uses a 2-line layout — shortName on top, fullName muted
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
@@ -829,6 +853,16 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const projectsById = useMemo(
     () => new Map(props.projects.map((project) => [normalizeProjectId(project.id), project])),
     [props.projects],
+  );
+
+  const { renderProjectIndicator } = props;
+  const renderIndicator = useCallback(
+    (row: ProjectRow): ReactNode => {
+      if (!renderProjectIndicator) return undefined;
+      const project = projectsById.get(normalizeProjectId(row.projectId));
+      return project ? renderProjectIndicator(project) : undefined;
+    },
+    [renderProjectIndicator, projectsById],
   );
 
   // Section partitioning dispatches on the active grouping. Versification is just another option
@@ -1180,6 +1214,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                         onClick={handleRowClick}
                         onOpen={openButtonHandler}
                         selectedRowRef={selectedRowRef}
+                        indicator={renderIndicator(row)}
                       />
                     ))}
                   </CommandGroup>
