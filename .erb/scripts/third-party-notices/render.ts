@@ -15,6 +15,7 @@ import { normalizeText } from './package-files';
 import type {
   CopiedPlatformLibrary,
   NamedText,
+  ProductBlock,
   Report,
   ReportRow,
   SnapStagePackage,
@@ -528,17 +529,38 @@ function accountNpmRows(npmDescribed: DescribedRow[]): NpmAccount {
 }
 
 /** The title, the statement of what the document covers, and the generation provenance. */
-function pushPreamble(out: string[], corpusVersion: string, licenseeVersion: string): void {
+function pushPreamble(
+  out: string[],
+  corpusVersion: string,
+  licenseeVersion: string,
+  product: ProductBlock | undefined,
+): void {
+  const subject = product ? product.name : 'Platform.Bible';
   out.push('# Third-party notices', '');
   out.push(
-    'Platform.Bible incorporates the third-party components listed below. Where a component ships a',
-    'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
-    'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
-    'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',
-    'accounted for separately in the last section. This file covers the redistributable',
-    'closure of **this repository**: the npm packages webpack actually compiled into `dist/` (plus the',
-    'stylesheet-only packages Tailwind inlines before webpack runs, and anything `release/app` ships',
-    'unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.',
+    ...(product
+      ? [
+          `${product.name} incorporates the third-party components listed below. Where a component ships a`,
+          'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
+          'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
+          'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',
+          'accounted for separately in the last section. This file covers the redistributable',
+          `closure of **${product.name}**, built from paranext-core by \`${product.repository}\`: the npm`,
+          'packages webpack actually compiled into `dist/` (plus the stylesheet-only packages Tailwind',
+          'inlines before webpack runs, and anything `release/app` ships unbundled beside the bundle), the',
+          'NuGet closure of the bundled .NET data provider, Electron, and the components that repository',
+          'adds, each described in a section of its own below.',
+        ]
+      : [
+          'Platform.Bible incorporates the third-party components listed below. Where a component ships a',
+          'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
+          'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
+          'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',
+          'accounted for separately in the last section. This file covers the redistributable',
+          'closure of **this repository**: the npm packages webpack actually compiled into `dist/` (plus the',
+          'stylesheet-only packages Tailwind inlines before webpack runs, and anything `release/app` ships',
+          'unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.',
+        ]),
     'Build and test tooling is excluded because it is not distributed.',
     '',
     'Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,',
@@ -548,10 +570,14 @@ function pushPreamble(out: string[], corpusVersion: string, licenseeVersion: str
     'of its own, present only when that build actually carries it: a component that ships without a',
     'row is indistinguishable from one nobody considered.',
     '',
-    '**This is a reference, not the notices for any shipped product.** A distributed application',
-    'built on paranext-core carries its own dependencies on top of these, and must generate its own',
-    'notices covering both.',
-    '',
+    ...(product
+      ? []
+      : [
+          '**This is a reference, not the notices for any shipped product.** A distributed application',
+          'built on paranext-core carries its own dependencies on top of these, and must generate its own',
+          'notices covering both.',
+          '',
+        ]),
     '**Generated on Linux, and it covers every platform.** The NuGet half is the union of the restore',
     'closure for every runtime identifier this application is published for (`linux-x64`, `win-x64`,',
     '`osx-x64`, `osx-arm64`), so a package that ships on only one platform is still listed. The npm',
@@ -567,7 +593,7 @@ function pushPreamble(out: string[], corpusVersion: string, licenseeVersion: str
     '> recorded in `THIRD-PARTY-NOTICES.lock.json` so a verdict that moved because the matcher was',
     '> upgraded stays distinguishable from one that moved because a license changed.',
     '',
-    'For the license covering Platform.Bible itself, see [LICENSING.md](./LICENSING.md).',
+    `For the license covering ${subject} itself, see [LICENSING.md](./LICENSING.md).`,
     '',
   );
 }
@@ -624,7 +650,11 @@ function pushElectronSection(out: string[], shipsElectron: boolean): void {
  * contains no database - and an ungated section would go on making UBS copyright claims and CC
  * BY-SA 4.0 attributions for content no installer carries.
  */
-function pushLexicalDatabaseSection(out: string[], packedExtensions: string[]): void {
+function pushLexicalDatabaseSection(
+  out: string[],
+  packedExtensions: string[],
+  product: ProductBlock | undefined,
+): void {
   if (!packedExtensions.includes(LEXICAL_DATABASE_EXTENSION)) return;
   out.push('## Bundled data \u2014 UBS lexical database', '');
   out.push(
@@ -649,11 +679,21 @@ function pushLexicalDatabaseSection(out: string[], packedExtensions: string[]): 
     'Albert Nida \u00a9 United Bible Societies 1988, 1989. Licensed under',
     '[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).',
     '',
-    'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
-    'source license. UBS permits their distribution in **Paratext**. That permission is specific to',
-    'Paratext: it does not extend to Platform.Bible, nor to anyone else redistributing the database,',
-    'including a third party building from this repository \u2014 see LICENSING.md. The open-licensed',
-    'content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.',
+    ...(product?.isParatext
+      ? [
+          'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
+          `source license. UBS permits their distribution in **Paratext**. ${product.name} is a Paratext product, and that permission covers it. It does not extend to Platform.Bible, nor to anyone`,
+          'else redistributing the database, including a third party building from paranext-core \u2014 see',
+          'LICENSING.md. The open-licensed content can be obtained separately from',
+          '<https://github.com/ubsicap/ubs-open-license>.',
+        ]
+      : [
+          'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
+          'source license. UBS permits their distribution in **Paratext**. That permission is specific to',
+          'Paratext: it does not extend to Platform.Bible, nor to anyone else redistributing the database,',
+          'including a third party building from this repository \u2014 see LICENSING.md. The open-licensed',
+          'content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.',
+        ]),
     '',
   );
 }
@@ -1251,6 +1291,7 @@ export function render({
   packedExtensions = [],
   shipsElectron = false,
   copiedPlatformLibraries = {},
+  product,
 }: Report): string {
   assertKnownEcosystems(verdicts);
 
@@ -1269,10 +1310,10 @@ export function render({
   const npmAccount = accountNpmRows(npmDescribed);
 
   const out: string[] = [];
-  pushPreamble(out, corpusVersion, licenseeVersion);
+  pushPreamble(out, corpusVersion, licenseeVersion, product);
   pushOpenQuestions(out, openPolicyQuestions);
   pushElectronSection(out, shipsElectron);
-  pushLexicalDatabaseSection(out, packedExtensions);
+  pushLexicalDatabaseSection(out, packedExtensions, product);
   pushStaticAssetSection(out, staticAssetNotices);
   pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
   pushCopiedPlatformLibrarySection(out, copiedPlatformLibraries);

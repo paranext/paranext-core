@@ -767,3 +767,35 @@ describe('the license cell for a row that was both elected and excepted', () => 
     ).toContain('| MIT (elected from (MPL-2.0 OR Apache-2.0)) |');
   });
 });
+
+describe('product block', () => {
+  const product = { name: 'Paratext 10 Studio', repository: 'paranext/paratext-10-studio' };
+
+  it('keeps the reference wording when no product is declared', () => {
+    const out = render(report);
+    expect(out).toContain('Platform.Bible incorporates the third-party components listed below.');
+    expect(out).toContain('**This is a reference, not the notices for any shipped product.**');
+    expect(out).toContain('For the license covering Platform.Bible itself');
+  });
+
+  it('names the product and drops the reference paragraph when one is declared', () => {
+    const out = render({ ...report, product });
+    expect(out).toContain(
+      'Paratext 10 Studio incorporates the third-party components listed below.',
+    );
+    expect(out).toContain('built from paranext-core by `paranext/paratext-10-studio`');
+    expect(out).not.toContain('This is a reference, not the notices for any shipped product');
+    expect(out).toContain('For the license covering Paratext 10 Studio itself');
+  });
+
+  it('says the UBS permission covers a Paratext product, and only a Paratext product', () => {
+    const packed = { ...report, packedExtensions: ['platform-lexical-tools'] };
+    expect(render(packed)).toContain('That permission is specific to');
+    expect(render({ ...packed, product })).toContain('That permission is specific to');
+    const paratext = render({ ...packed, product: { ...product, isParatext: true } });
+    expect(paratext).toContain(
+      'Paratext 10 Studio is a Paratext product, and that permission covers it.',
+    );
+    expect(paratext).not.toContain('it does not extend to Platform.Bible, nor');
+  });
+});

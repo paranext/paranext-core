@@ -410,6 +410,11 @@ export type Report = {
   /** Folder names of the extensions an installer packs - see `packedExtensionNames`. */
   packedExtensions?: string[];
   /**
+   * The downstream product this run describes, where the overlay declares one - see
+   * `Policy.product`.
+   */
+  product?: ProductBlock;
+  /**
    * Whether the packaged application embeds the prebuilt Electron runtime.
    *
    * Electron is compiled into no bundle, so it has no row: the notices policy's
