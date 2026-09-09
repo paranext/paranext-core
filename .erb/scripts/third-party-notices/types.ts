@@ -422,6 +422,8 @@ export type Report = {
   copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
   /** Third-party programs redistributed as separate executables - see `separate-programs.ts`. */
   separatePrograms?: Record<string, SeparateProgram>;
+  /** Extensions packed from outside this repository - see `external-extensions.ts`. */
+  externalExtensions?: Record<string, ExternalExtension>;
   /** Folder names of the extensions an installer packs - see `packedExtensionNames`. */
   packedExtensions?: string[];
   /**

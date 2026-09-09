@@ -15,6 +15,7 @@ import { normalizeText } from './package-files';
 import type {
   BundledComponent,
   CopiedPlatformLibrary,
+  ExternalExtension,
   NamedText,
   ProductBlock,
   Report,
@@ -855,6 +856,33 @@ function addSeparateProgramTexts(
   });
 }
 
+/** Extensions packed from outside this repository - see `external-extensions.ts`. */
+function pushExternalExtensionsSection(
+  out: string[],
+  externalExtensions: Record<string, ExternalExtension>,
+): void {
+  const entries = Object.entries(externalExtensions).sort(([first], [second]) =>
+    compareStrings(first, second),
+  );
+  if (!entries.length) return;
+  out.push('## Extensions packed from outside this repository', '');
+  out.push(
+    'The installer also carries these extensions, built in other repositories and packed as zips',
+    'beside the ones built here. Each bundles every dependency outside the extension host’s',
+    'externals list, and no module manifest describes that bundle, so the packages inside it have no',
+    'rows above. That is an omission this document records rather than hides.',
+    '',
+  );
+  entries.forEach(([name, entry]) => {
+    out.push(
+      `### ${name}`,
+      '',
+      `Its bundled dependencies are **not itemized** in this document. ${entry.reason}`,
+      '',
+    );
+  });
+}
+
 /** The Ubuntu libraries snapcraft stages inside the Linux `.snap`, and their copyright files. */
 function pushSnapSection(
   out: string[],
@@ -1385,6 +1413,7 @@ export function render({
   shipsElectron = false,
   copiedPlatformLibraries = {},
   separatePrograms = {},
+  externalExtensions = {},
   product,
 }: Report): string {
   assertKnownEcosystems(verdicts);
@@ -1413,6 +1442,7 @@ export function render({
   pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
   pushCopiedPlatformLibrarySection(out, copiedPlatformLibraries);
   pushSeparateProgramsSection(out, separatePrograms);
+  pushExternalExtensionsSection(out, externalExtensions);
   pushDotnetSection(out, dotnetDescribed, copiedPlatformLibraries);
   pushNpmSection(out, npmDescribed, npmAccount);
   assertNpmRowsAccountedFor(npmDescribed, npmAccount, canonical);

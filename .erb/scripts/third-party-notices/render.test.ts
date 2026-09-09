@@ -843,3 +843,26 @@ describe('separate programs section', () => {
     expect(out).toMatch(/### GPL-2\.0-or-later — canonical text[^#]*`Mercurial`/);
   });
 });
+
+describe('external extensions section', () => {
+  it('is absent when none is packed', () => {
+    expect(render(report)).not.toContain('## Extensions packed from outside this repository');
+  });
+
+  it('names each packed extension and states that its bundle is not itemized', () => {
+    const out = render({
+      ...report,
+      externalExtensions: {
+        'paratext-bible-send-receive': {
+          itemized: false,
+          reason:
+            'Built in paratext-bible-internal-extensions, which emits no module manifest yet.',
+        },
+      },
+    });
+    expect(out).toContain('## Extensions packed from outside this repository');
+    expect(out).toContain('### paratext-bible-send-receive');
+    expect(out).toContain('bundled dependencies are **not itemized** in this document');
+    expect(out).toContain('emits no module manifest yet.');
+  });
+});
