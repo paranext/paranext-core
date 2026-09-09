@@ -4,6 +4,7 @@ import {
   ExtensionDataListScope,
   ExtensionDataScope,
   IBaseProjectDataProviderEngine,
+  WithProjectDataProviderEngineExtensionDataEnumerationMethods,
 } from '@papi/core';
 import type {
   ProjectInterfaceDataTypes,
@@ -14,10 +15,11 @@ import type {
 /** The `projectInterface`s the hello rock3 pdpf serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
 // needs to be used in ProjectMetadata as not readonly :p
-export const HELLO_ROCK3_PROJECT_INTERFACES = ['platform.base', 'helloRock3'] as const satisfies [
+export const HELLO_ROCK3_PROJECT_INTERFACES = [
   'platform.base',
+  'platform.extensionDataEnumeration',
   'helloRock3',
-];
+] as const satisfies ['platform.base', 'platform.extensionDataEnumeration', 'helloRock3'];
 
 export type HelloRock3ProjectData = {
   projectName: string;
@@ -40,7 +42,9 @@ function getExtensionDataKey(scope: ExtensionDataScope): string {
 
 export class HelloRock3ProjectDataProviderEngine
   extends BaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>
-  implements IBaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>
+  implements
+    IBaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods
 {
   private saveProjectData: () => Promise<void>;
 

@@ -115,6 +115,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         var retVal = base.GetFunctions();
 
+        // Serves ProjectInterfaces.EXTENSION_DATA_ENUMERATION, which every Paratext project
+        // advertises, published or not. The base class registers only the platform.base methods.
+        retVal.Add(("listExtensionDataQualifiers", ListExtensionDataQualifiers));
+
         retVal.Add(("getBookUSFM", GetBookUsfm));
         retVal.Add(("setBookUSFM", SetBookUsfm));
         retVal.Add(("getChapterUSFM", GetChapterUsfm));
@@ -430,15 +434,38 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    /// <summary>
+    /// List the DataQualifiers that exist for the extension identified by
+    /// <paramref name="scope"/>. This is the one method of
+    /// <see cref="ProjectInterfaces.EXTENSION_DATA_ENUMERATION"/>, which every Paratext project
+    /// advertises.
+    ///
+    /// Listing creates nothing, so an extension that has never written any data gets an empty
+    /// array.
+    /// </summary>
     /// <remarks>
     /// Takes no sync write scope and no project write lock: this is a read, like
     /// <see cref="GetExtensionData"/>.
     /// </remarks>
+    /// <param name="scope">Whose data to list: ExtensionName selects the extension.</param>
+    /// <returns>
+    /// Every DataQualifier that exists for that extension, sorted with
+    /// <see cref="StringComparer.Ordinal"/>. Each is a valid DataQualifier for
+    /// <see cref="GetExtensionData"/> under the same ExtensionName, exactly as it would be passed:
+    /// forward slashes, relative to the extension's own data, nested paths included. Empty
+    /// documents are included; an extension with no data at all gets an empty array.
+    /// </returns>
     /// <exception cref="InvalidDataException">
     /// The scope has no extension name, or one that would root the listing at the shared extensions
     /// directory or above it. See <see cref="EnsureExtensionNameStaysInItsOwnDirectory"/>.
     /// </exception>
-    public override string[] ListExtensionDataQualifiers(ProjectDataScope scope)
+    /// <exception cref="ArgumentException">
+    /// The ExtensionName composes into a stream path the project's
+    /// <see cref="IProjectStreamManager"/> refuses — a name containing ".." anywhere, even without a
+    /// separator ("a..b"), is rejected before the filesystem is touched — exactly as
+    /// <see cref="GetExtensionData"/> and <see cref="SetExtensionData"/> reject the same name.
+    /// </exception>
+    public string[] ListExtensionDataQualifiers(ProjectDataScope scope)
     {
         if (string.IsNullOrWhiteSpace(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");

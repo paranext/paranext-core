@@ -7,10 +7,12 @@ declare module 'papi-shared-types' {
     DataProviderUpdateInstructions,
   } from '@shared/models/data-provider.model';
   import type {
-    ExtensionDataListScope,
+    ExtensionDataEnumerationProjectDataTypes,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
     PROJECT_INTERFACE_PLATFORM_BASE,
+    PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from '@shared/models/project-data-provider.model';
   import type {
@@ -683,37 +685,28 @@ declare module 'papi-shared-types' {
           callback: (extensionData: string | undefined | PlatformError) => void,
           options?: DataProviderSubscriberOptions,
         ): Promise<UnsubscriberAsync>;
-        /**
-         * Lists the `dataQualifier`s an extension has data for in this project.
-         *
-         * Every returned string is a valid `dataQualifier` for `getExtensionData` under the same
-         * `extensionName`, exactly as it would be passed: forward slashes, relative to the
-         * extension's own data, nested paths included. The list is sorted and includes empty
-         * documents.
-         *
-         * Listing never creates anything, so an extension that has never written any data gets
-         * `[]`.
-         *
-         * Not every Project Data Provider can enumerate its extension data (one over a remote store
-         * may not be able to), and the method is optional on the PDP's engine. It is declared
-         * required here because a PDP reached over the network cannot be feature-detected: the
-         * remote proxy answers with a request function for any property name, so
-         * `pdp.listExtensionDataQualifiers?.()` does not short-circuit — it calls and then
-         * rejects.
-         *
-         * A PDP in the CALLING process is not proxied that way, so there the property really is
-         * absent when its engine omits the method: `?.()` short-circuits to `undefined`, and a
-         * direct call throws synchronously rather than rejecting. Extensions share one extension
-         * host, so an extension consuming another extension's PDP is on that path. Wrap the call in
-         * `try`/`catch` around an `await` — which catches both shapes, where a bare `.catch()`
-         * catches only the remote one — and treat a failure as "unknown", never as "this extension
-         * has no data". Do not use `?.`: `undefined` is indistinguishable from an empty list.
-         *
-         * @param scope Which extension's `dataQualifier`s to list
-         * @returns Sorted `dataQualifier`s that exist for that extension in this project
-         */
-        listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]>;
       };
+
+  /**
+   * A Project Data Provider that can list the `dataQualifier`s an extension has data for in its
+   * project. Returned from `papi.projectDataProviders.get('platform.extensionDataEnumeration',
+   * projectId)`.
+   *
+   * This is its own `projectInterface` rather than a member of `platform.base`, because not every
+   * PDP can enumerate its extension data (one over a remote store may not be able to) and a PDP
+   * method is never optional. A project whose PDP can enumerate lists
+   * `'platform.extensionDataEnumeration'` in its metadata `projectInterfaces`
+   * (`papi.projectLookup.getMetadataForProject`), so check there first:
+   * `papi.projectDataProviders.get` throws for a project that does not advertise the interface, and
+   * on a platform that predates the interface no project advertises it. Treat "not advertised" as
+   * "cannot enumerate", never as "no data".
+   *
+   * The qualifiers it lists are exactly the ones `getExtensionData` on the same project's
+   * `platform.base` PDP reads.
+   */
+  export type IExtensionDataEnumerationProjectDataProvider =
+    IProjectDataProvider<ExtensionDataEnumerationProjectDataTypes> &
+      WithProjectDataProviderEngineExtensionDataEnumerationMethods;
 
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   export type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
@@ -789,6 +782,13 @@ declare module 'papi-shared-types' {
      * There should be a PDP that provides `platform.base` for all available project ids.
      */
     [PROJECT_INTERFACE_PLATFORM_BASE]: IBaseProjectDataProvider<MandatoryProjectDataTypes>;
+    /**
+     * `projectInterface` a PDP serves when it can list the `dataQualifier`s an extension has data
+     * for. Its one method is `listExtensionDataQualifiers`. Separate from `platform.base` because
+     * not every PDP can enumerate its extension data and a PDP method is never optional; see
+     * {@link IExtensionDataEnumerationProjectDataProvider} for how a consumer discovers it.
+     */
+    [PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION]: IExtensionDataEnumerationProjectDataProvider;
     'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
     'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }

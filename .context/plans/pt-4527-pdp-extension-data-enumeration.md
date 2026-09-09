@@ -11,9 +11,10 @@ a better reason.
 
 ## Outcome — what changed in execution
 
-The method shipped as planned — `listExtensionDataQualifiers` on `platform.base`, `list*` not
-`get*`, optional on the engine and required on the consumer, no `subscribe*`. Code review (twelve
-angles, each finding verified against a real project directory) then changed the following. The
+The method shipped as planned in most respects — `listExtensionDataQualifiers`, `list*` not
+`get*`, no `subscribe*` — with one shape change after the PR's first human review, recorded in the
+last bullet: it lives on its own `projectInterface`, not on `platform.base`. Code review (twelve
+angles, each finding verified against a real project directory) changed the following. The
 decision record is `adr-pdp-enumerates-extension-data-qualifiers` in
 `.context/standards/Architecture-Decisions.md`, recorded as **Proposed**.
 
@@ -50,8 +51,9 @@ decision record is `adr-pdp-enumerates-extension-data-qualifiers` in
   gained the carve-out.
 - **The consumer TSDoc no longer claims `?.` never short-circuits.** That holds only for a remote
   proxy; in-process the property is genuinely absent and a direct call throws synchronously. Callers
-  are told to `try`/`catch` around an `await`. The two conventions this hardened are promoted into
-  `Paranext-Core-Patterns.md` as "Adding an optional method to `platform.base`".
+  were told to `try`/`catch` around an `await`. (Moot once the method moved to its own
+  `projectInterface` — see the last bullet — but it is why probing for a method can never be the
+  discovery mechanism, and the patterns standard keeps that explanation.)
 - **Path composition is centralized** in `GetExtensionDataRoot`, so listing and reading move
   together by construction; the `scope.ProjectID = …` writes in §3.4 turned out to be dead once
   their only reader went, and were removed.
@@ -63,6 +65,20 @@ decision record is `adr-pdp-enumerates-extension-data-qualifiers` in
   contents; fixtures are BOM-free so the empty-document case is a genuine 0-byte file.
 - Nine commits rather than §8's "three or four": C#, TS contract, sample/stub, ADR, cleanup, doc
   corrections, review fixes with the API trims, docs promotion, and this plan.
+- **After the PR's first human review (2026-09-09), the method moved off `platform.base` onto its
+  own `projectInterface`, `platform.extensionDataEnumeration`.** The reviewer rejected
+  "optional on the engine, required on the consumer" (§2, §4) as too messy for the API — a member
+  optional to implement but required to call cannot be reasoned about from either side, and it is
+  discovered by failure — and offered three ways out: drop the method, make it required everywhere
+  with a `#platform-changes` announcement, or give it its own `projectInterface`. The third was
+  chosen: no breaking change in either direction, and a consumer learns whether a project's PDP can
+  enumerate from metadata `projectInterfaces` rather than by calling. Both `platform.base` types are
+  back to their merge-base shape; the method is declared once on
+  `WithProjectDataProviderEngineExtensionDataEnumerationMethods` and shared by the new
+  `IExtensionDataEnumerationProjectDataProvider`; the Paratext PDP publishes the interface for
+  published and unpublished projects; `hello-rock3` claims it and `platform-lexical-tools` no longer
+  carries a throwing stub. The reviewer also asked for a standing rule, recorded as
+  `adr-pdp-methods-are-never-optional`. The plan's §2 and §4 describe the pre-review shape.
 
 ## 1. The gap
 
