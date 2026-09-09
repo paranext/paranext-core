@@ -1,9 +1,9 @@
 import type { FullConfig } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
-import { execFileSync, execSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { killProcessesUnderRoot, machineOwnershipFlag, runCleanup } from './scoped-cleanup';
-import { isPidAlive, restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
+import { killProcessTree, restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
 
 /**
  * Stops the renderer dev server process global-setup spawned, addressed the way that platform's
@@ -21,32 +21,7 @@ import { isPidAlive, restoreAppGlobalState, restoreLeakedSettings } from './fixt
  * port — only a Windows run can confirm that.
  */
 export function killDevServerProcess(pid: number, platform: NodeJS.Platform): void {
-  if (platform === 'win32') {
-    if (!isPidAlive(pid)) return;
-    try {
-      execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], {
-        stdio: 'pipe',
-        timeout: 10_000,
-      });
-    } catch (error) {
-      console.warn(
-        `taskkill for dev server pid ${pid} did not complete cleanly: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-    return;
-  }
-  try {
-    // Kill the process group (negative PID kills the group)
-    process.kill(-pid, 'SIGTERM');
-  } catch {
-    try {
-      process.kill(pid, 'SIGTERM');
-    } catch {
-      // Already stopped
-    }
-  }
+  killProcessTree(pid, 'SIGTERM', platform);
 }
 
 // Playwright global teardown requires this signature even though config is unused
