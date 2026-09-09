@@ -1187,9 +1187,10 @@ async function loadLayout(
     // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
     // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
     // flag-off run — provider-less, though closable, since the merge drops an entry's Simple-mode
-    // `isClosable: false` pin outside simple mode. (Changing a tab's id across versions likewise
-    // leaves a duplicate, since we dedup by exact id.) Fix when power mode lands: drop persisted
-    // supplement tabs whose provider is no longer registered.
+    // `isClosable: false` pin outside simple mode. (The merge dedups a web-view entry by
+    // `webViewType` and any other entry by its tab's own id, so renaming either one across versions
+    // likewise leaves a duplicate.) Fix when power mode lands: drop persisted supplement tabs whose
+    // provider is no longer registered.
     // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
     // mirroring platform-dock-layout.component.tsx
     // eslint-disable-next-line no-type-assertion/no-type-assertion
