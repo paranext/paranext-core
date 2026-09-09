@@ -46,24 +46,32 @@ export type WebViewMoveInFlight = {
   /** Project the captured view was showing, if any */
   projectId?: string;
   /**
-   * Window this move is currently trying to put the captured view into. Known before the move ever
-   * reaches the register below: a named target's id is the caller's own argument, and a new-window
-   * target's id is `createFreshWindow`'s window, stood up before the capture that empties the
-   * source. Either way this is set from the moment a `WebViewMoveInFlight` exists at all — there is
-   * no window in which one sits in the register with this still undefined.
+   * Window this move is currently trying to put the captured view into, or `undefined` while it has
+   * no current destination at all — between giving up on a target and choosing the next one, the
+   * move is headed nowhere, and no window's read should be told otherwise.
+   *
+   * Set before the move ever reaches the register below: a named target's id is the caller's own
+   * argument, and a new-window target's id is `createFreshWindow`'s window, stood up before the
+   * capture that empties the source. Either way this is set from the moment a `WebViewMoveInFlight`
+   * exists at all — there is no window in which one sits in the register with this still unset for
+   * the move's original target.
    *
    * Not set once. A failed move's recovery (`recoverAfterFailedMove` in `web-view-move.util.ts`)
-   * re-adopts the captured view into a window other than the one that just failed — the source
-   * window first, then the focused window if that also fails — and updates this field on the same
-   * record, in place, before each of those readopts is attempted. So the value always names
-   * whichever window the move is heading toward right now, not the window it originally set out
-   * for.
+   * clears this to `undefined` as the first thing it does — before either of its rungs runs, and so
+   * before the target it just gave up on can be mistaken for where it is still headed — then
+   * re-adopts the captured view into a window other than the one that just failed: the source
+   * window first, then the focused window if that also fails. It sets this field to each rung's own
+   * window id before that rung's readopt is attempted, on the same record, in place. So the value
+   * always names whichever window the move is heading toward right now, `undefined` while it is
+   * between destinations, and never the window it originally set out for once that has failed.
    *
    * What lets `getOpenWebViewDefinitionsForWindow` in `web-view.service-router.ts` attribute an
    * in-flight move to the one closing window it is headed toward, the same way `webViewType` and
-   * `projectId` let a search attribute one to what it is looking for.
+   * `projectId` let a search attribute one to what it is looking for. `undefined` simply matches no
+   * window's read, which is correct: the move belongs to nobody's enumeration until it has a
+   * destination again.
    */
-  destinationWindowId: string;
+  destinationWindowId: string | undefined;
   /**
    * The definition the capture returned, kept whole rather than split into the fields above: both
    * `getAllOpenWebViewDefinitionsWithReachability` (the whole-app read) and
