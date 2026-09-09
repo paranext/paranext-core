@@ -98,8 +98,8 @@ export type ProjectSelectorSection = {
   match: (project: ProjectSelectorProject) => boolean;
   /**
    * Row order within this section. Omit to use the selector's canonical order (alphabetical by
-   * `shortName`). Supply one when the section's meaning implies an order the selector cannot know
-   * — a "Recent" section is the motivating case, since alphabetical order defeats its purpose.
+   * `shortName`). Supply one when the section's meaning implies an order the selector cannot know —
+   * a "Recent" section is the motivating case, since alphabetical order defeats its purpose.
    */
   compare?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
@@ -410,7 +410,15 @@ export type RowSection = {
    * group (typically the active project's versification) is pinned to the top by
    * `partitionByVersification`.
    */
-  kind: 'openTabs' | 'other' | 'flat' | 'versification' | 'language' | 'type' | 'lastUsed' | 'custom';
+  kind:
+    | 'openTabs'
+    | 'other'
+    | 'flat'
+    | 'versification'
+    | 'language'
+    | 'type'
+    | 'lastUsed'
+    | 'custom';
   rows: ProjectRow[];
   /**
    * Stable identity for the section, used as its React key. Set on `custom` sections, where two
@@ -661,7 +669,7 @@ const UNMATCHED_SECTION_ID = '__unmatched__';
  * `projectsById`) collect into a single trailing unlabeled section. Sections that end up empty are
  * omitted.
  *
- * `match` is evaluated once per *project*, and the verdict applies to every row that project
+ * `match` is evaluated once per _project_, and the verdict applies to every row that project
  * produced — `project-multi` and `projectScrollGroup` fan one project out into a row per scroll
  * group plus synthetic bound-but-closed rows, and those must not be split across sections.
  *
