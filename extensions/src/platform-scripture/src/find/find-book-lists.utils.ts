@@ -11,6 +11,25 @@ const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
 );
 
 /**
+ * Whether a book id names extra material (GLO, FRT, INT, XXA, etc.) rather than a book of
+ * scripture.
+ *
+ * The `book` and `chapter` scopes resolve from the current scripture reference rather than from the
+ * book lists below, so excluding extra material from those lists does not reach them. This is what
+ * gates those two scopes on the current reference; see {@link excludeExtraMaterialBooks} for why
+ * Find withholds extra material at all.
+ *
+ * TODO(PT-4414): Drop this gate along with the rest of the exclusion once extra material can be
+ * opened and addressed.
+ *
+ * @param bookId The book id to test, e.g. from the current scripture reference.
+ * @returns `true` when the book is extra material.
+ */
+export function isExtraMaterialBookId(bookId: string): boolean {
+  return Canon.isExtraMaterial(bookId);
+}
+
+/**
  * Clears the extra material (GLO, FRT, INT, XXA, etc.) from a `platformScripture.booksPresent` flag
  * string so Find never offers those books.
  *
@@ -24,7 +43,7 @@ const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
  *
  * This narrows what Find _searches_ and what its book picker _offers_. It does not reach the
  * `book`/`chapter` scopes, which resolve from the current scripture reference rather than from this
- * flag string; PT-4415 covers gating those.
+ * flag string; {@link isExtraMaterialBookId} gates those.
  *
  * TODO(PT-4414): Drop this exclusion once extra material can be opened and addressed.
  *

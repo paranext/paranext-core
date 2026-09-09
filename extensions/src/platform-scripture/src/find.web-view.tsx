@@ -721,12 +721,10 @@ global.webViewComponent = function FindWebView({
   // the scope selector builds its book picker from. Filtering one but not the other would let a user
   // pick a book the search never covers.
   //
-  // This does NOT cover the `book`/`chapter` scopes, which build `findScope` from
-  // `verseRefSetting.book` rather than from these lists. The navigation control offers every book the
-  // project has (`getActiveBookIds` in the toolbar is unfiltered), so with the current reference in
-  // a book of extra material those two scopes still search it and still report the useless
-  // reference this exclusion exists to hide. Closing that path means gating the scopes themselves
-  // on the current book being searchable; PT-4415 tracks it.
+  // These lists do NOT reach the `book`/`chapter` scopes, which build `findScope` from
+  // `verseRefSetting.book` rather than from them. The navigation control offers every book the
+  // project has (`getActiveBookIds` in the toolbar is unfiltered), so the current reference can sit
+  // in a book of extra material; `isFindQueryValid` gates those two scopes on it separately.
   //
   // A book list is "not known" while the setting is still resolving AND when the read fails.
   // `useProjectSetting` reports a delivered `PlatformError` as loaded, so the error branch has to be
@@ -1064,8 +1062,9 @@ global.webViewComponent = function FindWebView({
   // moved into `gateStartSearch`'s `hasPdp` argument below, which is the input that actually governs
   // whether a job may start.
   const isSearchQueryValid = useMemo(
-    () => isFindQueryValid({ searchTerm, scope, selectedBookIds }),
-    [scope, searchTerm, selectedBookIds],
+    () =>
+      isFindQueryValid({ searchTerm, scope, selectedBookIds, currentBookId: verseRefSetting.book }),
+    [scope, searchTerm, selectedBookIds, verseRefSetting.book],
   );
 
   // Surface an unresolvable provider through the existing error path instead of leaving the panel

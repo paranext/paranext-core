@@ -481,7 +481,12 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   // this exact divergence (the harness's own copy dropped the empty-term check) shipped once
   // already (see PT-4343 review) and made the NoBooksSelected story pass despite testing the wrong
   // rule.
-  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  const isSearchQueryValid = isFindQueryValid({
+    searchTerm,
+    scope,
+    selectedBookIds,
+    currentBookId: verseRef.book,
+  });
   const liveSearchStatus: FindJobStatus | undefined = isSearchQueryValid
     ? completedStatus
     : undefined;

@@ -508,28 +508,89 @@ describe('armBoundedWait', () => {
 
 describe('isFindQueryValid', () => {
   it('is false for an empty (or whitespace-only) search term regardless of scope', () => {
-    expect(isFindQueryValid({ searchTerm: '', scope: 'book', selectedBookIds: [] })).toBe(false);
-    expect(isFindQueryValid({ searchTerm: '   ', scope: 'chapter', selectedBookIds: [] })).toBe(
-      false,
-    );
+    expect(
+      isFindQueryValid({
+        searchTerm: '',
+        scope: 'book',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(false);
+    expect(
+      isFindQueryValid({
+        searchTerm: '   ',
+        scope: 'chapter',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(false);
   });
 
   it('is true for a non-empty term in the chapter/book scopes, which need no book selection', () => {
-    expect(isFindQueryValid({ searchTerm: 'God', scope: 'chapter', selectedBookIds: [] })).toBe(
-      true,
-    );
-    expect(isFindQueryValid({ searchTerm: 'God', scope: 'book', selectedBookIds: [] })).toBe(true);
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'chapter',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(true);
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'book',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(true);
   });
 
   it('is false for the selectedBooks scope with no books selected, even with a non-empty term', () => {
     expect(
-      isFindQueryValid({ searchTerm: 'God', scope: 'selectedBooks', selectedBookIds: [] }),
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: [],
+        currentBookId: 'GEN',
+      }),
     ).toBe(false);
   });
 
   it('is true for the selectedBooks scope once at least one book is selected', () => {
     expect(
-      isFindQueryValid({ searchTerm: 'God', scope: 'selectedBooks', selectedBookIds: ['GEN'] }),
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: ['GEN'],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(true);
+  });
+
+  // Find cannot search extra material, and these two scopes resolve to the current reference's
+  // book rather than to the (already-filtered) book list, so this is the only thing stopping them.
+  it.each(['book', 'chapter'] as const)(
+    'is false for the %s scope while the current reference is in extra material',
+    (scope) => {
+      expect(
+        isFindQueryValid({ searchTerm: 'God', scope, selectedBookIds: [], currentBookId: 'XXB' }),
+      ).toBe(false);
+      expect(
+        isFindQueryValid({ searchTerm: 'God', scope, selectedBookIds: [], currentBookId: 'GLO' }),
+      ).toBe(false);
+    },
+  );
+
+  // The book picker never offers extra material, so the current reference sitting in it says
+  // nothing about the books the user actually chose to search.
+  it('is unaffected by a current reference in extra material under the selectedBooks scope', () => {
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: ['GEN'],
+        currentBookId: 'GLO',
+      }),
     ).toBe(true);
   });
 });

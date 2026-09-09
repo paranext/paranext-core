@@ -56,6 +56,7 @@ import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import React, { useCallback, useMemo, useRef } from 'react';
 import { FindFilters } from './find-filters.component';
 import { LocalizedBookData, SearchTextType } from './find-types';
+import { isExtraMaterialBookId } from './find-book-lists.utils';
 import { isFindQueryValid } from './find.utils';
 import {
   FindLogger,
@@ -94,6 +95,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_clearSearch%',
   '%webView_find_errorOccurred%',
   '%webView_find_extraMaterialNotSearched%',
+  '%webView_find_extraMaterialNotSearchedScope%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
   '%webView_find_matchContentIn%',
@@ -148,6 +150,16 @@ export const FIND_LOCALIZED_STRING_KEYS = [
  */
 const EXTRA_MATERIAL_NOT_SEARCHED_KEY =
   '%webView_find_extraMaterialNotSearched%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * Key for the explanation shown when the current reference sits in extra material, which the `book`
+ * and `chapter` scopes cannot search. Distinct from {@link EXTRA_MATERIAL_NOT_SEARCHED_KEY}, whose
+ * wording is specific to the book picker's list.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} for the same reason as that key.
+ */
+const EXTRA_MATERIAL_SCOPE_KEY =
+  '%webView_find_extraMaterialNotSearchedScope%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
 
 /**
  * A search result paired with its index in the complete (ungrouped) results array, as produced by
@@ -635,7 +647,18 @@ export function Find({
   // the container previously passed its own copy as isSearchQueryValid, which drifted from the
   // Storybook harness's copy and let impossible prop combinations exist in tests. Find already
   // receives every input the rule needs.
-  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  const isSearchQueryValid = isFindQueryValid({
+    searchTerm,
+    scope,
+    selectedBookIds,
+    currentBookId: verseRef.book,
+  });
+
+  // Whether the invalid query is invalid *because* the current reference sits in extra material,
+  // which the `book` and `chapter` scopes cannot search. Read only to pick which placeholder the
+  // results area shows; `isSearchQueryValid` above is what actually blocks the search.
+  const isBlockedByExtraMaterial =
+    scope !== 'selectedBooks' && isExtraMaterialBookId(verseRef.book);
 
   // Single source of truth for which (if any) results-area placeholder shows, so the four states
   // are mutually exclusive by construction instead of by four separately-maintained boolean
@@ -650,6 +673,7 @@ export function Find({
     | 'skeleton'
     | 'idlePrompt'
     | 'invalidQueryPrompt'
+    | 'extraMaterialPrompt'
     | 'none' = useMemo(() => {
     if (noOpenProjects) return 'noOpenProjectsPrompt';
     // Outranks the results still on screen. They belong to the last query that DID run, so leaving
@@ -658,13 +682,26 @@ export function Find({
     // makes an invalid query show the right thing by construction: no container effect has to land
     // first, so there is no window in which stale results are on screen under a query that cannot
     // produce them.
-    if (!isSearchQueryValid) return searchTerm.trim() === '' ? 'idlePrompt' : 'invalidQueryPrompt';
+    if (!isSearchQueryValid) {
+      if (searchTerm.trim() === '') return 'idlePrompt';
+      // Ranked ahead of the generic invalid-query prompt, whose "select books" wording would send
+      // the user to a picker that cannot fix this — only moving the reference or switching scope
+      // can.
+      return isBlockedByExtraMaterial ? 'extraMaterialPrompt' : 'invalidQueryPrompt';
+    }
     if (results.length > 0) return 'none';
     if (searchStatus === 'running') return 'skeleton';
     if (searchStatus !== undefined) return 'none';
     if (searchTerm.trim() === '') return 'idlePrompt';
     return 'skeleton';
-  }, [noOpenProjects, results.length, searchStatus, searchTerm, isSearchQueryValid]);
+  }, [
+    noOpenProjects,
+    results.length,
+    searchStatus,
+    searchTerm,
+    isSearchQueryValid,
+    isBlockedByExtraMaterial,
+  ]);
 
   const resultsMessage = useMemo(() => {
     if (results.length === 0) {
@@ -689,6 +726,20 @@ export function Find({
         ? { [Section.Extra]: localizedStrings[EXTRA_MATERIAL_NOT_SEARCHED_KEY] }
         : undefined,
     [hasExcludedExtraMaterial, localizedStrings],
+  );
+
+  // Both scopes resolve to the current reference's book, so both are unavailable together whenever
+  // that book is extra material. Supplied only while it is: an always-present explanation would
+  // disable the scopes everywhere.
+  const disabledScopeExplanations = useMemo(
+    () =>
+      isExtraMaterialBookId(verseRef.book)
+        ? {
+            book: localizedStrings[EXTRA_MATERIAL_SCOPE_KEY],
+            chapter: localizedStrings[EXTRA_MATERIAL_SCOPE_KEY],
+          }
+        : undefined,
+    [verseRef.book, localizedStrings],
   );
 
   /** Text shown in the scope popover trigger, e.g. "GEN 1", "GEN, EXO, JHN", or "All books" */
@@ -1131,6 +1182,10 @@ export function Find({
                 // quick-select button disabled on a project that has some. Say why, so it doesn't
                 // read as "this project has no extra material".
                 disabledSectionExplanations={extraMaterialNotSearchedExplanation}
+                // Find cannot search extra material, and both these scopes resolve to the current
+                // reference's book. Disabling them keeps the user from choosing a scope that would
+                // only produce the blocked-query placeholder.
+                disabledScopeExplanations={disabledScopeExplanations}
               />
             </PopoverContent>
           </Popover>
@@ -1227,6 +1282,15 @@ export function Find({
           <ResultsPlaceholder
             id="find-invalid-query-placeholder"
             message={localizedStrings['%webView_find_selectBooksPrompt%']}
+          />
+        )}
+        {/* The current reference is in extra material, so the `book`/`chapter` scopes have nothing
+            searchable to resolve to. Separate from the invalid-query placeholder because the fix is
+            different: move the reference or switch scope, not pick books. */}
+        {resultsAreaState === 'extraMaterialPrompt' && (
+          <ResultsPlaceholder
+            id="find-extra-material-placeholder"
+            message={localizedStrings[EXTRA_MATERIAL_SCOPE_KEY]}
           />
         )}
         {(() => {

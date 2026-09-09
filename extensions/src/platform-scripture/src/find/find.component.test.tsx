@@ -416,6 +416,8 @@ const STRINGS = {
   '%webView_find_replace_readOnlyTooltip%':
     "This project is read-only, so replacements can't be made.",
   '%webView_find_previewOptions_toggle%': 'Preview style',
+  '%webView_find_extraMaterialNotSearchedScope%':
+    "Find doesn't search extra material, such as glossaries and front matter.",
 };
 
 /** `buildProps` with the English string map swapped in, for the suites below. */
@@ -881,4 +883,124 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
       expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveClass('tw:bg-muted');
     },
   );
+});
+
+// The bug these cover: the book and chapter scopes resolve to the CURRENT reference's book rather
+// than to the (already extra-material-free) book list, so navigating into a glossary and searching
+// "Current book" returned matches labeled with the meaningless reference the exclusion exists to
+// hide.
+describe('Find — current reference in extra material', () => {
+  const GLOSSARY_VERSE_REF: SerializedVerseRef = { book: 'GLO', chapterNum: 1, verseNum: 1 };
+  const EXTRA_MATERIAL_MESSAGE =
+    "Find doesn't search extra material, such as glossaries and front matter.";
+  // The scope selector's own strings stay stubbed to their keys — `buildLifecycleProps` swaps in
+  // English only for Find's own strings.
+  const BOOK_SCOPE_LABEL_KEY = '%webView_scope_selector_book%';
+  const CHAPTER_SCOPE_LABEL_KEY = '%webView_scope_selector_chapter%';
+
+  /**
+   * The scope option a label names, found through the label's `for`.
+   *
+   * Not `getByRole('radio', { name })`: the scope selector renders each option as a Radix `<button
+   * role="radio">`, and the accessible-name computation does not pick up a `<label for>` pointing
+   * at a button, so every option comes back nameless.
+   */
+  function getScopeOption(labelKey: string): HTMLElement {
+    const optionId = screen.getByText(labelKey).getAttribute('for');
+    if (!optionId) throw new Error(`Scope label '${labelKey}' has no 'for'`);
+    const option = document.getElementById(optionId);
+    if (!option) throw new Error(`Scope label '${labelKey}' points at missing id '${optionId}'`);
+    return option;
+  }
+
+  it.each(['book', 'chapter'] as const)(
+    'explains why the %s scope cannot run instead of showing results for it',
+    (scope) => {
+      render(
+        <Find
+          {...buildLifecycleProps({
+            scope,
+            verseRef: GLOSSARY_VERSE_REF,
+            searchTerm: 'God',
+            results: [RESULT],
+            resultsByBook: RESULTS_BY_BOOK,
+            searchStatus: 'completed',
+            totalNumberOfResults: 1,
+          })}
+        />,
+      );
+
+      expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+      // The stale results are replaced, not merely covered — they carry the bogus reference.
+      expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+    },
+  );
+
+  // "Select at least one book" would send the user to a picker that cannot fix this: the picker
+  // never offers extra material, and the fix is to move the reference or change scope.
+  it('does not fall back to the select-books wording, which names the wrong remedy', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
+  });
+
+  // The selected books are the user's own choice and already exclude extra material, so where the
+  // reference happens to sit says nothing about them.
+  it('leaves the selectedBooks scope searchable while the reference sits in extra material', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(RESULT_MATCH_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText(EXTRA_MATERIAL_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('disables both current-reference scopes in the picker so neither can be chosen', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeDisabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeDisabled();
+  });
+
+  it('leaves both scopes selectable while the reference is in a scripture book', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({ scope: 'selectedBooks', selectedBookIds: ['GEN'] })} />);
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeEnabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeEnabled();
+  });
 });

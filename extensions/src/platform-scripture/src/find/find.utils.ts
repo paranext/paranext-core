@@ -10,6 +10,7 @@ import {
 } from 'platform-bible-utils';
 import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
+import { isExtraMaterialBookId } from './find-book-lists.utils';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -174,19 +175,29 @@ export async function classifyPollAttempt(params: {
 
 /**
  * Whether the current search term + scope/filters combination would actually run a search: false
- * for an empty term, and false for the `selectedBooks` scope with no books selected. Shared between
+ * for an empty term, false for the `selectedBooks` scope with no books selected, and false for the
+ * `book`/`chapter` scopes while the current reference sits in extra material. Shared between
  * `find.web-view.tsx` (the source of truth) and `find.stories.tsx`'s harness so the two can't
  * silently diverge — they previously each hand-rolled this rule, and the harness's copy dropped the
  * empty-term check.
+ *
+ * The extra-material rule is the enforcement point for the `book`/`chapter` scopes, not merely a
+ * mirror of the disabled scope options in the UI. `scope` is persisted per web view and the current
+ * reference moves independently of it, so a user who chose `book` in a scripture book and then
+ * navigated into extra material never touches a disabled control on the way into this state.
+ *
+ * TODO(PT-4414): Drop the extra-material rule once extra material can be opened and addressed.
  */
 export function isFindQueryValid(params: {
   searchTerm: string;
   scope: Scope;
   selectedBookIds: string[];
+  /** Book id of the current scripture reference — what the `book`/`chapter` scopes resolve to. */
+  currentBookId: string;
 }): boolean {
   if (params.searchTerm.trim() === '') return false;
-  if (params.scope === 'selectedBooks' && params.selectedBookIds.length === 0) return false;
-  return true;
+  if (params.scope === 'selectedBooks') return params.selectedBookIds.length > 0;
+  return !isExtraMaterialBookId(params.currentBookId);
 }
 
 /** The decision {@link gateStartSearch} makes for a given attempt to start a search. */

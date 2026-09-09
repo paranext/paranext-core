@@ -55,6 +55,7 @@ interface RenderArgs {
   rangeStart?: SerializedVerseRef;
   rangeEnd?: SerializedVerseRef;
   selectedBookIds?: string[];
+  disabledScopeExplanations?: Partial<Record<ScopeWithRange, string>>;
 }
 
 function renderDropdown(args: RenderArgs = {}) {
@@ -79,6 +80,7 @@ function renderDropdown(args: RenderArgs = {}) {
       rangeEnd={args.rangeEnd ?? REF_GEN_5_30}
       onRangeStartChange={onRangeStartChange}
       onRangeEndChange={onRangeEndChange}
+      disabledScopeExplanations={args.disabledScopeExplanations}
       hideLabel
     />,
   );
@@ -111,6 +113,7 @@ function renderRadio(args: RenderArgs = {}) {
       rangeEnd={args.rangeEnd ?? REF_GEN_5_30}
       onRangeStartChange={onRangeStartChange}
       onRangeEndChange={onRangeEndChange}
+      disabledScopeExplanations={args.disabledScopeExplanations}
       hideLabel
     />,
   );
@@ -294,5 +297,58 @@ describe('ScopeSelector — range mode', () => {
     await user.click(closeBtn);
     expect(onScopeChange).not.toHaveBeenCalled();
     expect(onSelectedBookIdsChange).not.toHaveBeenCalled();
+  });
+});
+
+// Disabling an option is only an affordance — a consumer still has to reject the operation itself,
+// because a scope already selected when the state changed never passes through a disabled control.
+describe('ScopeSelector — disabled scope explanations', () => {
+  const BOOK_UNAVAILABLE = 'Current book cannot be searched right now';
+
+  /** The option control a scope's label points at, via the label's `for`. */
+  function getScopeOption(labelPattern: RegExp): HTMLElement {
+    const optionId = screen.getByText(labelPattern).getAttribute('for');
+    if (!optionId) throw new Error(`Scope label ${labelPattern} has no 'for'`);
+    const option = document.getElementById(optionId);
+    if (!option) throw new Error(`Scope label ${labelPattern} points at missing id '${optionId}'`);
+    return option;
+  }
+
+  it('radio variant: disables only the scopes that have an explanation', () => {
+    renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
+
+    expect(getScopeOption(/scope_selector_book/i)).toBeDisabled();
+    expect(getScopeOption(/scope_selector_chapter/i)).toBeEnabled();
+  });
+
+  it('radio variant: surfaces the explanation to assistive technology on the disabled option', () => {
+    renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
+
+    // The wrapper carries the name because a disabled control cannot host its own tooltip; see
+    // DisabledTooltipWrapper.
+    expect(screen.getByRole('group', { name: BOOK_UNAVAILABLE })).toBeInTheDocument();
+  });
+
+  it('radio variant: leaves every scope enabled when no explanations are supplied', () => {
+    renderRadio({ scope: 'chapter' });
+
+    expect(getScopeOption(/scope_selector_book/i)).toBeEnabled();
+    expect(getScopeOption(/scope_selector_chapter/i)).toBeEnabled();
+  });
+
+  it('dropdown variant: disables the explained option and refuses to select it', async () => {
+    const { user, onScopeChange, getByRole } = renderDropdown({
+      scope: 'chapter',
+      disabledScopeExplanations: { book: BOOK_UNAVAILABLE },
+    });
+    await user.click(getByRole('combobox'));
+
+    // The dropdown variant labels these options with the `current_*` keys, not the radio variant's.
+    const bookItem = await screen.findByText(/scope_selector_current_book/i);
+    expect(bookItem.closest('[role="menuitem"]')).toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(bookItem);
+
+    expect(onScopeChange).not.toHaveBeenCalled();
   });
 });

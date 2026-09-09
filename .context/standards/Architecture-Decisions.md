@@ -688,6 +688,15 @@ step, no automation. Just a record.
   answer would have wiped that selection permanently — `useProjectSetting` reports an error as
   loaded, so the error branch has to be recognized on its own.
 - **Source:** PT-3299, review of #2708.
+- **Update (2026-09-08, PT-3299 reopened):** The deferred `book`/`chapter` gate landed. Those scopes
+  are now rejected by `isFindQueryValid` while the current reference sits in extra material, and
+  `ScopeSelector` disables them with an explanation via a new `disabledScopeExplanations` prop. The
+  gate is a separate predicate (`isExtraMaterialBookId`) rather than a second filter over
+  `findScope`, which keeps the "one gate per path" shape the alternatives above rejected two filters
+  for: the book lists narrow what is offered, the predicate rejects what the current reference
+  resolves to. The query gate — not the disabled option — is the enforcement point, because `scope`
+  is persisted per web view and the reference moves independently, so this state is reachable
+  without touching the scope selector at all. PT-4414 still covers removing both halves together.
 
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 

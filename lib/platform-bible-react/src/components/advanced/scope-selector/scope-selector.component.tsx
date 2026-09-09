@@ -2,6 +2,7 @@ import { SelectBooks } from '@/components/advanced/scope-selector/select-books.c
 import { SELECT_BOOKS_STRING_KEYS } from '@/components/advanced/scope-selector/select-books.types';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { BookChapterControlLocalizedStrings } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
+import { DisabledActionTooltip } from '@/components/basics/disabled-action-tooltip.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Dialog,
@@ -32,7 +33,7 @@ import {
   LocalizedStringValue,
   Section,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -136,6 +137,16 @@ interface ScopeSelectorProps {
    * {@link SelectBooks} and shown as a tooltip on that section's disabled quick-select button.
    */
   disabledSectionExplanations?: Partial<Record<Section, string>>;
+  /**
+   * Optional explanations, by scope, for why that scope cannot be chosen right now. A scope with an
+   * entry renders disabled with its explanation as a tooltip, in both variants.
+   *
+   * Only for a scope that is genuinely unavailable in the CURRENT state — a scope the consumer
+   * never offers at all belongs out of {@link ScopeSelectorProps.availableScopes} instead. Disabling
+   * is only an affordance: the consumer still has to reject the query itself, since a scope already
+   * selected when the state changed never passes through a disabled control.
+   */
+  disabledScopeExplanations?: Partial<Record<ScopeWithRange, string>>;
   /** Optional ID that is applied to the root element of this component */
   id?: string;
 
@@ -215,6 +226,7 @@ export function ScopeSelector({
   localizedStrings,
   localizedBookNames,
   disabledSectionExplanations,
+  disabledScopeExplanations,
   id,
   variant = 'radio',
   rangeStart,
@@ -780,6 +792,11 @@ export function ScopeSelector({
                   <DropdownMenuItem
                     key={scopeId}
                     ref={assignScopeItemRef(value)}
+                    // Radix already blocks selection and marks the item `aria-disabled`; the title
+                    // carries the explanation, since a Tooltip inside DropdownMenuContent competes
+                    // with the menu for the same pointer and focus.
+                    disabled={!!disabledScopeExplanations?.[value]}
+                    title={disabledScopeExplanations?.[value]}
                     // Match dialog-launcher items for visual consistency.
                     // tw:ps-8 reserves space for the leading Check indicator.
                     // data-[highlighted] styles trigger on Radix's hover/focus mapping
@@ -967,12 +984,35 @@ export function ScopeSelector({
             onValueChange={handleScopeChange}
             className="tw:flex tw:flex-col tw:space-y-1"
           >
-            {displayedScopes.map(({ value, label, scrRefSuffix, id: scopeId }) => (
-              <div key={scopeId} className="tw:flex tw:items-center">
-                <RadioGroupItem className="tw:me-2" value={value} id={scopeId} />
-                <Label htmlFor={scopeId}>{renderScopeLabel(label, scrRefSuffix)}</Label>
-              </div>
-            ))}
+            {displayedScopes.map(({ value, label, scrRefSuffix, id: scopeId }) => {
+              const disabledExplanation = disabledScopeExplanations?.[value];
+              const row = (
+                <div className="tw:flex tw:items-center">
+                  <RadioGroupItem
+                    className="tw:me-2"
+                    value={value}
+                    id={scopeId}
+                    disabled={!!disabledExplanation}
+                  />
+                  <Label htmlFor={scopeId}>{renderScopeLabel(label, scrRefSuffix)}</Label>
+                </div>
+              );
+              // Every row is wrapped once the consumer opts into scope explanations at all, not only
+              // the rows that currently have one: a consumer supplies an explanation exactly when
+              // the scope becomes unavailable, so wrapping per-entry would swap the element type at
+              // this position on that flip, remounting the radio and dropping keyboard focus. The
+              // wrapper is inert while `disabled` is false.
+              if (!disabledScopeExplanations) return <Fragment key={scopeId}>{row}</Fragment>;
+              return (
+                <DisabledActionTooltip
+                  key={scopeId}
+                  disabled={!!disabledExplanation}
+                  tooltipText={disabledExplanation ?? ''}
+                >
+                  {row}
+                </DisabledActionTooltip>
+              );
+            })}
           </RadioGroup>
         )}
       </div>
