@@ -779,6 +779,62 @@ step, no automation. Just a record.
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
 
+## adr-focus-in-a-background-window-is-latent: A `focus()` call inside a backgrounded window sets the active element without raising the window
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** Two comments in the withhold-activation code (PT-4465) asserted opposite claims about
+  the same call. One line of comments said a `focus()` call inside a window that does not hold OS
+  focus "asks the browser to activate that window" — implying the call itself could pull a
+  backgrounded window to the foreground, which is exactly what `activateWithoutDocumentFocus` exists
+  to prevent. Another line said the same call "is silently dropped rather than deferred" — implying
+  the element never becomes focused at all, so nothing is lost by skipping the withholding. Both
+  cannot be true, and the whole design of `activateWithoutDocumentFocus`
+  (`shouldContentAvoidDocumentFocus`, `noteWindowWithheldFromActivation`,
+  `web-view.service-router.ts`, `platform-dock-layout-storage.util.ts`,
+  `web-view.service-shard.model.ts`) rests on knowing which one is true.
+- **Decision:** Settle it by measurement rather than by documentation or memory — Electron does not
+  specify this. A throwaway two-window Electron probe was run on native Windows, not WSLg: WSLg's
+  compositor does not implement client-initiated window activation, so a negative result there would
+  be indistinguishable from Electron's own behavior and would misread as confirmation that nothing
+  happens. Window A was given OS focus; window B was left visible but backgrounded
+  (`winA.isFocused() === true`, `winB.isFocused() === false`, and B's own document reporting
+  `hasFocus() === false`). Then, inside backgrounded B:
+
+  | call inside backgrounded B | did B come forward? | B's `activeElement` after | B's `document.hasFocus()` after |
+  | --- | --- | --- | --- |
+  | `input.focus()` on a plain element | no | `target` | `false` |
+  | `iframe.focus()` on the iframe element | no | `frame` | `false` |
+  | `input.focus()` on an element inside the iframe | no | `frame` | `false` |
+  | control: `BrowserWindow.focus()` from main | yes | — | — |
+
+  The control is what makes the other three rows readable: this environment can activate a window on
+  request, so "B did not come forward" is a fact about `focus()`, not about the compositor refusing
+  every activation request. The result: a `focus()` call inside a window that does not hold OS focus
+  sets that document's active element — on a plain element, on an iframe, and on an element inside
+  the iframe alike — and does nothing at the OS level. The window is never raised and
+  `document.hasFocus()` stays `false`. The focus is real but latent: it becomes live keyboard focus
+  only if and when the window is separately raised.
+- **Alternatives:** Neither prior claim was arrived at by measurement — both were plausible-sounding
+  guesses about undocumented Electron/Chromium behavior, confident enough in code comments to become
+  load-bearing for why `activateWithoutDocumentFocus` exists. There was no live alternative to
+  measuring directly; the only choice was where to run the probe, and WSLg was rejected as the venue
+  for the reason above.
+- **Consequences:** The withholding flag's original stated rationale — that skipping it risks a
+  backgrounded window being pulled to the foreground by its own content — does not hold; `focus()`
+  never does that, with or without the flag. Its established remaining job is caret ownership at the
+  moment a window IS raised: several tabs' content can each call `focus()` while a window sits
+  backgrounded, and without withholding, whichever call lands last claims the latent active element
+  and wins the caret the instant the window is raised, regardless of which tab the raise is actually
+  showing. Comments in `main.ts`, `web-view.service-router.ts`,
+  `platform-dock-layout-storage.util.ts`, `platform.data.ts`, `docking-framework.model.ts`, and
+  `web-view.service-shard.model.ts` were corrected to state the latent-focus fact and this narrower
+  rationale in place of the two disproved claims. Left open: on a path where the window is never
+  raised at all, the latent active element may have no observable consequence, so whether
+  withholding earns its place there too is unresolved — raised with the reviewer separately, not
+  answered by this entry.
+- **Source:** PT-4465; probe run 2026-09-09 on native Windows.
+
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Formerly:** ADR-0008
