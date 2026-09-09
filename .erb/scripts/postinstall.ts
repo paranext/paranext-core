@@ -39,6 +39,30 @@ type Manifest = {
   dependencies?: Record<string, string>;
 };
 
+/**
+ * The dependency sections npm records for a `file:` package and validates against the lockfile.
+ *
+ * `peerDependenciesMeta` belongs here even though it declares no package: it is what marks a peer
+ * optional, so removing an entry turns that peer into a required one and pulls it into the closure.
+ * Kept in step with `COMPARED_SECTIONS` in scripture-editors' `verify-consumer-lockfile-sync.mjs`,
+ * which performs the same comparison from the other side.
+ */
+const COMPARED_SECTIONS = [
+  'dependencies',
+  'peerDependencies',
+  'peerDependenciesMeta',
+  'optionalDependencies',
+] as const;
+
+/**
+ * The dependency sections this compares, as parsed from a staged manifest or a lockfile entry.
+ * Entry values are `unknown` because `peerDependenciesMeta` holds objects where the others hold
+ * version-range strings.
+ */
+type DependencySections = Partial<
+  Record<(typeof COMPARED_SECTIONS)[number], Record<string, unknown>>
+>;
+
 /** The staging folder names `dev-packages.json` declares, which are the only ones that count. */
 function getDeclaredStagingFolders(): string[] {
   const config: { repos?: { devPackages?: { stagingFolder?: string }[] }[] } = JSON.parse(
@@ -92,17 +116,73 @@ function isEnvFlagEnabled(value: string | undefined): boolean {
   return normalized !== '' && normalized !== '0' && normalized !== 'false' && normalized !== 'no';
 }
 
+/**
+ * Describes every place `package-lock.json`'s record of a staged package disagrees with the
+ * manifest actually staged.
+ *
+ * Presence in `node_modules` is not enough on its own: npm builds its ideal tree from the on-disk
+ * state it saw at startup, so a staged package whose dependency _range_ moved — `^0.43.0` to
+ * `^0.44.0`, say — resolves to the already-installed version, reports "up to date", and leaves the
+ * lockfile recording the old range. Every later `npm ci` then fails on the mismatch, in CI, for
+ * everyone. Comparing the recorded sections against the staged manifest is what catches it while it
+ * is still repairable.
+ */
+function getStagedLockMismatches(): string[] {
+  const lockPath = path.resolve(REPO_ROOT, 'package-lock.json');
+  if (!fs.existsSync(lockPath)) return [];
+  const lock: { packages?: Record<string, DependencySections> } = JSON.parse(
+    fs.readFileSync(lockPath, 'utf8'),
+  );
+
+  const mismatches: string[] = [];
+  getDeclaredStagingFolders().forEach((folder: string) => {
+    const manifestPath = path.resolve(STAGING_ROOT, folder, 'package.json');
+    if (!fs.existsSync(manifestPath)) return;
+    const staged: DependencySections = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+    const lockEntry = lock.packages?.[`dev-packages/staging/${folder}`];
+    if (!lockEntry) {
+      mismatches.push(`package-lock.json has no entry for dev-packages/staging/${folder}`);
+      return;
+    }
+
+    COMPARED_SECTIONS.forEach((section) => {
+      const stagedSection = staged[section] ?? {};
+      const recordedSection = lockEntry[section] ?? {};
+      new Set([...Object.keys(stagedSection), ...Object.keys(recordedSection)]).forEach((name) => {
+        // Structural, because `peerDependenciesMeta` entries are objects. Both sides are parsed
+        // from JSON npm wrote, so key order is stable. `JSON.stringify` of an absent entry is
+        // `undefined`, which compares equal only to another absent one.
+        const stagedValue = JSON.stringify(stagedSection[name]);
+        const recordedValue = JSON.stringify(recordedSection[name]);
+        if (stagedValue === recordedValue) return;
+        mismatches.push(
+          `${folder} ${section}.${name}: staged package declares ${stagedValue ?? 'nothing'}, ` +
+            `package-lock.json records ${recordedValue ?? 'nothing'}`,
+        );
+      });
+    });
+  });
+  return mismatches;
+}
+
 function runBuildChain(): void {
   execSync('npm run postinstall:build', { stdio: 'inherit', cwd: REPO_ROOT });
 }
 
 function postinstall(): void {
   const missing = getMissingStagedDependencies();
+  const mismatches = getStagedLockMismatches();
 
-  if (missing.length === 0) {
+  if (missing.length === 0 && mismatches.length === 0) {
     runBuildChain();
     return;
   }
+
+  const problems = [
+    ...missing.map((name) => `${name} (declared by a staged package, not installed)`),
+    ...mismatches,
+  ];
 
   // `npm ci` cannot repair this: it installs the closure `package-lock.json` records and never
   // re-resolves, so a second pass would arrive here with the same missing dependencies. Only an
@@ -113,7 +193,7 @@ function postinstall(): void {
     process.env.npm_command === 'ci'
   ) {
     console.error(
-      `\nThe staged dev packages declare dependencies that are not installed:\n\n  ${missing.join(
+      `\nThis repo's package-lock.json does not match the staged dev packages:\n\n  ${problems.join(
         '\n  ',
       )}\n\nThis means scripture-editors' dependencies changed but this repo's package-lock.json was\nnot updated to match. To fix: run \`npm install\` in this repo (with the scripture-editors\ncheckout present) and commit the package-lock.json change.\n`,
     );
@@ -129,7 +209,7 @@ function postinstall(): void {
   // run executes the full lifecycle — preinstall re-stages (a fast no-op via its freshness marker),
   // and its own postinstall runs the build chain — so this outer run is done when it returns.
   console.log(
-    '\nThe staged dev packages were created during this install, after npm had already resolved the\ndependency tree without them. Running the install again to pick them up...\n',
+    '\nThe staged dev packages do not match what npm resolved this run — they were created or\nchanged after it had already built the dependency tree. Running the install again to pick them\nup...\n',
   );
   execSync('npm install', {
     stdio: 'inherit',
