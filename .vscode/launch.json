@@ -57,6 +57,26 @@
       "autoAttachChildProcesses": true
     },
     {
+      // Same as "Debug Platform Backend" but with PT_DOTNET_NO_WATCH set, so the .NET provider runs
+      // the already-built assembly instead of `dotnet watch`. C# changes are NOT picked up: run
+      // `npm run build:data` and restart. Shipped as its own entry so nobody has to edit this
+      // tracked file to get the flag; "false" in the block above would not work, since the check is
+      // `=== 'true'` and so is indistinguishable from omitting the key.
+      "name": "Debug Platform Backend (no .NET watcher)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start"],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223 --remote-allow-origins=http://localhost:9223",
+        "IN_VSCODE": "true",
+        "DEV_NOISY": "false",
+        "PT_DOTNET_NO_WATCH": "true"
+      },
+      "autoAttachChildProcesses": true
+    },
+    {
       "name": "Attach to Renderer",
       "type": "chrome",
       "request": "attach",
@@ -108,6 +128,15 @@
         "hidden": false,
         "group": "",
         "order": 1
+      }
+    },
+    {
+      "name": "Debug Platform (no .NET watcher)",
+      "configurations": ["Debug Platform Backend (no .NET watcher)", "Attach to Renderer"],
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 2
       }
     }
   ]
