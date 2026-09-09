@@ -127,16 +127,16 @@ const NO_MATCH_TERM = 'ZZZQQQXXX_NORESULT_12345';
 const BOUNDARY_SPANNING_TERM = 'of Abraham. Abraham became';
 
 /**
- * A negative control for the boundary-whitespace tolerance: "in to" exists in the bundled WEB text
- * only as the substring "into", never as two words separated by a real space. With the gate
- * engaged, the query's interior space may only match zero characters at a break boundary, and no
- * "into" occurrence sits at one, so this returns no results (measured: 0 results with the gate on,
- * 6 with it off — the two states genuinely differ). A query whose space is missing from the text
- * everywhere, at a boundary or not (e.g. "of David,the son"), is not a control: the tolerance only
- * ever lets query whitespace shrink to zero, never grow, so that kind of query matches nothing
- * whether or not the gate is engaged, and would still pass with the gate deleted.
+ * A negative control for the boundary-whitespace tolerance. "Bartholomew" occurs in the bundled WEB
+ * text (Matt 10:3); the two-word form "Bartholom ew" does not occur anywhere in the corpus. So this
+ * query's interior space, to match at all, would have to match zero characters mid-word — a
+ * position that is never a block boundary. With the gate engaged that zero-width gap is rejected,
+ * so this returns no results. This is a real control, unlike a query whose space is simply missing
+ * from the text everywhere (e.g. "of David,the son"): the tolerance only ever lets query whitespace
+ * shrink to zero, never grow, so a query already missing that space matches nothing regardless of
+ * whether the gate exists, and would still pass with the gate deleted.
  */
-const NON_BOUNDARY_GAP_TERM = 'in to';
+const NON_BOUNDARY_GAP_TERM = 'Bartholom ew';
 
 /** History debounce delay (ms). Must match HISTORY_DEBOUNCE_DELAY_MS in find.web-view.tsx. */
 const HISTORY_DEBOUNCE_MS = 5_000;

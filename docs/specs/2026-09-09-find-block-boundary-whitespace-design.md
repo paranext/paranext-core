@@ -227,24 +227,24 @@ The bug reproduces in the **unmodified bundled WEB text**, so every layer uses i
 example, MAT 1 (`\p` boundary between verse 1 and verse 2), whose searched form is
 `…the son of David, the son of Abraham.Abraham became the father of Isaac…`:
 
-| Query                                                                | Today     | After     |
-| -------------------------------------------------------------------- | --------- | --------- |
-| `of Abraham. Abraham became` (what copy-paste from the editor gives) | 0 results | 1 result  |
-| `of Abraham.Abraham became`                                          | 1 result  | 1 result  |
-| `in to` (mid-paragraph, no boundary — the text only has "into")      | 0 results | 0 results |
+| Query                                                                   | Today     | After     |
+| ----------------------------------------------------------------------- | --------- | --------- |
+| `of Abraham. Abraham became` (what copy-paste from the editor gives)    | 0 results | 1 result  |
+| `of Abraham.Abraham became`                                             | 1 result  | 1 result  |
+| `Bartholom ew` (mid-word gap, not a boundary — "Bartholomew" is a word) | 0 results | 0 results |
 
 `web-matthew-1-and-2.usj` offers 22 further note-free zero-whitespace boundaries if another phrase is
 wanted (`the exile to Babylon.After the exile…`, `fourteen generations.Now the birth…`, and so on).
 
-**Negative control:** the third row. `in to` exists in the bundled WEB text only as the substring
-"into", never as two words separated by a real space, so it is a query the boundary gate can
-actually fail: with the gate engaged, the interior space may only match zero characters at a break
-boundary, and none of the "into" occurrences sit at one, giving 0 results; with the gate removed
-(measured by disabling `flexibleWhitespaceAtBlockBoundaries`), the same zero-length group is
-accepted anywhere and matches all 6 "into" occurrences. A query whose space is missing from the text
-everywhere, at a boundary or not (e.g. `of David,the son`), is not a control: the tolerance only ever
-lets query whitespace shrink to zero, never grow, so that kind of query matches nothing whether or
-not the gate exists, and the test would still pass with the gate deleted. (A whole-corpus "no results
+**Negative control:** the third row. "Bartholomew" occurs once in the bundled WEB text (Matt 10:3);
+the two-word form "Bartholom ew" does not occur anywhere in the corpus. So this query's interior
+space, to match at all, would have to match zero characters mid-word — a position that is never a
+block boundary — which is exactly what the boundary gate can actually fail on: with the gate engaged
+that zero-width gap is rejected, giving 0 results; with the gate removed, the same zero-length group
+is accepted anywhere and the query matches "Bartholomew". A query whose space is missing from the
+text everywhere, at a boundary or not (e.g. `of David,the son`), is not a control: the tolerance only
+ever lets query whitespace shrink to zero, never grow, so that kind of query matches nothing whether
+or not the gate exists, and the test would still pass with the gate deleted. (A whole-corpus "no results
 change" control is **not** available: the bundled text has boundary-spanning matches everywhere, so
 results legitimately change in many places.)
 
