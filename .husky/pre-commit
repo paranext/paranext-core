@@ -53,6 +53,16 @@ fi
 # re-staged.
 if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.json'; then
   LOCK_ROOT_NAME=$(git show :package-lock.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).name" 2>/dev/null)
+  # An empty value means node could not parse the staged blob at all (unresolved conflict markers
+  # are the usual cause); "undefined" means it parsed but carried no root name. Neither is drift, so
+  # do not send the developer off to edit a name that is not the problem. stderr stays suppressed
+  # above: without it a V8 stack trace buries the message below.
+  if [ -z "$LOCK_ROOT_NAME" ] || [ "$LOCK_ROOT_NAME" = "undefined" ]; then
+    echo ""
+    echo "Error: could not read the root \"name\" from the staged package-lock.json."
+    echo "Is it valid JSON with a root \"name\"? Unresolved conflict markers will do this."
+    exit 1
+  fi
   if [ "$LOCK_ROOT_NAME" != "paranext-core" ]; then
     echo ""
     echo "Error: package-lock.json's root \"name\" is \"$LOCK_ROOT_NAME\", expected \"paranext-core\"."

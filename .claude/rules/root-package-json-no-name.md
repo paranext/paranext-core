@@ -31,6 +31,12 @@ Because npm falls back to the containing directory name when `name` is absent, r
 `.husky/pre-commit` blocks the commit if you miss it, and the wrong name is otherwise
 self-consistent — CI's "Verify no files changed after build" will not catch it.
 
+That hook guards the symptom, not this rule: it compares the lockfile's root `name` against
+`paranext-core`, so adding `"name": "paranext-core"` to the manifest makes npm write the expected
+value and the check passes while the decision is being violated. What actually stops that is CI —
+naming the root makes `import/no-relative-packages` reject 12 pre-existing imports across 9 files.
+See the ADR for why that is a prerequisite rather than a nuisance.
+
 ### Why this rule exists
 
 Adding the field is a reasonable-looking one-line change, so it keeps getting proposed — repeatedly
