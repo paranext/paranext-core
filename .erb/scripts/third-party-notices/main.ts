@@ -37,7 +37,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import JSON5 from 'json5';
 
 import { compareStrings } from './compare';
 import { identify } from './identify';
@@ -76,6 +75,7 @@ import { describeBlock, openPolicyQuestions, stalePolicyEntries } from './report
 import { render, joinTexts } from './render';
 import { declaredLicenseField, readPackageNotices, readTextFile } from './package-files';
 import { messageOf, readJsonFile } from './read-json';
+import { assertProductMatchesPackaging, readPackagingConfig } from './product';
 import type {
   CopiedPlatformLibrary,
   Detection,
@@ -83,6 +83,7 @@ import type {
   MergedNugetPackage,
   NamedText,
   Policy,
+  ProductBlock,
   ReportRow,
   ShippedPackage,
   SnapStagePackage,
@@ -179,9 +180,7 @@ const SNAP_MIN_STAGE_PACKAGES = 8;
  * the artifact - see the "Linux snap" section `render` writes from this list.
  */
 function snapStagePackages(): string[] {
-  const config: { snap?: { stagePackages?: string[] } } = JSON5.parse(
-    fs.readFileSync(ELECTRON_BUILDER, 'utf8'),
-  );
+  const config = readPackagingConfig(ELECTRON_BUILDER);
   const staged = config.snap?.stagePackages ?? [];
   if (staged.length < SNAP_MIN_STAGE_PACKAGES)
     throw new Error(
@@ -721,6 +720,7 @@ type BuiltReport = {
   copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>;
   packedExtensions: string[];
   shipsElectron: boolean;
+  product: ProductBlock | undefined;
 };
 
 /**
@@ -800,6 +800,13 @@ export function buildReport(): BuiltReport {
 
   const policy = loadPolicy(POLICY);
 
+  // Refused before anything is derived: the name goes into the first sentence of the document.
+  assertProductMatchesPackaging(
+    policy.product,
+    readPackagingConfig(ELECTRON_BUILDER),
+    path.relative(REPO, ELECTRON_BUILDER),
+  );
+
   const { npmPackages, unresolvedStylesheetSpecifiers } = buildNpmShippingSet(policy);
   const npmVerdicts = classifyNpmPackages(npmPackages, policy);
 
@@ -855,6 +862,7 @@ export function buildReport(): BuiltReport {
     // `unbundledDependencies` entry is the record that it ships at all.
     packedExtensions: packedExtensionNames(REPO),
     shipsElectron: Boolean((policy.unbundledDependencies || {}).electron),
+    product: policy.product,
   };
 }
 
