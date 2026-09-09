@@ -125,14 +125,17 @@ async function findWebViewAdoptedAfterTimeout(
  * view went — same narrow rule as cross-window opens: only between this app's windows, never taking
  * focus from another application. A window created for the move is not raised at all: it is
  * revealed without activation on purpose, so the move does not pull the user out of the window they
- * are working in. An existing window the platform deliberately kept out of the foreground is
- * likewise left alone: a move landing content there is not the user asking to go there either.
+ * are working in. An existing window the platform deliberately kept out of the foreground is left
+ * alone the same way, UNLESS the move itself was declared user-requested: naming a background
+ * window from a control the user operated (the tab context menu's "Move to window") is the user
+ * asking to go there, and raising it is what a person asking for a window is for — the raise
+ * reaches the window's own focus handler, which is what clears the withholding.
  */
-function raiseMoveTarget(target: MoveWebViewTarget): void {
+function raiseMoveTarget(target: MoveWebViewTarget, isUserRequested: boolean): void {
   if (
     target.kind === 'window' &&
     isApplicationFocused() &&
-    !shouldContentAvoidDocumentFocus(target.windowId)
+    (isUserRequested || !shouldContentAvoidDocumentFocus(target.windowId))
   )
     focusWindow(target.windowId);
 }
@@ -306,10 +309,11 @@ async function moveCapturedWebView(
     // from whether the destination is awaiting its first activation — which is false for an
     // ordinary window that is simply not the one holding OS focus, so the adopt takes document
     // focus there. `raiseMoveTarget` below is what is meant to make that harmless, by raising the
-    // destination right after; when it is skipped (the application does not hold focus) or refused
-    // by the OS, the window stays backgrounded and the adopt's focus stays latent — it claims the
-    // caret only once something later raises that window, at a moment the user never associated
-    // with this move.
+    // destination right after; when it is skipped (the application does not hold focus, or the
+    // destination is withheld from activation and the move was not declared user-requested) or
+    // refused by the OS, the window stays backgrounded and the adopt's focus stays latent — it
+    // claims the caret only once something later raises that window, at a moment the user never
+    // associated with this move.
     adoptIntoDestination = (definition) => shard.adoptWebView(definition);
   }
 
@@ -391,7 +395,7 @@ async function moveCapturedWebView(
           logger.debug(
             `Webview ${webViewId}'s adopt into window ${adoptedWindowId} succeeded, but that window's close was decided while the adopt was running; its own close path will handle the view.`,
           );
-        else raiseMoveTarget(target);
+        else raiseMoveTarget(target, isUserRequested);
         return movedWebViewId;
       }
       logger.warn(
@@ -419,7 +423,7 @@ async function moveCapturedWebView(
           targetDescription,
         );
         if (lateAdoptedWebViewId !== undefined) {
-          raiseMoveTarget(target);
+          raiseMoveTarget(target, isUserRequested);
           return lateAdoptedWebViewId;
         }
       }

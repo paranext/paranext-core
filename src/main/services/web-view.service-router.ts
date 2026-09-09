@@ -292,6 +292,15 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
           summary: 'Id of the target window, as `platform.getWindows` reports it',
           schema: { type: 'string' },
         },
+        {
+          name: 'isUserRequested',
+          required: false,
+          summary:
+            'Whether a person asked for this move, which decides whether a target window the ' +
+            'platform is withholding from activation comes to the front. Defaults to false, so ' +
+            'an extension moving a view on its own leaves a backgrounded window backgrounded',
+          schema: { type: 'boolean' },
+        },
       ],
       result: {
         name: 'return value',
@@ -340,11 +349,17 @@ async function moveWebViewToNewWindow(
 async function moveWebViewToWindow(
   webViewId: unknown,
   targetWindowId: unknown,
+  isUserRequested: unknown,
 ): Promise<WebViewId> {
   if (typeof webViewId !== 'string')
     throw new Error(`platform.moveWebViewToWindow needs a web view id; got ${typeof webViewId}`);
   assertWindowExists(targetWindowId, 'platform.moveWebViewToWindow');
-  return moveWebView(webViewId, { kind: 'window', windowId: targetWindowId });
+  // Same default and reason as moveWebView's isUserRequested.
+  return moveWebView(
+    webViewId,
+    { kind: 'window', windowId: targetWindowId },
+    isUserRequested === true,
+  );
 }
 
 /**
