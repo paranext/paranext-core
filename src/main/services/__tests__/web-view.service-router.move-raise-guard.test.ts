@@ -9,6 +9,10 @@ import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import type { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import type { InternalRequestHandler } from '@shared/data/rpc.model';
+import {
+  noteWindowWithheldFromActivation,
+  resetWindowActivationForTesting,
+} from '@main/window-activation.util';
 
 const mocks = vi.hoisted(() => {
   // Where the router's shard index parks its subscriptions — module state that outlives one test,
@@ -128,6 +132,10 @@ type WindowShard = ReturnType<typeof windowShard>;
 describe('the cross-application focus guard on a move', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Which windows were created without activation is process state, not a mock — nothing else
+    // clears it between tests, and a mark left by one test would silently change what a later one
+    // exercises.
+    resetWindowActivationForTesting();
     mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
@@ -160,6 +168,36 @@ describe('the cross-application focus guard on a move', () => {
     withWindows({ 2: owner, 3: target });
     mocks.getFocusedWindowId.mockReturnValue('2');
     mocks.isApplicationFocused.mockReturnValue(true);
+
+    await moveWebView('view-1', { kind: 'window', windowId: '3' });
+
+    expect(mocks.focusWindow).toHaveBeenCalledWith('3');
+  });
+
+  test('a move into a window the platform deliberately kept in the background does not raise it', async () => {
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    withWindows({ 2: owner, 3: target });
+    mocks.getFocusedWindowId.mockReturnValue('2');
+    mocks.isApplicationFocused.mockReturnValue(true);
+    // What the window creator does for a window the platform opened without activation
+    noteWindowWithheldFromActivation('3');
+
+    await moveWebView('view-1', { kind: 'window', windowId: '3' });
+
+    expect(mocks.focusWindow).not.toHaveBeenCalled();
+  });
+
+  test('a move into a window that is not withheld still raises it, even with an unrelated window withheld', async () => {
+    // Positive control for the case above: the guard must key off the TARGET window, not act as a
+    // blanket suppression — a target that is not withheld must still be raised, even while some
+    // other window (here, the source) is.
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    withWindows({ 2: owner, 3: target });
+    mocks.getFocusedWindowId.mockReturnValue('2');
+    mocks.isApplicationFocused.mockReturnValue(true);
+    noteWindowWithheldFromActivation('2');
 
     await moveWebView('view-1', { kind: 'window', windowId: '3' });
 
