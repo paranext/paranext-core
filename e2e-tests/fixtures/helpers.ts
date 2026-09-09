@@ -96,10 +96,10 @@ export interface ElectronAppContext {
 /**
  * Wait for the given port to stop accepting connections (i.e., be free). Used after teardown to
  * ensure the previous Electron's extension-host WebSocket server has released port 8876 before the
- * next test launches. On Windows, killing the Electron main process does not always kill the
- * extension-host child process immediately; without this wait, the next `waitForWebSocketReady`
- * connects to the dying extension host rather than the new one, causing "Settings service
- * undefined" errors.
+ * next test launches. Even after {@link killProcessTree} has reached the whole tree, the
+ * extension-host child process does not always release the port immediately; without this wait, the
+ * next `waitForWebSocketReady` connects to the dying extension host rather than the new one,
+ * causing "Settings service undefined" errors.
  */
 async function waitForPortFree(port: number, timeout: number): Promise<boolean> {
   const startTime = Date.now();
@@ -578,12 +578,16 @@ const defaultKillProcessTreeDeps: KillProcessTreeDeps = {
  *
  * On POSIX, `-pid` signals the whole process group a `detached: true` launch put the process in;
  * `pid` alone is the fallback for whatever that misses. Windows has no process groups, so `-pid`
- * throws there and a plain `process.kill(pid, …)` only ever reaches the one process named by that
- * pid — for Electron, that stops the main process while its child tree (the extension host, and the
- * `dotnet watch` .NET data provider with its own descendants) keeps running, since none of them
- * watch their parent. Orphaned like that, they keep files and the fixed WebSocket port open, and
- * the next launch can connect to a leftover server instead of its own — `taskkill /pid <pid> /t /f`
- * asks Windows to walk the tree instead of signalling one pid.
+ * throws there and a plain `process.kill(pid, …)` reaches exactly one process — and for an Electron
+ * app launched by Playwright that process is not even the app: on Windows Playwright starts
+ * Electron through `shell: true` (`playwright-core/lib/server/electron/electron.js`), so
+ * `electronApp.process().pid` names a `cmd.exe` wrapper, and killing it leaves `electron.exe` and
+ * its whole tree — renderer and utility processes, the extension host, the `dotnet watch` .NET data
+ * provider with its own descendants — running as if nothing happened. The orphaned app keeps the
+ * fixed WebSocket port bound, so the next launch's server fails with EADDRINUSE and its renderer
+ * connects to the leftover app instead of its own, and it holds the Chromium cache files the
+ * profile cleanup then cannot delete. `taskkill /pid <pid> /t /f` asks Windows to walk the tree
+ * down from that wrapper instead of signalling one pid.
  *
  * `deps` lets a test substitute every OS call this makes without touching a real process.
  */
@@ -700,8 +704,9 @@ export async function launchElectronApp(
   try {
     await waitForWebSocketReady(DEFAULT_WEBSOCKET_PORT, PROCESS_READY_TIMEOUT);
   } catch (error) {
-    // Launch succeeded but WebSocket never became ready — kill the orphaned
-    // Electron process and clean up the temp directory before propagating.
+    // Launch succeeded but WebSocket never became ready — kill the orphaned Electron tree (not just
+    // the pid Playwright hands back; see killProcessTree) and clean up the temp directory before
+    // propagating.
     console.error('WebSocket readiness check failed after Electron launch:', error);
     const proc = electronApp.process();
     if (proc?.pid) killProcessTree(proc.pid, 'SIGKILL');
@@ -757,9 +762,10 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
 
   // On Linux, processLauncher.js spawns Electron with `detached: true`, making Electron the leader
   // of its own process group; its .NET data-provider and extension-host children inherit the
-  // write-ends of Electron's stdout/stderr pipes, so killing only the Electron PID leaves those
-  // write-ends — and, on Windows, the whole child tree — open. See {@link killProcessTree} for how
-  // each platform reaches the rest of the tree.
+  // write-ends of Electron's stdout/stderr pipes, so signalling only that one pid leaves those
+  // write-ends open. On Windows `pid` above is not even Electron's — Playwright launches it through
+  // a `cmd.exe` wrapper there — so a plain kill of it leaves the wrapper's whole child tree running.
+  // See {@link killProcessTree} for how each platform reaches the rest of the tree.
 
   /** Whether the Electron OS process is still running, per the best signal available. */
   const isProcessAlive = (): boolean => {
@@ -794,9 +800,9 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   }
 
   // Wait for the extension-host's WebSocket server (port 8876) to release the port before the next
-  // launch. On Windows, killing the Electron main process does not immediately kill child
-  // processes — the extension host can outlive the main process and keep port 8876 bound, causing
-  // the next test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
+  // launch. Even a full-tree kill does not free it instantly — the extension host can take a moment
+  // to unbind after being signalled, and keep port 8876 bound in the meantime, causing the next
+  // test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
   // preserve-and-return path too, since a relaunch reuses the same fixed port 8876.
   console.log('[teardown] Waiting for port 8876 to be free...');
   const portFreed = await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
