@@ -532,10 +532,11 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
 
     /**
-     * Syncs projects: sends/receives each project, then reads each synced project's connected
-     * resources and projects (one level deep — connections of connections are not included) and
-     * sends/receives connected translation projects or DBL-updates connected resources as needed.
-     * Unknown project IDs are skipped. Deduplication is handled internally.
+     * Syncs projects: sends/receives each project, then reads connected resources and projects (one
+     * level deep — connections of connections are not included) for the project(s) this call
+     * settles on, and sends/receives connected translation projects or DBL-updates connected
+     * resources for those as needed. Unknown project IDs are skipped. Deduplication is handled
+     * internally.
      *
      * This signature matches this repository's C# stub (`String[]? projectIds`, no return value),
      * which core itself calls with `undefined` — see the cases below for what that actually syncs.
@@ -545,10 +546,12 @@ declare module 'papi-shared-types' {
      * @param projectIds IDs of the projects to sync.
      *
      *   - If provided, each given ID is synced regardless of whether it is already present locally — a
-     *       `new` (not yet downloaded) project among them is downloaded, not skipped. Unknown IDs
-     *       are skipped.
+     *       `new` (not yet downloaded) project among them is downloaded, not skipped, though an
+     *       implementation may still exclude a given id for reasons outside the caller's control
+     *       (e.g., an unsupported project version, or the project being otherwise ineligible).
      *   - If omitted and at least one shared project the account knows about is already present locally
-     *       (not new), every locally-present project is synced; new projects are left alone.
+     *       (not new), every locally-present shared project is synced; new projects are left
+     *       alone.
      *   - If omitted and no shared project the account knows about is present locally yet (whether a
      *       genuine first sync, or every previously-local project has since gone missing from
      *       disk), an implementation is expected to try to make at least one project available for

@@ -215,10 +215,10 @@ internal class ParatextProjectSendReceiveService(
     }
 
     /// <summary>
-    /// Syncs the given projects (S/Rs them), then reads each synced project's connected resources
-    /// and projects (one level deep — connections of connections are not included) and S/Rs
-    /// connected translation projects or DBL-updates connected resources as needed. Unknown IDs are
-    /// skipped. Deduplication is handled internally.
+    /// Syncs the given projects (S/Rs them), then reads connected resources and projects (one level
+    /// deep — connections of connections are not included) for the project(s) this call settles on,
+    /// and S/Rs connected translation projects or DBL-updates connected resources for those as
+    /// needed. Unknown IDs are skipped. Deduplication is handled internally.
     /// Exception is thrown if this function is not implemented in the current application
     /// or if an error was encountered syncing.
     /// </summary>
@@ -227,10 +227,12 @@ internal class ParatextProjectSendReceiveService(
     /// <list type="bullet">
     /// <item>If explicit IDs are given, each one is synced regardless of whether it is already
     /// present locally — a <c>new</c> (not yet downloaded) project among them is downloaded, not
-    /// skipped.</item>
+    /// skipped, though an implementation may still exclude a given id for reasons outside the
+    /// caller's control (e.g., an unsupported project version, or the project being otherwise
+    /// ineligible).</item>
     /// <item>If <see langword="null"/> and at least one shared project the account knows about is
-    /// already present locally (not new), every locally-present project is synced; new projects
-    /// are left alone.</item>
+    /// already present locally (not new), every locally-present shared project is synced; new
+    /// projects are left alone.</item>
     /// <item>If <see langword="null"/> and no shared project the account knows about is present
     /// locally yet (whether a genuine first sync, or every previously-local project has since gone
     /// missing from disk), an implementation is expected to try to make at least one project
