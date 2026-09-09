@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import {
+  findWindowIdOwningWebView,
   getAllOpenWebViewDefinitionsWithReachability,
   getOpenWebViewDefinitionsForWindow,
   setWebViewWindowCreator,
@@ -1485,6 +1486,43 @@ describe('web view service router', () => {
     await expect(router.getOpenWebViewDefinition('owned-view')).resolves.toEqual({
       id: 'owned-view',
     });
+  });
+
+  test('findWindowIdOwningWebView resolves the id of the window that owns a web view', async () => {
+    const owner = windowShard(['owned-view']);
+    withWindows({ 1: windowShard([]), 2: owner });
+
+    const { windowId, hadUnreachableWindows } = await findWindowIdOwningWebView(
+      'owned-view',
+      'test operation',
+    );
+
+    expect(windowId).toBe('2');
+    expect(hadUnreachableWindows).toBe(false);
+  });
+
+  test('findWindowIdOwningWebView answers undefined when no window owns the web view', async () => {
+    withWindows({ 1: windowShard([]), 2: windowShard([]) });
+
+    const { windowId, hadUnreachableWindows } = await findWindowIdOwningWebView(
+      'missing-view',
+      'test operation',
+    );
+
+    expect(windowId).toBeUndefined();
+    expect(hadUnreachableWindows).toBe(false);
+  });
+
+  test('findWindowIdOwningWebView reports unreachable windows rather than guessing', async () => {
+    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreachableWindowIds: ['2'] });
+
+    const { windowId, hadUnreachableWindows } = await findWindowIdOwningWebView(
+      'some-view',
+      'test operation',
+    );
+
+    expect(windowId).toBeUndefined();
+    expect(hadUnreachableWindows).toBe(true);
   });
 
   test('refuses to answer that nobody owns a web view while a window that stopped serving may hold it', async () => {
