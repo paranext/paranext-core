@@ -211,7 +211,10 @@ export function InternetAccessOptionList({
                   // would pop a description open with no user gesture. Preventing the default
                   // suppresses Radix's focus handler, leaving hover and a keyboard arrival as the
                   // only ways in. See useInteractionModalityRef for why modality, not
-                  // `:focus-visible`, is what tells those apart.
+                  // `:focus-visible`, is what tells those apart. `'none'` (no input yet in this
+                  // document) falls on the suppress side here — the opposite of the reveal-side
+                  // reading in `toolbar-compound-label`, because a description that pops open as
+                  // the panel loads is the exact bug this guard exists for.
                   if (interactionModality.current !== 'keyboard') event.preventDefault();
                 }}
               >
