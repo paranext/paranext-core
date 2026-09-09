@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import {
   canPublishResourcePanelProjectIds,
+  canResolveResourceSelection,
   getResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
@@ -143,5 +144,45 @@ describe('canPublishResourcePanelProjectIds', () => {
 
   it('withholds publishing when the list could not be read', () => {
     expect(canPublishResourcePanelProjectIds({ status: 'error' }, true)).toBe(false);
+  });
+});
+
+describe('canResolveResourceSelection', () => {
+  const SETTLED = { listState: readyWith(1), isCatalogReady: true, hasCatalogError: false };
+
+  it('allows resolving once the list and the catalog have both arrived', () => {
+    expect(canResolveResourceSelection(SETTLED)).toBe(true);
+  });
+
+  it('withholds resolving while the catalog is still arriving', () => {
+    // The window PT-4470 reports: a configured resource whose catalog entry has not landed is
+    // absent from the filtered rows, so auto-correct would persist a fallback over the user's pick.
+    expect(canResolveResourceSelection({ ...SETTLED, isCatalogReady: false })).toBe(false);
+  });
+
+  it('withholds resolving while the configured list is still resolving', () => {
+    expect(canResolveResourceSelection({ ...SETTLED, listState: { status: 'loading' } })).toBe(
+      false,
+    );
+  });
+
+  it('allows resolving once the catalog has definitively FAILED', () => {
+    // Distinct from `canPublishResourcePanelProjectIds`, which waits for a catalog that arrived.
+    // `isCatalogReady` stays false for the rest of the session after a failure, so waiting for it
+    // here would strand the panel: locally-downloaded rows still arrive and are still selectable,
+    // and withholding selection would leave the panel with no resource, hence a permanent spinner
+    // with no reachable retry.
+    expect(
+      canResolveResourceSelection({ ...SETTLED, isCatalogReady: false, hasCatalogError: true }),
+    ).toBe(true);
+  });
+
+  it('withholds resolving until the panel rows have been built', () => {
+    // This panel unions in locally-downloaded resources, a third source the other panel lacks.
+    expect(canResolveResourceSelection({ ...SETTLED, arePanelRowsReady: false })).toBe(false);
+  });
+
+  it('withholds resolving when the configured list could not be read', () => {
+    expect(canResolveResourceSelection({ ...SETTLED, listState: { status: 'error' } })).toBe(false);
   });
 });

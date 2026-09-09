@@ -1,5 +1,4 @@
 import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -35,7 +34,7 @@ import {
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ChevronDown } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
 import {
   hasNewScrollTarget,
@@ -49,6 +48,7 @@ import { useResourcePickerResources } from './use-resource-picker-resources.hook
 import type { PickerResource } from './downloaded-resources.utils';
 import {
   canPublishResourcePanelProjectIds,
+  canResolveResourceSelection,
   getResourcePanelReadiness,
   type ResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
@@ -349,6 +349,12 @@ globalThis.webViewComponent = function ResourceTextPanel({
     filteredResources,
     selectedResourceId,
     pendingResourceId,
+    canResolveResourceSelection({
+      listState: effectiveResourcesState,
+      isCatalogReady,
+      hasCatalogError,
+      arePanelRowsReady: pickerResources !== undefined,
+    }),
   );
   const selectedRef = selection.selectedRow;
 
@@ -469,16 +475,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
       }),
       [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
     ),
-    EMPTY_USJ,
+    // Seeded with nothing rather than a blank USJ so that "no chapter has arrived yet" is
+    // representable. A blank USJ is neither `undefined` nor falsy, which made both of the branches
+    // that answer this — `resolveResourceContentState`'s `'loading'` and the render's `!usjFromPdp`
+    // spinner — unreachable, and mounted `Editorial` holding nothing instead. That paints Lexical's
+    // "Enter some Scripture…" prompt: an invitation to type in a text the reader cannot edit.
+    undefined,
   );
 
   const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
 
   // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
   // `useProjectData`'s underlying `useData` hook doesn't reset to its default when the selector
-  // (here, `scrRef`) changes — it keeps the previous chapter's USJ until the new subscription's
-  // first update lands, and its default is `EMPTY_USJ`, which is itself blank. Without the gate the
-  // panel would claim "empty" over a chapter that is still arriving, and again on first mount.
+  // (here, `scrRef`) changes — it keeps the PREVIOUS chapter's USJ until the new subscription's
+  // first update lands. Without the gate the panel would claim "empty" over a chapter that is still
+  // arriving, using a blank answer that belongs to the reference the reader just left.
   //
   // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
   const isBlankChapter = useMemo(
@@ -646,7 +657,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // without re-running when the panel comes back to the editor, the reader gets Lexical's "Enter
   // some Scripture…" placeholder (an edit invitation in a text they cannot edit) until the next USJ
   // happens to arrive.
-  useEffect(() => {
+  //
+  // A LAYOUT effect, not a passive one, because the render that decides to mount `Editorial` is the
+  // render where the chapter arrived — and the editor holds nothing until this feed runs. A passive
+  // effect runs after the browser has already painted, so that placeholder is shown for a frame on
+  // every arrival. React flushes layout effects after the DOM is mutated but before paint, and the
+  // child's `useImperativeHandle` handle is installed before this parent effect runs, so the feed
+  // lands in the same frame the editor appears in.
+  useLayoutEffect(() => {
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
   }, [usjFromPdp, contentState, isBlankChapter]);
 

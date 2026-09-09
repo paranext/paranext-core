@@ -51,17 +51,24 @@ export function matchesSelectedResourceId(
  *    new resource shows up.
  * 3. Auto-correct otherwise — rewrite a legacy bare id to its namespaced form, or fall back to the
  *    first row that has something to display when the selection has left the list. A row with no
- *    `projectId` has no content, so selecting it would spin forever.
+ *    `projectId` has no content, so selecting it would spin forever. Only once the sources behind
+ *    `rows` have settled, though: until then a selection is missing because its source has not
+ *    landed, not because it is gone, and correcting on that overwrites the user's pick for good.
  *
  * @param rows The panel's filtered rows
  * @param selectedResourceId The persisted selection, namespaced or legacy-bare
  * @param pendingResourceId The row id of a pick still propagating, if any
+ * @param areSourcesSettled Whether the sources `rows` is filtered against have settled, so that a
+ *   selection's ABSENCE from them can be read as genuine (see `canResolveResourceSelection`).
+ *   Required rather than defaulted: the safe-looking default is `false`, and a caller that silently
+ *   got it would render no resource at all.
  * @returns See {@link ResourceSelectionResolution}
  */
 export function resolveResourceSelection(
   rows: PickerResource[],
   selectedResourceId: string | undefined,
   pendingResourceId: string | undefined,
+  areSourcesSettled: boolean,
 ): ResourceSelectionResolution {
   const selectedRow = rows.find((row) => matchesSelectedResourceId(row, selectedResourceId));
   const displayRow = selectedRow ?? rows[0];
@@ -94,6 +101,13 @@ export function resolveResourceSelection(
       selectedRow,
     };
   }
+
+  // The selection is not among the rows. That is only evidence it is GONE once the sources the rows
+  // are filtered against have settled; while one is still arriving it is evidence of nothing, and
+  // both correcting the stored id and displaying `rows[0]` in its place would be wrong — the stored
+  // id would be overwritten by a resource the user never chose, and it does not come back.
+  if (!areSourcesSettled)
+    return { nextSelectedResourceId: undefined, shouldClearPending: false, selectedRow: undefined };
 
   const firstUsable = rows.find((row) => row.projectId !== undefined);
   return {

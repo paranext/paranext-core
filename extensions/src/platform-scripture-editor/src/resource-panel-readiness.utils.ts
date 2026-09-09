@@ -108,3 +108,42 @@ export function canPublishResourcePanelProjectIds(
 ): boolean {
   return listState.status === 'ready' && isCatalogReady && arePanelRowsReady;
 }
+
+/**
+ * Whether a resource panel's sources have SETTLED enough to decide its selection.
+ *
+ * Distinct from {@link canPublishResourcePanelProjectIds}, which asks whether the displayed project
+ * id can be trusted and therefore waits for a catalog that actually arrived. Selection asks a
+ * different question — "is this row's absence from the filtered list real, or has its source simply
+ * not landed?" — and a catalog that definitively FAILED answers it just as well as one that
+ * arrived: nothing more is coming, so the rows in hand are all the rows there will be.
+ *
+ * That difference is load-bearing rather than pedantic. `isCatalogReady` stays `false` for the rest
+ * of the session after a catalog failure, while locally-downloaded rows still arrive and are still
+ * selectable. Waiting for readiness here would leave the panel with no selection, hence no resource
+ * project id, hence a permanent spinner — and no reachable retry, because the panel is `configured`
+ * and so never renders `PanelReadinessView`. Failing closed is safe where it means "declare
+ * nothing"; here it would mean "show nothing".
+ *
+ * @param input.listState The effective resource reference list's state (see
+ *   `useEffectiveResourceReferenceList`)
+ * @param input.isCatalogReady Whether the DBL resource catalog has finished loading and delivered
+ * @param input.hasCatalogError Whether the catalog fetch failed, so no entry is still on its way
+ * @param input.arePanelRowsReady Whether the panel's own rows have been built. Defaults to `true`
+ *   for a panel whose rows come straight from the list and the catalog; a panel that also unions in
+ *   locally-downloaded projects must pass its own readiness.
+ * @returns True when an absence from the filtered rows can be read as genuine
+ */
+export function canResolveResourceSelection({
+  listState,
+  isCatalogReady,
+  hasCatalogError,
+  arePanelRowsReady = true,
+}: {
+  listState: EffectiveResourceReferenceListState;
+  isCatalogReady: boolean;
+  hasCatalogError: boolean;
+  arePanelRowsReady?: boolean;
+}): boolean {
+  return listState.status === 'ready' && arePanelRowsReady && (isCatalogReady || hasCatalogError);
+}
