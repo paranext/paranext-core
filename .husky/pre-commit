@@ -45,8 +45,24 @@ echo "No secrets found"
 # way to develop both repos at once, and the lockfile that comes out of it is reproducible by
 # anyone with that branch — so it is committable, and this does not block it.
 if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.json'; then
-  PROVISIONAL=$(find dev-packages/staging -maxdepth 2 -name .staged-from \
-    -exec grep -l -e '-local' -e '-dirty' {} + 2>/dev/null || true)
+  # Driven by `dev-packages.json`, not by what is on disk. Nothing removes a staging folder when a
+  # package is renamed or dropped, and a leftover one carrying an old `-local` marker would block
+  # every lockfile commit while naming a package this repo no longer consumes — with no way to
+  # clear it, since `npm install` only rewrites declared folders.
+  PROVISIONAL=$(node -e '
+    const fs = require("fs");
+    const config = JSON.parse(fs.readFileSync("dev-packages.json", "utf8"));
+    const folders = (config.repos ?? []).flatMap((repo) =>
+      (repo.devPackages ?? []).map((devPackage) => devPackage.stagingFolder).filter(Boolean),
+    );
+    const provisional = folders.filter((folder) => {
+      const marker = `dev-packages/staging/${folder}/.staged-from`;
+      if (!fs.existsSync(marker)) return false;
+      const stamp = fs.readFileSync(marker, "utf8");
+      return stamp.includes("-local") || stamp.includes("-dirty");
+    });
+    process.stdout.write(provisional.map((f) => `dev-packages/staging/${f}`).join("\n"));
+  ' 2>/dev/null || true)
   if [ -n "$PROVISIONAL" ]; then
     echo ""
     echo "=========================================="
@@ -55,12 +71,16 @@ if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.jso
     echo "package-lock.json is staged, but these dev packages were staged from a local or dirty"
     echo "build rather than from a commit:"
     echo ""
-    echo "$PROVISIONAL" | sed 's|/.staged-from$||;s|^|  |'
+    echo "$PROVISIONAL" | sed 's|^|  |'
     echo ""
     echo "Its dependency closure is whatever your working tree had, so the lockfile would record"
     echo "something nobody else can reproduce. To fix:"
     echo ""
     echo "  npm install    # restages the pinned revision and rewrites package-lock.json"
+    echo ""
+    echo "If that install stops with \"has working changes\", the scripture-editors checkout it"
+    echo "stages from is dirty: commit or stash there first, then run it again. It refuses to touch"
+    echo "a dirty checkout, so the marker cannot clear until it is clean."
     echo ""
     echo "Then stage package-lock.json again."
     echo "=========================================="

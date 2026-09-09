@@ -368,8 +368,12 @@ function getSourceStamp(repoPath: string): string {
 }
 
 /** What a marker written by this version of the script, for this source state, would say. */
-function getExpectedMarker(sourceStamp: string): string {
-  return `${sourceStamp}${isLocalMode ? '-local' : ''} format=${STAGING_FORMAT}`;
+function getExpectedMarker(sourceStamp: string, devPackage: DevPackage): string {
+  // `packagePath` is part of the identity because the source commit alone does not determine what
+  // was staged: repointing a package at a different path in `dev-packages.json` leaves both the
+  // commit and the destination folder unchanged, so without this the staged copy would keep
+  // satisfying the freshness check and never be rebuilt from the new path.
+  return `${sourceStamp}${isLocalMode ? '-local' : ''} path=${devPackage.packagePath} format=${STAGING_FORMAT}`;
 }
 
 /**
@@ -379,10 +383,16 @@ function getExpectedMarker(sourceStamp: string): string {
  */
 function isStagingCurrent(repo: DevRepo, sourceStamp: string): boolean {
   if (sourceStamp.endsWith('-dirty')) return false;
-  const expected = getExpectedMarker(sourceStamp);
   return repo.devPackages.every((devPackage) => {
-    const markerPath = path.resolve(STAGING_ROOT, devPackage.stagingFolder, STAGED_FROM_MARKER);
-    return fs.existsSync(markerPath) && fs.readFileSync(markerPath, 'utf8').trim() === expected;
+    const stagingDir = path.resolve(STAGING_ROOT, devPackage.stagingFolder);
+    const markerPath = path.resolve(stagingDir, STAGED_FROM_MARKER);
+    if (!fs.existsSync(markerPath)) return false;
+    // The staging folders are gitignored, so they look disposable; deleting one's contents by hand
+    // leaves the marker behind, and keying on it alone would skip staging forever afterwards.
+    if (!fs.existsSync(path.resolve(stagingDir, 'package.json'))) return false;
+    return (
+      fs.readFileSync(markerPath, 'utf8').trim() === getExpectedMarker(sourceStamp, devPackage)
+    );
   });
 }
 
@@ -521,7 +531,7 @@ function stagePackage(
   // stamp indistinguishable from a real staging run, leaving that build in place indefinitely.
   fs.writeFileSync(
     path.resolve(stagingDir, STAGED_FROM_MARKER),
-    `${getExpectedMarker(sourceStamp)}\n`,
+    `${getExpectedMarker(sourceStamp, devPackage)}\n`,
   );
 }
 
