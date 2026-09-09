@@ -18,10 +18,18 @@ describe('renderer startup ordering', () => {
   it('subscribes the connection-lost service before the network service is initialized', () => {
     const source = readFileSync(join(__dirname, 'index.tsx'), 'utf8');
 
-    const subscribeIndex = source.indexOf('initConnectionLostService()');
-    const initializeIndex = source.indexOf('networkService.initialize()');
+    // Matched as a whole statement anchored at column 0 rather than as a substring: a substring
+    // search is satisfied by a commented-out call or a breadcrumb comment naming it, which is a
+    // likelier refactor artifact than a rename. The `^` anchor also pins the call to module scope,
+    // which is the constraint itself — indented, it would be inside the async IIFE or a function.
+    // Asserting exactly one match is what keeps a leftover comment from standing in for the call.
+    const subscribeCalls = source.match(/^initConnectionLostService\(\);$/gm) ?? [];
+    expect(subscribeCalls).toHaveLength(1);
 
-    // Positive control: both call sites still exist under these names, so a rename cannot turn this
+    const subscribeIndex = source.search(/^initConnectionLostService\(\);$/m);
+    const initializeIndex = source.search(/^\s*await networkService\.initialize\(\);$/m);
+
+    // Positive control: both call sites still exist in these shapes, so a rename cannot turn this
     // into a vacuous comparison of two -1s.
     expect(subscribeIndex).toBeGreaterThan(-1);
     expect(initializeIndex).toBeGreaterThan(-1);

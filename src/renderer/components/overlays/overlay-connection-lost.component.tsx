@@ -191,12 +191,11 @@ export function ConnectionLostOverlayPresentational({
       >
         <div
           data-testid="connection-lost-banner"
-          // The banner sits directly over the editor's own toolbar row, so the destructive tint
-          // alone would let that row show through and collide with the banner's text.
-          // `tw:bg-background` here gives the tint an opaque ground to composite over, so the banner
-          // reads as solid while still carrying the destructive tone on top of it — rather than
-          // reaching for a fully saturated `tw:bg-destructive`, which would flatten the text
-          // contrast this tint is tuned for.
+          // The banner sits directly over the editor's own toolbar row, so a transparent strip
+          // would let that row show through and collide with the banner's text. `tw:bg-background`
+          // here is the banner's opaque ground; the `Alert` inside it is transparent, so this is
+          // also the ground the text contrast below is measured against. A fully saturated
+          // `tw:bg-destructive` would flatten that contrast instead.
           className="tw:absolute tw:inset-x-0 tw:bg-background"
           style={{ top: getToolbarHeight(isPowerMode) }}
         >
@@ -207,8 +206,8 @@ export function ConnectionLostOverlayPresentational({
             // live region in place would announce it twice. Spread last, so this wins.
             role={undefined}
             // A full-width strip below the toolbar rather than a floating card: no rounding, and
-            // borders only where the strip meets the content above and below it. The tint replaces
-            // the variant's `tw:bg-card` so the destructive tone reads across the whole strip.
+            // borders only where the strip meets the content above and below it. `tw:bg-transparent`
+            // drops the variant's `tw:bg-card` so the wrapper's `tw:bg-background` is the ground.
             //
             // The third grid column holds the reload button in normal flow. `Alert`'s own action
             // slot positions its children absolutely over the text and reserves only 72px for them,
@@ -218,11 +217,20 @@ export function ConnectionLostOverlayPresentational({
             // The text and icon take `diff-deleted` rather than the variant's own `destructive`.
             // `--destructive` is background-grade in the Platform dark theme (`index.css` says so
             // where `--diff-deleted` is defined): at `oklch(0.396 …)` on a slate-950 ground it
-            // reaches roughly 2:1, well under the 4.5:1 AA needs, and Platform light only reaches
-            // about 3.3:1. `--diff-deleted` is the text-grade red the themes provision — red-600 on
-            // light, red-400 on dark — and clears AA in all four. This is the screen a user reaches
-            // when nothing else in the app works, so reading it cannot depend on the theme.
-            className="tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-destructive/10 tw:px-3 tw:text-diff-deleted tw:has-[>svg]:grid-cols-[auto_1fr_auto] tw:*:data-[slot=alert-description]:text-diff-deleted/90"
+            // reaches roughly 2:1, well under the 4.5:1 AA needs. `--diff-deleted` is the
+            // text-grade red the themes provision — red-600 on light, red-400 on dark.
+            //
+            // The strip carries the destructive tone through its border and icon only, with no
+            // background tint. A `tw:bg-destructive/10` wash costs about 0.6:1, which is the whole
+            // margin in the light themes: on it the title reaches 4.18 (Platform light) and 3.99
+            // (paratext-light) against the 4.5:1 AA needs, and the description another 0.2 below
+            // that. Over the wrapper's opaque `tw:bg-background` the worst case across all four
+            // themes is 4.52. Darkening the light-theme token to red-700 would buy real headroom
+            // instead of a thin pass, but `index.css` requires UX approval for a token change.
+            //
+            // This is the screen a user reaches when nothing else in the app works, so reading it
+            // cannot depend on the theme.
+            className="tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-transparent tw:px-3 tw:text-diff-deleted tw:has-[>svg]:grid-cols-[auto_1fr_auto] tw:*:data-[slot=alert-description]:text-diff-deleted/90"
           >
             <TriangleAlert aria-hidden="true" />
             {/* `asChild` so the dialog's accessible name and description ARE the banner's own title

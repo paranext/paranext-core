@@ -86,9 +86,15 @@ describe('OverlayHost', () => {
     // Driven through the host's own store subscription rather than a bare re-render: re-rendering
     // alone does not re-read `getOverlays`, so the overlay would never have been offered and the
     // assertion below would pass whether or not the stand-down exists.
+    //
+    // Read into a const and required, because the seam is the test: if the host stops subscribing,
+    // an optional call is a no-op and this case silently goes back to proving nothing.
+    const notify = notifyOverlaysChanged;
+    if (!notify) throw new Error('OverlayHost did not subscribe to the overlay store');
+
     mockGetOverlays.mockReturnValue([modalDialogEntry()]);
     act(() => {
-      notifyOverlaysChanged?.();
+      notify();
     });
 
     expect(screen.queryByTestId('overlay-body')).not.toBeInTheDocument();

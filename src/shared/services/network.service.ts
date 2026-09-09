@@ -145,11 +145,21 @@ export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent> =
   clientDisconnectEmitter.event;
 
 /**
- * Fires when this process's own connection to the network is lost unexpectedly.
+ * Fires when this process's own connection to the network is lost unexpectedly — the websocket
+ * closed without the app having asked it to.
+ *
+ * This is platform-internal core plumbing between the process that holds a client connection and
+ * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+ * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+ *
+ * This is a local, in-process event. Only a process that holds a client connection can lose one, so
+ * it fires exclusively on clients; in the process that owns the websocket server it is a real event
+ * that simply never fires. A deliberate disconnect does not fire it: intent travels in the close
+ * code, and a close the app asked for is not a loss. Neither does a connection that never opened —
+ * only an established connection can be lost, so a failed startup attempt is silent here.
  *
  * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
- * handler to subscribe to. Local to this process, and silent on a deliberate disconnect — see
- * {@link IRpcMethodRegistrar.onDidLoseConnection}.
+ * handler to subscribe to. Carries no payload; the close detail is logged where it is observed.
  *
  * @experimental
  */
@@ -220,6 +230,12 @@ export async function initialize(): Promise<void> {
         `A subscriber threw while being told a process disconnected, taking ${clientDisconnect.removedMethodNames.length} methods with it; the rest were still told: ${error}`,
     );
 
+    // TODO(main-renderer-shutdown-relay): `onDidDisconnectClient` above fires only in main, so a
+    // renderer never learns that the extension host went away — its own socket is still alive, and
+    // `onDidLoseConnection` below is deliberately local. Telling a renderer needs a main→renderer
+    // network event carrying that case, plus wording of its own ("extensions have stopped working"
+    // is a different claim than "you are disconnected"). Deferred with the two other sites this
+    // marker names; see `adr-connection-lost-is-renderer-local`.
     unsubscribeFromConnectionLost = relayWhileUp(
       jsonRpc.onDidLoseConnection,
       connectionLostEmitter,

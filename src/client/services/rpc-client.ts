@@ -60,8 +60,9 @@ export class RpcClient implements IRpcMethodRegistrar {
    */
   readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   /**
-   * Fires when this client's websocket closes without the app having asked it to. See
-   * {@link IRpcMethodRegistrar.onDidLoseConnection}.
+   * Fires when this client's established websocket closes without the app having asked it to. A
+   * socket that dies before it ever opened is a failed connection attempt rather than a loss, and
+   * is silent here. See {@link IRpcMethodRegistrar.onDidLoseConnection}.
    *
    * @experimental
    */
@@ -417,14 +418,30 @@ export class RpcClient implements IRpcMethodRegistrar {
       logger.info(summary);
     } else {
       logger.warn(summary);
-      // One subscriber that throws must not cost the others the news, and must not cost this
-      // socket the teardown below: this is the only time subscribers are told, and for a UI
-      // subscriber it is the difference between a visible failure and a silent one.
-      this.connectionLostEmitter.emitIsolated(undefined, (error) => {
-        logger.error(
-          `A subscriber threw while being told the websocket for ${this.peerName} lost its connection; the rest were still told: ${getErrorMessage(error)}`,
-        );
-      });
+      // Only a connection that was actually established can be lost, which is what
+      // `IRpcMethodRegistrar.onDidLoseConnection` promises. A socket that dies during the opening
+      // handshake is a failed connection ATTEMPT: `connect()` reports that through its own return
+      // value, and how the app surfaces a startup that never reached the network is owned by
+      // PT-4494 / PT-4495, not by this event.
+      //
+      // Gating on the status is also what makes the two shapes of a refused startup agree. A
+      // refused socket fires `error` then `close`; `onError` settles the attempt through
+      // `failConnectionAttempt`, and `AsyncVariable` rejects synchronously, so `connect()`'s catch
+      // runs on the next microtask — before the browser dispatches the `close` task — and strips
+      // the listeners, so this handler never runs at all. A peer that accepts the TCP connection
+      // and then drops it before the upgrade fires `close` with no `error`, and this handler does
+      // run. Without the gate the event would fire in the second shape and not the first, making
+      // the feature depend on which event a failing peer happened to emit.
+      if (this.connectionStatus === ConnectionStatus.Connected) {
+        // One subscriber that throws must not cost the others the news, and must not cost this
+        // socket the teardown below: this is the only time subscribers are told, and for a UI
+        // subscriber it is the difference between a visible failure and a silent one.
+        this.connectionLostEmitter.emitIsolated(undefined, (error) => {
+          logger.error(
+            `A subscriber threw while being told the websocket for ${this.peerName} lost its connection; the rest were still told: ${getErrorMessage(error)}`,
+          );
+        });
+      }
     }
     // A close with no preceding error still has to settle the attempt in flight: it is the only
     // event a peer that accepts the TCP connection and then drops it before the websocket upgrade

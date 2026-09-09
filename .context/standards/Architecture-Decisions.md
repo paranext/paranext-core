@@ -440,6 +440,19 @@ step, no automation. Just a record.
 
     Line numbers are deliberately omitted throughout this entry: they went stale within one review
     round of being written.
+  - **Scope: an ESTABLISHED connection only.** `RpcClient` emits the loss only while
+    `connectionStatus` is `Connected`. A socket that dies during the opening handshake is a failed
+    connection ATTEMPT, which `connect()` already reports through its return value, and how the app
+    surfaces a startup that never reached the network belongs to PT-4494 / PT-4495 rather than to
+    this state — the banner offers a reload, which is not the answer to a server that was never
+    there. The gate is also what makes the two shapes of a failed startup agree instead of the
+    feature depending on which events a failing peer happened to emit: a refused socket fires
+    `error` then `close`, and since `onError` settles the connection attempt through
+    `failConnectionAttempt` while `AsyncVariable` rejects SYNCHRONOUSLY, `connect()`'s catch runs on
+    the next microtask — before the browser dispatches the `close` task — and strips the listeners,
+    so `onWebSocketClose` never runs at all; a peer that accepts the TCP connection and then drops
+    it before the upgrade fires `close` with no `error`, and the handler does run. Both shapes are
+    pinned in `rpc-client-connection-lost.test.ts`.
   - **Store:** `src/renderer/services/connection-lost-store.ts` is a one-way latch — `isConnectionLost`
     starts `false`, flips to `true` on the first reported loss, and nothing in the module ever sets
     it back (the `resetConnectionLost` export is explicitly test-only). State and wiring are split
@@ -537,6 +550,21 @@ step, no automation. Just a record.
     the window, so the button would overlap the message at narrow widths or in a locale with a
     longer label. `AlertAction` is consequently NOT exported from `platform-bible-react` — an
     earlier round of this work added it to the public index for a consumer that no longer uses it.
+
+    **Banner text takes `--diff-deleted`, and the strip carries no background tint.** Two separate
+    contrast problems, both of which the destructive variant walks into. First, the variant's
+    `text-destructive`: `--destructive` is background-grade in the Platform dark theme, which
+    `index.css` states where `--diff-deleted` is defined, and at `oklch(0.396 …)` on a slate-950
+    ground it reaches roughly 2:1 against the 4.5:1 AA needs. `--diff-deleted` is the text-grade red
+    the themes provision — red-600 light, red-400 dark. Second, a `bg-destructive/10` wash over the
+    banner's opaque `bg-background` costs about 0.6:1, which is the entire remaining margin in the
+    LIGHT themes: on the tint the title measures 4.18 (Platform light) and 3.99 (paratext-light),
+    both failing, and the description sits ~0.2 lower again. So the tint is dropped and the
+    destructive tone is carried by the border and the icon alone; the worst case across all four
+    themes is then 4.52. Darkening the light-theme `--diff-deleted` to red-700 would buy real
+    headroom rather than a thin pass and was the better fix on the merits, but `index.css` requires
+    UX approval for a theme-token change and this state cannot wait on one. This is the screen a
+    user reaches when nothing else in the app works, so reading it cannot depend on the theme.
   - **Reload label:** "Reload anyway", not a bare "Reload". Reloading discards whatever the message
     just warned may be unsaved, and the scrim means the user cannot select and copy that text out
     first, so the label carries the consequence — the `Guidelines/Applying Changes` rule that a

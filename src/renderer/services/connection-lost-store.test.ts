@@ -51,10 +51,12 @@ describe('connection-lost store', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  // Every websocket dies with 1006 on an ordinary quit, so without this latch the store flips true
-  // on the way out and the overlay is asked to render — leaving whether the user sees a farewell
-  // error banner up to paint timing rather than up to the code.
-  it('ignores a loss reported after the app has started closing', () => {
+  // Every websocket dies with 1006 on any teardown, so without this latch the store flips true on
+  // the way out and the overlay is asked to render — leaving whether the user sees a farewell error
+  // banner up to paint timing rather than up to the code. What reaches this latch is a window
+  // closing while the app stays up, and a reload; an app quit destroys the window without either
+  // unload event, so it never gets here (see `connection-lost-service.ts`).
+  it('ignores a loss reported after this window has started unloading', () => {
     const listener = vi.fn();
     subscribeToConnectionLost(listener);
 
@@ -67,7 +69,7 @@ describe('connection-lost store', () => {
 
   // The latch only suppresses losses that arrive AFTER it. A real disconnect the user is already
   // looking at must survive them starting to close the window.
-  it('keeps a loss that was already reported before the app started closing', () => {
+  it('keeps a loss that was already reported before this window started unloading', () => {
     reportConnectionLost();
     markShuttingDown();
 

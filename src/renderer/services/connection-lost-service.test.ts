@@ -49,8 +49,10 @@ describe('connection-lost service', () => {
   });
 
   // The renderer has no `isAppShuttingDown()` of its own — that latch is main's — so the browser's
-  // own unload signal is what tells this renderer a 1006 close is a quit rather than a failure.
-  it('latches the store shut on beforeunload so an ordinary quit reports nothing', () => {
+  // own unload signal is what tells this renderer a 1006 close is a teardown rather than a failure.
+  // `beforeunload` reaches a window closing while the app stays up; an app quit takes main's
+  // `destroy()` path, which raises neither unload event, so it is NOT covered here.
+  it('latches the store shut on beforeunload so a closing window reports nothing', () => {
     const { fire, teardown } = initAndCaptureTrigger();
 
     window.dispatchEvent(new Event('beforeunload'));
