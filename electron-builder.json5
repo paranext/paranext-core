@@ -95,6 +95,31 @@
     // The base version needs to align with the Ubuntu runners in the GitHub Actions workflows.
     // Some things are built in the host OS, and some are built in the snap environment. If they
     // don't match, there will likely be compatibility issues.
+    //
+    // It must also align with the GNOME platform content snap mounted at $SNAP/gnome-platform,
+    // which is NOT configurable here: electron-builder's snapcraft template hardcodes that plug
+    // and config can replace a template plug entry but never rename or remove one. Renaming it is
+    // what matters -- snapd matches stored connections by plug NAME on refresh, so an attribute-only
+    // override leaves existing installs mounting the old platform. The pairing therefore lives in
+    // the `app-builder-lib` patch under `patches/`, and is enforced against this `base` value by
+    // .erb/scripts/electron-builder-snap-config.test.ts
+    //
+    // Upstream knows: electron-builder issue #9452 root-caused the same stale `gnome-3-28-1804`
+    // runtime, and PR #9517 addressed it by migrating snap builds to the `snapcraft` CLI under a
+    // new root `snapcraft` config property, rather than by fixing this `snap` property's template.
+    //
+    // Removing the patch takes that new property AND `base: core24` -- the property alone is not
+    // enough, and stopping at it would silently reinstate this bug. Under `snapcraft`, core18,
+    // core20 and core22 all dispatch to `SnapCoreLegacy` (`LinuxTargetHelper.getSnapCore`), which
+    // loads this same template with the same hardcoded `gnome-3-28-1804` plug and merges config
+    // plugs by key exactly as the `snap` property does. Only core24 escapes, via the snapcraft
+    // `gnome` extension, which supplies `gnome-46-2404` itself. So migrating on core22 and deleting
+    // the patch would put every existing install back on the wrong platform snap -- and take the
+    // guard with it, since that test asserts against the patched template.
+    //
+    // core24 is its own project, not a flag flip: it was beta when #9517 merged, its reporter saw
+    // the built snap land in an lxd container path and not launch, and `libtinfo5` in
+    // `stagePackages` below does not exist on noble.
     base: 'core22',
     category: 'Development',
     environment: {
