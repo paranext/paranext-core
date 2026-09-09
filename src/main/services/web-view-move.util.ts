@@ -477,10 +477,12 @@ async function readoptAfterFailedMove(
  * nowhere at all", and a caller reporting a failed move to the user has to tell them apart without
  * reading a sentence written for the log.
  *
- * Keeps `moveInFlight.destinationWindowId` current as the ladder moves on: this is the same record
+ * Keeps `moveInFlight.destinationWindowId` honest as the ladder moves on: this is the same record
  * `getOpenWebViewDefinitionsForWindow` (`web-view.service-router.ts`) folds a mid-move view into
- * for the one window it names, so a rung that re-targets without updating it would leave that
- * fold-in still pointing at the target that just failed.
+ * for the one window it names. Cleared to `undefined` before either rung runs — the move has given
+ * up on its last target and has not chosen its next one yet, so for that stretch it is headed
+ * nowhere — then set to each rung's own window id before that rung's readopt, so the fold-in never
+ * keeps pointing at a target this recovery has already given up on.
  *
  * @param moveInFlight This move's own record in the in-flight register, updated in place — the
  *   register holds this exact object, not a copy
@@ -492,6 +494,10 @@ async function recoverAfterFailedMove(
   targetDescription: string,
   moveInFlight: WebViewMoveInFlight,
 ): Promise<never> {
+  // The target this move just gave up on must stop being named as where it is headed the moment
+  // recovery starts choosing where to try next — before either rung below, and before either of
+  // their awaits, so a window read that lands in the gap is told the truth: right now, nowhere.
+  moveInFlight.destinationWindowId = undefined;
   logger.debug(
     `Reopening webview ${webViewId} after its failed move to ${targetDescription}. Captured definition: ${JSON.stringify(captured)}`,
   );
