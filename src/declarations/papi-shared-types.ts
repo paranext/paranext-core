@@ -121,6 +121,20 @@ declare module 'papi-shared-types' {
      * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+    /**
+     * Open the Terms of Service document that ships beside the application - the terms the
+     * distributed application is licensed to the user under, rather than this repository's AGPL
+     * source (see LICENSING.md).
+     *
+     * The document is handed to whatever the operating system opens Markdown with; if nothing does,
+     * it is revealed in the file manager instead.
+     *
+     * @throws If the document could not be opened - which includes the case where it was revealed
+     *   in the file manager instead, because that fallback cannot report whether it succeeded
+     *   either. A caller that offers this as a link needs to be able to tell the user the document
+     *   did not open, so the failure is reported rather than only logged.
+     */
+    'platform.openTermsOfService': () => Promise<void>;
 
     // These commands are provided in `web-view.service-shard.ts`
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
