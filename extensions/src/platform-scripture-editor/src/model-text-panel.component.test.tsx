@@ -293,6 +293,49 @@ describe('ModelTextPanel', () => {
     await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
   });
 
+  it('re-reads the catalog when the user retries a failed install', async () => {
+    // The install ran against a catalog snapshot, so when that snapshot is what was wrong — a
+    // resource cached as not-installed that is in fact on disk — re-running the same install
+    // against it can only reproduce the same error. Refetching first is what lets Try again reach
+    // a different outcome instead of replaying the failure forever.
+    const installResource = vi.fn(async () => {
+      throw new Error('install failed');
+    });
+    const onRetryCatalog = vi.fn();
+    renderPanel({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [UNINSTALLED_RESOURCE],
+      installResource,
+      onRetryCatalog,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    expect(onRetryCatalog).toHaveBeenCalled();
+  });
+
+  it('offers a retry rather than reinstalling when a successful install leaves the flag stale', async () => {
+    // Installing a resource that is already on disk succeeds as a no-op, so a stale catalog hands
+    // the same uid back after the refetch that success triggers. Re-firing the install there loops
+    // forever; the panel surfaces the recovery affordance instead, whose retry re-reads the catalog.
+    const installResource = vi.fn(async () => {});
+    const props = makeProps({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [UNINSTALLED_RESOURCE],
+      installResource,
+    });
+    const { rerender } = render(<ModelTextPanel {...props} />);
+    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
+
+    // The refetch the successful install triggered: the catalog clears while it is in flight, then
+    // comes back reporting the resource as uninstalled still.
+    rerender(<ModelTextPanel {...props} dblResources={[]} />);
+    rerender(<ModelTextPanel {...props} dblResources={[{ ...UNINSTALLED_RESOURCE }]} />);
+
+    await screen.findByRole('button', { name: 'Try again' });
+    expect(installResource).toHaveBeenCalledTimes(1);
+  });
+
   it('does not auto-install a model text whose resource is already installed', async () => {
     const installResource = vi.fn(async () => {});
     const getResourceChapter = vi.fn(async () => ({ usj: undefined, textDirection: 'ltr' }));

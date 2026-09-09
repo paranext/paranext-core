@@ -66,6 +66,19 @@ describe('useDblResourceCatalog', () => {
     expect(result.current.hasCatalogError).toBe(false);
   });
 
+  it('waits for the installed-flag sync before reading the DBL rows', async () => {
+    // A panel acts on `installed`: a row cached before the C# project factory registered its
+    // projects reads not-installed, and the panel then downloads a resource that is already on
+    // disk. Reading the rows only after the reconciliation is what keeps that from happening.
+    renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() =>
+      expect(mockSendCommand).toHaveBeenCalledWith('platformGetResources.getCachedResources', {
+        waitForInstalledFlagsSync: true,
+      }),
+    );
+  });
+
   it('appends the locally-installed non-DBL resources to the catalog', async () => {
     fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [RESOURCE] });
     fetchLocalNonDbl = () => Promise.resolve([LOCAL_RESOURCE]);

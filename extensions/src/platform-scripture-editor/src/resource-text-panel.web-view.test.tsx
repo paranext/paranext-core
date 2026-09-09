@@ -1,16 +1,24 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
 // ---------------------------------------------------------------------------
 
-const { mockUseEffectiveResourceReferenceList } = vi.hoisted(() => ({
+const {
+  mockUseEffectiveResourceReferenceList,
+  mockUseDblResourceAutoInstall,
+  mockUseDblResourceCatalog,
+  mockUseResourcePickerResources,
+} = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
+  mockUseDblResourceAutoInstall: vi.fn(),
+  mockUseDblResourceCatalog: vi.fn(),
+  mockUseResourcePickerResources: vi.fn(),
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -95,8 +103,8 @@ vi.mock('./use-effective-resource-reference-list.hook', () => ({
 // The picker list is a source the panel waits on: while it is loading the panel renders a spinner
 // instead of any empty state, so it has to be settled for the disclosure to be reachable at all.
 vi.mock('./use-resource-picker-resources.hook', () => ({
-  useResourcePickerResources: vi.fn(() => [[], false]),
-  default: vi.fn(() => [[], false]),
+  useResourcePickerResources: (...args: unknown[]) => mockUseResourcePickerResources(...args),
+  default: (...args: unknown[]) => mockUseResourcePickerResources(...args),
 }));
 
 vi.mock('./use-commentary-marker-styles.hook', () => ({
@@ -105,18 +113,13 @@ vi.mock('./use-commentary-marker-styles.hook', () => ({
 }));
 
 vi.mock('./use-dbl-resource-auto-install.hook', () => ({
-  useDblResourceAutoInstall: vi.fn(() => ({
-    isInstalling: false,
-    installFailed: false,
-    retryInstall: vi.fn(),
-    markInstallFailed: vi.fn(),
-  })),
-  default: vi.fn(() => ({
-    isInstalling: false,
-    installFailed: false,
-    retryInstall: vi.fn(),
-    markInstallFailed: vi.fn(),
-  })),
+  useDblResourceAutoInstall: (...args: unknown[]) => mockUseDblResourceAutoInstall(...args),
+  default: (...args: unknown[]) => mockUseDblResourceAutoInstall(...args),
+}));
+
+vi.mock('./use-dbl-resource-catalog.hook', () => ({
+  useDblResourceCatalog: (...args: unknown[]) => mockUseDblResourceCatalog(...args),
+  default: (...args: unknown[]) => mockUseDblResourceCatalog(...args),
 }));
 
 vi.mock('./use-install-dbl-resource.hook', () => ({
@@ -217,6 +220,29 @@ function renderZeroState(resourceType: 'ScriptureResource' | 'Commentary' = 'Scr
 // Tests
 // ---------------------------------------------------------------------------
 
+/**
+ * Resets the two hooks this file drives to their inert defaults — nothing installing, a settled but
+ * empty catalog — so each test opts into only the state it is about.
+ */
+function resetPanelHooks() {
+  mockUseDblResourceAutoInstall.mockReturnValue({
+    isInstalling: false,
+    installFailed: false,
+    retryInstall: vi.fn(),
+    markInstallFailed: vi.fn(),
+  });
+  mockUseDblResourceCatalog.mockReturnValue({
+    dblResources: [],
+    isLoadingResources: false,
+    isCatalogReady: false,
+    hasCatalogError: false,
+    refetchCatalog: vi.fn(),
+  });
+  mockUseResourcePickerResources.mockReturnValue([[], false]);
+}
+
+beforeEach(resetPanelHooks);
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -234,5 +260,56 @@ describe('ResourceTextPanel — More info disclosure', () => {
   it('renders no disclosure for commentaries, whose prompt is self-explanatory', () => {
     renderZeroState('Commentary');
     expect(screen.queryByRole('button', { name: 'More info' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel — failed install recovery', () => {
+  it('re-reads the catalog when the user retries a failed install', () => {
+    // The install ran against a catalog snapshot, so when that snapshot is what was wrong — a
+    // resource cached as not-installed that is in fact on disk — re-running the same install
+    // against it can only reproduce the same error. Refetching first is what lets Try again reach
+    // a different outcome instead of replaying the failure forever.
+    const retryInstall = vi.fn();
+    const refetchCatalog = vi.fn();
+    mockUseDblResourceAutoInstall.mockReturnValue({
+      isInstalling: false,
+      installFailed: true,
+      retryInstall,
+      markInstallFailed: vi.fn(),
+    });
+    mockUseDblResourceCatalog.mockReturnValue({
+      dblResources: [],
+      isLoadingResources: false,
+      isCatalogReady: true,
+      hasCatalogError: false,
+      refetchCatalog,
+    });
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.0.0', items: [] },
+    });
+    // One Bible-text row is what carries the panel past its front states — the install-failed
+    // branch is only reachable once the panel has something to display.
+    mockUseResourcePickerResources.mockReturnValue([
+      [
+        {
+          reference: { type: 'dblResource', id: 'uid-web' },
+          source: 'user',
+          isAdminLocked: false,
+          type: 'ScriptureResource',
+          installed: false,
+          projectId: undefined,
+        },
+      ],
+      false,
+    ]);
+
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(refetchCatalog).toHaveBeenCalled();
+    expect(retryInstall).toHaveBeenCalled();
   });
 });

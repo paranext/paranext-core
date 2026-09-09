@@ -78,8 +78,16 @@ export function useDblResourceCatalog(): DblResourceCatalogState {
 
       // The local non-DBL list is supplementary: settled separately so that losing it degrades the
       // panel to DBL-only resources rather than reporting the whole catalog as failed.
+      //
+      // The DBL rows are asked for only after the installed-flag reconciliation has run, because a
+      // panel acts on those flags: a row cached before the C# project factory registered its
+      // projects reads not-installed, and the panel then tries to download a resource that is
+      // already on disk. Waiting costs nothing in wall-clock here — the local non-DBL call
+      // alongside it already waits for the same reconciliation.
       const [dblResult, localResult] = await Promise.allSettled([
-        papi.commands.sendCommand('platformGetResources.getCachedResources'),
+        papi.commands.sendCommand('platformGetResources.getCachedResources', {
+          waitForInstalledFlagsSync: true,
+        }),
         papi.commands.sendCommand('platformGetResources.getLocalNonDblResources'),
       ]);
 

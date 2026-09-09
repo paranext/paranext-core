@@ -100,6 +100,71 @@ describe('useDblResourceAutoInstall', () => {
     expect(installResource).not.toHaveBeenCalled();
   });
 
+  it('reports failure instead of re-installing a uid whose install already succeeded', async () => {
+    // Installing a resource that is already on disk succeeds as a no-op, so the catalog behind the
+    // panel can hand the same uid straight back. Re-firing the install there is an endless loop —
+    // every success asks the caller to re-read that catalog, which returns the same uid again.
+    const installResource = okInstall();
+    // Typed up front (rather than asserted at the call) so the uid can later be cleared to
+    // `undefined`, which is how the catalog refetch between attempts presents itself.
+    const initialProps: { uid: string | undefined } = { uid: 'uid-a' };
+    const { result, rerender } = renderHook(
+      ({ uid }: { uid: string | undefined }) => useDblResourceAutoInstall(uid, installResource),
+      { initialProps },
+    );
+
+    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
+
+    // The catalog refetch the install triggered: the uid drops out while the fetch is in flight and
+    // comes back still uninstalled.
+    rerender({ uid: undefined });
+    rerender({ uid: 'uid-a' });
+
+    await waitFor(() => expect(result.current.installFailed).toBe(true));
+    expect(installResource).toHaveBeenCalledTimes(1);
+  });
+
+  it('retryInstall re-attempts a uid whose install already succeeded', async () => {
+    // The retry is user-initiated and the caller re-reads its catalog alongside it, so it is a
+    // genuinely fresh attempt rather than a replay of the state that produced the error.
+    const installResource = okInstall();
+    // Typed up front (rather than asserted at the call) so the uid can later be cleared to
+    // `undefined`, which is how the catalog refetch between attempts presents itself.
+    const initialProps: { uid: string | undefined } = { uid: 'uid-a' };
+    const { result, rerender } = renderHook(
+      ({ uid }: { uid: string | undefined }) => useDblResourceAutoInstall(uid, installResource),
+      { initialProps },
+    );
+
+    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
+    rerender({ uid: undefined });
+    rerender({ uid: 'uid-a' });
+    await waitFor(() => expect(result.current.installFailed).toBe(true));
+
+    act(() => result.current.retryInstall());
+
+    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
+  });
+
+  it('runs the real install after the no-op one that precedes the data provider', async () => {
+    // `useInstallDblResource` returns a callback that resolves without installing until the DBL
+    // provider resolves, and a new callback identity once it does. That first resolve must not
+    // count as an attempt, or the resource is never installed at all.
+    const noOpInstall = vi.fn(async () => {});
+    const realInstall = vi.fn(async () => {});
+    const { result, rerender } = renderHook(
+      ({ install }: { install: (uid: string) => Promise<void> }) =>
+        useDblResourceAutoInstall('uid-a', install),
+      { initialProps: { install: noOpInstall } },
+    );
+
+    await waitFor(() => expect(noOpInstall).toHaveBeenCalledTimes(1));
+    rerender({ install: realInstall });
+
+    await waitFor(() => expect(realInstall).toHaveBeenCalledWith('uid-a'));
+    expect(result.current.installFailed).toBe(false);
+  });
+
   it('attempts a newly-configured uid even while a previous uid is in the failed state', async () => {
     // Only uid-a fails; uid-b installs cleanly.
     const installResource = vi.fn(async (uid: string) => {

@@ -400,6 +400,45 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-dbl-install-is-idempotent: Installing an already-installed DBL resource succeeds; the catalog's `installed` flag is a hint
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** The Model Text panel auto-installs a configured resource its cached catalog reports as
+  not installed. `DblDownloadableDataProvider.InstallDblResourceCore` threw
+  `"Resource is already installed and up to date"` in that case, so a stale flag produced an
+  install-failed view whose **Try again** re-ran the identical call forever (PT-4588: 14 identical
+  failures over 4 minutes against a resource that was on disk and readable in the same session).
+  The flag goes stale for reasons no consumer can rule out: the C# catalog computes `Installed` from
+  `ScrTextCollection` at fetch time, and both that fetch and the TypeScript-side reconciliation in
+  `extensions/src/platform-get-resources/src/main.ts` can run before the C# project factory has
+  finished registering projects.
+- **Decision:** Three rules, together. (1) **Install is idempotent** — an already-installed,
+  up-to-date resource is a no-op success, not an error. (2) **`installed` is a hint, never
+  authority** — a consumer that acts on it must be able to recover when it is wrong, which for both
+  resource panels means re-reading the catalog before retrying a failed install rather than
+  replaying the same call. (3) **A resolved install is never re-fired for the same uid** — since
+  every success asks the caller to re-read its catalog, an idempotent install plus a catalog that
+  does not converge is an infinite loop; `useDblResourceAutoInstall` surfaces the retry state
+  instead. The reconciliation still refuses to downgrade rows from a project list containing no
+  read-only project (`reconcileInstalledFlags`), which is the poisoning case that is detectable;
+  a list that is partially registered is not distinguishable from a settled one, which is why (1)
+  and (2) carry the recovery rather than the guard.
+- **Alternatives:** *Match the "already installed" message on the TypeScript side and treat it as
+  success* — rejected: a cross-process string match that silently breaks on localization or
+  rewording. *Make the reconciliation upgrade-only, never downgrading `installed`* — rejected: the
+  downgrade is what reflects an uninstall in the Get Resources dialog before the next authoritative
+  catalog fetch. *Block every `getCachedResources` on the reconciliation* — rejected: it can wait
+  many seconds while the C# factory initializes, and a listing surface would rather show the
+  previous snapshot; the wait is opt-in per call (`waitForInstalledFlagsSync`) and taken by the
+  panels, which act on the flags, not by the dialogs, which only list.
+- **Consequences:** A panel whose catalog is stale now installs (as a no-op), re-reads, and renders,
+  with no remount. Callers can no longer distinguish "I installed it" from "it was already there" —
+  neither one needs to. **Revisit** if a caller ever needs that distinction (return the outcome
+  rather than restoring the throw), or if the C# provider gains a way to report that its project
+  registration has settled, which would let the reconciliation trust a partial list.
+- **Source:** PT-4588.
+
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
 - **Date:** 2026-09-03

@@ -212,6 +212,15 @@ export function ModelTextPanel({
   const { isInstalling, installFailed, retryInstall, markInstallFailed } =
     useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
 
+  // Re-read the catalog before re-attempting. The install ran against a catalog snapshot, and when
+  // that snapshot is what was wrong — a resource cached as not-installed that is in fact on disk —
+  // re-running the same install against it can only reproduce the same failure. Refetching first is
+  // what lets a stale flag self-correct and gives "Try again" a chance at a different outcome.
+  const handleRetryInstall = useCallback(() => {
+    onRetryCatalog();
+    retryInstall();
+  }, [onRetryCatalog, retryInstall]);
+
   // Only used to add a "check your connection" hint to the install-failed message when the machine
   // is definitely offline (the common cause of a failed download on first run).
   const isOnline = useIsOnline();
@@ -555,7 +564,7 @@ export function ModelTextPanel({
             : '%webView_modelTextPanel_installFailedOffline%',
         )}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
-        onRetry={retryInstall}
+        onRetry={handleRetryInstall}
       />
     );
   }

@@ -276,14 +276,18 @@ internal class DblResourcesDataProvider(
             out var installableResource
         );
 
+        // Already having the resource is the outcome the caller asked for, so this is a no-op
+        // success, not a failure. Reporting it as an error strands a caller whose catalog snapshot
+        // says the resource is missing when it is in fact on disk: the install it fires can only
+        // ever come back as the same error, so the panel it feeds shows an install-failed state
+        // that no retry can leave. Nothing changed on disk, so no update event is sent either.
         if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
-            throw new Exception(
-                LocalizationService.GetLocalizedString(
-                    PapiClient,
-                    "%getResources_errorInstallResource_resourceAlreadyInstalled%",
-                    $"Resource is already installed and up to date. Installation skipped."
-                )
+        {
+            Console.WriteLine(
+                $"DBL resource {DBLEntryUid} is already installed and up to date. Installation skipped."
             );
+            return;
+        }
 
         // Note that we don't get any info telling if the installation succeeded or failed
         installableResource.Install();

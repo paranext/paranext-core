@@ -207,7 +207,6 @@
   "%general_open%": "Abrir",
   "%general_run%": "Ejecutar",
   "%getResources_errorInstallResource_installationFailed%": "No se encuentra el recurso después de intentar instalarlo. La instalación falló.",
-  "%getResources_errorInstallResource_resourceAlreadyInstalled%": "El recurso ya está instalado y actualizado. Instalación omitida.",
   "%getResources_errorInstallResource_resourceNotFound%": "Recurso no disponible en la Biblioteca Digital de Biblias (DBL)",
   "%getResources_errorRegistrationInvalid%": "Su código de registro de Paratext es inválido o está desactualizado. El acceso a los recursos en la Biblioteca Digital de Biblias (DBL) se bloqueó.",
   "%getResources_errorUninstallResource_localResourceNotFound%": "No se puede encontrar el recurso, por lo tanto no se puede eliminar.",

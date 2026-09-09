@@ -52,10 +52,31 @@ declare module 'platform-get-resources' {
   export type DblResourceCatalog =
     | { status: 'available'; resources: DblResourceData[] }
     | { status: 'unavailable'; reason: DblResourceCatalogUnavailableReason };
+
+  /** Options for the `platformGetResources.getCachedResources` command. */
+  export type GetCachedResourcesOptions = {
+    /**
+     * Wait for the catalog's `installed` flags to be reconciled against the local project list
+     * before returning, instead of returning the current snapshot and reconciling in the
+     * background.
+     *
+     * Opt in when the next decision turns on those flags — a panel deciding whether to install the
+     * resource it is about to render reads a snapshot taken before the reconciliation as "not
+     * installed" and downloads a resource that is already on disk. Leave it off for a listing (the
+     * Get Resources dialog, the resource picker), where blocking the open on a project-metadata
+     * read that can take many seconds while the C# project factory initializes costs more than
+     * showing the previous snapshot and picking up the corrected flags on the next open.
+     */
+    waitForInstalledFlagsSync?: boolean;
+  };
 }
 
 declare module 'papi-shared-types' {
-  import type { DblResourceCatalog, IDblResourcesProvider } from 'platform-get-resources';
+  import type {
+    DblResourceCatalog,
+    GetCachedResourcesOptions,
+    IDblResourcesProvider,
+  } from 'platform-get-resources';
   import type { DblResourceData } from 'platform-bible-utils';
 
   export interface DataProviders {
@@ -101,12 +122,19 @@ declare module 'papi-shared-types' {
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
      * existing cached data.
      *
+     * The catalog's `installed` flags are reconciled against the local project list on every call;
+     * by default that runs in the background and the current snapshot is returned. Pass
+     * `waitForInstalledFlagsSync` to wait for it — see {@link GetCachedResourcesOptions}.
+     *
+     * @param options Options for this call; see {@link GetCachedResourcesOptions}.
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
      * @throws When the fetch itself fails. Callers that render an error state with a retry should
      *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
      *   change the answer.
      */
-    'platformGetResources.getCachedResources': () => Promise<DblResourceCatalog>;
+    'platformGetResources.getCachedResources': (
+      options?: GetCachedResourcesOptions,
+    ) => Promise<DblResourceCatalog>;
 
     /**
      * Returns locally-installed, read-only resources that are NOT in the DBL catalog (e.g. VULGP83,

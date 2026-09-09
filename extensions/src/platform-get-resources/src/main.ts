@@ -7,11 +7,12 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import type { DblResourceCatalog } from 'platform-get-resources';
+import type { DblResourceCatalog, GetCachedResourcesOptions } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
 import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
 import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
+import { hasResourceProject, reconcileInstalledFlags } from './installed-flags.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -104,17 +105,13 @@ const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
  * seen the factory is up and no wait is needed, and if the full budget passes with none seen the
  * machine has none to find, so later calls return the first read immediately.
  *
- * @returns The project metadata, and whether any read-only (resource) project was in it
+ * @returns The project metadata
  */
-async function getLocalProjectMetadata(): Promise<{
-  metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>;
-  hasResourceProjects: boolean;
-}> {
+async function getLocalProjectMetadata(): Promise<
+  Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>
+> {
   const readMetadata = () =>
     papi.projectLookup.getMetadataForAllProjects({ includeProjectInterfaces: ['platform.base'] });
-  const hasResourceProject = (
-    metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>,
-  ) => metadata.some((m) => m.isEditable === false);
 
   const shouldWait = !haveLocalResourceProjectsAppeared && !hasWaitedForLocalResourceProjects;
   const metadata = shouldWait
@@ -124,67 +121,39 @@ async function getLocalProjectMetadata(): Promise<{
       })
     : await readMetadata();
 
-  const hasResourceProjects = hasResourceProject(metadata);
-  if (hasResourceProjects) haveLocalResourceProjectsAppeared = true;
+  if (hasResourceProject(metadata)) haveLocalResourceProjectsAppeared = true;
   else if (shouldWait) hasWaitedForLocalResourceProjects = true;
 
-  return { metadata, hasResourceProjects };
+  return metadata;
 }
 
 /**
- * Syncs installed flags on `cachedResources` against live project metadata from C#. Runs in the
- * background so it never blocks a dialog open. Updates `cachedResources` and writes to storage when
- * flags change.
+ * Syncs installed flags on `cachedResources` against live project metadata from C#. Updates
+ * `cachedResources` and writes to storage when flags change. Callers usually leave it running in
+ * the background so it never blocks a dialog open; see `getCachedResources`.
  */
 async function syncInstalledFlags(): Promise<void> {
   if (cachedResources === undefined) return;
   try {
-    const { metadata: localProjectMetadata, hasResourceProjects } = await getLocalProjectMetadata();
-    // No read-only project in the list means either C# has not registered yet or the machine has
-    // none. Syncing against it would mark every installed resource not-installed and persist that,
-    // and it can never mark anything installed, so there is nothing to gain by continuing.
-    if (!hasResourceProjects) return;
+    const localProjectMetadata = await getLocalProjectMetadata();
 
     // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
-    // overwrite cachedResources between our map() and our assignment.
+    // overwrite cachedResources between reading it and assigning the reconciled rows. Whether the
+    // metadata is trustworthy enough to reconcile against at all is decided in
+    // `reconcileInstalledFlags`, which returns `undefined` when there is nothing to write.
     await fetchMutex.runExclusive(async () => {
       if (cachedResources === undefined) return;
 
-      let isChanged = false;
-      const newCachedResources = cachedResources.map((resource) => {
-        const matchingLocalProject = localProjectMetadata.find((localProject) =>
-          // If the `projectId` is defined then tries to use that
-          resource.projectId
-            ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
-              // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-              resource.dblEntryUid !== '' &&
-              localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
+      const newCachedResources = reconcileInstalledFlags(cachedResources, localProjectMetadata);
+      if (!newCachedResources) return;
+
+      cachedResources = newCachedResources;
+      if (executionToken)
+        await papi.storage.writeUserData(
+          executionToken,
+          RESOURCES_CACHE_KEY,
+          JSON.stringify(cachedResources),
         );
-
-        const isInstalled = matchingLocalProject !== undefined;
-        if (isInstalled !== resource.installed) {
-          isChanged = true;
-          return {
-            ...resource,
-            installed: isInstalled,
-            updateAvailable: false,
-            projectId: matchingLocalProject?.id ?? '',
-          };
-        }
-
-        return resource;
-      });
-
-      if (isChanged) {
-        cachedResources = newCachedResources;
-        if (executionToken)
-          await papi.storage.writeUserData(
-            executionToken,
-            RESOURCES_CACHE_KEY,
-            JSON.stringify(cachedResources),
-          );
-      }
     });
   } catch (error: unknown) {
     logger.warn(`Error syncing installed flags: ${getErrorMessage(error)}`);
@@ -207,15 +176,13 @@ function ensureInstalledFlagsSynced(): Promise<void> {
   return syncInFlight;
 }
 
-async function getCachedResources(): Promise<DblResourceCatalog> {
-  if (cachedResources !== undefined) {
-    // Run the installed-flag sync in the background so the dialog open is never blocked by
-    // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
-    // the C# PDPF is still initializing). The next dialog open picks up the updated flags.
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    ensureInstalledFlagsSynced();
-    return { status: 'available', resources: cachedResources };
-  }
+/**
+ * The catalog as it currently stands: the in-memory cache when there is one, otherwise a fetch.
+ * Says nothing about whether the `installed` flags on it have been reconciled against the local
+ * project list — that is `getCachedResources`' job.
+ */
+async function getCatalogFromCacheOrFetch(): Promise<DblResourceCatalog> {
+  if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
 
   return fetchMutex.runExclusive(async () => {
     if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
@@ -233,6 +200,28 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
   });
 }
 
+async function getCachedResources(
+  options?: GetCachedResourcesOptions,
+): Promise<DblResourceCatalog> {
+  const catalog = await getCatalogFromCacheOrFetch();
+  if (catalog.status !== 'available') return catalog;
+
+  // The sync is what corrects a stale `installed` flag — a row cached before the C# project factory
+  // registered its projects reads not-installed even though the resource is on disk. It is normally
+  // left running in the background so a dialog open is never blocked by getMetadataForAllProjects
+  // retries (which can exceed the 30-second JSON-RPC timeout while the C# PDPF is initializing);
+  // that open shows the previous snapshot and the next one picks up the corrected flags.
+  const syncPromise = ensureInstalledFlagsSynced();
+  if (!options?.waitForInstalledFlagsSync) return catalog;
+
+  // A caller that acts on the flags — a panel deciding whether to install the resource it is about
+  // to render — cannot use a snapshot that predates the sync, so it opts into waiting and gets the
+  // rows the sync produced. `cachedResources` is reassigned (not mutated) by the sync, so the
+  // catalog captured above is the pre-sync array and has to be re-read here.
+  await syncPromise;
+  return { status: 'available', resources: cachedResources ?? catalog.resources };
+}
+
 /**
  * Returns locally-installed, read-only resources that are NOT in the DBL catalog — e.g. VULGP83,
  * TNN, TND, HBK. Useful for populating the Resource Picker's INSTALLED section with resources that
@@ -244,19 +233,18 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
  */
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
-    await getCachedResources();
-    // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
-    // `getCachedResources` returns before its background sync finishes. Wait for that sync and read
-    // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
-    // than emitted a second time as a synthetic non-DBL one.
-    await ensureInstalledFlagsSynced();
+    // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, so wait
+    // for the installed-flag sync rather than reading the snapshot that precedes it — otherwise a
+    // resource already on disk is emitted a second time here as a synthetic non-DBL entry instead
+    // of being excluded as the DBL entry it is.
+    await getCachedResources({ waitForInstalledFlagsSync: true });
     // An absent catalog means one has never been fetched on this profile (a fetched catalog is
     // persisted and reloaded on activation), so there is nothing for these projects to duplicate
     // and no reason to withhold them. Suppressing them here would hide side-loaded resources from
     // exactly the offline, never-connected users most likely to have them.
     const dblCatalog = cachedResources ?? [];
 
-    const { metadata: allMetadata } = await getLocalProjectMetadata();
+    const allMetadata = await getLocalProjectMetadata();
     return buildLocalNonDblResources(allMetadata, dblCatalog);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
