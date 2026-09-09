@@ -969,15 +969,28 @@ export type NavigationHistoryButtonsProps = {
  * arrow icons, and tooltip shortcut hints), matching Paratext 9.
  */
 export declare function NavigationHistoryButtons({ canGoBack, canGoForward, backItems, forwardItems, onNavigate, localizedStrings, showKeyboardShortcuts, className, variant, groupClassName, showDivider, }: NavigationHistoryButtonsProps): import("react/jsx-runtime").JSX.Element;
-type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
+/**
+ * How the app is permitted to use the internet. Local alias — identical string literals to the
+ * extension's `InternetUse` type, defined here so platform-bible-react does not depend on the
+ * paratext-registration extension package.
+ *
+ * SYNC WARNING: Keep this alias identical to `InternetUse` in
+ * extensions/src/paratext-registration/src/types/paratext-registration.d.ts and the matching C#
+ * enum. Structural typing makes them mutually assignable today, but divergence (e.g. C# adding a
+ * new value) will silently break the wizard step's prop wiring. Update this alias whenever the
+ * authoritative type changes.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
 /**
  * Whether the app can honor this internet-use value.
  *
- * `InternetSettings.xml` is shared with a co-installed Paratext 9 and can be copied in from one, so
- * a stored value may name an option this app does not implement yet (the "Coming soon" rows). Such
- * a value is shown selected and called out in a banner rather than silently replaced — callers that
- * gate on a usable selection (the first-run wizard's Next button) should refuse to advance until
- * this returns true.
+ * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
+ * apps keep separate copies thereafter), so a stored value may name an option this app does not
+ * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
+ * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
+ * Next button) should refuse to advance until this returns true.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -995,7 +1008,27 @@ export type InternetAccessOptionListProps = {
 	/** When true, all rows are non-interactive (loading or saving in progress). */
 	disabled: boolean;
 };
-/** @experimental This export is unstable and may change shape or disappear without notice */
+/**
+ * The five internet-access options as radio rows, each with its description behind a hover- or
+ * keyboard-revealed tooltip.
+ *
+ * Two deliberate deviations, recorded here so a later reader does not read them as oversights. Both
+ * are UX calls made when the descriptions moved off the page; revisit them with UX rather than
+ * quietly, since either change costs new localized strings:
+ *
+ * - **Tooltip length.** `Guidelines/Tooltips` asks that tooltip copy be a hint, supplemental to a UI
+ *   that reads without it. These descriptions run 100–190 characters and are what explains each
+ *   option, so they exceed that. Shortening them means new strings; the descriptions were kept
+ *   whole and the info icon added so the content at least announces itself.
+ * - **Keyboard reach on the "Coming soon" rows.** Those rows' only focusable child is a `disabled`
+ *   radio, so they take no tab stop and a sighted keyboard-only user cannot open their tooltip.
+ *   Screen-reader users are unaffected — the `sr-only` copy below reaches them on every row.
+ *   Closing the gap means either making the info icon a real focusable trigger (a new accessible
+ *   name, plus five extra tab stops) or `aria-disabled` rows that arrow-keys can land on and
+ *   select.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
 type ServerType = "Production" | "QualityAssurance" | "Development" | "Test";
 /** @experimental This export is unstable and may change shape or disappear without notice */
