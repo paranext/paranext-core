@@ -9,18 +9,47 @@
  * app-builder-lib's `snap.js` and is visible only from here.
  */
 
+import { readFileSync } from 'fs';
 import path from 'path';
+import JSON5 from 'json5';
 import {
   checkGeneratedSnapMetadata,
   readSnapMetadata,
   resolveSnapArtifact,
 } from './assert-generated-snap-metadata.util';
 
-/** Matches `directories.output` in `electron-builder.json5`. */
-const OUT_DIR = path.join(__dirname, '..', '..', 'release', 'build');
+const REPO_ROOT = path.join(__dirname, '..', '..');
+
+/** A plain object, for walking into parsed config without asserting a shape. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && !!value && !Array.isArray(value);
+}
+
+/**
+ * Where electron-builder was told to put its output.
+ *
+ * Read from the config rather than restated here: a hardcoded copy that fell out of step would send
+ * this check to an empty directory, and it would then report "no snap artifact found" -- blaming
+ * the build for a wrong path.
+ */
+function readOutDir(): string {
+  const config: unknown = JSON5.parse(
+    readFileSync(path.join(REPO_ROOT, 'electron-builder.json5'), 'utf8'),
+  );
+  const directories = isRecord(config) ? config.directories : undefined;
+  const output = isRecord(directories) ? directories.output : undefined;
+
+  if (typeof output !== 'string')
+    throw new Error(
+      'electron-builder.json5 has no string `directories.output`, so there is no output directory ' +
+        'to look for a snap in. If the config was restructured, this check needs revisiting.',
+    );
+
+  return path.join(REPO_ROOT, output);
+}
 
 function main(): void {
-  const snapPath = resolveSnapArtifact(OUT_DIR);
+  const snapPath = resolveSnapArtifact(readOutDir());
   const problems = checkGeneratedSnapMetadata(readSnapMetadata(snapPath));
 
   if (problems.length > 0) {

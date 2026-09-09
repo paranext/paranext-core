@@ -43,6 +43,7 @@ type PlugAttributes = {
   interface?: string;
   target?: string;
   'default-provider'?: string;
+  content?: string;
 };
 
 /** A found plug, keyed by the name it is declared under. */
@@ -252,6 +253,11 @@ describe('electron-builder snap configuration', () => {
     expect(plugs[0].descriptor.interface).toBe('content');
     // A name/provider mismatch means snapd installs the wrong platform snap to satisfy the plug.
     expect(plugs[0].descriptor['default-provider']).toBe(expected);
+    // `content` names the slot the plug connects to and defaults to the plug's own name, so a plug
+    // can install the right snap and still connect to nothing, mounting an empty directory. The
+    // template sets no `content`, so this passes by default today -- asserted so that a `snap.plugs`
+    // entry adding one has to agree with `base`.
+    expect(plugs[0].descriptor.content ?? expected).toBe(expected);
   });
 
   it('keeps the rename in a committed patch, not just in an installed node_modules', () => {

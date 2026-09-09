@@ -15,7 +15,7 @@
  * staged libraries and the mounted platform libraries out of sync, and the app fails to launch. The
  * full rationale lives beside `base` in `electron-builder.json5`.
  */
-export const GNOME_PLATFORM_BY_BASE: Readonly<Record<string, string>> = {
+export const GNOME_PLATFORM_BY_BASE: Readonly<Partial<Record<string, string>>> = {
   core18: 'gnome-3-28-1804',
   core20: 'gnome-3-38-2004',
   core22: 'gnome-42-2204',
