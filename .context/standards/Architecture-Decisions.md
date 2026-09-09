@@ -4543,7 +4543,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `listExtensionDataQualifiers(scope)`, returning sorted `dataQualifier`s that round-trip verbatim
   into `getExtensionData` — forward slashes on every platform, recursive, scoped to
   `{EXTENSION_DATA_SUBDIRECTORY}/{extensionName}`, empty documents included, and **creating
-  nothing**. Three shape choices go with it. (1) `list*`, not `get*`: `get`/`set`/`subscribe` are
+  nothing**. Four shape choices go with it. (1) `list*`, not `get*`: `get`/`set`/`subscribe` are
   magic prefixes for the data-provider service, and a `get*` name would demand a paired setter with
   nothing to set and imply a subscriber with nothing to notify. (2) **Optional on the engine,
   required on the consumer** (`IBaseProjectDataProvider`): the `platform.base` registration guard

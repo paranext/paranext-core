@@ -71,9 +71,15 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     /// documents are included; an extension with no data at all gets an empty array.
     /// </returns>
     /// <exception cref="InvalidDataException">
-    /// The scope has no ExtensionName, or one that does not name a single directory of extension
-    /// data. An implementation must reject an ExtensionName that would widen the listing past the
-    /// one extension asked about.
+    /// The scope has no ExtensionName, or one that would root the listing at the shared extensions
+    /// directory or above it. An implementation must reject an ExtensionName that would widen the
+    /// listing past the one extension asked about.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The ExtensionName composes into a stream path the project's
+    /// <see cref="IProjectStreamManager"/> refuses — a name containing ".." anywhere, even without a
+    /// separator ("a..b"), is rejected before the filesystem is touched — exactly as
+    /// <see cref="GetExtensionData"/> and <see cref="SetExtensionData"/> reject the same name.
     /// </exception>
     public abstract string[] ListExtensionDataQualifiers(ProjectDataScope scope);
 }

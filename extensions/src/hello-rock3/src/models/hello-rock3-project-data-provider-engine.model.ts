@@ -123,7 +123,8 @@ export class HelloRock3ProjectDataProviderEngine
     // exactly the same terms. Grapheme-aware matching does not agree with exact-string storage: a
     // `dataQualifier` beginning with a combining mark fuses it onto the `/` into one cluster, so a
     // grapheme `startsWith` rejects a key `getExtensionData` reads back fine, and the qualifier
-    // vanishes from the listing.
+    // vanishes from the listing. The repo's string rule records this carve-out and names this
+    // method as its example: .claude/rules/code-quality/native-string-vs-grapheme-helpers.md
     const keyPrefix = getExtensionKeyPrefix(scope.extensionName);
     return Object.keys(this.projectData.extensionData)
       .filter((key) => key.startsWith(keyPrefix))
