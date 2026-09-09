@@ -2079,6 +2079,53 @@ step, no automation. Just a record.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
 
+## adr-project-selector-custom-sections: ProjectSelector takes ordered section descriptors, not a grouping callback
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** `ProjectSelector`'s sections were computed entirely internally, so a consumer could
+  not express a list like "Recent / Your projects". The titlebar picker therefore stayed bespoke
+  and re-implemented the list from scratch. Two shapes were available: ordered declarative
+  descriptors, or a `groupRows` callback receiving the filtered rows and returning sections.
+- **Decision:** Callers pass `customSections` — ordered `{ id, label, match, compare? }`
+  descriptors — selected by a `'custom'` member of `ProjectSelectorGroupingOption`. The component
+  keeps ownership of heading resolution, empty-section elision and the default sort. `match` is
+  evaluated once per project and its verdict applied to all of that project's rows, because
+  `project-multi` fans one project into several rows.
+- **Alternatives considered:**
+  - **A `groupRows` callback.** Rejected: it would put `RowSection` on the public barrel and hand
+    every caller responsibility for sort order, heading text and empty-section elision. The
+    argument holds at barrel level only — `ProjectRow` is already re-exported from
+    `project-selector.component.tsx`.
+  - **Widening `RowSection` itself**, as originally proposed. Rejected: `RowSection` is not
+    barrel-exported, so naming it as the deliverable leaves an implementer unable to tell what
+    public API to add.
+- **Consequences:** A section whose meaning implies an order the component cannot know needs its
+  own `compare` — the canonical sort is alphabetical by `shortName`, which would render a "Recent"
+  section alphabetically. `RowSection` needed an `id` for React keys, since two custom sections can
+  share a `kind` and both lack a `label`.
+
+## adr-project-selector-type-stays-free-form: ProjectSelectorProject.type is a free-form string, not a closed union
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** Projects and resources rendered identically in the picker, with the distinction
+  carried only by localized copy. Adding a discriminator raised whether `type` should be a closed
+  TypeScript union or an open string.
+- **Decision:** `type` stays `string`. Rows are grouped by exact key equality and displayed under a
+  caller-supplied `typeName`; the library defines no taxonomy, no enum and no localization key set
+  for the values.
+- **Alternatives considered:**
+  - **A closed union.** Rejected: a single picker's rows can come from two established
+    vocabularies, neither owned by `platform-bible-react` — Paratext project types (the PT9
+    `ProjectType` enum, forwarded as `ProjectListResult.projectType`, see
+    `c-sharp/ManageBooks/ProjectSummary.cs`) and DBL resource types (the `ResourceType` union in
+    `lib/platform-bible-utils/src/resources.model.ts`). A union would duplicate one and drift from
+    its source, or invent a third. Grouping needs only equality.
+- **Consequences:** The library will never resolve a type's label or icon, so every picker must
+  supply both — `typeName` for grouping headers and `renderProjectIndicator` for the row glyph. A
+  caller wanting compile-time safety should type the literal at its own call site.
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25
