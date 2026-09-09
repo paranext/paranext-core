@@ -63,9 +63,11 @@ export type {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 export type {
+  ExtensionDataEnumerationProjectDataTypes,
   ExtensionDataListScope,
   ExtensionDataScope,
   MandatoryProjectDataTypes,
+  WithProjectDataProviderEngineExtensionDataEnumerationMethods,
 } from '@shared/models/project-data-provider.model';
 export type { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 export type {

@@ -104,6 +104,7 @@ internal class LocalParatextProjects : IDisposable
     private static readonly List<string> s_paratextPublishedProjectInterfaces =
     [
         ProjectInterfaces.BASE,
+        ProjectInterfaces.EXTENSION_DATA_ENUMERATION,
         ProjectInterfaces.USFM_BOOK,
         ProjectInterfaces.USFM_CHAPTER,
         ProjectInterfaces.USFM_VERSE,
