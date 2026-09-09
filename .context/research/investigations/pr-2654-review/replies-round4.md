@@ -32,12 +32,19 @@ still builds a snap nothing publishes; and one sentence in `adr-core-does-not-di
 naming the S3 upload at `publish.yml:266` - the bucket is not public, so LICENSING.md:195 stands as
 written and it was only the ADR's silence that needed closing.
 
-**Ticketed (1):** 3 becomes PT-4560, "Inventory the packed static-asset trees by content, not by
-filename" (https://paratextstudio.atlassian.net/browse/PT-4560). It is deliberately scoped to cover
-your round-3 conversation item 3 as well, because they are the same gap: an inventory that sees only
+**Ticketed (2).** 3 becomes PT-4560, "Inventory the packed static-asset trees by content, not by
+filename" (https://paratextstudio.atlassian.net/browse/PT-4560), deliberately scoped to cover your
+round-3 conversation item 3 as well, because they are the same gap: an inventory that sees only
 notice-SHAPED filenames, and attribution files pinned and reproduced by nothing.
 
-**Declined, with reasons on the threads (5):** 2, 18, 20, 26, 30 - plus the resolver half of 10.
+30 becomes PT-4572 (https://paratextstudio.atlassian.net/browse/PT-4572). You handed us that one as a
+judgement call and we would rather not settle it by argument, so it was measured: `clean.ts`'s cache
+glob costs **133s cold against 18-24s warm**, about 110 seconds and roughly 6x on every invocation,
+paid by every local `npm run package` and every downstream `package-core`. That is not in the noise,
+so your suggestion is taken - as its own change, because it alters the build entry point every
+downstream repository calls. Details and methodology are on the thread and in the ticket.
+
+**Declined, with reasons on the threads (4):** 2, 18, 20, 26 - plus the resolver half of 10.
 
 18 and 20 are declined and deliberately not ticketed. Both mechanisms are confirmed. Both are latent
 with no trigger anywhere in the tree, and both fixes change the path that decides which rows the
@@ -52,6 +59,26 @@ ships under. 4 and 22 are a wrong row and wrong wording inside `THIRD-PARTY-NOTI
 release-page prose. The rest are gates that fail open on cases the tree does not currently contain,
 or invariants that assert less than they claim. That is the difference between "this is not ready"
 and "these are worth fixing before it lands", and this round is the second.
+
+**Four defects our own round-4 changes introduced, found before committing rather than by you.**
+Naming them because each is a fix being larger than the finding that prompted it, and because three
+of the four are the fail-open shape this pipeline exists to refuse:
+
+- Moving `packedExtensionNames` to `extensions/dist` (5) made "no extensions" a REACHABLE answer, and
+  it returned `[]` - which drops every gated prose section from the document AND from the lock
+  written in the same run, so the two agree and the byte-compare has nothing to catch. It throws.
+- Opening the below-threshold case (12) meant the exception template was now printed there, filling
+  `spdx` from `detected` - which in exactly that case is the inadmissible objecting-file id, the one
+  value `applyException` always refuses. Handing over a paste-ready entry the gate rejects is worse
+  than the withheld template we opened the case to avoid.
+- Adding the staleness check (15) covered the harmless direction. A copy rule with NO policy entry -
+  a native library shipping undisclosed - stayed open, and our own change is what made it closeable.
+- The placeholder sweep (11) covered `reason`, `reviewer` and `note` but not `license`, and
+  `nonSpdx: true` is precisely what stops that value being parsed again, so the template's own
+  wording would have reached the document and the lock as a shipped package's terms.
+
+All four have tests and were mutation-checked. Regenerating afterwards produced an identical artifact,
+which is what confirms they are gate hardening rather than output changes.
 
 **Verification.** `npm run typecheck` clean on all four legs. `npm run lint` exit 0, with the one
 pre-existing warning in a file this change does not touch. `dotnet test c-sharp-tests/` 1725 passed,
@@ -79,7 +106,8 @@ The notices pipeline was run end to end from a cold cache - `build`, `build:exte
 `verify:third-party-notices:document` both pass against the regenerated pair. The document diff is
 +115/-148 and is exactly four effects: `@testing-library/react@16.2.0` out of the lock, the table,
 the counts and license text section 11 with the renumbering that follows; the ICU split; the
-`rc-new-window` wording; and two escaped holder strings. [VERIFY: CI result once pushed.]
+`rc-new-window` wording; and two escaped holder strings. CI has not reported on the push yet at the
+time of writing - I will say so on the thread if any leg comes back red.
 
 _(AI-assisted, with my guidance)_
 
