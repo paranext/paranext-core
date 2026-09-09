@@ -748,6 +748,25 @@ test.describe('Search Results', () => {
 
     await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: 20_000 });
   });
+
+  test('finds a phrase copied across a paragraph boundary', async ({ mainPage }) => {
+    // MAT 1:1 and 1:2 are separate paragraphs, so the searched text runs "...the son of
+    // Abraham.Abraham became..." with no space. The editor renders a line break there, so a
+    // copy-paste of this phrase carries one.
+    const frame = await openFindPanel(mainPage);
+
+    await fillSearchAndWaitForResults(frame, 'of Abraham. Abraham became');
+
+    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('does not match a missing space away from a paragraph boundary', async ({ mainPage }) => {
+    const frame = await openFindPanel(mainPage);
+
+    await frame.locator('#search-term').fill('of David,the son');
+
+    await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: 20_000 });
+  });
 });
 
 // ---------------------------------------------------------------------------

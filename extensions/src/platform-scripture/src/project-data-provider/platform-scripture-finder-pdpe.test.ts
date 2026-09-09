@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FindResult, ScriptureRangeUsjChapterOrUsfmVerseLocation } from 'platform-scripture';
+import { UsjReaderWriter } from 'platform-bible-utils';
 import papi from '@papi/backend';
 import {
   ScriptureFinderProjectDataProviderEngine,
@@ -2290,6 +2291,32 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
 
     expect(foundBooks.has('MAT')).toBe(true);
     expect(foundBooks.has('GEN')).toBe(false);
+  });
+
+  it('passes block-boundary whitespace tolerance for a plain search but not a regex search', async () => {
+    const searchSpy = vi.spyOn(UsjReaderWriter.prototype, 'search');
+
+    await pollFindJob(engine, {
+      searchString: 'of Abraham. Abraham',
+      useRegex: false,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+    expect(searchSpy).toHaveBeenLastCalledWith(
+      expect.any(RegExp),
+      expect.objectContaining({ flexibleWhitespaceAtBlockBoundaries: true }),
+    );
+
+    await pollFindJob(engine, {
+      searchString: 'of Abraham\\.\\s?Abraham',
+      useRegex: true,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+    expect(searchSpy).toHaveBeenLastCalledWith(
+      expect.any(RegExp),
+      expect.objectContaining({ flexibleWhitespaceAtBlockBoundaries: false }),
+    );
   });
 });
 
