@@ -10,6 +10,7 @@ import {
   InternetAccessOptionList,
   isSupportedInternetUse,
   type InternetAccessOptionListProps,
+  type InternetUse,
 } from './internet-access-option-list.component';
 
 // Radix RadioGroup and the Tooltip's Popper positioning both use ResizeObserver internally; jsdom
@@ -205,19 +206,34 @@ describe('InternetAccessOptionList', () => {
     expect(screen.getAllByText('Coming soon')).toHaveLength(3);
   });
 
-  // InternetSettings.xml is shared with a co-installed Paratext 9 and can be copied in from one, so
-  // it can name an option this app does not implement yet. Showing the row selected under a banner
-  // is what keeps that from looking like the app quietly picked something else.
+  // InternetSettings.xml is seeded once from a co-installed Paratext 9 on first launch, so it can
+  // name an option this app does not implement yet. Showing the row selected under a banner is what
+  // keeps that from looking like the app quietly picked something else.
   describe('a stored value the app cannot honor', () => {
+    // role="status" (polite), not Alert's assertive default: the setting was already stored before
+    // the user arrived, so announcing it must not interrupt whatever is being read.
     test.each(['Disabled', 'ProxyOnly'] as const)('%s is announced in a banner', (value) => {
       renderList({ value });
-      expect(screen.getByRole('alert')).toHaveTextContent('Not supported sentinel');
+      expect(screen.getByRole('status')).toHaveTextContent('Not supported sentinel');
     });
 
     test('the banner names the option that is selected', () => {
       renderList({ value: 'ProxyOnly' });
-      expect(screen.getByRole('alert')).toHaveTextContent(
+      expect(screen.getByRole('status')).toHaveTextContent(
         'Configure proxy sentinel is not supported sentinel',
+      );
+    });
+
+    // A value with no row at all selects nothing, so without this the wizard would hold Next shut
+    // with nothing on screen explaining why. It can only be named by its raw form.
+    test('a value with no row of its own still raises the banner, named by its raw value', () => {
+      // The point of the test is a value outside the union — a settings file can carry one, and the
+      // type cannot express it. Asserting is the only way to hand the component that input.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      renderList({ value: 'SomethingNewer' as InternetUse });
+      expect(screen.queryByRole('radio', { checked: true })).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'SomethingNewer is not supported sentinel',
       );
     });
 
@@ -230,7 +246,7 @@ describe('InternetAccessOptionList', () => {
 
     test.each(['Enabled', 'VpnRequired'] as const)('%s shows no banner', (value) => {
       renderList({ value });
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
   });
 

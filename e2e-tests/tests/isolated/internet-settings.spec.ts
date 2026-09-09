@@ -46,7 +46,23 @@ test.describe('Internet & Connectivity settings', () => {
     // Lowercase "connectivity" — this is %internetSettings_webView_title_2%, and toContainText is
     // case-sensitive for plain strings.
     await expect(frame.locator('h2')).toContainText('Internet & connectivity');
-    await expect(frame.locator('p').first()).toContainText('only apply to the Paratext app');
+    await expect(frame.locator('p').first()).toContainText('apply only to Paratext 10 Studio');
+  });
+
+  // A key the panel asks for but the localization data no longer carries resolves to the bare
+  // `%key%` as a debug safety net, which the panel then renders verbatim. Asserting the ABSENCE of
+  // a retired English string cannot catch that — the raw key is absent too — so assert positively
+  // that nothing key-shaped reaches the screen.
+  test('renders no unresolved localization keys', async ({ mainPage }) => {
+    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForSettingsLoaded(frame);
+    await expandDeveloperSection(frame);
+
+    const text = await frame.locator('body').innerText();
+    expect(text).not.toMatch(/%[a-zA-Z0-9_]+%/);
+    // Positive control: this corpus is the panel's real text, not an empty string that would
+    // satisfy the assertion above no matter what.
+    expect(text).toContain('Internet & connectivity');
   });
 
   test('shows 2 active radio rows and 3 coming-soon rows with badges', async ({ mainPage }) => {

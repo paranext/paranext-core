@@ -18,8 +18,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%internetSettings_button_retry%': 'Retry',
-      '%internetSettings_webView_title_2%': 'Internet & connectivity',
-      '%internetSettings_subtitle_short%': 'Manage how Paratext accesses the internet',
+      '%firstRun_step_internetSettings_heading%': 'Internet & connectivity',
+      '%firstRun_step_internetSettings_body%': 'Manage how Paratext accesses the internet.',
       '%firstRun_step_internetSettings_connecting%': 'Getting things ready…',
       '%firstRun_step_internetSettings_loadError%':
         "We couldn't get things ready. Please try again in a moment.",
@@ -147,8 +147,8 @@ describe('InternetSettingsStep', () => {
       screen.getByRole('heading', { name: 'Internet & connectivity', level: 2 }),
     ).toBeInTheDocument();
     // The lead-in is what frames the radio list, so it must be present in every state — without it
-    // the first thing the user reads is the bare "Unrestricted" option (PT-4363).
-    expect(screen.getByText('Manage how Paratext accesses the internet')).toBeInTheDocument();
+    // the first thing the user reads is the bare "Unrestricted" option.
+    expect(screen.getByText('Manage how Paratext accesses the internet.')).toBeInTheDocument();
   });
 
   it('shows a spinner and no error while the provider is undefined', () => {
@@ -241,8 +241,8 @@ describe('InternetSettingsStep', () => {
     expect(setCanProceed).not.toHaveBeenCalledWith(true);
   });
 
-  // InternetSettings.xml is shared with a co-installed Paratext 9 and can be copied in from one, so
-  // it can arrive naming an option this app does not implement yet. The list shows that option
+  // InternetSettings.xml is seeded once from a co-installed Paratext 9 on first launch, so it can
+  // arrive naming an option this app does not implement yet. The list shows that option
   // selected under a banner; Next has to stay shut until the user replaces it with one that will
   // actually take effect.
   describe('a stored value the app cannot honor', () => {

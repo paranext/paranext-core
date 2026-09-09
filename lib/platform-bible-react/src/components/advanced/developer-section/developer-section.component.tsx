@@ -20,10 +20,10 @@ type ServerType = 'Production' | 'QualityAssurance' | 'Development' | 'Test';
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_developer_section_label%',
-  '%paratextRegistration_label_serverType_option_Production%',
-  '%paratextRegistration_label_serverType_option_QualityAssurance%',
-  '%paratextRegistration_label_serverType_option_Development%',
-  '%paratextRegistration_label_serverType_option_Test%',
+  '%paratextRegistration_label_serverType_option_Production_2%',
+  '%paratextRegistration_label_serverType_option_QualityAssurance_2%',
+  '%paratextRegistration_label_serverType_option_Development_2%',
+  '%paratextRegistration_label_serverType_option_Test_2%',
 ];
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -42,22 +42,22 @@ export type DeveloperSectionProps = {
 const SERVER_ROWS = [
   {
     value: 'Production',
-    labelKey: '%paratextRegistration_label_serverType_option_Production%',
+    labelKey: '%paratextRegistration_label_serverType_option_Production_2%',
     testId: 'server-type-production',
   },
   {
     value: 'QualityAssurance',
-    labelKey: '%paratextRegistration_label_serverType_option_QualityAssurance%',
+    labelKey: '%paratextRegistration_label_serverType_option_QualityAssurance_2%',
     testId: 'server-type-quality-assurance',
   },
   {
     value: 'Development',
-    labelKey: '%paratextRegistration_label_serverType_option_Development%',
+    labelKey: '%paratextRegistration_label_serverType_option_Development_2%',
     testId: 'server-type-development',
   },
   {
     value: 'Test',
-    labelKey: '%paratextRegistration_label_serverType_option_Test%',
+    labelKey: '%paratextRegistration_label_serverType_option_Test_2%',
     testId: 'server-type-test',
   },
 ] as const satisfies readonly { value: ServerType; labelKey: LocalizeKey; testId: string }[];

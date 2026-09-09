@@ -12,7 +12,7 @@ import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
 // describes. The ordering is pinned by z-index.test.tsx.
 import { Z_INDEX_TOOLTIP } from '@/components/z-index';
 // CUSTOM: Shared portal-container factory (also used by popover.tsx) so this workaround is defined once
-import { createPortalContainerContext } from '@/components/portal-container.context';
+import { createPortalContainerContext } from '@/context/portal-container.context';
 
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */
@@ -189,5 +189,7 @@ function TooltipContent({
   );
 }
 
-// CUSTOM: Export TooltipPortalContainerProvider alongside the stock exports
+// CUSTOM: Export TooltipPortalContainerProvider alongside the stock exports, so a consumer whose
+// tooltips sit under a higher-stacking ancestor can redirect where they portal without
+// reaching into this vendored file
 export { Tooltip, TooltipContent, TooltipPortalContainerProvider, TooltipProvider, TooltipTrigger };

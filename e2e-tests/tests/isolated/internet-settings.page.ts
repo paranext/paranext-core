@@ -76,10 +76,10 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
  * Select whichever of the two selectable connectivity options is not the current one, so the form
  * genuinely holds an unsaved change.
  *
- * Which one that is depends on the machine: these settings live in ParatextData's own storage and
- * are shared with any co-installed Paratext 9, so a developer box can legitimately start on either.
- * Clicking a fixed option would be a no-op wherever that option was already selected. Nothing here
- * is persisted — only "Save and restart" writes.
+ * Which one that is depends on the machine: these settings live in ParatextData's own storage,
+ * which is seeded once from a co-installed Paratext 9, so a developer box can legitimately start on
+ * either. Clicking a fixed option would be a no-op wherever that option was already selected.
+ * Nothing here is persisted — only "Save and restart" writes.
  *
  * @returns The radio that was selected before the click, so a test can assert a reset restores it
  */

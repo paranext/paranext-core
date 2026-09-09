@@ -14,18 +14,23 @@ import {
   type LanguageStrings,
   type LocalizeKey,
 } from 'platform-bible-utils';
-import { useEffect, useId, useRef } from 'react';
+import { useId } from 'react';
+import { useInteractionModalityRef } from '@/hooks/use-interaction-modality.hook';
 
-// Local alias — identical string literals to the extension's InternetUse type.
-// Defined here so platform-bible-react does not depend on the paratext-registration
-// extension package.
-//
-// SYNC WARNING: Keep this alias identical to `InternetUse` in
-// extensions/src/paratext-registration/src/types/paratext-registration.d.ts
-// and the matching C# enum. Structural typing makes them mutually assignable today,
-// but divergence (e.g. C# adding a new value) will silently break the wizard step's
-// prop wiring. Update this alias whenever the authoritative type changes.
-type InternetUse = 'Enabled' | 'VpnRequired' | 'Disabled' | 'ProxyOnly';
+/**
+ * How the app is permitted to use the internet. Local alias — identical string literals to the
+ * extension's `InternetUse` type, defined here so platform-bible-react does not depend on the
+ * paratext-registration extension package.
+ *
+ * SYNC WARNING: Keep this alias identical to `InternetUse` in
+ * extensions/src/paratext-registration/src/types/paratext-registration.d.ts and the matching C#
+ * enum. Structural typing makes them mutually assignable today, but divergence (e.g. C# adding a
+ * new value) will silently break the wizard step's prop wiring. Update this alias whenever the
+ * authoritative type changes.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type InternetUse = 'Enabled' | 'VpnRequired' | 'Disabled' | 'ProxyOnly';
 
 type OptionRow = {
   // BlockInSensitiveLocations is included here as a UI-only option that the UX spec requires
@@ -43,44 +48,7 @@ type OptionRow = {
  */
 const TOOLTIP_DELAY_MS = 300;
 
-/**
- * Tracks whether the last user input was a key press, so a focus handler can tell a keyboard focus
- * from a programmatic one.
- *
- * Radix opens a tooltip on _any_ focus, including the programmatic focus the standalone settings
- * panel puts on the checked radio once its fetch resolves — which would pop a description open with
- * no user gesture. `:focus-visible` cannot separate the two: Chromium reports it as true for a
- * programmatic `.focus()` in a document that has seen no pointer input, which is exactly the
- * panel's situation, because the click that opened the panel landed in the host document rather
- * than the panel's own iframe.
- *
- * Listens on the document in the capture phase, since a Tab press that moves focus _into_ this list
- * fires its keydown on whatever held focus before — usually something outside the list. One gap
- * follows from that: tabbing straight from the host document into the panel's iframe fires its
- * keydown in a document this listener cannot see, so the first row focused that way reveals no
- * tooltip until the next key press. Screen readers are unaffected — they read the `sr-only`
- * description wired to each radio via `aria-describedby`, not the tooltip.
- */
-function useLastInputWasKeyboardRef() {
-  const lastInputWasKeyboard = useRef(false);
-  useEffect(() => {
-    const onKeyDown = () => {
-      lastInputWasKeyboard.current = true;
-    };
-    const onPointerDown = () => {
-      lastInputWasKeyboard.current = false;
-    };
-    document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('pointerdown', onPointerDown, true);
-    };
-  }, []);
-  return lastInputWasKeyboard;
-}
-
-const OPTION_ROWS: OptionRow[] = [
+const OPTION_ROWS = [
   {
     value: 'Enabled',
     labelKey: '%paratextRegistration_description_internetUse_option_Enabled_2%',
@@ -112,22 +80,19 @@ const OPTION_ROWS: OptionRow[] = [
     descriptionKey: '%paratextRegistration_description_internetUse_option_ProxyOnly_details%',
     isEnabled: false,
   },
-];
+] as const satisfies readonly OptionRow[];
 
-function isInternetUse(value: string): value is InternetUse {
-  return OPTION_ROWS.some(
-    (row) => row.value !== 'BlockInSensitiveLocations' && row.value === value,
-  );
-}
+const isInternetUse = (value: string): value is InternetUse =>
+  OPTION_ROWS.some((row) => row.value !== 'BlockInSensitiveLocations' && row.value === value);
 
 /**
  * Whether the app can honor this internet-use value.
  *
- * `InternetSettings.xml` is shared with a co-installed Paratext 9 and can be copied in from one, so
- * a stored value may name an option this app does not implement yet (the "Coming soon" rows). Such
- * a value is shown selected and called out in a banner rather than silently replaced — callers that
- * gate on a usable selection (the first-run wizard's Next button) should refuse to advance until
- * this returns true.
+ * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
+ * apps keep separate copies thereafter), so a stored value may name an option this app does not
+ * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
+ * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
+ * Next button) should refuse to advance until this returns true.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -156,7 +121,27 @@ export type InternetAccessOptionListProps = {
   disabled: boolean;
 };
 
-/** @experimental This export is unstable and may change shape or disappear without notice */
+/**
+ * The five internet-access options as radio rows, each with its description behind a hover- or
+ * keyboard-revealed tooltip.
+ *
+ * Two deliberate deviations, recorded here so a later reader does not read them as oversights. Both
+ * are UX calls made when the descriptions moved off the page; revisit them with UX rather than
+ * quietly, since either change costs new localized strings:
+ *
+ * - **Tooltip length.** `Guidelines/Tooltips` asks that tooltip copy be a hint, supplemental to a UI
+ *   that reads without it. These descriptions run 100–190 characters and are what explains each
+ *   option, so they exceed that. Shortening them means new strings; the descriptions were kept
+ *   whole and the info icon added so the content at least announces itself.
+ * - **Keyboard reach on the "Coming soon" rows.** Those rows' only focusable child is a `disabled`
+ *   radio, so they take no tab stop and a sighted keyboard-only user cannot open their tooltip.
+ *   Screen-reader users are unaffected — the `sr-only` copy below reaches them on every row.
+ *   Closing the gap means either making the info icon a real focusable trigger (a new accessible
+ *   name, plus five extra tab stops) or `aria-disabled` rows that arrow-keys can land on and
+ *   select.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export function InternetAccessOptionList({
   localizedStrings,
   value,
@@ -168,16 +153,23 @@ export function InternetAccessOptionList({
   const idPrefix = useId();
   const radioId = (optionValue: OptionRow['value']) => `${idPrefix}-${optionValue}`;
   const descriptionId = (optionValue: OptionRow['value']) => `${radioId(optionValue)}-description`;
-  const lastInputWasKeyboard = useLastInputWasKeyboardRef();
+  const interactionModality = useInteractionModalityRef();
 
   // A stored value the app cannot honor still selects its row, so the user can see exactly which
-  // setting is carried over, and this banner says why nothing will act on it.
-  const unsupportedRow = OPTION_ROWS.find((row) => row.value === value && !row.isEnabled);
+  // setting is carried over, and this banner says why nothing will act on it. Derived from the
+  // value rather than from a matching row, so a value with no row at all — which selects nothing
+  // and would otherwise leave the wizard's Next disabled with nothing on screen explaining why —
+  // is announced too. Such a value can only be named by its raw form.
+  const isUnsupported = !isSupportedInternetUse(value);
+  const unsupportedRow = OPTION_ROWS.find((row) => row.value === value);
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
-      {unsupportedRow && (
-        <Alert className="tw:mb-2">
+      {isUnsupported && (
+        // role="status" (polite), overriding Alert's assertive default: this reports a setting that
+        // was already stored before the user arrived, not a change they just caused, so it should
+        // not interrupt whatever a screen reader is currently reading.
+        <Alert role="status" className="tw:mb-2">
           <TriangleAlert />
           <AlertTitle>
             {localizedStrings['%paratextRegistration_internetUse_unsupportedSelection_title%']}
@@ -187,7 +179,11 @@ export function InternetAccessOptionList({
               localizedStrings[
                 '%paratextRegistration_internetUse_unsupportedSelection_description%'
               ] ?? '',
-              { selectedOption: localizedStrings[unsupportedRow.labelKey] ?? unsupportedRow.value },
+              {
+                selectedOption: unsupportedRow
+                  ? (localizedStrings[unsupportedRow.labelKey] ?? unsupportedRow.value)
+                  : value,
+              },
             )}
           </AlertDescription>
         </Alert>
@@ -210,9 +206,13 @@ export function InternetAccessOptionList({
               <TooltipTrigger
                 asChild
                 onFocus={(event) => {
-                  // Suppresses Radix's own focus handler, leaving hover and keyboard focus as the
-                  // only ways in. See useLastInputWasKeyboardRef for why the modality is tracked.
-                  if (!lastInputWasKeyboard.current) event.preventDefault();
+                  // Radix opens a tooltip on any focus, including the programmatic one the
+                  // standalone panel puts on the checked radio when its fetch resolves — which
+                  // would pop a description open with no user gesture. Preventing the default
+                  // suppresses Radix's focus handler, leaving hover and a keyboard arrival as the
+                  // only ways in. See useInteractionModalityRef for why modality, not
+                  // `:focus-visible`, is what tells those apart.
+                  if (interactionModality.current !== 'keyboard') event.preventDefault();
                 }}
               >
                 <div
