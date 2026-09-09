@@ -25,15 +25,22 @@ decision record is `adr-pdp-enumerates-extension-data-qualifiers` in
 - **`GetExtensionData` no longer creates the document it looks for.** §1's first bullet is fixed at
   the root, not only worked around: `createIfNotExists: false`, with an absent document reading as
   `""` — the answer callers always got — so nothing on the wire changed.
-- **The extension name is validated as a single directory segment** in the shared
-  `GetExtensionDataRoot`. Review found that `extensionName: "."` passed the empty-name check and, via
-  the only downstream guard (`Contains("..")`), rooted the walk at the shared extensions directory —
-  returning, and then reading back, every other extension's data. `"./"`, `".."`, embedded
-  separators, and Windows-trimmed trailing space or dot are rejected the same way; listing and
-  reading share the check.
-- **`AttributesToSkip = FileAttributes.ReparsePoint`** on the recursive walk: a symlink or junction
-  is no longer followed out of the project, and the default `Hidden | System` skip — which dropped
-  every dot-prefixed stream on macOS/Linux while Windows listed it — is lifted.
+- **The extension name is checked, on the listing only, for escaping its own directory.** Review
+  found that `extensionName: "."` passed the empty-name check and, via the only downstream guard
+  (`Contains("..")`), rooted the walk at the shared extensions directory — returning, and then
+  reading back, every other extension's data. `ListExtensionDataQualifiers` now rejects `"."`,
+  `"./"`, and any `".."` segment. The check is deliberately **not** in the shared
+  `GetExtensionDataRoot`: for `getExtensionData`/`setExtensionData` such a name reaches nothing a
+  caller could not reach by naming the other extension outright, and those methods have always
+  accepted nested names like `acme/tools`, so tightening them would strand data written under one.
+  They are unchanged from the merge base, and a test pins that a nested name writes, lists, and
+  reads back.
+- **The walk is a `FileSystemEnumerable` with two predicates** — include every file whatever its
+  attributes; never recurse into a symlink or junction — rather than `Directory.GetFiles` with an
+  attribute skip. The default `Hidden | System` skip dropped every dot-prefixed stream on
+  macOS/Linux while Windows listed it, and skipping `ReparsePoint` instead (the one-flag way to
+  stop link recursion) dropped cloud-sync placeholder files that `getExtensionData` reads fine.
+  Both halves are pinned by symlink-based tests that skip where the OS refuses to create links.
 - **A missing project directory throws `DirectoryNotFoundException`** instead of answering `[]`,
   so an unreachable project cannot be mistaken for "no data". An absent extension sub-path is still
   `[]`.
