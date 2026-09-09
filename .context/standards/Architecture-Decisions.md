@@ -2524,9 +2524,10 @@ step, no automation. Just a record.
   that the window itself is backgrounded — the ring problem above. Second,
   `openWebViewInOwningWindow` (`src/main/services/web-view.service-router.ts`) calls the shard's
   `focus()` on the owner's tab while the owner window is still backgrounded, then raises the window
-  afterward with `focusWindow` — a `focus()` call made from inside a window that does not hold OS
-  focus is silently dropped by the renderer rather than deferred, so the raise lands with no
-  document focus left to give the revealed tab.
+  afterward with `focusWindow` — and a `focus()` call made from inside a window that does not hold
+  OS focus sets that document's active element without raising the window, latently, so whichever
+  tab's content focuses last owns the caret the moment the raise lands, rather than the tab the
+  raise is showing. See `adr-focus-in-a-background-window-is-latent` for the measurement.
 - **Decision:** Main is the process that already knows which window is focused
   (`getFocusedWindowId`/`setFocusedWindowId` in `src/main/services/window-state.service.ts`), so it
   is the source of truth broadcast to every renderer, rather than each renderer trying to infer "am
