@@ -1207,6 +1207,73 @@ describe('findNextMatchingNode finds next occurrence of a node matching a predic
 });
 
 describe('Find USJ details for text searches', () => {
+  test('search bridges a whitespace gap only at a block boundary 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // MAT 1:1 ends one paragraph and 1:2 begins the next, so the concatenated text reads
+    // "...the son of Abraham.Abraham became..." with nothing between the two words.
+    const acrossBoundary = /(of Abraham\.(?<ws0>(?: )?)Abraham became)/dg;
+    const bridged = usjDoc.search(acrossBoundary, {
+      flexibleWhitespaceAtBlockBoundaries: true,
+    });
+    expect(bridged.length).toBe(1);
+    expect(bridged[0].text).toBe('of Abraham.Abraham became');
+
+    // The gate is what the filter REJECTS, not what it accepts: this hand-written pattern already
+    // permits a zero-length group, so with the option off the engine matches it wherever the group
+    // can be empty. There is no whitespace between "Abraha" and "m" and that offset is not a block
+    // boundary, so only the filtered search discards it.
+    const insideAWord = /(Abraha(?<ws0>(?: )?)m became)/dg;
+    expect(usjDoc.search(insideAWord).length).toBeGreaterThan(0);
+    insideAWord.lastIndex = 0;
+    expect(usjDoc.search(insideAWord, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(
+      0,
+    );
+  });
+
+  test('search treats a group that matched real whitespace as always allowed 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // Mid-paragraph, the text really does contain the space, so the group is non-empty and
+    // the boundary filter must not consider it at all.
+    const midParagraph = /(of David,(?<ws0>(?: )?)the son)/dg;
+    expect(usjDoc.search(midParagraph, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(
+      1,
+    );
+  });
+
+  test('search does not treat a char-marker or note boundary as a block boundary 3.0', () => {
+    const usjDoc = new UsjReaderWriter(webMatthew5Usj);
+
+    // "...inherit the earth." is followed by footnote content in the concatenated text. A note
+    // is nested inside its paragraph, so entering and leaving it is not a block boundary, and
+    // the gap there is note text rather than zero characters either way.
+    const acrossANote = /(inherit the earth\.(?<ws0>(?: )?)5:5 or)/dg;
+    const matches = usjDoc.search(acrossANote, {
+      flexibleWhitespaceAtBlockBoundaries: true,
+    });
+    expect(matches.length).toBe(0);
+  });
+
+  test('search terminates on a pattern that can match the empty string 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // A zero-length match does not advance lastIndex, so the exec loop must step past it. The
+    // group can never match real characters, so every match is zero-length and none can be
+    // accepted on the "matched real whitespace" ground the boundary filter otherwise allows.
+    const canMatchEmpty = /(?<ws0>)/dg;
+    expect(usjDoc.search(canMatchEmpty, { flexibleWhitespaceAtBlockBoundaries: true })).toEqual([]);
+  });
+
+  test('search with the boundary option off is unchanged and does not require the d flag 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    const fatherRegex = /father/g;
+    expect(usjDoc.search(fatherRegex).length).toBe(40);
+    fatherRegex.lastIndex = 0;
+    expect(usjDoc.search(fatherRegex, { markerStylesToInclude: undefined }).length).toBe(40);
+  });
+
   test('usfmVerseLocationToNextTextLocation takes USJ location and finds USJ details for next text 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 

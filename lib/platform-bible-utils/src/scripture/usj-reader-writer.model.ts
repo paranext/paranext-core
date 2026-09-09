@@ -532,6 +532,14 @@ export type UsjNodeAndDocumentLocation<
   documentLocation: TDocumentLocation;
 };
 
+/**
+ * Prefix identifying the capture groups that
+ * {@link UsjSearchOptions.flexibleWhitespaceAtBlockBoundaries} applies to. A regex built for such a
+ * search names each whitespace run `${SEARCH_WHITESPACE_GROUP_PREFIX}${n}` — names must be unique,
+ * because a duplicate capture group name is a `SyntaxError`.
+ */
+export const SEARCH_WHITESPACE_GROUP_PREFIX = 'ws';
+
 /** Options controlling how {@link IUsjReaderWriter.search} performs its search */
 export type UsjSearchOptions = {
   /**
@@ -549,6 +557,17 @@ export type UsjSearchOptions = {
    * always slices of the original (non-NFD) string.
    */
   normalizationForm?: 'NFD';
+  /**
+   * When `true`, a capture group whose name starts with {@link SEARCH_WHITESPACE_GROUP_PREFIX} may
+   * match zero characters, but only at a block boundary — an offset in the concatenated text where
+   * the adjacent text nodes belong to different block-level markers, which is where the editor
+   * renders a line break. A match whose whitespace group matched zero characters anywhere else is
+   * discarded.
+   *
+   * This lets a phrase copied out of an editor match across a rendered line break: the clipboard
+   * supplies a space where the concatenated text has nothing between the two words.
+   */
+  flexibleWhitespaceAtBlockBoundaries?: boolean;
 };
 
 /** Result of a search for text within a USJ object */
