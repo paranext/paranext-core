@@ -263,6 +263,11 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       // process.kill(-pid) throws ESRCH), on Windows via `taskkill /t` instead, since `detached`
       // does not create an addressable process group there.
       detached: true,
+      // A detached (and/or shell-wrapped) child gets its own console window on Windows unless told
+      // otherwise — Node's own doc for `detached`: "On Windows, ... the child process will have its
+      // own console window". Without this, every isolated-suite run opens a visible cmd window
+      // nobody asked for, on top of the app windows under test.
+      windowsHide: true,
       // Must clear ELECTRON_RUN_AS_NODE for the env to be clean.
       // SKIP_START_MAIN tells the webpack dev server's setupMiddlewares to skip
       // spawning start:main — Playwright launches Electron directly via electron.launch().

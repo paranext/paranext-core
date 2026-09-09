@@ -2082,9 +2082,10 @@ interface StuckGateObservations {
  * first.
  *
  * The three states overlap in their signals: the error screen shows a heading, an alert AND an
- * escape hatch simultaneously. Racing "a hatch appeared" against "a heading appeared" therefore
- * reaches either answer for one app state, depending on which locator settles first — so the race
- * establishes only THAT the gate is stuck, and this decides what it is.
+ * escape hatch simultaneously. A single snapshot can therefore show both a hatch and a heading at
+ * once for one app state — so the snapshot only establishes THAT the gate is stuck, and this
+ * decides what it is, from what the snapshot holds together rather than from which field it
+ * happened to check first.
  */
 export function decideStuckGateAction({
   escapeHatchVisible,
@@ -2125,13 +2126,23 @@ export const TOP_LEVEL_ERROR_SELECTOR = '[role="alert"]:has(h1)';
 type FirstRunGateOutcome = 'settled' | 'inconclusive';
 
 /**
- * What one leg of the stuck-gate race should report, given what it caught.
- *
- * A leg timing out just means the gate has not reached that leg's state yet within the budget —
- * ordinary and quiet. The page, its context, or the browser closing out from under the wait is a
- * different kind of failure: there is no gate left to be stuck, and reporting `'inconclusive'`
- * would hide that behind what looks like a merely slow first run. Rethrown, with the original error
- * attached as `cause`, so it rejects the whole race instead of being collapsed here.
+ * One snapshot of everything {@link pollFirstRunGate} needs to decide what the first-run gate is
+ * doing, read together so the fields describe a single instant rather than several separate reads
+ * that could straddle a state change.
+ */
+interface FirstRunGateSample {
+  gateVisible: boolean;
+  escapeHatchVisible: boolean;
+  headingVisible: boolean;
+  onErrorScreen: boolean;
+}
+
+/**
+ * Rethrow a {@link FirstRunGateSample} read failure that means the page, its context, or the browser
+ * closed out from under {@link pollFirstRunGate} — there is no gate left to recover, so reporting
+ * `'inconclusive'` and letting the poll continue would hide that behind what looks like a merely
+ * slow first run. Any other error is left alone: it just means this iteration's read caught nothing
+ * usable, which is ordinary and quiet, so the poll tries again next iteration.
  *
  * Told apart by `error.constructor.name`, not `error.name` or the error message: Playwright's
  * `TargetClosedError` class (`playwright-core/lib/client/errors.js`) never sets `this.name` in its
@@ -2140,14 +2151,67 @@ type FirstRunGateOutcome = 'settled' | 'inconclusive';
  * exported from `@playwright/test`, so there is nothing to `instanceof` against; its constructor
  * name survives because Playwright ships this file unminified.
  */
-export function resolveRaceLeg(error: unknown): 'inconclusive' {
+export function rethrowIfTargetClosed(error: unknown): void {
   if (error instanceof Error && error.constructor.name === 'TargetClosedError')
     throw new Error(
       'e2e precondition: the page, its context, or the browser closed while waiting for the ' +
         'first-run gate to resolve — there is no gate left to recover.',
       { cause: error },
     );
-  return 'inconclusive';
+}
+
+/**
+ * Poll a first-run-gate sample until it clears, shows a recognisably stuck state, or the budget
+ * runs out — one snapshot per iteration, deliberately not a race of several `waitFor` calls against
+ * each other.
+ *
+ * `Promise.race` never cancels its losers. On the ordinary path — the gate clears within a poll or
+ * two — every losing `waitFor` would keep polling for up to its own full timeout (the caller's
+ * entire remaining readiness budget, up to ~90 s) after the function that raced them has already
+ * returned. Playwright records each of those dangling waits as a failed step in the trace/HTML
+ * report even though the test passes, and if the page closes before a losing wait times out — the
+ * common case, since most tests finish in well under 90 s — it rejects with `TargetClosedError`
+ * after the race has already settled and nobody is left to handle it: an unhandled rejection
+ * Playwright attributes to whatever happens to be running at that moment. Reading every
+ * discriminator together, once per iteration, leaves nothing outstanding once this returns.
+ *
+ * @param sample Takes one snapshot of the gate's current DOM state. Must not itself time out —
+ *   `dismissStuckFirstRunGate` passes non-auto-waiting reads (`isVisible`/`count`), never a
+ *   `waitFor`, so a slow read never leaves this loop blocked past `timeout`.
+ * @param timeout Budget for the whole poll.
+ * @param sleep Delay between samples, injected so tests can drive the loop without waiting in real
+ *   time.
+ * @returns `'cleared'` once the gate is gone; the sample itself once it shows a recognisable stuck
+ *   state (an escape hatch or a heading) — the caller needs that exact snapshot, since it is
+ *   already the single consistent observation {@link decideStuckGateAction} requires, not a cue to
+ *   read again; `'inconclusive'` if neither happened within the budget.
+ */
+export async function pollFirstRunGate(
+  sample: () => Promise<FirstRunGateSample>,
+  timeout: number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<'cleared' | 'inconclusive' | FirstRunGateSample> {
+  const start = Date.now();
+  for (;;) {
+    let current: FirstRunGateSample | undefined;
+    try {
+      // Sequential polling: each sample must finish before the next is taken.
+      // eslint-disable-next-line no-await-in-loop
+      current = await sample();
+    } catch (error) {
+      rethrowIfTargetClosed(error);
+      // Anything else means nothing recognisable came back this iteration — fall through and keep
+      // polling rather than failing a run that is merely slow.
+    }
+    if (current) {
+      if (!current.gateVisible) return 'cleared';
+      if (current.escapeHatchVisible || current.headingVisible) return current;
+    }
+    if (Date.now() - start >= timeout) return 'inconclusive';
+    // Sequential polling: each sample must finish before the next is taken.
+    // eslint-disable-next-line no-await-in-loop
+    await sleep(100);
+  }
 }
 
 /**
@@ -2182,50 +2246,50 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
   const dialogHeading = firstRunDialog.getByRole('heading', { level: 1 });
   const errorScreen = firstRunDialog.locator(TOP_LEVEL_ERROR_SELECTOR);
 
-  // The race establishes only WHETHER the gate cleared or is stuck showing something; what it is
-  // stuck on is decided afterwards, from the screen itself. Racing the discriminators against each
-  // other would let one app state reach either answer depending on which locator settled first.
-  //
-  // Each leg swallows its own TIMEOUT so the race reports what it SAW rather than rejecting: a
-  // rejection makes the gate's ordinary loading flash a hard failure whenever the remaining budget
-  // is short, which is exactly when this is called. A leg whose page/context/browser closed out
-  // from under it is a different matter — see resolveRaceLeg — and is left to reject the race.
-  const settled = await Promise.race([
-    firstRunDialog
-      .waitFor({ state: 'hidden', timeout })
-      .then(() => 'cleared' as const)
-      .catch((err: unknown) => resolveRaceLeg(err)),
-    escapeHatch
-      .waitFor({ state: 'visible', timeout })
-      .then(() => 'stuck' as const)
-      .catch((err: unknown) => resolveRaceLeg(err)),
-    dialogHeading
-      .waitFor({ state: 'visible', timeout })
-      .then(() => 'stuck' as const)
-      .catch((err: unknown) => resolveRaceLeg(err)),
-  ]);
+  // One snapshot per iteration, not a race of the three `waitFor`s against each other — see
+  // pollFirstRunGate's own docblock for why racing them cannot be made safe: `Promise.race` never
+  // cancels its losers, so on the ordinary path (the gate clears within a poll or two) the losing
+  // waits would keep polling for up to the caller's whole remaining budget after this function has
+  // already returned, each showing up as a failed step in an otherwise-passing trace, and reject
+  // with `TargetClosedError` once the page closes with nobody left to catch it. `isVisible`/`count`
+  // never auto-wait or time out, so the sample itself needs no timeout of its own.
+  const polled = await pollFirstRunGate(
+    async () => {
+      const [gateVisible, escapeHatchVisible, headingVisible, errorScreenCount] = await Promise.all(
+        [
+          firstRunDialog.isVisible(),
+          escapeHatch.isVisible(),
+          dialogHeading.isVisible(),
+          errorScreen.count(),
+        ],
+      );
+      return {
+        gateVisible,
+        escapeHatchVisible,
+        headingVisible,
+        onErrorScreen: errorScreenCount > 0,
+      };
+    },
+    timeout,
+    (ms) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+      }),
+  );
 
-  if (settled === 'cleared') return 'settled';
+  if (polled === 'cleared') return 'settled';
+  if (polled === 'inconclusive') return 'inconclusive';
 
-  let action: ReturnType<typeof decideStuckGateAction> | 'inconclusive' = 'inconclusive';
-  if (settled === 'stuck') {
-    // Read concurrently, not one after another: a gate that resolves between two sequential awaits
-    // would leave them describing two different instants, which is exactly the inconsistent
-    // combination decideStuckGateAction's own precedence (gateStillShowing decides first) exists to
-    // rule out — but only if the three readings are actually a single snapshot in time.
-    const [escapeHatchVisible, errorScreenCount, gateStillShowing] = await Promise.all([
-      escapeHatch.isVisible(),
-      errorScreen.count(),
-      firstRunDialog.isVisible(),
-    ]);
-    action = decideStuckGateAction({
-      escapeHatchVisible,
-      onErrorScreen: errorScreenCount > 0,
-      gateStillShowing,
-    });
-  }
+  // `polled` is already the single consistent observation decideStuckGateAction needs — reading the
+  // DOM again here could land after the gate moved on and describe an instant this call never saw.
+  const action = decideStuckGateAction({
+    escapeHatchVisible: polled.escapeHatchVisible,
+    onErrorScreen: polled.onErrorScreen,
+    gateStillShowing: polled.gateVisible,
+  });
 
-  // The gate resolved while it was being examined, which is the outcome this whole step wants.
+  // decideStuckGateAction checks gateStillShowing first; kept as the defensive branch it is, even
+  // though pollFirstRunGate only ever hands this call a snapshot where the gate was still showing.
   if (action === 'cleared') return 'settled';
 
   if (action === 'wizard')
