@@ -23,7 +23,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Standard View           | [Standard-View-Invariants.md](.context/standards/Standard-View-Invariants.md) | **Read before touching anything Standard view depends on here** — the USJ/USFM writer contract, the markers map, the marker palette key table, the footnote editor, the C# serialization approval gate. The editor engine's own invariants live in the `scripture-editors` repo at `docs/standard-view-invariants.md`; each half is readable alone |
 | Localization            | [Localization-Guide.md](.context/standards/Localization-Guide.md)         | i18n store/APIs, fallback chain, RTL, immutable strings, C# localization |
 | Git and GitHub          | [Git-Guide.md](.context/standards/Git-Guide.md)                           | Branch structure, squash-merge, template merges              |
-| Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge        |
+| Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge, roborev setup and when to decline its reminder        |
 | Current Epic            | [Current-Epic.md](.context/standards/Current-Epic.md)                     | What the current epic is, where it is articulated (roadmap, JIRA sprint board, Discord), is work item in epic? |
 | Security                | [Security-Guide.md](.context/standards/Security-Guide.md)                 | CSP, module import restrictions, extension sandboxing        |
 | PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
@@ -166,6 +166,7 @@ npm run typecheck
 - When any code quality tool flags your code (ESLint, TypeScript, Prettier, Stylelint), fix the code first. Only suppress warnings if the fix would be significantly worse.
 - Don't add features, refactor code, or make "improvements" beyond what was asked.
 - Avoid indecipherable [initialisms and abbreviations](.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations).
+- When roborev's reminder fires ("Invoke the /roborev-fix skill now"), it is a prompt on a turn counter, not an order about this moment. Finish the unit of work you are in first, and decline it outright — saying why — if you are mid-rebase or holding a dirty tree, if the findings are on a branch another session owns, if a shared resource the fix would need is held elsewhere, or if you are an agent roborev itself spawned (a review job produces a verdict; it must never edit a tree or start processes). Use `/roborev-snooze on 2h` for a genuinely uninterruptible stretch, and close handled findings with `roborev close` — `roborev comment` leaves them open, and open findings are what the reminder counts. See [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md).
 - Write forward-facing comments, not backward-facing ones. Strip the PR/development context: if a comment only explains how the code reached its current state during this PR — a ticket/PR ID for in-PR work, a review-finding ID, a stage/epic tag, a dated dev note, or bare change narration with no ID ("previously", "used to", "the review found") — cut it and put it in the commit message instead. See [forward-facing-comments.md](.claude/rules/code-quality/forward-facing-comments.md).
 
 ## Send/Receive Write Gate
@@ -248,7 +249,8 @@ Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the se
   PR body: `AI-assisted — [session 1](<url>), [session 2](<url>)`
 - Use squash-merge for PRs.
 - Keep PR titles short (under 70 characters) with a descriptive body.
-- Run `npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/` before committing.
+- Run `npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/` before **pushing or opening a PR** — this is the gate that must pass, and it is the same work CI does. Individual commits are gated only by the pre-commit hook (secret scanning and `lint:staged`), which runs in seconds.
+- **Commit early and often.** After each self-contained change that builds, make a commit rather than batching many changes into one. Small, focused commits are easier to review, easier to revert, and give automated review tools a diff they can reason about. Do not let the full verification battery above discourage frequent commits — it belongs at the push boundary, not on every commit.
 - When committing, include ALL related files (plans, docs, configs) — never exclude supporting files unless they are gitignored or you are explicitly told to.
 - When git reports warnings about untracked or uncommitted files, investigate what they are before dismissing them. Never claim a file is unrelated without reading it first.
 - After completing file changes, push all relevant branches before reporting completion.
