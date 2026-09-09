@@ -911,6 +911,10 @@ step, no automation. Just a record.
   pre-slot-era `${windowId}_dock-saved-layout` reader, its lowest-id heuristic, and the
   `^\d+_web-view-state$` obsolete-key sweep are all untouched: they read numeric-era data no future
   build can add to, and durability changes nothing about them.
+- **Amended 2026-09-09 (`adr-web-view-ids-are-unique-from-birth`):** `window-scoped-web-view-ids.util.ts`
+  and its `WINDOW_SUFFIX_PATTERN` matcher, cited above, are deleted outright — a web view id is no
+  longer derived from a window-scoped suffix at all. See `adr-web-view-ids-are-unique-from-birth` for
+  the id scheme that replaced it.
 - **Source:** PT-4464.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
