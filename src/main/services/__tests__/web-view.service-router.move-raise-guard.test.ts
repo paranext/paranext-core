@@ -129,7 +129,7 @@ function windowShard(openWebViewIds: string[]) {
 /** A window's WebView service shard stand-in, as {@link windowShard} builds it */
 type WindowShard = ReturnType<typeof windowShard>;
 
-describe('the cross-application focus guard on a move', () => {
+describe('the focus and withhold-activation guards on a move', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Which windows were created without activation is process state, not a mock — nothing else
@@ -191,15 +191,32 @@ describe('the cross-application focus guard on a move', () => {
   test('a move into a window that is not withheld still raises it, even with an unrelated window withheld', async () => {
     // Positive control for the case above: the guard must key off the TARGET window, not act as a
     // blanket suppression — a target that is not withheld must still be raised, even while some
-    // other window (here, the source) is.
+    // other, genuinely uninvolved window is.
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    const unrelated = windowShard([]);
+    withWindows({ 2: owner, 3: target, 4: unrelated });
+    mocks.getFocusedWindowId.mockReturnValue('2');
+    mocks.isApplicationFocused.mockReturnValue(true);
+    noteWindowWithheldFromActivation('4');
+
+    await moveWebView('view-1', { kind: 'window', windowId: '3' });
+
+    expect(mocks.focusWindow).toHaveBeenCalledWith('3');
+  });
+
+  test('a user-requested move into a window the platform deliberately kept in the background raises it anyway', async () => {
+    // The tab context menu's "Move to window" names a background window on purpose — that is the
+    // user asking to go there, so the declared intent overrides the withholding this same guard
+    // otherwise enforces (see the test above).
     const owner = windowShard(['view-1']);
     const target = windowShard([]);
     withWindows({ 2: owner, 3: target });
     mocks.getFocusedWindowId.mockReturnValue('2');
     mocks.isApplicationFocused.mockReturnValue(true);
-    noteWindowWithheldFromActivation('2');
+    noteWindowWithheldFromActivation('3');
 
-    await moveWebView('view-1', { kind: 'window', windowId: '3' });
+    await moveWebView('view-1', { kind: 'window', windowId: '3' }, true);
 
     expect(mocks.focusWindow).toHaveBeenCalledWith('3');
   });

@@ -241,7 +241,10 @@ const reportMoveFailure = async (webViewIdToMove: WebViewId, error: unknown) => 
 
 const handleMoveTabToWindow = async (webViewIdToMove: WebViewId, targetWindowId: string) => {
   try {
-    await sendCommand('platform.moveWebViewToWindow', webViewIdToMove, targetWindowId);
+    // A person picked this window by name from the tab's own menu, so it is the user asking to go
+    // there — even if the platform is withholding that window from activation because it opened it
+    // in the background, this call raises it.
+    await sendCommand('platform.moveWebViewToWindow', webViewIdToMove, targetWindowId, true);
   } catch (error) {
     logger.error(
       `Failed to move web view ${webViewIdToMove} to window ${targetWindowId}: ${getErrorMessage(error)}`,

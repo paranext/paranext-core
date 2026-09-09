@@ -876,14 +876,17 @@ async function findWebViewAdoptedAfterTimeout(
  * view went — same narrow rule as cross-window opens: only between this app's windows, never taking
  * focus from another application. A window created for the move is not raised at all: it is
  * revealed without activation on purpose, so the move does not pull the user out of the window they
- * are working in. An existing window the platform deliberately kept out of the foreground is
- * likewise left alone: a move landing content there is not the user asking to go there either.
+ * are working in. An existing window the platform deliberately kept out of the foreground is left
+ * alone the same way, UNLESS the move itself was declared user-requested: naming a background
+ * window from a control the user operated (the tab context menu's "Move to window") is the user
+ * asking to go there, and raising it is what a person asking for a window is for — the raise
+ * reaches the window's own focus handler, which is what clears the withholding.
  */
-function raiseMoveTarget(target: MoveWebViewTarget): void {
+function raiseMoveTarget(target: MoveWebViewTarget, isUserRequested: boolean): void {
   if (
     target.kind === 'window' &&
     isApplicationFocused() &&
-    !shouldContentAvoidDocumentFocus(target.windowId)
+    (isUserRequested || !shouldContentAvoidDocumentFocus(target.windowId))
   )
     focusWindow(target.windowId);
 }
@@ -999,10 +1002,11 @@ async function moveWebView(
     // from whether the destination is awaiting its first activation — which is false for an
     // ordinary window that is simply not the one holding OS focus, so the adopt takes document
     // focus there. `raiseMoveTarget` below is what is meant to make that harmless, by raising the
-    // destination right after; when it is skipped (the application does not hold focus) or refused
-    // by the OS, the window stays backgrounded and the adopt's focus stays latent — it claims the
-    // caret only once something later raises that window, at a moment the user never associated
-    // with this move.
+    // destination right after; when it is skipped (the application does not hold focus, or the
+    // destination is withheld from activation and the move was not declared user-requested) or
+    // refused by the OS, the window stays backgrounded and the adopt's focus stays latent — it
+    // claims the caret only once something later raises that window, at a moment the user never
+    // associated with this move.
     adoptIntoDestination = (definition) => shard.adoptWebView(definition);
   }
 
@@ -1071,7 +1075,7 @@ async function moveWebView(
         );
       const movedWebViewId = await adoptIntoDestination(captured);
       if (movedWebViewId !== undefined) {
-        raiseMoveTarget(target);
+        raiseMoveTarget(target, isUserRequested);
         return movedWebViewId;
       }
       logger.warn(
@@ -1099,7 +1103,7 @@ async function moveWebView(
           targetDescription,
         );
         if (lateAdoptedWebViewId !== undefined) {
-          raiseMoveTarget(target);
+          raiseMoveTarget(target, isUserRequested);
           return lateAdoptedWebViewId;
         }
       }
@@ -1301,6 +1305,15 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
           summary: 'Id of the target window, as `platform.getWindows` reports it',
           schema: { type: 'string' },
         },
+        {
+          name: 'isUserRequested',
+          required: false,
+          summary:
+            'Whether a person asked for this move, which decides whether a target window the ' +
+            'platform is withholding from activation comes to the front. Defaults to false, so ' +
+            'an extension moving a view on its own leaves a backgrounded window backgrounded',
+          schema: { type: 'boolean' },
+        },
       ],
       result: {
         name: 'return value',
@@ -1349,11 +1362,17 @@ async function moveWebViewToNewWindow(
 async function moveWebViewToWindow(
   webViewId: unknown,
   targetWindowId: unknown,
+  isUserRequested: unknown,
 ): Promise<WebViewId> {
   if (typeof webViewId !== 'string')
     throw new Error(`platform.moveWebViewToWindow needs a web view id; got ${typeof webViewId}`);
   assertWindowExists(targetWindowId, 'platform.moveWebViewToWindow');
-  return moveWebView(webViewId, { kind: 'window', windowId: targetWindowId });
+  // Same default and reason as moveWebView's isUserRequested.
+  return moveWebView(
+    webViewId,
+    { kind: 'window', windowId: targetWindowId },
+    isUserRequested === true,
+  );
 }
 
 /**

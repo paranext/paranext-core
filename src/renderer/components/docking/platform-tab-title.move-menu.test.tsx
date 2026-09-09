@@ -854,6 +854,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
         'platform.moveWebViewToWindow',
         'web-view-1',
         MAIN_WINDOW.windowId,
+        true,
       ),
     );
   });
