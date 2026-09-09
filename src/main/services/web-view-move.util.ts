@@ -302,6 +302,10 @@ async function moveCapturedWebView(
     );
     targetShard = shard;
     destinationWindowId = target.windowId;
+    // TODO(PT-4573): This adopt carries no document-focus instruction, so the dock decides from
+    // whether the destination is awaiting its first activation — which cannot see an ordinary
+    // window that is simply not the one holding OS focus. Moving a view into such a window takes
+    // the caret out of wherever the user is typing.
     adoptIntoDestination = (definition) => shard.adoptWebView(definition);
   }
 

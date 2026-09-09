@@ -138,6 +138,11 @@ async function openWebViewInOwningWindow(
     throw new Error(
       `Cannot open ${webViewType} in window ${owner.windowId}: that window is closing.`,
     );
+  // TODO(PT-4574): A user gesture that activates this window between the read below and the raise
+  // gate at the end can fire the renderer's one-shot focus catch-up before the dock has written the
+  // note that catch-up collects, leaving the tab active with no document focus and no trigger left
+  // to give it any. Reading the condition once here does not close that gap — the ordering it turns
+  // on is the renderer's, between the note and the gesture.
   const isOwnerAwaitingFirstActivation = shouldContentAvoidDocumentFocus(owner.windowId);
   // Read the same condition the raise below decides on, before the open runs: a raise about to
   // happen needs the shard to activate the tab without moving document focus. Without this, the
