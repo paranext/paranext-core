@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { newPlatformError } from 'platform-bible-utils';
-import { FindJobStatusReport } from 'platform-scripture';
+import { newPlatformError, SEARCH_WHITESPACE_GROUP_PREFIX } from 'platform-bible-utils';
+import { FindJobStatusReport, FindOptions } from 'platform-scripture';
 import {
   CharacterCategorizer,
   MAX_CONSECUTIVE_POLL_MISSES,
@@ -1145,5 +1145,76 @@ describe('resolveTargetReferencePanelWebViewId', () => {
         REVEALABLE,
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('buildSearchRegex – block-boundary whitespace groups', () => {
+  const categorizer: CharacterCategorizer = {
+    baseCharacterClassRegex: '\\p{L}',
+    diacriticCharacterClassRegex: '\\p{Mn}',
+    wordMedialCharacterRegex: '',
+    wordBreakRegex: '\\s+',
+    allowInvisibleCharacters: false,
+  };
+  const baseOptions: FindOptions = {
+    scope: [{ bookId: 'MAT' }],
+    searchString: '',
+    caseInsensitive: true,
+    useRegex: false,
+    verseTextOnly: false,
+    wordRestriction: 'none',
+    ignoreWhitespaceDifferences: false,
+    ignoreDiacritics: false,
+  };
+
+  it('names each interior whitespace run uniquely so a multi-run query compiles', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'of Abraham. Abraham became' },
+      categorizer,
+    );
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}0>`);
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}1>`);
+    expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}2>`);
+    expect(regex.flags).toContain('d');
+  });
+
+  it('lets an interior run match zero characters', () => {
+    const regex = buildSearchRegex({ ...baseOptions, searchString: 'a b' }, categorizer);
+    expect(regex.test('ab')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a b')).toBe(true);
+  });
+
+  it('keeps a whitespace-only query matching whitespace', () => {
+    const regex = buildSearchRegex({ ...baseOptions, searchString: ' ' }, categorizer);
+    expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    expect('a b'.match(regex)?.length).toBe(1);
+  });
+
+  it('collapses an interior run when ignoring whitespace differences', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a b', ignoreWhitespaceDifferences: true },
+      categorizer,
+    );
+    expect(regex.test('a   b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('ab')).toBe(true);
+  });
+
+  it('treats ~ as whitespace inside the group when invisible characters are not allowed', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a b', ignoreWhitespaceDifferences: true },
+      categorizer,
+    );
+    expect(regex.test('a~b')).toBe(true);
+  });
+
+  it('emits no groups and no d flag in regex mode', () => {
+    const regex = buildSearchRegex(
+      { ...baseOptions, searchString: 'a\\s+b', useRegex: true },
+      categorizer,
+    );
+    expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    expect(regex.flags).not.toContain('d');
   });
 });

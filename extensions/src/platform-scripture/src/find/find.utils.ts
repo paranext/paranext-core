@@ -6,6 +6,7 @@ import {
   normalizeProjectId,
   PlatformError,
   ScrollGroupId,
+  SEARCH_WHITESPACE_GROUP_PREFIX,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
 import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
@@ -730,6 +731,11 @@ export function buildSearchRegex(
 
   regexStr += '(';
 
+  // Counts the interior whitespace runs that get their own named capture group. Declared here so
+  // it is still 0 (and thus omits the `d` flag) on the useRegex path, where the pattern is used
+  // as-is and must compile exactly as the user wrote it.
+  let whitespaceGroupCount = 0;
+
   if (useRegex) {
     // When using the search string as a regex pattern, it is assumed the user who created the regex
     // accounted for ignoreDiacritics and ignoreWhitespaceDifferences in the pattern they provided,
@@ -744,44 +750,72 @@ export function buildSearchRegex(
     // Spread to iterate over Unicode code points (handles surrogate pairs correctly in JS,
     // equivalent to C#'s UString / UCodepoint iteration).
     const chars = [...normSearch];
-    let prevWasWhiteSpace = false;
 
-    for (let i = 0; i < chars.length; i++) {
-      const char = chars[i];
+    // When AllowInvisibleChars is false (the default), NBSP is stored as ~ in USFM, so ~ is
+    // treated as whitespace. When true, ~ is a literal tilde, not a whitespace substitute.
+    const isWhiteSpaceChar = (candidate: string) =>
+      isSelectableInvisibleCharOrWhiteSpace(candidate) ||
+      (!allowInvisibleCharacters && candidate === '~');
+    const isSkippedDiacritic = (candidate: string) =>
+      ignoreDiacritics && isDiacritic.test(candidate);
 
-      // Skip combining marks in the search string when ignoreDiacritics is set.
-      if (!ignoreDiacritics || !isDiacritic.test(char)) {
-        // Determine whether this code point is whitespace / invisible.
-        // When AllowInvisibleChars is false (the default), NBSP is stored as ~ in USFM, so ~ is
-        // treated as whitespace. When true, ~ is a literal tilde, not a whitespace substitute.
-        const isTildeWhitespace = !allowInvisibleCharacters;
-        const isWhiteSpace =
-          isSelectableInvisibleCharOrWhiteSpace(char) || (isTildeWhitespace && char === '~');
+    let index = 0;
+    while (index < chars.length) {
+      const char = chars[index];
 
-        // Skip consecutive whitespace code points when ignoreWhitespaceDifferences is set.
-        if (!(ignoreWhitespace && prevWasWhiteSpace && isWhiteSpace)) {
-          let charPattern: string;
-          if (ignoreWhitespace && isWhiteSpace) {
-            // Collapse any whitespace run to a single lazy multi-whitespace pattern (including ~
-            // when it represents NBSP, i.e., when AllowInvisibleChars is false).
-            charPattern = isTildeWhitespace
-              ? `([${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]|~)+?`
-              : `[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]+?`;
+      if (isSkippedDiacritic(char)) {
+        index += 1;
+      } else if (isWhiteSpaceChar(char)) {
+        const runStart = index;
+        const run: string[] = [];
+        let scanningRun = true;
+        while (scanningRun && index < chars.length) {
+          const runChar = chars[index];
+          if (isSkippedDiacritic(runChar)) {
+            index += 1;
+          } else if (isWhiteSpaceChar(runChar)) {
+            run.push(runChar);
+            index += 1;
           } else {
-            charPattern = escapeStringRegexp(char);
+            scanningRun = false;
           }
-
-          regexStr += charPattern;
-
-          // Allow diacritics after each base character when ignoreDiacritics is set.
-          // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
-          // is emitted — only a trailing [M]* after each processed code point.
-          if (ignoreDiacritics) {
-            regexStr += `[${diacriticClass}]*`;
-          }
-
-          prevWasWhiteSpace = isWhiteSpace;
         }
+
+        // Only a run with query characters on both sides can sit at a block boundary. A leading,
+        // trailing, or whitespace-only run has no gap to bridge, and making it optional would stop
+        // a whitespace-only query from matching whitespace at all: a lazy `*?` prefers zero
+        // repetitions, producing an empty overall match that gets skipped.
+        const isInteriorRun = runStart > 0 && index < chars.length;
+        const whitespaceClass = allowInvisibleCharacters
+          ? `[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]`
+          : `(?:[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]|~)`;
+
+        if (ignoreWhitespace) {
+          // Collapse the run to a lazy multi-whitespace pattern (including ~ when it represents
+          // NBSP, i.e., when AllowInvisibleChars is false).
+          regexStr += isInteriorRun
+            ? `(?<${SEARCH_WHITESPACE_GROUP_PREFIX}${whitespaceGroupCount}>${whitespaceClass}*?)`
+            : `${whitespaceClass}+?`;
+        } else {
+          const literalRun = run.map((runChar) => escapeStringRegexp(runChar)).join('');
+          regexStr += isInteriorRun
+            ? `(?<${SEARCH_WHITESPACE_GROUP_PREFIX}${whitespaceGroupCount}>(?:${literalRun})?)`
+            : literalRun;
+        }
+        if (isInteriorRun) whitespaceGroupCount += 1;
+
+        // Allow diacritics after the run when ignoreDiacritics is set. C# assumes
+        // DiacriticsFollowBaseCharacters=true (standard Unicode), so only a trailing class is
+        // emitted, once for the whole run rather than after each whitespace character.
+        if (ignoreDiacritics) regexStr += `[${diacriticClass}]*`;
+      } else {
+        regexStr += escapeStringRegexp(char);
+
+        // Allow diacritics after each base character when ignoreDiacritics is set.
+        // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
+        // is emitted — only a trailing [M]* after each processed code point.
+        if (ignoreDiacritics) regexStr += `[${diacriticClass}]*`;
+        index += 1;
       }
     }
   }
@@ -805,7 +839,12 @@ export function buildSearchRegex(
   const needsUnicodeFlag =
     (!containsSingleCharacterWord && !!(wordRestriction && wordRestriction !== 'none')) ||
     (!!ignoreDiacritics && !useRegex);
-  const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
+  // `d` exposes capture group offsets, which UsjReaderWriter.search needs to tell a whitespace
+  // group that matched real whitespace from one that matched nothing. Emitted only when there is
+  // such a group, so a regex-mode pattern is compiled exactly as the user wrote it.
+  const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}${
+    whitespaceGroupCount > 0 ? 'd' : ''
+  }`;
 
   return new RegExp(regexStr, flags);
 }
