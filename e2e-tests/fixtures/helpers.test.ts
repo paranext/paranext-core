@@ -12,9 +12,19 @@ import {
   DEFAULT_WINDOW_SIZE,
   isLocalizedAboutMenuItem,
   isPopoverTriggerExpanded,
+  killProcessTree,
   LAUNCH_PHASE_TIMEOUT_MS,
   rethrowIfTargetClosed,
 } from './helpers';
+
+/** A {@link killProcessTree} `deps` bundle whose calls are all spies a test can assert on. */
+function killProcessTreeDeps() {
+  return {
+    isPidAlive: vi.fn().mockReturnValue(true),
+    execFileSync: vi.fn(),
+    kill: vi.fn().mockReturnValue(true),
+  };
+}
 
 /** A stub whose `evaluate` resolves to the given window size, whatever function is passed in. */
 function pageReporting(size: { width: number; height: number }): {
@@ -153,5 +163,79 @@ describe('rethrowIfTargetClosed', () => {
     expect(caught).toBeInstanceOf(Error);
     const cause = caught instanceof Error ? caught.cause : undefined;
     expect(cause).toBe(closedError);
+  });
+});
+
+describe('killProcessTree', () => {
+  describe('on win32', () => {
+    it('walks the whole tree with taskkill when the pid is alive', () => {
+      const deps = killProcessTreeDeps();
+
+      killProcessTree(4242, 'SIGKILL', 'win32', deps);
+
+      expect(deps.isPidAlive).toHaveBeenCalledExactlyOnceWith(4242);
+      expect(deps.execFileSync).toHaveBeenCalledExactlyOnceWith(
+        'taskkill',
+        ['/pid', '4242', '/t', '/f'],
+        { stdio: 'pipe', timeout: 10_000 },
+      );
+      expect(deps.kill).not.toHaveBeenCalled();
+    });
+
+    it('does not call taskkill when the pid is not alive', () => {
+      const deps = killProcessTreeDeps();
+      deps.isPidAlive.mockReturnValue(false);
+
+      killProcessTree(4242, 'SIGKILL', 'win32', deps);
+
+      expect(deps.execFileSync).not.toHaveBeenCalled();
+    });
+
+    it('warns, but does not throw, when taskkill itself fails', () => {
+      const deps = killProcessTreeDeps();
+      deps.execFileSync.mockImplementation(() => {
+        throw new Error('no such process');
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      expect(() => killProcessTree(4242, 'SIGKILL', 'win32', deps)).not.toThrow();
+
+      expect(warnSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('no such process'));
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('on POSIX (darwin/linux)', () => {
+    it('signals the process group first, and never falls back when that succeeds', () => {
+      const deps = killProcessTreeDeps();
+
+      killProcessTree(4242, 'SIGKILL', 'linux', deps);
+
+      expect(deps.kill).toHaveBeenCalledExactlyOnceWith(-4242, 'SIGKILL');
+      expect(deps.execFileSync).not.toHaveBeenCalled();
+      expect(deps.isPidAlive).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the bare pid when the group signal throws', () => {
+      const deps = killProcessTreeDeps();
+      deps.kill.mockImplementationOnce(() => {
+        throw new Error('ESRCH');
+      });
+
+      killProcessTree(4242, 'SIGKILL', 'darwin', deps);
+
+      expect(deps.kill).toHaveBeenNthCalledWith(1, -4242, 'SIGKILL');
+      expect(deps.kill).toHaveBeenNthCalledWith(2, 4242, 'SIGKILL');
+    });
+
+    it('does not throw when both the group and bare-pid signals fail', () => {
+      const deps = killProcessTreeDeps();
+      deps.kill.mockImplementation(() => {
+        throw new Error('ESRCH');
+      });
+
+      expect(() => killProcessTree(4242, 'SIGKILL', 'linux', deps)).not.toThrow();
+      expect(deps.kill).toHaveBeenCalledTimes(2);
+    });
   });
 });

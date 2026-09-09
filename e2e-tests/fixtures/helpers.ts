@@ -5,6 +5,7 @@ import {
   FrameLocator,
   Page,
 } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -100,7 +101,7 @@ export interface ElectronAppContext {
  * connects to the dying extension host rather than the new one, causing "Settings service
  * undefined" errors.
  */
-async function waitForPortFree(port: number, timeout: number): Promise<void> {
+async function waitForPortFree(port: number, timeout: number): Promise<boolean> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
     // Sequential polling: each probe must finish before starting the next.
@@ -125,7 +126,7 @@ async function waitForPortFree(port: number, timeout: number): Promise<void> {
         resolve(true); // Connection refused → port is free
       });
     });
-    if (isFree) return;
+    if (isFree) return true;
     // Sequential polling: each probe must complete before the next starts.
     // eslint-disable-next-line no-await-in-loop
     await new Promise<void>((resolve) => {
@@ -135,6 +136,7 @@ async function waitForPortFree(port: number, timeout: number): Promise<void> {
   // Do not throw — if the port is never freed within the window, log and proceed; the next
   // launch will fail its own waitForWebSocketReady with a clearer error.
   console.warn(`[teardown] Port ${port} still in use after ${timeout}ms — proceeding anyway`);
+  return false;
 }
 
 /** Wait for the WebSocket server to be ready on the specified port. */
@@ -557,6 +559,68 @@ function unreachableDescription(lastReadError: unknown): string {
   return `unknown (every read of the settings service failed; the last said: ${reason})`;
 }
 
+/** Seams {@link killProcessTree} calls through, so a test can watch or fake them. */
+export interface KillProcessTreeDeps {
+  isPidAlive: (pid: number) => boolean;
+  execFileSync: (file: string, args: readonly string[], options: unknown) => unknown;
+  kill: (pid: number, signal: NodeJS.Signals) => boolean;
+}
+
+const defaultKillProcessTreeDeps: KillProcessTreeDeps = {
+  isPidAlive,
+  execFileSync,
+  kill: (pid, signal) => process.kill(pid, signal),
+};
+
+/**
+ * Kill an OS process AND everything it spawned, addressed the way the platform actually makes that
+ * possible.
+ *
+ * On POSIX, `-pid` signals the whole process group a `detached: true` launch put the process in;
+ * `pid` alone is the fallback for whatever that misses. Windows has no process groups, so `-pid`
+ * throws there and a plain `process.kill(pid, …)` only ever reaches the one process named by that
+ * pid — for Electron, that stops the main process while its child tree (the extension host, and the
+ * `dotnet watch` .NET data provider with its own descendants) keeps running, since none of them
+ * watch their parent. Orphaned like that, they keep files and the fixed WebSocket port open, and
+ * the next launch can connect to a leftover server instead of its own — `taskkill /pid <pid> /t /f`
+ * asks Windows to walk the tree instead of signalling one pid.
+ *
+ * `deps` lets a test substitute every OS call this makes without touching a real process.
+ */
+export function killProcessTree(
+  pid: number,
+  signal: NodeJS.Signals,
+  platform: NodeJS.Platform = process.platform,
+  deps: KillProcessTreeDeps = defaultKillProcessTreeDeps,
+): void {
+  if (platform === 'win32') {
+    if (!deps.isPidAlive(pid)) return;
+    try {
+      deps.execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], {
+        stdio: 'pipe',
+        timeout: 10_000,
+      });
+    } catch (error) {
+      console.warn(
+        `taskkill for pid ${pid} did not complete cleanly: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    return;
+  }
+  try {
+    deps.kill(-pid, signal);
+  } catch {
+    // Process group may already be gone — fall back to single-process kill
+    try {
+      deps.kill(pid, signal);
+    } catch {
+      /* already dead */
+    }
+  }
+}
+
 /**
  * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
  * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
@@ -640,17 +704,7 @@ export async function launchElectronApp(
     // Electron process and clean up the temp directory before propagating.
     console.error('WebSocket readiness check failed after Electron launch:', error);
     const proc = electronApp.process();
-    if (proc?.pid) {
-      try {
-        process.kill(-proc.pid, 'SIGKILL');
-      } catch {
-        try {
-          proc.kill('SIGKILL');
-        } catch {
-          /* already dead */
-        }
-      }
-    }
+    if (proc?.pid) killProcessTree(proc.pid, 'SIGKILL');
     if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
     // See the matching comment above: unconditional and safe either way.
     restoreAppGlobalState();
@@ -701,27 +755,11 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
     `[teardown] Closing Electron app... pid=${pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
   );
 
-  // On Linux, processLauncher.js spawns Electron with `detached: true`, making
-  // Electron the leader of its own process group. Child processes inherit the
-  // write-ends of Electron's stdout/stderr pipes; killing only the Electron PID
-  // leaves those write-ends open forever. The fix is to kill the ENTIRE process
-  // group (-pid).
-  // NodeJS is the ambient @types/node namespace; the strict staged-file lint
-  // config has no node environment, so it cannot see the global.
-  // eslint-disable-next-line no-undef
-  const killGroup = (sig: NodeJS.Signals) => {
-    if (!pid) return;
-    try {
-      process.kill(-pid, sig);
-    } catch {
-      // Process group may already be gone — fall back to single-process kill
-      try {
-        process.kill(pid, sig);
-      } catch {
-        /* already dead */
-      }
-    }
-  };
+  // On Linux, processLauncher.js spawns Electron with `detached: true`, making Electron the leader
+  // of its own process group; its .NET data-provider and extension-host children inherit the
+  // write-ends of Electron's stdout/stderr pipes, so killing only the Electron PID leaves those
+  // write-ends — and, on Windows, the whole child tree — open. See {@link killProcessTree} for how
+  // each platform reaches the rest of the tree.
 
   /** Whether the Electron OS process is still running, per the best signal available. */
   const isProcessAlive = (): boolean => {
@@ -742,7 +780,7 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
         `[teardown] Playwright handle already disposed but pid ${pid} is still alive — killing anyway...`,
       );
     console.log('[teardown] Sending SIGKILL to process group...');
-    killGroup('SIGKILL');
+    if (pid) killProcessTree(pid, 'SIGKILL');
     console.log('[teardown] Waiting for appClosed after SIGKILL (up to 3s)...');
     await Promise.race([
       appClosed,
@@ -761,8 +799,8 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // the next test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
   // preserve-and-return path too, since a relaunch reuses the same fixed port 8876.
   console.log('[teardown] Waiting for port 8876 to be free...');
-  await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
-  console.log('[teardown] Port 8876 is free');
+  const portFreed = await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
+  if (portFreed) console.log('[teardown] Port 8876 is free');
 
   // A preserved profile stays on disk so a later launch can relaunch into it (see
   // LaunchElectronAppOptions.preserveUserDataDir). The last teardown of a relaunch chain runs with
