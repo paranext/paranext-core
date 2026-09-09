@@ -98,7 +98,14 @@ export function FindFilters({
           <TooltipContent>{localizedStrings.toggleFilters}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <PopoverContent align="end" className="tw:w-72 tw:p-3">
+      {/* The height cap and internal scrolling are load-bearing, and PopoverContent — unlike
+          DropdownMenuContent — does not supply them. Without them this panel outgrows a short web
+          view, so moving focus down it scrolls the document instead, and the popper repositions on
+          every keypress. Scrolling inside the panel keeps it anchored. */}
+      <PopoverContent
+        align="end"
+        className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
+      >
         {/* 1. Match content in */}
         <fieldset className="tw:mb-3">
           <legend className="tw:px-2 tw:py-1.5 tw:text-sm tw:font-semibold">
