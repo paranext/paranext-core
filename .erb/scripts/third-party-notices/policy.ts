@@ -746,6 +746,8 @@ type ClassifyContext = {
   common: CommonFields;
   declared: Declared;
   usableById: Map<string, DetectedFile>;
+  /** Names of the policy's `separatePrograms` entries - see the `separateProgram` link. */
+  separatePrograms: Set<string>;
 };
 
 /**
@@ -1122,6 +1124,42 @@ function applyOverride(ctx: ClassifyContext, override: Override): Verdict {
           'that the value is deliberately free text and the determination was made by a human.',
       ),
     };
+
+  // A package that IS a separately redistributed program - the NuGet route for one - is admitted
+  // by the reviewed `separatePrograms` entry it names, not by this override's own fields. The
+  // link has to resolve, and the license has to be an SPDX expression, because the document
+  // reproduces that identifier's canonical text on the program's behalf.
+  if (override.separateProgram !== undefined) {
+    const programName = String(override.separateProgram).trim();
+    if (!ctx.separatePrograms.has(programName))
+      return {
+        ...common,
+        ...blocked(
+          `the "overrides" entry for "${key}" names separate program "${programName}", and ` +
+            `"separatePrograms" records no entry named "${programName}". Record the program ` +
+            'there - reviewer, date, reason, source availability and each delivery - or remove ' +
+            'the link.',
+        ),
+      };
+    if (!recorded.ok)
+      return {
+        ...common,
+        ...blocked(
+          `the "overrides" entry for "${key}" is linked to separate program "${programName}", ` +
+            `so its "license" must be an SPDX expression, and "${override.license}" is not. The ` +
+            "document reproduces the program's canonical license text under that identifier.",
+        ),
+      };
+    return {
+      ...common,
+      verdict: 'overridden',
+      spdxId: override.license,
+      reason:
+        `recorded determination in the notices policy: ${override.license}, redistributed as ` +
+        `the separate program "${programName}"`,
+    };
+  }
+
   // The same predicate the exception path applies, for the same reason. Testing `copyleft` alone
   // makes this a denylist over 21 ids, under which an override spelled as a real SPDX identifier
   // the policy has never admitted - `CC-BY-NC-4.0`, `BUSL-1.1` - is recorded as the license of a
@@ -1453,6 +1491,7 @@ export function classify({
     common,
     declared,
     usableById,
+    separatePrograms: new Set(Object.keys(policy.separatePrograms || {})),
   };
 
   const { exception, overridable } = readInstruments(ctx, signals, sha256);
