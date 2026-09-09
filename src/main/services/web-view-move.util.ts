@@ -12,7 +12,10 @@ import {
   isApplicationFocused,
   isWindowClosing,
 } from '@main/services/window-state.service';
-import { shouldContentAvoidDocumentFocus } from '@main/window-activation.util';
+import {
+  forgetWindowWithholding,
+  shouldContentAvoidDocumentFocus,
+} from '@main/window-activation.util';
 import { resolveShardForWindow } from '@main/services/target-shard-resolver.util';
 import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import {
@@ -128,16 +131,27 @@ async function findWebViewAdoptedAfterTimeout(
  * are working in. An existing window the platform deliberately kept out of the foreground is left
  * alone the same way, UNLESS the move itself was declared user-requested: naming a background
  * window from a control the user operated (the tab context menu's "Move to window") is the user
- * asking to go there, and raising it is what a person asking for a window is for — the raise
- * reaches the window's own focus handler, which is what clears the withholding.
+ * asking to go there, and raising it is what a person asking for a window is for.
+ *
+ * A user-requested raise stops the withholding itself, right here, rather than leaving that to the
+ * window's own `focus` handler: that handler's bounce-back (`shouldBounceFocusBack`) fires for any
+ * window still marked as awaiting its first activation, and every condition it checks can hold on
+ * this path — so leaving the mark in place would have the raise trigger the bounce-back, which
+ * hands focus straight back to wherever the user was and silently discards the very raise the user
+ * just asked for.
  */
 function raiseMoveTarget(target: MoveWebViewTarget, isUserRequested: boolean): void {
   if (
     target.kind === 'window' &&
     isApplicationFocused() &&
     (isUserRequested || !shouldContentAvoidDocumentFocus(target.windowId))
-  )
+  ) {
+    // The user's declared intent overrides whatever withholding decision the platform made for
+    // this window, so that decision must be revoked before the raise, not left for the focus
+    // handler to (fail to) sort out — see the docblock above.
+    if (isUserRequested) forgetWindowWithholding(target.windowId);
     focusWindow(target.windowId);
+  }
 }
 
 /**
