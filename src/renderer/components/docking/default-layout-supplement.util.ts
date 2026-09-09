@@ -238,7 +238,9 @@ export function mergeDefaultLayoutSupplement(
     panel.tabs =
       insertAt < 0 ? [...tabs, tab] : [...tabs.slice(0, insertAt), tab, ...tabs.slice(insertAt)];
     if (entryWebViewType) existingWebViewTypes.add(entryWebViewType);
-    else existingTabIds.add(tab.id);
+    // Record the id the check above looks up. A tab with no web view type passes through the mint
+    // unchanged, so the id it carries in the layout is the one the entry declared.
+    else existingTabIds.add(entry.tab.id);
   });
 
   return layout;
