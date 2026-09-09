@@ -161,7 +161,7 @@ export class SharedLayoutReceiver {
   /**
    * The Simple-mode editor a completed sync's "Apply now" prompt should be about — its project, to
    * decide whether the layout changed, and its web view id, so the router can send the prompt to
-   * the window that actually has it open instead of the focused window (PT-4335).
+   * the window that actually has it open instead of the focused window.
    */
   private async getOpenSimpleModeEditor(): Promise<
     { projectId: string; webViewId: string } | undefined
@@ -172,12 +172,14 @@ export class SharedLayoutReceiver {
       (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.state?.isReadOnly,
     );
     if (!editor?.projectId) return undefined;
+
     return { projectId: editor.projectId, webViewId: editor.id };
   }
 
   private async handleSyncCompleted(): Promise<void> {
     const editor = await this.getOpenSimpleModeEditor();
     if (!editor) return;
+
     const { projectId, webViewId } = editor;
 
     // Only manual Send/Receives reach here (`onSyncStateChanged` does not fire for the programmatic
@@ -203,7 +205,7 @@ export class SharedLayoutReceiver {
       clickCommand: 'platformScriptureEditor.applySharedLayout',
       clickCommandLabel: '%platformScriptureEditor_sharedLayout_applyNow%',
       // Routes the prompt to the window that has this editor open, rather than the focused window —
-      // the project it is about may not be the one the user is currently looking at (PT-4335).
+      // the project it is about may not be the one the user is currently looking at.
       webViewId,
     });
     this.projectIdByNotificationId.set(notificationId, projectId);

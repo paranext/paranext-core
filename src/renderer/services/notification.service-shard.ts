@@ -220,8 +220,9 @@ const notificationService: INotificationService = {
  *
  * Registered under this window's scoped name (e.g.
  * `NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) so every window can serve its own
- * notification UI. The main process publishes the generic name and forwards to the focused window,
- * so a notification raised by a background task lands where the user is looking.
+ * notification UI. The main process publishes the generic name and forwards to the window that owns
+ * the web view a notification names, or to the focused window when it names none, so a notification
+ * raised by a background task lands where the user is looking.
  */
 export async function startNotificationServiceShard(): Promise<void> {
   if (globalThis.windowId === undefined)

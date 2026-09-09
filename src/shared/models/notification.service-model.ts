@@ -140,6 +140,11 @@ export interface PlatformNotification {
    * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
    * the value it had on the previous `send` for that id - omitting a field never clears it. Pass
    * the field explicitly to change it.
+   *
+   * The one exception is {@link webViewId}: which window a `send` runs in is decided in the main
+   * process before the renderer ever sees the notification to merge it, so omitting `webViewId` on
+   * an update does NOT keep routing to the window the original send resolved to - it always routes
+   * by the rules {@link webViewId} documents, using only what this call passed.
    */
   notificationId?: string | number;
   /**
@@ -154,8 +159,9 @@ export interface PlatformNotification {
    * Optional id of a web view this notification is about. When provided, the notification is routed
    * to the window that owns that web view instead of the focused window — for a notification or
    * prompt raised about a specific project or editor that may not be the one the user is currently
-   * looking at. Falls back to the focused window if the web view cannot be found open in any
-   * window.
+   * looking at. Falls back to the focused window whenever the web view's window cannot be
+   * determined — it is open nowhere, a window that might have it could not be asked, or it is
+   * moving between windows.
    *
    * Omit for a generic notice, which should keep routing to the focused window — where the user is
    * looking is the right place for something that is not about anything in particular.

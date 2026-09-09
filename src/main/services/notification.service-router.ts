@@ -13,7 +13,7 @@
  * service shard".
  */
 
-import { getReadyWindowIds } from '@main/services/window-state.service';
+import { getReadyWindowIds, isWindowClosing } from '@main/services/window-state.service';
 import {
   createTargetShardResolver,
   resolveShardForWindow,
@@ -55,7 +55,7 @@ const getTargetNotificationShard = createTargetShardResolver(
 /**
  * The notification service shard a `send` should run in: the window that owns
  * {@link PlatformNotification.webViewId} when the notification names one, otherwise the focused
- * window, exactly as before that field existed.
+ * window.
  *
  * Falls back to the focused window rather than throwing when the named web view cannot be resolved
  * to a window — a notification is user-facing feedback, and showing it in the wrong window is a
@@ -65,12 +65,15 @@ const getTargetNotificationShard = createTargetShardResolver(
 async function getSendTargetShard(
   notification: PlatformNotification,
 ): Promise<INotificationService> {
-  if (notification.webViewId !== undefined) {
+  if (notification.webViewId) {
     const { windowId, hadUnreachableWindows } = await findWindowIdOwningWebView(
       notification.webViewId,
       'route notification',
     );
-    if (windowId !== undefined) {
+    // Read the closing state again here, at the last moment before the window is asked to show the
+    // notification. Finding the owner meant asking every window in the app, which takes as long as
+    // the slowest of them — long enough for this one's close to have been decided since.
+    if (windowId !== undefined && !isWindowClosing(windowId)) {
       try {
         return await resolveShardForWindow(
           NotificationServiceNetworkObjectName,
@@ -82,6 +85,10 @@ async function getSendTargetShard(
           `Notification named webViewId ${notification.webViewId}, owned by window ${windowId}, but that window's notification service could not be resolved (${getErrorMessage(e)}); falling back to the focused window.`,
         );
       }
+    } else if (windowId !== undefined) {
+      logger.warn(
+        `Notification named webViewId ${notification.webViewId}, owned by window ${windowId}, but that window is closing; falling back to the focused window.`,
+      );
     } else {
       logger.warn(
         `Notification named webViewId ${notification.webViewId}, but no window could be found owning it${hadUnreachableWindows ? ' (some windows could not be asked)' : ''}; falling back to the focused window.`,
