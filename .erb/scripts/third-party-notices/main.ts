@@ -76,13 +76,16 @@ import { render, joinTexts } from './render';
 import { declaredLicenseField, readPackageNotices, readTextFile } from './package-files';
 import { messageOf, readJsonFile } from './read-json';
 import { assertProductMatchesPackaging, readPackagingConfig } from './product';
+import type { PackagingConfig } from './product';
 import {
   assertSeparateProgramsRecorded,
   assertSeparateProgramTextsAvailable,
 } from './separate-programs';
+import { assertExternalExtensionsRecorded, externalExtensionNames } from './external-extensions';
 import type {
   CopiedPlatformLibrary,
   Detection,
+  ExternalExtension,
   Lock,
   MergedNugetPackage,
   NamedText,
@@ -183,9 +186,11 @@ const SNAP_MIN_STAGE_PACKAGES = 8;
  * the notices cannot describe a different set than the one that ships. They are neither npm nor
  * NuGet packages, so nothing else in this pipeline can see them, but they ARE redistributed inside
  * the artifact - see the "Linux snap" section `render` writes from this list.
+ *
+ * Takes the already-parsed packaging config rather than reading it again, so
+ * `electron-builder.json5` is parsed exactly once per `buildReport` run - see the caller.
  */
-function snapStagePackages(): string[] {
-  const config = readPackagingConfig(ELECTRON_BUILDER);
+function snapStagePackages(config: PackagingConfig): string[] {
   const staged = config.snap?.stagePackages ?? [];
   if (staged.length < SNAP_MIN_STAGE_PACKAGES)
     throw new Error(
@@ -724,6 +729,7 @@ type BuiltReport = {
   staticAssetNotices: NamedText[];
   copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>;
   separatePrograms: Record<string, SeparateProgram>;
+  externalExtensions: Record<string, ExternalExtension>;
   packedExtensions: string[];
   shipsElectron: boolean;
   product: ProductBlock | undefined;
@@ -806,10 +812,14 @@ export function buildReport(): BuiltReport {
 
   const policy = loadPolicy(POLICY);
 
+  // Parsed once for the whole run - `assertProductMatchesPackaging` below, `externalExtensionNames`
+  // and `snapStagePackages` further down all read the same packaging config.
+  const packagingConfig = readPackagingConfig(ELECTRON_BUILDER);
+
   // Refused before anything is derived: the name goes into the first sentence of the document.
   assertProductMatchesPackaging(
     policy.product,
-    readPackagingConfig(ELECTRON_BUILDER),
+    packagingConfig,
     path.relative(REPO, ELECTRON_BUILDER),
   );
 
@@ -824,13 +834,17 @@ export function buildReport(): BuiltReport {
   assertCopiedPlatformLibrariesRecorded(policy, copiedPlatformLibraryStems());
   assertSeparateProgramsRecorded(REPO, policy.separatePrograms || {});
   assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
+  assertExternalExtensionsRecorded(
+    externalExtensionNames(REPO, packagingConfig),
+    policy.externalExtensions || {},
+  );
 
   const nugetVerdicts = buildNugetVerdicts({ policy, collected, directReferences, alwaysListed });
 
   const verdicts = [...npmVerdicts, ...nugetVerdicts];
   // Refused here rather than at render time: the document is written from this table, so a staged
   // library it does not classify has to stop the run before anything is produced from it.
-  const staged = snapStagePackages();
+  const staged = snapStagePackages(packagingConfig);
   assertSnapStagePackagesClassified(staged, policy.snapStagePackages || {});
 
   return {
@@ -867,6 +881,9 @@ export function buildReport(): BuiltReport {
     // The sixth: third-party programs redistributed as separate executables and invoked as
     // subprocesses - see `SeparateProgram`.
     separatePrograms: policy.separatePrograms || {},
+    // The seventh: extensions packed from outside this repository, whose bundled dependencies no
+    // manifest here describes - see `ExternalExtension`.
+    externalExtensions: policy.externalExtensions || {},
     // What the two prose sections are gated on, so neither can survive the thing it describes. The
     // extension set is the directory listing of `extensions/dist`, which is the tree an installer
     // packs; `electron` ships as a prebuilt runtime compiled into no bundle, so the policy's
