@@ -401,6 +401,43 @@ describe('buildSearchRegex – trailing space', () => {
   });
 });
 
+describe('buildSearchRegex – leading space', () => {
+  it('does not match a word when no whitespace precedes it', () => {
+    const regex = buildSearchRegex(
+      { scope: [], searchString: ' Abraham', caseInsensitive: false, wordRestriction: 'none' },
+      DEFAULT_CATEGORIZER,
+    );
+    // "Abraham" here is not preceded by whitespace — must not match
+    expect(matchAll(regex, 'Abraham begot Isaac')).toEqual([]);
+  });
+
+  it('matches a word only where whitespace actually precedes it', () => {
+    const regex = buildSearchRegex(
+      { scope: [], searchString: ' Isaac', caseInsensitive: false, wordRestriction: 'none' },
+      DEFAULT_CATEGORIZER,
+    );
+    expect(matchAll(regex, 'Isaac begot Isaac')).toEqual([' Isaac']);
+  });
+
+  it('keeps a leading whitespace run mandatory when only a stripped diacritic precedes it', () => {
+    // A search string opening with a bare combining mark, once ignoreDiacritics normalizes and
+    // strips it, leaves only the leading space before "a" — the space must stay a leading run
+    // (mandatory), not be reclassified as interior just because a code point preceded it.
+    const regex = buildSearchRegex(
+      {
+        scope: [],
+        searchString: '́ a',
+        caseInsensitive: false,
+        wordRestriction: 'none',
+        ignoreDiacritics: true,
+      },
+      DEFAULT_CATEGORIZER,
+    );
+    expect(regex.source).not.toContain('(?<ws');
+    expect('a'.match(regex)).toBeNull();
+  });
+});
+
 describe('nextPollMissState', () => {
   it('does not exceed the retry limit on the first miss', () => {
     const result = nextPollMissState(0);
@@ -1175,9 +1212,9 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
     expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}0>`);
     expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}1>`);
     expect(regex.source).toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}2>`);
-    // Literal checks alongside the interpolated ones above: if SEARCH_WHITESPACE_GROUP_PREFIX ever
-    // resolved to undefined (e.g. an unbuilt platform-bible-utils package), the interpolated
-    // checks above would pass vacuously against `(?<undefined0>` — these pin the real value.
+    // The group name is also asserted literally, alongside every SEARCH_WHITESPACE_GROUP_PREFIX
+    // interpolation in this suite: an interpolated-only assertion can pass on a falsy imported
+    // constant.
     expect(regex.source).toContain('(?<ws0>');
     expect(regex.source).toContain('(?<ws1>');
     expect(regex.source).toContain('(?<ws2>');
@@ -1194,8 +1231,6 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
   it('keeps a whitespace-only query matching whitespace', () => {
     const regex = buildSearchRegex({ ...baseOptions, searchString: ' ' }, categorizer);
     expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
-    // Literal check alongside the interpolated one above: pins the real group-name prefix rather
-    // than whatever SEARCH_WHITESPACE_GROUP_PREFIX happens to resolve to.
     expect(regex.source).not.toContain('(?<ws');
     expect('a b'.match(regex)?.length).toBe(1);
   });
@@ -1224,8 +1259,6 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
       categorizer,
     );
     expect(regex.source).not.toContain(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
-    // Literal check alongside the interpolated one above: pins the real group-name prefix rather
-    // than whatever SEARCH_WHITESPACE_GROUP_PREFIX happens to resolve to.
     expect(regex.source).not.toContain('(?<ws');
     expect(regex.flags).not.toContain('d');
   });

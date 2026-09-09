@@ -759,6 +759,11 @@ export function buildSearchRegex(
     const isSkippedDiacritic = (candidate: string) =>
       ignoreDiacritics && isDiacritic.test(candidate);
 
+    // Tracks whether any query character has actually reached the pattern yet. A skipped
+    // diacritic never sets this, so a run preceded only by a stripped combining mark is still a
+    // leading run, not an interior one — a code-point index alone can't tell the two apart.
+    let hasEmittedContent = false;
+
     let index = 0;
     while (index < chars.length) {
       const char = chars[index];
@@ -766,7 +771,6 @@ export function buildSearchRegex(
       if (isSkippedDiacritic(char)) {
         index += 1;
       } else if (isWhiteSpaceChar(char)) {
-        const runStart = index;
         const run: string[] = [];
         let scanningRun = true;
         while (scanningRun && index < chars.length) {
@@ -785,7 +789,7 @@ export function buildSearchRegex(
         // trailing, or whitespace-only run has no gap to bridge, and making it optional would stop
         // a whitespace-only query from matching whitespace at all: a lazy `*?` prefers zero
         // repetitions, producing an empty overall match that gets skipped.
-        const isInteriorRun = runStart > 0 && index < chars.length;
+        const isInteriorRun = hasEmittedContent && index < chars.length;
         const whitespaceClass = allowInvisibleCharacters
           ? `[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]`
           : `(?:[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]|~)`;
@@ -806,10 +810,12 @@ export function buildSearchRegex(
 
         // Allow diacritics after the run when ignoreDiacritics is set. C# assumes
         // DiacriticsFollowBaseCharacters=true (standard Unicode), so only a trailing class is
-        // emitted, once for the whole run rather than after each whitespace character.
+        // emitted, once per run: combining marks between two whitespace code points are not a
+        // case Paratext produces.
         if (ignoreDiacritics) regexStr += `[${diacriticClass}]*`;
       } else {
         regexStr += escapeStringRegexp(char);
+        hasEmittedContent = true;
 
         // Allow diacritics after each base character when ignoreDiacritics is set.
         // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
