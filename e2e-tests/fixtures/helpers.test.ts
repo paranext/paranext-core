@@ -14,6 +14,7 @@ import {
   isPopoverTriggerExpanded,
   killProcessTree,
   LAUNCH_PHASE_TIMEOUT_MS,
+  removeUserDataDirWithRetry,
   rethrowIfTargetClosed,
 } from './helpers';
 
@@ -237,5 +238,79 @@ describe('killProcessTree', () => {
       expect(() => killProcessTree(4242, 'SIGKILL', 'linux', deps)).not.toThrow();
       expect(deps.kill).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+describe('removeUserDataDirWithRetry', () => {
+  it('succeeds on the first attempt: no sleep, no warning', async () => {
+    const rmSync = vi.fn();
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const now = vi.fn().mockReturnValue(0);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await removeUserDataDirWithRetry('/tmp/some-dir', { rmSync, sleep, now });
+
+    expect(rmSync).toHaveBeenCalledExactlyOnceWith('/tmp/some-dir', {
+      recursive: true,
+      force: true,
+    });
+    expect(sleep).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
+  it('retries silently on a transient lock and succeeds: two 250ms sleeps, no warning', async () => {
+    const rmSync = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('EBUSY');
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('EBUSY');
+      })
+      .mockImplementationOnce(() => {});
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    // Elapsed time never reaches the budget across these three attempts.
+    const now = vi.fn().mockReturnValue(0);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await removeUserDataDirWithRetry('/tmp/some-dir', { rmSync, sleep, now });
+
+    expect(rmSync).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenNthCalledWith(1, 250);
+    expect(sleep).toHaveBeenNthCalledWith(2, 250);
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
+  it('gives up once the time budget is exhausted, warning once with the attempt count', async () => {
+    const rmSync = vi.fn().mockImplementation(() => {
+      throw new Error('EBUSY');
+    });
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    // Called once for the start time, then once per failed attempt to compute elapsed time —
+    // reaching the 5000ms budget on the 5th attempt without a single real sleep in the test.
+    const now = vi
+      .fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(1000)
+      .mockReturnValueOnce(2000)
+      .mockReturnValueOnce(3000)
+      .mockReturnValueOnce(4000)
+      .mockReturnValueOnce(5000);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await removeUserDataDirWithRetry('/tmp/some-dir', { rmSync, sleep, now });
+
+    expect(rmSync).toHaveBeenCalledTimes(5);
+    expect(sleep).toHaveBeenCalledTimes(4);
+    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/Could not remove .*\/tmp\/some-dir.* after 5 attempts/),
+    );
+
+    warnSpy.mockRestore();
   });
 });
