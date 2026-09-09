@@ -1111,9 +1111,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                     availableGroupings={availableGroupings}
                     activeGrouping={activeGrouping}
                     onChangeGrouping={setActiveGrouping}
-                    showSelectedOnly={
-                      props.mode === 'project-multi' ? showSelectedOnly : undefined
-                    }
+                    showSelectedOnly={props.mode === 'project-multi' ? showSelectedOnly : undefined}
                     onChangeShowSelectedOnly={
                       props.mode === 'project-multi' ? setShowSelectedOnly : undefined
                     }

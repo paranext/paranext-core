@@ -2561,8 +2561,12 @@ export function ManageBooksDialog({
                           // Group reference candidates by versification so the
                           // user can pick one whose canon matches the
                           // destination project. The destination's own
-                          // versification group is pinned to the top.
+                          // versification group is pinned to the top. Locked to this one
+                          // grouping — there is no other axis worth switching to here — so the
+                          // filter menu itself is hidden rather than exposing an inert toggle.
+                          availableGroupings={['versification']}
                           defaultGrouping="versification"
+                          hideFilterMenu
                           priorityVersificationId={versification}
                           // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                           // the picker reads as a call-to-action until a reference project is set.

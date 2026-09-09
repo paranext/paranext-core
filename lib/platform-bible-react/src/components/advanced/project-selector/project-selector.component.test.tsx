@@ -320,3 +320,84 @@ describe('ProjectSelector — scroll-to-selected on open', () => {
     }
   });
 });
+
+describe('hideFilterMenu (regression: must survive the #2673 rebase)', () => {
+  const projects: ProjectSelectorProject[] = [
+    { id: 'a', shortName: 'A', fullName: 'Project A' },
+    { id: 'b', shortName: 'B', fullName: 'Project B' },
+    { id: 'c', shortName: 'C', fullName: 'Project C' },
+  ];
+
+  it('renders no grouping control when hideFilterMenu is set', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'a' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        hideFilterMenu
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    // The funnel button is the only affordance that opens the grouping menu.
+    expect(screen.queryByLabelText('Filter')).not.toBeInTheDocument();
+  });
+
+  it('renders the grouping control when hideFilterMenu is absent', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'a' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByLabelText('Filter')).toBeInTheDocument();
+  });
+});
+
+describe('locked grouping (regression: manage-books after groupByVersification removal)', () => {
+  it('groups by versification with no user-facing way to change it', async () => {
+    const user = setupUser();
+    const versified: ProjectSelectorProject[] = [
+      {
+        id: 'a',
+        shortName: 'A',
+        fullName: 'Project A',
+        versificationId: '4',
+        versificationName: 'English',
+      },
+      {
+        id: 'b',
+        shortName: 'B',
+        fullName: 'Project B',
+        versificationId: '3',
+        versificationName: 'Vulgate',
+      },
+    ];
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={versified}
+        openTabs={[]}
+        selection={{ projectId: 'a' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        availableGroupings={['versification']}
+        defaultGrouping="versification"
+        hideFilterMenu
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByText('English')).toBeInTheDocument();
+    expect(screen.getByText('Vulgate')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Filter')).not.toBeInTheDocument();
+  });
+});
