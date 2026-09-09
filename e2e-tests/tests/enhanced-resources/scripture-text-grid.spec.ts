@@ -21,8 +21,11 @@ import { waitForAppReady } from '../../fixtures/helpers';
 import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 import {
   discoverAdminTextConnectionProject,
+  armColumnRenderMeasure,
+  flagResourcesAndOpenGrid,
   flagResourcesAndOpenScriptureTextGrid,
   openAlignedGridWithResources,
+  readColumnRenderMs,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
@@ -461,32 +464,11 @@ test.describe('Scripture Text Grid renderer', () => {
     );
 
     const stg = await openScriptureTextGrid(mainPage);
+    // Armed before the switch, read after it: the switch itself ends with an awaited keypress, so
+    // anything that starts the clock afterwards is measuring an already-finished render.
+    await armColumnRenderMeasure(stg.frame, 5);
     await stg.switchToChapterView();
-
-    const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
-      const start = performance.now();
-      const hasAllColumns = () => document.querySelectorAll('[role="region"]').length >= 5;
-      await new Promise<void>((resolve) => {
-        const observer = new MutationObserver(() => {
-          if (hasAllColumns()) {
-            observer.disconnect();
-            resolve();
-          }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-        // Give up rather than hang: a run that never renders five columns should fail on the count
-        // assertion below, which says what went wrong, not on Playwright's global timeout.
-        setTimeout(() => {
-          observer.disconnect();
-          resolve();
-        }, 15_000);
-        if (hasAllColumns()) {
-          observer.disconnect();
-          resolve();
-        }
-      });
-      return performance.now() - start;
-    });
+    const elapsedMs = await readColumnRenderMs(stg.frame);
 
     await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
     // Chapter mode renders full chapters (10–100x a verse cell), so the ~220ms verse threshold does
@@ -555,7 +537,9 @@ test.describe('Scripture Text Grid empty state', () => {
     await expect(stg.frame.getByTestId('scripture-text-grid-empty-state')).toBeVisible({
       timeout: 15_000,
     });
-    await expect(stg.frame.locator('[role="gridcell"]')).toHaveCount(0);
+    // The verse listitem is the cell; `[role="gridcell"]` has matched nothing since PT-4157 removed
+    // that role, so asserting zero of those could not fail.
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(0);
   });
 });
 
@@ -700,7 +684,7 @@ test.describe('Scripture Text Grid accessibility', () => {
 });
 
 // ---------------------------------------------------------------------------
-// PT-4184 — verse-aligned (Grid) view.
+// Verse-aligned (Grid) view.
 //
 // Alignment can only be checked where there is layout, so these measure rendered geometry in the
 // running app: every column's block for verse N must have the same top. No unit test can make that
@@ -788,31 +772,55 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
     columnBorders.forEach((borders) => expect(borders).toBe('0px/0px'));
   });
 
+  test('columns run right-to-left under an RTL locale', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'AlignedRtl',
+    );
+
+    // The chapter row's RTL guard asserts `flex-direction`, which this branch does not use: the
+    // columns here are grid tracks, and a track's inline axis follows `dir` only if nothing pins it
+    // to a physical side. Measure where the first column actually lands instead.
+    const firstColumnLeft = await stg.frame
+      .getByTestId('scripture-text-grid-aligned')
+      .evaluate((root) => {
+        const readFirstLeft = () => {
+          const [first] = Array.from(root.children);
+          return first.getBoundingClientRect().left;
+        };
+        document.documentElement.dir = 'ltr';
+        const ltr = readFirstLeft();
+        document.documentElement.dir = 'rtl';
+        const rtl = readFirstLeft();
+        document.documentElement.dir = 'ltr';
+        return { ltr, rtl };
+      });
+
+    // Same first column, opposite edge of the grid: in LTR it starts at the left, in RTL it starts
+    // further right, because the remaining columns now sit to its left.
+    expect(firstColumnLeft.rtl).toBeGreaterThan(firstColumnLeft.ltr);
+  });
+
   test('grid frame budget: >=5 aligned columns render under the chapter-mode baseline', async ({
     mainPage,
   }) => {
     const projectId = await requireProjectAndResources(mainPage, 5);
-    const stg = await openAlignedGridWithResources(
+    // Opened in Verse view, so the switch into Grid is a statement of its own that the measurement
+    // can bracket. `openAlignedGridWithResources` would switch and then await the grid, and the
+    // columns are the grid's own children from the same React pass — nothing left to measure.
+    const stg = await flagResourcesAndOpenGrid(
       mainPage,
       projectId,
       REAL_RESOURCE_IDS.slice(0, 5),
       'AlignedPerf',
     );
 
-    const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
-      const start = performance.now();
-      await new Promise<void>((resolve) => {
-        const observer = new MutationObserver(() => {
-          if (document.querySelectorAll('[role="region"]').length >= 5) {
-            observer.disconnect();
-            resolve();
-          }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-        if (document.querySelectorAll('[role="region"]').length >= 5) resolve();
-      });
-      return performance.now() - start;
-    });
+    await armColumnRenderMeasure(stg.frame, 5);
+    await stg.switchToGridView();
+    const elapsedMs = await readColumnRenderMs(stg.frame);
 
     await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
     // Same threshold as the chapter-mode budget: this renders the same five whole chapters, and

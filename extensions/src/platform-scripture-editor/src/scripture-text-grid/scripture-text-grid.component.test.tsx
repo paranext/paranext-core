@@ -63,6 +63,9 @@ const mockResourceCell = vi.fn(
       ) : undefined}
       {showDragHandle ? (
         // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
+        // NOTE: the real `ResourceCellView` renders this only in its header-band layout, so a verse
+        // -view test that uses it is exercising the handler, not the rendered UI. The grip's own
+        // presence is covered against the real component in `resource-cell-view.component.test.tsx`.
         <button
           type="button"
           data-reorder-handle-id={resourceRef.resourceId}
@@ -99,8 +102,8 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   return {
     ...original,
     useViewVisibility: () => mockVisibility.isVisible,
-    // The aligned stylesheet is inert in jsdom (no layout) and its `:has()` rule crashes jsdom's
-    // rule matcher, so it is not injected here. `aligned-grid.styles.test.ts` asserts its content.
+    // The aligned stylesheet is inert in jsdom, which lays nothing out, so injecting ~400 rules per
+    // mount would only cost parse time. `aligned-grid.styles.test.ts` asserts its content instead.
     useStylesheet: () => {},
     ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="resizable-panel-group">{children}</div>
@@ -555,7 +558,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={onReorder}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
     fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.drop(wrappers[0]); // onto WEB (resourceId 'r-a')
     expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
@@ -570,7 +573,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={vi.fn()}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
     fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.dragOver(wrappers[0]); // hover over WEB (resourceId 'r-a')
     expect(wrappers[0].className).toContain('tw:ring-2');
@@ -589,7 +592,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={vi.fn()}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
     fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.dragOver(wrappers[1]); // hover over itself
     expect(wrappers[1].className).not.toContain('tw:ring-2');
@@ -605,7 +608,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={onReorder}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
     fireEvent.dragStart(screen.getByTestId('header-r-b'));
     fireEvent.dragOver(wrappers[0]);
     expect(wrappers[0].className).toContain('tw:ring-2');
@@ -809,6 +812,19 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
     expect(screen.getByTestId('cell-b')).toHaveAttribute('data-view-mode', 'aligned');
   });
 
+  it('gives the scroll port a tab stop, since nothing that scrolls it can be focused', () => {
+    // The columns do have tab stops — the reorder grip and the zoom kebab — but both sit in the
+    // sticky header, which never moves. Without this the content below the fold is reachable only
+    // by pointer, because Arrow and PageDown have nothing to scroll.
+    const { port } = renderAligned(alignedRef, resources, {
+      onReorder: vi.fn(),
+      getReorderHandleLabel: (name: string) => `Reorder ${name}`,
+    });
+
+    expect(port).toHaveAttribute('tabindex', '0');
+    expect(port.className).toContain('tw:focus-visible:ring-2');
+  });
+
   it('lays out one column per resource', () => {
     const { port } = renderAligned(alignedRef);
 
@@ -861,7 +877,7 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
       // The header is the drag source; the column is the drop target. A column-wide drag source
       // would start a reorder when the reader tried to select text.
       renderAligned(alignedRef, resources, reorderProps);
-      const columns = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+      const columns = screen.getAllByTestId('scripture-text-grid-column-drop-target');
 
       fireEvent.dragStart(screen.getByTestId('header-r-b'));
       fireEvent.drop(columns[0]);
@@ -871,7 +887,7 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
 
     it('rings the hovered column as a drop target', () => {
       renderAligned(alignedRef, resources, reorderProps);
-      const columns = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+      const columns = screen.getAllByTestId('scripture-text-grid-column-drop-target');
 
       fireEvent.dragStart(screen.getByTestId('header-r-b'));
       fireEvent.dragOver(columns[0]);
@@ -941,6 +957,32 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
       // A new reference re-arms it.
       rerenderAt({ ...alignedRef, verseNum: 1 });
       await waitFor(() => expect(port.scrollTop).toBe(100 - HEADER_HEIGHT));
+    });
+
+    it('keeps following the reference when the browser clamps scrollTop after content shrinks', async () => {
+      // Removing a resource (or zooming one out) shortens the content, and the browser then clamps
+      // scrollTop to the new bottom. That is not the reader moving the port, and reading it as such
+      // stood the reference scroll down for good — silently killing the late-column correction in
+      // the one case it exists for.
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // The port can now scroll only to 400, so the browser moves scrollTop down to it.
+      Object.defineProperty(port, 'scrollHeight', { value: 400 + PORT_HEIGHT, configurable: true });
+      Object.defineProperty(port, 'clientHeight', { value: PORT_HEIGHT, configurable: true });
+      port.scrollTop = 400;
+
+      // A slower resource then renders and moves the target, which must still be corrected.
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      await waitFor(() => expect(port.scrollTop).toBe(1500 - HEADER_HEIGHT));
     });
 
     it('defers the scroll while the tab is hidden and catches up when it is shown', () => {

@@ -2,6 +2,7 @@ import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import { AlignedGrid } from './aligned-grid.component';
+import { ALIGNED_ZOOM_PROPERTY, type AlignedZoomStyle } from './aligned-grid.styles';
 
 /**
  * The verse-aligned grid: verse N of every resource on one row.
@@ -67,15 +68,26 @@ function StubVerseBlock({ verse }: { verse: StubVerse }) {
   );
 }
 
+/** Per-resource zoom, published exactly as `ResourceCellView` publishes it in this view. */
+function buildZoomStyle(zoomFactor: number | undefined): AlignedZoomStyle | undefined {
+  return zoomFactor === undefined ? undefined : { [ALIGNED_ZOOM_PROPERTY]: zoomFactor };
+}
+
 /** One resource column, in the DOM shape `ResourceColumn` and the editor produce together. */
 function StubColumn({
   label,
   verses,
   textDirection = 'ltr',
+  zoomFactor,
+  placeholder,
 }: {
   label: string;
   verses: StubVerse[];
   textDirection?: string;
+  /** Per-resource zoom, published exactly as `ResourceCellView` publishes it in this view. */
+  zoomFactor?: number;
+  /** Renders the cell's placeholder state instead of the editor (downloading, unavailable, empty). */
+  placeholder?: string;
 }) {
   return (
     <div role="region" aria-label={label} data-resource-id={label} className="tw:min-w-0">
@@ -86,17 +98,31 @@ function StubColumn({
         >
           <span className="tw:truncate tw:text-xs tw:font-medium tw:text-primary">{label}</span>
         </div>
-        <div data-cell-content className="tw:flex-1 tw:overflow-visible" dir={textDirection}>
+        <div
+          data-cell-content
+          className="tw:flex-1 tw:overflow-visible"
+          dir={textDirection}
+          style={buildZoomStyle(zoomFactor)}
+        >
           <div data-cell-pad className="tw:p-2">
-            <div className="editor-container">
-              <div className="editor-inner">
-                <div className="editor-input">
-                  {verses.map((verse) => (
-                    <StubVerseBlock key={verse.marker} verse={verse} />
-                  ))}
+            {placeholder === undefined ? (
+              <div className="editor-container">
+                <div className="editor-inner">
+                  <div className="editor-input">
+                    {verses.map((verse) => (
+                      <StubVerseBlock key={verse.marker} verse={verse} />
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div
+                data-cell-placeholder
+                className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center"
+              >
+                <span className="tw:text-sm tw:text-muted-foreground">{placeholder}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -170,6 +196,41 @@ export const WithRightToLeftColumn: Story = {
             { marker: '5', lines: ['וַיָּבֹא לְעִיר בְּשֹׁמְרוֹן'] },
           ]}
         />
+      </AlignedGrid>
+    </div>
+  ),
+};
+
+/**
+ * One column zoomed while its neighbours are not. Rows stay aligned because zoom lands on the verse
+ * blocks, not on the subgrid box that carries the shared row tracks — a row simply takes the height
+ * of its tallest, now larger, cell. An original-language column often wants a bigger font, so this
+ * is the ordinary case, not an edge one.
+ */
+export const MixedZoom: Story = {
+  render: () => (
+    <div style={GRID_BOX_STYLE}>
+      <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
+        <StubColumn label="GRK" verses={versePerRow} zoomFactor={1.5} />
+        <StubColumn label="NRSV" verses={withBridgedVerses} />
+        <StubColumn label="CPB" verses={withMissingVerseAndPoetry} />
+      </AlignedGrid>
+    </div>
+  ),
+};
+
+/**
+ * A column that has nothing to render yet — still downloading, or with no verses in this chapter.
+ * Its message spans every row, so it is pinned to the top of the column: centred, it would sit at
+ * the midpoint of a whole chapter's height and start off screen, making the column read as blank.
+ */
+export const ColumnWithNothingToShow: Story = {
+  render: () => (
+    <div style={GRID_BOX_STYLE}>
+      <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
+        <StubColumn label="GRK" verses={versePerRow} />
+        <StubColumn label="CPB" verses={[]} placeholder="Resource is loading…" />
+        <StubColumn label="NRSV" verses={withBridgedVerses} />
       </AlignedGrid>
     </div>
   ),
