@@ -3,14 +3,6 @@ import { getAvailableBookIds } from 'platform-bible-react/experimental';
 import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 
 /**
- * Book numbers the canon classifies as extra material (GLO, FRT, INT, XXA, etc.). Precomputed
- * because the set is fixed for a given canon.
- */
-const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
-  Canon.nonCanonicalIds.map((bookId) => Canon.bookIdToNumber(bookId)),
-);
-
-/**
  * Whether a book id names extra material (GLO, FRT, INT, XXA, etc.) rather than a book of
  * scripture.
  *
@@ -28,6 +20,16 @@ const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
 export function isExtraMaterialBookId(bookId: string): boolean {
   return Canon.isExtraMaterial(bookId);
 }
+
+/**
+ * Book numbers {@link isExtraMaterialBookId} rejects. Precomputed because the set is fixed for a
+ * given canon, and derived from that predicate rather than from a second canon API so the flag
+ * string {@link excludeExtraMaterialBooks} clears and the scope gate cannot disagree about what
+ * counts as extra material.
+ */
+const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
+  Canon.allBookIds.filter(isExtraMaterialBookId).map((bookId) => Canon.bookIdToNumber(bookId)),
+);
 
 /**
  * Clears the extra material (GLO, FRT, INT, XXA, etc.) from a `platformScripture.booksPresent` flag

@@ -351,4 +351,33 @@ describe('ScopeSelector — disabled scope explanations', () => {
 
     expect(onScopeChange).not.toHaveBeenCalled();
   });
+
+  // Radix drops a disabled item out of the menu's roving focus, so the explanation has to be
+  // rendered rather than revealed on hover or focus — a `title` or a tooltip here reaches nobody
+  // navigating the menu by keyboard.
+  it('dropdown variant: renders the explanation inline in the disabled option', async () => {
+    const { user, getByRole } = renderDropdown({
+      scope: 'chapter',
+      disabledScopeExplanations: { book: BOOK_UNAVAILABLE },
+    });
+    await user.click(getByRole('combobox'));
+
+    const bookItem = (await screen.findByText(/scope_selector_current_book/i)).closest(
+      '[role="menuitem"]',
+    );
+    expect(bookItem).toHaveTextContent(BOOK_UNAVAILABLE);
+  });
+
+  it('dropdown variant: adds no explanation text to options that are still available', async () => {
+    const { user, getByRole } = renderDropdown({
+      scope: 'chapter',
+      disabledScopeExplanations: { book: BOOK_UNAVAILABLE },
+    });
+    await user.click(getByRole('combobox'));
+
+    const chapterItem = (await screen.findByText(/scope_selector_current_chapter/i)).closest(
+      '[role="menuitem"]',
+    );
+    expect(chapterItem).not.toHaveTextContent(BOOK_UNAVAILABLE);
+  });
 });

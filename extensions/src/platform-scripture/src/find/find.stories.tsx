@@ -250,6 +250,8 @@ type HarnessConfig = {
   scope?: Scope;
   /** Initial selected books for the `selectedBooks` scope. */
   selectedBookIds?: string[];
+  /** The current scripture reference the `book`/`chapter` scopes resolve to. Defaults to GEN 1:1. */
+  verseRef?: SerializedVerseRef;
   /** The find-job status the status bar reflects (fixed-state stories only). */
   searchStatus?: FindJobStatus;
   /** Percent complete for an in-progress search. */
@@ -324,9 +326,10 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   // eslint-disable-next-line no-null/no-null
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const configVerseRef = config.verseRef;
   const verseRef = useMemo<SerializedVerseRef>(
-    () => ({ book: 'GEN', chapterNum: 1, verseNum: 1 }),
-    [],
+    () => configVerseRef ?? { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    [configVerseRef],
   );
 
   const baseResults = useMemo<HidableFindResult[]>(() => {
@@ -693,6 +696,19 @@ export const ReadOnly: Story = {
  */
 export const NoBooksSelected: Story = {
   decorators: [createDecorator({ scope: 'selectedBooks', selectedBookIds: [] })],
+};
+
+/**
+ * The current reference sits in extra material (a glossary), which the `Current book` and `Current
+ * chapter` scopes resolve to and Find cannot search. Both scopes are disabled in the scope selector
+ * with an explanation, and the results area shows a placeholder naming the two ways out — choose
+ * books to search, or move to a Scripture book — rather than the generic "select a book" wording,
+ * which would point at a picker that never offers extra material.
+ */
+export const CurrentReferenceInExtraMaterial: Story = {
+  decorators: [
+    createDecorator({ scope: 'book', verseRef: { book: 'GLO', chapterNum: 1, verseNum: 1 } }),
+  ],
 };
 
 /**

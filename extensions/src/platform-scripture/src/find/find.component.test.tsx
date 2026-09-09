@@ -416,8 +416,9 @@ const STRINGS = {
   '%webView_find_replace_readOnlyTooltip%':
     "This project is read-only, so replacements can't be made.",
   '%webView_find_previewOptions_toggle%': 'Preview style',
-  '%webView_find_extraMaterialNotSearchedScope%':
-    "Find doesn't search extra material, such as glossaries and front matter.",
+  '%webView_find_extraMaterialNotSearchedScope%': "Find doesn't search extra material.",
+  '%webView_find_extraMaterialNotSearchedScopeResults%':
+    "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
 };
 
 /** `buildProps` with the English string map swapped in, for the suites below. */
@@ -891,8 +892,10 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
 // hide.
 describe('Find — current reference in extra material', () => {
   const GLOSSARY_VERSE_REF: SerializedVerseRef = { book: 'GLO', chapterNum: 1, verseNum: 1 };
+  // The placeholder and the scope tooltip are separate strings: the placeholder has to name a way
+  // out, the tooltip only has to say why the option is unavailable.
   const EXTRA_MATERIAL_MESSAGE =
-    "Find doesn't search extra material, such as glossaries and front matter.";
+    "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.";
   // The scope selector's own strings stay stubbed to their keys — `buildLifecycleProps` swaps in
   // English only for Find's own strings.
   const BOOK_SCOPE_LABEL_KEY = '%webView_scope_selector_book%';
@@ -1002,5 +1005,52 @@ describe('Find — current reference in extra material', () => {
 
     expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeEnabled();
     expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeEnabled();
+  });
+
+  // `localizedStrings` is an open index signature, so an unrequested key reads as `undefined` with
+  // no compile error. Leaving the scopes enabled while the query gate still rejects them would be
+  // worse than showing a raw key, so the explanation falls back to the key rather than vanishing.
+  it('keeps the scopes disabled when the explanation string is missing', async () => {
+    const user = setupUser();
+    const stringsWithoutExplanation = { ...STRINGS };
+    delete stringsWithoutExplanation['%webView_find_extraMaterialNotSearchedScope%'];
+    render(
+      <Find
+        {...buildProps({
+          localizedStrings: stringsWithoutExplanation,
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeDisabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeDisabled();
+  });
+
+  // The results area carries the explanation, but it scrolls; the collapsed trigger must not read
+  // as an ordinary active scope on its own.
+  it('points the collapsed scope trigger at the placeholder that explains the block', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    // The placeholder's own id, which the trigger points at. Spelled out here rather than read off
+    // the rendered node so the test fails if the two sides ever stop referring to the same element.
+    const placeholderId = 'find-extra-material-placeholder';
+    expect(document.getElementById(placeholderId)).toHaveTextContent(EXTRA_MATERIAL_MESSAGE);
+    expect(document.querySelector(`[aria-describedby="${placeholderId}"]`)).toHaveTextContent(
+      'GLO',
+    );
   });
 });

@@ -174,6 +174,23 @@ export async function classifyPollAttempt(params: {
 }
 
 /**
+ * Whether `scope` searches a book that Find cannot address — the `book` and `chapter` scopes
+ * resolve to the current scripture reference's book, and that book being extra material is what
+ * makes them unsearchable. Only those two scopes are gated: `selectedBooks` searches an explicit
+ * list the book picker never offers extra material for, and `verse`/`selectedText` are not among
+ * the scopes Find makes available.
+ *
+ * Exported so the query gate ({@link isFindQueryValid}) and the results-area placeholder that
+ * explains it decide from one rule rather than two copies of it.
+ *
+ * TODO(PT-4414): Drop this rule once extra material can be opened and addressed.
+ */
+export function isScopeBlockedByExtraMaterial(scope: Scope, currentBookId: string): boolean {
+  if (scope !== 'book' && scope !== 'chapter') return false;
+  return isExtraMaterialBookId(currentBookId);
+}
+
+/**
  * Whether the current search term + scope/filters combination would actually run a search: false
  * for an empty term, false for the `selectedBooks` scope with no books selected, and false for the
  * `book`/`chapter` scopes while the current reference sits in extra material. Shared between
@@ -181,12 +198,11 @@ export async function classifyPollAttempt(params: {
  * silently diverge — they previously each hand-rolled this rule, and the harness's copy dropped the
  * empty-term check.
  *
- * The extra-material rule is the enforcement point for the `book`/`chapter` scopes, not merely a
- * mirror of the disabled scope options in the UI. `scope` is persisted per web view and the current
- * reference moves independently of it, so a user who chose `book` in a scripture book and then
- * navigated into extra material never touches a disabled control on the way into this state.
- *
- * TODO(PT-4414): Drop the extra-material rule once extra material can be opened and addressed.
+ * The extra-material rule (see {@link isScopeBlockedByExtraMaterial}) is the enforcement point for
+ * the `book`/`chapter` scopes, not merely a mirror of the disabled scope options in the UI. `scope`
+ * is persisted per web view and the current reference moves independently of it, so a user who
+ * chose `book` in a scripture book and then navigated into extra material never touches a disabled
+ * control on the way into this state.
  */
 export function isFindQueryValid(params: {
   searchTerm: string;
@@ -197,7 +213,7 @@ export function isFindQueryValid(params: {
 }): boolean {
   if (params.searchTerm.trim() === '') return false;
   if (params.scope === 'selectedBooks') return params.selectedBookIds.length > 0;
-  return !isExtraMaterialBookId(params.currentBookId);
+  return !isScopeBlockedByExtraMaterial(params.scope, params.currentBookId);
 }
 
 /** The decision {@link gateStartSearch} makes for a given attempt to start a search. */

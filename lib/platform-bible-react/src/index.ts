@@ -312,7 +312,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope } from './components/utils/scripture.util';
+export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

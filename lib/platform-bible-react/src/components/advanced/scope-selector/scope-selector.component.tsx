@@ -33,7 +33,7 @@ import {
   LocalizedStringValue,
   Section,
 } from 'platform-bible-utils';
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -139,7 +139,11 @@ interface ScopeSelectorProps {
   disabledSectionExplanations?: Partial<Record<Section, string>>;
   /**
    * Optional explanations, by scope, for why that scope cannot be chosen right now. A scope with an
-   * entry renders disabled with its explanation as a tooltip, in both variants.
+   * entry renders disabled, with its explanation surfaced in the way that variant can reach every
+   * user: the `'radio'` variant shows a tooltip on a focusable wrapper, and the `'dropdown'`
+   * variant renders the text inline under the option's label, because a disabled Radix menu item is
+   * not focusable and so cannot carry a tooltip. Keep explanations short enough to read in either
+   * place.
    *
    * Only for a scope that is genuinely unavailable in the CURRENT state — a scope the consumer
    * never offers at all belongs out of {@link ScopeSelectorProps.availableScopes} instead. Disabling
@@ -788,32 +792,45 @@ export function ScopeSelector({
               align="start"
             >
               <PopoverPortalContainerProvider container={dropdownContentEl}>
-                {simpleScopes.map(({ value, label, dropdownLabel, scrRefSuffix, id: scopeId }) => (
-                  <DropdownMenuItem
-                    key={scopeId}
-                    ref={assignScopeItemRef(value)}
-                    // Radix already blocks selection and marks the item `aria-disabled`; the title
-                    // carries the explanation, since a Tooltip inside DropdownMenuContent competes
-                    // with the menu for the same pointer and focus.
-                    disabled={!!disabledScopeExplanations?.[value]}
-                    title={disabledScopeExplanations?.[value]}
-                    // Match dialog-launcher items for visual consistency.
-                    // tw:ps-8 reserves space for the leading Check indicator.
-                    // data-[highlighted] styles trigger on Radix's hover/focus mapping
-                    // (D5: pointer hover normally fires data-highlighted; this makes the
-                    // tw:bg-accent highlight unambiguous).
-                    className="tw:relative tw:ps-8 data-[highlighted]:tw:bg-accent data-[highlighted]:tw:text-accent-foreground"
-                    onSelect={() => handleScopeChange(value)}
-                    data-selected={scope === value ? 'true' : undefined}
-                  >
-                    {scope === value && (
-                      <span className="tw:absolute tw:flex tw:h-3.5 tw:w-3.5 tw:items-center tw:justify-center tw:ltr:left-2 tw:rtl:right-2">
-                        <Check className="tw:h-4 tw:w-4" />
+                {simpleScopes.map(({ value, label, dropdownLabel, scrRefSuffix, id: scopeId }) => {
+                  const disabledExplanation = disabledScopeExplanations?.[value];
+                  return (
+                    <DropdownMenuItem
+                      key={scopeId}
+                      ref={assignScopeItemRef(value)}
+                      disabled={!!disabledExplanation}
+                      // Match dialog-launcher items for visual consistency.
+                      // tw:ps-8 reserves space for the leading Check indicator.
+                      // data-[highlighted] styles trigger on Radix's hover/focus mapping
+                      // (D5: pointer hover normally fires data-highlighted; this makes the
+                      // tw:bg-accent highlight unambiguous).
+                      className="tw:relative tw:ps-8 data-[highlighted]:tw:bg-accent data-[highlighted]:tw:text-accent-foreground"
+                      onSelect={() => handleScopeChange(value)}
+                      data-selected={scope === value ? 'true' : undefined}
+                    >
+                      {scope === value && (
+                        <span className="tw:absolute tw:flex tw:h-3.5 tw:w-3.5 tw:items-center tw:justify-center tw:ltr:left-2 tw:rtl:right-2">
+                          <Check className="tw:h-4 tw:w-4" />
+                        </span>
+                      )}
+                      {/* The explanation renders inline rather than as a tooltip or a `title`:
+                          Radix drops a disabled item out of the menu's roving focus, so anything
+                          that surfaces on hover or focus alone is unreachable for exactly the
+                          keyboard and screen-reader users who need it, and a Tooltip inside
+                          DropdownMenuContent competes with the menu for the same pointer. Inline
+                          text needs neither. Only a disabled scope carries it, so the menu keeps
+                          its normal density whenever nothing is unavailable. */}
+                      <span className="tw:flex tw:flex-col tw:gap-0.5">
+                        {renderScopeLabel(dropdownLabel ?? label, scrRefSuffix, isDropdownNarrow)}
+                        {disabledExplanation && (
+                          <span className="tw:text-xs tw:whitespace-normal tw:text-muted-foreground">
+                            {disabledExplanation}
+                          </span>
+                        )}
                       </span>
-                    )}
-                    {renderScopeLabel(dropdownLabel ?? label, scrRefSuffix, isDropdownNarrow)}
-                  </DropdownMenuItem>
-                ))}
+                    </DropdownMenuItem>
+                  );
+                })}
                 {(selectedBooksScope || rangeScope) && <DropdownMenuSeparator />}
                 {selectedBooksScope && (
                   <DropdownMenuItem
@@ -997,12 +1014,13 @@ export function ScopeSelector({
                   <Label htmlFor={scopeId}>{renderScopeLabel(label, scrRefSuffix)}</Label>
                 </div>
               );
-              // Every row is wrapped once the consumer opts into scope explanations at all, not only
-              // the rows that currently have one: a consumer supplies an explanation exactly when
-              // the scope becomes unavailable, so wrapping per-entry would swap the element type at
-              // this position on that flip, remounting the radio and dropping keyboard focus. The
-              // wrapper is inert while `disabled` is false.
-              if (!disabledScopeExplanations) return <Fragment key={scopeId}>{row}</Fragment>;
+              // Every row is wrapped unconditionally, not only the rows that currently have an
+              // explanation: a consumer supplies one exactly when the scope becomes unavailable, so
+              // wrapping only those rows would swap the element type at this position on that flip,
+              // remounting the radio and dropping keyboard focus. Wrapping only when the prop is
+              // supplied has the same defect one level up, since a consumer that has nothing to
+              // disable right now passes nothing at all. The wrapper is inert while `disabled` is
+              // false.
               return (
                 <DisabledActionTooltip
                   key={scopeId}

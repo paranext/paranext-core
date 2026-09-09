@@ -13,6 +13,7 @@ import {
   gateStartSearch,
   isDifferentProjectSelection,
   isFindQueryValid,
+  isScopeBlockedByExtraMaterial,
   isSimpleInterfaceMode,
   nextPollMissState,
   prunePresentBookIds,
@@ -593,6 +594,44 @@ describe('isFindQueryValid', () => {
       }),
     ).toBe(true);
   });
+
+  // The gate names `book`/`chapter` rather than "anything but selectedBooks", so the rest of the
+  // Scope union stays valid in extra material and adding one of them to Find's availableScopes
+  // cannot silently inherit a rule that was never meant for it.
+  it.each(['verse', 'selectedText'] as const)(
+    'leaves the %s scope valid while the current reference is in extra material',
+    (scope) => {
+      expect(
+        isFindQueryValid({ searchTerm: 'God', scope, selectedBookIds: [], currentBookId: 'XXB' }),
+      ).toBe(true);
+    },
+  );
+});
+
+describe('isScopeBlockedByExtraMaterial', () => {
+  it.each(['book', 'chapter'] as const)(
+    'blocks the %s scope, which resolves to the current reference book, in extra material',
+    (scope) => {
+      expect(isScopeBlockedByExtraMaterial(scope, 'XXB')).toBe(true);
+      expect(isScopeBlockedByExtraMaterial(scope, 'GLO')).toBe(true);
+    },
+  );
+
+  it.each(['book', 'chapter'] as const)(
+    'leaves the %s scope unblocked in a scripture book',
+    (scope) => {
+      expect(isScopeBlockedByExtraMaterial(scope, 'GEN')).toBe(false);
+      expect(isScopeBlockedByExtraMaterial(scope, 'REV')).toBe(false);
+    },
+  );
+
+  it.each(['selectedBooks', 'verse', 'selectedText'] as const)(
+    'never blocks the %s scope, which does not resolve to the current reference book list',
+    (scope) => {
+      expect(isScopeBlockedByExtraMaterial(scope, 'XXB')).toBe(false);
+      expect(isScopeBlockedByExtraMaterial(scope, 'GEN')).toBe(false);
+    },
+  );
 });
 
 describe('gateStartSearch', () => {
