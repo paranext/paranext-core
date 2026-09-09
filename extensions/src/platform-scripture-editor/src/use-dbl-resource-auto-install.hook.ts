@@ -38,21 +38,19 @@ export type DblResourceAutoInstallState = {
  * Resource (Bible Texts / Commentaries) panels: without it a matched-but-uninstalled resource would
  * sit on an infinite spinner because nothing else triggers the install at display time.
  *
- * The install is fire-and-forget; the caller re-resolves its resource list once the install
- * completes so the resource flips to installed and renders.
+ * The install is fire-and-forget; the caller re-resolves its resource list once it completes.
  *
- * An install that RESOLVES is never fired again for the same uid, because installing a resource
- * already on disk succeeds as a no-op: a uid still uninstalled after a successful install means the
- * caller's list is not converging, and re-firing would loop forever. That uid gets the failed state
- * instead, whose retry re-reads the list and so can reach a different outcome. See
- * `adr-dbl-install-is-idempotent`.
+ * An install that RESOLVES is never fired again for the same uid. Installing a resource already on
+ * disk succeeds as a no-op, so a uid still uninstalled afterwards means the caller's list is not
+ * converging — and since every success asks for a re-read, re-firing would loop. That uid gets the
+ * failed state instead, whose retry re-reads the list. See `adr-dbl-install-is-idempotent`.
  *
  * @param dblEntryUidToInstall Uid of the matched-but-uninstalled resource, or `undefined` when
  *   nothing needs installing (already installed, not a DBL resource, or nothing selected).
  * @param installResource Installs a resource by uid; rejects on failure. Must keep a stable
- *   identity across renders (`useInstallDblResource` does) — a new identity reads as a new
- *   installer and re-enables the auto-install, which is what lets the real install run once the
- *   data provider replaces the no-op one.
+ *   identity across renders (`useInstallDblResource` does): a new identity reads as a new installer
+ *   and re-enables the auto-install, which is how the real install runs once the data provider
+ *   replaces the no-op one.
  * @param options See {@link DblResourceAutoInstallOptions}.
  * @returns See {@link DblResourceAutoInstallState}.
  */
@@ -63,13 +61,10 @@ export function useDblResourceAutoInstall(
 ): DblResourceAutoInstallState {
   const { skipAutoInstall = false, refreshResourceList } = options;
 
-  // uid whose install we saw fail, so we can surface a recovery state instead of spinning forever
-  // and avoid retrying the same failing uid in a loop.
+  // uid whose install we saw fail, so we surface a recovery state instead of spinning forever.
   const [failedInstallUid, setFailedInstallUid] = useState<string | undefined>(undefined);
 
-  // The last uid whose install resolved, paired with the `installResource` that ran it. Recorded on
-  // resolution rather than on the call, so an attempt still in flight does not count; paired with
-  // the installer so the no-op one returned before the data provider resolves does not either.
+  // Set on resolution, not on the call, so an attempt still in flight does not count as one.
   const resolvedAttemptRef = useRef<
     { uid: string; install: (dblEntryUid: string) => Promise<void> } | undefined
   >(undefined);
@@ -78,10 +73,10 @@ export function useDblResourceAutoInstall(
     if (dblEntryUidToInstall === undefined) return;
     // A manual pick already installs the resource itself; don't fire a duplicate install.
     if (skipAutoInstall) return;
-    // Skip a uid we already saw fail (prevents a retry loop); retryInstall clears failedInstallUid.
+    // Skip a uid we already saw fail (prevents a retry loop).
     if (dblEntryUidToInstall === failedInstallUid) return;
-    // Installing again cannot help: this uid's install already succeeded and it is still being
-    // asked for, so only a re-read of the caller's list can change the answer. Offer the retry.
+    // Already installed this one and it is still being asked for: only a re-read can change the
+    // answer now, so offer the retry rather than looping.
     if (
       resolvedAttemptRef.current?.uid === dblEntryUidToInstall &&
       resolvedAttemptRef.current.install === installResource
@@ -101,16 +96,14 @@ export function useDblResourceAutoInstall(
   const installFailed =
     dblEntryUidToInstall !== undefined && dblEntryUidToInstall === failedInstallUid;
 
-  // Clears the resolved-attempt record too, so the uid is genuinely attempted again rather than
-  // falling straight back into the "already installed this" branch above.
+  // Clears the resolved-attempt record too, or the uid falls straight back into the branch above.
   const clearInstallFailure = useCallback(() => {
     resolvedAttemptRef.current = undefined;
     setFailedInstallUid(undefined);
   }, []);
 
-  // The refresh is started, not awaited: it lands as a new resource list a render or two later. The
-  // install re-fired in between runs against the old list, which is harmless because installing an
-  // already-installed resource is a no-op success.
+  // The refresh is started, not awaited, so the install re-fired in between runs against the old
+  // list — harmless, because installing an already-installed resource is a no-op success.
   const retryInstall = useCallback(() => {
     refreshResourceList?.();
     clearInstallFailure();
