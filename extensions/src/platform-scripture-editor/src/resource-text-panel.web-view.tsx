@@ -375,11 +375,17 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
   // pick is in flight (it installs the resource itself).
   const dblEntryUidToInstall = dblMatch && !dblMatch.installed ? dblMatch.dblEntryUid : undefined;
-  const { isInstalling, installFailed, retryInstall, clearInstallFailure, markInstallFailed } =
-    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
-      skipAutoInstall: isSelecting,
-      refreshResourceList: refetchCatalog,
-    });
+  const {
+    isInstalling,
+    installFailed,
+    installFailureReason,
+    retryInstall,
+    clearInstallFailure,
+    markInstallFailed,
+  } = useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
+    skipAutoInstall: isSelecting,
+    refreshResourceList: refetchCatalog,
+  });
 
   // Only used to add a "check your connection" hint to the install-failed message when offline.
   const isOnline = useIsOnline();
@@ -832,7 +838,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
       <PanelRetryableErrorView
         message={
           localizedStrings[
-            isOnline
+            // The connection hint only fits a download that actually failed; see the model-text
+            // panel for the same guard.
+            isOnline || installFailureReason === 'listNotConverging'
               ? '%webView_resourcePanel_installFailed%'
               : '%webView_resourcePanel_installFailedOffline%'
           ]

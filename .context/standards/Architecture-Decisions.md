@@ -430,9 +430,13 @@ step, no automation. Just a record.
   downgrade is what reflects an uninstall in the Get Resources dialog before the next authoritative
   catalog fetch. *Block every `getCachedResources` on the reconciliation* — rejected: it can wait
   many seconds while the C# factory initializes, and a listing surface would rather show the
-  previous snapshot; the wait is opt-in per call (`waitForInstalledFlagsSync`), taken by the panels
-  that act on the flags and not by the dialogs that only list, and bounded so a slow reconciliation
-  degrades to the previous snapshot instead of failing the command on the network timeout.
+  previous snapshot; the wait is opt-in per call (`waitForInstalledFlagsSync`), taken by every
+  caller that ACTS on the flags (both panels, the text grid, the resource picker, and the Get
+  Resources dialog after a download) and skipped by the ones that only display them, and bounded so
+  a slow reconciliation degrades to the previous snapshot instead of failing the command on the
+  network timeout. Reconciliation applies only to a CACHED catalog: a freshly fetched one carries
+  flags C# read live, and checking those against a mid-registration project list would downgrade and
+  persist them — manufacturing the very staleness this entry is about.
 - **Consequences:** A panel whose catalog is stale now installs (as a no-op), re-reads, and renders,
   with no remount. Callers can no longer distinguish "I installed it" from "it was already there" —
   neither one needs to. **Revisit** if a caller ever needs that distinction (return the outcome

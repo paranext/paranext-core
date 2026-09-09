@@ -110,6 +110,13 @@ const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
 const INSTALLED_FLAGS_SYNC_WAIT_MS = 5000;
 
 /**
+ * How long after this process started a project still missing from the metadata might simply not
+ * have registered yet. Mirrors the platform's own grace period for exactly this question
+ * (`LOAD_TIME_GRACE_PERIOD_MS` in `project-lookup.service-model.ts`, which is not exported).
+ */
+const PROJECT_REGISTRATION_GRACE_PERIOD_MS = 30 * 1000;
+
+/**
  * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
  *
  * The wait is what makes a newly-installed resource visible: a read that resolves before the
@@ -157,7 +164,14 @@ async function syncInstalledFlags(): Promise<void> {
     await fetchMutex.runExclusive(async () => {
       if (cachedResources === undefined) return;
 
-      const newCachedResources = reconcileInstalledFlags(cachedResources, localProjectMetadata);
+      // Past the grace period, a project missing from the list really is missing — that is what
+      // lets an uninstall come back through. Inside it, absence is just as likely to mean "not
+      // registered yet", and acting on it is what poisons the cache.
+      const newCachedResources = reconcileInstalledFlags(
+        cachedResources,
+        localProjectMetadata,
+        performance.now() >= PROJECT_REGISTRATION_GRACE_PERIOD_MS,
+      );
       if (!newCachedResources) return;
 
       cachedResources = newCachedResources;
@@ -190,14 +204,20 @@ function ensureInstalledFlagsSynced(): Promise<void> {
 }
 
 /**
- * The catalog as it currently stands: the in-memory cache when there is one, otherwise a fetch.
- * Says nothing about whether the `installed` flags on it have been reconciled against the local
- * project list — that is `getCachedResources`' job.
+ * The catalog as it currently stands, and whether it came from the cache.
+ *
+ * The distinction decides whether reconciling is even appropriate: a catalog just fetched from C#
+ * carries `installed` flags read live from `ScrTextCollection`, so it is the authority the local
+ * reconciliation approximates — never something to correct. Only a cached snapshot can be stale.
  */
-async function getCatalogFromCacheOrFetch(): Promise<DblResourceCatalog> {
-  if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
+async function getCatalogFromCacheOrFetch(): Promise<{
+  catalog: DblResourceCatalog;
+  isFromCache: boolean;
+}> {
+  if (cachedResources !== undefined)
+    return { catalog: { status: 'available', resources: cachedResources }, isFromCache: true };
 
-  return fetchMutex.runExclusive(async () => {
+  const catalog = await fetchMutex.runExclusive(async (): Promise<DblResourceCatalog> => {
     if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
     try {
       // Awaited deliberately: returning the promise un-awaited from inside this `try` would let a
@@ -211,18 +231,22 @@ async function getCatalogFromCacheOrFetch(): Promise<DblResourceCatalog> {
       throw e;
     }
   });
+  return { catalog, isFromCache: false };
 }
 
 async function getCachedResources(
   options?: GetCachedResourcesOptions,
 ): Promise<DblResourceCatalog> {
-  const catalog = await getCatalogFromCacheOrFetch();
-  if (catalog.status !== 'available') return catalog;
+  const { catalog, isFromCache } = await getCatalogFromCacheOrFetch();
+  // A fresh fetch is already authoritative, and reconciling it would be actively harmful: the
+  // project list it would be checked against can be mid-registration, so rows C# just confirmed
+  // installed would be rewritten to not-installed AND persisted — manufacturing the stale flag this
+  // whole mechanism exists to survive.
+  if (catalog.status !== 'available' || !isFromCache) return catalog;
 
-  // The sync corrects a stale `installed` flag: a row cached before the C# project factory
-  // registered its projects reads not-installed even though the resource is on disk. Callers that
-  // only list resources let it run in the background and show this snapshot; callers that act on
-  // the flags wait for it (see `GetCachedResourcesOptions`).
+  // Only a cached snapshot can be stale: a row cached before the C# project factory registered its
+  // projects reads not-installed even though the resource is on disk. Callers that act on the flags
+  // wait for the correction; the rest show this snapshot (see `GetCachedResourcesOptions`).
   const syncPromise = ensureInstalledFlagsSynced();
   if (!options?.waitForInstalledFlagsSync) return catalog;
 
@@ -248,11 +272,12 @@ async function getCachedResources(
  */
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
-    // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, so wait
-    // for the installed-flag sync rather than reading the snapshot that precedes it — otherwise a
-    // resource already on disk is emitted a second time here as a synthetic non-DBL entry instead
-    // of being excluded as the DBL entry it is.
-    await getCachedResources({ waitForInstalledFlagsSync: true });
+    await getCachedResources();
+    // Awaited without a bound, unlike `getCachedResources`' opt-in wait. The exclusion below is
+    // only as good as the `installed`/`projectId` flags, and giving up early does not degrade it —
+    // it duplicates rows, emitting a resource already on disk as a synthetic non-DBL entry
+    // alongside its real DBL one. Returning late beats returning double.
+    await ensureInstalledFlagsSynced();
     // An absent catalog means one has never been fetched on this profile (a fetched catalog is
     // persisted and reloaded on activation), so there is nothing for these projects to duplicate
     // and no reason to withhold them. Suppressing them here would hide side-loaded resources from

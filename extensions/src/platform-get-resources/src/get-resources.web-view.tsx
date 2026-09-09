@@ -125,8 +125,21 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       const actionFunction = action === 'install' ? installResource : uninstallResource;
 
       return actionFunction(dblEntryUid)
-        .then(() => {
-          // Trigger a refetch so the resource list reflects the new installed state.
+        .then(async () => {
+          // Reconcile before re-reading. The in-progress row clears only once the list agrees with
+          // what was asked for, and an install that succeeded as a no-op (the resource was already
+          // on disk, the catalog just said otherwise) changes nothing for the refetch to notice —
+          // so without this the row spins forever. Swallowed on failure: the action itself already
+          // succeeded, and letting this reach the caller would report it to the user as a failure.
+          try {
+            await papi.commands.sendCommand('platformGetResources.getCachedResources', {
+              waitForInstalledFlagsSync: true,
+            });
+          } catch (error) {
+            logger.debug(
+              `Could not refresh installed flags after ${action}: ${getErrorMessage(error)}`,
+            );
+          }
           refetchResources();
           return undefined;
         })

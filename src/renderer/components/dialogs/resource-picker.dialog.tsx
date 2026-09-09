@@ -45,7 +45,15 @@ function ResourcePickerDialogWrapper({
     hasSettled: hasDblSettled,
     refetch: refetchDblCatalog,
   } = useRetryablePromise(
-    useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(
+      async () =>
+        // The picker's selection path acts on `installed` (`selectTextConnection` installs only
+        // when the row says it is missing), so it needs the reconciled flags.
+        sendCommand('platformGetResources.getCachedResources', {
+          waitForInstalledFlagsSync: true,
+        }),
+      [],
+    ),
   );
 
   // Locally-installed non-DBL resources (e.g. VULGP83, TNN, TND, HBK) that are not in the DBL

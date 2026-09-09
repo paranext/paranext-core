@@ -209,11 +209,17 @@ export function ModelTextPanel({
   // without it the panel spins forever with the picker unreachable. Skipped while a manual pick is
   // in flight (it installs the resource itself).
   const dblEntryUidToInstall = match && !match.installed ? match.dblEntryUid : undefined;
-  const { isInstalling, installFailed, retryInstall, clearInstallFailure, markInstallFailed } =
-    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
-      skipAutoInstall: isSelecting,
-      refreshResourceList: onRetryCatalog,
-    });
+  const {
+    isInstalling,
+    installFailed,
+    installFailureReason,
+    retryInstall,
+    clearInstallFailure,
+    markInstallFailed,
+  } = useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
+    skipAutoInstall: isSelecting,
+    refreshResourceList: onRetryCatalog,
+  });
 
   // Only used to add a "check your connection" hint to the install-failed message when the machine
   // is definitely offline (the common cause of a failed download on first run).
@@ -553,7 +559,10 @@ export function ModelTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          isOnline
+          // The connection hint only fits a download that actually failed. When the install
+          // succeeded and the catalog simply has not caught up, the network is not the problem and
+          // saying so would send the user off fixing the wrong thing.
+          isOnline || installFailureReason === 'listNotConverging'
             ? '%webView_modelTextPanel_installFailed%'
             : '%webView_modelTextPanel_installFailedOffline%',
         )}

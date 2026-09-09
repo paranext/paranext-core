@@ -10,7 +10,9 @@ declare module 'platform-get-resources' {
 
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
-     * Installs or updates a DBL resource to the local filesystem
+     * Installs or updates a DBL resource to the local filesystem. Idempotent: a resource already
+     * present and up to date resolves without doing anything, so a caller whose catalog wrongly
+     * says "not installed" gets a success it can act on rather than an error no retry can clear.
      *
      * @param uid DBL Entry UID that is used to identify the resource
      */
@@ -119,8 +121,10 @@ declare module 'papi-shared-types' {
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
      * existing cached data.
      *
-     * The catalog's `installed` flags are reconciled against the local project list on every call,
-     * in the background unless `options` asks otherwise.
+     * When a cached catalog is returned, its `installed` flags are reconciled against the local
+     * project list — in the background unless `options` asks otherwise. A freshly fetched catalog
+     * is already authoritative and is left alone, and an `unavailable` result has nothing to
+     * reconcile.
      *
      * @param options Options for this call; see {@link GetCachedResourcesOptions}.
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.

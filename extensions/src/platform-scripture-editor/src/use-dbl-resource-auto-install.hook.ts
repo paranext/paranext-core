@@ -14,12 +14,24 @@ export type DblResourceAutoInstallOptions = {
   refreshResourceList?: () => void;
 };
 
+/**
+ * Why the resource still is not usable.
+ *
+ * - `installRejected` — the install itself failed. Connectivity is a plausible cause.
+ * - `listNotConverging` — the install SUCCEEDED (possibly as a no-op, because the resource was
+ *   already on disk) and the caller's list still reports it uninstalled. Nothing is wrong with the
+ *   download, so advice about the network would be actively misleading.
+ */
+export type DblResourceInstallFailureReason = 'installRejected' | 'listNotConverging';
+
 /** What {@link useDblResourceAutoInstall} reports and offers. */
 export type DblResourceAutoInstallState = {
   /** An attempt is in flight or pending. */
   isInstalling: boolean;
   /** The last attempt for this uid failed — show a recovery affordance. */
   installFailed: boolean;
+  /** Why, when `installFailed`; `undefined` otherwise. Drives how the failure is explained. */
+  installFailureReason: DblResourceInstallFailureReason | undefined;
   /** Refreshes the resource list and re-attempts the uid. Wire this to the recovery affordance. */
   retryInstall: () => void;
   /** Drops the failed state without retrying, for a caller starting its own fresh attempt. */
@@ -62,7 +74,10 @@ export function useDblResourceAutoInstall(
   const { skipAutoInstall = false, refreshResourceList } = options;
 
   // uid whose install we saw fail, so we surface a recovery state instead of spinning forever.
-  const [failedInstallUid, setFailedInstallUid] = useState<string | undefined>(undefined);
+  const [failedInstall, setFailedInstall] = useState<
+    { uid: string; reason: DblResourceInstallFailureReason } | undefined
+  >(undefined);
+  const failedInstallUid = failedInstall?.uid;
 
   // Set on resolution, not on the call, so an attempt still in flight does not count as one.
   const resolvedAttemptRef = useRef<
@@ -81,7 +96,7 @@ export function useDblResourceAutoInstall(
       resolvedAttemptRef.current?.uid === dblEntryUidToInstall &&
       resolvedAttemptRef.current.install === installResource
     ) {
-      setFailedInstallUid(dblEntryUidToInstall);
+      setFailedInstall({ uid: dblEntryUidToInstall, reason: 'listNotConverging' });
       return;
     }
     // An async function rather than `.then`, so a rejection skips the record and lands in the one
@@ -90,7 +105,9 @@ export function useDblResourceAutoInstall(
       await installResource(dblEntryUidToInstall);
       resolvedAttemptRef.current = { uid: dblEntryUidToInstall, install: installResource };
     };
-    runInstall().catch(() => setFailedInstallUid(dblEntryUidToInstall));
+    runInstall().catch(() =>
+      setFailedInstall({ uid: dblEntryUidToInstall, reason: 'installRejected' }),
+    );
   }, [dblEntryUidToInstall, installResource, failedInstallUid, skipAutoInstall]);
 
   const installFailed =
@@ -99,7 +116,7 @@ export function useDblResourceAutoInstall(
   // Clears the resolved-attempt record too, or the uid falls straight back into the branch above.
   const clearInstallFailure = useCallback(() => {
     resolvedAttemptRef.current = undefined;
-    setFailedInstallUid(undefined);
+    setFailedInstall(undefined);
   }, []);
 
   // The refresh is started, not awaited, so the install re-fired in between runs against the old
@@ -110,7 +127,7 @@ export function useDblResourceAutoInstall(
   }, [refreshResourceList, clearInstallFailure]);
 
   const markInstallFailed = useCallback(
-    (dblEntryUid: string) => setFailedInstallUid(dblEntryUid),
+    (dblEntryUid: string) => setFailedInstall({ uid: dblEntryUid, reason: 'installRejected' }),
     [],
   );
 
@@ -118,6 +135,7 @@ export function useDblResourceAutoInstall(
     // Once installed, `dblEntryUidToInstall` clears, so this drops to false on its own.
     isInstalling: dblEntryUidToInstall !== undefined && !installFailed,
     installFailed,
+    installFailureReason: installFailed ? failedInstall?.reason : undefined,
     retryInstall,
     clearInstallFailure,
     markInstallFailed,

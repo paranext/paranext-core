@@ -174,6 +174,29 @@ describe('useDblResourceAutoInstall', () => {
     await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
   });
 
+  it('distinguishes a rejected install from a list that will not converge', async () => {
+    // The two need different explanations: a rejected download may well be a connection problem,
+    // while a successful one whose flag never flips is not — telling that user to check their
+    // connection sends them off fixing the wrong thing.
+    const failing = failInstall();
+    const { result: rejected } = renderHook(() => useDblResourceAutoInstall('uid-a', failing));
+    await waitFor(() => expect(rejected.current.installFailed).toBe(true));
+    expect(rejected.current.installFailureReason).toBe('installRejected');
+
+    const succeeding = okInstall();
+    const initialProps: { uid: string | undefined } = { uid: 'uid-b' };
+    const { result: stale, rerender } = renderHook(
+      ({ uid }: { uid: string | undefined }) => useDblResourceAutoInstall(uid, succeeding),
+      { initialProps },
+    );
+    await waitFor(() => expect(succeeding).toHaveBeenCalledTimes(1));
+    rerender({ uid: undefined });
+    rerender({ uid: 'uid-b' });
+
+    await waitFor(() => expect(stale.current.installFailed).toBe(true));
+    expect(stale.current.installFailureReason).toBe('listNotConverging');
+  });
+
   it('runs the real install after the no-op one that precedes the data provider', async () => {
     // Until the DBL provider resolves, `useInstallDblResource` returns a callback that resolves
     // without installing, then a new identity once it does. That first resolve must not count as

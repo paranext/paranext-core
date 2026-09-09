@@ -249,7 +249,9 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// Try to install DBL resource with specified DBL id
+    /// Try to install DBL resource with specified DBL id. Installing a resource that is already
+    /// present and up to date succeeds without doing anything, so callers working from a stale
+    /// catalog are not stranded on an error no retry can clear.
     /// </summary>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
     private Task InstallDblResource(string DBLEntryUid) =>
@@ -280,12 +282,16 @@ internal class DblResourcesDataProvider(
         // success, not a failure. Reporting it as an error strands a caller whose catalog snapshot
         // says the resource is missing when it is in fact on disk: the install it fires can only
         // ever come back as the same error, so the panel it feeds shows an install-failed state
-        // that no retry can leave. Nothing changed on disk, so no update event is sent either.
+        // that no retry can leave.
         if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
         {
             Console.WriteLine(
                 $"DBL resource {DBLEntryUid} is already installed and up to date. Installation skipped."
             );
+            // Nothing changed on disk, but the caller asked because its own view disagrees. Nudging
+            // the project-list consumers is what lets that view catch up; staying silent leaves it
+            // to guess when to look again.
+            paratextProjects.NotifyProjectsChanged();
             return;
         }
 
