@@ -165,12 +165,21 @@ and Replace all keep working exactly as they do today.
   Reading `workingStack[i].parent` inside the callback is safe: the walk mutates `StackItem.index`
   and pushes/pops the array (`:687, 705-728`) but never reassigns `parent`.
 - **Advance `lastIndex` past a zero-length match.** The existing loop discards empty matches without
-  advancing (`:1747`, `:1803`), which is unreachable today because every whitespace run compiles to
-  `+?` and the overall pattern always requires at least one character. Making runs zero-or-more makes
-  it reachable: a whitespace-only query produces a pattern that matches the empty string, `exec`
-  leaves `lastIndex` at 0, and the find job spins forever in the extension host with no timeout.
-  Verified in node. Guard both ends — advance on a zero-length match here, and reject a
-  whitespace-only search string in the PDPE, whose only current validation is emptiness (`:353`).
+  advancing (`:1747`, `:1803`). `search()` is published API, so a caller-supplied regex is not
+  guaranteed to require at least one character — a pattern like `/(?<ws0>)/dg`, whose group can never
+  match real characters, matches the empty string at every position — and without this advance `exec`
+  would leave `lastIndex` unchanged and spin forever. This is general defensive code for the API
+  surface, independent of how any particular caller's pattern is built.
+
+  Find's own `buildSearchRegex` does not reach this hazard through a whitespace-only query: only
+  _interior_ whitespace runs are compiled as optional groups, and a query made entirely of whitespace
+  has no interior run (there is no query character on either side of it), so its compiled pattern
+  keeps the existing required, one-or-more form and still cannot match the empty string. For that
+  reason `beginFindJob` adds no whitespace-only rejection beyond its existing emptiness check: the
+  `lastIndex` guard above already covers the general case, and rejecting a whitespace-only string
+  specifically would also surface an error toast while the user is still typing, since Find
+  auto-searches on a debounce.
+
 - Add a `UsjSearchOptions` field gating the filter. When set, reject a match if any group carrying
   the shared prefix matched zero characters at a non-boundary position, and resume `exec` from
   `match.index + 1`. **The rewind applies only to rejected matches**; applying it to accepted ones
@@ -187,11 +196,13 @@ detected` (`platform-scripture-finder-pdpe.model.ts:578-585`).
 
 ### `extensions/src/platform-scripture/src/find/find.utils.ts` — `buildSearchRegex`
 
-- In the non-regex path, emit each whitespace run as a uniquely-named group with the shared prefix,
-  allowed to match zero characters. The group body keeps today's option-driven meaning — the
-  collapsing `+?` pattern when _Ignore whitespace differences_ is on, the literal escaped run when
-  off — and the existing `~`-as-NBSP handling (`allowInvisibleCharacters`) moves inside the group
-  unchanged.
+- In the non-regex path, emit each **interior** whitespace run — one with a query character on both
+  sides — as a uniquely-named group with the shared prefix, allowed to match zero characters. A
+  leading, trailing, or whitespace-only run keeps its existing required (one-or-more) form instead;
+  see [Matching semantics](#matching-semantics) for why. The group body keeps today's option-driven
+  meaning — the collapsing `+?` pattern when _Ignore whitespace differences_ is on, the literal
+  escaped run when off — and the existing `~`-as-NBSP handling (`allowInvisibleCharacters`) moves
+  inside the group unchanged.
 - Emit the `d` flag only when groups were emitted. The `useRegex` branch is not touched.
 
 ### `extensions/src/platform-scripture/src/project-data-provider/platform-scripture-finder-pdpe.model.ts`
@@ -201,7 +212,9 @@ detected` (`platform-scripture-finder-pdpe.model.ts:578-585`).
   any named group in a user's own pattern that happened to carry the prefix, and would rebuild their
   regex to add `d` — precisely what the existing code avoids for the `u` flag, "to avoid silently
   breaking user-supplied patterns" (`find.utils.ts:797-800`).
-- Reject a whitespace-only search string, per the hang guard above.
+- No additional validation is added here for a whitespace-only search string; `beginFindJob`'s
+  existing emptiness check is unchanged. See the `search()` section above for why the hang guard that
+  motivates PDPE-side validation for a general caller doesn't apply to Find's own compiled pattern.
 
 ### Generated output
 

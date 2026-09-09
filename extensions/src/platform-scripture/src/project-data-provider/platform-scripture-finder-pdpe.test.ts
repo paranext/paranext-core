@@ -2093,9 +2093,10 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
     it('refuses to replace a match that spans a paragraph boundary while structure is protected', async () => {
       // Verse 1 ends its paragraph with "Abraham." and verse 2 opens a new paragraph with "Abraham
-      // was" — the shape of a block-boundary match Find can now report. The range below starts at
-      // the end of verse 1's text and ends partway into verse 2's text, so the removed span crosses
-      // the intervening \p and \v 2 markers without also removing any of the surrounding words.
+      // was" — the shape of a block-boundary match Find reports. The range below starts at the end
+      // of verse 1's text and ends at the end of the word "Abraham" in verse 2's text, so the
+      // removed span crosses the intervening \p and \v 2 markers without also removing any of the
+      // surrounding words.
       const TWO_PARAGRAPH_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
 <usx version="3.0">
   <book code="MAT" style="id">Matthew</book>
@@ -2116,7 +2117,8 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
           // offset 24 = 5 (start of verse 1's text) + 19 (length of "The son of Abraham.") — the end
           // of verse 1's text, so none of verse 1's words are part of the removed span.
           start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 24 },
-          // offset 12 = 5 (start of verse 2's text) + 7 (length of "Abraham") — partway into verse 2.
+          // offset 12 = 5 (start of verse 2's text) + 7 (length of "Abraham") — the end of the word
+          // "Abraham" in verse 2, so the full word is removed but "was the father." is not.
           end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
         },
       ];
