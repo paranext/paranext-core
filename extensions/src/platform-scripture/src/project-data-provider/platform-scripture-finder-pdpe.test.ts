@@ -2090,6 +2090,40 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       // simple-mode default is locked, so effective protection is true.
       await expect(engine.getIsStructureProtected()).resolves.toBe(true);
     });
+
+    it('refuses to replace a match that spans a paragraph boundary while structure is protected', async () => {
+      // Verse 1 ends its paragraph with "Abraham." and verse 2 opens a new paragraph with "Abraham
+      // was" — the shape of a block-boundary match Find can now report. The range below starts at
+      // the end of verse 1's text and ends partway into verse 2's text, so the removed span crosses
+      // the intervening \p and \v 2 markers without also removing any of the surrounding words.
+      const TWO_PARAGRAPH_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>The son of Abraham.<verse eid="MAT 1:1"/>
+  </para>
+  <para style="p">
+    <verse number="2" style="v" sid="MAT 1:2"/>Abraham was the father.<verse eid="MAT 1:2"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+      const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
+      );
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          // offset 24 = 5 (start of verse 1's text) + 19 (length of "The son of Abraham.") — the end
+          // of verse 1's text, so none of verse 1's words are part of the removed span.
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 24 },
+          // offset 12 = 5 (start of verse 2's text) + 7 (length of "Abraham") — partway into verse 2.
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
+        },
+      ];
+      await expect(boundaryEngine.replace(ranges, 'replaced')).rejects.toThrow(
+        STRUCTURE_PROTECTED_ERROR,
+      );
+    });
   });
 });
 

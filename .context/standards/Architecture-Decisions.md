@@ -608,6 +608,53 @@ step, no automation. Just a record.
   `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
   precisely because that path is not readable from the repo.)
 
+## adr-find-block-boundary-whitespace: Find tolerates a whitespace gap only at block boundaries, never mid-paragraph
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** `UsjReaderWriter.search` builds the text it searches by concatenating every USJ text
+  node with no separator, and paragraph-final whitespace is stripped during the USFM→USX conversion,
+  so a phrase copied out of the editor across a paragraph, table, or sidebar break (e.g. `of Abraham.
+  Abraham became`, which the editor renders on two lines) has no space to match in the concatenated
+  text and returns no results. The bundled WEB text reproduces this at nearly every paragraph
+  boundary, so the gap is common, not a corner case.
+- **Decision:** A whitespace run in the query may match zero characters, but only at a **break
+  boundary** — a point where two adjacent text chunks' nearest block-level ancestors differ by
+  identity. The block-level set is `para`, `table`, `row`, `cell`, `sidebar`. Three kinds of boundary
+  are deliberately excluded from that set: **`char`-marker** boundaries (e.g. `the ` + `LORD` +
+  ` said`) render continuously and already carry their real whitespace inside a chunk; **`note`**
+  boundaries, because a note nests inside a `para` in USJ, so treating it as block-level would fire
+  on entering and leaving a note the editor renders as continuous flowing text; and **`chapter`**,
+  which carries no `content` and so can never be a text node's ancestor in the first place. Mid-
+  paragraph matching and regex mode are both unchanged — the tolerance applies only at the boundary
+  positions computed above, never to an ordinary run of whitespace inside one paragraph.
+- **Alternatives:**
+  - **Sentinel character in the searched text** (insert a synthetic marker at every break boundary
+    and let query whitespace match it). Rejected: every index in the search text's index map would
+    have to account for synthetic characters, matches starting or ending on a sentinel would need
+    trimming, and regex mode would change behavior for everyone (e.g. `.` matching the sentinel) —
+    more blast radius for the same user-visible result than filtering matches by boundary position
+    after the fact.
+  - **Global whitespace looseness** (query whitespace always optional, independent of position).
+    Rejected: it produces false positives mid-paragraph, which is the exact behavior a prior PT-3609
+    comment flagged as unexpected.
+  - **Filter in the Find PDPE** instead of in `UsjReaderWriter.search`. Rejected: it would expose
+    regex-match plumbing (capture groups, `d`-flag indices) through a published API just to apply a
+    policy that `search()` already has the natural seam for, alongside its existing
+    `markerStylesToInclude` and `normalizationForm` options.
+- **Consequences:** Because paragraph-final whitespace is stripped in conversion, boundary-spanning
+  matches become available at nearly every paragraph boundary in every project — a broad change, not
+  a narrow one. Replace's structure protection (`usfmChangesStructure`, keyed off `isBlockMarker`)
+  covers a match that spans a **paragraph** marker (`isBlockMarker('p')`, `('q1')`, `('v')` are all
+  `true`): such a replace is refused with `STRUCTURE_PROTECTED_ERROR`. It does **not** cover a match
+  that spans a **note** (`isBlockMarker('f')`, `('fe')`, `('x')`, `('fr')`, `('ft')` are all `false`),
+  so a replace spanning a footnote can silently delete it while structure protection is engaged. This
+  is a pre-existing gap — the no-separator concatenation already produced note-spanning matches
+  before this change — and this decision does not widen it: `note` is excluded from the block-level
+  set precisely so it adds no new note-spanning matches. The gap itself is filed as a follow-up
+  outside this work.
+- **Source:** PT-3609, `docs/specs/2026-09-09-find-block-boundary-whitespace-design.md`.
+
 ## adr-find-follows-editor-to-read-only: Find follows the editor onto read-only resources, with replace withheld
 
 - **Formerly:** ADR-0020

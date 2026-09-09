@@ -77,7 +77,13 @@ _has_ it): paste always produces the space, so the query is never the side that 
 
 ### Matching semantics
 
-**A whitespace run in the query may match zero characters, but only at a break boundary.**
+**An interior whitespace run in the query may match zero characters, but only at a break boundary.**
+A run is interior when it has at least one query character on both sides; a leading, trailing, or
+whitespace-only run stays required (matches one or more characters, per the existing
+`ignoreWhitespaceDifferences`-off/on behavior below), because making one of those optional would let
+the pattern match the empty string for a whitespace-only query — under a lazy zero-or-more the engine
+prefers the empty match, producing an empty overall match that the existing zero-length-match handling
+skips, so a whitespace-only search would stop matching real whitespace at all.
 
 Using the concatenated text `…the son of Abraham.Abraham became the father of…`:
 
@@ -119,9 +125,11 @@ Each exclusion gets a comment at the code site, so the decision is checkable fro
 
 ### Approach: one relaxed pass, boundary filter inside `search()`
 
-`buildSearchRegex` compiles each whitespace run in the query as a named capture group allowing
-zero-or-more; `search()` runs the regex with the `d` flag and rejects any match where such a group
-matched zero characters at a position that is not a break boundary.
+`buildSearchRegex` compiles each **interior** whitespace run in the query as a named capture group
+allowing zero-or-more; a leading, trailing, or whitespace-only run keeps today's required (one-or-
+more) group instead, for the reason given under [Matching semantics](#matching-semantics). `search()`
+runs the regex with the `d` flag and rejects any match where an interior group matched zero
+characters at a position that is not a break boundary.
 
 Group names must be **unique per run** — `new RegExp('(?<w>a)(?<w>b)')` throws
 `SyntaxError: Duplicate capture group name`, and a query like `of Abraham. Abraham became` has three
