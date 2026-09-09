@@ -154,7 +154,7 @@ describe('registerProjectDataProviderEngineFactory — platform-canonical attrib
   });
 });
 
-describe('registerProjectDataProviderEngineFactory — listExtensionDataQualifiers is optional', () => {
+describe('registerProjectDataProviderEngineFactory — enumeration is not part of platform.base', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSuccessfulRegistration();
@@ -162,9 +162,10 @@ describe('registerProjectDataProviderEngineFactory — listExtensionDataQualifie
 
   it('registers a platform.base engine that does not enumerate its extension data', async () => {
     // Not every base PDP can enumerate — one over a remote store may not be able to, and
-    // platform-lexical-tools holds no extension data at all — so the method is optional on the
-    // engine and the `platform.base` guard must keep checking only getExtensionData and getSetting.
-    // Requiring it there would stop every engine that predates it from registering.
+    // platform-lexical-tools holds no extension data at all — so `listExtensionDataQualifiers`
+    // lives on its own projectInterface, `platform.extensionDataEnumeration`, and the
+    // `platform.base` guard must keep checking only getExtensionData and getSetting. Requiring it
+    // there would stop every engine that does not claim that interface from registering.
     const engineWithoutEnumeration = makeBaseEngine();
     expect('listExtensionDataQualifiers' in engineWithoutEnumeration).toBe(false);
     const engineFactory: IProjectDataProviderEngineFactory<['platform.base']> = {

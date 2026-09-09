@@ -10,6 +10,14 @@ public static class ProjectInterfaces
     /// Provider must implement
     /// </summary>
     public const string BASE = "platform.base";
+
+    /// <summary>
+    /// The `projectInterface` a Project Data Provider serves when it can list the data qualifiers an
+    /// extension has data for (`listExtensionDataQualifiers`). Separate from <see cref="BASE"/>
+    /// because not every PDP can enumerate its extension data and PDP methods are never optional: a
+    /// PDP that can enumerate advertises this interface, and one that cannot leaves it off.
+    /// </summary>
+    public const string EXTENSION_DATA_ENUMERATION = "platform.extensionDataEnumeration";
     public const string USFM_BOOK = "platformScripture.USFM_Book";
     public const string USFM_CHAPTER = "platformScripture.USFM_Chapter";
     public const string USFM_VERSE = "platformScripture.USFM_Verse";
