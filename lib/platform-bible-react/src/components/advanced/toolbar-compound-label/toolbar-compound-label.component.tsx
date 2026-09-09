@@ -105,10 +105,10 @@ export function ToolbarCompoundLabel({
       !!element && element.scrollWidth > element.clientWidth;
 
     const reveal = () => {
-      // Only a keyboard arrival reveals — see `useInteractionModalityRef`. Radix hands focus back
+      // Only a non-pointer arrival reveals — see `useInteractionModalityRef`. Radix hands focus back
       // to the trigger when the menu it opened closes, and a pointer user who just dismissed a menu
-      // is not asking for an explanation of a label they can already see. Focus before any input at
-      // all ('none') still reveals, so a label focused on load explains itself.
+      // is not asking for an explanation of a label they can already see. `'none'` (no input yet in
+      // this document) falls on the reveal side, so a label focused on load explains itself.
       if (interactionModality.current === 'pointer') return;
       // Same two sources as hover: a label that is short by construction, or one CSS has clipped.
       // Anything that already reads in full needs no tooltip on focus either.
