@@ -2117,11 +2117,15 @@ step, no automation. Just a record.
   for the values.
 - **Alternatives considered:**
   - **A closed union.** Rejected: a single picker's rows can come from two established
-    vocabularies, neither owned by `platform-bible-react` — Paratext project types (the PT9
-    `ProjectType` enum, forwarded as `ProjectListResult.projectType`, see
-    `c-sharp/ManageBooks/ProjectSummary.cs`) and DBL resource types (the `ResourceType` union in
-    `lib/platform-bible-utils/src/resources.model.ts`). A union would duplicate one and drift from
-    its source, or invent a third. Grouping needs only equality.
+    vocabularies, neither owned by `platform-bible-react` — Paratext project types (Paratext.Data's
+    `ProjectType` enum, used in this repo as `Enum<ProjectType>`, e.g.
+    `c-sharp/ManageBooks/CopyBooksOrchestrator.cs:602`, and owned upstream, not here) and DBL
+    resource types (the `ResourceType` union in `lib/platform-bible-utils/src/resources.model.ts`).
+    The Paratext side reaches the wire already flattened to a plain string —
+    `ProjectSummary.ProjectType` (`c-sharp/ManageBooks/ProjectSummary.cs:44`), sourced from
+    `scrText.Settings.TranslationInfo.Type.InternalValue` (e.g. `"Standard"`, `"BackTranslation"`,
+    `"Daughter"`). A union would duplicate one of these taxonomies and drift from its source, or
+    invent a third. Grouping needs only equality.
 - **Consequences:** The library will never resolve a type's label or icon, so every picker must
   supply both — `typeName` for grouping headers and `renderProjectIndicator` for the row glyph. A
   caller wanting compile-time safety should type the literal at its own call site.

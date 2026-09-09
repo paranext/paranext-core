@@ -51,8 +51,8 @@ export type ProjectSelectorProject = {
    *
    * - **Paratext project types** — the PT9 `ProjectType` enum, surfaced by the C# ParatextData
    *   library via `ScrText.Settings.TranslationInfo.Type.InternalValue` and forwarded on the wire
-   *   as `ProjectListResult.projectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values
-   *   include `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
+   *   as `ProjectSummary.ProjectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values include
+   *   `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
    *   `"StudyBibleAdditions"`, `"ConsultantNotes"`, `"Transliteration"`,
    *   `"TransliterationWithEncoder"`.
    * - **DBL resource types** — the `ResourceType` union in `platform-bible-utils`
