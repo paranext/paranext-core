@@ -245,10 +245,18 @@ export type Policy = {
 /** A third-party program redistributed as a separate executable - see `separate-programs.ts`. */
 export type SeparateProgram = {
   spdx: string[];
+  /** Inline text: the renderer escapes it (`inlineText`), so Markdown syntax in it prints literally. */
   copyright: string;
   reviewer: string;
   date: string;
+  /**
+   * A Markdown paragraph, reproduced verbatim in the document - unlike `copyright`, this is NOT
+   * escaped, so it may carry a link or other Markdown, and a literal `<`, `*`, `_` or backtick in
+   * it renders as Markdown rather than as that character. Matches the
+   * `CopiedPlatformLibrary.reason` precedent.
+   */
   reason: string;
+  /** A Markdown paragraph, reproduced verbatim - see `reason`; the same rule applies here. */
   sourceAvailability: string;
   deliveries: ProgramDelivery[];
 };
