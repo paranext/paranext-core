@@ -775,7 +775,10 @@ function describeComponent(component: BundledComponent): string {
  * Third-party programs redistributed as separate executables - see `separate-programs.ts`.
  *
  * Every field is the reviewer's own words, reproduced rather than paraphrased, because the entry is
- * the determination: the document says what was decided, by whom, and when.
+ * the determination: the document says what was decided, by whom, and when. `reason` and
+ * `sourceAvailability` are written straight through as Markdown paragraphs (they may carry a link),
+ * while `copyright` goes through `inlineText` like every other copyright notice this document
+ * quotes.
  */
 function pushSeparateProgramsSection(
   out: string[],
