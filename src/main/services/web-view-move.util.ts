@@ -212,6 +212,13 @@ async function moveCapturedWebView(
    * set
    */
   let freshWindowId: string | undefined;
+  /**
+   * The window this move is putting the captured view into, for the in-flight register — set in the
+   * branch below the moment the id exists (immediately for a named target, or once
+   * `createFreshWindow` hands one back), so a `WebViewMoveInFlight` this move later adds is never
+   * missing it.
+   */
+  let destinationWindowId: string;
   /** Puts the captured definition in the destination resolved below */
   let adoptIntoDestination: (definition: SavedWebViewDefinition) => Promise<WebViewId | undefined>;
   /**
@@ -243,6 +250,7 @@ async function moveCapturedWebView(
     // what makes the capture below have to come before the adopt is untouched by doing this early.
     const freshWindow = await createFreshWindow(webViewId);
     freshWindowId = freshWindow.windowId;
+    destinationWindowId = freshWindow.windowId;
     adoptIntoDestination = (definition) =>
       freshWindow.runOpen(
         (shard) => shard.adoptWebView(definition),
@@ -268,6 +276,7 @@ async function moveCapturedWebView(
       target.windowId,
     );
     targetShard = shard;
+    destinationWindowId = target.windowId;
     adoptIntoDestination = (definition) => shard.adoptWebView(definition);
   }
 
@@ -320,6 +329,7 @@ async function moveCapturedWebView(
   const moveInFlight: WebViewMoveInFlight = {
     webViewType: captured.webViewType,
     projectId: captured.projectId,
+    destinationWindowId,
     capturedDefinition: captured,
   };
   addMoveInFlight(moveInFlight);

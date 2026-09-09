@@ -625,7 +625,11 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
 
   // A web view mid-move is open in no window (see the in-flight register), so every window above
   // answered truthfully and the merged read still misses it — the one gap a caller that selects by
-  // this list, like the shutdown sync's writable-project selection, cannot see for itself.
+  // this list, like the app-quit shutdown sync's writable-project selection (Simple mode's
+  // whole-app read), cannot see for itself. A single closing window's own read has the identical
+  // gap and its own matching fold-in — see getOpenWebViewDefinitionsForWindow below — but every
+  // move belongs here regardless of where it is headed, since this read has no one window to
+  // narrow by.
   //
   // Each open move folds its captured definition in, unless a window already reported that exact
   // id — a target that adopted it, or a source a failed move's recovery handed it back to; either
@@ -671,19 +675,52 @@ export async function getOpenWebViewDefinitionsForWindow(
   windowId: string,
 ): Promise<SavedWebViewDefinition[]> {
   const webViewShard = await getWebViewShard(windowId);
-  if (webViewShard) return webViewShard.getAllOpenWebViewDefinitions();
+  let definitions: SavedWebViewDefinition[];
+  if (webViewShard) {
+    definitions = await webViewShard.getAllOpenWebViewDefinitions();
+  } else {
+    // Having EVER been ready is what tells the two empty answers apart, not being ready right now.
+    // A window whose renderer never registered genuinely had nothing open. One that was serving
+    // requests a moment ago may have had editors with unsaved work in it, and its own service is
+    // the only thing that could have listed them, so the caller has to hear that the question went
+    // unanswered rather than that the answer was none — and that is just as true of a window whose
+    // renderer has since died, which is exactly when the distinction is load-bearing.
+    if (wasWindowEverReady(windowId))
+      throw new Error(
+        `WebView service for window ${windowId} is not available, so what it had open could not be read.`,
+      );
+    definitions = [];
+  }
 
-  // Having EVER been ready is what tells the two empty answers apart, not being ready right now. A
-  // window whose renderer never registered genuinely had nothing open. One that was serving
-  // requests a moment ago may have had editors with unsaved work in it, and its own service is the
-  // only thing that could have listed them, so the caller has to hear that the question went
-  // unanswered rather than that the answer was none — and that is just as true of a window whose
-  // renderer has since died, which is exactly when the distinction is load-bearing.
-  if (wasWindowEverReady(windowId))
-    throw new Error(
-      `WebView service for window ${windowId} is not available, so what it had open could not be read.`,
+  // A web view a move is landing here is open in no window at all until its adopt lands (see the
+  // in-flight register), so this window's own answer above is truthful and still misses it — the
+  // same gap the whole-app read's fold-in above exists for, but for the one window this call asked
+  // about: this window's close-time enumeration is a separate, faster read than the adopt it may be
+  // racing (the caller this matters for is performWindowCloseTasksInternal's writable-project
+  // selection in shutdown-tasks.ts), and nothing serializes the two.
+  //
+  // Matched on destinationWindowId rather than folding in every move regardless of where it is
+  // headed — a move to a different window must stay invisible here, or this window's close-time
+  // sync would pick up a project that has nothing to do with it. Deduplicated the same way the
+  // whole-app fold-in is: skip a move whose destination already reported that exact id, since a web
+  // view keeps the id it was minted with for its whole life, across any number of moves (see
+  // `mint-web-view-ids.util.ts`).
+  const definitionIds = new Set(definitions.map((definition) => definition.id));
+  const foldedInDefinitions: SavedWebViewDefinition[] = [];
+  forEachMoveInFlight((move) => {
+    if (move.destinationWindowId !== windowId) return;
+    if (definitionIds.has(move.capturedDefinition.id)) return;
+    foldedInDefinitions.push(move.capturedDefinition);
+  });
+  // `debug`, not `warn`: see the identical reasoning on the whole-app fold-in above — a move landing
+  // in a window whose close is being processed at the same instant is an expected, handled
+  // condition, not an operator-facing problem.
+  if (foldedInDefinitions.length > 0)
+    logger.debug(
+      `Web view(s) ${foldedInDefinitions.map((definition) => definition.id).join(', ')} are between windows on a move into window ${windowId}, so it did not report them; folding in their captured definitions rather than leaving them out of this read.`,
     );
-  return [];
+
+  return [...definitions, ...foldedInDefinitions];
 }
 
 /**

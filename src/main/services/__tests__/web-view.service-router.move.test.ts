@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import {
   getAllOpenWebViewDefinitionsWithReachability,
+  getOpenWebViewDefinitionsForWindow,
   setWebViewWindowCreator,
   startWebViewServiceRouter,
   testingWebViewServiceRouter,
@@ -865,6 +866,7 @@ describe('a web view that is between windows on a move', () => {
     seedMoveInFlightForTesting({
       webViewType: 'test.type',
       projectId: 'project-1',
+      destinationWindowId: '2',
       capturedDefinition: { id: 'view-1', webViewType: 'test.type', projectId: 'project-1' },
     });
 
@@ -988,6 +990,72 @@ describe('a web view that is between windows on a move', () => {
 
     releaseAdopt('dragged-view');
     await move;
+  });
+
+  test('a closing window enumeration folds in a move heading to that window', async () => {
+    // A window closes while an adopt into it is still running: the window's own close-time
+    // enumeration resolves almost immediately, but the adopt is a slow, multi-hop round trip. Without
+    // folding the move in, the closing window's snapshot would truthfully report nothing new and the
+    // moved view's project would be silently absent from a caller like the shutdown sync's
+    // writable-project selection.
+    const owner = sourceWindowShard('view-1', {
+      projectId: 'project-1',
+      state: { isReadOnly: false },
+    });
+    const target = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+
+    const moving = moveWebView('view-1', { kind: 'window', windowId: '3' });
+    await settle();
+
+    const definitions = await getOpenWebViewDefinitionsForWindow('3');
+
+    expect(definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'view-1',
+        projectId: 'project-1',
+        state: { isReadOnly: false },
+      }),
+    );
+
+    releaseAdopt('view-1');
+    await moving;
+  });
+
+  test('a closing window enumeration does not fold in a move heading to a different window', async () => {
+    // The discrimination test: without matching on the destination, the fold-in above could match
+    // every open move regardless of where it is headed and still look like it fixed the gap. A
+    // window's own close-time sync must not pick up a project that has nothing to do with it. A web
+    // view id distinct from the sibling test's, so this one's outcome never depends on whether that
+    // one's own move finished releasing.
+    const owner = sourceWindowShard('view-2', { projectId: 'project-2' });
+    const target = windowShard([]);
+    const uninvolvedWindow = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target, 4: uninvolvedWindow });
+
+    const moving = moveWebView('view-2', { kind: 'window', windowId: '3' });
+    await settle();
+
+    const definitions = await getOpenWebViewDefinitionsForWindow('4');
+
+    expect(definitions.some((definition) => definition.id === 'view-2')).toBe(false);
+
+    releaseAdopt('view-2');
+    await moving;
   });
 });
 
