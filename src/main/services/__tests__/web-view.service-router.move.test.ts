@@ -1175,6 +1175,42 @@ describe('a web view that is between windows on a move', () => {
 
     await failedMove(moving);
   });
+
+  test('a source window whose own readopt genuinely failed does not get folded into while recovery is still choosing the next window', async () => {
+    // The third gap the review found. Unlike the sibling test above, the source rung here actually
+    // RUNS — nothing is closing when recovery starts — and its own readopt genuinely fails: a
+    // rejected adopt, not a close decided mid-flight (that is the separate "began closing while it
+    // readopted" case covered elsewhere in this file). The gap is what happens next: recovery has
+    // given up on the source and has not yet picked its next window, which takes an await on
+    // getTargetWebViewWindowShard() — window 1 (the focused window, per getTargetWindowId's
+    // default) is deliberately left out of the initial wiring so that await hangs waiting for its
+    // shard to be announced, the same wait a real cold-started window would cause, letting the test
+    // observe state while it is pending. Only once the source rung has already failed does its own
+    // close get decided — simulating the race the review found. Without clearing the field the
+    // instant the source's readopt settles, it stays pointing at the source window all through the
+    // following await, and that window's own close-time enumeration would wrongly fold the view in.
+    const owner = sourceWindowShard('view-7', { projectId: 'project-7' });
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('target provider exploded'));
+    owner.adoptWebView.mockRejectedValue(new Error('source provider exploded'));
+    withWindows({ 2: owner, 3: target });
+    mocks.getTargetWindowId.mockReturnValue('1');
+
+    const moving = moveWebView('view-7', { kind: 'window', windowId: '3' });
+    await settle();
+
+    // Only now — after the source window's own readopt has already failed — is its close decided
+    mocks.isWindowClosing.mockImplementation((windowId: string) => windowId === '2');
+
+    const definitions = await getOpenWebViewDefinitionsForWindow('2');
+    expect(definitions.some((definition) => definition.id === 'view-7')).toBe(false);
+
+    // Let the focused window's shard become reachable so recovery — and the move — can finish
+    const focused = windowShard([]);
+    withWindows({ 1: focused, 2: owner, 3: target });
+
+    await failedMove(moving);
+  });
 });
 
 describe('the move commands', () => {

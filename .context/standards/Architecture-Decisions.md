@@ -1745,6 +1745,51 @@ step, no automation. Just a record.
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
 
+## adr-move-destination-lifetime: `WebViewMoveInFlight.destinationWindowId` is scoped to the readopt actually running, not to a recovery rung
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** `destinationWindowId` tells a closing window's own enumeration
+  (`getOpenWebViewDefinitionsForWindow` in `web-view.service-router.ts`) whether an in-flight move
+  belongs to it, which feeds the close-time Send/Receive writable-project selection in
+  `shutdown-tasks.ts`. Three commits in a row tried to keep it correct by patching where it is
+  *set*: once at record creation and never updated (so recovery into a different window was
+  invisible); then at each recovery rung (still stale during the focused-window resolution when the
+  source rung was skipped); then cleared at `recoverAfterFailedMove`'s entry (still stale in a third
+  gap — when the source rung runs and its readopt genuinely fails, the field kept naming the source
+  window all through the following `await getTargetWebViewWindowShard()`). Each fix closed the gap
+  a reviewer had just found and opened the next one, because each treated the field as "the window
+  this rung is assigned to," updated wherever the rung's own bookkeeping happened to touch it,
+  rather than as a value with its own lifetime.
+- **Decision:** Give the field an invariant instead of a set of assignment sites: it names a window
+  if and only if a readopt into that window is genuinely in flight right now. Every recovery readopt
+  runs through `readoptWithDestination` (`web-view-move.util.ts`), a `try`/`finally` wrapper that
+  sets the field immediately before the readopt starts and clears it to `undefined` immediately
+  after the readopt settles — success, a handled failure, or a throw — so a rung added later cannot
+  omit the clear; there is no path through the wrapper that skips it. The primary adopt in
+  `moveCapturedWebView` does not use the same wrapper: its destination is baked into the record at
+  construction, the record is not added to the in-flight register until it already carries that
+  value, and nothing but a synchronous `isWindowClosing` check separates registration from the adopt
+  starting, so the record is never visible with a destination whose adopt is not about to run or
+  already running. Every path that gives up on the primary destination hands off to
+  `recoverAfterFailedMove` synchronously too, which clears the field as its own first statement
+  before its own first `await`.
+- **Alternatives:**
+  - *Keep patching the gap the next review finds.* Rejected: this was already the third iteration of
+    exactly that, and a fourth patch would only relocate the same bug rather than remove its cause.
+  - *Clear the field at the top of every function that might change it, as the third commit did.*
+    Rejected: correct only for the gap between two known call sites; the same shape of bug reappears
+    the moment a rung sets the field and then awaits something else — resolving where to try next —
+    before its own readopt starts or after it ends.
+  - *Wrap the whole recovery ladder in one outer `try`/`finally` that clears once at the end.*
+    Rejected: it would leave the field naming the wrong rung for the whole stretch between when one
+    rung's readopt ends and the next one's begins, which is the exact gap this decision closes.
+- **Consequences:** Adding a future recovery rung is safe by construction as long as it goes through
+  `readoptWithDestination` — a reviewer no longer has to re-derive where every assignment must go,
+  and the field's TSDoc on `WebViewMoveInFlight.destinationWindowId` states the invariant directly
+  rather than listing assignment sites, so a new rung's correct behavior can be derived from the doc
+  alone.
+
 ## adr-narrow-toolbar-yields-padding-then-decoration: A toolbar out of room gives up its own padding, then a control's decoration — never a code
 
 - **Date:** 2026-09-03
