@@ -144,7 +144,10 @@ export interface PlatformNotification {
    * The one exception is {@link webViewId}: which window a `send` runs in is decided in the main
    * process before the renderer ever sees the notification to merge it, so omitting `webViewId` on
    * an update does NOT keep routing to the window the original send resolved to - it always routes
-   * by the rules {@link webViewId} documents, using only what this call passed.
+   * by the rules {@link webViewId} documents, using only what this call passed. An update that lands
+   * in a different window updates nothing: that window has never seen the id, so it opens a second
+   * notification with no merge applied, and the original stays up in the window it was routed to.
+   * Pass the same `webViewId` on every `send` that shares an id.
    */
   notificationId?: string | number;
   /**
