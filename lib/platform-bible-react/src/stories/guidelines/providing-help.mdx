@@ -1,0 +1,74 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import LinkTo from '@storybook/addon-links/react';
+
+<Meta title="Guidelines/Providing Help" />
+
+# Providing Help
+
+How to explain what a control does, when to show more context, and where deeper help belongs.
+Reach for the lightest option that still answers the user's question — extra text competes with
+the UI for attention.
+
+We do **not** ship PT9-style embedded "guides" (numbered explanations anchored to the UI). For
+anything past a sentence or two, link out to application help (see below).
+
+## The ladder
+
+Pick the first row that fits. Move down only when the row above cannot carry the message.
+
+| Surface                    | Use for                                                                | Format               |
+| -------------------------- | ---------------------------------------------------------------------- | -------------------- |
+| **Visible label**          | The primary meaning of a control                                       | 1–3 words            |
+| **Tooltip on the control** | Icon buttons (required); short hints on other action buttons as needed | Short phrase (ideally 1-3 words) |
+| **Label subtext**          | A brief clarification that must be visible at a glance                 | One `muted` line     |
+| **Info icon button**       | An explanation too long for a control tooltip, or optional context     | 1–2 sentences        |
+| **Application help**       | Concepts, workflows, anything more than a paragraph                    | Online (TBD, Nov 2026) |
+
+## Tooltips on action buttons
+
+- **Icon buttons: required** — the tooltip is the label. Describe the action, not the icon.
+- **Labelled buttons: optional.** Add one only when it says something the label doesn't. Don't
+  tooltip every button — it becomes noise.
+- Keep tooltip text short and precise enough to scan at a glance.
+
+See <LinkTo title="Guidelines/Tooltips">Tooltips</LinkTo> for length, keyboard-shortcut rendering,
+and when a popover is needed instead.
+
+## Label subtext
+
+A single muted line directly below an option's label or below a headline. Use it when the clarification is essential
+enough that a user should read it without hovering — for example, disambiguating two similarly
+named settings, or naming a non-obvious consequence.
+
+Use sparingly. If every option in a form carries subtext, the form gets loud and the important
+ones stop standing out. Prefer a clearer label first; add subtext only when a clearer label isn't
+possible.
+
+## Info icon buttons
+
+A ghost-variant icon button (`Info` from `lucide-react`) placed next to the thing it explains.
+Two placements:
+
+- **Next to a specific choice or action** — scoped help for one control.
+- **Top right of a screen, next to view options / settings** — help that applies to the whole
+  view.
+
+The info button opens one of:
+
+- **A tooltip** — for a slightly longer explanation than the control's own tooltip would
+  reasonably carry. Still a hint, not an essay.
+- **A dialog** — as a stop-gap for the not-yet-available help system, when the explanation needs
+  paragraphs, structure, an example, or links.
+- **Application help** — when the explanation is long enough to belong in the online help
+  system (see below).
+
+Do not put interactive content (links, form fields, copy buttons) inside a tooltip — use a dialog
+or popover. See <LinkTo title="Guidelines/Tooltips">Tooltips</LinkTo>.
+
+## Application help
+
+Deeper help — concepts, task walkthroughs, reference material — belongs in the online
+application help. **The help system is TBD and will ship for the November 2026 release.** Until
+it exists, defer the content until when it is available. If needed as a stop-gap, only create a
+single, temporary in-app guide dialog, but do not create more than one.
+
