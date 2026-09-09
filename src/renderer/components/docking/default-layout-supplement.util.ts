@@ -45,13 +45,31 @@ function findPanelByWebViewType(box: BoxData, anchor: string): PanelData | undef
  * materialized from a baked layout gets a freshly minted id (see `mintFreshWebViewIds`), so a tab's
  * id is not a stable way to recognize "this supplement entry is already in the layout" across
  * reloads — its `webViewType` is: the supplement entries are singletons by design (one Scripture
- * Text Grid tab, not several), so type identity is exactly what "already present" means here.
+ * Text Grid tab, not several), so type identity is exactly what "already present" means here. An
+ * entry whose tab has no `webViewType` at all is not a web view tab and needs a different identity
+ * — see `collectTabIds`.
  */
 function collectWebViewTypes(box: BoxData, types: Set<string>): void {
   findPanel(box, (panel) => {
     (panel.tabs ?? []).forEach((t) => {
       const type = webViewTypeOf(t);
       if (type) types.add(type);
+    });
+    return undefined;
+  });
+}
+
+/**
+ * Collect the `id` of every tab under `box`, across every panel. Backs the dedup fallback for a
+ * supplement entry whose tab carries no `data.webViewType`: `mintFreshWebViewIdInTab` mints a fresh
+ * id only for a web view tab and copies any other tab through unchanged, so a no-type entry's baked
+ * id IS the id its materialized tab keeps on every reload — stable in exactly the way a web view
+ * tab's id is not, which is what makes it a sound identity for these entries and only these.
+ */
+function collectTabIds(box: BoxData, ids: Set<string>): void {
+  findPanel(box, (panel) => {
+    (panel.tabs ?? []).forEach((t) => {
+      if (t.id) ids.add(t.id);
     });
     return undefined;
   });
@@ -121,9 +139,10 @@ function withPinningForMode(tab: SavedTabInfo, isSimpleMode: boolean): SavedTabI
 /**
  * Add each supplement entry's tab to the panel containing its `anchorWebViewType` — appended last,
  * or before the tab named by the entry's `insertBeforeWebViewType` when that tab is in the panel.
- * Pure and idempotent: returns a deep clone, never mutates `baseLayout`, and skips entries whose id
- * already exists or whose anchor is absent. `entries` should already be filtered by any
- * `flagSetting` (see {@link filterEnabledSupplementEntries} and the caller in
+ * Pure and idempotent: returns a deep clone, never mutates `baseLayout`, and skips an entry that is
+ * already present — recognized by `webViewType` when the entry's tab has one, and by the tab's own
+ * `id` when it does not (see `collectTabIds`) — or whose anchor is absent. `entries` should already
+ * be filtered by any `flagSetting` (see {@link filterEnabledSupplementEntries} and the caller in
  * `web-view.service-shard.ts`).
  *
  * `interfaceMode` is required rather than inferred because this merge runs against both modes'
@@ -155,20 +174,30 @@ export function mergeDefaultLayoutSupplement(
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockbox = layout.dockbox as BoxData;
   const existingWebViewTypes = new Set<string>();
+  const existingTabIds = new Set<string>();
   // Dedup across every box, not just the dockbox: rc-dock keeps floated/windowed/maximized tabs in
   // sibling boxes. A supplement tab the user moved out of the dockbox still exists, so scanning only
   // the dockbox would re-inject a duplicate that grows on each load and corrupts the saved layout.
   [dockbox, layout.floatbox, layout.windowbox, layout.maxbox].forEach((box) => {
-    // Each optional box is a BoxData at runtime when present; LayoutBase types them as the rc-dock union.
+    if (!box) return;
+    // The optional box is a BoxData at runtime when present; LayoutBase types them as the rc-dock union.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    if (box) collectWebViewTypes(box as BoxData, existingWebViewTypes);
+    const typedBox = box as BoxData;
+    collectWebViewTypes(typedBox, existingWebViewTypes);
+    collectTabIds(typedBox, existingTabIds);
   });
 
   entries.forEach((entry) => {
     // entry.tab is a SavedTabInfo; webViewTypeOf reads the same `data.webViewType` shape off either
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const entryWebViewType = webViewTypeOf(entry.tab as unknown as TabData);
-    if (entryWebViewType && existingWebViewTypes.has(entryWebViewType)) return;
+    // An entry with a webViewType is deduped by type (see `collectWebViewTypes`); an entry with none
+    // falls back to its tab's own `id`, which `collectTabIds`'s doc explains is sound for exactly
+    // this case.
+    const alreadyPresent = entryWebViewType
+      ? existingWebViewTypes.has(entryWebViewType)
+      : existingTabIds.has(entry.tab.id);
+    if (alreadyPresent) return;
     const panel = findPanelByWebViewType(dockbox, entry.anchorWebViewType);
     if (!panel) return;
     const tabs = panel.tabs ?? [];
@@ -209,6 +238,7 @@ export function mergeDefaultLayoutSupplement(
     panel.tabs =
       insertAt < 0 ? [...tabs, tab] : [...tabs.slice(0, insertAt), tab, ...tabs.slice(insertAt)];
     if (entryWebViewType) existingWebViewTypes.add(entryWebViewType);
+    else existingTabIds.add(tab.id);
   });
 
   return layout;

@@ -224,6 +224,47 @@ describe('mergeDefaultLayoutSupplement', () => {
   });
 });
 
+/**
+ * An entry whose tab carries no `data.webViewType` at all — a non-web-view tab (e.g. a settings
+ * tab), the kind `mintFreshWebViewIdInTab` leaves untouched on every materialization. Dedup for
+ * these can't key on type (there is none), so it falls back to the tab's own `id`, which is sound
+ * here precisely because minting never changes it.
+ */
+const noTypeEntry: DefaultLayoutSupplementEntry = {
+  anchorWebViewType: 'platformScriptureEditor.bibleTexts',
+  tab: {
+    id: 'settings-tab',
+    tabType: 'settings',
+    data: { id: 'settings-tab' },
+  },
+};
+
+describe('mergeDefaultLayoutSupplement with a no-webViewType entry', () => {
+  it('does not append a second time when the layout already contains that tab id', () => {
+    const layout = baseLayout();
+    tabsInFirstPanel(layout).push({
+      id: 'settings-tab',
+      tabType: 'settings',
+      data: { id: 'settings-tab' },
+    });
+    const merged = mergeDefaultLayoutSupplement(layout, [noTypeEntry], 'simple');
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab', 'settings-tab']);
+  });
+
+  it('is idempotent: re-merging the output of a first merge adds nothing', () => {
+    const once = mergeDefaultLayoutSupplement(baseLayout(), [noTypeEntry], 'simple');
+    const twice = mergeDefaultLayoutSupplement(once, [noTypeEntry], 'simple');
+    expect(tabsInFirstPanel(twice).map((t) => t.id)).toEqual(
+      tabsInFirstPanel(once).map((t) => t.id),
+    );
+  });
+
+  it('positive control: a genuinely new no-type entry is still added', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [noTypeEntry], 'simple');
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab', 'settings-tab']);
+  });
+});
+
 /** Reads the `isClosable` a merged tab carries, which lives inside the tab's web view data. */
 function isClosableOf(tab: SavedTabInfo | undefined): boolean | undefined {
   // Tab data is `unknown` in the shared model; supplement tabs store a WebViewDefinition there.
