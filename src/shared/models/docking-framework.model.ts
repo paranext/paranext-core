@@ -433,10 +433,10 @@ export type PapiDockLayout = {
    *   OS focus sets that document's active element without raising the window — so without this,
    *   whichever tab's content focuses last would claim the caret the moment the window is finally
    *   raised, rather than the tab the raise is actually showing. Left unspecified, this defaults to
-   *   whether this window is still awaiting its first activation. **Experimental** — this parameter
-   *   is the new part of this method
+   *   whether this window is still awaiting its first activation.
    * @returns True if successfully found the WebView to update; false otherwise
-   * @experimental
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
   updateWebViewDefinition: (
     webViewId: string,
