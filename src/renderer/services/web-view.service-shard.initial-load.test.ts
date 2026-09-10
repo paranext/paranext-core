@@ -171,12 +171,17 @@ async function primeProvider(webViewState?: Record<string, unknown>) {
   const { localThemeService } = await import('@renderer/services/theme.service');
   let doesGetWebViewPark = false;
   let parkedWebViewRequests: (() => void)[] = [];
+  // The nonce each web view was created under, as the provider itself received it. Recorded because
+  // it is the only way a test can hold the value `isWebViewNonceCorrect` gates on — the shard mints
+  // nonces privately and hands them out here and nowhere else.
+  const noncesById = new Map<string, string>();
   // `webViewProviderService` and `localThemeService` are mocked as `{}` (file-level mocks above);
   // attaching stub methods needs a type assertion because the plain-object mock type doesn't model
   // them — same reasoning as the equivalent stubs in `web-view.service-shard.test.ts`.
   (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
     async () => ({
-      getWebView: async (saved: SavedWebViewDefinition) => {
+      getWebView: async (saved: SavedWebViewDefinition, _options: unknown, nonce?: string) => {
+        if (nonce !== undefined) noncesById.set(saved.id, nonce);
         if (doesGetWebViewPark)
           await new Promise<void>((resolve) => {
             parkedWebViewRequests.push(resolve);
@@ -207,6 +212,15 @@ async function primeProvider(webViewState?: Record<string, unknown>) {
       const parked = parkedWebViewRequests;
       parkedWebViewRequests = [];
       parked.forEach((answer) => answer());
+    },
+    /**
+     * The nonce this web view was created under, as the provider received it — the value
+     * `isWebViewNonceCorrect` gates `postMessageToWebView` on.
+     */
+    nonceFor: (id: string) => {
+      const nonce = noncesById.get(id);
+      if (nonce === undefined) throw new Error(`the provider was never asked for web view ${id}`);
+      return nonce;
     },
   };
 }
@@ -979,6 +993,82 @@ describe('content admitted to the dock after the entry point had its say', () =>
 
     await expect(reloadingWebView).resolves.toBe('settled-view');
     expect(dockedWebViews.map((webView) => webView.id)).toContain('settled-view');
+  });
+
+  test('a reload the load left docked keeps the nonce its live view is still using', async () => {
+    // The bail-out for a load that ran to completion entirely inside the provider await has to ask
+    // the same question the two cleanups below it ask: is this web view still docked? A reload
+    // shares the live view's nonce (`getWebViewNonce` hands back the existing one for an open id),
+    // and `isWebViewNonceCorrect` is the sole gate on `postMessageToWebView` — so cleaning up here
+    // without looking would mute an iframe the user is still looking at, permanently and silently.
+    //
+    // The load here keeps what is docked, which is what makes the view survivable and the nonce
+    // still load-bearing when the reload gives up.
+    const {
+      module,
+      dockedWebViews,
+      provider,
+      startReloadWithSavedLayoutHanging,
+      releaseLayoutGet,
+    } = await windowHoldingOneWebViewWithNothingLoading({ doesLoadReplaceTheDock: false });
+
+    const liveNonce = provider.nonceFor('settled-view');
+    // Positive control: the nonce is genuinely the live view's before anything races it, so the
+    // assertion at the end is a negative of something that was true.
+    expect(module.isWebViewNonceCorrect('settled-view', liveNonce)).toBe(true);
+
+    provider.makeTheProviderThink();
+    const reloading = module.reloadWebView('test.type', 'settled-view');
+    reloading.catch(() => {});
+    await provider.waitForTheProviderToBeAsked();
+
+    // A whole load begins and ends inside the provider await — the one shape the generation check
+    // exists to catch, and the one where nothing is left in flight for the wait to find.
+    const { reloading: load } = await startReloadWithSavedLayoutHanging();
+    releaseLayoutGet({ kind: 'empty' });
+    await load;
+
+    provider.releaseTheProvider();
+    await reloading.catch(() => {});
+
+    expect(dockedWebViews.map((webView) => webView.id)).toContain('settled-view');
+    expect(module.isWebViewNonceCorrect('settled-view', liveNonce)).toBe(true);
+  });
+
+  test('a web view the load replaced leaves no controller behind', async () => {
+    // The other half of the same bail-out. The provider has run, so the extension host holds a
+    // controller and state is persisted — and a tab that never joined the dock gets no close event
+    // from anywhere else, so nothing would ever dispose either. This is the residue the catch below
+    // clears for the same shape of failure; the early return has to clear it too.
+    const {
+      module,
+      dockedWebViews,
+      provider,
+      startReloadWithSavedLayoutHanging,
+      releaseLayoutGet,
+    } = await windowHoldingOneWebViewWithNothingLoading();
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+
+    provider.makeTheProviderThink();
+    const opening = module.openWebView('test.opened');
+    opening.catch(() => {});
+    await provider.waitForTheProviderToBeAsked();
+
+    const { reloading: load } = await startReloadWithSavedLayoutHanging();
+    releaseLayoutGet({ kind: 'empty' });
+    await load;
+
+    provider.releaseTheProvider();
+    const openedId = await opening.catch(() => undefined);
+
+    expect(dockedWebViews.map((webView) => webView.webViewType)).not.toContain('test.opened');
+    // The close event is what disposes the controller and the nonce; the state is evicted directly
+    const closedIds = getClosedWebViewIds();
+    expect(closedIds.some((id) => id !== 'settled-view')).toBe(true);
+    expect(deleteFullWebViewStateById).toHaveBeenCalled();
+    expect(openedId).toBeUndefined();
   });
 
   test('a tab waits for a load in flight', async () => {

@@ -3057,14 +3057,30 @@ export async function openOrReloadWebView(
   // to catch.
   const wasLayoutLoadInFlight = layoutLoadInFlight !== undefined;
   await waitForLayoutLoadToSettle();
+  const dockLayoutVar = await getDockLayout();
   if (!wasLayoutLoadInFlight && layoutLoadGeneration !== layoutLoadGenerationBeforeProvider) {
     logger.debug(
       `Not docking web view ${webView.id} (type ${webView.webViewType}): a layout load replaced this window's dock while it was being created`,
     );
-    deleteWebViewNonce(webView.id);
+    // Whether there is anything to clean up depends on whether this web view is still docked, which
+    // is why the dock is read before this decision rather than after it. A reload of a view the
+    // load left alone shares that view's nonce (see `getWebViewNonce`, which hands back the
+    // existing one for an open id), and `isWebViewNonceCorrect` is the sole gate on
+    // `postMessageToWebView` — so deleting it here would mute a live iframe the user is still
+    // looking at. Same reasoning as the catch below, which refuses all cleanup while the view is
+    // docked, and as the sibling refusal beneath this one.
+    if (!dockLayoutVar.getWebViewDefinition(webView.id)) {
+      // Not docked, and no close event will ever fire for a tab that never joined the dock. Emit it
+      // so the controller registered during the provider call is disposed and the nonce cleaned up
+      // (both subscribe to it), and evict the state — the same residue the catch below clears for
+      // the same shape of failure.
+      onDidCloseWebViewBufferedEmitter.emit({
+        webView: convertWebViewDefinitionToSaved(finalWebView),
+      });
+      deleteFullWebViewStateById(webView.id);
+    }
     return undefined;
   }
-  const dockLayoutVar = await getDockLayout();
   // A reload's caller read this web view out of the dock before the provider ran and before the
   // wait above, and either stretch is long enough to lose it: a load that runs inside one takes the
   // dock wholesale — the user switching to simple mode while a restored tab is still fetching its
