@@ -167,6 +167,46 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
   },
   {
+    id: 'content-zoom-in',
+    purpose: 'Zoom the content of the pane in by one step (10 %)',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts `=` (the unshifted key sharing the `+` cap) and the numpad `+` key.
+    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
+    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+  },
+  {
+    id: 'content-zoom-out',
+    purpose: 'Zoom the content of the pane out by one step (10 %)',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts the numpad `-` key.
+    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
+    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+  },
+  {
+    id: 'content-zoom-reset',
+    purpose: 'Return the content of the pane to the default zoom from Settings',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts the numpad `0` key.
+    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
+    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+  },
+  {
+    id: 'content-zoom-wheel',
+    purpose: 'Zoom the content of the pane in or out one step per wheel notch',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area)',
+    // The handler accepts Ctrl or ⌘ as the modifier on every platform.
+    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+  },
+  {
     id: 'dismiss-overlays',
     purpose:
       'Dismiss the topmost open overlay — a context menu, command palette, or popover (works in every frame, including web views)',
