@@ -12,6 +12,7 @@ import { compareByNameThenVersion, compareStrings } from './compare';
 import { canonicalText } from './corpus';
 import { parseDeclared } from './declared';
 import { normalizeText } from './package-files';
+import { DEFAULT_PRODUCT_NAME } from './product';
 import type {
   BundledComponent,
   CopiedPlatformLibrary,
@@ -538,7 +539,7 @@ function pushPreamble(
   licenseeVersion: string,
   product: ProductBlock | undefined,
 ): void {
-  const subject = product ? product.name : 'Platform.Bible';
+  const subject = product ? product.name : DEFAULT_PRODUCT_NAME;
   out.push('# Third-party notices', '');
   out.push(
     ...(product
@@ -555,7 +556,7 @@ function pushPreamble(
           'adds, each described in a section of its own below.',
         ]
       : [
-          'Platform.Bible incorporates the third-party components listed below. Where a component ships a',
+          `${DEFAULT_PRODUCT_NAME} incorporates the third-party components listed below. Where a component ships a`,
           'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
           'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
           'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',

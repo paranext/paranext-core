@@ -3,12 +3,16 @@ import * as path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { REQUIRED_BUNDLES } from './shipping-set';
 import {
+  ELECTRON_BUILDER,
   assertCopiedPlatformLibrariesRecorded,
   assertCopiedPlatformLibraryIdsAllowed,
   assertSnapStagePackagesClassified,
 } from './main';
 import { RIDS, copiedPlatformLibraryStems, readDirectPackageReferences } from './nuget-set';
 import { STATIC_TREES, WHOLESALE_COPIED_EXTENSIONS } from './static-assets';
+import { assertExternalExtensionsRecorded, externalExtensionFolders } from './external-extensions';
+import { assertProductMatchesPackaging, readPackagingConfig } from './product';
+import { assertSeparateProgramsRecorded } from './separate-programs';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 
@@ -370,6 +374,40 @@ describe('every copied platform library names terms the corpus can reproduce', (
         },
       }),
     ).toThrow(/NotAnAllowedIdentifier/);
+  });
+});
+
+describe('this repository ships none of the downstream-product instruments', () => {
+  // The three instruments the downstream overlay drives are all OFF here, and each is off by being
+  // EMPTY rather than by being absent from the code path - so a value that arrives in the committed
+  // policy by accident (a merge, a copied entry, a rebase) changes what this repository's own
+  // document says about itself. Checked against the real policy and the real packaging config
+  // because that pair is what a build reads; asserting the shapes alone would pass on either one
+  // having moved.
+  const policy = JSON.parse(fs.readFileSync(path.join(__dirname, 'notices-policy.json'), 'utf8'));
+  const config = readPackagingConfig(ELECTRON_BUILDER);
+
+  it('declares no product block, so the document keeps its reference wording', () => {
+    expect(policy.product).toBeUndefined();
+  });
+
+  it('records no separate programs and no external extensions', () => {
+    expect(policy.separatePrograms).toEqual({});
+    expect(policy.externalExtensions).toEqual({});
+  });
+
+  it('maps no folder other than its own extensions/dist into ./extensions', () => {
+    expect(externalExtensionFolders(config)).toEqual([]);
+  });
+
+  it('accepts the shipped policy against the shipped packaging config', () => {
+    expect(() =>
+      assertExternalExtensionsRecorded([], policy.externalExtensions || {}),
+    ).not.toThrow();
+    expect(() => assertSeparateProgramsRecorded(REPO, policy.separatePrograms || {})).not.toThrow();
+    expect(() =>
+      assertProductMatchesPackaging(policy.product, config, 'electron-builder.json5'),
+    ).not.toThrow();
   });
 });
 

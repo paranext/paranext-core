@@ -89,6 +89,7 @@ import type {
   Lock,
   MergedNugetPackage,
   NamedText,
+  Override,
   Policy,
   ProductBlock,
   ReportRow,
@@ -101,7 +102,8 @@ const REPO = path.resolve(__dirname, '..', '..', '..');
 const OUT = path.join(REPO, 'THIRD-PARTY-NOTICES.md');
 const LOCK = path.join(REPO, 'THIRD-PARTY-NOTICES.lock.json');
 const POLICY = path.join(__dirname, 'notices-policy.json');
-const ELECTRON_BUILDER = path.join(REPO, 'electron-builder.json5');
+/** Exported so `derived-invariants.test.ts` checks the SAME file this pipeline reads. */
+export const ELECTRON_BUILDER = path.join(REPO, 'electron-builder.json5');
 const MANIFESTS = path.join(REPO, '.notices', 'modules');
 const DEV_PACKAGES = path.join(REPO, 'dev-packages.json');
 
@@ -357,6 +359,29 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
 }
 
 /**
+ * The Notes cell for a NuGet row.
+ *
+ * A curated note replaces the nuspec copyright because it is the more specific statement about that
+ * package; the copyright itself is kept in its own field, which is what pairs with a canonical
+ * license text.
+ *
+ * The separate-program sentence is DERIVED from the link rather than left to the overlay's
+ * hand-typed `note`. The row is the only place a reader meets that package, and on its own it reads
+ * as an ordinary dependency listed under copyleft terms - the fact that answers that is the entry
+ * in the separate-programs section, which the row has to point at. Deriving it also means the two
+ * cannot drift: `applyOverride` already refuses a link the `separatePrograms` table does not
+ * record.
+ */
+export function nugetNote(pkg: MergedNugetPackage, override: Override): string {
+  const ships = pkg.assemblies?.length ? `Ships ${pkg.assemblies.join(', ')}.` : '';
+  const separate = override.separateProgram
+    ? `Redistributed as the separate program "${override.separateProgram}" - see "Third-party ` +
+      'programs redistributed as separate executables".'
+    : '';
+  return [ships, separate, override.note || pkg.copyright].filter(Boolean).join(' ');
+}
+
+/**
  * Composes one NuGet package's verdict.
  *
  * `nuget-license` reports nuspec metadata, not license files, so `detection` is always empty here
@@ -377,7 +402,6 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
  */
 function nugetVerdict(pkg: MergedNugetPackage, policy: Policy): ReportRow {
   const override = (policy.overrides || {})[`nuget:${pkg.name}`] || {};
-  const ships = pkg.assemblies?.length ? `Ships ${pkg.assemblies.join(', ')}.` : '';
   return {
     ...pkg,
     // A nuspec DOES have a copyright field, so unlike the npm side this is a real second source
@@ -410,10 +434,7 @@ function nugetVerdict(pkg: MergedNugetPackage, policy: Policy): ReportRow {
     // Read by `nuget-set.ts` from the restored package folder, the same place its license files
     // come from. Without this `render.ts`'s NOTICE section could never fire for a NuGet package.
     notices: pkg.notices,
-    // A curated note replaces the nuspec copyright in the Notes column because it is the more
-    // specific statement about that package; the copyright itself is kept in its own field, which
-    // is what pairs with a canonical license text.
-    note: [ships, override.note || pkg.copyright].filter(Boolean).join(' '),
+    note: nugetNote(pkg, override),
   };
 }
 

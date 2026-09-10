@@ -1886,6 +1886,39 @@ describe('what a curated override may carry across', () => {
       expect(v.verdict).toBe('blocked');
       expect(v.reason).toContain('SPDX expression');
     });
+
+    // The link returns before the allowed/copyleft test, so the reviewed ENTRY is the only thing
+    // admitting this identifier. An override naming one the reviewer never read would carry it
+    // past that gate under cover of a program reviewed for entirely different terms.
+    it('refuses a linked override naming a copyleft license the program does not record', () => {
+      const v = classify(withOverride({ ...linked, license: 'AGPL-3.0-only' }, withPrograms));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('AGPL-3.0-only');
+      expect(v.reason).toContain('GPL-2.0-or-later');
+      expect(v.reason).toContain('fix whichever is wrong');
+    });
+
+    it('refuses a linked override naming an identifier on neither policy list', () => {
+      const v = classify(withOverride({ ...linked, license: 'BUSL-1.1' }, withPrograms));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('BUSL-1.1');
+      expect(v.reason).toContain('separate program "Mercurial"');
+    });
+
+    it('admits a linked override naming any identifier the program does record', () => {
+      const withTwoIds = (policy: Policy): Policy => {
+        const programs = withPrograms(policy).separatePrograms || {};
+        return {
+          ...policy,
+          separatePrograms: {
+            Mercurial: { ...programs.Mercurial, spdx: ['GPL-2.0-or-later', 'GPL-3.0-or-later'] },
+          },
+        };
+      };
+      const v = classify(withOverride({ ...linked, license: 'GPL-3.0-or-later' }, withTwoIds));
+      expect(v.verdict).toBe('overridden');
+      expect(v.spdxId).toBe('GPL-3.0-or-later');
+    });
   });
 });
 

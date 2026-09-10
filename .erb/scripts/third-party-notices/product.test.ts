@@ -1,13 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { assertProductMatchesPackaging } from './product';
+import { assertProductMatchesPackaging, DEFAULT_PRODUCT_NAME } from './product';
 
 describe('assertProductMatchesPackaging', () => {
   const config = { productName: 'Paratext 10 Studio' };
 
-  it('accepts no product block at all', () => {
+  it("accepts no product block where the build is this repository's own", () => {
+    expect(() =>
+      assertProductMatchesPackaging(
+        undefined,
+        { productName: DEFAULT_PRODUCT_NAME },
+        'electron-builder.json5',
+      ),
+    ).not.toThrow();
+  });
+
+  // Without this the no-product prose - "Platform.Bible incorporates..." and "This is a reference,
+  // not the notices for any shipped product" - would ship as the notices for a renamed build whose
+  // overlay misspelled or dropped the "product" key.
+  it('refuses a renamed build that declares no product block', () => {
     expect(() =>
       assertProductMatchesPackaging(undefined, config, 'electron-builder.json5'),
-    ).not.toThrow();
+    ).toThrow(
+      /electron-builder\.json5 builds "Paratext 10 Studio" but the notices policy declares no "product" block; add one to the overlay, or restore productName/,
+    );
   });
 
   it('accepts a block whose name is what the packaging config builds', () => {

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { nugetNote } from './main';
 import {
   assertSeparateProgramTextsAvailable,
   assertSeparateProgramsRecorded,
@@ -109,5 +110,28 @@ describe('assertSeparateProgramTextsAvailable', () => {
     expect(() =>
       assertSeparateProgramTextsAvailable({ X: { ...mercurial, spdx: ['Not-A-License-1.0'] } }),
     ).toThrow(/Not-A-License-1\.0.*build:third-party-notices:corpus/s);
+  });
+});
+
+describe('the NuGet row for a linked package points at the separate-programs section', () => {
+  // The row is the only place a reader meets that package, and under copyleft terms it reads as an
+  // ordinary dependency until something says otherwise. Derived from the link rather than typed
+  // into the overlay's `note`, so the two cannot disagree.
+  const pkg = { name: 'hgWindows', version: '6.3.1', copyright: '(c) Olivia Mackall and others' };
+
+  it('names the program and the section', () => {
+    const note = nugetNote(pkg, { license: 'GPL-2.0-or-later', separateProgram: 'Mercurial' });
+    expect(note).toContain('Redistributed as the separate program "Mercurial"');
+    expect(note).toContain('"Third-party programs redistributed as separate executables"');
+  });
+
+  it('keeps the assemblies sentence, the curated note and the nuspec copyright as they were', () => {
+    expect(nugetNote({ ...pkg, assemblies: ['hg.exe'] }, {})).toBe(
+      'Ships hg.exe. (c) Olivia Mackall and others',
+    );
+    expect(nugetNote(pkg, { note: 'Windows only.' })).toBe('Windows only.');
+    const linked = nugetNote(pkg, { note: 'Windows only.', separateProgram: 'Mercurial' });
+    expect(linked.startsWith('Redistributed as the separate program')).toBe(true);
+    expect(linked.endsWith('Windows only.')).toBe(true);
   });
 });
