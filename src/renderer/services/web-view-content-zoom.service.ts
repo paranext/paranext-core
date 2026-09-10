@@ -1,11 +1,4 @@
 import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinates';
-// getLastFocusedTabId closes the cycle documented on web-view.service-shard.ts's import of this
-// module: window.service-shard already imports from web-view.service-shard, and web-view.service-shard
-// imports from this module, so this edge back to window.service-shard closes the loop. Both ends are
-// `function` declarations, so evaluation order can't leave either side observing the other
-// mid-initialization.
-// eslint-disable-next-line import/no-cycle
-import { getLastFocusedTabId } from '@renderer/services/window.service-shard';
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
@@ -66,9 +59,9 @@ type ContentZoomDeps = {
 };
 
 /**
- * Whether {@link warnShardDepsNotConfigured} has already logged. The shard's web-view-definition
- * functions (`getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView`)
- * only exist once the shard calls {@link initializeContentZoomService} with them; a call routed
+ * Whether {@link warnShardDepsNotConfigured} has already logged. These five functions come from the
+ * renderer's two window-scoped shards and only exist once the composition root
+ * (`src/renderer/index.tsx`) calls {@link initializeContentZoomService} with them; a call routed
  * through one of the stubs below before that happens is worth one warning, not one per call.
  */
 let hasWarnedShardDepsNotConfigured = false;
@@ -77,17 +70,16 @@ function warnShardDepsNotConfigured(): void {
   if (hasWarnedShardDepsNotConfigured) return;
   hasWarnedShardDepsNotConfigured = true;
   logger.warn(
-    'Content zoom: called before the shard injected its web-view-definition functions (initializeContentZoomService has not run with them yet).',
+    'Content zoom: called before the composition root injected the shard functions (initializeContentZoomService has not run with them yet).',
   );
 }
 
 const productionDeps: ContentZoomDeps = {
   getIframe: getWebViewIframe,
-  // The four functions below come from the window's web-view shard, which itself depends on this
-  // service (see the shard's imports/globalThis bindings for the zoom bootstrap). Rather than
-  // importing them here and closing that cycle, the shard injects its own functions through
-  // `initializeContentZoomService`; these stubs cover the window between module load and that
-  // call.
+  // The five functions below come from the renderer's web-view and window shards. Importing them
+  // here directly would create an import cycle (both shards import from this module), so the
+  // renderer's composition root injects its own functions through `initializeContentZoomService`
+  // instead; these stubs cover the window between module load and that call.
   getDefinition: () => {
     warnShardDepsNotConfigured();
     return undefined;
@@ -104,7 +96,10 @@ const productionDeps: ContentZoomDeps = {
     warnShardDepsNotConfigured();
     return () => false;
   },
-  getLastFocusedTabId,
+  getLastFocusedTabId: () => {
+    warnShardDepsNotConfigured();
+    return undefined;
+  },
   settings: {
     get: (key) => settingsService.get(key),
     set: (key, value) =>
@@ -566,16 +561,20 @@ async function pruneMemoryOfRemovedProjects(): Promise<void> {
 /**
  * Idempotent. Subscribes to the default, the memory and web-view updates; prunes stale memory.
  *
- * @param shardDeps The calling window's web-view shard supplies its own `getDefinition`,
- *   `updateDefinition`, `getAllOpenDefinitions` and `onDidUpdateWebView` here rather than this
- *   module importing them directly — that import would create a cycle, since the shard itself
- *   imports from this module to wire each web view's zoom bootstrap. Merged into the deps in use
+ * @param shardDeps The renderer's composition root supplies the web-view and window shards'
+ *   `getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView` and
+ *   `getLastFocusedTabId` here rather than this module importing them directly — both shards import
+ *   from this module, so a direct import back would create a cycle. Merged into the deps in use
  *   whenever provided, even on a later call after the first initialization already ran.
  */
 export function initializeContentZoomService(
   shardDeps?: Pick<
     ContentZoomDeps,
-    'getDefinition' | 'updateDefinition' | 'getAllOpenDefinitions' | 'onDidUpdateWebView'
+    | 'getDefinition'
+    | 'updateDefinition'
+    | 'getAllOpenDefinitions'
+    | 'onDidUpdateWebView'
+    | 'getLastFocusedTabId'
   >,
 ): Promise<void> {
   if (shardDeps) deps = { ...deps, ...shardDeps };
