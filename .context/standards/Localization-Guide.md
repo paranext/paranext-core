@@ -158,7 +158,7 @@ This is advisory, not a [blocking issue](#blocking-issues) — raise it, don't h
 
 The pattern above assumes a web view that can call `useLocalizedStrings` (a PAPI/`@papi/frontend` hook). **Components that live in `lib/platform-bible-react/` cannot do this.** That library is process-agnostic and must stay free of any PAPI dependency, so a library component must NOT resolve its own strings — the consuming extension resolves them and passes them in.
 
-The established contract for a localizable library component is three parts:
+The established contract for a localizable library component is four parts:
 
 1. **A frozen `STRING_KEYS` tuple** of the localize keys the component needs, exported so consumers have a typed handle to feed into `useLocalizedStrings`:
 
@@ -184,6 +184,21 @@ The established contract for a localizable library component is three parts:
    const selectChapter =
      localizedStrings?.['%webView_bookChapterControl_selectChapter%'] ?? 'Select Chapter';
    ```
+
+4. **A shipped English value for every key in the tuple, in `assets/localization/en.json`.** The
+   tuple only *declares* what the component asks for; nothing about declaring a key produces a
+   value. A library component's strings do not belong in any one extension's
+   `contributions/localizedStrings.json`, because the library is shared by every consumer — they
+   belong in the platform shell's own assets. Add the Spanish value in `es.json` at the same time;
+   the other shipped locales fall back to English.
+
+   Skipping this step fails quietly rather than loudly: the Storybook
+   pseudo-localization fixture at `lib/platform-bible-react/src/localizedStrings.json` is a
+   *separate, hand-maintained file that never ships*, so a key defined only there renders correctly
+   in Storybook and renders as raw `%key%` text in the real app.
+   `src/node/data/shipped-locale-assets.test.ts` enforces this step — it fails when an exported
+   `*_STRING_KEYS` array names a key that no English shipping source defines, and when the Storybook
+   fixture names a key that does not ship.
 
 The consuming extension resolves the keys with `useLocalizedStrings(STRING_KEYS)` and passes the result down as the `localizedStrings` prop — the library never imports PAPI.
 

@@ -77,10 +77,12 @@ const CHARACTER_MARKER_CONTROL_KEYS_CHECKED_ELSEWHERE: readonly string[] = [
   '%webView_platformScriptureEditor_characterMarkerControl_label_format%',
   // Ships in the platform shell's locale assets (assets/localization/en.json, es.json) beside its
   // `%markerMenu_searchPlaceholder%`, `_insert`, and `_paragraph` siblings, not in this extension's
-  // contribution, so it is absent from the file read here. Asserted instead by
-  // src/shared/data/shipped-locale-assets.test.ts. Note that `platform-bible-react`'s
-  // `src/localizedStrings.json` also defines it, but that file is Storybook-only and is never
-  // loaded by the running app — do not treat a definition there as evidence the string ships.
+  // contribution, so it is absent from the file read here. Its presence is asserted instead by
+  // src/node/data/shipped-locale-assets.test.ts; the differs-from-English assertion the keys below
+  // get is deliberately NOT asserted there, so this key does not have one anywhere. Note that
+  // `platform-bible-react`'s `src/localizedStrings.json` also defines it, but that file is
+  // Storybook-only and is never loaded by the running app — do not treat a definition there as
+  // evidence the string ships.
   '%markerMenu_searchPlaceholder_character%',
 ];
 

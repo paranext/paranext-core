@@ -1276,6 +1276,40 @@ step, no automation. Just a record.
   now-redundant test in one deliberate commit.
 - **Source:** PR #2425
 
+## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** A `lib/platform-bible-react/` component declares the localize keys it needs in an
+  exported `*_STRING_KEYS` array, but nothing about declaring a key produces a value, and the
+  Localization Guide's routing rule ("built-in shell UI" vs "extension features") does not say where
+  a *shared library* component's values belong. The library also carries
+  `src/localizedStrings.json`, a hand-maintained Storybook pseudo-localization fixture with the same
+  filename and shape as a real extension contribution, which never ships. That collision is a
+  silent trap: `%markerMenu_searchPlaceholder_character%` was defined only in the fixture, rendered
+  correctly in Storybook, and rendered as raw `%key%` text in the running app.
+- **Decision:** A `platform-bible-react` component's string values ship in the platform shell's own
+  assets — `assets/localization/en.json`, plus `es.json` — never in one extension's
+  `contributions/localizedStrings.json`, regardless of how many extensions consume the component
+  today. `src/node/data/shipped-locale-assets.test.ts` enforces it: every key in every exported
+  `*_STRING_KEYS` array (both the `.` and `./experimental` package entries) must be defined in an
+  English shipping source, and every key in the Storybook fixture must ship too.
+- **Alternatives:** (a) Route by consumer — a library string used by exactly one extension lives in
+  that extension's contribution. Rejected: the count of consumers is not a stable property, so the
+  string would have to move the first time a second extension adopted the component, and nothing
+  would notice it had not. (b) Leave the convention unwritten and rely on review. Rejected: the
+  failure is invisible in Storybook and in every test, which is precisely why it reached main.
+  (c) Generate the Storybook fixture from `assets/localization/en.json` the way
+  `.storybook/localization.utils.ts` already does, so the two files cannot diverge. Deferred, not
+  rejected — it removes the trap structurally rather than guarding it, and is the better long-term
+  answer; it is out of scope for the branch that introduced the guard.
+- **Consequences:** Adding a key to a library component now has a fourth required step (ship a value)
+  documented in `Localization-Guide.md`, and CI fails when it is skipped. The guard reads the
+  committed `lib/platform-bible-react/dist/`, which no CI step rebuilds, so a newly exported array
+  is covered only once the library is rebuilt and the rebuilt bundle committed. Revisit if the
+  fixture becomes generated (alternative c), which would make most of the guard redundant.
+- **Source:** PR #2664
+
 ## adr-licensing-boundary: Platform.Bible is AGPL-3.0-or-later, with an MIT carve-out drawn by runtime linking
 
 - **Date:** 2026-08-07

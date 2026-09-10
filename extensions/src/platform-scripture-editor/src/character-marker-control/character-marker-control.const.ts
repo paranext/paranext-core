@@ -34,10 +34,9 @@ export const NO_MARKERS_TOOLTIP_KEY: LocalizeKey =
  * field, and the editor web view already preloads `MARKER_MENU_STRING_KEYS`, so it needs no
  * separate registration here.
  *
- * Being a platform-shell string rather than an extension-namespaced one, its value ships in
- * `assets/localization/en.json` and `es.json` beside those siblings — not in this extension's
- * `contributions/localizedStrings.json`. Guarded by
- * `src/shared/data/shipped-locale-assets.test.ts`.
+ * Its value ships in `assets/localization/en.json` and `es.json` beside those siblings — not in
+ * this extension's `contributions/localizedStrings.json` — because that is where the whole
+ * `markerMenu` family already lives. Guarded by `src/node/data/shipped-locale-assets.test.ts`.
  */
 export const SEARCH_PLACEHOLDER_KEY: LocalizeKey = '%markerMenu_searchPlaceholder_character%';
 /** Reuses the shipped sync-blocked wording rather than adding a second phrasing of it. */
