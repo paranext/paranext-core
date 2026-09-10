@@ -112,6 +112,10 @@ describe('web-view-content-zoom.service', () => {
         set: settingsSet,
         subscribe: async (key: string, callback: (value: unknown) => void) => {
           if (key === MEMORY) memoryCallbacks.push(callback);
+          // Mirrors the production subscription's immediate delivery of the current value
+          // (`retrieveDataImmediately` defaults to true), which is what primes the module's caches
+          // on initialization rather than leaving them to wait for the first live change.
+          callback(settings[key]);
           return async () => {};
         },
       },
@@ -456,6 +460,28 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('re-arms the fallback grace after a later report clears an earlier fallback grant, instead of reapplying it instantly', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    vi.useFakeTimers();
+    try {
+      setContentZoomAreas('editor-1', []);
+      vi.advanceTimersByTime(1000);
+      expect(iframe.style.zoom).toBe('1.3'); // the fallback grant from the first grace
+      setContentZoomAreas('editor-1', ['main']);
+      expect(iframe.style.zoom).toBe(''); // an area exists now, so the grant is revoked
+      setContentZoomAreas('editor-1', []);
+      expect(iframe.style.zoom).toBe(''); // the revoked grant must not apply instantly
+      vi.advanceTimersByTime(999);
+      expect(iframe.style.zoom).toBe('');
+      vi.advanceTimersByTime(1);
+      expect(iframe.style.zoom).toBe('1.3'); // only a fresh, fully-elapsed grace re-grants it
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('never scales a pane whole when its content reports an area within the grace period', async () => {
     settings['platform.webViewContentZoom'] = 1.3;
     __setContentZoomDepsForTesting({});
@@ -467,6 +493,40 @@ describe('web-view-content-zoom.service', () => {
       applyContentZoomForWebView('editor-1');
       vi.advanceTimersByTime(500);
       expect(iframe.style.zoom).toBe('');
+      setContentZoomAreas('editor-1', ['main']);
+      vi.advanceTimersByTime(2000);
+      expect(iframe.style.zoom).toBe('');
+      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('arms the fallback grace from the iframe load hook too, so a pane whose bootstrap never reports still gets the whole-view fallback', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    forgetContentZoom('editor-1'); // no area report at all, as for a bootstrap that never runs
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-1');
+      expect(iframe.style.zoom).toBe('');
+      vi.advanceTimersByTime(1000);
+      expect(iframe.style.zoom).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels the grace armed by the iframe load hook once the pane reports an area within it', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    forgetContentZoom('editor-1');
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-1');
+      vi.advanceTimersByTime(500);
       setContentZoomAreas('editor-1', ['main']);
       vi.advanceTimersByTime(2000);
       expect(iframe.style.zoom).toBe('');

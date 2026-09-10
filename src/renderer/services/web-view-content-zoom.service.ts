@@ -293,19 +293,30 @@ const FALLBACK_GRACE_MS = 1000;
 
 /**
  * Panes whose grace period has passed with no zoom area reported, so the whole-iframe fallback may
- * be applied to them. A URL web view is not listed here and does not need to be: it never runs the
- * bootstrap, so it can never report, and {@link mayScaleWholeIframe} lets it through at once.
+ * be applied to them. A later NON-EMPTY report revokes the grant ({@link clearFallbackGrace}), so a
+ * pane whose content is replaced (a navigation, say) has to earn it again through a fresh grace
+ * rather than being scaled instantly on its next empty report. A URL web view is not listed here
+ * and does not need to be: it never runs the bootstrap, so it can never report, and
+ * {@link mayScaleWholeIframe} lets it through at once.
  */
 const fallbackAllowedWebViewIds = new Set<WebViewId>();
 
 /** Running grace timers, one per pane, so a report or an unmount can cancel one. */
 const fallbackGraceTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>();
 
+/**
+ * Cancels a pending grace timer, and revokes an already-granted whole-iframe fallback for the pane.
+ * Called on a NON-EMPTY area report, so any earlier grant was for content that has since gone away:
+ * a later empty report must not reuse it and has to pass a fresh grace before the fallback applies
+ * again.
+ */
 function clearFallbackGrace(webViewId: WebViewId): void {
   const timer = fallbackGraceTimers.get(webViewId);
-  if (timer === undefined) return;
-  clearTimeout(timer);
-  fallbackGraceTimers.delete(webViewId);
+  if (timer !== undefined) {
+    clearTimeout(timer);
+    fallbackGraceTimers.delete(webViewId);
+  }
+  fallbackAllowedWebViewIds.delete(webViewId);
 }
 
 /** Test seam only: drops every pending grace timer and everything they have decided. */
@@ -316,9 +327,12 @@ function clearAllFallbackGraces(): void {
 }
 
 /**
- * Starts the wait after a pane's first area report came back empty. If the pane still has no area
- * when it elapses, its content is taken to have no zoom area at all and the whole-iframe fallback
- * is applied from then on.
+ * Starts the wait during which a pane with no known areas may still be mounting content that will
+ * report some. If the pane still has no area when it elapses, its content is taken to have no zoom
+ * area at all and the whole-iframe fallback is applied from then on. Started both by a pane's first
+ * empty area report ({@link setContentZoomAreas}) and, for a pane whose bootstrap may never run at
+ * all, by the iframe load hook ({@link applyContentZoomForWebView}); idempotent either way, since a
+ * grace already pending or already granted is left alone.
  */
 function startFallbackGrace(webViewId: WebViewId): void {
   if (fallbackAllowedWebViewIds.has(webViewId) || fallbackGraceTimers.has(webViewId)) return;
@@ -391,8 +405,7 @@ export function forgetContentZoom(webViewId: WebViewId): void {
   areasByWebViewId.delete(webViewId);
   activeAreaByWebViewId.delete(webViewId);
   unknownAreasLoggedByWebViewId.delete(webViewId);
-  clearFallbackGrace(webViewId);
-  fallbackAllowedWebViewIds.delete(webViewId);
+  clearFallbackGrace(webViewId); // also revokes a whole-iframe fallback grant, if any
 }
 
 /**
@@ -440,8 +453,23 @@ export function pushContentZoom(
   contentWindow?.__platformContentZoom?.showIndicator(indicator.areaId, indicator.text);
 }
 
-/** For the iframe load hook: push whatever this pane should show right now. */
+/**
+ * For the iframe load hook: push whatever this pane should show right now, and, for a non-URL pane
+ * with no areas known yet, arm the whole-iframe fallback grace here too. A pane whose bootstrap
+ * never runs at all (an HTML view opened with `allowScripts: false`, say) never calls
+ * {@link setContentZoomAreas}, so without this the grace would never start and the pane would stay
+ * unscaled indefinitely; a pane that does go on to report an area within the grace still cancels it
+ * as usual.
+ */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
+  const definition = deps.getDefinition(webViewId);
+  if (
+    definition &&
+    definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL &&
+    (areasByWebViewId.get(webViewId) ?? []).length === 0
+  ) {
+    startFallbackGrace(webViewId);
+  }
   pushContentZoom(webViewId);
 }
 
