@@ -114,6 +114,18 @@ export function FootnotesLayout({
     setSelectedFootnote({ footnote: footnotes[index], index });
   }, [focusRequest, footnotes]);
 
+  // Mirrors `editingFootnoteIndex` into a ref so the USJ-processing effect below can read its
+  // current value without depending on it: `editingFootnoteIndex` changes far more often relative
+  // to `usj` staying fixed (entering/leaving edit mode) than the reverse, and re-running the USJ
+  // parse on every such change would re-mint every footnote's row key via `setFootnoteListKey`,
+  // remounting the entire list (including the editing row itself) for no content change. Declared
+  // BEFORE the USJ effect so the ref is already current when that effect reads it within the same
+  // commit.
+  const editingFootnoteIndexRef = useRef(editingFootnoteIndex);
+  useEffect(() => {
+    editingFootnoteIndexRef.current = editingFootnoteIndex;
+  }, [editingFootnoteIndex]);
+
   useEffect(() => {
     try {
       const usjReaderWriter = new UsjReaderWriter(usj, {
@@ -131,7 +143,9 @@ export function FootnotesLayout({
         const fresh = newFootnotes[index];
         // The row being edited is the selection by definition: its content changes on every
         // live-apply, so content equality must not decide whether it stays selected.
-        const isEditingRow = editingFootnoteIndex !== undefined && index === editingFootnoteIndex;
+        const isEditingRow =
+          editingFootnoteIndexRef.current !== undefined &&
+          index === editingFootnoteIndexRef.current;
         if (
           isEditingRow ||
           (fresh.marker === footnote.marker &&
@@ -156,7 +170,7 @@ export function FootnotesLayout({
           `USJ (truncated): ${JSON.stringify(usj).slice(0, 200)}`,
       );
     }
-  }, [usj, editingFootnoteIndex]);
+  }, [usj]);
 
   const [containerHeight, setContainerHeight] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);

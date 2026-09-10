@@ -249,4 +249,34 @@ describe('FootnotesLayout selection across USJ changes', () => {
     expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
     expect(screen.getByTestId('row-editor')).toBeInTheDocument();
   });
+
+  it('does not remount the list when a row enters edit mode', () => {
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+        <div />
+      </FootnotesLayout>,
+    );
+    const rowsBefore = screen.getAllByRole('option');
+    rerender(
+      <FootnotesLayout
+        {...props}
+        usj={usjWithTwoNotes}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <div data-testid="row-editor" />}
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+    // A remount would produce a brand new element for the non-editing row; same node means the
+    // USJ-processing effect did not re-run (and therefore did not re-mint `footnoteListKey`) just
+    // because `editingFootnoteIndex` changed.
+    expect(screen.getAllByRole('option')[0]).toBe(rowsBefore[0]);
+    expect(screen.getByTestId('row-editor')).toBeInTheDocument();
+  });
 });
