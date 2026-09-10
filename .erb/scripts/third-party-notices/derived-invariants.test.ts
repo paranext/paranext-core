@@ -453,9 +453,10 @@ describe('the two Microsoft compatibility shims contribute nothing to the derive
 });
 
 describe('the Terms of Service document is spelled the same in all three places', () => {
-  // Three independent spellings of one filename, with nothing tying them together: `main.ts` opens
-  // it, `electron-builder.json5` packs it into `resources/`, and `release/app/package.json` declares
-  // the application licensed under it. `resolveLicenseDisplay` maps that declaration to a display
+  // Three independent spellings of one filename, with nothing tying them together:
+  // `terms-of-service-window.ts` opens it, `electron-builder.json5` packs it into `resources/`, and
+  // `release/app/package.json` declares the application licensed under it. `resolveLicenseDisplay`
+  // maps that declaration to a display
   // string by prefix and discards the filename, so a rename passes every other test in the tree
   // while leaving the About dialog opening a file that is not there.
   const NAME_FROM_MANIFEST = /"license"\s*:\s*"SEE LICENSE IN ([^"]+)"/;
@@ -478,7 +479,10 @@ describe('the Terms of Service document is spelled the same in all three places'
   });
 
   it('opens that name from the main process', () => {
-    const main = fs.readFileSync(path.join(REPO, 'src', 'main', 'main.ts'), 'utf8');
-    expect(main).toContain(`TERMS_OF_SERVICE_FILE_NAME = '${declared}'`);
+    const opener = fs.readFileSync(
+      path.join(REPO, 'src', 'main', 'terms-of-service-window.ts'),
+      'utf8',
+    );
+    expect(opener).toContain(`TERMS_OF_SERVICE_FILE_NAME = '${declared}'`);
   });
 });
