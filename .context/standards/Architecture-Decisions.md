@@ -1202,8 +1202,12 @@ step, no automation. Just a record.
   highlight is presentational only and never dirties the document. The footnotes pane renders from
   the editor's live USJ (falling back to the last-saved USJ before the editor has produced one)
   rather than only the last-saved USJ, so the pane and `getNoteIndex` always index the same
-  document. The pane's `listId` changes only when the note count changes, so a content edit keeps
-  the same row's inline editor mounted across re-renders; reordering with an unchanged count is a
+  document. That publish is gated on the pane actually being rendered: the web view pushes the
+  editor's live USJ to the pane only while the pane is rendered — once when it becomes rendered and
+  again on each chapter load — so every view with no pane showing keeps the typing hot path free of
+  that publish; a hidden pane falls back to the last-saved USJ and catches up once it is shown
+  again. The pane's `listId` changes only when the note count changes, so a content edit keeps the
+  same row's inline editor mounted across re-renders; reordering with an unchanged count is a
   known, accepted gap in that identity.
 - **Alternatives:**
   - **Host-side DOM class toggling**, re-applying the caller highlight after every `onUsjChange`.
@@ -1222,9 +1226,14 @@ step, no automation. Just a record.
   `platform-yalc` branch (or a published editor version) before its typecheck passes. The inline
   footnote editor in the pane has no Save/Cancel — edits apply live and flush on unmount, matching
   the popover's existing live-apply behavior and PT9's own pane editing, so an inserted note is
-  never discarded when an editing session ends. The "Auto-show footnote pane" toggle and its
-  persisted setting are removed: PT9 has no auto-hide, so the pane now hides only via its own close
-  control, and a caller click reveals a hidden pane only in Power mode.
+  never discarded when an editing session ends. Gating the live-USJ publish on the pane being
+  rendered means the cost of keeping the pane in sync is paid only by views that actually show it;
+  a formatted-view or Simple-mode session, which never renders the pane, never pays it. The "Auto-show
+  footnote pane" toggle and its persisted setting are removed: PT9 has no auto-hide, so the pane now
+  hides only via its own close control, and a caller click reveals a hidden pane only in Power mode.
+  The pane's chrome is a close (X) button in its top-right corner and no title header — the earlier
+  title header was removed by team decision, and PT9's own pane likewise closes via a corner button
+  rather than a toggle in a title bar.
 - **Source:** PT-4189, PT-4478.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
