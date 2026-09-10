@@ -44,16 +44,16 @@ describe('electron-builder packaging', () => {
     expect(asStrings.some((r) => r.includes('LICENSING.md'))).toBe(true);
   });
 
-  it("ships TERMS-OF-SERVICE.md, which the binary's declared license points at", () => {
-    // `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.md`. That declaration is
+  it("ships TERMS-OF-SERVICE.html, which the binary's declared license points at", () => {
+    // `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.html`. That declaration is
     // only meaningful if the file travels with the binary, and it is the terms the application is
     // actually licensed to the user under - so it has to be packed, not merely present in the repo.
-    expect(asStrings.some((r) => r.includes('TERMS-OF-SERVICE.md'))).toBe(true);
+    expect(asStrings.some((r) => r.includes('TERMS-OF-SERVICE.html'))).toBe(true);
     const releaseApp = JSON.parse(
       fs.readFileSync(path.join(REPO, 'release', 'app', 'package.json'), 'utf8'),
     );
-    expect(releaseApp.license).toBe('SEE LICENSE IN TERMS-OF-SERVICE.md');
-    expect(fs.existsSync(path.join(REPO, 'TERMS-OF-SERVICE.md'))).toBe(true);
+    expect(releaseApp.license).toBe('SEE LICENSE IN TERMS-OF-SERVICE.html');
+    expect(fs.existsSync(path.join(REPO, 'TERMS-OF-SERVICE.html'))).toBe(true);
   });
 
   it('ships LICENSE-EXCEPTION.md, which modifies the license text beside it', () => {
