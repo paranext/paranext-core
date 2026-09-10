@@ -1,6 +1,6 @@
 import { deepClone, type InterfaceMode } from 'platform-bible-utils';
 import type { BoxData, LayoutBase, PanelData, TabData } from 'rc-dock';
-import type { SavedTabInfo } from '@shared/models/docking-framework.model';
+import { TAB_TYPE_WEBVIEW, type SavedTabInfo } from '@shared/models/docking-framework.model';
 import { mintFreshWebViewIdInTab } from './mint-web-view-ids.util';
 import type { DefaultLayoutSupplementEntry } from './default-layout-supplement.model';
 
@@ -60,11 +60,16 @@ function collectWebViewTypes(box: BoxData, types: Set<string>): void {
 }
 
 /**
- * Collect the `id` of every tab under `box`, across every panel. Backs the dedup fallback for a
- * supplement entry whose tab carries no `data.webViewType`: `mintFreshWebViewIdInTab` mints a fresh
- * id only for a web view tab and copies any other tab through unchanged, so a no-type entry's baked
- * id IS the id its materialized tab keeps on every reload — stable in exactly the way a web view
- * tab's id is not, which is what makes it a sound identity for these entries and only these.
+ * Collect the `id` of every tab under `box`, across every panel. Backs dedup for a supplement entry
+ * whose tab is not a web view: `mintFreshWebViewIdInTab` mints a fresh id only for a web view tab
+ * and copies any other tab through unchanged, so such an entry's baked id IS the id its
+ * materialized tab keeps on every reload — stable in exactly the way a web view tab's id is not,
+ * which is what makes it a sound identity for these entries and only these.
+ *
+ * The condition is the tab's own `tabType`, matching the mint's, rather than whether it declares a
+ * `data.webViewType`. Those two agree for every well-formed entry and diverge for one malformed
+ * shape — a tab typed as a web view that declares no type — where keying on the declaration would
+ * hand that tab an id the mint has already replaced.
  */
 function collectTabIds(box: BoxData, ids: Set<string>): void {
   findPanel(box, (panel) => {
@@ -140,10 +145,11 @@ function withPinningForMode(tab: SavedTabInfo, isSimpleMode: boolean): SavedTabI
  * Add each supplement entry's tab to the panel containing its `anchorWebViewType` — appended last,
  * or before the tab named by the entry's `insertBeforeWebViewType` when that tab is in the panel.
  * Pure and idempotent: returns a deep clone, never mutates `baseLayout`, and skips an entry that is
- * already present — recognized by `webViewType` when the entry's tab has one, and by the tab's own
- * `id` when it does not (see `collectTabIds`) — or whose anchor is absent. `entries` should already
- * be filtered by any `flagSetting` (see {@link filterEnabledSupplementEntries} and the caller in
- * `web-view.service-shard.ts`).
+ * already present — a web view tab recognized by its `webViewType` and any other tab by its own
+ * `id` (see `collectTabIds`) — or whose anchor is absent. An entry typed as a web view that
+ * declares no `webViewType` has neither identity, so it is skipped and reported rather than merged;
+ * see the `onPlacementAnomaly` parameter. `entries` should already be filtered by any `flagSetting`
+ * (see {@link filterEnabledSupplementEntries} and the caller in `web-view.service-shard.ts`).
  *
  * `interfaceMode` is required rather than inferred because this merge runs against both modes'
  * layouts — Simple mode's build-baked one and Power mode's persisted one — while a supplement entry
@@ -157,9 +163,12 @@ function withPinningForMode(tab: SavedTabInfo, isSimpleMode: boolean): SavedTabI
  * @param entries Supplement entries to merge, already filtered by `flagSetting`.
  * @param interfaceMode Mode whose layout `baseLayout` is, which decides whether each entry's
  *   Simple-mode-only ordering and pinning apply.
- * @param onPlacementAnomaly Called when an entry's `insertBeforeWebViewType` could not be resolved
- *   in Simple mode and the tab was appended instead. Never called in Power mode, where appending is
- *   the documented behavior rather than a fallback.
+ * @param onPlacementAnomaly Called when an entry could not be handled as written, which for a
+ *   hand-edited supplement file usually means a typo. Two cases, and they differ by mode: an
+ *   `insertBeforeWebViewType` that could not be resolved, reported in Simple mode only, since
+ *   appending is Power mode's documented behavior rather than a fallback there; and an entry typed
+ *   as a web view that declares no `webViewType`, reported in both modes and skipped, since it is
+ *   malformed in both.
  */
 export function mergeDefaultLayoutSupplement(
   baseLayout: LayoutBase,
@@ -191,13 +200,27 @@ export function mergeDefaultLayoutSupplement(
     // entry.tab is a SavedTabInfo; webViewTypeOf reads the same `data.webViewType` shape off either
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const entryWebViewType = webViewTypeOf(entry.tab as unknown as TabData);
-    // An entry with a webViewType is deduped by type (see `collectWebViewTypes`); an entry with none
-    // falls back to its tab's own `id`, which `collectTabIds`'s doc explains is sound for exactly
-    // this case.
-    const alreadyPresent = entryWebViewType
-      ? existingWebViewTypes.has(entryWebViewType)
-      : existingTabIds.has(entry.tab.id);
-    if (alreadyPresent) return;
+    // The tab type decides which identity dedup can use, because the tab type is what decides
+    // whether the id survives: `mintFreshWebViewIdInTab` re-mints a web view tab's id on every
+    // materialization and copies any other tab through unchanged. So a web view tab is recognized
+    // by its `webViewType` (see `collectWebViewTypes`) and any other tab by its own `id` (see
+    // `collectTabIds`). Keying this on `data.webViewType` instead would ask a different question
+    // than the mint answers, and the two disagree for the entry handled just below.
+    if (entry.tab.tabType === TAB_TYPE_WEBVIEW) {
+      if (!entryWebViewType) {
+        // Neither identity is available: the id is re-minted on every load and there is no type to
+        // match on, so nothing can ever recognize this tab as already present. Merging it would
+        // append it again on every load, and Power mode persists the merged layout, so the saved
+        // layout would grow without bound and collect duplicate ids with it. Refusing the entry
+        // costs one absent tab in a hand-edited file; merging it corrupts the layout on disk.
+        onPlacementAnomaly?.(
+          entry,
+          `tab '${entry.tab.id}' is a web view tab but declares no webViewType, so it has no identity that survives a reload; skipping it rather than re-appending it on every load`,
+        );
+        return;
+      }
+      if (existingWebViewTypes.has(entryWebViewType)) return;
+    } else if (existingTabIds.has(entry.tab.id)) return;
     const panel = findPanelByWebViewType(dockbox, entry.anchorWebViewType);
     if (!panel) return;
     const tabs = panel.tabs ?? [];

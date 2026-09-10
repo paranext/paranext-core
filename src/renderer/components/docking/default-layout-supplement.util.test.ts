@@ -265,6 +265,90 @@ describe('mergeDefaultLayoutSupplement with a no-webViewType entry', () => {
   });
 });
 
+/**
+ * A malformed entry: its tab claims to be a web view, so minting gives it a fresh id on every
+ * materialization, but it declares no `data.webViewType` for the dedup to key on. Neither identity
+ * is available, so nothing can recognize it as already present — merging it would append it again
+ * on every load, and Power mode persists the merged layout, so the file would grow without bound.
+ * Reachable only through the hand-edited supplement JSON a product build replaces.
+ */
+const webViewEntryWithNoType: DefaultLayoutSupplementEntry = {
+  anchorWebViewType: 'platformScriptureEditor.bibleTexts',
+  tab: {
+    id: 'malformed-tab',
+    tabType: 'webView',
+    data: { id: 'malformed-tab', state: {} },
+  },
+};
+
+describe('mergeDefaultLayoutSupplement with a web-view entry that declares no webViewType', () => {
+  it('does not merge it, since it has no identity that survives a reload', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [webViewEntryWithNoType], 'simple');
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab']);
+  });
+
+  it('does not grow the layout when the merge is repeated, which is the failure it prevents', () => {
+    const once = mergeDefaultLayoutSupplement(baseLayout(), [webViewEntryWithNoType], 'simple');
+    const twice = mergeDefaultLayoutSupplement(once, [webViewEntryWithNoType], 'simple');
+    expect(tabsInFirstPanel(twice).map((t) => t.id)).toEqual(
+      tabsInFirstPanel(once).map((t) => t.id),
+    );
+  });
+
+  it('reports it, so the typo in the hand-edited JSON is visible rather than silent', () => {
+    const anomalies: { entry: DefaultLayoutSupplementEntry; message: string }[] = [];
+    mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [webViewEntryWithNoType],
+      'simple',
+      (entry, message) => anomalies.push({ entry, message }),
+    );
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0].entry).toBe(webViewEntryWithNoType);
+    expect(anomalies[0].message).toContain('webViewType');
+  });
+
+  it('reports it in power mode too, unlike the ordering anomaly', () => {
+    // The ordering anomaly stays quiet in power mode because appending is what that mode's contract
+    // says happens. A malformed entry is malformed in both modes, so this one has to fire in both.
+    const anomalies: string[] = [];
+    mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [webViewEntryWithNoType],
+      'power',
+      (_entry, message) => anomalies.push(message),
+    );
+    expect(anomalies).toHaveLength(1);
+  });
+
+  it('positive control: a well-formed web-view entry is still merged and reports nothing', () => {
+    const anomalies: string[] = [];
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [gridEntry],
+      'simple',
+      (_e, message) => anomalies.push(message),
+    );
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
+    ]);
+    expect(anomalies).toEqual([]);
+  });
+
+  it('positive control: a non-web-view tab with no type is unaffected and still merges', () => {
+    const anomalies: string[] = [];
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [noTypeEntry],
+      'simple',
+      (_e, message) => anomalies.push(message),
+    );
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab', 'settings-tab']);
+    expect(anomalies).toEqual([]);
+  });
+});
+
 /** Reads the `isClosable` a merged tab carries, which lives inside the tab's web view data. */
 function isClosableOf(tab: SavedTabInfo | undefined): boolean | undefined {
   // Tab data is `unknown` in the shared model; supplement tabs store a WebViewDefinition there.
