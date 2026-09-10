@@ -27,7 +27,11 @@ export const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = '--platform-content-zoom-';
  */
 export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-default';
 
-/** The CSS custom property carrying one zoom area's effective factor. */
+/**
+ * The CSS custom property carrying one zoom area's effective factor.
+ *
+ * @experimental This function is unstable and may change or disappear without notice
+ */
 export function getContentZoomCssVariable(areaId: string): string {
   return `${CONTENT_ZOOM_CSS_VARIABLE_PREFIX}${areaId}`;
 }
@@ -43,13 +47,19 @@ export function getContentZoomCssVariable(areaId: string): string {
  */
 export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
 
-/** `id` of the `<style>` element the platform injects into each web view head for content zoom. */
+/**
+ * `id` of the `<style>` element the platform injects into each web view head for content zoom.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
 export const CONTENT_ZOOM_STYLE_ELEMENT_ID = 'platform-content-zoom-styles';
 
 /**
  * Which kind of memory a first-party web view type uses for its content zoom. Core lists extension
  * web-view types by string here because core code cannot import extension source (same pattern as
  * `SCRIPTURE_EDITOR_WEBVIEW_TYPE`).
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
  */
 export const CONTENT_ZOOM_KIND_BY_WEB_VIEW_TYPE: ReadonlyMap<string, ContentZoomKind> = new Map<
   string,
@@ -65,12 +75,20 @@ export const CONTENT_ZOOM_KIND_BY_WEB_VIEW_TYPE: ReadonlyMap<string, ContentZoom
   ['legacyCommentManager.commentListPanel', 'notes'],
 ]);
 
-/** The content-zoom kind of a web view type, or `undefined` for a type with no per-project memory. */
+/**
+ * The content-zoom kind of a web view type, or `undefined` for a type with no per-project memory.
+ *
+ * @experimental This function is unstable and may change or disappear without notice
+ */
 export function getContentZoomKind(webViewType: string): ContentZoomKind | undefined {
   return CONTENT_ZOOM_KIND_BY_WEB_VIEW_TYPE.get(webViewType);
 }
 
-/** Names of the three content-zoom commands (registered in the main-process web-view router). */
+/**
+ * Names of the three content-zoom commands (registered in the main-process web-view router).
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
 export const CONTENT_ZOOM_COMMANDS = {
   in: 'platform.webViewContentZoomIn',
   out: 'platform.webViewContentZoomOut',
