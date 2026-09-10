@@ -80,6 +80,12 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
  * that is momentarily absent while the dialog is still open is the mid-transition frame, and reads
  * as "not changed yet".
  *
+ * A dialog that is not visible is ambiguous: the tour unmounts it for good after Done, but it also
+ * renders nothing for a frame while it re-measures the next step's target — on a fast machine a
+ * single sample lands in that frame. So "closed" is only reported once the dialog has stayed away
+ * for several consecutive samples; a brief absence reads as "not changed yet" and the poll goes
+ * on.
+ *
  * Compares trimmed text on both sides: `textContent()` can carry incidental leading/trailing
  * whitespace from the surrounding markup that has nothing to do with the step actually changing, so
  * comparing the raw strings can either report a change that is not real or paper over a stale
@@ -89,6 +95,8 @@ async function waitForStepCounterChange(page: Page, previousText: string | null)
   const dialog = getTourDialog(page);
   const stepCounter = getStepCounter(page);
   const previousTrimmed = previousText?.trim() ?? previousText;
+  const samplesBeforeClosed = 4;
+  let dialogAbsentSamples = 0;
   await expect
     .poll(
       async () => {
@@ -96,7 +104,11 @@ async function waitForStepCounterChange(page: Page, previousText: string | null)
           dialog.isVisible(),
           stepCounter.count(),
         ]);
-        if (!dialogVisible) return 'closed';
+        if (!dialogVisible) {
+          dialogAbsentSamples += 1;
+          return dialogAbsentSamples >= samplesBeforeClosed ? 'closed' : previousTrimmed;
+        }
+        dialogAbsentSamples = 0;
         if (counterCount === 0) return previousTrimmed;
         const text = await stepCounter.textContent();
         return text?.trim() ?? text;
