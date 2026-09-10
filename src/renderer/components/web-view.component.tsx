@@ -317,9 +317,9 @@ export function WebView({
     iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
     setIframeHasLoadedTimes((prev) => prev + 1);
-    // Applies whatever this pane should already show: the whole-view fallback for a URL web view
-    // (which never runs the bootstrap) or a React/HTML view whose bootstrap has not reported its
-    // areas yet.
+    // Pushes the pane's current zoom. The whole-view fallback applies immediately to URL web views;
+    // for any other view it applies only after the grace period during which the bootstrap may
+    // report its zoom areas.
     applyContentZoomForWebView(id);
   }, [id]);
 
