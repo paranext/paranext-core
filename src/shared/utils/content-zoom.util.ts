@@ -74,13 +74,18 @@ function isContentZoomKind(value: string): value is ContentZoomKind {
 
 /**
  * Key under which one area's level for a kind of view and an identity (project id, or the resource
- * id for views without a project) is remembered: `kind:identity:area`.
+ * id for views without a project) is remembered: `kind:identity:area`. Throws for an empty
+ * `identity` or a malformed `areaId`, since `parseContentZoomMemoryKey` could not read either
+ * back.
  */
 export function buildContentZoomMemoryKey(
   kind: ContentZoomKind,
   identity: string,
   areaId: string,
 ): string {
+  if (!identity) throw new Error('buildContentZoomMemoryKey: identity must not be empty');
+  if (!isValidContentZoomAreaId(areaId))
+    throw new Error(`buildContentZoomMemoryKey: invalid area id "${areaId}"`);
   return `${kind}:${identity}:${areaId}`;
 }
 

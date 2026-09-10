@@ -76,4 +76,10 @@ describe('content-zoom.util', () => {
     expect(parseContentZoomMemoryKey('editor:abc123:Main')).toBeUndefined();
     expect(parseContentZoomMemoryKey('editor::main')).toBeUndefined();
   });
+
+  it('rejects an identity or area id that parseContentZoomMemoryKey could not round-trip', () => {
+    expect(() => buildContentZoomMemoryKey('editor', '', 'main')).toThrow();
+    expect(() => buildContentZoomMemoryKey('editor', 'abc123', 'Main')).toThrow();
+    expect(() => buildContentZoomMemoryKey('editor', 'abc123', '')).toThrow();
+  });
 });
