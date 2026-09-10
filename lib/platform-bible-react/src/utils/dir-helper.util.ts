@@ -13,23 +13,37 @@ const STORAGE_KEY: string = 'layoutDirection';
  * never throw, including while a web view's iframe is mid-reparent inside the dock.
  */
 function getStorage(): Storage | undefined {
-  try {
-    return globalThis.localStorage ?? undefined;
-  } catch {
-    return undefined;
-  }
+  return globalThis.localStorage ?? undefined;
 }
 
-/** Read layout direction from localStorage, or return 'ltr' when storage is unavailable */
+/**
+ * Read layout direction from localStorage, or return 'ltr' when storage is unavailable.
+ *
+ * The `try` also covers `getItem` itself, not just reaching `localStorage` - a `Storage` object
+ * that is reachable without throwing can still throw on the call (e.g. a sandboxed proxy that
+ * defers its `SecurityError` to the method rather than the property access).
+ */
 export function readDirection(): Direction {
-  const retrieved = getStorage()?.getItem(STORAGE_KEY);
-  if (retrieved === 'rtl') {
-    return retrieved;
+  try {
+    const retrieved = getStorage()?.getItem(STORAGE_KEY);
+    if (retrieved === 'rtl') {
+      return retrieved;
+    }
+  } catch {
+    // Fall through to 'ltr' below
   }
   return 'ltr';
 }
 
-/** Write layout direction to localStorage. A no-op when storage is unavailable. */
+/**
+ * Write layout direction to localStorage. A no-op when storage is unavailable or the write itself
+ * throws (e.g. quota exceeded in Safari private browsing) - see `readDirection` for why the call,
+ * not just reaching `localStorage`, has to be inside the guard.
+ */
 export function persistDirection(dir: Direction): void {
-  getStorage()?.setItem(STORAGE_KEY, dir);
+  try {
+    getStorage()?.setItem(STORAGE_KEY, dir);
+  } catch {
+    // Storage unavailable or the write was rejected - no-op
+  }
 }
