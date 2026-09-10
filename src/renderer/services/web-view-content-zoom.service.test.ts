@@ -18,9 +18,13 @@ vi.mock('@renderer/services/overlays/overlay-coordinates', () => ({ getWebViewIf
 // Import types and the service under test after the mocks above are established.
 // eslint-disable-next-line import/first
 import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
+// The mocked logger, so a test can assert on a warning it produced.
+// eslint-disable-next-line import/first
+import { logger } from '@shared/services/logger.service';
 // The service itself, for the same reason as the type import above.
 // eslint-disable-next-line import/first
 import {
+  __flushContentZoomMemoryForTesting,
   __setContentZoomDepsForTesting,
   adjustContentZoom,
   forgetContentZoom,
@@ -87,6 +91,7 @@ describe('web-view-content-zoom.service', () => {
     settingsSet.mockClear();
     updateDefinition.mockClear();
     showIndicator.mockClear();
+    vi.mocked(logger.warn).mockClear();
     lastFocused = undefined;
     document.body.innerHTML = '';
     iframe = makeIframe();
@@ -140,6 +145,7 @@ describe('web-view-content-zoom.service', () => {
 
   it('zooms one area in from the default, writes state and memory for that area, pushes its variable and shows the indicator there', async () => {
     await adjustContentZoom('editor-1', 1, 'main');
+    await __flushContentZoomMemoryForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
     expect(settings[MEMORY]).toEqual({ 'editor:proj-A:main': 1.1 });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
@@ -154,6 +160,7 @@ describe('web-view-content-zoom.service', () => {
     await adjustContentZoom('editor-1', 1, 'main');
     await adjustContentZoom('editor-1', 1, 'main');
     await adjustContentZoom('editor-1', 1, 'footnotes');
+    await __flushContentZoomMemoryForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2, footnotes: 1.1 } });
     expect(settings[MEMORY]).toEqual({ 'editor:proj-A:main': 1.2, 'editor:proj-A:footnotes': 1.1 });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.2');
@@ -172,7 +179,9 @@ describe('web-view-content-zoom.service', () => {
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
     await adjustContentZoom('editor-1', 1, 'main'); // 1.6
+    await __flushContentZoomMemoryForTesting(); // persist 1.6 so the reset below deletes a real entry
     await resetContentZoom('editor-1', 'main');
+    await __flushContentZoomMemoryForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({});
     expect(settings[MEMORY]).toEqual({});
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
@@ -184,6 +193,43 @@ describe('web-view-content-zoom.service', () => {
     await adjustContentZoom('editor-1', 1, 'main');
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(settingsSet).not.toHaveBeenCalled();
+  });
+
+  it('coalesces an un-awaited burst of adjustments into one memory write per key', async () => {
+    const first = adjustContentZoom('editor-1', 1, 'main');
+    const second = adjustContentZoom('editor-1', 1, 'main');
+    const third = adjustContentZoom('editor-1', 1, 'footnotes');
+    await Promise.all([first, second, third]);
+    await __flushContentZoomMemoryForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2, footnotes: 1.1 } });
+    expect(settings[MEMORY]).toEqual({
+      'editor:proj-A:main': 1.2,
+      'editor:proj-A:footnotes': 1.1,
+    });
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the memory write and warns, without losing the pane update, when the memory read fails', async () => {
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          if (key === MEMORY) throw new Error('network blip');
+          return settings[key];
+        },
+        set: settingsSet,
+        subscribe: async (key: string, callback: (value: unknown) => void) => {
+          if (key === MEMORY) memoryCallbacks.push(callback);
+          return async () => {};
+        },
+      },
+    });
+    await adjustContentZoom('editor-1', 1, 'main');
+    await __flushContentZoomMemoryForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
+    expect(showIndicator).toHaveBeenCalledWith('main', '110 %');
+    expect(settingsSet).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalled();
   });
 
   it('seeds a new pane per area from state, else memory, else the default', async () => {
