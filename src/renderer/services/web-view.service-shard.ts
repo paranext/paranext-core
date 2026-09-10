@@ -24,18 +24,9 @@ import {
   getContentZoomBootstrapScript,
   getContentZoomStyleElement,
 } from '@renderer/services/web-view-content-zoom.bootstrap-script';
-// This module imports the zoom service's getLastFocusedTabId dependency (still injected as a
-// direct import there, unlike the four shard functions injected below) from window.service-shard,
-// which itself imports several web-view-definition functions from this file. window.service-shard's
-// side of that pairing is unrelated to content zoom and out of scope here; every name crossing any
-// of these three imports is a hoisted `function`/`async function` declaration, so none of the three
-// modules can observe another mid-initialization no matter which one the module graph evaluates
-// first.
-// eslint-disable-next-line import/no-cycle
 import {
   adjustContentZoom,
   getInitialContentZoomForWebView,
-  initializeContentZoomService,
   resetContentZoom,
   setContentZoomActiveArea,
   setContentZoomAreas,
@@ -3609,19 +3600,6 @@ export const initialize = () => {
           `Tried to delete webViewNonce for web view with id ${id} (type ${webViewType}), but a nonce was not found. May not be an issue, but worth investigating`,
         );
     });
-
-    // Not awaited: its startup prune does a project lookup, and no web view should wait on that to
-    // open. Injects this shard's own web-view-definition functions so the zoom service never
-    // imports them back (that import would close a cycle with this file's own import of the zoom
-    // service, above).
-    initializeContentZoomService({
-      getDefinition: getSavedWebViewDefinitionSync,
-      updateDefinition: (webViewId, update) => updateWebViewDefinitionSync(webViewId, update),
-      getAllOpenDefinitions: getAllOpenWebViewDefinitionsSync,
-      onDidUpdateWebView,
-    }).catch((e) =>
-      logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
-    );
 
     isInitialized = true;
 
