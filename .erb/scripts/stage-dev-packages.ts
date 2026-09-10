@@ -259,7 +259,7 @@ function checkoutRevision(repo: DevRepo): void {
   const status = execSync('git status --porcelain', { cwd: repoPath, encoding: 'utf8' });
   if (status.trim().length > 0) {
     throw new Error(
-      `The ${repo.folder} repo has working changes:\n${status}\nWe don't want to accidentally overwrite any changes. Please go handle your changes and try again when there are no more working changes.\n\nIf you are actively developing ${repo.folder}, build your working state with \`npm run build:editor\` instead.`,
+      `The ${repo.folder} repo has working changes:\n${status}\nWe don't want to accidentally overwrite any changes. Please go handle your changes and try again when there are no more working changes.\n\nIf you are actively developing ${repo.folder}, build your working state with \`npm run build:editor\` instead. To get those changes into this repo's package-lock.json, commit them there first — this command stages a committed revision, and a lockfile built from uncommitted work records something nobody else can reproduce (the pre-commit hook blocks committing one).\n\n\`packages/*/dist\` and \`packages/*/etc\` are committed build outputs, so a \`build:editor\` run shows up here too. If they are the only changes listed, they are regenerable: \`git -C "${repoPath}" restore packages/*/dist packages/*/etc\`.`,
     );
   }
 
