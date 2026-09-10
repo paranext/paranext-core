@@ -278,6 +278,14 @@ export type BundledComponent = {
   name: string;
   version?: string;
   spdx?: string[];
+  /**
+   * The component's OWN copyright notice, as read from its license file or its source - not the
+   * program's. It is what pairs the component with the canonical text reproduced on its behalf, so
+   * that text is never credited to the program's copyright holder. Inline text: the renderer
+   * escapes it (`inlineText`), so Markdown syntax in it prints literally. Omit it when no notice
+   * was read; the document states the absence rather than inventing a holder.
+   */
+  copyright?: string;
   /** Free-text terms where no SPDX identifier applies; requires `nonSpdx: true`. */
   terms?: string;
   nonSpdx?: boolean;
