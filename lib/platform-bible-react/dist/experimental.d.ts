@@ -589,9 +589,9 @@ export type LinkedScrRefButtonProps = {
 export declare function LinkedScrRefButton({ scrRef, onClick, tooltipContent, ariaLabel, className, testId, }: LinkedScrRefButtonProps): import("react/jsx-runtime").JSX.Element | undefined;
 /** Text and layout direction */
 export type Direction = "rtl" | "ltr";
-/** Read layout direction from localStorage or return 'ltr' */
+/** Read layout direction from localStorage, or return 'ltr' when storage is unavailable */
 export declare function readDirection(): Direction;
-/** Write layout direction to localStorage */
+/** Write layout direction to localStorage. A no-op when storage is unavailable. */
 export declare function persistDirection(dir: Direction): void;
 /**
  * What this table needs of a keydown. A DOM `KeyboardEvent` satisfies it, and so does a
