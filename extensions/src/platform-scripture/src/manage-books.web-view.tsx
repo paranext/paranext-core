@@ -23,9 +23,9 @@ import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  PROJECT_SELECTOR_STRING_KEYS,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
+  type ProjectSelectorLocalizedStrings,
 } from 'platform-bible-react/experimental';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
@@ -350,11 +350,7 @@ global.webViewComponent = function ManageBooksWebView({
   // (Hoisted above the project-change effect so the effect can read the localized title
   // template when computing the new tab title.)
   const stringKeys = useMemo(
-    () => [
-      ...MANAGE_BOOKS_DIALOG_STRING_KEYS,
-      ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS,
-      ...PROJECT_SELECTOR_STRING_KEYS,
-    ],
+    () => [...MANAGE_BOOKS_DIALOG_STRING_KEYS, ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS],
     [],
   );
   const [localizedStrings] = useLocalizedStrings(stringKeys);
@@ -449,6 +445,57 @@ global.webViewComponent = function ManageBooksWebView({
       if (typeof value === 'string') out[key] = value;
     });
     return out;
+  }, [localizedStrings]);
+
+  // The ProjectSelector popover's internal strings (search placeholder,
+  // filter labels, section headings) are not localized by default. Build a
+  // ProjectSelectorLocalizedStrings object from the resolved manage-books
+  // strings so all three pickers (sidebar / Copy "From" / Create "Based on")
+  // share the same translations.
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(() => {
+    const resolve = (key: keyof typeof localizedStrings, fallback: string) => {
+      const value = localizedStrings[key];
+      return typeof value === 'string' ? value : fallback;
+    };
+    return {
+      searchPlaceholder: resolve(
+        '%manageBooks_projectSelector_searchPlaceholder%',
+        'Search projects & resources',
+      ),
+      viewOptionsAriaLabel: resolve(
+        '%manageBooks_projectSelector_filterAriaLabel%',
+        'View options',
+      ),
+      groupSectionLabel: resolve('%manageBooks_projectSelector_groupSectionLabel%', 'Group'),
+      filterSectionLabel: resolve('%manageBooks_projectSelector_filterSectionLabel%', 'Filter'),
+      filterGroupByOpenTabs: resolve(
+        '%manageBooks_projectSelector_filterGroupByOpenTabs%',
+        'By open tabs',
+      ),
+      filterShowSelectedOnly: resolve(
+        '%manageBooks_projectSelector_filterShowSelectedOnly%',
+        'Show selected only',
+      ),
+      openTabsSectionHeading: resolve(
+        '%manageBooks_projectSelector_openTabsSectionHeading%',
+        'Opened project & resource tabs',
+      ),
+      otherProjectsSectionHeading: resolve(
+        '%manageBooks_projectSelector_otherProjectsSectionHeading%',
+        'Your projects & resources',
+      ),
+      versificationUnknownSectionHeading: resolve(
+        '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
+        'Unknown versification',
+      ),
+      boundButClosedTooltip: resolve(
+        '%manageBooks_projectSelector_boundButClosedTooltip%',
+        'Bound to {group} · not currently open',
+      ),
+      openButtonLabel: resolve('%manageBooks_projectSelector_openButtonLabel%', 'Open'),
+      selectAll: resolve('%manageBooks_projectSelector_selectAll%', 'Select all'),
+      clearAll: resolve('%manageBooks_projectSelector_clearAll%', 'Clear all'),
+    };
   }, [localizedStrings]);
 
   // ===== PAPI: project list =================================================
@@ -1047,7 +1094,7 @@ global.webViewComponent = function ManageBooksWebView({
         localizedStrings={localizedStrings}
         sidebarProjects={sidebarProjects}
         openTabs={projectSelectorOpenTabs}
-        projectSelectorLocalizedStrings={localizedStrings}
+        projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
       />
       <GreekEstherTemplatePicker
         open={pickerOpen}

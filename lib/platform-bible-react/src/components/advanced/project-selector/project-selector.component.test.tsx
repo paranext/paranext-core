@@ -497,7 +497,7 @@ describe('customSections', () => {
         hideFilterMenu
         customSections={[{ id: 'recent', label: 'Recent', match: (p) => p.id === 'c' }]}
         localizedStrings={{
-          '%webView_project_selector_custom_unmatched_section_heading%': 'Everything else',
+          customUnmatchedSectionHeading: 'Everything else',
         }}
       />,
     );

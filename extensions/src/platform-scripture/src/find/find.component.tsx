@@ -40,10 +40,10 @@ import {
   getAvailableBookIds,
   ScopeWithRange,
   summarizeSelectedBooks,
-  PROJECT_SELECTOR_STRING_KEYS,
   ProjectSelector,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
+  ProjectSelectorLocalizedStrings,
 } from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
@@ -107,6 +107,9 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_projectFilter_noOpenProjectsOrResources%',
   '%webView_find_projectFilter_noProjectsFound%',
   '%webView_find_projectSelector_label%',
+  '%webView_find_projectSelector_openTabsSectionHeading%',
+  '%webView_find_projectSelector_otherProjectsSectionHeading%',
+  '%webView_find_projectSelector_searchPlaceholder%',
   '%webView_find_recent%',
   '%webView_find_replace%',
   '%webView_find_replaceAll%',
@@ -134,8 +137,6 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_verseTextOnly%',
   // Preview-options keys live with their component; spread them so the two lists can't drift.
   ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
-  // Find renders a ProjectSelector, so it also needs that component's own popover strings.
-  ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const;
 
 /**
@@ -781,11 +782,46 @@ export function Find({
     [projects],
   );
 
+  // `ProjectSelector`'s popover strings default to hardcoded English (`DEFAULT_STRINGS` in
+  // `project-selector.component.tsx`), so they must be supplied explicitly or the picker's insides
+  // stay untranslated. Mirrors the `manage-books.web-view.tsx` precedent.
+  //
+  // Deliberately only the strings REACHABLE from Find's configuration, since localized keys are
+  // immutable once shipped and one that can never render is permanent dead surface. Omitted, with
+  // the reason each cannot appear here:
+  // - `filterAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `filterGroupByOpenTabs` —
+  //   the funnel menu is not mounted at all (`hideFilterMenu` below).
+  // - `selectAll` / `clearAll` / `filterShowSelectedOnly` — multi-select only; both of Find's
+  //   configurations are single-select (`mode="projectScrollGroup"` / `mode="project"`).
+  // - `versificationUnknownSectionHeading` — requires versification grouping.
+  // - `boundButClosedTooltip` / `openButtonLabel` — render only on bound-but-closed rows, which Find
+  //   cannot produce (see `onOpenProjectInGroup`'s defensive no-op) and which `mode="project"` has no
+  //   code path for at all.
+  //
+  // `otherProjectsSectionHeading` is kept even though today's list is all open tabs (so that section
+  // is empty and its heading does not render): unlike the above, its reachability depends on what
+  // ends up in `projects` rather than on a setting here, so it is the one worth holding.
+  //
+  // `openTabsSectionHeading` is only reachable in the power-mode configuration: `defaultGroupByOpenTabs`
+  // defaults to `true`, and there every row carries a `scrollGroupId` so all of them land in the
+  // "open tabs" section. The simple-mode configuration passes `openTabs={[]}`, which leaves no row
+  // eligible for that section and collapses the list to a single unheaded group.
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
+    () => ({
+      searchPlaceholder: localizedStrings['%webView_find_projectSelector_searchPlaceholder%'],
+      openTabsSectionHeading:
+        localizedStrings['%webView_find_projectSelector_openTabsSectionHeading%'],
+      otherProjectsSectionHeading:
+        localizedStrings['%webView_find_projectSelector_otherProjectsSectionHeading%'],
+    }),
+    [localizedStrings],
+  );
+
   // Presentation and localization shared by both project-picker configurations, so the
   // `hideScrollGroups` branch below differs only in the parts that actually vary: the mode, the
   // selection shape, and the change/open callbacks.
   const sharedProjectSelectorProps = {
-    localizedStrings,
+    localizedStrings: projectSelectorLocalizedStrings,
     isLoading: isLoadingProjects,
     hideFilterMenu: true,
     buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],

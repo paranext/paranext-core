@@ -258,8 +258,8 @@ export type ManageBooksDialogProps = {
   /**
    * Localized strings for the popover internals of every `<ProjectSelector>` inside the dialog
    * (sidebar / Copy "From" / Create "Based on"). Optional — each picker falls back to
-   * ProjectSelector's English defaults when omitted, but the wiring layer typically passes the
-   * strings resolved from `PROJECT_SELECTOR_STRING_KEYS`.
+   * ProjectSelector's English defaults when omitted, but the wiring layer typically passes a
+   * fully-populated object sourced from `manageBooks_projectSelector_*` localize keys.
    */
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 
