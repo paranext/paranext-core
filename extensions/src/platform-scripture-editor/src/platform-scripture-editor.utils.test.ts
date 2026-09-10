@@ -32,6 +32,7 @@ import {
   openOrUpdateRelatedPanels,
   parseMissingBookError,
   resolveResourceContentState,
+  resolveNoteEditingSurface,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2765,11 +2766,12 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     popoverShown: false,
     paneVisible: false,
     paneRendered: false,
-    isPowerMode: false,
+    isPowerMode: true,
+    surface: 'popover' as const,
   };
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
-    expect(decideNoteCallerClickAction(base)).toEqual({
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2798,9 +2800,14 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
-    // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
+    // A leftover editingNoteKey must not silently swallow every future caller click.
     expect(
-      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
+      decideNoteCallerClickAction({
+        ...base,
+        editingNoteKey: 'note-1',
+        popoverShown: false,
+        isPowerMode: false,
+      }),
     ).toEqual({
       clearStaleEditingSession: true,
       action: 'open-popover',
@@ -2865,6 +2872,77 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       sendPaneFocusRequest: true,
       showPane: false,
     });
+  });
+
+  it('Standard view: opens the pane editor and reveals a hidden pane', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'pane' });
+    expect(d).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-pane-editor',
+      showPane: true,
+      sendPaneFocusRequest: true,
+    });
+  });
+
+  it('Standard view: an open pane session is not stale bookkeeping', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      surface: 'pane',
+      editingNoteKey: 'k1',
+      paneVisible: true,
+      paneRendered: true,
+    });
+    expect(d.clearStaleEditingSession).toBe(false);
+    expect(d.action).toBe('open-pane-editor');
+  });
+
+  it('read-only: navigates only, still revealing the pane in Power mode', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'none' });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it('read-only in Simple mode: navigates within an already-rendered pane only', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, surface: 'none', isPowerMode: false }),
+    ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: false });
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'none',
+        isPowerMode: false,
+        paneVisible: true,
+        paneRendered: true,
+      }),
+    ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: true });
+  });
+
+  it('expanded caller is ignored regardless of surface', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, surface: 'pane', isCollapsed: false }).action,
+    ).toBe('ignore-expanded');
+  });
+
+  it('popover surface keeps ignoring a click while the popover is open', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, popoverShown: true, editingNoteKey: 'k' }).action,
+    ).toBe('ignore-popover-open');
+  });
+});
+
+describe('resolveNoteEditingSurface', () => {
+  it('routes Standard view to the pane', () => {
+    expect(resolveNoteEditingSurface({ viewType: 'standard', isReadOnly: false })).toBe('pane');
+  });
+
+  it.each(['formatted', 'markers'] as const)('routes %s view to the popover', (viewType) => {
+    expect(resolveNoteEditingSurface({ viewType, isReadOnly: false })).toBe('popover');
+  });
+
+  it('has no editing surface when read-only, in any view', () => {
+    expect(resolveNoteEditingSurface({ viewType: 'standard', isReadOnly: true })).toBe('none');
+    expect(resolveNoteEditingSurface({ viewType: 'formatted', isReadOnly: true })).toBe('none');
   });
 });
 

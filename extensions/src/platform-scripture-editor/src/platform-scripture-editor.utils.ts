@@ -141,15 +141,39 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
 }
 
+/** Where a note is edited: the footnotes pane (Standard view), the popover, or nowhere. */
+export type NoteEditingSurface = 'pane' | 'popover' | 'none';
+
+/**
+ * Decides the note-editing surface for a click on a note caller. Standard view edits notes in the
+ * footnotes pane, in place, matching PT9's model; every other view keeps the popover. A read-only
+ * text has no editing surface at all — a caller click still navigates (see
+ * {@link decideNoteCallerClickAction}) but never opens an editor.
+ *
+ * @param viewType The scripture editor's current view type
+ * @param isReadOnly Whether the text is read-only (editing is disabled)
+ * @returns Where a click on a collapsed note caller should open its editor
+ */
+export function resolveNoteEditingSurface({
+  viewType,
+  isReadOnly,
+}: {
+  viewType: ScriptureEditorViewType;
+  isReadOnly: boolean;
+}): NoteEditingSurface {
+  if (isReadOnly) return 'none';
+  return viewType === 'standard' ? 'pane' : 'popover';
+}
+
 /** Snapshot of the state a collapsed-note caller click decides against. */
-export interface NoteCallerClickState {
+export type NoteCallerClickState = {
   /**
    * Whether the clicked note is collapsed (expanded notes are edited in place, not via click).
    * `undefined` (the adaptor could not tell) is treated as not collapsed, matching the original
    * `noteCallerOnClick` guard.
    */
   isCollapsed: boolean | undefined;
-  /** The note key of an in-progress footnote-editor session, if any. */
+  /** The note key of an in-progress note-editing session, if any (popover or pane). */
   editingNoteKey: string | undefined;
   /** Whether the footnote-editor popover is actually shown right now. */
   popoverShown: boolean;
@@ -162,14 +186,26 @@ export interface NoteCallerClickState {
    * mode; Simple mode keeps PT9's manual pane visibility.
    */
   isPowerMode: boolean;
-}
+  /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
+  surface: NoteEditingSurface;
+};
+
+/** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
+export type NoteCallerClickAction =
+  | 'ignore-expanded'
+  | 'ignore-popover-open'
+  | 'open-popover'
+  | 'open-pane-editor'
+  | 'navigate-only';
 
 /** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
-export interface NoteCallerClickDecision {
+export type NoteCallerClickDecision = {
   /**
-   * True when `editingNoteKey` belongs to a session whose popover is no longer shown — orphaned
-   * bookkeeping that would otherwise dead-end every future caller click; clearing it keeps the
-   * failure benign. The caller must clear the editing-session refs before acting.
+   * True when `editingNoteKey` belongs to a popover session whose popover is no longer shown —
+   * orphaned bookkeeping that would otherwise dead-end every future caller click; clearing it keeps
+   * the failure benign. A pane-editor session keeps its key between clicks by design (the row stays
+   * open across navigation), so it is never stale. The caller must clear the editing-session refs
+   * before acting.
    */
   clearStaleEditingSession: boolean;
   /**
@@ -177,11 +213,13 @@ export interface NoteCallerClickDecision {
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
    * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
-   * - `open-popover` — open the footnote-editor popover for the clicked note. The popover always
-   *   opens on a routed click, because it is the only surface that can EDIT a note today; the pane
-   *   flags below are navigation alongside it, never a substitute for it.
+   * - `open-popover` — open the footnote-editor popover for the clicked note (every view but
+   *   Standard).
+   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (Standard view).
+   * - `navigate-only` — the text is read-only, so there is no editing surface; the click still
+   *   navigates (reveals/scrolls the pane) without opening an editor.
    */
-  action: 'ignore-expanded' | 'ignore-popover-open' | 'open-popover';
+  action: NoteCallerClickAction;
   /**
    * Also select/highlight/scroll to the clicked note in the footnotes pane (PT9 navigate-to-note).
    * True when the pane is rendered — or is being shown by this very click ({@link showPane}); the
@@ -190,44 +228,51 @@ export interface NoteCallerClickDecision {
   sendPaneFocusRequest: boolean;
   /** Also show the footnotes pane: it is currently toggled off and the interface is in Power mode. */
   showPane: boolean;
-}
+};
 
 /**
  * Decides what a click on a note caller does. Pure decision logic extracted from
- * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests:
+ * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests.
+ *
+ * The editing surface ({@link NoteCallerClickState.surface}, from {@link resolveNoteEditingSurface})
+ * decides where a routed click opens an editor: the footnotes pane in Standard view, the popover
+ * everywhere else, and nowhere in a read-only text, where the click still navigates without opening
+ * an editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
- * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
- * - An editing-session key without a shown popover is STALE — it must not block the click.
- * - Otherwise the popover OPENS — always, in every view, because it is the only surface that can edit
- *   a note today. Alongside it, the pane highlights the clicked note when it is rendered, and a
- *   click also SHOWS the pane when it is toggled off and the interface is in Power mode.
+ * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
+ *   pane-editor session has no such limit — its row stays open across clicks.
+ * - A popover session's key left behind without a shown popover is STALE and must not block the
+ *   click; a pane-editor session's key is never stale, since the pane keeps it by design.
+ *
+ * Alongside whichever action is chosen, the pane highlights the clicked note when it is rendered,
+ * and a click also SHOWS the pane when it is toggled off and the interface is in Power mode.
  */
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
+  const clearStaleEditingSession =
+    state.editingNoteKey !== undefined && !state.popoverShown && state.surface !== 'pane';
+  const showPane = state.isPowerMode && !state.paneVisible;
+  const sendPaneFocusRequest = state.paneRendered || showPane;
+
   if (!state.isCollapsed)
     return {
-      clearStaleEditingSession: false,
+      clearStaleEditingSession,
       action: 'ignore-expanded',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  // A truthy editingNoteKey marks an editing session (matches the original inline guard's
-  // truthiness check; an empty-string key is never a live session).
-  if (state.editingNoteKey && state.popoverShown)
+  if (state.surface === 'popover' && state.popoverShown)
     return {
-      clearStaleEditingSession: false,
+      clearStaleEditingSession,
       action: 'ignore-popover-open',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  const clearStaleEditingSession = !!state.editingNoteKey;
-  const showPane = state.isPowerMode && !state.paneVisible;
-  return {
-    clearStaleEditingSession,
-    action: 'open-popover',
-    sendPaneFocusRequest: state.paneRendered || showPane,
-    showPane,
-  };
+
+  let action: NoteCallerClickAction = 'navigate-only';
+  if (state.surface === 'pane') action = 'open-pane-editor';
+  else if (state.surface === 'popover') action = 'open-popover';
+  return { clearStaleEditingSession, action, sendPaneFocusRequest, showPane };
 }
 
 // #region Editor Title Formatting
