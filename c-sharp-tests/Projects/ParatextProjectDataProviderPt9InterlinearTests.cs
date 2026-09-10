@@ -443,7 +443,7 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     [Description(
         "A setup's model and export fields are served as written; PT9's __EMPTY__ sentinel "
             + "means no model text, so the model name is absent while the id PT9 minted for the "
-            + "setup still serves, and empty strings serve as absent."
+            + "setup still serves, and an empty text name serves as absent."
     )]
     public void GetPt9InterlinearData_ServesSetupModelTextAndTreatsTheEmptySentinelAsNone()
     {
@@ -485,6 +485,58 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
             Assert.That(data.Setups[1].ModelScrTextName, Is.Null);
             Assert.That(data.Setups[1].ModelScrTextId, Is.EqualTo("fedcba0987654321"));
             Assert.That(data.Setups[1].ExportScrTextName, Is.Null);
+        });
+    }
+
+    [Test]
+    [Description(
+        "Emptiness is not normalized uniformly: an empty font name or text name serves as "
+            + "absent, while an empty language id, language name, or text id serves as an empty "
+            + "string and only a field the project omits is absent."
+    )]
+    public void GetPt9InterlinearData_ServesEmptySetupStringsAsAbsentOrEmptyPerField()
+    {
+        WriteProjectFile(
+            "InterlinearSetup.xml",
+            """
+            <InterlinearSetupList>
+              <InterlinearSetup type="Glossing" language="">
+                <LanguageName></LanguageName>
+                <FontName></FontName>
+                <MdlScrTextName></MdlScrTextName>
+                <MdlScrTextId></MdlScrTextId>
+                <ExportScrTextName></ExportScrTextName>
+                <ExportScrTextId></ExportScrTextId>
+              </InterlinearSetup>
+              <InterlinearSetup type="Glossing">
+              </InterlinearSetup>
+            </InterlinearSetupList>
+            """
+        );
+
+        var data = _provider.GetPt9InterlinearData();
+
+        Assert.That(data.Setups, Has.Count.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            // Written empty: the three fields the conversion nulls are absent, the four it passes
+            // through keep the empty string PT9 stored.
+            Assert.That(data.Setups[0].FontName, Is.Null);
+            Assert.That(data.Setups[0].ModelScrTextName, Is.Null);
+            Assert.That(data.Setups[0].ExportScrTextName, Is.Null);
+            Assert.That(data.Setups[0].LanguageId, Is.Empty);
+            Assert.That(data.Setups[0].LanguageName, Is.Empty);
+            Assert.That(data.Setups[0].ModelScrTextId, Is.Empty);
+            Assert.That(data.Setups[0].ExportScrTextId, Is.Empty);
+
+            // Omitted entirely: absent regardless of which side of the split the field is on.
+            Assert.That(data.Setups[1].FontName, Is.Null);
+            Assert.That(data.Setups[1].ModelScrTextName, Is.Null);
+            Assert.That(data.Setups[1].ExportScrTextName, Is.Null);
+            Assert.That(data.Setups[1].LanguageId, Is.Null);
+            Assert.That(data.Setups[1].LanguageName, Is.Null);
+            Assert.That(data.Setups[1].ModelScrTextId, Is.Null);
+            Assert.That(data.Setups[1].ExportScrTextId, Is.Null);
         });
     }
 
