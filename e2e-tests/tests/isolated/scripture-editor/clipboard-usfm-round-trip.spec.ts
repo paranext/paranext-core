@@ -137,7 +137,7 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // data-marker="c">` (ChapterNode.createDOM), not an inline `span.opening` — the loaded
       // chapter has exactly one going in, and a corrupted paste could either add a second one or
       // replace/remove the existing one, so pin the baseline before pasting.
-      const chapterMarker = editorFrame.locator('p.chapter-marker[data-marker="c"]');
+      const chapterMarker = editorFrame.locator('p.chapter[data-marker="c"]');
       await expect(chapterMarker).toHaveCount(1);
 
       await electronApp.evaluate(({ clipboard }) => clipboard.writeText('\\c 99 '));
