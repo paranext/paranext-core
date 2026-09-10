@@ -2120,6 +2120,35 @@ describe('policy overlay', () => {
     platformOnlyPackages: ['fsevents'],
   };
 
+  const NAMES = { base: 'notices-policy.json', overlay: 'overlay.json' };
+
+  it('refuses an overlay key no policy field matches, rather than dropping it', () => {
+    // The merge copies only the fields it enumerates, so a misspelled table would leave the
+    // committed empty one in place and every gate below would pass over it.
+    // Assigned rather than written inline: the overlay is untyped JSON at runtime, and a key
+    // `Partial<Policy>` does not declare is exactly what this refuses.
+    const misspelled: Partial<Policy> = {};
+    Object.assign(misspelled, { seperatePrograms: {} });
+
+    expect(() => mergePolicies(basePolicy, misspelled, NAMES)).toThrow(
+      /"seperatePrograms".*no such field/s,
+    );
+  });
+
+  it('refuses a "product" block in the committed policy, which describes a downstream build', () => {
+    expect(() =>
+      mergePolicies({ ...basePolicy, product: { name: 'P', repository: 'o/r' } }, {}, NAMES),
+    ).toThrow(/declares a "product" block/);
+  });
+
+  it('refuses an overlay that puts one identifier on both classification lists', () => {
+    // Copyleft is tested first, so the identifier still blocks - but the "allowed" entry does
+    // nothing and the eventual block message never mentions the overlay author's edit.
+    expect(() => mergePolicies(basePolicy, { allowed: ['GPL-2.0-only'] }, NAMES)).toThrow(
+      /GPL-2\.0-only.*both "allowed" and\s+"copyleft"/s,
+    );
+  });
+
   it('reads the overlay path by value and treats blank as none', () => {
     expect(overlayFromEnv({ NOTICES_POLICY_OVERLAY: '  ' })).toBeUndefined();
     expect(overlayFromEnv({})).toBeUndefined();

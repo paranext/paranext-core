@@ -368,14 +368,23 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
  * The separate-program sentence is DERIVED from the link rather than left to the overlay's
  * hand-typed `note`. The row is the only place a reader meets that package, and on its own it reads
  * as an ordinary dependency listed under copyleft terms - the fact that answers that is the entry
- * in the separate-programs section, which the row has to point at. Deriving it also means the two
- * cannot drift: `applyOverride` already refuses a link the `separatePrograms` table does not
- * record.
+ * in the separate-programs section, which the row has to point at.
+ *
+ * The name is trimmed the way `applyOverride` trims it before looking the program up, so a value
+ * carrying stray whitespace resolves and renders as the same string.
+ *
+ * `applyOverride` refuses a link the `separatePrograms` table does not record, but only for a row
+ * the override actually settles: `readInstruments` sets `overridable` only where nothing else
+ * resolved the package, so a row cleared by its own declared license carries this sentence with the
+ * link unvalidated, and could point at a section the document does not contain. Validating every
+ * recorded link against the table - rather than only the ones classification routes through
+ * `applyOverride` - belongs with the other whole-set assertions in `buildReport`, and is not done.
  */
 export function nugetNote(pkg: MergedNugetPackage, override: Override): string {
   const ships = pkg.assemblies?.length ? `Ships ${pkg.assemblies.join(', ')}.` : '';
-  const separate = override.separateProgram
-    ? `Redistributed as the separate program "${override.separateProgram}" - see "Third-party ` +
+  const programName = String(override.separateProgram ?? '').trim();
+  const separate = programName
+    ? `Redistributed as the separate program "${programName}" - see "Third-party ` +
       'programs redistributed as separate executables".'
     : '';
   return [ships, separate, override.note || pkg.copyright].filter(Boolean).join(' ');
@@ -853,7 +862,11 @@ export function buildReport(): BuiltReport {
   assertStaticAssetNoticesRecorded(REPO, policy);
   assertCopiedPlatformLibraryIdsAllowed(policy);
   assertCopiedPlatformLibrariesRecorded(policy, copiedPlatformLibraryStems());
-  assertSeparateProgramsRecorded(REPO, policy.separatePrograms || {});
+  assertSeparateProgramsRecorded(
+    REPO,
+    policy.separatePrograms || {},
+    new Set([...policy.allowed, ...policy.copyleft]),
+  );
   assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
   assertExternalExtensionsRecorded(
     externalExtensionNames(REPO, packagingConfig),
@@ -995,6 +1008,26 @@ function verifyNpmShippingSet() {
   const committed = verifyCommittedDocument();
   if (!committed) return;
 
+  // The three policy gates whose inputs are committed files and nothing else: the packaging config,
+  // the policy tables, the evidence paths they name, and the committed SPDX corpus. They live in
+  // `buildReport`, which this path deliberately does not reach - but they cost a policy read this
+  // function already pays for below, and running them here is what covers a release cut from a ref
+  // whose Linux `--verify` leg never ran. `assertExternalExtensionsRecorded` is NOT among them: its
+  // input is a directory listing that differs per platform, so it can only answer where the
+  // installer's extensions actually are.
+  const policy = loadPolicy(POLICY);
+  assertProductMatchesPackaging(
+    policy.product,
+    readPackagingConfig(ELECTRON_BUILDER),
+    path.relative(REPO, ELECTRON_BUILDER),
+  );
+  assertSeparateProgramsRecorded(
+    REPO,
+    policy.separatePrograms || {},
+    new Set([...policy.allowed, ...policy.copyleft]),
+  );
+  assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
+
   try {
     ({
       packages: npmPackages,
@@ -1016,7 +1049,7 @@ function verifyNpmShippingSet() {
     // The same union `buildReport` applies - see `withPlatformOnlyPackages`. Without it this check
     // compares a set missing the other platforms' packages against a lock that records them, and
     // reports every one as `removed:` on the platform that does not install them.
-    npmPackages = withPlatformOnlyPackages(npmPackages, loadPolicy(POLICY));
+    npmPackages = withPlatformOnlyPackages(npmPackages, policy);
 
     // BEFORE the floors, which is the whole point of the `report` mode above. Both floors measure
     // the derived set, and a warm cache is the one condition under which that set is known to be

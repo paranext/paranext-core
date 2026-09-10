@@ -799,7 +799,33 @@ describe('product block', () => {
     // Matched across a wrap: the paragraph is wrapped in the source and the product name's length
     // decides where the break lands.
     expect(paratext).toMatch(/is a Paratext\s+product, and that permission covers it\./);
-    expect(paratext).not.toContain('it does not extend to Platform.Bible, nor');
+    // The generic arm's opening clause, which the Paratext arm replaces. Both arms go on to say
+    // the permission does not extend to Platform.Bible, so asserting on THAT sentence would pass
+    // on capitalization alone rather than on the distinction this test is named for.
+    expect(paratext).not.toContain('That permission is specific to');
+  });
+
+  it('names a declared non-Paratext product as one the permission does not reach', () => {
+    const packed = { ...report, packedExtensions: ['platform-lexical-tools'] };
+    // Deliberately not a Paratext name: `assertProductMatchesPackaging` refuses a product called
+    // Paratext that does not record `isParatext`, because the paragraph below would contradict
+    // itself. This arm is for the products that genuinely are not covered.
+    const other = { name: 'Scripture Studio', repository: 'org/scripture-studio' };
+    const rendered = render({ ...packed, product: other });
+
+    // Leaving the reader to infer it from "specific to Paratext" is the one thing this paragraph
+    // exists to state plainly, and "this repository" would be paranext-core's point of view in a
+    // document that names the product everywhere else.
+    expect(rendered).toMatch(new RegExp(`does not extend to ${other.name},`));
+    expect(rendered).toContain('building from paranext-core');
+    expect(rendered).not.toContain('building from this repository');
+  });
+
+  it("keeps this repository's own wording when no product is declared", () => {
+    const packed = { ...report, packedExtensions: ['platform-lexical-tools'] };
+    const rendered = render(packed);
+
+    expect(rendered).toContain('including a third party building from this repository');
   });
 });
 

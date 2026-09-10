@@ -16,6 +16,10 @@ const { FakeBrowserWindow, instances } = vi.hoisted(() => {
 
     focusCalls = 0;
 
+    minimized = false;
+
+    restoreCalls = 0;
+
     menuRemoved = false;
 
     loadedPaths: string[] = [];
@@ -50,6 +54,15 @@ const { FakeBrowserWindow, instances } = vi.hoisted(() => {
 
     focus() {
       this.focusCalls += 1;
+    }
+
+    isMinimized() {
+      return this.minimized;
+    }
+
+    restore() {
+      this.restoreCalls += 1;
+      this.minimized = false;
     }
 
     isDestroyed() {
@@ -147,6 +160,7 @@ describe('openTermsOfServiceWindow', () => {
     openExternal.mockRejectedValueOnce(new Error('External URL must start with https://'));
     const { logger } = await import('@shared/services/logger.service');
 
+    expect(win.windowOpenHandler).toBeDefined();
     expect(() => win.windowOpenHandler?.({ url: 'http://paratext.org' })).not.toThrow();
 
     await vi.waitFor(() => expect(logger.warn).toHaveBeenCalled());
@@ -158,6 +172,50 @@ describe('openTermsOfServiceWindow', () => {
 
     expect(instances).toHaveLength(1);
     expect(second).toBe(first);
+    expect(first.focusCalls).toBe(1);
+  });
+
+  /** A stand-in application window to parent to. `electron` is mocked, so this is a `FakeWindow`. */
+  async function makeAppWindow() {
+    const { BrowserWindow } = await import('electron');
+    const appWindow = new BrowserWindow({});
+    // It is scaffolding, not the window under test
+    instances.length = 0;
+    return appWindow;
+  }
+
+  it('parents the window to the one it was opened from, so it cannot outlive the application', async () => {
+    const { openTermsOfServiceWindow } = await import('@main/terms-of-service-window');
+    const appWindow = await makeAppWindow();
+
+    await openTermsOfServiceWindow(openExternal, appWindow);
+
+    // Electron closes a child with its parent and counts an UNPARENTED window in
+    // `window-all-closed`, so without this the application would not quit while this window is open.
+    expect(instances[0].options.parent).toBe(appWindow);
+  });
+
+  it('opens without a parent rather than throwing when the window it came from has closed', async () => {
+    const { openTermsOfServiceWindow } = await import('@main/terms-of-service-window');
+    const appWindow = await makeAppWindow();
+    appWindow.close();
+
+    await openTermsOfServiceWindow(openExternal, appWindow);
+
+    expect(instances[0].options.parent).toBeUndefined();
+  });
+
+  it('restores the window before focusing it, so a minimized document comes back', async () => {
+    const first = await open();
+    first.minimized = true;
+
+    const second = await open();
+
+    // `focus()` alone leaves a minimized window minimized on Windows, so the user would click the
+    // link, get a resolved command, and see nothing happen.
+    expect(second).toBe(first);
+    expect(first.restoreCalls).toBe(1);
+    expect(first.minimized).toBe(false);
     expect(first.focusCalls).toBe(1);
   });
 

@@ -84,18 +84,91 @@ function mergeTable<T>(
 }
 
 /**
+ * How each `Policy` field combines when an overlay is merged over the committed file.
+ *
+ * Declared as a table rather than spelled out per field in `mergePolicies`, because the merge
+ * returns `Policy` by spreading the base: a field added to `Policy` later would satisfy the return
+ * type while being silently taken from the base, with the overlay's value dropped and no type error
+ * and no test to catch it. `satisfies Record<keyof Policy, MergeKind>` makes that a compile error
+ * instead - a new field has to say how it merges before this file builds.
+ *
+ * - `union` - the two lists' union, in base order then overlay order.
+ * - `concat` - appended; `assertOneExceptionPerPackage` then rejects a duplicate key.
+ * - `table` - keyed, with a key both files record refused outright.
+ * - `base-only` - the committed value stands; an overlay may not contribute one.
+ * - `overlay-only` - the overlay's value alone, and the committed file may not carry one.
+ */
+type MergeKind = 'union' | 'concat' | 'table' | 'base-only' | 'overlay-only';
+
+const MERGE_KINDS = {
+  allowed: 'union',
+  copyleft: 'union',
+  platformOnlyPackages: 'union',
+  exceptions: 'concat',
+  elections: 'table',
+  overrides: 'table',
+  copyrightNotices: 'table',
+  licenseTexts: 'table',
+  unbundledDependencies: 'table',
+  snapStagePackages: 'table',
+  staticAssetNotices: 'table',
+  copiedPlatformLibraries: 'table',
+  separatePrograms: 'table',
+  externalExtensions: 'table',
+  product: 'overlay-only',
+  // The `*Note` fields document the table they precede for a reader of the committed file. They
+  // are read by nothing, so a downstream has nothing to add to them.
+  exceptionsNote: 'base-only',
+  copyrightNoticesNote: 'base-only',
+  licenseTextsNote: 'base-only',
+  platformOnlyPackagesNote: 'base-only',
+  unbundledDependenciesNote: 'base-only',
+  snapStagePackagesNote: 'base-only',
+  staticAssetNoticesNote: 'base-only',
+  copiedPlatformLibrariesNote: 'base-only',
+  separateProgramsNote: 'base-only',
+  externalExtensionsNote: 'base-only',
+  productNote: 'base-only',
+} as const satisfies Record<keyof Policy, MergeKind>;
+
+/** Every key an overlay may carry, which is every `Policy` field the merge does not reserve. */
+const OVERLAY_KEYS = new Set(
+  Object.entries(MERGE_KINDS)
+    .filter(([, kind]) => kind !== 'base-only')
+    .map(([key]) => key),
+);
+
+/**
  * The committed policy with a downstream overlay merged over it.
  *
- * Lists union, keyed tables merge with collisions refused, `exceptions` concatenate (and
- * `assertOneExceptionPerPackage` then runs over the result in `loadPolicy`), the `*Note` fields
- * stay the committed ones, and `product` comes from the overlay alone.
+ * Every field combines the way `MERGE_KINDS` records. An overlay key the table does not name is
+ * REFUSED rather than ignored: the merge copies only what it enumerates, so a misspelled table
+ * (`seperatePrograms`) would otherwise leave the committed empty one in place and every gate below
+ * would pass over it - a redistributed program omitted from a legal document with the run exiting
+ * 0.
  */
 export function mergePolicies(
   base: Policy,
   overlay: Partial<Policy>,
   names: { base: string; overlay: string },
 ): Policy {
-  return {
+  const unknown = Object.keys(overlay)
+    .filter((key) => !OVERLAY_KEYS.has(key))
+    .sort(compareStrings);
+  if (unknown.length)
+    throw new Error(
+      `${names.overlay} records ${unknown.map((key) => `"${key}"`).join(', ')}, which the notices ` +
+        'policy has no such field for. An overlay key this merge does not know is dropped in ' +
+        'silence, so what it was meant to declare would go undisclosed - check the spelling ' +
+        `against ${names.base}.`,
+    );
+  if (base.product)
+    throw new Error(
+      `${names.base} declares a "product" block. It describes what a DOWNSTREAM build produces, so ` +
+        "it belongs in that build's overlay; this repository's own document uses the no-product " +
+        'wording. Remove it.',
+    );
+  const merged: Policy = {
     ...base,
     allowed: unionLists(base.allowed, overlay.allowed),
     copyleft: unionLists(base.copyleft, overlay.copyleft),
@@ -148,6 +221,27 @@ export function mergePolicies(
     ),
     product: overlay.product,
   };
+  assertListsDisjoint(merged, names);
+  return merged;
+}
+
+/**
+ * Refuses a merged policy whose two classification lists both name an identifier.
+ *
+ * `isDisallowedId` consults `copyleft` first, so an id on both still blocks and nothing unsafe
+ * ships - but the overlay author who added it to `allowed` gets a silent no-op and a later block
+ * message that never mentions their edit. The committed file is guarded by a test; the MERGED
+ * object is what every consumer actually receives, so it is checked here.
+ */
+function assertListsDisjoint(policy: Policy, names: { base: string; overlay: string }): void {
+  const copyleft = new Set(policy.copyleft);
+  const both = policy.allowed.filter((id) => copyleft.has(id)).sort(compareStrings);
+  if (both.length)
+    throw new Error(
+      `${names.overlay} merged over ${names.base} puts ${both.join(', ')} on both "allowed" and ` +
+        '"copyleft". Copyleft is tested first, so the identifier still blocks and the "allowed" ' +
+        'entry does nothing - decide which list it belongs on.',
+    );
 }
 
 /**
@@ -344,8 +438,16 @@ function blocked(reason: string, extra: Partial<Verdict> = {}): BlockedFields {
 /**
  * A value still spelled as one of the `<…>` placeholders `report.ts` prints in its paste-ready
  * templates, rather than replaced with the thing the placeholder asks for.
+ *
+ * `[\s\S]` rather than `.` so a placeholder a reviewer pasted across two lines is still caught; `.`
+ * stops at a newline, which would let the multi-line case through.
+ *
+ * A leading URI scheme is excluded because `<https://example.org/>` is a Markdown autolink, not a
+ * template: the fields this guards (`SeparateProgram.sourceAvailability`,
+ * `ExternalExtension.reason`) are documented as paragraphs that may carry a link, and a bare URL's
+ * natural spelling in this document is the autolink form.
  */
-const PLACEHOLDER_TEMPLATE_VALUE = /^<.*>$/;
+export const PLACEHOLDER_TEMPLATE_VALUE = /^<(?![A-Za-z][A-Za-z0-9+.-]*:)[\s\S]*>$/;
 
 /**
  * Applies a reviewed exception. Exceptions are an override applied AFTER a block, never a path
@@ -1127,7 +1229,11 @@ function applyOverride(ctx: ClassifyContext, override: Override): Verdict {
   // reproduces that identifier's canonical text on the program's behalf.
   if (override.separateProgram !== undefined) {
     const programName = String(override.separateProgram).trim();
-    const program = (ctx.policy.separatePrograms || {})[programName];
+    const programs = ctx.policy.separatePrograms || {};
+    // `Object.hasOwn` rather than a bare index, as `mergeTable` and `assertExternalExtensionsRecorded`
+    // both do: indexing answers every `Object.prototype` member, so a name like `constructor` would
+    // resolve truthy and skip the refusal below in favour of a message about reviewed identifiers.
+    const program = Object.hasOwn(programs, programName) ? programs[programName] : undefined;
     if (!program)
       return {
         ...common,

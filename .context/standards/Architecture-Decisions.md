@@ -437,7 +437,9 @@ step, no automation. Just a record.
   'Platform.Bible'` and every one carrying the database, which `download-db.ts` puts in strict mode
   so a missing copy hard-fails the install. Both statements are about the same artifact. Separately,
   `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.md` for a product built under
-  the Platform.Bible name, while the Terms of Service name only Paratext.
+  the Platform.Bible name, while the Terms of Service name only Paratext. **Amended 2026-09-10:** the
+  document now ships as `TERMS-OF-SERVICE.html`, so that declaration reads
+  `SEE LICENSE IN TERMS-OF-SERVICE.html`; the point it illustrates is unchanged.
 
   There is no practical path to releasing a separate Platform.Bible build, and only Paratext 10 is
   released from this source — from `paranext/paratext-10-studio`, which clones this repository,
@@ -1315,10 +1317,11 @@ step, no automation. Just a record.
   the Paratext Terms of Service, whose section 3.B.1 states that the built application is licensed
   solely under those Terms and not under the AGPL, and whose 3.B.2 adds that network interaction with
   it triggers no AGPL obligation. `release/app/package.json` therefore declares
-  `SEE LICENSE IN TERMS-OF-SERVICE.md` rather than an SPDX identifier. That split is lawful because
+  `SEE LICENSE IN TERMS-OF-SERVICE.html` rather than an SPDX identifier (**amended 2026-09-10:** the
+  document was `TERMS-OF-SERVICE.md` when this was written). That split is lawful because
   SIL Global and United Bible Societies control the copyright in the source, and it retracts nothing:
   the AGPL grant on this repository is irrevocable and anyone may build and redistribute their own
-  binary under it. The installer carries `LICENSE` (the AGPL text), `TERMS-OF-SERVICE.md`,
+  binary under it. The installer carries `LICENSE` (the AGPL text), `TERMS-OF-SERVICE.html`,
   `THIRD-PARTY-NOTICES.md`, and `LICENSING.md` — the last because the others otherwise state
   several things about the user's rights with nothing reconciling them, and because LICENSING.md is
   what 3.B.1 means by "the AGPL Components identified by Paratext".
@@ -1625,7 +1628,9 @@ step, no automation. Just a record.
 - **Status:** Accepted
 - **Context:** `LICENSE` (the full AGPL text), `LICENSING.md`, `LICENSE-EXCEPTION.md` and
   `THIRD-PARTY-NOTICES.md` all ship in the installed `resources/` directory, but only
-  `TERMS-OF-SERVICE.md` has a code path that opens it. The About dialog reads "License: Paratext
+  `TERMS-OF-SERVICE.html` has a code path that opens it (**amended 2026-09-10:** the document was
+  `TERMS-OF-SERVICE.md`, opened through the operating system, when this was written; it is now HTML
+  shown in a window the application owns). The About dialog reads "License: Paratext
   Terms of Service" and names no license, disclaims no warranty, and offers no way to view the
   AGPL. AGPL section 5(d) expects an interactive program that normally displays "appropriate legal
   notices" to keep displaying a copyright notice, a warranty disclaimer, and a statement of how to
@@ -1849,7 +1854,11 @@ step, no automation. Just a record.
   Platform.Bible, said of itself that it was "a reference, not the notices for any shipped product",
   and had no row for the Mercurial builds, the `hgWindows-6.3.1` package or the private extensions
   that clone adds. `adr-package-verifies-the-document-not-the-shipping-set` had deferred exactly
-  this: revisit if notices generation ever moves downstream.
+  this: revisit if notices generation ever moves downstream. `separatePrograms` and
+  `externalExtensions` are the sixth and seventh instruments under
+  `adr-disclosure-outside-package-graphs`, which is the standing decision that anything the installer
+  redistributes but neither package graph describes is disclosed in generated, data-backed prose
+  rather than by silence; they extend it downstream rather than departing from it.
 - **Decision:** The generator accepts a second policy file from `NOTICES_POLICY_OVERLAY`, merged
   over the committed one with a key collision refused, so a downstream repository's determinations
   live beside its build rather than in a patch to this file. The overlay carries a `product` block,

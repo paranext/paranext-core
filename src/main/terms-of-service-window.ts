@@ -28,17 +28,34 @@ let termsOfServiceWindow: BrowserWindow | undefined;
  * @param openExternal How a link leaves the window - main's `openExternal`, which lets only
  *   `https:` and `mailto:` links through. Its refusal is logged, not thrown: a link the user
  *   clicked in a legal document failing to open is not the caller's error.
+ * @param parent The application window this was opened from. Electron closes a child window with
+ *   its parent and, crucially, counts an unparented window in `window-all-closed` - so without this
+ *   the application would not quit while a Terms of Service window was still open, leaving a
+ *   resident process holding the single-instance lock with no way to get an application window
+ *   back. A child window is also always shown above its parent, which is the right stacking for a
+ *   document the user opened from it. Optional so the module stays testable, but every caller in
+ *   the application passes one.
  * @throws When the document cannot be loaded. The caller is a dialog the user clicked a license
  *   link in; it needs to be able to say the document did not open.
  */
-export async function openTermsOfServiceWindow(openExternal: OpenExternalLink): Promise<void> {
+export async function openTermsOfServiceWindow(
+  openExternal: OpenExternalLink,
+  parent?: BrowserWindow,
+): Promise<void> {
   if (termsOfServiceWindow && !termsOfServiceWindow.isDestroyed()) {
+    // Restored before it is focused, for the reason `window-state.service.ts` gives at its own
+    // raise: a minimized window that is merely focused stays minimized on Windows, so the user
+    // would click the link, get a resolved command, and see nothing happen.
+    if (termsOfServiceWindow.isMinimized()) termsOfServiceWindow.restore();
     termsOfServiceWindow.focus();
     return;
   }
 
   const termsOfServicePath = path.join(globalThis.resourcesPath, TERMS_OF_SERVICE_FILE_NAME);
   const newWindow = new BrowserWindow({
+    // A destroyed parent is not a legal `parent`, and the window it came from can close between
+    // the request and this line.
+    parent: parent && !parent.isDestroyed() ? parent : undefined,
     width: 900,
     height: 800,
     minWidth: 480,

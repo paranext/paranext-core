@@ -184,8 +184,18 @@ export type ProductBlock = {
   /** The repository the product is built from, e.g. `paranext/paratext-10-studio`. */
   repository: string;
   /**
-   * Whether UBS's permission to distribute the lexical database covers this product. UBS's
-   * permission names Paratext, so this is true only for a Paratext product.
+   * Whether UBS's permission to distribute the lexical database covers this product.
+   *
+   * The database is the MARBLE data as `platform-lexical-tools` ships it in `lexicon.db`. Portions
+   * of it are UBS copyright and are NOT open-licensed; UBS's permission to distribute them names
+   * **Paratext**, so this is true only for a Paratext product and false for anything else built
+   * from this source. It changes what the document asserts about a third party's grant, which is
+   * why `assertProductMatchesPackaging` refuses any value that is not a real boolean - a string
+   * `"false"` would otherwise read as "yes".
+   *
+   * Setting it true is a determination about what UBS has permitted, not a fact this pipeline can
+   * derive: nothing here can check it, and the section it drives only renders for a build that
+   * actually packs `platform-lexical-tools`.
    */
   isParatext?: boolean;
 };

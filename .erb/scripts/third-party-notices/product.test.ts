@@ -28,7 +28,11 @@ describe('assertProductMatchesPackaging', () => {
   it('accepts a block whose name is what the packaging config builds', () => {
     expect(() =>
       assertProductMatchesPackaging(
-        { name: 'Paratext 10 Studio', repository: 'paranext/paratext-10-studio' },
+        {
+          name: 'Paratext 10 Studio',
+          repository: 'paranext/paratext-10-studio',
+          isParatext: true,
+        },
         config,
         'electron-builder.json5',
       ),
@@ -52,5 +56,25 @@ describe('assertProductMatchesPackaging', () => {
     expect(() =>
       assertProductMatchesPackaging({ name: 'Paratext 10 Studio', repository: '' }, config, 'c'),
     ).toThrow(/"name" and "repository"/);
+  });
+
+  it('refuses a product named Paratext that does not record the UBS permission as covering it', () => {
+    // The document would say the permission is specific to Paratext and then that it does not
+    // extend to this product - a contradiction a reader cannot resolve.
+    expect(() =>
+      assertProductMatchesPackaging(
+        { name: 'Paratext 10 Studio', repository: 'paranext/paratext-10-studio' },
+        { productName: 'Paratext 10 Studio' },
+        'electron-builder.json5',
+      ),
+    ).toThrow(/does not record\s+"isParatext": true/s);
+
+    expect(() =>
+      assertProductMatchesPackaging(
+        { name: 'Paratext 10 Studio', repository: 'paranext/paratext-10-studio', isParatext: true },
+        { productName: 'Paratext 10 Studio' },
+        'electron-builder.json5',
+      ),
+    ).not.toThrow();
   });
 });

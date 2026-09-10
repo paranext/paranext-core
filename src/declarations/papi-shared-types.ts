@@ -126,13 +126,14 @@ declare module 'papi-shared-types' {
      * distributed application is licensed to the user under, rather than this repository's AGPL
      * source (see LICENSING.md).
      *
-     * The document is handed to whatever the operating system opens Markdown with; if nothing does,
-     * it is revealed in the file manager instead.
+     * The document is a self-contained HTML file, shown in a window the application owns rather
+     * than handed to the operating system. One window at a time: a second request focuses the one
+     * already open. Every link in the document leaves through the browser, so the window only ever
+     * shows the document.
      *
-     * @throws If the document could not be opened - which includes the case where it was revealed
-     *   in the file manager instead, because that fallback cannot report whether it succeeded
-     *   either. A caller that offers this as a link needs to be able to tell the user the document
-     *   did not open, so the failure is reported rather than only logged.
+     * @throws If the document could not be loaded. A caller that offers this as a link needs to be
+     *   able to tell the user the document did not open, so the failure is reported rather than
+     *   only logged.
      */
     'platform.openTermsOfService': () => Promise<void>;
 

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { compareStrings } from './compare';
 import { canonicalText } from './corpus';
+import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
 import type { BundledComponent, ProgramDelivery, SeparateProgram } from './types';
 
 /**
@@ -24,7 +25,7 @@ import type { BundledComponent, ProgramDelivery, SeparateProgram } from './types
  */
 
 /** A value still spelled as one of the `<...>` placeholders a template would print. */
-const PLACEHOLDER = /^<.*>$/;
+const PLACEHOLDER = PLACEHOLDER_TEMPLATE_VALUE;
 
 /** Every identifier an entry names, at the program level and inside each delivery, once each. */
 export function separateProgramIds(programs: Record<string, SeparateProgram>): string[] {
@@ -40,8 +41,22 @@ export function separateProgramIds(programs: Record<string, SeparateProgram>): s
   return [...ids].sort(compareStrings);
 }
 
+/**
+ * Refuses a field that is not a filled-in string.
+ *
+ * The type is checked rather than coerced, because these values arrive as untyped JSON: a policy
+ * that records a number, a boolean or an object reaches the document either as the literal
+ * `"[object Object]"` or as a `TypeError` from inside the renderer, both of which say less than
+ * naming the field here does.
+ */
 function requireText(name: string, field: string, value: unknown): void {
-  const text = String(value ?? '').trim();
+  if (typeof value !== 'string')
+    throw new Error(
+      `the "separatePrograms" entry for "${name}" records "${field}" as ` +
+        `${value === undefined ? 'nothing' : `a ${typeof value}`}, and every field of the entry is ` +
+        'reproduced in the document as written. Record it as a string.',
+    );
+  const text = value.trim();
   if (!text || PLACEHOLDER.test(text))
     throw new Error(
       `the "separatePrograms" entry for "${name}" records no usable "${field}". Every field of ` +
@@ -60,6 +75,18 @@ function assertComponent(name: string, delivery: ProgramDelivery, component: Bun
         `${delivery.platform} with neither "spdx" identifiers nor free-text "terms" marked ` +
         '"nonSpdx": true. A bundled component whose terms nobody recorded reads as one nobody ' +
         'considered - record what it is under.',
+    );
+  // The two are ALTERNATIVES, and the document renders them as such: `describeComponent` prints the
+  // identifiers when there are any and the free text only when there are none, so a component
+  // recording both loses whichever a reviewer wrote second. Refused rather than silently dropped,
+  // because the reason to write both is that the identifier alone is not the whole grant - which is
+  // exactly the case the document would then fail to state.
+  if (hasIds && Boolean(String(component.terms || '').trim()))
+    throw new Error(
+      `the "separatePrograms" entry for "${name}" records both "spdx" and "terms" for ` +
+        `"${component.name}" on ${delivery.platform}. The document reproduces one or the other, ` +
+        'so the free text would be dropped - record the identifiers alone, or free text alone ' +
+        'with "nonSpdx": true.',
     );
 }
 
@@ -84,15 +111,30 @@ function assertDelivery(repo: string, name: string, delivery: ProgramDelivery): 
         'the entry describes has changed or gone - re-read it and update the entry, or remove ' +
         'the delivery.',
     );
+  // `false` is the recorded "this bundle carries none"; anything else has to be the path the
+  // document quotes. `true` is the natural typo for the first of those, and it is refused here
+  // rather than reaching `inlineText`, which would fail on a non-string with no field named.
   if (delivery.carriesNotices !== false)
     requireText(name, `deliveries[${delivery.platform}].carriesNotices`, delivery.carriesNotices);
   (delivery.alsoContains || []).forEach((component) => assertComponent(name, delivery, component));
 }
 
-/** Refuses an entry a reviewer has not fully signed, and one whose evidence is gone from the tree. */
+/**
+ * Refuses an entry a reviewer has not fully signed, and one whose evidence is gone from the tree.
+ *
+ * `admissible` is `allowed` union `copyleft` - every identifier the committed policy classifies. A
+ * program's own identifiers must be drawn from it. `applyOverride` returns `overridden` for a
+ * linked package BEFORE the allowed/copyleft test, on the ground that "an override may only name an
+ * identifier the reviewed entry itself names" - which is circular unless something constrains the
+ * ENTRY. That something was incidental: the committed SPDX corpus holds exactly these identifiers,
+ * so `assertSeparateProgramTextsAvailable` rejected anything else a step later. Checking it here
+ * states the constraint the linked-override path actually rests on, rather than leaving it to be
+ * re-derived from which texts happen to be in the corpus.
+ */
 export function assertSeparateProgramsRecorded(
   repo: string,
   programs: Record<string, SeparateProgram>,
+  admissible?: Set<string>,
 ): void {
   Object.entries(programs).forEach(([name, program]) => {
     requireText(name, 'copyright', program.copyright);
@@ -116,6 +158,19 @@ export function assertSeparateProgramsRecorded(
           'describes a program no installer carries - add the platform deliveries, each with the ' +
           'evidence that the mechanism is still in the tree.',
       );
+    if (admissible) {
+      const unclassified = program.spdx
+        .filter((id) => !admissible.has(id))
+        .sort(compareStrings)
+        .join(', ');
+      if (unclassified)
+        throw new Error(
+          `the "separatePrograms" entry for "${name}" names ${unclassified}, which the notices ` +
+            'policy classifies on neither "allowed" nor "copyleft". A linked override is admitted ' +
+            "by the terms a human read for the program, so the program's own identifiers have to " +
+            'be ones the policy recognises - add it to the right list, or fix the entry.',
+        );
+    }
     program.deliveries.forEach((delivery) => assertDelivery(repo, name, delivery));
   });
 }

@@ -372,11 +372,15 @@ async function readCanonicalLicense(root: string = repoRoot): Promise<string> {
  * Sets `license` in a JSON file, keeping it beside `version` when the field is not there yet.
  *
  * PRECONDITION: the caller has already decided that this FOLDER may be stamped.
- * `decideLicenseStamp` is what makes that decision, and it makes it for the folder rather than per
- * file - an extension deliberately given other terms is left alone there, before this is ever
- * called. A second per-file check here would be unreachable through the only caller, and worse than
- * unreachable: it would read as the decision while `decideLicenseStamp` was actually making it, so
- * a future caller could reasonably believe this function is safe to call on any folder. It is not.
+ * `decideLicenseStamp` is what makes that decision for an EXTENSION folder, and it makes it for the
+ * folder rather than per file - an extension deliberately given other terms is left alone there,
+ * before this is ever called. A second per-file check here would read as the decision while
+ * `decideLicenseStamp` was actually making it, so a future caller could reasonably believe this
+ * function is safe to call on any folder. It is not.
+ *
+ * `stampExtensionsRootLicense` is the one caller that deliberately makes no such decision: the
+ * subtree ROOT is part of this application rather than an extension, so its terms are this
+ * repository's unconditionally and there is nothing per-folder to decide.
  */
 async function stampLicenseInJson(
   repoRootRelativePath: string,

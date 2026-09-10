@@ -135,3 +135,37 @@ describe('the NuGet row for a linked package points at the separate-programs sec
     expect(linked.endsWith('Windows only.')).toBe(true);
   });
 });
+
+describe("a program's own identifiers have to be ones the policy classifies", () => {
+  // `applyOverride` admits a linked package on the terms recorded for the PROGRAM, returning before
+  // the allowed/copyleft test - so if nothing constrains the entry's own `spdx`, that argument is
+  // circular. This is the check that closes it.
+  const admissible = new Set(['GPL-2.0-or-later', 'MIT']);
+
+  beforeEach(() => {
+    write('c-sharp/ParanextDataProvider.csproj', '<PackageReference Include="hgWindows-6.3.1" />');
+  });
+
+  it('accepts identifiers the policy classifies', () => {
+    expect(() =>
+      assertSeparateProgramsRecorded(repo, { Mercurial: mercurial }, admissible),
+    ).not.toThrow();
+  });
+
+  it('refuses one it does not', () => {
+    const unclassified: SeparateProgram = {
+      ...mercurial,
+      spdx: ['GPL-2.0-or-later', 'CC-BY-NC-4.0'],
+    };
+
+    expect(() =>
+      assertSeparateProgramsRecorded(repo, { Mercurial: unclassified }, admissible),
+    ).toThrow(/CC-BY-NC-4\.0, which the notices policy classifies on neither/);
+  });
+
+  it('checks nothing when no classification is supplied', () => {
+    const unclassified: SeparateProgram = { ...mercurial, spdx: ['CC-BY-NC-4.0'] };
+
+    expect(() => assertSeparateProgramsRecorded(repo, { Mercurial: unclassified })).not.toThrow();
+  });
+});

@@ -138,6 +138,19 @@ function inlineText(value: string): string {
 }
 
 /**
+ * A copyright notice as one line of Markdown prose.
+ *
+ * Notices copied out of a `COPYING` or `NOTICE` file routinely span several lines with blank lines
+ * between holders, and `inlineText` escapes characters but leaves newlines - which would end the
+ * list item or credit line the notice sits in and push the remaining holders out as loose
+ * paragraphs. Collapsing first is what `canonicalTextCredit` does with a package's notice, for the
+ * same reason.
+ */
+function inlineNotice(value: string): string {
+  return inlineText(value.replace(/\s+/g, ' ').trim());
+}
+
+/**
  * The credit line for one package listed beneath a canonical SPDX license text.
  *
  * A canonical text carries SPDX's placeholders (`<year>`, `<copyright holders>`) rather than any
@@ -539,22 +552,36 @@ function pushPreamble(
   corpusVersion: string,
   licenseeVersion: string,
   product: ProductBlock | undefined,
+  /**
+   * Whether any of the downstream per-component sections will actually render. The sentence below
+   * promises "each described in a section of its own", and both of those sections drop out when
+   * their table is empty - which is the ordinary case for a product whose additions are just more
+   * npm and NuGet dependencies.
+   */
+  hasAddedComponentSections: boolean,
 ): void {
-  const subject = product ? product.name : DEFAULT_PRODUCT_NAME;
+  // Escaped for the reason `inlineText` gives: the name is policy-supplied prose, and a `<` in it
+  // would otherwise be swallowed by the Markdown renderer. `repository` is NOT escaped - it sits in
+  // a code span, where a backslash escape would print as a backslash.
+  const subject = inlineText(product ? product.name : DEFAULT_PRODUCT_NAME);
   out.push('# Third-party notices', '');
   out.push(
     ...(product
       ? [
-          `${product.name} incorporates the third-party components listed below. Where a component ships a`,
+          `${subject} incorporates the third-party components listed below. Where a component ships a`,
           'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
           'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
           'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',
           'accounted for separately in the last section. This file covers the redistributable',
-          `closure of **${product.name}**, built from paranext-core by \`${product.repository}\`: the npm`,
+          `closure of **${subject}**, built from paranext-core by \`${product.repository}\`: the npm`,
           'packages webpack actually compiled into `dist/` (plus the stylesheet-only packages Tailwind',
           'inlines before webpack runs, and anything `release/app` ships unbundled beside the bundle), the',
-          'NuGet closure of the bundled .NET data provider, Electron, and the components that repository',
-          'adds, each described in a section of its own below.',
+          ...(hasAddedComponentSections
+            ? [
+                'NuGet closure of the bundled .NET data provider, Electron, and the components that',
+                'repository adds, each described in a section of its own below.',
+              ]
+            : ['NuGet closure of the bundled .NET data provider, and Electron.']),
         ]
       : [
           `${DEFAULT_PRODUCT_NAME} incorporates the third-party components listed below. Where a component ships a`,
@@ -572,10 +599,11 @@ function pushPreamble(
       ? 'Some of what this application distributes is neither an npm nor a NuGet package - bundled data,'
       : 'Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,',
     'the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source',
-    'tree, and native libraries taken from the machine that built the installer. No scan of either',
-    'graph can reach any of them and none appears as a row below, so each is described in a section',
-    'of its own, present only when that build actually carries it: a component that ships without a',
-    'row is indistinguishable from one nobody considered.',
+    'tree, native libraries taken from the machine that built the installer, third-party programs',
+    'redistributed as separate executables, and extensions packed from other repositories. No scan of',
+    'either graph can reach any of them and none appears as a row below, so each is described in a',
+    'section of its own, present only when that build actually carries it: a component that ships',
+    'without a row is indistinguishable from one nobody considered.',
     '',
     ...(product
       ? []
@@ -657,6 +685,46 @@ function pushElectronSection(out: string[], shipsElectron: boolean): void {
  * contains no database - and an ungated section would go on making UBS copyright claims and CC
  * BY-SA 4.0 attributions for content no installer carries.
  */
+/**
+ * What the document says about the portions of the lexical database UBS has not open-licensed.
+ *
+ * Three cases, because the sentence is a claim about whose distribution UBS permitted:
+ *
+ * - A declared PARATEXT product: the permission names Paratext, so it covers this product.
+ * - A declared NON-Paratext product: it does not, and the document says so naming the product -
+ *   leaving the reader to infer it from "specific to Paratext" would be the one thing this
+ *   paragraph exists to state plainly. "paranext-core" rather than "this repository", because every
+ *   other sentence in a product document is about the product.
+ * - No product at all - this repository's own reference document, which is about this repository.
+ */
+function lexicalDatabasePermission(product: ProductBlock | undefined): string[] {
+  if (product?.isParatext)
+    return [
+      'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
+      `source license. UBS permits their distribution in **Paratext**. ${inlineText(product.name)} is a Paratext`,
+      'product, and that permission covers it. It does not extend to Platform.Bible, nor to anyone',
+      'else redistributing the database, including a third party building from paranext-core \u2014 see',
+      'LICENSING.md. The open-licensed content can be obtained separately from',
+      '<https://github.com/ubsicap/ubs-open-license>.',
+    ];
+  if (product)
+    return [
+      'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
+      'source license. UBS permits their distribution in **Paratext**. That permission is specific to',
+      `Paratext: it does not extend to ${inlineText(product.name)}, nor to Platform.Bible, nor to`,
+      'anyone else redistributing the database, including a third party building from paranext-core',
+      '\u2014 see LICENSING.md. The open-licensed content can be obtained separately from',
+      '<https://github.com/ubsicap/ubs-open-license>.',
+    ];
+  return [
+    'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
+    'source license. UBS permits their distribution in **Paratext**. That permission is specific to',
+    'Paratext: it does not extend to Platform.Bible, nor to anyone else redistributing the database,',
+    'including a third party building from this repository \u2014 see LICENSING.md. The open-licensed',
+    'content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.',
+  ];
+}
+
 function pushLexicalDatabaseSection(
   out: string[],
   packedExtensions: string[],
@@ -686,22 +754,7 @@ function pushLexicalDatabaseSection(
     'Albert Nida \u00a9 United Bible Societies 1988, 1989. Licensed under',
     '[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).',
     '',
-    ...(product?.isParatext
-      ? [
-          'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
-          `source license. UBS permits their distribution in **Paratext**. ${product.name} is a Paratext`,
-          'product, and that permission covers it. It does not extend to Platform.Bible, nor to anyone',
-          'else redistributing the database, including a third party building from paranext-core \u2014 see',
-          'LICENSING.md. The open-licensed content can be obtained separately from',
-          '<https://github.com/ubsicap/ubs-open-license>.',
-        ]
-      : [
-          'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
-          'source license. UBS permits their distribution in **Paratext**. That permission is specific to',
-          'Paratext: it does not extend to Platform.Bible, nor to anyone else redistributing the database,',
-          'including a third party building from this repository \u2014 see LICENSING.md. The open-licensed',
-          'content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.',
-        ]),
+    ...lexicalDatabasePermission(product),
     '',
   );
 }
@@ -808,13 +861,13 @@ function pushSeparateProgramsSection(
   entries.forEach(([name, program]) => {
     out.push(`### ${name}`, '');
     out.push(
-      `- **Terms:** ${program.spdx.join(', ')}`,
-      `- **Copyright:** ${inlineText(program.copyright)}`,
+      `- **Terms:** ${(program.spdx || []).join(', ')}`,
+      `- **Copyright:** ${inlineNotice(program.copyright)}`,
       '',
       'Delivered as:',
       '',
     );
-    program.deliveries.forEach((delivery) => {
+    (program.deliveries || []).forEach((delivery) => {
       const notices =
         delivery.carriesNotices === false
           ? 'The bundle carries no notice files of its own.'
@@ -866,13 +919,13 @@ function addSeparateProgramTexts(
   });
   const credit = (id: string, line: string) => canonical.get(id)?.packages.push(line);
   Object.entries(separatePrograms).forEach(([name, program]) => {
-    new Set(program.spdx).forEach((id) =>
+    new Set(program.spdx || []).forEach((id) =>
       credit(
         id,
-        `\`${name}\` (redistributed as a separate executable) — ${inlineText(program.copyright)}`,
+        `\`${name}\` (redistributed as a separate executable) — ${inlineNotice(program.copyright)}`,
       ),
     );
-    program.deliveries.forEach((delivery) =>
+    (program.deliveries || []).forEach((delivery) =>
       (delivery.alsoContains || []).forEach((component) => {
         const version = component.version ? ` ${component.version}` : '';
         const notice = (component.copyright || '').replace(/\s+/g, ' ').trim();
@@ -1467,7 +1520,13 @@ export function render({
   const npmAccount = accountNpmRows(npmDescribed);
 
   const out: string[] = [];
-  pushPreamble(out, corpusVersion, licenseeVersion, product);
+  pushPreamble(
+    out,
+    corpusVersion,
+    licenseeVersion,
+    product,
+    Object.keys(separatePrograms).length > 0 || Object.keys(externalExtensions).length > 0,
+  );
   pushOpenQuestions(out, openPolicyQuestions);
   pushElectronSection(out, shipsElectron);
   pushLexicalDatabaseSection(out, packedExtensions, product);
