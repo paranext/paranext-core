@@ -13,6 +13,7 @@ import { canonicalText } from './corpus';
 import { parseDeclared } from './declared';
 import { normalizeText } from './package-files';
 import { DEFAULT_PRODUCT_NAME } from './product';
+import { separateProgramIds } from './separate-programs';
 import type {
   BundledComponent,
   CopiedPlatformLibrary,
@@ -799,6 +800,9 @@ function pushSeparateProgramsSection(
     'runtime, and invokes them as subprocesses. They belong to neither the npm nor the NuGet graph',
     'above. The canonical text of every identifier named here is reproduced under "Canonical license',
     'texts for declared identifiers", because not every bundle below carries a copy of its own terms.',
+    'A component bundled inside one of these programs is credited there under its own name and its',
+    'own copyright notice rather than the program\u2019s: it is under its own terms, held by its own',
+    'copyright holder.',
     '',
   );
   entries.forEach(([name, program]) => {
@@ -829,35 +833,59 @@ function pushSeparateProgramsSection(
 }
 
 /**
- * Adds the canonical text of every identifier a separate-program entry names, credited to the
- * program - the counterpart of `addCopiedPlatformLibraryTexts`, with the same refusal.
+ * Adds the canonical text of every identifier a separate-program entry names, each credited to the
+ * subject it actually belongs to - the counterpart of `addCopiedPlatformLibraryTexts`, with the
+ * same refusal.
+ *
+ * WHICH texts are reproduced is `separateProgramIds`' question, asked through that same function so
+ * this and the pre-render `assertSeparateProgramTextsAvailable` cannot drift apart. WHO each one is
+ * credited to is decided here, per subject: the program under the identifiers in its own `spdx`,
+ * with its own copyright notice; a component bundled inside a delivery under the identifiers in ITS
+ * `spdx`, by its own name, with its own notice. The two must not be merged. A bundled component is
+ * under its own terms, held by its own copyright holder, and crediting Mercurial's notice to the
+ * OpenSSL, TCL or PSF-2.0 text merely packaged beside it would state a holder nobody established -
+ * in a document that exists to state only what was.
+ *
+ * A component whose entry records no `copyright` says so, for the reason `canonicalTextCredit`
+ * gives: a blank reads as "nobody looked".
  */
 function addSeparateProgramTexts(
   canonical: CollectedTexts,
   separatePrograms: Record<string, SeparateProgram>,
 ): void {
+  separateProgramIds(separatePrograms).forEach((id) => {
+    const text = canonicalText(id);
+    if (!text)
+      throw new Error(
+        `the "separatePrograms" table names ${id}, and the SPDX corpus holds no text for it - run ` +
+          '`npm run build:third-party-notices:corpus` after adding the identifier to the committed ' +
+          'policy.',
+      );
+    // Normalized on the way in, for the reason `useCanonicalText` states.
+    if (!canonical.has(id)) canonical.set(id, { text: normalizeText(text), packages: [] });
+  });
+  const credit = (id: string, line: string) => canonical.get(id)?.packages.push(line);
   Object.entries(separatePrograms).forEach(([name, program]) => {
-    const ids = new Set<string>(program.spdx);
-    program.deliveries.forEach((delivery) =>
-      (delivery.alsoContains || []).forEach((component) =>
-        (component.spdx || []).forEach((id) => ids.add(id)),
+    new Set(program.spdx).forEach((id) =>
+      credit(
+        id,
+        `\`${name}\` (redistributed as a separate executable) — ${inlineText(program.copyright)}`,
       ),
     );
-    ids.forEach((id) => {
-      const text = canonicalText(id);
-      if (!text)
-        throw new Error(
-          `the notices policy lists the separate program "${name}" under ${id}, and the SPDX ` +
-            'corpus holds no text for it - run `npm run build:third-party-notices:corpus` after ' +
-            'adding the identifier to the committed policy.',
-        );
-      if (!canonical.has(id)) canonical.set(id, { text: normalizeText(text), packages: [] });
-      canonical
-        .get(id)
-        ?.packages.push(
-          `\`${name}\` (redistributed as a separate executable) — ${inlineText(program.copyright)}`,
-        );
-    });
+    program.deliveries.forEach((delivery) =>
+      (delivery.alsoContains || []).forEach((component) => {
+        const version = component.version ? ` ${component.version}` : '';
+        const notice = (component.copyright || '').replace(/\s+/g, ' ').trim();
+        // The name sits in a code span, where a backslash escape would print as a backslash, so it
+        // is written through as `canonicalTextCredit` writes a package name; the platform and the
+        // notice are prose and are escaped.
+        const line =
+          `\`${component.name}${version}\` (bundled with the separate program \`${name}\` on ` +
+          `${inlineText(delivery.platform)}) — ` +
+          `${notice ? inlineText(notice) : 'no copyright notice recorded'}`;
+        new Set(component.spdx || []).forEach((id) => credit(id, line));
+      }),
+    );
   });
 }
 

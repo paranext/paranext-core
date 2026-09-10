@@ -845,6 +845,88 @@ describe('separate programs section', () => {
     expect(out).toContain('Reviewed by r@example.org on 2026-09-04.');
     expect(out).toMatch(/### GPL-2\.0-or-later — canonical text[^#]*`Mercurial`/);
   });
+
+  /** The credit bullets under one canonical-text heading: everything before its fenced text. */
+  const creditsFor = (out: string, id: string): string => {
+    const start = out.indexOf(`### ${id} — canonical text`);
+    expect(start).toBeGreaterThan(-1);
+    return out.slice(start, out.indexOf('```', start));
+  };
+
+  // A bundled component is under ITS OWN terms, held by ITS OWN copyright holder. Crediting the
+  // program's notice to a text the program does not own - Mercurial's holder over the MIT text of
+  // something merely packaged beside it - is a claim nobody established, in a legal artifact.
+  it("credits a bundled component's text to the component, not to the program", () => {
+    const bundling = {
+      Mercurial: {
+        ...separatePrograms.Mercurial,
+        deliveries: [
+          {
+            ...separatePrograms.Mercurial.deliveries[0],
+            alsoContains: [
+              { name: 'Python', version: '3.9', spdx: ['GPL-2.0-or-later'] },
+              {
+                name: 'certifi',
+                version: '2024.2.2',
+                spdx: ['MIT'],
+                copyright: 'Copyright (c) 2011 Kenneth Reitz',
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const mit = creditsFor(render({ ...report, separatePrograms: bundling }), 'MIT');
+    expect(mit).toContain(
+      '`certifi 2024.2.2` (bundled with the separate program `Mercurial` on macOS) — ' +
+        'Copyright (c) 2011 Kenneth Reitz',
+    );
+    expect(mit).not.toContain('Olivia Mackall');
+    expect(mit).not.toContain('redistributed as a separate executable');
+  });
+
+  it("does not credit a component under the program's own identifiers", () => {
+    const bundling = {
+      Mercurial: {
+        ...separatePrograms.Mercurial,
+        deliveries: [
+          {
+            ...separatePrograms.Mercurial.deliveries[0],
+            alsoContains: [
+              { name: 'certifi', spdx: ['MIT'], copyright: 'Copyright (c) 2011 Kenneth Reitz' },
+            ],
+          },
+        ],
+      },
+    };
+    const out = render({ ...report, separatePrograms: bundling });
+    const gpl = creditsFor(out, 'GPL-2.0-or-later');
+    expect(gpl).toContain('`Mercurial` (redistributed as a separate executable)');
+    expect(gpl).not.toContain('certifi');
+    // No version recorded means none is invented: the name stands on its own.
+    expect(creditsFor(out, 'MIT')).toContain(
+      '`certifi` (bundled with the separate program `Mercurial` on macOS) — ' +
+        'Copyright (c) 2011 Kenneth Reitz',
+    );
+  });
+
+  it('states the absence when a bundled component records no copyright notice', () => {
+    const bundling = {
+      Mercurial: {
+        ...separatePrograms.Mercurial,
+        deliveries: [
+          {
+            ...separatePrograms.Mercurial.deliveries[0],
+            alsoContains: [{ name: 'certifi', version: '2024.2.2', spdx: ['MIT'] }],
+          },
+        ],
+      },
+    };
+    expect(creditsFor(render({ ...report, separatePrograms: bundling }), 'MIT')).toContain(
+      '`certifi 2024.2.2` (bundled with the separate program `Mercurial` on macOS) — ' +
+        'no copyright notice recorded',
+    );
+  });
 });
 
 describe('external extensions section', () => {
