@@ -463,10 +463,14 @@ export function pushContentZoom(
  * fallback grace or grant left over from whatever the pane showed before — otherwise a grant the
  * old content earned would still authorize scaling the new content before its own bootstrap gets a
  * chance to report — and drops the pane's last-reported areas, since they described that old
- * content too. For a non-URL pane this then arms a fresh grace, exactly as if the pane had just
- * been opened: a pane whose bootstrap never runs at all (an HTML view opened with `allowScripts:
- * false`, say) still eventually gets the whole-iframe fallback, and one that does go on to report
- * an area within the grace still cancels it as usual.
+ * content too. For a non-URL pane this then also clears the whole-iframe `zoom` a reload does not
+ * reset on its own (it lives on the host `<iframe>` element, not the content a reload replaces), so
+ * the new content never renders whole-scaled on the strength of the old grant, before arming a
+ * fresh grace exactly as if the pane had just been opened: a pane whose bootstrap never runs at all
+ * (an HTML view opened with `allowScripts: false`, say) still eventually gets the whole-iframe
+ * fallback, and one that does go on to report an area within the grace still cancels it as usual. A
+ * URL pane keeps its immediate fallback and is left out of this reset: {@link pushContentZoom}
+ * reapplies it below regardless, since {@link mayScaleWholeIframe} always allows a URL pane.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
   clearFallbackGrace(webViewId);
@@ -474,6 +478,8 @@ export function applyContentZoomForWebView(webViewId: WebViewId): void {
   const definition = deps.getDefinition(webViewId);
   if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     startFallbackGrace(webViewId);
+    const iframe = deps.getIframe(webViewId);
+    if (iframe) iframe.style.zoom = '';
   }
   pushContentZoom(webViewId);
 }
