@@ -14,6 +14,7 @@ import './index.css';
 // The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
 export {
   default as ProjectSelector,
+  PROJECT_SELECTOR_STRING_KEYS,
   type ProjectSelectorProps,
   type ProjectSelectorProject,
   type ProjectSelectorOpenTab,

@@ -4,6 +4,7 @@ import {
   SettingsSidebarContentSearch,
   usePromise,
 } from 'platform-bible-react';
+import { PROJECT_SELECTOR_STRING_KEYS } from 'platform-bible-react/experimental';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import {
   filterProjectSettingsContributionsByProjectInterfaces,
@@ -89,6 +90,10 @@ const filterSettingsContributions = (
 
 export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
+
+  const [projectSelectorLocalizedStrings] = useLocalizedStrings(
+    useMemo(() => Array.from(PROJECT_SELECTOR_STRING_KEYS), []),
+  );
 
   const [selectedSidebarItem, setSelectedSidebarItem] = useState<SelectedSettingsSidebarItem>({
     label: '',
@@ -304,6 +309,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_generalSettingsLabel%']}
           projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectSettingsLabel%']}
           buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
+          projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
         >
           <div className="project-or-settings-list-container">
             {selectedSidebarItem.projectId ? (

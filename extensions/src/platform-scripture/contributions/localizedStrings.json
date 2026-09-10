@@ -15,15 +15,6 @@
     "%webView_find_projectSelector_label%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },
-    "%webView_find_projectSelector_searchPlaceholder%": {
-      "fallbackKey": "%manageBooks_projectSelector_searchPlaceholder%"
-    },
-    "%webView_find_projectSelector_openTabsSectionHeading%": {
-      "fallbackKey": "%manageBooks_projectSelector_openTabsSectionHeading%"
-    },
-    "%webView_find_projectSelector_otherProjectsSectionHeading%": {
-      "fallbackKey": "%manageBooks_projectSelector_otherProjectsSectionHeading%"
-    },
     "%manageBooks_copy_confirmMergeFromSource%": {
       "fallbackKey": "%manageBooks_copy_onlyNonExistingChapters%"
     },
@@ -240,20 +231,7 @@
       "%manageBooks_dialog_title%": "Manage books",
       "%manageBooks_filter_books%": "Filter books",
       "%manageBooks_genericError%": "An unexpected error occurred.",
-      "%manageBooks_projectSelector_boundButClosedTooltip%": "Bound to {group} · not currently open",
-      "%manageBooks_projectSelector_clearAll%": "Clear all",
-      "%manageBooks_projectSelector_filterAriaLabel%": "Filter",
-      "%manageBooks_projectSelector_filterGroupByOpenTabs%": "By open tabs",
-      "%manageBooks_projectSelector_filterSectionLabel%": "Filter",
-      "%manageBooks_projectSelector_filterShowSelectedOnly%": "Show selected only",
-      "%manageBooks_projectSelector_groupSectionLabel%": "Group",
-      "%manageBooks_projectSelector_openButtonLabel%": "Open",
-      "%manageBooks_projectSelector_openTabsSectionHeading%": "Opened project & resource tabs",
-      "%manageBooks_projectSelector_otherProjectsSectionHeading%": "Your projects & resources",
-      "%manageBooks_projectSelector_searchPlaceholder%": "Search projects & resources",
-      "%manageBooks_projectSelector_selectAll%": "Select all",
       "%manageBooks_projectSelector_versificationSectionHeading%": "{0} versification",
-      "%manageBooks_projectSelector_versificationUnknownSectionHeading%": "Unknown versification",
       "%manageBooks_filter_buttonAriaLabel%": "Filter",
       "%manageBooks_filter_clearButton%": "Clear filter",
       "%manageBooks_filter_menuLabel%": "Show",
@@ -503,9 +481,6 @@
       "%webView_find_projectFilter_noOpenProjectsOrResources%": "No open projects or resources",
       "%webView_find_projectFilter_noProjectsFound%": "No projects found",
       "%webView_find_projectSelector_label%": "Project",
-      "%webView_find_projectSelector_searchPlaceholder%": "Search projects & resources",
-      "%webView_find_projectSelector_openTabsSectionHeading%": "Opened project & resource tabs",
-      "%webView_find_projectSelector_otherProjectsSectionHeading%": "Your projects & resources",
       "%webView_find_noOpenProjectsOrResources_results%": "No projects or resources are open. Open one to search.",
       "%webView_find_project_unavailableError%": "the selected project is not available to search",
       "%webView_find_replace%": "Replace",
