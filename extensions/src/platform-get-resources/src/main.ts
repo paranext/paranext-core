@@ -133,15 +133,34 @@ async function getLocalProjectMetadata(): Promise<{
 }
 
 /**
- * Syncs the derived `installed`, `projectId` and `updateAvailable` flags on `cachedResources`
- * against current local state. Runs in the background so it never blocks a dialog open. Updates
- * `cachedResources` and writes to storage when flags change.
+ * Asks the backend which resources have a newer version on the DBL, or `undefined` if it could not
+ * say.
  *
- * `installed` and `projectId` come from live project metadata. `updateAvailable` compares the
- * locally installed revision against the DBL catalog's, and neither number is reachable from
- * TypeScript, so the backend is asked for it.
+ * `updateAvailable` compares the locally installed revision against the DBL catalog's, and neither
+ * number is reachable from TypeScript, so only the backend can answer. `undefined` leaves those
+ * flags at their cached values rather than guessing.
  */
-async function syncInstalledFlags(): Promise<void> {
+async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> {
+  try {
+    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+    return await provider?.recomputeDblResourcesUpdateStatus();
+  } catch (error: unknown) {
+    logger.warn(`Could not recompute DBL resource update status: ${getErrorMessage(error)}`);
+    return undefined;
+  }
+}
+
+/**
+ * Syncs the derived flags on `cachedResources` against current local state, updating the cache and
+ * writing to storage when any of them change.
+ *
+ * `installed` and `projectId` come from live project metadata and are always reconciled. The
+ * backend round trip for `updateAvailable` is opt-in, because only the Get Resources list renders
+ * that flag: every other consumer of the catalog would otherwise wait on a value it discards.
+ *
+ * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`
+ */
+async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
   if (cachedResources === undefined) return;
   try {
     const { metadata: localProjectMetadata, hasResourceProjects } = await getLocalProjectMetadata();
@@ -150,16 +169,7 @@ async function syncInstalledFlags(): Promise<void> {
     // and it can never mark anything installed, so there is nothing to gain by continuing.
     if (!hasResourceProjects) return;
 
-    // Kept in its own `try` so a backend failure costs only the `updateAvailable` refresh: an
-    // undefined status leaves those flags at their cached values, while `installed` and `projectId`
-    // still reconcile against the local projects.
-    let updateStatus: DblResourceUpdateStatus | undefined;
-    try {
-      const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
-      updateStatus = await provider?.recomputeDblResourcesUpdateStatus();
-    } catch (error: unknown) {
-      logger.warn(`Could not recompute DBL resource update status: ${getErrorMessage(error)}`);
-    }
+    const updateStatus = shouldRecomputeUpdateStatus ? await readUpdateStatus() : undefined;
 
     // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
     // overwrite cachedResources between our reconcile and our assignment.
@@ -188,14 +198,18 @@ async function syncInstalledFlags(): Promise<void> {
 }
 
 /**
- * Starts the installed-flag sync if one is not already running, and returns the promise for it.
- * Callers that only need the catalog let it run in the background; callers whose answer depends on
- * the flags being current await it and re-read `cachedResources` afterwards.
+ * Starts a flag sync if one is not already running, and returns the promise for it. Callers that
+ * only need the catalog let it run in the background; callers whose answer depends on the flags
+ * being current await it and re-read `cachedResources` afterwards.
+ *
+ * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`. A
+ *   caller that needs it joins an in-flight sync that does not refresh it, so ask for it through
+ *   {@link refreshResourceFlags}, which starts a sync of its own rather than joining.
  */
-function ensureInstalledFlagsSynced(): Promise<void> {
+function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
   if (!syncInFlight) {
-    syncInFlight = syncInstalledFlags()
-      .catch((e) => logger.warn(`Background installed-flag sync failed: ${getErrorMessage(e)}`))
+    syncInFlight = syncFlags(shouldRecomputeUpdateStatus)
+      .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
         syncInFlight = undefined;
       });
@@ -215,12 +229,12 @@ function ensureInstalledFlagsSynced(): Promise<void> {
  * caller that has just changed local state awaits this first, then re-reads.
  */
 async function refreshResourceFlags(): Promise<void> {
-  // Joining a sync that is already running is not enough: it may have read its project metadata
-  // before the change this caller just made, so it can resolve on pre-change state. Let that one
-  // finish first, then start one that is guaranteed to observe the change. Any sync another caller
-  // starts in between also began after the change, so it is equally good.
+  // Joining a sync that is already running is not enough, for two reasons: it may have read its
+  // project metadata before the change this caller just made, and a background sync does not
+  // refresh `updateAvailable` at all. Let any running sync finish, then start one that is
+  // guaranteed to observe the change and to ask the backend.
   if (syncInFlight) await syncInFlight;
-  await ensureInstalledFlagsSynced();
+  await ensureInstalledFlagsSynced(true);
 }
 
 async function getCachedResources(): Promise<DblResourceCatalog> {
