@@ -42,6 +42,17 @@ describe('readDirection', () => {
     persistDirection('rtl');
     expect(readDirection()).toBe('rtl');
   });
+
+  test('returns "ltr" when storage.getItem itself throws (deferred SecurityError)', () => {
+    // A `Storage` object can be reachable without throwing and still throw on the method call - a
+    // sandboxed proxy that defers its `SecurityError` to `getItem` rather than the property access.
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new DOMException('Access is denied for this document', 'SecurityError');
+      },
+    });
+    expect(readDirection()).toBe('ltr');
+  });
 });
 
 describe('persistDirection', () => {
@@ -59,6 +70,17 @@ describe('persistDirection', () => {
         throw new DOMException('Access is denied for this document', 'SecurityError');
       },
       configurable: true,
+    });
+    expect(() => persistDirection('rtl')).not.toThrow();
+  });
+
+  test('does not throw when storage.setItem itself throws (e.g. quota exceeded)', () => {
+    // A `Storage` object can be reachable without throwing and still throw on the method call -
+    // Safari private browsing raises `QuotaExceededError` from `setItem` this way.
+    vi.stubGlobal('localStorage', {
+      setItem: () => {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      },
     });
     expect(() => persistDirection('rtl')).not.toThrow();
   });
