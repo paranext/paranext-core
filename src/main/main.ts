@@ -2306,7 +2306,10 @@ async function main() {
     },
     {
       method: {
-        summary: 'Increase the zoom factor of all application windows by 10%',
+        summary:
+          'Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
+          'Has no default keyboard shortcut; per-pane content zoom uses ' +
+          'platform.webViewContentZoomIn',
         params: [],
         result: {
           name: 'return value',
@@ -2323,7 +2326,10 @@ async function main() {
     },
     {
       method: {
-        summary: 'Decrease the zoom factor of all application windows by 10%',
+        summary:
+          'Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
+          'Has no default keyboard shortcut; per-pane content zoom uses ' +
+          'platform.webViewContentZoomOut',
         params: [],
         result: {
           name: 'return value',
