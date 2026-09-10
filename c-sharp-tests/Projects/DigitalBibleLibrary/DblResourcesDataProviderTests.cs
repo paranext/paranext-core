@@ -186,6 +186,25 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         }
 
         /// <summary>
+        /// An installed resource whose DBL copy is newer reports an update. Without this the suite
+        /// only ever asserts the `false` side, so the badge could stop appearing entirely — for
+        /// every resource, whether or not an update exists — and stay green.
+        /// </summary>
+        [Test]
+        public void ProjectUpdateStatus_ReportsAnUpdateForAnInstalledOutOfDateResource()
+        {
+            using DummyScrText existing = new();
+            var resources = new[] { OutOfDateResource("97196133a859179b", existing) };
+
+            var updateStatus = DblResourcesDataProvider.ProjectUpdateStatus(
+                resources,
+                new HashSet<string> { "97196133a859179b" }
+            );
+
+            Assert.That(updateStatus["97196133a859179b"], Is.True);
+        }
+
+        /// <summary>
         /// Duplicate uids resolve first-wins, matching `FindResource`'s `FirstOrDefault`, so the
         /// flag shown describes the same resource the install/uninstall buttons act on. The two
         /// entries deliberately disagree, which is the only way this can tell first-wins from the

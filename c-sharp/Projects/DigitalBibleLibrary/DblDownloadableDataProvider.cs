@@ -326,11 +326,26 @@ internal class DblResourcesDataProvider(
         HashSet<string> installedDblIds = [];
         foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
         {
-            if (!scrText.IsResourceProject)
-                continue;
-            var dblId = scrText.Settings.DBLId;
-            if (dblId != null)
-                installedDblIds.Add(dblId.Id);
+            try
+            {
+                if (!scrText.IsResourceProject)
+                    continue;
+                var dblId = scrText.Settings.DBLId;
+                if (dblId != null)
+                    installedDblIds.Add(dblId.Id);
+            }
+            catch (Exception e)
+            {
+                // Both reads above touch project settings, which fault on a corrupt Settings.xml.
+                // Skipping the project costs at most one row an accurate flag; letting the
+                // exception escape would fault the whole recheck and leave every row stale for the
+                // session — the outcome the per-entry guard in ProjectUpdateStatus also prevents.
+                // The project is deliberately not named here: reading anything off it is what
+                // just failed, so doing it again in the handler could throw out of the catch.
+                Console.WriteLine(
+                    $"Could not read a project's DBL id while rechecking updates: {e}"
+                );
+            }
         }
         return installedDblIds;
     }
