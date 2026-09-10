@@ -92,6 +92,7 @@ function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
     shortName: m.name ?? m.id,
     language: resolved?.tag,
     languageDisplayName: resolved?.displayName,
+    isEditable: m.isEditable ?? true,
   };
 }
 
@@ -389,15 +390,12 @@ export function useProjectPickerData(): ProjectPickerData {
         const metadataById = new Map<string, ProjectMetadata>(
           metadata.map((m) => [normalizeProjectId(m.id), m]),
         );
-        // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored)
-        // and non-editable projects.
-        // `isEditable` is optional on ProjectMetadata; a factory that omits it must be treated as
-        // editable to match the registered contribution default (true) for `platform.isEditable`.
+        // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored).
+        // Read-only projects are deliberately kept: a project the user can open but not edit is
+        // still a project they can reach, and the row marks it as read-only.
         return safeRecentIds
           .map((id: string) => metadataById.get(normalizeProjectId(id)))
-          .filter(
-            (m: ProjectMetadata | undefined): m is ProjectMetadata => !!m && m.isEditable !== false,
-          )
+          .filter((m: ProjectMetadata | undefined): m is ProjectMetadata => !!m)
           .map(metadataToProjectItem);
       } catch (e) {
         logger.warn(
@@ -413,14 +411,9 @@ export function useProjectPickerData(): ProjectPickerData {
     useCallback(async () => {
       try {
         const metadata = await getAllMetadata();
-        return (
-          metadata
-            // The service already filtered to PICKER_PROJECT_INTERFACE, so only the editability
-            // filter is left. Treat a missing `isEditable` as editable - the registered default is
-            // true (see the recents filter above for the full reasoning).
-            .filter((m) => m.isEditable !== false)
-            .map(metadataToProjectItem)
-        );
+        // The service already filtered to PICKER_PROJECT_INTERFACE; nothing further is excluded.
+        // Read-only projects belong in the list, marked rather than hidden.
+        return metadata.map(metadataToProjectItem);
       } catch (e) {
         logger.warn(`ProjectPicker: could not fetch project metadata: ${getErrorMessage(e)}`);
         return [];

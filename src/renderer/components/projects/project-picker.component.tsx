@@ -23,6 +23,13 @@ export type ProjectItem = {
   language?: string;
   /** Full localized language name shown as a tooltip over {@link language} (e.g. "English"). */
   languageDisplayName?: string;
+  /**
+   * Whether the project accepts edits. `false` marks a read-only project, which consumers surface
+   * with a read-only affordance. Absent means editable — the registered default for
+   * `platform.isEditable` is true, so a factory that leaves the metadata field unset must not be
+   * treated as read-only.
+   */
+  isEditable?: boolean;
 };
 
 /** Localization string keys used by {@link ProjectPicker}. */
