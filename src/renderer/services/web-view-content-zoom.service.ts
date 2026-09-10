@@ -293,22 +293,24 @@ const FALLBACK_GRACE_MS = 1000;
 
 /**
  * Panes whose grace period has passed with no zoom area reported, so the whole-iframe fallback may
- * be applied to them. A later NON-EMPTY report revokes the grant ({@link clearFallbackGrace}), so a
- * pane whose content is replaced (a navigation, say) has to earn it again through a fresh grace
- * rather than being scaled instantly on its next empty report. A URL web view is not listed here
- * and does not need to be: it never runs the bootstrap, so it can never report, and
- * {@link mayScaleWholeIframe} lets it through at once.
+ * be applied to them. A later NON-EMPTY report, or a fresh iframe load — including an in-place
+ * reload that replaces a pane's content without unmounting it — revokes the grant
+ * ({@link clearFallbackGrace}), so a pane whose content is replaced has to earn it again through a
+ * fresh grace rather than being scaled instantly. A URL web view is not listed here and does not
+ * need to be: it never runs the bootstrap, so it can never report, and {@link mayScaleWholeIframe}
+ * lets it through at once.
  */
 const fallbackAllowedWebViewIds = new Set<WebViewId>();
 
-/** Running grace timers, one per pane, so a report or an unmount can cancel one. */
+/** Running grace timers, one per pane, so a report, a reload, or an unmount can cancel one. */
 const fallbackGraceTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>();
 
 /**
  * Cancels a pending grace timer, and revokes an already-granted whole-iframe fallback for the pane.
- * Called on a NON-EMPTY area report, so any earlier grant was for content that has since gone away:
- * a later empty report must not reuse it and has to pass a fresh grace before the fallback applies
- * again.
+ * Called on every NON-EMPTY area report and on every iframe load
+ * ({@link applyContentZoomForWebView}): either way, whatever grant or pending grace existed belongs
+ * to content that is now gone, and a fresh grace has to be earned again before the fallback can
+ * apply.
  */
 function clearFallbackGrace(webViewId: WebViewId): void {
   const timer = fallbackGraceTimers.get(webViewId);
@@ -329,10 +331,11 @@ function clearAllFallbackGraces(): void {
 /**
  * Starts the wait during which a pane with no known areas may still be mounting content that will
  * report some. If the pane still has no area when it elapses, its content is taken to have no zoom
- * area at all and the whole-iframe fallback is applied from then on. Started both by a pane's first
- * empty area report ({@link setContentZoomAreas}) and, for a pane whose bootstrap may never run at
- * all, by the iframe load hook ({@link applyContentZoomForWebView}); idempotent either way, since a
- * grace already pending or already granted is left alone.
+ * area at all and the whole-iframe fallback is applied from then on. Started by a pane's first
+ * empty area report ({@link setContentZoomAreas}) and by every non-URL iframe load
+ * ({@link applyContentZoomForWebView}, which clears any grant left over from the previous content
+ * first, so this always waits out a fresh grace rather than reusing one inherited from that
+ * content); idempotent either way, since a grace already pending is left alone.
  */
 function startFallbackGrace(webViewId: WebViewId): void {
   if (fallbackAllowedWebViewIds.has(webViewId) || fallbackGraceTimers.has(webViewId)) return;
@@ -454,20 +457,22 @@ export function pushContentZoom(
 }
 
 /**
- * For the iframe load hook: push whatever this pane should show right now, and, for a non-URL pane
- * with no areas known yet, arm the whole-iframe fallback grace here too. A pane whose bootstrap
- * never runs at all (an HTML view opened with `allowScripts: false`, say) never calls
- * {@link setContentZoomAreas}, so without this the grace would never start and the pane would stay
- * unscaled indefinitely; a pane that does go on to report an area within the grace still cancels it
- * as usual.
+ * For the iframe load hook: treats every load as a fresh content session, including an in-place
+ * reload that replaces a pane's content without the component unmounting (`forgetContentZoom` only
+ * runs on unmount, so the pane's id, and anything keyed by it, survives a reload). Clears any
+ * fallback grace or grant left over from whatever the pane showed before — otherwise a grant the
+ * old content earned would still authorize scaling the new content before its own bootstrap gets a
+ * chance to report — and drops the pane's last-reported areas, since they described that old
+ * content too. For a non-URL pane this then arms a fresh grace, exactly as if the pane had just
+ * been opened: a pane whose bootstrap never runs at all (an HTML view opened with `allowScripts:
+ * false`, say) still eventually gets the whole-iframe fallback, and one that does go on to report
+ * an area within the grace still cancels it as usual.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
+  clearFallbackGrace(webViewId);
+  areasByWebViewId.delete(webViewId);
   const definition = deps.getDefinition(webViewId);
-  if (
-    definition &&
-    definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL &&
-    (areasByWebViewId.get(webViewId) ?? []).length === 0
-  ) {
+  if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     startFallbackGrace(webViewId);
   }
   pushContentZoom(webViewId);

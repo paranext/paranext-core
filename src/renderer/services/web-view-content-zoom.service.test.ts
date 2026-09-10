@@ -536,6 +536,32 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('gives a reload a fresh grace instead of instantly reapplying a fallback grant inherited from the old content', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    vi.useFakeTimers();
+    try {
+      setContentZoomAreas('editor-1', []);
+      vi.advanceTimersByTime(1000);
+      expect(iframe.style.zoom).toBe('1.3'); // the fallback grant earned by the old content
+
+      // The reload's new content hasn't rendered anything yet, so nothing has touched the
+      // iframe element's own style; clearing it here isolates what the load hook itself does
+      // with the grant it inherits, from whatever the old content happened to leave behind.
+      iframe.style.zoom = '';
+      applyContentZoomForWebView('editor-1');
+      expect(iframe.style.zoom).toBe(''); // the inherited grant must not be reapplied instantly
+
+      vi.advanceTimersByTime(999);
+      expect(iframe.style.zoom).toBe('');
+      vi.advanceTimersByTime(1);
+      expect(iframe.style.zoom).toBe('1.3'); // only a fresh, fully-elapsed grace re-grants it
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('scales a URL web view whole straight away, since it never runs the bootstrap and never reports areas', () => {
     definitions.set('url-1', {
       id: 'url-1',
@@ -548,13 +574,20 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('applyContentZoomForWebView leaves a pane that has not reported yet unscaled, and pushes a per-area variable once it has', () => {
-    applyContentZoomForWebView('editor-7');
-    expect(iframe.style.zoom).toBe('');
-    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
-    setContentZoomAreas('editor-1', ['main']);
-    applyContentZoomForWebView('editor-1');
-    expect(iframe.style.zoom).toBe('');
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+    // Every call for a known non-URL pane now arms a fallback grace timer, so fake timers keep
+    // that timer from leaking into later tests as a real pending setTimeout.
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-7');
+      expect(iframe.style.zoom).toBe('');
+      expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
+      setContentZoomAreas('editor-1', ['main']);
+      applyContentZoomForWebView('editor-1');
+      expect(iframe.style.zoom).toBe('');
+      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('gives a late-reported area its remembered level', async () => {
