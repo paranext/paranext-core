@@ -255,7 +255,7 @@ test.describe('moving a web view between windows', () => {
     // the foreground away from wherever the user is. The window a person DID ask for is covered by
     // every other test here, all of which depend on the new window activating normally.
     const logStep = createStepLogger('withhold-activation');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const window1Id = getWindowIdOfPage(mainPage);
     await expect(homeTabTitle(mainPage)).toBeVisible({ timeout: 60_000 });
     const webViewId = await getHomeTabWebViewId(mainPage);
