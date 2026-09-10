@@ -84,12 +84,29 @@ let cachedDefault: number | undefined;
 /** The one-time initialization promise; cleared by a test reset so each test starts fresh. */
 let initialized: Promise<void> | undefined;
 
+/** The tail of the memory-setting transaction chain; a transaction is appended onto it next. */
+let memoryChain: Promise<void> = Promise.resolve();
+
+/** How long a per-key memory edit waits for more edits to the same or another key before it flushes. */
+const MEMORY_WRITE_DEBOUNCE_MS = 250;
+
+/** Memory edits not yet flushed to the setting, keyed by memory key; `undefined` means delete. */
+const pendingMemoryWrites = new Map<string, number | undefined>();
+
+let memoryWriteTimer: ReturnType<typeof setTimeout> | undefined;
+
 /** Test seam only. Production code never calls this. */
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
 export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>): void {
   deps = { ...deps, ...partial };
   cachedDefault = undefined;
   initialized = undefined;
+  pendingMemoryWrites.clear();
+  if (memoryWriteTimer !== undefined) {
+    clearTimeout(memoryWriteTimer);
+    memoryWriteTimer = undefined;
+  }
+  memoryChain = Promise.resolve();
 }
 
 function asNumber(value: unknown): number {
@@ -236,12 +253,13 @@ export function applyContentZoomForWebView(webViewId: WebViewId): void {
   pushContentZoom(webViewId);
 }
 
-async function readMemory(): Promise<MemoryRecord> {
+/** `undefined` marks a failed read, distinct from a genuinely empty record. */
+async function readMemory(): Promise<MemoryRecord | undefined> {
   try {
     return asMemory(await deps.settings.get('platform.webViewContentZoomMemory'));
   } catch (e) {
     logger.warn(`Content zoom: could not read memory. ${getErrorMessage(e)}`);
-    return {};
+    return undefined;
   }
 }
 
@@ -273,22 +291,88 @@ function memoryKeyFor(
   return id ? buildContentZoomMemoryKey(id.kind, id.identity, areaId) : undefined;
 }
 
-async function writeMemory(
-  definition: SavedWebViewDefinition,
+/**
+ * Serializes every change to the memory setting behind one promise chain: a transaction reads the
+ * current record, lets `mutate` compute the next one from a private copy, and writes only when
+ * `mutate` reports a change by returning it (an unchanged record returns `undefined`, and so does a
+ * failed read — nothing is ever written from a read that didn't actually succeed). Queuing onto
+ * `memoryChain` rather than reading independently means two overlapping transactions apply in order
+ * against the latest write instead of both starting from the same stale snapshot. Errors are caught
+ * and logged here so one failed transaction never stops the next from running.
+ */
+function enqueueMemoryTransaction(
+  mutate: (memory: MemoryRecord) => MemoryRecord | undefined,
+): Promise<void> {
+  const previous = memoryChain;
+  memoryChain = (async () => {
+    await previous;
+    try {
+      const memory = await readMemory();
+      if (!memory) return;
+      const next = mutate({ ...memory });
+      if (!next) return;
+      await deps.settings.set('platform.webViewContentZoomMemory', next);
+    } catch (e) {
+      logger.warn(`Content zoom: could not write memory. ${getErrorMessage(e)}`);
+    }
+  })();
+  return memoryChain;
+}
+
+/**
+ * Applies every pending edit as one transaction against the latest stored memory, so a debounced
+ * burst becomes a single write. Safe to call with nothing pending.
+ */
+function flushMemoryWrites(): Promise<void> {
+  if (memoryWriteTimer !== undefined) {
+    clearTimeout(memoryWriteTimer);
+    memoryWriteTimer = undefined;
+  }
+  if (pendingMemoryWrites.size === 0) return Promise.resolve();
+  const pending = new Map(pendingMemoryWrites);
+  pendingMemoryWrites.clear();
+  return enqueueMemoryTransaction((memory) => {
+    let changed = false;
+    pending.forEach((level, key) => {
+      if (level === undefined) {
+        if (key in memory) {
+          delete memory[key];
+          changed = true;
+        }
+      } else if (memory[key] !== level) {
+        memory[key] = level;
+        changed = true;
+      }
+    });
+    return changed ? memory : undefined;
+  });
+}
+
+/**
+ * Records one area's level as a pending memory edit and (re)starts the flush timer, so a burst of
+ * adjustments — a wheel gesture, keyboard auto-repeat — coalesces into one write per key instead of
+ * one round trip per step.
+ */
+function writeMemory(
+  definition: Pick<SavedWebViewDefinition, 'webViewType' | 'projectId' | 'state'>,
   areaId: string,
   level: number | undefined,
-): Promise<void> {
+): void {
   const key = memoryKeyFor(definition, areaId);
   if (!key) return;
-  const memory = await readMemory();
-  if (level === undefined) {
-    if (!(key in memory)) return;
-    delete memory[key];
-  } else {
-    if (memory[key] === level) return;
-    memory[key] = level;
-  }
-  await deps.settings.set('platform.webViewContentZoomMemory', memory);
+  pendingMemoryWrites.set(key, level);
+  if (memoryWriteTimer !== undefined) clearTimeout(memoryWriteTimer);
+  memoryWriteTimer = setTimeout(() => {
+    memoryWriteTimer = undefined;
+    flushMemoryWrites();
+  }, MEMORY_WRITE_DEBOUNCE_MS);
+}
+
+/** Test seam only. Flushes any pending edit now and waits for the transaction chain to settle. */
+// eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
+export async function __flushContentZoomMemoryForTesting(): Promise<void> {
+  await flushMemoryWrites();
+  await memoryChain;
 }
 
 /** Sets or deletes one area's level in the definition state; an empty map is removed entirely. */
@@ -328,7 +412,7 @@ export async function adjustContentZoom(
   const next = adjustZoomFactor(current, deltaSteps);
   if (next === current) return;
   if (!writeOwnLevel(definition, area, next)) return;
-  await writeMemory(definition, area, next);
+  writeMemory(definition, area, next);
   pushContentZoom(target, { areaId: area, text: formatZoomPercent(next) });
 }
 
@@ -347,7 +431,7 @@ export async function resetContentZoom(
   if (getOwnLevels(definition)[area] !== undefined) {
     if (!writeOwnLevel(definition, area, undefined)) return;
   }
-  await writeMemory(definition, area, undefined);
+  writeMemory(definition, area, undefined);
   const defaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
   pushContentZoom(target, {
     areaId: area,
@@ -366,7 +450,7 @@ export async function getInitialContentZoomForWebView(
   const levels: Levels = { ...getOwnLevels(webView) };
   const id = memoryIdentityFor(webView);
   if (id) {
-    const memory = await readMemory();
+    const memory = (await readMemory()) ?? {};
     Object.entries(memory).forEach(([key, level]) => {
       const parsed = parseContentZoomMemoryKey(key);
       if (!parsed || parsed.kind !== id.kind || parsed.identity !== id.identity) return;
@@ -412,18 +496,17 @@ function syncSiblingsFromMemory(memory: MemoryRecord): void {
  * `resource:` memory keys on a different, non-project identity and is left alone here.
  */
 async function pruneMemoryOfRemovedProjects(): Promise<void> {
-  const memory = await readMemory();
-  const keys = Object.keys(memory);
-  if (keys.length === 0) return;
   const projectIds = new Set((await deps.listProjects()).map((project) => project.id));
-  let changed = false;
-  keys.forEach((key) => {
-    const parsed = parseContentZoomMemoryKey(key);
-    if (!parsed || parsed.kind === 'resource' || projectIds.has(parsed.identity)) return;
-    delete memory[key];
-    changed = true;
+  await enqueueMemoryTransaction((memory) => {
+    let changed = false;
+    Object.keys(memory).forEach((key) => {
+      const parsed = parseContentZoomMemoryKey(key);
+      if (!parsed || parsed.kind === 'resource' || projectIds.has(parsed.identity)) return;
+      delete memory[key];
+      changed = true;
+    });
+    return changed ? memory : undefined;
   });
-  if (changed) await deps.settings.set('platform.webViewContentZoomMemory', memory);
 }
 
 /** Idempotent. Subscribes to the default, the memory and web-view updates; prunes stale memory. */
@@ -458,6 +541,13 @@ export function initializeContentZoomService(): Promise<void> {
     onDidUpdateWebView(({ webView }) => {
       if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
     });
+    // Best effort: a debounced edit still in flight when the window closes gets one last chance
+    // to reach the setting rather than being silently dropped.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', () => {
+        flushMemoryWrites();
+      });
+    }
     await pruneMemoryOfRemovedProjects().catch((e) =>
       logger.warn(`Content zoom: memory prune failed. ${getErrorMessage(e)}`),
     );
