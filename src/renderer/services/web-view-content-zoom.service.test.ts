@@ -318,6 +318,32 @@ describe('web-view-content-zoom.service', () => {
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('2');
   });
 
+  it('seeds on the first non-empty report even when an earlier report for the same pane was empty', async () => {
+    settings[MEMORY] = { 'editor:proj-A:main': 1.3, 'editor:proj-A:footnotes': 0.9 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('editor-6', {
+      id: 'editor-6',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    // The bootstrap's first scan reports no areas yet (e.g. a spinner while the pane loads).
+    setContentZoomAreas('editor-6', []);
+    expect(definitions.get('editor-6')?.state).toEqual({});
+    showIndicator.mockClear();
+    settingsSet.mockClear();
+    setContentZoomAreas('editor-6', ['main', 'footnotes']);
+    await __flushContentZoomMemoryForTesting();
+    expect(definitions.get('editor-6')?.state).toEqual({
+      [LEVELS]: { main: 1.3, footnotes: 0.9 },
+    });
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('0.9');
+    expect(showIndicator).not.toHaveBeenCalled();
+    expect(settingsSet).not.toHaveBeenCalled();
+  });
+
   it('does not seed on a later report', async () => {
     settings[MEMORY] = { 'editor:proj-A:main': 1.3 };
     __setContentZoomDepsForTesting({});

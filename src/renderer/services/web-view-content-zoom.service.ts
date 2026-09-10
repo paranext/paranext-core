@@ -260,25 +260,27 @@ function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
   if (definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state) return;
   const id = memoryIdentityFor(definition);
   if (!id) return;
-  const levels: Levels = {};
-  Object.entries(cachedMemory).forEach(([key, level]) => {
-    const parsed = parseContentZoomMemoryKey(key);
-    if (parsed && parsed.kind === id.kind && parsed.identity === id.identity)
-      levels[parsed.areaId] = level;
-  });
+  const levels = collectMemoryLevelsFor(cachedMemory, id);
   if (Object.keys(levels).length === 0) return;
   deps.updateDefinition(definition.id, {
     state: { ...(definition.state ?? {}), [CONTENT_ZOOM_LEVELS_STATE_KEY]: levels },
   });
 }
 
-/** Called by the bootstrap (through the parent-bound helper) whenever the set of areas changes. */
+/**
+ * Called by the bootstrap (through the parent-bound helper) whenever the set of areas changes. A
+ * pane's bootstrap commonly reports no areas at all on its first scan — nothing zoom-marked has
+ * rendered yet — and reports again once its content mounts; seeding runs on that first NON-EMPTY
+ * report, not merely the first call, so the empty scan itself never counts as "the pane has
+ * reported" for seeding purposes.
+ */
 export function setContentZoomAreas(webViewId: WebViewId, areaIds: string[]): void {
   const valid = areaIds.filter((areaId) => isValidContentZoomAreaId(areaId));
   const previous = areasByWebViewId.get(webViewId);
   if (previous && previous.length === valid.length && previous.every((a, i) => a === valid[i]))
     return;
-  if (!previous) seedFromMemoryOnFirstReport(webViewId);
+  if ((previous === undefined || previous.length === 0) && valid.length > 0)
+    seedFromMemoryOnFirstReport(webViewId);
   areasByWebViewId.set(webViewId, valid);
   pushContentZoom(webViewId);
 }
@@ -366,6 +368,17 @@ function memoryIdentityFor(
   const identity = definition.projectId ?? resourceIdFromState(definition);
   if (!identity) return undefined;
   return { kind, identity };
+}
+
+/** Every level `memory` remembers for one pane's kind and identity, keyed by area id. */
+function collectMemoryLevelsFor(memory: MemoryRecord, id: MemoryIdentity): Levels {
+  const levels: Levels = {};
+  Object.entries(memory).forEach(([key, level]) => {
+    const parsed = parseContentZoomMemoryKey(key);
+    if (parsed && parsed.kind === id.kind && parsed.identity === id.identity)
+      levels[parsed.areaId] = level;
+  });
+  return levels;
 }
 
 function memoryKeyFor(
@@ -537,10 +550,8 @@ export async function getInitialContentZoomForWebView(
   const id = memoryIdentityFor(webView);
   if (id) {
     const memory = (await readMemory()) ?? {};
-    Object.entries(memory).forEach(([key, level]) => {
-      const parsed = parseContentZoomMemoryKey(key);
-      if (!parsed || parsed.kind !== id.kind || parsed.identity !== id.identity) return;
-      if (levels[parsed.areaId] === undefined) levels[parsed.areaId] = level;
+    Object.entries(collectMemoryLevelsFor(memory, id)).forEach(([areaId, level]) => {
+      if (levels[areaId] === undefined) levels[areaId] = level;
     });
   }
   return { defaultZoom: await getDefaultZoom(), levels };
