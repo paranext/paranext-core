@@ -90,7 +90,7 @@
     "prepare": "husky && npm run csharp:tool:restore",
     "prestart": "tsx ./.erb/scripts/generate-dev-build-info.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.dev.ts",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "stage-dev-packages": "node --experimental-strip-types .erb/scripts/stage-dev-packages.ts",
+    "stage-dev-packages": "node .erb/scripts/stage-dev-packages.ts",
     "start": "node ./.erb/scripts/check-port-in-use.mjs && npm run start:renderer",
     "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "start:extension-host": "cross-env NODE_ENV=development NODE_PATH=\"./release/app/node_modules\" nodemon ./src/extension-host/extension-host.ts",
