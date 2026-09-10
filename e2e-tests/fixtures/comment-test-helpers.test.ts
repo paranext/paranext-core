@@ -9,14 +9,11 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { setReferencedProjectsAndResources, type CommentTestProject } from './comment-test-helpers';
-
-/**
- * Mirrors `REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION` in `comment-test-helpers.ts` — that
- * constant is not exported, so the version this suite expects on disk is pinned here
- * independently.
- */
-const DATA_VERSION = '1.1.0';
+import {
+  REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION,
+  setReferencedProjectsAndResources,
+  type CommentTestProject,
+} from './comment-test-helpers';
 
 let tempDir: string;
 
@@ -102,7 +99,7 @@ describe('setReferencedProjectsAndResources', () => {
     const parsed = parseElementText(unescapeXml(rawText));
 
     expect(parsed).toEqual({
-      dataVersion: DATA_VERSION,
+      dataVersion: REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION,
       items: [{ type: 'project', name: 'otherProjectId', id: 'otherProjectId' }],
     });
   });
@@ -126,7 +123,7 @@ describe('setReferencedProjectsAndResources', () => {
 
     const parsed = parseElementText(unescapeXml(rawText));
     expect(parsed).toEqual({
-      dataVersion: DATA_VERSION,
+      dataVersion: REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION,
       items: [{ type: 'project', name: 'AT&T Sample', id: project.projectId }],
     });
   });
@@ -140,7 +137,7 @@ describe('setReferencedProjectsAndResources', () => {
     const parsed = parseElementText(unescapeXml(rawText));
 
     expect(parsed).toEqual({
-      dataVersion: DATA_VERSION,
+      dataVersion: REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION,
       items: [
         { type: 'project', name: 'MyProj', id: 'selfId' },
         { type: 'project', name: 'otherId', id: 'otherId' },
@@ -186,7 +183,7 @@ describe('setReferencedProjectsAndResources', () => {
     const rawText = extractElementTextImmediatelyBeforeClosingTag(xml);
     const parsed = parseElementText(unescapeXml(rawText));
     expect(parsed).toEqual({
-      dataVersion: DATA_VERSION,
+      dataVersion: REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION,
       items: [{ type: 'project', name: 'Weird $& Name', id: project.projectId }],
     });
   });
