@@ -57,6 +57,7 @@ Core worktree (`paranext-core`), all under `extensions/src/platform-scripture-ed
 - Modify: `libs/shared-react/src/index.ts` (export `$getNoteIndex`)
 - Modify: `packages/platform/src/editor/editor.model.ts` (`EditorRef`, after `getNoteOps` ~line 559)
 - Modify: `packages/platform/src/editor/Editor.tsx` (`editorApi`, after `getNoteOps` ~line 931)
+- Modify: `packages/platform/src/marginal/Marginal.tsx` (`MarginalRef extends EditorRef`; its `useImperativeHandle` is an explicit object literal, so every new `EditorRef` member needs a delegation there, next to `selectNote`/`getNoteOps`)
 - Test: `packages/platform/src/editor/noteIndexAndHighlight.test.tsx` (create)
 
 **Interfaces:**
@@ -281,6 +282,7 @@ git commit -m "feat(platform): EditorRef.getNoteIndex/getNoteKey map between not
 - Create: `libs/shared-react/src/plugins/usj/NoteCallerHighlightPlugin.tsx`
 - Modify: `libs/shared-react/src/index.ts` (export plugin + `NoteCallerHighlightHandle`)
 - Modify: `packages/platform/src/editor/editor.model.ts`, `packages/platform/src/editor/Editor.tsx`
+- Modify: `packages/platform/src/marginal/Marginal.tsx` (delegate `highlightNote` in `MarginalRef`'s `useImperativeHandle`, as Task 1 did for `getNoteIndex`/`getNoteKey`)
 - Test: `packages/platform/src/editor/noteIndexAndHighlight.test.tsx` (extend)
 
 **Interfaces:**
@@ -517,9 +519,9 @@ Editor wiring in `packages/platform/src/editor/Editor.tsx`: add `const noteCalle
   highlightNote(noteKeyOrIndex: string | number | undefined): void;
 ```
 
-- [ ] **Step 5: Run the suites**
+- [ ] **Step 5: Run the suites and the project typecheck**
 
-Run: `$SHIM_ENV pnpm nx test @eten-tech-foundation/platform-editor -- noteIndexAndHighlight`
+Run: `$SHIM_ENV pnpm nx run @eten-tech-foundation/platform-editor:typecheck` (must show no new errors; a `MarginalRef` TS2739 means the delegation is missing) and `$SHIM_ENV pnpm nx test @eten-tech-foundation/platform-editor -- noteIndexAndHighlight`
 Expected: PASS (all six highlight tests plus Task 1's). Then the full editor and shared-react suites: `$SHIM_ENV pnpm nx test @eten-tech-foundation/platform-editor` and `$SHIM_ENV pnpm nx test shared-react` — expected PASS (note SE issue #3: two known-flaky tests; rerun a failure once before treating it as yours).
 
 - [ ] **Step 6: Commit**
