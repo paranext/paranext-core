@@ -577,20 +577,34 @@ step, no automation. Just a record.
   it again.
 - **Decision:** Keep all four as they are for now. Consumers call core's `stage-dev-packages` npm
   script rather than a path inside core, which was the fifth suggestion and is taken — it removes
-  eight repos' dependency on an internal file location, and lets the script carry
-  `--experimental-strip-types` so a consumer below Node 22.18 can still run it.
+  eight repos' dependency on an internal file location. It does not lift the Node floor: the npm
+  script runs a bare `node`, and the one consumer whose Volta pin predates 22.18 passes
+  `--experimental-strip-types` from its own workflow, where the flag can precede the script path.
 - **Alternatives:** Each of the four is a real improvement to some property, and none was rejected
   on merit. The tag pin buys reproducibility, `.mjs` removes a floor that has already bitten a
   consumer repo, opt-in sibling use removes a class of surprise entirely, and a non-nested install
   is easier to reason about when it fails. They are deferred because they change the shape of a
   mechanism that is about to be exercised across eleven repositories at once, and doing that before
   it has run in anger trades a known state for an unknown one.
-- **Consequences:** The Node 22.18 floor is real for anything invoking the scripts directly rather
-  than through the npm script. Editor code can change under an unchanged core commit while
+- **Consequences:** The Node 22.18 floor is real for every caller, npm script or not; a consumer
+  below it passes the flag itself. Editor code can change under an unchanged core commit while
   `platform-yalc` moves, which the consumer-lockfile check and the pre-commit provisional guard
   exist to contain. A sibling checkout is used and moved by a plain `npm install`; it is protected
   when dirty, on a branch of its own, or detached, and the README says so. Revisit whichever of
   these the mechanism actually makes painful.
+
+  The branch pin is the one whose exposure is worth stating precisely, because it now spans eleven
+  repositories and the parts of it that ARE covered are easy to mistake for the whole. A change to
+  the staged packages' **dependencies or versions** is visible and gated: npm records the staged
+  manifest under `dev-packages/staging/<folder>` in `package-lock.json`, `diffStagedAgainstLock`
+  fails an install that disagrees with it, `verify:dev-packages` lets a consumer run that check
+  without core's `postinstall`, and `scripture-editors`' `verify-platform-yalc` workflow gates the
+  push that would cause it. Release provenance is covered too: `paratext-10-studio`'s
+  `snap-product-info` rewrites each dev repo's `branch` to the SHA actually built. What remains
+  uncovered is a **code-only push at an unchanged version** — it changes what core's `main` builds
+  with no commit anywhere in core — and that is the ordinary case, not an exotic one, since
+  `move-platform-yalc` rebases onto `main` rather than bumping versions. That residue is the price
+  of the branch pin, and it is accepted rather than overlooked.
 
 ## adr-disclosure-outside-package-graphs: What ships outside the npm and NuGet graphs is disclosed in prose, not by silence
 
@@ -3651,7 +3665,7 @@ step, no automation. Just a record.
 - **Consequences:** Adding a consumer costs nothing: it needs no lockfile refresh when the editor's
   dependencies change, and no entry in any list. What it does need is for core's `node_modules` to
   be genuinely populated, which is why every consumer CI job that installs core with
-  `--ignore-scripts` must run `node .erb/scripts/stage-dev-packages.ts` first — without it npm links
+  `--ignore-scripts` must run core's `npm run stage-dev-packages` first — without it npm links
   a target that does not exist, `npm ci` still exits 0, and
   `node_modules/@eten-tech-foundation/platform-editor` is left a dangling symlink. That surfaces far
   away, as an unresolved module during a consumer's lint or typecheck (PBR imports the editor in 28
@@ -4388,6 +4402,29 @@ step, no automation. Just a record.
 
 - **Date:** 2026-08-26
 - **Status:** Accepted
+- **Context:** `adr-simple-mode-column-minimums` derives Simple mode's column floor from the window
+  minimum, but the 900 lived in two places by hand: `minWidth` on the `BrowserWindow` in `main.ts`,
+  and a local `const WINDOW_MIN_WIDTH_PX = 900` inside `simple-layout.data.test.ts`. Both sites
+  carried a comment saying the other had to change with it, and the test comment stated outright
+  that lowering the window minimum would NOT fail the test — so the one assertion guarding against a
+  horizontal scrollbar was pinned to a number that no longer had to match reality. The extraction
+  was deferred from PR #2701 over a concern that a constant in `src/shared/` would be picked up by
+  the generated `papi.d.ts` and become extension-visible API.
+- **Decision:** Put the constant in `src/shared/models/window-constraints.model.ts` and import it in
+  both places. `papi.d.ts` is generated by `tsc --outFile` from a seven-entry include list following
+  the transitive import graph — not from everything under `src/shared/` — and `simple-layout.data.ts`
+  is not reachable from those entry points. Regenerating confirmed `papi.d.ts` is byte-identical and
+  contains no reference to the new module.
+- **Alternatives:** **`src/node/`** — rejected on a factual error in the original suggestion: the
+  renderer is not a Node process, so `simple-layout.data.ts` cannot import from there. **Leave the
+  mirror and keep the "change both" comments** — rejected: a comment cannot fail a build, and the
+  test that exists to catch a scrollbar regression was blind to the change most likely to cause one.
+- **Consequences:** Lowering the window minimum now fails `simple-layout.data.test.ts` instead of
+  silently overflowing the dock, which is what that test was written to prevent. The
+  `papi.d.ts`-pollution question is settled empirically rather than by assumption, and the same check
+  (`npm run build:types`, then diff) applies to any future constant placed in `src/shared/` for
+  cross-process use — reachability from the papi-dts entry points is what matters, not the directory.
+- **Source:** PT-4466, deferred from PT-4344 (PR #2701).
 
 ## adr-window-readiness-in-main: Window readiness is tracked in main via window-service registration, used to pick routing targets
 

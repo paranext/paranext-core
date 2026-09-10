@@ -51,10 +51,10 @@ jobs:
 
       - name: Install packages
         run: |
-          # Bumping versions only needs core's dev tooling (tsx, prettier), so skip the lifecycle
-          # scripts. That skips staging the dev packages too, leaving their `file:` targets as
-          # dangling symlinks — which npm accepts silently and a version bump never resolves — and
-          # skips building the Electron DLL. Neither is read or written here.
+          # Bumping versions only needs core's dev tooling (ts-node, tsx, prettier), so skip the
+          # lifecycle scripts. That skips staging the dev packages too, leaving their `file:`
+          # targets as dangling symlinks — which npm accepts silently and a version bump never
+          # resolves — and skips building the Electron DLL. Neither is read or written here.
           npm ci --ignore-scripts
 
       - name: Bump repo versions
