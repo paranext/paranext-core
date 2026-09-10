@@ -157,8 +157,11 @@ export interface NoteCallerClickState {
   paneVisible: boolean;
   /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
   paneRendered: boolean;
-  /** Whether the footnotes pane's auto-show behavior is enabled. */
-  isAutoShowEnabled: boolean;
+  /**
+   * Whether the interface is in Power mode. A caller click reveals a hidden pane only in Power
+   * mode; Simple mode keeps PT9's manual pane visibility.
+   */
+  isPowerMode: boolean;
 }
 
 /** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
@@ -185,7 +188,7 @@ export interface NoteCallerClickDecision {
    * pane's focus-request machinery retries a request that arrives before its data mounts.
    */
   sendPaneFocusRequest: boolean;
-  /** Also show the footnotes pane: it is currently toggled off and auto-show is enabled. */
+  /** Also show the footnotes pane: it is currently toggled off and the interface is in Power mode. */
   showPane: boolean;
 }
 
@@ -198,7 +201,7 @@ export interface NoteCallerClickDecision {
  * - An editing-session key without a shown popover is STALE — it must not block the click.
  * - Otherwise the popover OPENS — always, in every view, because it is the only surface that can edit
  *   a note today. Alongside it, the pane highlights the clicked note when it is rendered, and a
- *   click also SHOWS the pane when it is toggled off and auto-show is enabled.
+ *   click also SHOWS the pane when it is toggled off and the interface is in Power mode.
  */
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
   if (!state.isCollapsed)
@@ -218,7 +221,7 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
       showPane: false,
     };
   const clearStaleEditingSession = !!state.editingNoteKey;
-  const showPane = state.isAutoShowEnabled && !state.paneVisible;
+  const showPane = state.isPowerMode && !state.paneVisible;
   return {
     clearStaleEditingSession,
     action: 'open-popover',

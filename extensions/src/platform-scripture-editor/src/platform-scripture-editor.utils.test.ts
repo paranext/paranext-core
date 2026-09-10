@@ -2765,7 +2765,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     popoverShown: false,
     paneVisible: false,
     paneRendered: false,
-    isAutoShowEnabled: false,
+    isPowerMode: false,
   };
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
@@ -2822,8 +2822,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     );
   });
 
-  it('shows a closed pane when auto-show is on, and highlights the note once it mounts', () => {
-    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: true })).toEqual({
+  it('shows a closed pane in Power mode, and highlights the note once it mounts', () => {
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: true,
@@ -2831,8 +2831,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     });
   });
 
-  it('leaves a closed pane closed when auto-show is off', () => {
-    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: false })).toEqual({
+  it('leaves a closed pane closed in Simple mode', () => {
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2843,9 +2843,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   it('does not re-show a pane that is already toggled visible but still mounting its data', () => {
     // paneVisible without paneRendered: the toggle is on but the data has not loaded — nothing to
     // show and nothing to highlight yet.
-    expect(
-      decideNoteCallerClickAction({ ...base, paneVisible: true, isAutoShowEnabled: true }),
-    ).toEqual({
+    expect(decideNoteCallerClickAction({ ...base, paneVisible: true, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
