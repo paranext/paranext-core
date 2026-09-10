@@ -95,8 +95,12 @@ public static class Program
             );
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
+            var internetSettingsDataProvider = new InternetSettingsDataProvider(papi);
             var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
-            var paratextRegistrationService = new ParatextRegistrationService(papi);
+            var paratextRegistrationService = new ParatextRegistrationService(
+                papi,
+                internetSettingsDataProvider
+            );
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var manageBooksService = new ManageBooksService(
                 papi,
@@ -130,7 +134,8 @@ public static class Program
                     Task.Run(() => checkRunner.RegisterDataProviderAsync()),
                     Task.Run(() => checklistNetworkObject.InitializeAsync()),
                     Task.Run(() => manageBooksService.RegisterNetworkObjectAsync()),
-                    Task.Run(() => enhancedResourceFactory.InitializeAsync())
+                    Task.Run(() => enhancedResourceFactory.InitializeAsync()),
+                    Task.Run(() => internetSettingsDataProvider.RegisterDataProviderAsync())
                 ),
                 "Background service registration"
             );
@@ -138,6 +143,13 @@ public static class Program
             // Bridge the S/R write gate to the PAPI (event + getAutoSyncBlocking). Initialized in the
             // critical barrier below so it is serving before extension activation.
             var sendReceiveBlockNotifierService = new SendReceiveBlockNotifierService(papi);
+
+            // Bridge sync-run activity to the PAPI (event + getSyncActivity). Initialized in the
+            // critical barrier below so it is serving before extension activation.
+            var syncActivityNotifierService = new SyncActivityNotifierService(
+                papi,
+                paratextSendReceiveService
+            );
 
             StartupTiming.Mark("init-barrier-start");
             // Critical path: everything the renderer needs to list projects and open an editor.
@@ -148,7 +160,8 @@ public static class Program
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
                 dblResources.RegisterDataProviderAsync(),
-                sendReceiveBlockNotifierService.InitializeAsync()
+                sendReceiveBlockNotifierService.InitializeAsync(),
+                syncActivityNotifierService.InitializeAsync()
             );
             StartupTiming.Mark("init-barrier-end");
 

@@ -212,8 +212,9 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
 
     const extensionHostExecArgv = app.isPackaged
       ? process.execArgv
-      : // Set up ts-node in the extension host process so it can run un-bundled TypeScript source files in dev
-        [...process.execArgv, '-r', 'ts-node/register/transpile-only'];
+      : // Run the extension host's un-bundled TypeScript through tsx in dev. tsx transpiles with
+        // esbuild and resolves the tsconfig `paths` aliases these imports rely on.
+        [...process.execArgv, '--import', 'tsx'];
 
     const extensionHostEnv = app.isPackaged
       ? process.env

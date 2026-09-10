@@ -316,6 +316,13 @@ export type SavedWebViewDefinition = (
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
 /**
+ * The `webViewType` of the Find web view provided by the `platform-scripture` extension. Must match
+ * `findWebViewType` in `extensions/src/platform-scripture/src/find.web-view-provider.ts` — core
+ * code cannot import extension source, so the value is mirrored here as the single core-side copy.
+ */
+export const FIND_WEBVIEW_TYPE = 'platformScripture.find';
+
+/**
  * Finds the first open Scripture editor web view that has a project (first match in the given
  * order, which is dock-layout order for the open web view lists) — the shared "current project
  * editor" rule used by the project picker and by BCV navigation-target resolution so the two can
@@ -533,6 +540,18 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    */
   existingId?: string | '?';
   /**
+   * Limit an `existingId: '?'` search to web views showing this project.
+   *
+   * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+   * view, so combining it with a project filter is contradictory and is rejected as an error.
+   * Without this, `'?'` matches any web view of the type regardless of project. Providing this
+   * without any `existingId` at all is the same contradiction — there is no `'?'` search for it to
+   * limit — and is rejected the same way.
+   *
+   * @experimental
+   */
+  existingProjectId?: string;
+  /**
    * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
    * relevant if `existingId` is provided. If `existingId` is not provided, this property is
    * ignored.
@@ -547,8 +566,31 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    * Defaults to `true`
    *
    * If a new WebView is created, it is always brought to the front, regardless of this option.
+   *
+   * When the existing WebView is in a window other than the one this call is otherwise headed for,
+   * this also determines whether that other window is raised to the front of the OS window order.
+   * Set this to `false` for a call that should not disturb whatever window the user is currently
+   * looking at.
    */
   bringToFront?: boolean;
+  /**
+   * Id of the application window to open the web view in, instead of the window the user is working
+   * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+   * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+   * views — a caller that names a window wants that window, not a guess.
+   *
+   * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
+   * names the window.
+   *
+   * Window ids are assigned by the platform and never reused within a profile, in this run of the
+   * app or any later one, so an id names one window and only ever that window. Get the id of the
+   * window this code is running in with `papi.window.getWindowId()` — not
+   * `platform.getFocusedWindowId`, which answers with a different window's id whenever this one is
+   * not the focused window.
+   *
+   * @experimental This option is unstable and may change or disappear without notice
+   */
+  targetWindowId?: string;
 };
 
 /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */

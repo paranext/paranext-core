@@ -2,7 +2,6 @@ import {
   DocumentCombiner,
   expandThemeContribution,
   JsonDocumentLike,
-  startsWith,
   ThemeContribution,
   themeDocumentSchema,
   ThemeFamiliesByIdExpanded,
@@ -91,7 +90,7 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
       if (!themeFamily) return;
 
       // Make sure it contributes no theme families starting with the user-defined prefix
-      if (startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX))
+      if (themeFamilyId.startsWith(USER_THEME_FAMILY_PREFIX))
         throw new Error(
           `Extension ${documentName} tried to add theme family ${themeFamilyId} with user-defined prefix! This is not allowed.`,
         );

@@ -4,7 +4,6 @@ import path from 'path';
 import os from 'os';
 import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
-import { includes, split } from 'platform-bible-utils';
 
 // FOR SCHEME DOCUMENTATION, SEE Uri JSDOC
 const APP_SCHEME = 'app';
@@ -92,12 +91,15 @@ const getSchemePaths = memoizeOne((): { [scheme: string]: string } => {
 // TODO: Make URI an actual class. Will be challenging when passing through WebSocket
 function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
-  const fullUri = includes(uri, PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
+  const fullUri = uri.includes(PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
 
-  const [scheme, uriPath] = split(fullUri, PROTOCOL_PART);
+  // Split at the FIRST separator only. A plain `split` would drop everything after a second one,
+  // so a cached path that itself holds a URL (`file://C:/cache/https://x/y`) would silently resolve
+  // to `C:/cache/https` rather than failing.
+  const separatorIndex = fullUri.indexOf(PROTOCOL_PART);
   return {
-    scheme,
-    uriPath,
+    scheme: fullUri.substring(0, separatorIndex),
+    uriPath: fullUri.substring(separatorIndex + PROTOCOL_PART.length),
   };
 }
 

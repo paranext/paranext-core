@@ -205,8 +205,7 @@ export const NarrowWidthResponsive: Story = {
           />
         </div>
         <p style={{ fontSize: 12, color: 'gray' }}>
-          Below ~640px container width, tab labels collapse to icon-only via `@container` queries
-          and the row never wraps.
+          Below 384px, tab labels collapse to icon-only and the row never wraps.
         </p>
       </div>
     );

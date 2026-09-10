@@ -124,7 +124,8 @@ and surfaces failures via `PlatformError` codes (`NOT_FOUND`, `PERMISSION_DENIED
 `FAILED_PRECONDITION`, etc.) rather than by hiding the entry point. Document the PT9
 visibility/enable rules inline in the command/backend so the rationale isn't lost.
 
-See `Architecture-Decisions.md` (ADR on deferred menu availability) for the rationale and history.
+See `adr-menus-always-available-gate-at-submission` in `Architecture-Decisions.md` for the
+rationale and history.
 
 ---
 

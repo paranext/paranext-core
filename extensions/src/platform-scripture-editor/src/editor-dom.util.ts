@@ -15,6 +15,17 @@ const EDITOR_FIRST_LOAD_POLL_TIME = 100;
 const EDITOR_MAX_POLL_INTERVALS = 100; // Hopefully the editor will load in 10 seconds
 
 /**
+ * The USFM paragraph elements the editor renders.
+ *
+ * Shared rather than restated: both gutter overlays decide what counts as a paragraph, and they
+ * have to agree — `ParagraphMarkerTooltipOverlay` picks the paragraph to describe, and
+ * `CharacterMarkerBarOverlay` picks the one to anchor and measure against. Two copies of the
+ * selector could drift, and a mismatch would leave the bar tracking a different element than the
+ * tooltip names.
+ */
+export const EDITOR_PARA_SELECTOR = '.para[class*="usfm_"]';
+
+/**
  * Run something on the editor's first load. This is a workaround until we can listen for the editor
  * to finish loading.
  *
@@ -91,6 +102,90 @@ export function findScrollContainer(
     candidate = candidate.parentElement ?? undefined;
   }
   return undefined;
+}
+
+/**
+ * Clamps a target's top edge into the scroll container's visible area, in `positionAnchor` content
+ * coordinates — the shared vertical math behind every gutter-anchored overlay in this extension.
+ *
+ * `scrollContainer` must be an ANCESTOR of `positionAnchor`. Because they move together in the
+ * viewport as the user scrolls, the viewport-relative delta is already the content-relative
+ * position and no `scrollTop` addition is needed; the container's own viewport top is used only to
+ * locate where the visible area begins. `positionAnchor.scrollTop` staying 0 while text visibly
+ * scrolls is the symptom of having passed the wrong element.
+ *
+ * Two clamps, in order: pin to the top of the visible area when the target has scrolled above it,
+ * then never exceed the target's own bottom edge, so an almost-fully-scrolled-past target does not
+ * drag the anchor below itself.
+ *
+ * @param targetRect Viewport rect of the thing being tracked — a paragraph element or a caret range
+ * @param anchorRect Viewport rect of the positioned element that owns the coordinate space
+ * @param scrollContainerRect Viewport rect of the scrolling ancestor
+ * @returns The clamped top, in `positionAnchor` content coordinates
+ */
+export function clampTopToVisibleArea(
+  targetRect: { top: number; bottom: number },
+  anchorRect: { top: number },
+  scrollContainerRect: { top: number },
+): number {
+  const topInContent = targetRect.top - anchorRect.top;
+  const bottomInContent = targetRect.bottom - anchorRect.top;
+  const visibleAreaTop = scrollContainerRect.top - anchorRect.top;
+
+  const ANCHOR_HEIGHT = 1;
+  const clampedTop = Math.max(topInContent, visibleAreaTop);
+  return Math.min(clampedTop, bottomInContent - ANCHOR_HEIGHT);
+}
+
+/**
+ * Marks the throwaway span {@link measureBaselineOffset} appends. Exported so a test can tell the
+ * probe's stubbed rect from its container's.
+ */
+export const BASELINE_PROBE_ATTRIBUTE = 'data-psc-baseline-probe';
+
+/**
+ * Measures where a container's first-line text baseline sits, in pixels below the container's own
+ * top edge.
+ *
+ * The mechanism is a zero-height, zero-width `inline-block` span with `vertical-align: baseline`:
+ * such a box has no content to sit above or below the baseline, so its top edge lands exactly ON
+ * the baseline. The difference between its rect top and the container's rect top is therefore the
+ * baseline offset.
+ *
+ * Uses rect math, NOT `offsetTop`: `offsetTop` is measured against the nearest positioned ancestor,
+ * and callers here run inside a `position: relative` wrapper — so `offsetTop` would silently be
+ * relative to the wrong element.
+ *
+ * Returns `undefined`, not `0`, when there is nothing to measure. Inside a `display: none` iframe
+ * every rect degenerates to zeros (see the hidden-view rule in
+ * `.claude/rules/cross-view-sync-hidden-views.md`), and a `0` there is indistinguishable from a
+ * genuine zero offset — so a caller that cached it would misalign forever. `undefined` tells the
+ * caller not to cache and to measure again once layout exists.
+ *
+ * @param container The element whose text baseline to measure. Must have inline content flow — a
+ *   flex container is not a valid target, because flex items ignore `vertical-align`
+ * @returns Pixels from the container's top edge to its first-line baseline, or `undefined` when
+ *   there is no layout
+ */
+export function measureBaselineOffset(container: HTMLElement): number | undefined {
+  const probe = container.ownerDocument.createElement('span');
+  probe.setAttribute(BASELINE_PROBE_ATTRIBUTE, '');
+  probe.style.cssText =
+    'display:inline-block;width:0;height:0;vertical-align:baseline;pointer-events:none';
+  container.appendChild(probe);
+
+  try {
+    const probeTop = probe.getBoundingClientRect().top;
+    const containerRect = container.getBoundingClientRect();
+
+    if (probeTop === 0 && containerRect.top === 0 && containerRect.height === 0) return undefined;
+
+    return probeTop - containerRect.top;
+  } finally {
+    // `finally` so the probe never survives a throw. A leaked zero-width span would be invisible
+    // and would accumulate one per measurement.
+    probe.remove();
+  }
 }
 
 /**
@@ -222,3 +317,63 @@ export function scrollToAnnotation(id: string): HTMLElement | undefined {
 
   return annotationElement;
 }
+
+/**
+ * Whether an incoming reference is this view's own echo — the reference it just published coming
+ * back through its scroll group.
+ *
+ * A read-only reference panel sits on scroll group 0, so a verse click inside it publishes to the
+ * group and returns immediately as a prop update. Scrolling for that echo would drag the user's own
+ * click target to the top of the viewport right after they clicked it.
+ *
+ * @param lastPublishedScrRef The reference this view last published, or `undefined` if none is
+ *   outstanding.
+ * @param scrRef The incoming reference.
+ * @returns `true` when the incoming reference is the outstanding echo and no scroll should happen.
+ */
+export function isEchoOfPublishedScrRef(
+  lastPublishedScrRef: SerializedVerseRef | undefined,
+  scrRef: SerializedVerseRef,
+): boolean {
+  return (
+    !!lastPublishedScrRef &&
+    lastPublishedScrRef.book === scrRef.book &&
+    lastPublishedScrRef.chapterNum === scrRef.chapterNum &&
+    lastPublishedScrRef.verseNum === scrRef.verseNum
+  );
+}
+
+/**
+ * Whether there is anything new to scroll to since the last scroll this view performed.
+ *
+ * Guards the bare reveal: a panel that shares a tab stack with other views is re-shown constantly,
+ * and re-scrolling every time would discard a scroll position the user set by hand before switching
+ * tabs. The chapter content is part of the identity because a reveal can beat the chapter load —
+ * when content arrives for the same reference, that IS new and does need a scroll.
+ *
+ * @param lastScrolledFor What the last performed scroll was for, or `undefined` if none yet.
+ * @param scrRef The reference to scroll to.
+ * @param usj The chapter content currently loaded, compared by identity.
+ * @returns `true` when the reference or the content differs from the last scroll.
+ */
+export function hasNewScrollTarget(
+  lastScrolledFor: { scrRef: SerializedVerseRef; usj: unknown } | undefined,
+  scrRef: SerializedVerseRef,
+  usj: unknown,
+): boolean {
+  if (!lastScrolledFor) return true;
+  return (
+    lastScrolledFor.usj !== usj ||
+    lastScrolledFor.scrRef.book !== scrRef.book ||
+    lastScrolledFor.scrRef.chapterNum !== scrRef.chapterNum ||
+    lastScrolledFor.scrRef.verseNum !== scrRef.verseNum
+  );
+}
+
+/**
+ * Max ms to wait for a verse scroll to become possible before giving up — the rAF retry in the
+ * model text panel and the settle loop in the resource text panel both bound themselves with it.
+ * The usual reason for reaching it is a verse marker genuinely absent from the USJ (a `\v 16-17`
+ * range publishes no marker for 17).
+ */
+export const SCROLL_MAX_WAIT_MS = 2000;

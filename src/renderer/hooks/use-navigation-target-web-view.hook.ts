@@ -1,7 +1,7 @@
 import {
   getNavigationTargetWebView,
   onDidChangeNavigationTargetWebView,
-} from '@renderer/services/window.service-host';
+} from '@renderer/services/window.service-shard';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { useSyncExternalStore } from 'react';
 

@@ -4,22 +4,31 @@ import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
+import {
+  hasRendererCrashed,
+  RendererErrorBoundary,
+} from '@renderer/components/renderer-error-boundary.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
+import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
-import { startDialogService } from '@renderer/services/dialog.service-host';
-import { startNotificationService } from '@renderer/services/notification.service-host';
+import { initConnectionLostService } from '@renderer/services/connection-lost-service';
+import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
+import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
+import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
-import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
-import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
+import { startScrollGroupService } from '@renderer/services/scroll-group.service';
 import {
-  initialize as initializeThemeService,
-  localThemeService,
-} from '@renderer/services/theme.service-host';
+  getCurrentThemeSync,
+  onDidChangeCurrentTheme,
+  startThemeService,
+} from '@renderer/services/theme.service';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
+import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
+import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { startWebViewService } from '@renderer/services/web-view.service-host';
-import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
+import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
+import { initialize as initializeWindowService } from '@renderer/services/window.service-shard';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { logger } from '@shared/services/logger.service';
@@ -30,7 +39,6 @@ import { markStartup } from '@shared/utils/startup-timing.util';
 import {
   applyThemeStylesheet,
   getErrorMessage,
-  isPlatformError,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { createRoot } from 'react-dom/client';
@@ -86,6 +94,14 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   throw new Error(`${reasons}`);
 }
 
+// Subscribed here, at module evaluation, rather than inside the async startup below or from a React
+// effect: `onDidLoseConnection` is a module-level emitter on the network service, so it exists
+// before `initialize()` runs, and subscribing before any await means a loss cannot land in a window
+// where nothing is listening. `PlatformEvent` does not replay to a late subscriber, so a missed loss
+// is missed for good — and this store is the one thing that tells the user the app has stopped
+// working. Returns an unsubscriber we intentionally never call; it runs for the renderer's lifetime.
+initConnectionLostService();
+
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
 // - They internally await other services when they need others in order to start
@@ -102,19 +118,21 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
 
-    // This needs to run before the web view service host starts running and blocks us from creating
+    // This needs to run before the web view service shard starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms
     await initializeUsersnapApi();
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
-      startWebViewService(),
-      startDialogService(),
+      startWebViewServiceShard(),
+      startDialogServiceShard(),
       startScrollGroupService(),
-      startScrollGroupNavigationCommands(),
-      startNotificationService(),
+      startNotificationServiceShard(),
+      startUsersnapServiceShard(),
+      startBookChapterControlServiceShard(),
+      startOnboardingTourServiceShard(),
       startOverlayService(),
-      initializeThemeService(),
+      startThemeService(),
       initializeWindowService(),
     );
 
@@ -127,14 +145,12 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     initAutoSyncBlockingService();
     initAutoSyncEditBlockDriver();
 
-    // Subscribe to updates to the current theme
-    await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {
-      if (isPlatformError(newTheme)) {
-        logger.warn(`Failed to get new current theme: ${getErrorMessage(newTheme)}`);
-        return;
-      }
-      applyThemeSafe(newTheme, 'subscribe');
-    });
+    // Drives the backend sync-activity store, which decides whether the toolbar's sync indicator is
+    // mounted and supplies one of the two inputs `useSyncStatus` unions. Started here rather than
+    // from a hook so one subscription and one seed serve every consumer, and so the seed runs once
+    // at startup instead of restarting on each Simple/Power toggle. Also returns an unsubscriber we
+    // intentionally never call — it runs for the renderer's lifetime.
+    initSyncActivityService();
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }
@@ -150,7 +166,11 @@ if (!container) {
 }
 
 const root = createRoot(container);
-root.render(<App />);
+root.render(
+  <RendererErrorBoundary>
+    <App />
+  </RendererErrorBoundary>,
+);
 markStartup('root-render');
 
 // #endregion
@@ -165,9 +185,14 @@ const scrollbarStyleSheet = document.createElement('style');
 scrollbarStyleSheet.textContent = SCROLLBAR_STYLES_RAW;
 document.head.appendChild(scrollbarStyleSheet);
 
+// Subscribed here, at module evaluation, rather than alongside the services above: the theme
+// service's cache is what `getCurrentThemeSync` below and every web view's baked-in stylesheet read,
+// and this local event fires after that cache has been updated. Registering it before the awaits in
+// the service startup above resolve means no change can slip through the gap.
+onDidChangeCurrentTheme((newTheme) => applyThemeSafe(newTheme, 'theme change'));
+
 // Apply theme on first load since it applies the theme a lot faster than the subscribe application does
-const currentTheme = localThemeService.getCurrentThemeSync();
-applyThemeSafe(currentTheme, 'first load');
+applyThemeSafe(getCurrentThemeSync(), 'first load');
 
 // #endregion
 
@@ -175,6 +200,10 @@ applyThemeSafe(currentTheme, 'first load');
 
 // This doesn't run if the renderer has an uncaught exception (which is a good thing)
 window.addEventListener('beforeunload', () => {
+  // `cleanupOldWebViewState` deletes the saved state of every web view it did not see load, so it
+  // is only correct once they all have — which a crashed tree never reached. See
+  // `hasRendererCrashed` for why the crash screen's reload button makes this path reachable.
+  if (hasRendererCrashed()) return;
   cleanupOldWebViewState();
 });
 

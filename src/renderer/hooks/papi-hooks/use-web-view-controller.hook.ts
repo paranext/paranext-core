@@ -2,6 +2,7 @@ import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/crea
 import { NetworkObject } from '@shared/models/network-object.model';
 import { WebViewId } from '@shared/models/web-view.model';
 import { webViewService } from '@shared/services/web-view.service';
+import { getWebViewControllerObjectId } from '@shared/services/web-view.service-model';
 import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
 
 /**
@@ -47,6 +48,10 @@ function mapParametersToWebViewId<WebViewType extends WebViewControllerTypes>(
 export const useWebViewController = createUseNetworkObjectHook(
   webViewService.getWebViewController,
   mapParametersToWebViewId,
+  // This hook is handed a web view id; the controller is registered on the network under the id
+  // derived from it
+  (networkObjectDetails, webViewId) =>
+    networkObjectDetails.id === getWebViewControllerObjectId(webViewId),
 ) as <WebViewType extends WebViewControllerTypes>(
   webViewType: WebViewType,
   webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,

@@ -24,7 +24,7 @@ function commandStub(name: string): keyof CommandHandlers {
 }
 
 // This is the ONE render-level test in the notification suite that uses REAL Sonner instead of
-// mocking it (every other notification.service-host.test.ts case mocks 'sonner' wholesale, which is
+// mocking it (every other notification.service-shard.test.ts case mocks 'sonner' wholesale, which is
 // exactly why the cancel-slot-button-is-dead-when-dismissible-is-false blocker slipped through
 // review undetected). Rendering the real Toaster and clicking
 // the real DOM button pins the actual Sonner contract instead of just the shape we hand it.
@@ -68,8 +68,8 @@ vi.mock('@shared/services/network-object.service', () => ({
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 
 // jsdom does not implement `window.matchMedia`; Sonner's Toaster calls it directly (unrelated to
-// this app's own theme service) to pick its light/dark default. Precedent:
-// share-layout.dialog.test.tsx hits the same gap for a different matchMedia caller.
+// this app's own theme service, which reads the OS preference in main through `nativeTheme`) to
+// pick its light/dark default.
 function stubMatchMedia() {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches: false,
@@ -90,13 +90,15 @@ describe('NotificationDisplay with real Sonner', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     vi.resetModules();
+    // The notification service shard registers per window, so it needs a window id
+    globalThis.windowId = '1';
     mockCurrentThemeType = 'light';
     mockSendCommand.mockResolvedValue(undefined);
     stubMatchMedia();
-    const { startNotificationService } = await import(
-      '@renderer/services/notification.service-host'
+    const { startNotificationServiceShard } = await import(
+      '@renderer/services/notification.service-shard'
     );
-    await startNotificationService();
+    await startNotificationServiceShard();
   });
 
   afterEach(() => {

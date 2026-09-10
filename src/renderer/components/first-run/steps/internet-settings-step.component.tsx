@@ -1,47 +1,137 @@
-import type { InternetSettings } from 'paratext-registration';
-import { Alert, AlertDescription, Button, Spinner } from 'platform-bible-react';
+import type { InternetSettings, IInternetSettingsDataProvider } from 'paratext-registration';
+import { Alert, AlertDescription, Button } from 'platform-bible-react';
 import {
   DeveloperSection,
   DEVELOPER_SECTION_STRING_KEYS,
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
 } from 'platform-bible-react/experimental';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { sendCommand } from '@shared/services/command.service';
-import { getErrorMessage, type LocalizeKey } from 'platform-bible-utils';
+import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
+import { logger } from '@shared/services/logger.service';
+import {
+  getErrorMessage,
+  isPlatformError,
+  type LanguageStrings,
+  type LocalizeKey,
+} from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
+import { StepLoading } from '../step-loading.component';
 
+const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
+
+// `internetSettings_*` keys come from the paratext-registration extension, `firstRun_*` from core
+// (assets/localization). Both merge in the combiner, so the extension keys need no en.json entry.
 const STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_button_retry%',
+  '%firstRun_step_internetSettings_body%',
+  '%firstRun_step_internetSettings_connecting%',
+  '%firstRun_step_internetSettings_heading%',
+  '%firstRun_step_internetSettings_loadError%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   ...DEVELOPER_SECTION_STRING_KEYS,
 ];
 
-async function fetchInternetSettings() {
-  return sendCommand('paratextRegistration.getParatextDataInternetSettings');
-}
-
-async function persistInternetSettings(settings: InternetSettings) {
-  return sendCommand('paratextRegistration.setParatextDataInternetSettings', settings);
-}
+// `useData`'s defaultValue is typed as the data type's getData (InternetSettings), so it cannot be
+// undefined. This value is never shown to the user — the spinner covers the load. Intentionally
+// duplicated in the standalone dialog (internet-settings.web-view.tsx): the two consumers sit on
+// opposite sides of the core/extension boundary and `paratext-registration` is a types-only module,
+// so there is no shared runtime module to hoist this into.
+const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
+  permittedInternetUse: 'VpnRequired',
+  selectedServer: 'Production',
+  proxyPort: 0,
+};
 
 /**
  * First-run wizard step that lets the user configure internet access before registration. Saves
  * immediately on each selection change (immediate-apply model). The identify step's restart applies
  * the chosen setting — no second restart is needed here.
  *
- * Save concurrency: only one save is in flight at a time. A second selection while a save is
- * pending is ignored (the control is disabled). This prevents out-of-order saves from leaving
- * persisted state inconsistent with the displayed state.
+ * Availability: `useDataProvider` returns `undefined` until the C# InternetSettingsDataProvider
+ * registers, giving a natural spinner without any startup-race retry heuristics.
  */
-export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
+export function InternetSettingsStep(props: FirstRunStepProps) {
+  const { setCanProceed } = props;
+  const provider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
+  // Bumped by Retry to remount the loaded subcomponent and re-subscribe from scratch.
+  const [retryCount, setRetryCount] = useState(0);
+
+  // While the provider is not yet registered, show the loading panel. Disable Next here so the
+  // wizard can't advance before settings are readable.
+  const showConnectingMessage = useDelayedFlag(provider === undefined);
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+
+  useEffect(() => {
+    if (provider === undefined) setCanProceed?.(false);
+  }, [provider, setCanProceed]);
+
+  // The heading sits outside the provider/loading branches so it is stable across every state of
+  // the step — the step's identity shouldn't appear only once the settings finish loading.
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-3">
+      <div className="tw:flex tw:flex-col tw:gap-1">
+        <h2 className="tw:text-base tw:font-medium">
+          {localizedStrings['%firstRun_step_internetSettings_heading%']}
+        </h2>
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {localizedStrings['%firstRun_step_internetSettings_body%']}
+        </p>
+      </div>
+      {provider === undefined ? (
+        <StepLoading
+          message={
+            showConnectingMessage
+              ? localizedStrings['%firstRun_step_internetSettings_connecting%']
+              : undefined
+          }
+        />
+      ) : (
+        <InternetSettingsLoaded
+          key={retryCount}
+          provider={provider}
+          localizedStrings={localizedStrings}
+          setCanProceed={setCanProceed}
+          onRetry={() => setRetryCount((c) => c + 1)}
+        />
+      )}
+    </div>
+  );
+}
+
+type LoadedProps = {
+  provider: IInternetSettingsDataProvider;
+  localizedStrings: LanguageStrings;
+  setCanProceed: FirstRunStepProps['setCanProceed'];
+  onRetry: () => void;
+};
+
+/**
+ * Rendered only once the provider is available. Reads via `useData` (live cross-window updates) and
+ * keeps a thin local mirror so the radio responds instantly on selection (optimistic apply), while
+ * the actual persist goes through `setData`.
+ */
+function InternetSettingsLoaded({
+  provider,
+  localizedStrings,
+  setCanProceed,
+  onRetry,
+}: LoadedProps) {
+  const [value, setData, isLoading] = useData(provider).InternetSettings(
+    undefined,
+    DEFAULT_INTERNET_SETTINGS,
+  );
+
   const [settings, setSettings] = useState<InternetSettings | undefined>();
-  const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isMounted = useRef(false);
+  // Last value we successfully displayed, so a failed optimistic save can revert to it.
+  const lastGood = useRef<InternetSettings | undefined>(undefined);
+
+  // When loading, value is the default placeholder, never a PlatformError — so gate on isLoading alone.
+  const showConnectingMessage = useDelayedFlag(isLoading);
 
   useEffect(() => {
     isMounted.current = true;
@@ -50,64 +140,75 @@ export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
     };
   }, []);
 
-  const load = useCallback(async () => {
-    setCanProceed?.(false);
-    setLoadError('');
-    try {
-      const loaded = await fetchInternetSettings();
-      if (!isMounted.current) return;
-      setSettings(loaded);
-      setCanProceed?.(true);
-    } catch (err: unknown) {
-      if (!isMounted.current) return;
-      setLoadError(getErrorMessage(err));
-    }
-  }, [setCanProceed]);
-
+  // Sync the local mirror from the provider value. While loading (value is still the default) or
+  // while a save is pending/failed, handleChange and the loading render own the state — defer. Once
+  // a real value is in, enable Next; if the read is an error, keep Next disabled so the wizard can't
+  // advance past an unloaded step.
   useEffect(() => {
-    load();
-  }, [load]);
+    if (isLoading || isSaving || saveError) return;
+    if (isPlatformError(value)) {
+      setCanProceed?.(false);
+      return;
+    }
+    setSettings(value);
+    lastGood.current = value;
+    setCanProceed?.(true);
+  }, [value, isLoading, isSaving, saveError, setCanProceed]);
 
   const handleChange = useCallback(
     async (next: InternetSettings) => {
       if (isSaving) return;
-      setSettings(next);
+      if (!setData) {
+        // Defensive: InternetSettingsLoaded renders only once `provider` is defined, so `setData` is
+        // always defined here. Bail rather than reporting a save that never actually persisted.
+        logger.warn('Internet settings provider unavailable; ignoring selection change.');
+        return;
+      }
+      setSettings(next); // optimistic
       setSaveError('');
       setIsSaving(true);
       setCanProceed?.(false);
       try {
-        await persistInternetSettings(next);
+        await setData(next);
         if (!isMounted.current) return;
+        lastGood.current = next;
         setIsSaving(false);
         setCanProceed?.(true);
       } catch (err: unknown) {
         if (!isMounted.current) return;
+        setSettings(lastGood.current); // revert
         setIsSaving(false);
         setSaveError(getErrorMessage(err));
         setCanProceed?.(false);
       }
     },
-    [setCanProceed, isSaving],
+    [isSaving, setData, setCanProceed],
   );
 
-  if (loadError) {
+  if (isPlatformError(value)) {
     return (
       <div className="tw:flex tw:flex-col tw:gap-4">
         <Alert variant="destructive">
-          <AlertDescription>{loadError}</AlertDescription>
+          <AlertDescription>
+            {localizedStrings['%firstRun_step_internetSettings_loadError%']}
+          </AlertDescription>
         </Alert>
-        <Button variant="outline" onClick={load}>
+        <Button variant="outline" onClick={onRetry}>
           {localizedStrings['%internetSettings_button_retry%']}
         </Button>
       </div>
     );
   }
 
-  if (!settings) {
+  if (isLoading || !settings) {
     return (
-      <div className="tw:flex tw:justify-center tw:py-8">
-        <Spinner />
-      </div>
+      <StepLoading
+        message={
+          showConnectingMessage
+            ? localizedStrings['%firstRun_step_internetSettings_connecting%']
+            : undefined
+        }
+      />
     );
   }
 
@@ -118,11 +219,15 @@ export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
           <AlertDescription>{saveError}</AlertDescription>
         </Alert>
       )}
+      {/* The step's heading and description already consume vertical space here, so drop the
+          list's footer note to keep the wizard's Next button above the fold. The per-row
+          "Coming soon" badges still mark the unavailable options. */}
       <InternetAccessOptionList
         localizedStrings={localizedStrings}
         value={settings.permittedInternetUse}
         onChange={(v) => handleChange({ ...settings, permittedInternetUse: v })}
         disabled={isSaving}
+        showFooter={false}
       />
       <DeveloperSection
         localizedStrings={localizedStrings}

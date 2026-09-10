@@ -43,6 +43,17 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
   private readonly pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>;
 
   /**
+   * Whether {@link dispose} has run, so nothing this factory registers will ever be cleaned up
+   * again.
+   *
+   * `dispose` cannot take the per-project locks — it is not about any one project — so a
+   * registration already in flight can finish after it. That PDP lands on a cleanup list that has
+   * already been drained and is torn down on arrival, which makes handing its id back a promise of
+   * a working provider that is already dead.
+   */
+  private isDisposed = false;
+
+  /**
    * Create a new PDP factory that is used to create PDPs
    *
    * @param projectInterfaces All the `projectInterface`s this PDP factory's PDPs can support
@@ -67,6 +78,7 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
 
   /** Disposes of all PDPs that were created by this PDP Factory */
   async dispose(): Promise<boolean> {
+    this.isDisposed = true;
     this.pdpIds.clear();
     return this.pdpCleanupList.runAllUnsubscribers();
   }
@@ -78,6 +90,10 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
     // make sure we don't create multiple of the same PDP
     const lock = this.pdpIdsMutexMap.get(key);
     return lock.runExclusive(async () => {
+      if (this.isDisposed)
+        throw new Error(
+          `PDP factory ${this.pdpFactoryId} is disposed, so it cannot provide a project data provider for ${projectId}`,
+        );
       let pdpId = this.pdpIds.get(key);
       if (!pdpId) {
         const factoryReturn =
@@ -131,6 +147,15 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
     const pdp = await registerEngineByType<
       UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
     >(pdpId, projectDataProviderEngine, 'pdp', mergedAttributes, perPdpDocumentation);
+    // The factory was disposed while this PDP was being registered, so its cleanup list has already
+    // been drained and nothing will ever run this PDP's cleanup. Take it down here and say so,
+    // rather than caching an id for a provider whose disposal already ran.
+    if (this.isDisposed) {
+      await pdp.dispose();
+      throw new Error(
+        `PDP factory ${this.pdpFactoryId} was disposed while registering a project data provider for ${projectId}`,
+      );
+    }
     this.pdpCleanupList.add(pdp);
     return pdpId;
   }

@@ -170,8 +170,13 @@ export function FootnoteItem({
   const caller = formatCaller ? formatCaller(footnote.caller) : footnote.caller;
   const isCallerFormatted = caller !== footnote.caller;
 
+  // The separator after the note's own marker sits BETWEEN the header's spans rather than inside
+  // the `.marker` glyph, which `.marker-visible .marker` draws at 0.7em - a space kept inside it is
+  // drawn at 0.7em too and reads as `\f+`. The header is outside the caret origin
+  // (`getCaretPositionFromClick` walks `.textual-note-body` only), so unlike the body's markers it
+  // is free to keep its separator out of the span.
   const footnoteOpening = showMarkers ? (
-    <span className="marker">{`\\${footnote.marker}${MARKER_SEPARATOR}`}</span>
+    <span className="marker">{`\\${footnote.marker}`}</span>
   ) : undefined;
 
   const footnoteClosing = showMarkers ? (
@@ -182,11 +187,15 @@ export function FootnoteItem({
   // run (`StandardNotes.xslt`), and shows it in its formatted pane too - there as raw `\cat …\cat*`
   // text. Only the standard pane's marked-up representation is ported; it is used in both modes.
   const footnoteCategory = footnote.category ? (
-    <>
-      <span className="marker">{`\\cat${MARKER_SEPARATOR}`}</span>
+    // Given its own class rather than a `usfm_*` one for the same reason the caller has one:
+    // `\cat` delimits the value but is not a style for it. The value is the note's data and stays
+    // visible either way; the `\cat` glyphs are marker display and follow the same switch every
+    // other marker in this component does.
+    <span className="note-category">
+      {showMarkers && <span className="marker">{`\\cat${MARKER_SEPARATOR}`}</span>}
       {footnote.category}
-      <span className="marker">\cat*</span>
-    </>
+      {showMarkers && <span className="marker">\cat*</span>}
+    </span>
   ) : undefined;
 
   const footnoteCaller = caller && (
@@ -194,7 +203,6 @@ export function FootnoteItem({
     // specific class name in case styling is needed.
     <span className={cn('note-caller tw:inline-block', { formatted: isCallerFormatted })}>
       {caller}
-      {MARKER_SEPARATOR}
     </span>
   );
 
@@ -211,6 +219,7 @@ export function FootnoteItem({
           text, so the line reads as one continuous USFM run the way PT9's notes pane renders it. */}
       <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteOpening}
+        {!!footnoteOpening && !!footnoteCaller && ' '}
         {footnoteCaller}
       </div>
       <div

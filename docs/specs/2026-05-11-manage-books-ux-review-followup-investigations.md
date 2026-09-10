@@ -105,7 +105,7 @@ User has authorized autonomous advancement; proceeding with the implementations 
 
 ### Findings vs the spec
 
-#### #28 floating tab — confirmed; `{ type: 'float', position: 'center', floatSize: { width: 1100, height: 720 } }` matches the Settings precedent at `src/renderer/services/web-view.service-host.ts:1805`.
+#### #28 floating tab — confirmed; `{ type: 'float', position: 'center', floatSize: { width: 1100, height: 720 } }` matches the Settings precedent at `src/renderer/services/web-view.service-shard.ts:1805`.
 
 #### #30 project full-name tooltip
 

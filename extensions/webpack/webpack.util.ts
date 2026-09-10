@@ -90,6 +90,36 @@ export async function getWebViewEntries(): Promise<webpack.EntryObject> {
 
 // #region not shared with others
 
+/**
+ * Where one extension bundle's persistent webpack cache lives.
+ *
+ * Per BUNDLE and per MODE, because `EmitShippedModulesPlugin` reads the temperature of this
+ * directory to decide whether the module manifest it writes can be trusted for a legal artifact
+ * (see `isWarmFilesystemCache`), and one shared directory answers that wrong in two ways:
+ *
+ * - Per bundle: `webpack.config.main.ts` declares `dependencies: ['webView']`, so `extension-main`
+ *   starts only after `extension-web-view` has finished writing ITS cache entries - which would
+ *   stamp it warm on a build that is, in every other sense, cold.
+ * - Per mode: a release job builds development extensions (`npm run build`) and then production ones
+ *   from the same commit, so the production build would inherit the development build's cache and
+ *   its manifests could not be verified - leaving the per-platform notices check nowhere to run
+ *   except before the production build, where it would verify a graph the job does not ship.
+ *
+ * Splitting the directory makes each build's temperature a fact about that build. Ordinary local
+ * rebuilds are unaffected: they stay in the development directory and stay warm.
+ */
+export function extensionCacheDirectory(bundleName: string): string {
+  const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
+  return path.resolve(
+    __dirname,
+    '..',
+    '..',
+    'node_modules',
+    '.cache',
+    `webpack-extensions-${bundleName}-${mode}`,
+  );
+}
+
 /** Folder containing the source files for the extensions */
 export const sourceFolder = 'src';
 /** Folder from repo root to this extensions folder git subtree */
@@ -126,6 +156,14 @@ const staticFiles: {
   to?: string;
   /* If true, don't throw an error when you miss the file (not all of these files are always present) */
   noErrorOnMissing?: boolean;
+  /**
+   * Force `copy-webpack-plugin`'s destination-type guess. It infers `'dir'` for any `to` with no
+   * file extension (`path.extname('LICENSE') === ''`), which silently nests a copied file inside a
+   * newly created directory of the same name instead of copying it as that file - exactly wrong for
+   * extensionless filenames like `LICENSE`. Leave unset for every other entry here, which all
+   * either have an extension or are already directories on purpose.
+   */
+  toType?: 'file' | 'dir' | 'template';
 }[] = [
   // Distribute the extension's public folder contents
   { from: 'public', to: './', noErrorOnMissing: true },
@@ -137,6 +175,19 @@ const staticFiles: {
   { from: 'manifest.json' },
   // We need to distribute the package.json for Platform.Bible to read the extension properly
   { from: 'package.json', noErrorOnMissing: true },
+  // Distribute the license text alongside the manifest that declares it. Every extension bundled in
+  // this repository is stamped `license: 'AGPL-3.0-or-later'` (`stampExtensionLicense` in
+  // `../lib/git.util.ts`) and can be installed/redistributed as its own folder independent of the
+  // app (see the installed-extensions directory and `--extensionDirs` in `extension.service.ts`), so
+  // a declared license with no accompanying text in the folder states an obligation without
+  // discharging it. `noErrorOnMissing` because this list is also used for third-party extension
+  // templates that may license themselves differently; `extension-licenses.test.ts` is the actual
+  // gate that a *declared* license always ships its text.
+  // `toType: 'file'` is required, not decorative: without it `copy-webpack-plugin` infers `'dir'`
+  // for this destination (no file extension) and nests the text inside a newly created `LICENSE/`
+  // directory instead of copying it as a file named `LICENSE`, which reads as a shipped license to
+  // any check that looks only at the name.
+  { from: 'LICENSE', noErrorOnMissing: true, toType: 'file' },
   // If the extension declares its types as an index.d.ts, copy that into the output
   { from: 'index.d.ts', noErrorOnMissing: true },
   // Copy the extension's type declaration file into the output folder if it's called the same as
@@ -200,6 +251,7 @@ function getCopyFilePatternsForExtension(extension: ExtensionInfo) {
         from: path.join(sourceFolder, internalFilePathFrom),
         to: internalFilePathTo,
         noErrorOnMissing: staticFile.noErrorOnMissing,
+        toType: staticFile.toType,
       };
     })
     .filter((value) => !!value) as Pattern[];

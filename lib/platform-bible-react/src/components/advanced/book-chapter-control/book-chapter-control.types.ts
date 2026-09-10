@@ -16,8 +16,12 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%scripture_section_extra_long%',
   '%history_recent%',
   '%history_recentSearches_ariaLabel%',
+  '%webView_bookChapterControl_bookNotInProject%',
+  '%webView_bookChapterControl_bookNotInProjectDescription%',
   '%webView_bookChapterControl_selectChapter%',
   '%webView_bookChapterControl_selectVerse%',
+  '%webView_bookChapterControl_showMoreBooks%',
+  '%webView_bookChapterControl_showProjectBooksOnly%',
 ] as const);
 
 /** Type definition for the localized strings used in the BookChapterControl component */
@@ -53,6 +57,19 @@ export type BookChapterControlProps = {
   className?: string;
   /** Callback to retrieve book IDs that are available in the current context */
   getActiveBookIds?: () => string[];
+  /**
+   * Optional callback returning book ids that exist outside the active project — e.g. books present
+   * in an open resource. They are hidden from the default list, revealed by the "show more books"
+   * control, and always searchable; those not also returned by `getActiveBookIds` render dimmed but
+   * remain selectable.
+   *
+   * Ignored unless `getActiveBookIds` is also passed: without a project list the control already
+   * offers the whole canon, so there is nothing left for this to add.
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
+   */
+  getAdditionalBookIds?: () => string[];
   /**
    * Optional map of localized book IDs/short names and full names. The key is the standard book ID
    * (e.g., "2CH"), the value contains a localized version of the ID and related book name (e.g. {

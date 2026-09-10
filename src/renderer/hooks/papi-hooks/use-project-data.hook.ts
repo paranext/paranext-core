@@ -124,6 +124,9 @@ type UseProjectDataHook = {
  *   successfully updates data.
  * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
  *   provider
+ *
+ * Subject to the same runaway-loop throttling as {@link useData} — see its docs for what the
+ * returned values look like while throttled.
  */
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */

@@ -1,12 +1,29 @@
 import * as commandService from '@shared/services/command.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { isDemoMode, markJustRegistered } from '@renderer/services/first-run-store';
-import { Alert, AlertTitle, Button, Input, Spinner } from 'platform-bible-react';
+import {
+  continueWithoutRegistration,
+  isDemoMode,
+  markJustRegistered,
+} from '@renderer/services/first-run-store';
+import { publishRegistrationValidity } from '@renderer/services/registration-validity-store';
+import { settingsService } from '@shared/services/settings.service';
+import { logger } from '@shared/services/logger.service';
+import {
+  Alert,
+  AlertTitle,
+  Button,
+  Checkbox,
+  Input,
+  Label,
+  Spinner,
+  usePromise,
+} from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { CircleCheck } from 'lucide-react';
-import { ChangeEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { AlertCircle, CircleCheck } from 'lucide-react';
+import { ChangeEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
+import { StepLoading } from '../step-loading.component';
 
 // Copied from the paratext-registration extension — keep in sync if the extension changes.
 //   REGISTRATION_CODE_REGEX_STRING, REGISTRATION_CODE_LENGTH_WITH_DASHES:
@@ -25,7 +42,29 @@ export const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 export const VALIDATION_DEBOUNCE_MS = 1000;
 export const INVALID_CODE_DISPLAY_DEBOUNCE_MS = 1000;
 
-const PARATEXT_REGISTRY_LINK = 'https://registry.paratext.org/';
+// No trailing slash: this is the exact string ParatextData returns for the Production environment,
+// so the fallback and a real backend response are the same value.
+const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org';
+
+/**
+ * Fetches the registry site URL for the selected server environment, falling back to production so
+ * the link always has a target rather than going blank (and skips the lookup entirely in demo
+ * mode). That is all the fallback guarantees — whether the target is reachable is a separate matter
+ * (a retired host, or access blocked from the user's network or country, still reads as a broken
+ * link). Module-scope so it is a stable `usePromise` callback.
+ */
+async function fetchRegistryUrl() {
+  if (isDemoMode()) return PRODUCTION_REGISTRY_URL;
+  try {
+    const url = await commandService.sendCommand('paratextRegistration.getParatextRegistryUrl');
+    return url || PRODUCTION_REGISTRY_URL;
+  } catch (error) {
+    logger.warn(
+      `Could not resolve the selected registry URL; falling back to production: ${getErrorMessage(error)}`,
+    );
+    return PRODUCTION_REGISTRY_URL;
+  }
+}
 
 // Eight %paratextRegistration_*% keys below are provided at runtime by the paratext-registration
 // extension's localizedStrings.json via PAPI — they will not appear in en.json.
@@ -39,10 +78,13 @@ const KEYS: LocalizeKey[] = [
   '%paratextRegistration_button_restarting%',
   '%paratextRegistration_warning_invalid_registration_length%',
   '%firstRun_step_identify_heading%',
+  '%firstRun_step_identify_reRegisterNotice%',
   '%firstRun_step_identify_registryHelp%',
   '%firstRun_step_identify_registryLink%',
   '%firstRun_step_identify_validatingCode%',
   '%firstRun_button_back%',
+  '%firstRun_button_continueWithoutRegistration%',
+  '%firstRun_step_identify_dontShowAgain%',
   '%general_error_title%',
 ];
 
@@ -78,6 +120,7 @@ export function IdentifyStep({
   setCanProceed,
   setManagesOwnFooter,
   onRestartAfterSave,
+  allowContinueWithoutRegistration,
 }: IdentifyStepProps) {
   // Suppress the shell's generic Next/Finish and the shell footer before the first paint — this
   // step owns its navigation entirely via WizardStepForm. onBack is rendered inside the form.
@@ -103,6 +146,25 @@ export function IdentifyStep({
   const [saveError, setSaveError] = useState('');
   const [saveErrorDescription, setSaveErrorDescription] = useState('');
   const [isRestarting, setIsRestarting] = useState(false);
+  const [suppressReminder, setSuppressReminder] = useState(false);
+  const onToggleSuppressReminder = async (checked: boolean) => {
+    setSuppressReminder(checked);
+    try {
+      // Setting is `true` = keep showing, so a checked "don't show again" writes `false`.
+      await settingsService.set('platform.showRegistrationReminderOnStartup', !checked);
+    } catch (e) {
+      // Revert the optimistic toggle so the checkbox reflects the (unchanged) persisted setting.
+      setSuppressReminder(!checked);
+      logger.warn(
+        `Failed to persist platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
+      );
+    }
+  };
+
+  // The registry link follows the selected server. This step remounts each time the wizard
+  // navigates to it, so the URL re-reads the latest selection (including a change made on the
+  // preceding Internet Settings step).
+  const [registryUrl] = usePromise(fetchRegistryUrl, PRODUCTION_REGISTRY_URL);
 
   const isMounted = useRef(false);
   const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -234,6 +296,11 @@ export function IdentifyStep({
       // non-fatal: the user just registered successfully, so 'invalid' on the next launch is almost
       // certainly a server fluke. The flag is consumed (cleared) on the next resolveInternal call.
       markJustRegistered();
+      // Correct THIS session too, not just the next one. The toolbar mounted behind the wizard has
+      // already cached a definitive 'invalid', and the restart below is best-effort: if it fails,
+      // the user stays in this session. Without this publish, that stale 'invalid' would keep the
+      // reminder dot nagging about the registration they just fixed.
+      publishRegistrationValidity('valid');
       // Restart immediately — the explicit "Save and restart" button already sets the expectation.
       await (onRestartAfterSave ?? (() => commandService.sendCommand('platform.restart')))();
       // platform.restart resolves after invoking app.quit() but before the process actually
@@ -260,13 +327,24 @@ export function IdentifyStep({
   const activeErrorDescription = error ? errorDescription : saveErrorDescription;
 
   if (isRestarting) {
-    return (
-      <div className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:py-8 tw:text-center">
-        <Spinner />
-        <p className="tw:text-sm tw:text-muted-foreground">
-          {strings['%paratextRegistration_button_restarting%']}
-        </p>
-      </div>
+    return <StepLoading message={strings['%paratextRegistration_button_restarting%']} />;
+  }
+
+  // Re-register mode surfaces an escape hatch in the back-button slot; at the identify entry the
+  // shell supplies no onBack (index === entryIndex), so the slot is otherwise empty. Computed as
+  // if/else (not a nested ternary) to satisfy ESLint no-nested-ternary.
+  let backButton: ReactNode;
+  if (onBack) {
+    backButton = (
+      <Button variant="outline" onClick={onBack}>
+        {strings['%firstRun_button_back%']}
+      </Button>
+    );
+  } else if (allowContinueWithoutRegistration) {
+    backButton = (
+      <Button variant="ghost" onClick={() => continueWithoutRegistration()}>
+        {strings['%firstRun_button_continueWithoutRegistration%']}
+      </Button>
     );
   }
 
@@ -275,13 +353,7 @@ export function IdentifyStep({
       heading={strings['%firstRun_step_identify_heading%']}
       error={activeError}
       errorDescription={activeErrorDescription}
-      backButton={
-        onBack && (
-          <Button variant="outline" onClick={onBack}>
-            {strings['%firstRun_button_back%']}
-          </Button>
-        )
-      }
+      backButton={backButton}
       primaryButton={
         <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
           {strings['%paratextRegistration_button_saveAndRestart%']}
@@ -289,6 +361,14 @@ export function IdentifyStep({
       }
     >
       <div className="tw:flex tw:flex-col tw:gap-3">
+        {/* Re-register mode only: explain why an already-onboarded user is being asked to register
+            again (their previously-valid registration went invalid). Absent in fresh onboarding. */}
+        {allowContinueWithoutRegistration && (
+          <Alert>
+            <AlertCircle className="tw:h-4 tw:w-4" />
+            <AlertTitle>{strings['%firstRun_step_identify_reRegisterNotice%']}</AlertTitle>
+          </Alert>
+        )}
         <div className="tw:flex tw:flex-col tw:gap-1">
           <label htmlFor="identify-name" className="tw:text-sm tw:font-medium">
             {strings['%paratextRegistration_label_registrationName%']}
@@ -328,12 +408,7 @@ export function IdentifyStep({
 
         <p className="tw:text-sm tw:text-muted-foreground">
           {strings['%firstRun_step_identify_registryHelp%']}{' '}
-          <a
-            href={PARATEXT_REGISTRY_LINK}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="tw:underline"
-          >
+          <a href={registryUrl} target="_blank" rel="noopener noreferrer" className="tw:underline">
             {strings['%firstRun_step_identify_registryLink%']}
           </a>
         </p>
@@ -343,6 +418,25 @@ export function IdentifyStep({
             <CircleCheck className="tw:h-4 tw:w-4" />
             <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
           </Alert>
+        )}
+
+        {/* Isolate this immediate-apply preference (persists instantly on toggle) from the
+            explicit-apply "Save and restart" form above it with a divider, so the two apply models
+            don't read as sibling controls. */}
+        {allowContinueWithoutRegistration && (
+          <div className="tw:mt-2 tw:flex tw:items-center tw:gap-2 tw:border-t tw:pt-4">
+            <Checkbox
+              id="identify-dont-show-again"
+              checked={suppressReminder}
+              // onToggleSuppressReminder is async but onCheckedChange expects void. Calling it
+              // directly (without void or .catch) is safe: the handler catches its own errors
+              // internally, and no-floating-promises is off in this codebase.
+              onCheckedChange={(checked) => onToggleSuppressReminder(checked === true)}
+            />
+            <Label htmlFor="identify-dont-show-again">
+              {strings['%firstRun_step_identify_dontShowAgain%']}
+            </Label>
+          </div>
         )}
       </div>
     </WizardStepForm>

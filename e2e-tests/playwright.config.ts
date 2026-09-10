@@ -4,7 +4,10 @@ import { defineConfig } from '@playwright/test';
  * Playwright configuration for paranext-core E2E tests.
  *
  * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
- * - `isolated`: each test gets a fresh Electron restart — for state-mutating tests.
+ * - `isolated`: each suite gets its own Electron, but how varies by fixture —
+ *   `fixtures/isolated.fixture.ts` launches one per test, `comment.fixture`/`find.fixture` one per
+ *   worker. Every spec in this project launches its own app; specs that attach to one you started
+ *   live in `tests/attached/` instead.
  */
 const config = defineConfig({
   testDir: './tests',
@@ -13,7 +16,15 @@ const config = defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1, // Retry once locally to handle flaky DataProvider timeouts
   workers: 1, // Single worker for Electron to avoid port conflicts
-  reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+  reporter: [
+    // FIRST on purpose. Fails the run when a test is reported skipped that nobody asked to skip —
+    // i.e. it never ran. The multiplexer applies a reporter's status override only after its
+    // `onEnd` returns, so listing this after `html`/`list` would let them write a green report for
+    // a run this one then fails. See the reporter for why that distinction matters.
+    ['./reporters/no-silent-skips.reporter.ts'],
+    ['html', { outputFolder: 'playwright-report' }],
+    ['list'],
+  ],
   timeout: 120_000, // 2 minutes per test (app initialization can be slow)
   expect: {
     timeout: 10_000,
@@ -37,6 +48,8 @@ const config = defineConfig({
   // `_example/` — reference template for new tests, not a runnable test suite.
   // Experimental tests that should not be wired into any standard test run. (e.g.,
   // `manage-books/` and `markers-checklist/`)
+  // Nothing else is excluded here: `navigation-history/` is an isolated subset like any other,
+  // and `playwright-cdp.config.ts` cannot collect it at all (`testIgnore: ['**/isolated/**']`).
   projects: [
     {
       name: 'smoke',
@@ -45,16 +58,30 @@ const config = defineConfig({
     {
       // The common set of locally-runnable tests, organized in subdirectories by feature.
       // `npm run test:e2e:isolated` (via e2e-tests/run-isolated.mjs) lists the subsets;
-      // `npm run test:e2e:isolated <subset>` runs one; `... all` runs everything.
+      // `npm run test:e2e:isolated <subset>` runs one; `... all` runs every subset.
+      //
+      // Every spec here launches its own Electron, which is what lets `... all` run as one
+      // command. Attach-based specs are deliberately NOT in this tree: this config's globalSetup
+      // aborts when port 8876 is bound, which is exactly the state an attach spec needs, so one
+      // living here could never run alongside its neighbours. They live in `tests/attached/`.
+      //
+      // `tests/attached/` is deliberately NOT a project in this config for that same reason: its
+      // globalSetup would refuse the running app those specs exist to attach to. They are collected
+      // by `playwright-cdp.config.ts`, which has no globalSetup, and run with
+      // `npm run test:e2e:attached` against an app started by ./.erb/scripts/refresh.sh.
       name: 'isolated',
       testDir: './tests/isolated',
     },
     {
       // Local-only - NOT wired into CI's `test:e2e:smoke`. The ER tests need real
       // Marble resources (e.g., ESV16UK+) which are not available in CI. There is no dedicated
-      // npm script; run the project directly (after booting the app once with CDP enabled):
+      // npm script. These specs use fixtures/cdp.fixture.ts, so run them through the CDP config,
+      // which has no globalSetup; running them through THIS config fails, because its globalSetup
+      // rejects the very app they need to attach to:
       //   ./.erb/scripts/refresh.sh
-      //   npx playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources
+      //   npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/
+      // The entry below therefore only registers the directory with this config; its practical
+      // effect is that `test:e2e:all` (this config, no --project) cannot pass either.
       name: 'enhanced-resources',
       testDir: './tests/enhanced-resources',
     },

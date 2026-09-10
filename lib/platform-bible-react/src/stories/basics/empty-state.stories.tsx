@@ -15,6 +15,8 @@ A presentational empty-state message for a list, grid, or panel that has nothing
 - Renders the localized \`message\` in a \`role="status"\` region so screen readers announce it when the content becomes empty
 - Layout (centering, spacing, emphasis) is left to the caller via \`className\`
 - Optional \`id\` becomes a \`data-testid\` for e2e/test lookup
+
+For a richer zero-state that needs media, a heading, or an action, use the [\`Empty\`](?path=/docs/shadcn-empty--docs) composition instead. \`EmptyState\` is the one-line case; \`Empty\` is the composed case.
         `,
       },
     },

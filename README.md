@@ -22,14 +22,9 @@ This repository contains the core Platform.Bible software (Electron client, exte
 
 ## Users
 
-This software is not yet ready for users. We'll update here with where you can install it when it is ready.
-
-If you would still like to try it, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
+This repository does not distribute a built application. The application released to users is **Paratext 10**, which is built from this source in [`paranext/paratext-10-studio`](https://github.com/paranext/paratext-10-studio); see [LICENSING.md](./LICENSING.md) for how the source and the released binary are licensed. To try Platform.Bible itself, build it from source with the [developer install instructions](#developer-install) below.
 
 ### Linux Users
-
-We produce [`snap` packages](<https://en.wikipedia.org/wiki/Snap_(software)>) available [on the snap store](https://snapcraft.io/platform-bible) for users to run our
-software on Linux. Once you have all the `snap` tools installed for your flavor of Linux, run `sudo snap install platform-bible` for our most recent stable build (none yet) or `sudo snap install platform-bible --channel=edge` for our most recent, pre-release build that has passed our limited, automated testing suite.
 
 To install a locally created `snap` package, run the following commands:
 
@@ -77,7 +72,17 @@ Set up pre-requisites, build, and run:
    # 8.0.412 (or similar 8.* version)
    ```
 
-3. Install [`gitleaks`](https://github.com/gitleaks/gitleaks). The pre-commit hook runs `gitleaks` on staged files to block accidental secret commits — without it, every `git commit` fails.
+3. **Ruby >= 3.2 and Bundler** - only needed to regenerate `THIRD-PARTY-NOTICES.md`, which is done
+   on Linux (see [Third-party notices](#third-party-notices)). Not needed to build or run the
+   application. On Ubuntu 22.04: `sudo snap install ruby --classic --channel=3.4/stable`. On 24.04+:
+   `sudo apt install ruby-full`. Then:
+
+   ```bash
+   gem install --user-install bundler
+   bundle install   # installs licensee, pinned in Gemfile.lock
+   ```
+
+4. Install [`gitleaks`](https://github.com/gitleaks/gitleaks). The pre-commit hook runs `gitleaks` on staged files to block accidental secret commits — without it, every `git commit` fails.
 
    - **macOS**: `brew install gitleaks`
    - **Windows**: `winget install Gitleaks.Gitleaks`
@@ -89,9 +94,9 @@ Set up pre-requisites, build, and run:
    gitleaks version
    ```
 
-4. Prerequisites for macOS or Linux (below).
+5. Prerequisites for macOS or Linux (below).
 
-5. Clone, install, build, and run (below).
+6. Clone, install, build, and run (below).
 
 ### Linux Development Pre-requisites
 
@@ -265,6 +270,28 @@ npm start
 
 After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit the code, and the relevant processes will hot reload.
 
+Dev builds are cached under `node_modules/.cache`. If you ever suspect a stale bundle, `npm run clean:build-cache` clears every cache in that directory (Storybook's and the extensions' included) and the next build repopulates them.
+
+### Starting without the .NET watcher
+
+`npm start` runs the .NET data provider under `dotnet watch`, which restores and builds the project before the provider's `Main()` runs — 15-24 seconds of dev startup, depending on how warm the MSBuild and Roslyn servers are (measured on one machine; reproduce with the [Startup performance timing](#startup-performance-timing) tooling below). If you are not editing C#, you can skip it:
+
+```bash
+npm run start:no-dotnet-watch
+```
+
+This runs the already-built assembly instead, which takes roughly 3 seconds off the time to a fully loaded app and about 15 seconds off how long the data provider takes to become ready.
+
+The script is a thin wrapper that sets `PT_DOTNET_NO_WATCH=true`. The value must be exactly `true`; any other value (including other truthy-looking strings) is ignored and the watcher runs as normal. If you start the app some other way, set the variable directly — this is the only handle you have when the npm script is out of reach:
+
+```bash
+PT_DOTNET_NO_WATCH=true npm start
+```
+
+In VSCode, use the **`Debug Platform (no .NET watcher)`** compound instead of `Debug Platform` — it is the same configuration with `PT_DOTNET_NO_WATCH` already set. (`Debug Platform Backend` runs `npm run start` with a fixed `env` block, so it cannot pick up the npm script, which is why this ships as its own entry rather than something you edit.)
+
+**The trade-off is that C# changes are no longer picked up.** After editing C# you have to run `npm run build:data` yourself **and then restart the app** — the provider is started once and never re-spawned in place, so a rebuild alone will not reach it. Otherwise the app keeps running the previous build: it starts and behaves normally, just against older C# code, which is why the startup log says explicitly when this mode is active. You also need to have built the provider at least once before the script will work at all.
+
 ### Developing Extensions
 
 Platform.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
@@ -299,6 +326,16 @@ Notes:
 
 - **Use a packaged build for numbers you intend to compare.** In dev, the .NET provider runs under `dotnet watch`, which inflates the C# portion of the timeline and is not representative.
 - `main.log` accumulates across launches; the tool shows only the latest run and warns when it drops older ones. For a clean capture, delete (or copy aside) the log between runs.
+
+### Analytics test-environment override
+
+Platform.Bible's analytics abstraction (`src/extension-host/services/analytics.service.ts`) normally decides whether events target the "test" or "production" analytics audience by checking whether the build is packaged and which Send/Receive server it's configured against. Developers and testers who need to force "test" targeting regardless of build/server configuration — so their activity never lands in production analytics — can set the `PT_ANALYTICS_TEST_OVERRIDE=true` environment variable when launching:
+
+```bash
+PT_ANALYTICS_TEST_OVERRIDE=true npm start
+```
+
+The value must be exactly `true`; any other value (including other truthy-looking strings) is ignored and normal resolution applies.
 
 ## GitHub Pages
 
@@ -342,12 +379,11 @@ These steps will walk you through releasing a version on GitHub and bumping the 
    - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
    - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
-   - `uploadReleaseAssets`: whether to upload the release assets to [Amazon S3](https://aws.amazon.com/s3/). If false, the release will still be created in GitHub, but no assets will be uploaded to S3.
+   - `uploadReleaseAssets`: whether to upload the Windows and macOS installers to [Amazon S3](https://aws.amazon.com/s3/) for internal sharing. This is the only place the built installers go; the GitHub release itself carries no assets.
 
-4. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
+4. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release. The release carries no installers - it is the version tag and the generated notes, which is what a downstream build constructs its own release from.
 5. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
 6. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
-7. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
 
 ### Configure uploading release assets to Amazon S3
 
@@ -443,13 +479,19 @@ npm run test:e2e:smoke
 All `test:e2e:*` scripts are there for running variations of the playwright end-to-end tests.
 
 - `test:e2e:smoke` runs a single instance of the application, and all tests share that instance
-- `test:e2e:smoke-wsl` runs the same smoke tests using a "hidden UI" on Linux instead of a visible UI
-- `test:e2e:isolated` runs tests that require a separate application instance for each test. These
-  tests are organized into feature subsets under `e2e-tests/tests/isolated/`; run
-  `npm run test:e2e:isolated all` for every test, `npm run test:e2e:isolated <subset>` for one
-  feature, or pass no arguments to list the available subsets (no tests are run in that case)
+- `test:e2e:smoke-wsl` runs the same smoke tests using a "hidden UI" on Linux instead of a visible
+  UI. Its script also takes `--wrap <command>` to run any other e2e command the same way, e.g.
+  `e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated multi-window`
+- `test:e2e:isolated` runs tests that need their own application instance rather than sharing
+  one. These tests are organized into feature subsets under `e2e-tests/tests/isolated/`; run
+  `npm run test:e2e:isolated <subset>` for one feature, or pass no arguments to list the available
+  subsets (no tests are run in that case). `npm run test:e2e:isolated all` runs every subset: specs
+  that attach to an app you started live in `e2e-tests/tests/attached/` instead, so nothing under
+  `tests/isolated/` needs a running app
 - `test:e2e-cdp` runs tests that require the application UI to be open already
-- `test:e2e:all` runs all configured tests
+- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`. It cannot currently pass:
+  `enhanced-resources` attaches to a running app, which that config's global setup refuses to start
+  alongside
 
 ## Storybook
 
@@ -539,14 +581,93 @@ const papi = {
   myService,
 ```
 
+## Third-party notices
+
+`THIRD-PARTY-NOTICES.md` and its sidecar `THIRD-PARTY-NOTICES.lock.json` are generated, never edited
+by hand. They describe what the packaged application redistributes: the npm packages webpack
+compiled into `dist/`, the NuGet closure of the .NET data provider, and the components that belong
+to neither graph. The document ships inside every installer.
+
+This section is the procedure. For what the document covers and deliberately does not, which policy
+entry answers a blocked build, and how to change the generator, see
+[`.erb/scripts/third-party-notices/README.md`](.erb/scripts/third-party-notices/README.md).
+
+**You do not need to regenerate them as part of ordinary work.** Building never touches them and
+never complains, whatever your webpack cache holds. Regenerate deliberately, when a **production**
+dependency changes - an npm package that reaches the bundle, or a NuGet version in
+`c-sharp/ParanextDataProvider.csproj`. If you forget, CI's Linux leg fails: it verifies, never
+regenerates, so the committed copy has to be brought up to date here and committed.
+
+### Regenerating (Linux)
+
+The generator reads what webpack actually compiled, and a warm webpack filesystem cache can
+under-report modules that were served from cache instead of rebuilt - so it refuses to write from
+one. Start from a cold cache:
+
+```bash
+rm -rf node_modules/.cache/webpack-* .notices
+npm run build
+npm run build:extensions:production
+dotnet restore c-sharp/ParanextDataProvider.csproj
+npm run build:third-party-notices
+```
+
+`npm run build` leaves its extensions leg in development mode, and every job that packages an
+installer follows it with `build:extensions:production` — so the second command is what makes the
+document describe the graph the installers actually carry. Each manifest records the webpack mode it
+came from and the generator refuses a mixed set, so skipping it fails rather than producing the
+wrong document.
+
+Then read the diff and commit **both** files together; they are written as a pair.
+
+If a package cannot be cleared, the run stops and prints the package, both signals it read, and the
+exact policy entry to add to `.erb/scripts/third-party-notices/notices-policy.json`. Nothing is
+written from an incomplete set.
+
+If dependencies were genuinely removed and the npm set drops by more than 10%, the run refuses that
+too - the drop is otherwise indistinguishable from a broken tree. Acknowledge a real one explicitly:
+
+```bash
+NOTICES_ACCEPT_SHRINK=1 npm run build:third-party-notices
+```
+
+### Checking without regenerating
+
+| Command                                           | Answers                                                                                                                            | Needs                         |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `npm run verify:third-party-notices`              | Does the committed pair match what this tree derives, verdicts and license texts included?                                         | Linux, Ruby, `dotnet restore` |
+| `npm run verify:third-party-notices:shipping-set` | Is the committed document the one its lock was written beside, and does this platform ship the same npm packages the lock records? | Nothing beyond a build        |
+| `npm run verify:third-party-notices:document`     | Is the committed document the one its lock was written beside? That half on its own.                                               | Nothing at all                |
+
+The `shipping-set` check runs on every platform, and the release workflows (`publish.yml`,
+`package-main.yml`) run it immediately after their production extension build. Its two halves answer
+under different conditions. The document check compares two committed files — the lock records a
+sha256 of the document it was written beside — so nothing can stop it running; it is what keeps a
+hand-edited `THIRD-PARTY-NOTICES.md` out of an installer on the paths that cannot afford the full
+check. The npm shipping-set check reads what webpack compiled, so it can only answer straight after
+a build whose cache was cold: on a warm cache it says so and skips that half rather than reporting a
+difference it cannot trust. In CI it only ever runs in that cold position, so a warm stamp there is
+a real anomaly and fails the build.
+
+`npm run package` runs the `document` check rather than the `shipping-set` one, and has to: it
+rebuilds from a tree that has already been built, so its webpack caches are warm by construction and
+the shipping-set half would refuse to answer on every platform. The document is what
+`electron-builder` packs into each installer, so `package` verifies it before packaging it.
+
 ## Thanks
 
 Some important decisions in this project were inspired by the work done in [Visual Studio Code](https://code.visualstudio.com/api). Thanks VS Code developers for some great ideas!
 
 ## License
 
-This project is licensed under the [MIT License](./LICENSE).
-Copyright © 2017-2025 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
+This repository contains code under two licenses:
+
+- The core Platform.Bible application — the Electron client, extension host, .NET data provider, the bundled extensions, and the build- and lint-time packages `lib/papi-dts`, `lib/eslint-plugin-paranext`, and `lib/browserslist-config-detect-electron` — is licensed under the [GNU Affero General Public License v3.0 or later](./LICENSE) (`AGPL-3.0-or-later`).
+- The two developer libraries an extension links against at runtime — `platform-bible-react` and `platform-bible-utils`, both under [`lib/`](./lib/) — remain under the MIT License, so an extension takes those two under MIT rather than the AGPL. Each carries its own `LICENSE` file. The boundary keys on runtime linkage, not on the `lib/` directory: three of the five packages there are AGPL. Extensions are covered by the [Platform.Bible Extension License Exception](./LICENSE-EXCEPTION.md), an additional permission under AGPL section 7: an extension that talks to Platform.Bible only through the published Extension Interface may be conveyed under terms of its author's choosing. It frees an extension author to choose, and takes no position on what they should choose — see [LICENSING.md](./LICENSING.md), "What a third-party extension links against".
+
+See [LICENSING.md](./LICENSING.md) for the authoritative path-by-path map and copyright attributions.
+
+Copyright © 2017-2026 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
 
 <!-- define variables used above -->
 

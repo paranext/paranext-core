@@ -282,6 +282,28 @@ describe('useTextCollectionSources', () => {
     expect(result.current.sources).toBeUndefined();
   });
 
+  it('keeps sources undefined when the admin referenced setting fails after the loading window', async () => {
+    // Mount while the setting is still loading, so the buffered copy holds the placeholder rather
+    // than the error. `useBufferedLayoutSetting` deliberately does not apply a PlatformError (it
+    // stays armed so a transient failure can self-heal), which means the held value alone can no
+    // longer distinguish "unreadable" from "configured with nothing".
+    mockSettings(settingTuple(list(), true));
+    const controller = makeControllablePdp();
+    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+
+    const { result, rerender } = renderHook(() => useTextCollectionSources('proj-1'));
+
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), { 'res-1': true });
+
+    mockSettings(settingTuple(makePlatformError(), false));
+    rerender();
+
+    // Assembling sources here would show the Text Collection grid an empty admin list, i.e. the
+    // same "unreadable setting rendered as nothing configured" bug this branch fixes elsewhere.
+    expect(result.current.sources).toBeUndefined();
+  });
+
   it('reflects updated subscription values in a later memo pass', async () => {
     mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
     const controller = makeControllablePdp();

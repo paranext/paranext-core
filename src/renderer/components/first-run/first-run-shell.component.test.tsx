@@ -13,6 +13,10 @@ vi.mock('@renderer/services/first-run-store', () => ({
   // Required by IdentifyStep when rendered via DEFAULT_STEP_COMPONENTS
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
+  continueWithoutRegistration: vi.fn(),
+}));
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) },
 }));
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,
@@ -64,6 +68,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 // the component mounts without crashing in jsdom (no real network layer available in tests).
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(() => () => () => {}),
+  // network-object.service subscribes to this at module load so a process that leaves during
+  // startup is still announced, and this test reaches that module on its import path.
+  onDidDisconnectClient: vi.fn(() => vi.fn()),
 }));
 // Mock platform-bible-react to avoid the React version conflict that arises when
 // lib/platform-bible-react/dist/index.js loads a different React instance via demo-first-run-setup.
@@ -103,6 +110,9 @@ vi.mock('platform-bible-react', () => {
     AlertTitle: ({ children }: { children: ReactNode }) => <strong>{children}</strong>,
     AlertDescription: ({ children }: { children: ReactNode }) => <span>{children}</span>,
     Button: ButtonStub,
+    // IdentifyStep calls usePromise for its registry link; this test doesn't exercise that value,
+    // so return the default without running the callback.
+    usePromise: (_callback: unknown, defaultValue: unknown) => [defaultValue, false],
     Input: ({
       id,
       value,
@@ -548,5 +558,36 @@ describe('FirstRunShell', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it('forwards allowContinueWithoutRegistration to the entry step component', () => {
+    let received: boolean | undefined = false;
+    const Spy = ({ allowContinueWithoutRegistration }: FirstRunStepProps) => {
+      received = allowContinueWithoutRegistration;
+      return undefined;
+    };
+    render(
+      <FirstRunShell
+        entryStep="identify"
+        allowContinueWithoutRegistration
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: Spy }}
+      />,
+    );
+    expect(received).toBe(true);
+  });
+
+  it('forwards allowContinueWithoutRegistration as falsy when not provided', () => {
+    let received: boolean | undefined = true; // start truthy so the assertion is meaningful
+    const Spy = ({ allowContinueWithoutRegistration }: FirstRunStepProps) => {
+      received = allowContinueWithoutRegistration;
+      return undefined;
+    };
+    render(
+      <FirstRunShell
+        entryStep="identify"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: Spy }}
+      />,
+    );
+    expect(received).toBeFalsy();
   });
 });

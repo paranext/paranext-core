@@ -3,6 +3,8 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { TabToolbar } from '@/components/advanced/tab-toolbar/tab-toolbar.component';
+import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
+import { ShrinkStepOverride } from '@/context/shrink-step-override.component';
 
 describe('TabToolbar', () => {
   it('does not force tw:h-full on the start/center/end area wrappers (breaks vertical centering)', () => {
@@ -46,5 +48,177 @@ describe('TabToolbar', () => {
       expect(wrapper?.className).toMatch(/(?:^|\s)tw:flex-nowrap(?:\s|$)/);
       expect(wrapper?.className).not.toMatch(/(?:^|\s)tw:flex-wrap(?:\s|$)/);
     });
+  });
+
+  it('lets the start zone shrink below its content width (tw:min-w-0), so the flex algorithm takes space from it instead of pushing the end zone out of the clipped container', () => {
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        startAreaChildren={<span data-testid="start-child">Start</span>}
+        endAreaChildren={<span data-testid="end-child">End</span>}
+      />,
+    );
+
+    const startWrapper = screen.getByTestId('start-child').parentElement;
+
+    expect(startWrapper).not.toBeNull();
+    expect(startWrapper?.className).toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+  });
+
+  it('keeps the min-content floor on the zero-basis center zone, so its contents cannot resolve to zero width and be clipped away entirely', () => {
+    // `tw:basis-0` means this zone absorbs none of a deficit, so `min-width: auto` is the only
+    // thing sizing it at narrow widths. Pairing `tw:min-w-0` with `tw:basis-0` resolves the zone
+    // to 0px, and `tw:overflow-clip` then erases whatever is in it.
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        centerAreaChildren={<span data-testid="center-child">Center</span>}
+      />,
+    );
+
+    const centerWrapper = screen.getByTestId('center-child').parentElement;
+
+    expect(centerWrapper).not.toBeNull();
+    expect(centerWrapper?.className).toMatch(/(?:^|\s)tw:basis-0(?:\s|$)/);
+    expect(centerWrapper?.className).not.toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+  });
+
+  it('keeps the end zone rigid so the view-info menu and its icon buttons are never the ones squeezed out (they have no shorter form to fall back to)', () => {
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        startAreaChildren={<span data-testid="start-child">Start</span>}
+        endAreaChildren={<span data-testid="end-child">End</span>}
+      />,
+    );
+
+    const endWrapper = screen.getByTestId('end-child').parentElement;
+
+    expect(endWrapper).not.toBeNull();
+    expect(endWrapper?.className).toMatch(/(?:^|\s)tw:shrink-0(?:\s|$)/);
+    expect(endWrapper?.className).not.toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+  });
+
+  it('tightens its own padding and gaps at the narrowest step, so the space goes to the controls instead of the margins', () => {
+    // At the narrowest step the toolbar spends 48px of a ~300px row on padding and inter-zone gaps
+    // while the start zone runs out of room for controls that have no shorter form left. Halving
+    // both hands that space back. Safe to key off the step because `useShrinkStep` measures the
+    // container's BORDER box, which padding does not change — so tightening cannot feed back into
+    // which step is chosen.
+    render(
+      <ShrinkStepOverride value={SHRINK_STEP.MINIMUM}>
+        <TabToolbar
+          onSelectProjectMenuItem={() => {}}
+          onSelectViewInfoMenuItem={() => {}}
+          startAreaChildren={<span data-testid="start-child">Start</span>}
+        />
+      </ShrinkStepOverride>,
+    );
+
+    const container = screen.getByTestId('start-child').parentElement?.parentElement;
+
+    expect(container).not.toBeNull();
+    expect(container?.className).toMatch(/(?:^|\s)tw:px-2(?:\s|$)/);
+    expect(container?.className).toMatch(/(?:^|\s)tw:gap-1(?:\s|$)/);
+    expect(container?.className).not.toMatch(/(?:^|\s)tw:px-4(?:\s|$)/);
+    expect(container?.className).not.toMatch(/(?:^|\s)tw:gap-2(?:\s|$)/);
+  });
+
+  it('keeps its full padding and gaps at every wider step', () => {
+    // Pinned rather than left to the default. jsdom ships no `ResizeObserver`, so an unpinned
+    // toolbar sits at step 0 because it never measured anything — which would make this pass
+    // whatever the tightening threshold were, and go red the moment a stub is installed. Pinning
+    // the step immediately above the threshold is what makes it a test of the boundary.
+    render(
+      <ShrinkStepOverride value={SHRINK_STEP.TIGHTER}>
+        <TabToolbar
+          onSelectProjectMenuItem={() => {}}
+          onSelectViewInfoMenuItem={() => {}}
+          startAreaChildren={<span data-testid="start-child">Start</span>}
+        />
+      </ShrinkStepOverride>,
+    );
+
+    const container = screen.getByTestId('start-child').parentElement?.parentElement;
+
+    expect(container?.className).toMatch(/(?:^|\s)tw:px-4(?:\s|$)/);
+    expect(container?.className).toMatch(/(?:^|\s)tw:gap-2(?:\s|$)/);
+  });
+
+  it('keeps its flex row when a consumer passes a conflicting display class', () => {
+    // `cn()` resolves Tailwind conflicts last-wins, so the container's layout classes have to be
+    // merged AFTER the consumer's `className`. Without that, the editor web view's own
+    // `scripture-editor-tab-nav` class list — which carried a `tw:block` — silently took
+    // `display: flex` away and stacked the zones vertically inside a fixed-height, clipped row,
+    // with every gap and alignment utility going inert alongside it.
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        className="tw:block"
+        startAreaChildren={<span data-testid="start-child">Start</span>}
+      />,
+    );
+
+    const container = screen.getByTestId('start-child').parentElement?.parentElement;
+
+    expect(container).not.toBeNull();
+    expect(container?.className).toMatch(/(?:^|\s)tw:flex(?:\s|$)/);
+    expect(container?.className).toMatch(/(?:^|\s)tw:flex-row(?:\s|$)/);
+    expect(container?.className).not.toMatch(/(?:^|\s)tw:block(?:\s|$)/);
+  });
+
+  it('publishes its shrink step down to the items inside it, so a laddered label sees the real value', () => {
+    // Guards the wiring end to end: `TabToolbarContainer` prefers the override over its own
+    // measurement, republishes it on `ShrinkStepContext`, and a descendant reads it. Each piece is
+    // exercised elsewhere; only this catches them being connected wrongly.
+    function StepProbe() {
+      return <span data-testid="step">{useShrinkStepValue()}</span>;
+    }
+
+    render(
+      <ShrinkStepOverride value={SHRINK_STEP.MINIMUM}>
+        <TabToolbar
+          onSelectProjectMenuItem={() => {}}
+          onSelectViewInfoMenuItem={() => {}}
+          startAreaChildren={<StepProbe />}
+        />
+      </ShrinkStepOverride>,
+    );
+
+    expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.MINIMUM));
+  });
+
+  it('reports the widest step to its items by default', () => {
+    function StepProbe() {
+      return <span data-testid="step">{useShrinkStepValue()}</span>;
+    }
+
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        startAreaChildren={<StepProbe />}
+      />,
+    );
+
+    expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.WIDE));
+  });
+
+  it('keeps the end zone growing so the wide-width split across the three zones is unchanged (grow and shrink are independent; dropping grow would visibly shift the center zone)', () => {
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        endAreaChildren={<span data-testid="end-child">End</span>}
+      />,
+    );
+
+    const endWrapper = screen.getByTestId('end-child').parentElement;
+
+    expect(endWrapper?.className).toMatch(/(?:^|\s)tw:grow-\[1\](?:\s|$)/);
   });
 });

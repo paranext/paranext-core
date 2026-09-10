@@ -10,10 +10,13 @@ import {
   serialize,
   UnsubscriberAsync,
   getAllObjectFunctionNames,
+  getErrorMessage,
   isString,
   CanHaveOnDidDispose,
   MutexMap,
   startsWith,
+  stringLength,
+  substring,
 } from 'platform-bible-utils';
 import {
   NetworkObject,
@@ -24,6 +27,7 @@ import {
 } from '@shared/models/network-object.model';
 import { logger } from '@shared/services/logger.service';
 import { getEmptyMethodDocs, NetworkObjectDocumentation } from '@shared/models/openrpc.model';
+import { isServer } from '@shared/utils/internal-util';
 
 // #endregion
 
@@ -104,24 +108,14 @@ const initialize = (): Promise<void> => {
     // Subscribe to the dispose event to clean up local and remote network object registrations
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     onDidDisposeNetworkObject((id: string) => {
-      // networkObjectRegistrations is defined later in the module; safe at runtime since initialize runs after module eval.
+      // The receipt for the whole announcement chain, and the only line about it that any process
+      // other than the one owning the connections writes: without it "did this process hear that
+      // the object went away?" cannot be answered from that process's log at all.
+      logger.debug(`Network object '${id}' was disposed; forgetting anything held for it here`);
+      // forgetRegistration is defined later in the module; safe at runtime since initialize runs
+      // after module eval.
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
-      const networkObjectRegistration = networkObjectRegistrations.get(id);
-
-      if (networkObjectRegistration) {
-        // Alert users of this specific network object that it was disposed
-        networkObjectRegistration.onDidDisposeEmitter.emit();
-
-        // Dispose of the network object registration itself
-        networkObjectRegistration.onDidDisposeEmitter.dispose();
-
-        // Dispose of the proxy
-        networkObjectRegistration.revokeProxy();
-
-        // Dispose of the network object registration
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
-        networkObjectRegistrations.delete(id);
-      }
+      forgetRegistration(id);
     });
 
     isInitialized = true;
@@ -145,6 +139,21 @@ const getNetworkObjectRequestType = (id: string, functionName?: string) =>
   serializeRequestType(CATEGORY_NETWORK_OBJECT, `${id}${functionName ? `.${functionName}` : ''}`);
 
 /**
+ * The request type one method of a network object is served under.
+ *
+ * This module decides that format, so anything that has to name a single method of a network object
+ * from the outside — attaching a custom request timeout to it, for instance — derives the name here
+ * rather than spelling it a second time somewhere a change to the format would never reach.
+ *
+ * @param networkObjectId ID the network object was registered under
+ * @param methodName Method on that object to name
+ * @returns The request type that method's calls travel on
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const getNetworkObjectMethodRequestType = (networkObjectId: string, methodName: string) =>
+  getNetworkObjectRequestType(networkObjectId, methodName);
+
+/**
  * Determine if a network object with the specified ID exists remotely (does not check locally)
  *
  * @param id ID of the network object - all processes must use this ID to look up this network
@@ -156,9 +165,13 @@ const getNetworkObjectRequestType = (id: string, functionName?: string) =>
 const getRemoteNetworkObjectFunctions = async (id: string): Promise<boolean | undefined> => {
   try {
     return await networkService.request<[], boolean>(getNetworkObjectRequestType(id));
-  } catch {
+  } catch (e) {
     // No processes are registered to handle this get request, meaning a network object with this ID does not exist
     // TODO: check the message and throw the error if it is not the right message?
+    // Until that is sorted out, "genuinely absent", "the request timed out" and "the handler threw"
+    // all arrive here as the same `undefined`, and callers decide things like whether to re-enter a
+    // hosting race on it. Record which one it actually was so that decision can be traced.
+    logger.debug(`No network object found for '${id}': ${getErrorMessage(e)}`);
     return undefined;
   }
 };
@@ -182,6 +195,12 @@ type NetworkObjectRegistration = {
   onDidDisposeEmitter: PlatformEventEmitter<void>;
   /** Function to make the proxy stop working. Should be run on disposing this network object. */
   revokeProxy: () => void;
+  /**
+   * Unregister the RPC handlers this process registered to serve the object, for a registration
+   * this process owns. Safe to run more than once. Absent on registrations for objects hosted
+   * elsewhere, which have no handlers here.
+   */
+  unregisterRequestHandlers?: () => Promise<boolean>;
 };
 
 /** Map of ID to network object */
@@ -195,6 +214,171 @@ const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
  *   network
  */
 const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
+
+/**
+ * An id this process HOSTS that the given id cannot safely coexist with, if there is one.
+ *
+ * The invariant is the one {@link getNetworkObjectIdsLostWithClient} rests on: no object id may be
+ * another object id followed by a dot and more text. Where that is broken, the disposal of the
+ * longer id is read as a function name of the shorter one and never announced, so its name stays
+ * taken everywhere for the rest of the session and every holder keeps a proxy of a dead object.
+ *
+ * Checked in both directions, because the announcement heuristic does not care which of the pair
+ * registered first.
+ *
+ * Locally hosted registrations only, and that is the whole point rather than an optimization: the
+ * heuristic can only confuse a pair that goes away TOGETHER, which is a pair one process hosts. An
+ * object hosted elsewhere does not leave with this process, so its id is never in the set the
+ * heuristic reasons over — and refusing over one would make the same extension code succeed or fail
+ * depending on whether this process happened to have fetched a proxy of it first.
+ *
+ * Checked at registration and nowhere else, because that is the only moment an id is chosen.
+ */
+const findConflictingHostedId = (id: string): string | undefined =>
+  [...networkObjectRegistrations.entries()]
+    .filter(([, { registrationType }]) => registrationType === NetworkObjectRegistrationType.Local)
+    .map(([knownId]) => knownId)
+    .find((knownId) => startsWith(id, `${knownId}.`) || startsWith(knownId, `${id}.`));
+
+/**
+ * What every request type registered for a network object starts with. Matches the front of what
+ * {@link getNetworkObjectRequestType} produces.
+ */
+const NETWORK_OBJECT_REQUEST_TYPE_PREFIX = `${CATEGORY_NETWORK_OBJECT}:`;
+
+/**
+ * Work out which network objects a departed process was hosting from the method names its departure
+ * removed from the central registry.
+ *
+ * {@link set} registers one bare `object:{id}` existence method per object plus one
+ * `object:{id}.{functionName}` per function it exposes. Every dead object's id is therefore among
+ * those names with the prefix stripped — but so is each of its function names, which read exactly
+ * the same way, since an id may itself contain dots (`platform.themeServiceDataProvider`).
+ * Splitting on the first dot would answer `platform`, so the question is settled the other way
+ * around: a name is another dead object's function exactly when some dot in it splits off an id
+ * that also died, and a name this process holds a registration under is an id whatever else it
+ * looks like.
+ *
+ * Announcing a function name as an id would be harmless — no live object can be called
+ * `{deadId}.{deadFunctionName}`, because the dead process held that name and registration is
+ * exclusive, so nothing else could be registered under it — but it would put a dispose event on the
+ * network for every method a departed process had registered rather than for every object.
+ *
+ * The direction the heuristic errs in is the costly one, so it rests on an invariant worth stating:
+ * **no object id is another object id followed by a dot and more text**. Every id family in the app
+ * ends in a segment glued on with a hyphen or a suffix rather than a dot (`{name}-data`,
+ * `{name}-webViewProvider`, `webViewController{nanoid}`, `{name}-pdpf`), so splitting a longer id
+ * at a dot cannot produce a shorter one that also exists. Where that holds, a candidate whose
+ * dot-prefix also died is a function name and nothing else. Where it is broken — two objects hosted
+ * by the same process named `X` and `X.Y` — the disposal of `X.Y` is never announced unless this
+ * process happens to hold it, so its name stays taken everywhere for the rest of the session.
+ *
+ * {@link findConflictingHostedId} enforces the invariant where it can be enforced: `set` refuses a
+ * pair like that within one process, which is the only place both halves can be lost at once. A
+ * name chosen from outside the platform (an extension-supplied provider name) is caught by the same
+ * check, since it registers through the same call.
+ */
+const getNetworkObjectIdsLostWithClient = (removedMethodNames: string[]): string[] => {
+  const candidateIds = removedMethodNames
+    .filter((methodName) => startsWith(methodName, NETWORK_OBJECT_REQUEST_TYPE_PREFIX))
+    .map((methodName) => substring(methodName, stringLength(NETWORK_OBJECT_REQUEST_TYPE_PREFIX)));
+  const candidateIdsThatDied = new Set(candidateIds);
+  const lostNetworkObjectIds = candidateIds.filter((candidateId) => {
+    if (hasKnown(candidateId)) return true;
+    // `split` from platform-bible-utils compiles a string separator into a regular expression, where
+    // '.' would match every character, so split on the dot directly. Both are code-unit safe here:
+    // no surrogate pair contains a '.'.
+    const idParts = candidateId.split('.');
+    return !idParts.some(
+      (_part, partIndex) =>
+        partIndex > 0 && candidateIdsThatDied.has(idParts.slice(0, partIndex).join('.')),
+    );
+  });
+  // Say what was ruled out, not only what survived: a name read as a function of a dead object when
+  // it was really an object of its own is the one way this can go wrong, and the announcement log
+  // otherwise reads as though every name was accounted for.
+  const namesReadAsFunctionsOfDeadObjects = candidateIds.filter(
+    (candidateId) => !lostNetworkObjectIds.includes(candidateId),
+  );
+  if (namesReadAsFunctionsOfDeadObjects.length > 0)
+    logger.debug(
+      `Read as function names of network objects that died with the same process, not as object ids: ${namesReadAsFunctionsOfDeadObjects.join(', ')}`,
+    );
+  return lostNetworkObjectIds;
+};
+
+/**
+ * Drop this process's registration for a network object and tell everyone holding it that it is
+ * gone: run and tear down its `onDidDispose` event, revoke its proxy so later calls fail loudly
+ * instead of hanging, and free the ID for a future `set`.
+ *
+ * @param id ID of the network object to forget
+ * @returns Whether there was a registration to forget
+ */
+const forgetRegistration = (id: string): boolean => {
+  const networkObjectRegistration = networkObjectRegistrations.get(id);
+  if (!networkObjectRegistration) return false;
+
+  // Free the ID before running anyone else's code, and let nothing anyone else does stop the rest
+  // of this from running. Nothing announces this object a second time, so a consumer that threw
+  // partway through used to leave the ID registered to a live proxy for the rest of the session:
+  // `set` would refuse the name to the process taking the object over, and calls on the proxy would
+  // hang instead of failing loudly. Freeing the ID first is also what lets a consumer claim the name
+  // from inside its own dispose handler.
+  networkObjectRegistrations.delete(id);
+
+  // An object's own `dispose` unregisters its RPC handlers before announcing the disposal, so for
+  // that route this is a no-op. It is not one for the other route: a process told that an object it
+  // still has registered is gone would otherwise keep answering requests for an object every other
+  // process has already forgotten.
+  // Not awaited — the announcement below must go out whatever the RPC layer does — so both ways it
+  // can fail have to be reported here or they are reported nowhere. A `false` resolution means as
+  // much as a throw: this process is still answering requests for an object every other process is
+  // about to forget.
+  const { unregisterRequestHandlers } = networkObjectRegistration;
+  if (unregisterRequestHandlers)
+    (async () => {
+      try {
+        if (!(await unregisterRequestHandlers()))
+          logger.error(
+            `Could not unregister all of the request handlers of forgotten network object '${id}', so this process may keep answering requests for it after everyone else has forgotten it`,
+          );
+      } catch (e) {
+        logger.error(
+          `Failed to unregister the request handlers of forgotten network object '${id}': ${getErrorMessage(e)}`,
+        );
+      }
+    })();
+
+  // Alert users of this specific network object that it was disposed, one at a time: this is the
+  // only time they are told, so one of them throwing must not keep the news from the rest.
+  networkObjectRegistration.onDidDisposeEmitter.emitIsolated(undefined, (error) => {
+    logger.error(
+      `A consumer threw while being told network object '${id}' was disposed; the rest were still told: ${getErrorMessage(error)}`,
+    );
+  });
+
+  // Dispose of the network object registration itself
+  networkObjectRegistration.onDidDisposeEmitter.dispose();
+
+  // Killed after the consumers have been told rather than before, so a SYNCHRONOUS dispose handler
+  // can still read the object it is being told about. That is the whole of the guarantee:
+  // `emitIsolated` does not await async subscribers, so the proxy is revoked as soon as the emit
+  // above returns. A handler that awaits anything before touching the object finds it revoked and
+  // every access on it throws, which is why the contract on `NetworkObject.onDidDispose` tells
+  // handlers to capture what they need before their first await. Reached whatever those consumers
+  // did, since none of their failures escape.
+  //
+  // Waiting for async handlers before revoking is not a safe patch. The id is freed at the top of
+  // this function by design, so any time spent waiting here is time in which another process can
+  // claim the name while this proxy is still live and its handlers are half torn down — calls
+  // through it would hang instead of failing loudly, which is the exact failure the
+  // free-the-name-first ordering exists to prevent. A bounded wait that also closes that hole is
+  // real work, not a one-line change.
+  networkObjectRegistration.revokeProxy();
+
+  return true;
+};
 
 /**
  * Emitter for when a network object is created. Includes the list of functions exposed by the
@@ -224,6 +408,46 @@ export const onDidDisposeNetworkObject = networkService.getNetworkEvent(
   'object:onDidDisposeNetworkObject',
 );
 
+// A process that goes away abruptly — most commonly a window the user closed — never disposes the
+// network objects it was hosting, so nothing announces their disposal on its behalf. The RPC layer
+// reports which method names its departure removed from the central registry and interprets none of
+// them; this service is what knows which of those names are network objects. The dispose event that
+// follows is a network event, so every process holding one of the dead objects forgets it through
+// the dispose handling it already has.
+//
+// Subscribed at module scope rather than from `initialize`, which nothing runs until the first
+// `get`/`set` in the process: a client that connected and left before then would otherwise be
+// announced to nobody, with not even a line saying so, since the code that would report it is the
+// handler that is not subscribed yet.
+networkService.onDidDisconnectClient(({ removedMethodNames }) => {
+  // Only the process that owns the connections can see one being lost, and only it may raise these
+  // disposals: the event it raises reaches every process, so a second announcer would only repeat
+  // it.
+  if (!isServer()) return;
+  const lostNetworkObjectIds = getNetworkObjectIdsLostWithClient(removedMethodNames);
+  if (lostNetworkObjectIds.length === 0) return;
+  const disposeEmitterForLostObjects = onDidDisposeNetworkObjectEmitter;
+  if (!disposeEmitterForLostObjects) {
+    logger.error(
+      `network-object.service not initialized — cannot announce the network objects a departed process took with it: ${lostNetworkObjectIds.join(', ')}`,
+    );
+    return;
+  }
+  logger.info(
+    `Announcing the network objects a departed process took with it: ${lostNetworkObjectIds.join(', ')}`,
+  );
+  lostNetworkObjectIds.forEach((id) => {
+    // Each id is the only notice anyone gets that that object is gone, so a subscriber that throws
+    // over one of them must not cost the remaining objects their announcement — nor the rest of the
+    // subscribers this one.
+    disposeEmitterForLostObjects.emitIsolated(id, (error) => {
+      logger.error(
+        `A subscriber threw while being told network object '${id}' died with the process hosting it; the rest were still told: ${getErrorMessage(error)}`,
+      );
+    });
+  });
+});
+
 // #endregion
 
 // #region Helpers for get and set
@@ -251,8 +475,9 @@ const createRemoteProxy = (
       if (key === 'then' || key in target) return target[key as keyof typeof target];
       // If the prop requested is a symbol, that doesn't work over the network. Reject
       if (!isString(key)) return undefined;
-      // Don't create remote proxies for events
-      if (startsWith(key, 'on')) return undefined;
+      // Don't create remote proxies for events. Native `startsWith` for the same reason as the
+      // data provider proxy traps — ASCII both sides, fresh key per access, nothing to reuse.
+      if (key.startsWith('on')) return undefined;
 
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
@@ -298,7 +523,7 @@ const createLocalProxy = (
       if (key === 'constructor' || key === 'dispose') return undefined;
       // Don't proxy events except "onDidDispose" since that's the only way for callers to
       // register functions to run when the object is going away
-      if (isString(key) && startsWith(key, 'on') && key !== 'onDidDispose') return undefined;
+      if (isString(key) && key.startsWith('on') && key !== 'onDidDispose') return undefined;
 
       const property = Reflect.get(target, key, objectBeingSet);
 
@@ -324,7 +549,7 @@ function createNetworkObjectDetails(
   objectFunctionNames.delete('dispose');
   objectFunctionNames.forEach((functionName) => {
     // If we come up with some better way to identify events, we can remove this and related checks
-    if (startsWith(functionName, 'on')) objectFunctionNames.delete(functionName);
+    if (functionName.startsWith('on')) objectFunctionNames.delete(functionName);
   });
   return {
     id,
@@ -501,6 +726,12 @@ const set = async <T extends NetworkableObject>(
     // Check to see if we already know there is a network object with this ID.
     if (hasKnown(id)) throw new Error(`Network object with id ${id} is already registered`);
 
+    const conflictingId = findConflictingHostedId(id);
+    if (conflictingId)
+      throw new Error(
+        `Network object with id ${id} cannot be registered alongside ${conflictingId}: one id is the other followed by a dot, and this process losing both at once would leave the longer one's disposal unannounced. Join the segments with a hyphen instead of a dot.`,
+      );
+
     // Check if there is a network object with this ID remotely by trying to register it
     const unsubPromises = [
       networkService.registerRequestHandler(
@@ -599,6 +830,55 @@ const set = async <T extends NetworkableObject>(
     }
 
     // At this point, the network object has been registered
+
+    /**
+     * The run that unregistered the RPC handlers registered above, if one has succeeded or is still
+     * in flight. Held as the run itself rather than a "we did that" flag so that what later callers
+     * get back is the real outcome of it: a flag set on entry answers `true` to everyone the moment
+     * the first caller starts, whether or not the unregistering ever worked.
+     */
+    let unregisterRequestHandlersRun: Promise<boolean> | undefined;
+    /**
+     * Stop answering network requests for this object. Both routes out of a registration run this —
+     * the object's own `dispose` and {@link forgetRegistration} — so it has to be safe to run twice;
+     * the second run is a no-op rather than a batch of unregisters for names that are already
+     * gone.
+     *
+     * Callers that overlap share the one run instead of each starting their own. Running it twice
+     * concurrently would be safe but would lie to the loser: `registerRequestHandler`'s
+     * unsubscriber resolves `false` (having warned) when there is nothing left to unregister, so
+     * the second run would report a failure that is really just the first run having already done
+     * the work.
+     */
+    const unregisterRequestHandlers = async (): Promise<boolean> => {
+      if (!unregisterRequestHandlersRun) {
+        const run = (async () => {
+          const unsubscribers = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+          return unsubscribers();
+        })();
+        unregisterRequestHandlersRun = run;
+        // Remember only a run that succeeded. A run that resolved `false` or threw did not stop this
+        // process answering requests for the object, so a caller that tries again — which is exactly
+        // what a caller does after `dispose` returns `false` — has to get a fresh attempt rather than
+        // this one's failure replayed as a success. Nothing re-runs on its own; this only keeps a
+        // failure from being remembered as one. Guarded on identity so a late settle cannot discard a
+        // newer run. This watcher is attached before anyone can await the run, so the memo is always
+        // cleared before a caller learns it failed and comes back.
+        (async () => {
+          let didUnregister = false;
+          try {
+            didUnregister = await run;
+          } catch {
+            // The caller gets the error from the run itself; here it only means "did not succeed"
+            didUnregister = false;
+          }
+          if (!didUnregister && unregisterRequestHandlersRun === run)
+            unregisterRequestHandlersRun = undefined;
+        })();
+      }
+      return unregisterRequestHandlersRun;
+    };
+
     // Create a proxy object that blocks functions like "dispose" for others in the same process
     const localProxy = createLocalProxy(objectToShare);
 
@@ -609,8 +889,7 @@ const set = async <T extends NetworkableObject>(
     // Override dispose on the object passed in to clean up the network object
     overrideDispose(objectToShare, async (): Promise<boolean> => {
       // Unsubscribe all requests for this network object
-      const unsubscribers = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
-      if (!(await unsubscribers())) {
+      if (!(await unregisterRequestHandlers())) {
         logger.error(`Failed to unsubscribe all requests for ${id}`);
         return false;
       }
@@ -633,6 +912,7 @@ const set = async <T extends NetworkableObject>(
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       networkObject: localProxy.proxy as NetworkObject<T>,
       revokeProxy: localProxy.revoke,
+      unregisterRequestHandlers,
     });
 
     // Notify that the network object was successfully registered
@@ -641,7 +921,15 @@ const set = async <T extends NetworkableObject>(
       throw new Error(
         'network-object.service not initialized — call initialize() before emitting onDidCreateNetworkObject',
       );
-    onDidCreateNetworkObjectEmitter.emit(netObjDetails);
+    // The one and only time anyone is told this object exists: nothing re-announces an object that
+    // is already registered, and network events have no replay. A subscriber that throws must not
+    // cost the subscribers after it the news, nor cost the caller a registration that has already
+    // fully succeeded by this point.
+    onDidCreateNetworkObjectEmitter.emitIsolated(netObjDetails, (error) => {
+      logger.error(
+        `A subscriber threw while being told network object '${id}' was registered; the rest were still told: ${getErrorMessage(error)}`,
+      );
+    });
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
     // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.

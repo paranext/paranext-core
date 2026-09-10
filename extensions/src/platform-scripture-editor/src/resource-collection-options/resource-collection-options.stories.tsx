@@ -82,11 +82,15 @@ function Harness({
   initialBottom,
   isChapterEnabled = false,
   installingResourceNames,
+  disabled,
+  disabledMessage,
 }: {
   initialTop: ViewOptionsTextEntry[];
   initialBottom: ViewOptionsTextEntry[];
   isChapterEnabled?: boolean;
   installingResourceNames?: string[];
+  disabled?: boolean;
+  disabledMessage?: string;
 }) {
   const [viewMode, setViewMode] = useState<ResourceCollectionViewMode>('verse');
   const [top, setTop] = useState(initialTop);
@@ -108,13 +112,15 @@ function Harness({
         top={top}
         bottom={bottom}
         installingResourceNames={installingResourceNames}
+        disabled={disabled}
+        disabledMessage={disabledMessage}
         onCheckedChange={setChecked}
         onRemoveFromList={(id) => setBottom((rows) => rows.filter((r) => r.reference.id !== id))}
         onGetResources={() => {}}
         localizedStrings={localizedStrings}
       />
     ),
-    [viewMode, top, bottom, isChapterEnabled, installingResourceNames],
+    [viewMode, top, bottom, isChapterEnabled, installingResourceNames, disabled, disabledMessage],
   );
 }
 
@@ -140,6 +146,21 @@ export const Installing: Story = {
       initialTop={ADMIN_ROWS}
       initialBottom={USER_ROWS}
       installingResourceNames={['Berean Standard Bible']}
+    />
+  ),
+};
+
+/**
+ * No project bound yet: the checkboxes and the remove (✕) controls are disabled and the list
+ * explains itself, while **Get Resources stays enabled**.
+ */
+export const Disabled: Story = {
+  render: () => (
+    <Harness
+      initialTop={[]}
+      initialBottom={[]}
+      disabled
+      disabledMessage="Open a project to choose the texts shown here."
     />
   ),
 };

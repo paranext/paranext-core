@@ -146,3 +146,81 @@ describe('registerProjectDataProviderEngineFactory — platform-canonical attrib
     });
   });
 });
+
+describe('ProjectDataProviderFactory — disposal while a PDP is being created', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // The mock returns a minimal disposable standing in for the full network object.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(networkObjectService.set).mockResolvedValue({ dispose: vi.fn() } as never);
+  });
+
+  /** Register a factory whose engine creation this test can hold open, and hand back that factory */
+  async function registerFactoryWithHeldEngineCreation() {
+    let releaseEngineCreation = () => {};
+    const engineCreationReleased = new Promise<void>((resolve) => {
+      releaseEngineCreation = resolve;
+    });
+    let signalEngineCreationStarted = () => {};
+    // Lets a test wait until the creation is genuinely in flight — behind the per-project lock and
+    // past the disposed check — before disposing, which is the race being reproduced
+    const engineCreationStarted = new Promise<void>((resolve) => {
+      signalEngineCreationStarted = resolve;
+    });
+    const engineFactory: IProjectDataProviderEngineFactory<['platform.base']> = {
+      getAvailableProjects: async () => [],
+      createProjectDataProviderEngine: async () => {
+        signalEngineCreationStarted();
+        await engineCreationReleased;
+        // The test engine isn't a full typed engine; cast to satisfy the generic engine return type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return makeBaseEngine() as never;
+      },
+    };
+
+    await registerProjectDataProviderEngineFactory('pdpf-id', ['platform.base'], engineFactory);
+
+    // set() types its object argument as a generic NetworkableObject, so cast to reach the methods.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const factory = vi.mocked(networkObjectService.set).mock.calls[0][1] as unknown as {
+      getProjectDataProviderId(projectId: string): Promise<string>;
+      dispose(): Promise<boolean>;
+    };
+    return { factory, releaseEngineCreation, engineCreationStarted };
+  }
+
+  it('takes down a PDP registered after disposal instead of handing back its id', async () => {
+    // `dispose` cannot take the per-project locks, so a creation already in flight finishes after
+    // it — onto a cleanup list that has already been drained, which tears the new PDP down on
+    // arrival. Caching that id would hand this and every later caller a provider that is dead.
+    const pdpDispose = vi.fn(async () => true);
+    // The mock returns a minimal disposable standing in for the full data provider.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(registerEngineByType).mockResolvedValue({ dispose: pdpDispose } as never);
+    const { factory, releaseEngineCreation, engineCreationStarted } =
+      await registerFactoryWithHeldEngineCreation();
+
+    const pendingProjectDataProviderId = factory.getProjectDataProviderId('project-id');
+    await engineCreationStarted;
+    await factory.dispose();
+    releaseEngineCreation();
+
+    await expect(pendingProjectDataProviderId).rejects.toThrow('disposed');
+    expect(pdpDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to create a PDP once it has been disposed', async () => {
+    // The mock returns a minimal disposable standing in for the full data provider.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(registerEngineByType).mockResolvedValue({
+      dispose: vi.fn(async () => true),
+    } as never);
+    const { factory, releaseEngineCreation } = await registerFactoryWithHeldEngineCreation();
+    releaseEngineCreation();
+
+    await factory.dispose();
+
+    await expect(factory.getProjectDataProviderId('project-id')).rejects.toThrow('disposed');
+    expect(registerEngineByType).not.toHaveBeenCalled();
+  });
+});

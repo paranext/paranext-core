@@ -1,11 +1,11 @@
 {
   "name": "legacy-comment-manager",
   "private": true,
-  "version": "0.6.0-alpha.0",
+  "version": "0.6.0-alpha.1",
   "main": "src/main.js",
   "types": "src/types/legacy-comment-manager.d.ts",
   "author": "Paranext",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
@@ -36,13 +36,13 @@
     "react-dom": ">=19.0.0"
   },
   "dependencies": {
-    "@sillsdev/scripture": "^2.0.5",
+    "@sillsdev/scripture": "^2.1.0",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
     "@dreamsicle.io/stylelint-config-tailwindcss": "^1.2.2",
-    "@fontsource-variable/ibm-plex-sans": "^5.2.8",
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
+    "@fontsource-variable/ibm-plex-sans": "^5.2.8",
     "@stylistic/eslint-plugin-ts": "^2.13.0",
     "@swc/core": "1.13.3",
     "@tailwindcss/postcss": "^4.0.0",

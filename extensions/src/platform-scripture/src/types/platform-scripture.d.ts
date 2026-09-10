@@ -963,15 +963,25 @@ declare module 'platform-scripture' {
 
   // #region Scripture Edit Permissions Types
 
-  /** Provides permission checks for editing Scripture content (intentionally empty) */
-  export type ScriptureEditPermissionsProjectInterfaceDataTypes = {};
+  /** Provides permission checks for editing Scripture content */
+  export type ScriptureEditPermissionsProjectInterfaceDataTypes = {
+    /**
+     * Read-only. Whether the current user can edit Scripture content on this project (i.e., has a
+     * role other than Observer or None). Refreshes automatically after every Send/Receive sync.
+     * Subscribe to react to changes; this data type cannot be set.
+     */
+    CanUserEditScripture: DataProviderDataType<undefined, boolean, never>;
+  };
 
   /** Provides permission checks for editing Scripture content on this project */
   export type IScriptureEditPermissionsProjectDataProvider =
     IProjectDataProvider<ScriptureEditPermissionsProjectInterfaceDataTypes> & {
       /**
-       * Determines whether the current user can edit Scripture content on this project (i.e., has a
-       * role other than Observer or None).
+       * One-shot, non-reactive check for whether the current user can edit Scripture content on
+       * this project. Prefer subscribing to the `CanUserEditScripture` data type
+       * (`getCanUserEditScripture`/`subscribeCanUserEditScripture`) for anything that should react
+       * to a role change landing via sync; this method is for one-off checks (e.g. picking a
+       * default project) that don't need a live subscription.
        *
        * @returns `true` if the user can edit Scripture content, `false` if they are Observer-only
        *   or if permissions cannot be determined.
@@ -980,6 +990,40 @@ declare module 'platform-scripture' {
     };
 
   // #endregion Scripture Edit Permissions Types
+
+  // #region Find History Types
+
+  /**
+   * Data types for the find history data provider. The selector for each data type is the project
+   * id the history belongs to, or `undefined` for history not associated with a project.
+   */
+  export type FindHistoryDataTypes = {
+    /** The user's recent find search history (most recent first) */
+    History: DataProviderDataType<string | undefined, string[], string[]>;
+    /** The find search term most recently used, restored when the find WebView reopens */
+    LastSearchTerm: DataProviderDataType<string | undefined, string, string>;
+  };
+
+  /**
+   * Provides the user's find search history and last search term, backed by user data storage.
+   * Subscribing through this data provider keeps every consumer's copy of the history in sync, so
+   * multiple find WebViews do not clobber each other's changes.
+   */
+  export type IFindHistoryDataProvider = IDataProvider<FindHistoryDataTypes> & {
+    /**
+     * Adds one item to the top of the find search history for a project. If the item is already in
+     * the history, it moves to the top instead of being duplicated. The history is capped at a
+     * maximum number of items, dropping the oldest. Prefer this over `setHistory` so the data
+     * provider manages ordering and deduplication consistently for all consumers.
+     *
+     * @param item The search term to add. Empty strings are ignored.
+     * @param projectId The project whose history to add to, or `undefined` for history not
+     *   associated with a project
+     */
+    addHistoryItem(item: string, projectId?: string): Promise<void>;
+  };
+
+  // #endregion Find History Types
 
   // #region Marker Types
 
@@ -1021,6 +1065,93 @@ declare module 'platform-scripture' {
     };
 
   // #endregion Marker Types
+
+  // #region StyleInfo Types
+
+  /**
+   * A single marker's stylesheet entry (merged usfm.sty + custom.sty). Units:
+   * fontSize/spaceBefore/spaceAfter in points; firstLineIndent/leftMargin/ rightMargin in inches;
+   * color "#RRGGBB" (omitted when black). Matches the scripture-editors platform-editor
+   * `MarkerStyleInfo` shape structurally.
+   */
+  export type MarkerStyleInfo = {
+    marker: string;
+    styleType: 'paragraph' | 'character' | 'note' | 'milestone';
+    endMarker?: string;
+    occursUnder?: string[];
+    rank?: number;
+    textType?: string;
+    textProperties?: string[];
+    notRepeatable?: boolean;
+    description?: string;
+    fontName?: string;
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    smallCaps?: boolean;
+    subscript?: boolean;
+    superscript?: boolean;
+    color?: string;
+    /**
+     * Mirrors the editor package's `MarkerStyleInfo` union. Note that `'left'` never arrives from
+     * this provider: the C# side omits the property for the default/left case rather than emitting
+     * it, so a consumer branching on `'left'` writes a dead branch.
+     */
+    justification?: 'left' | 'center' | 'right' | 'both';
+    firstLineIndent?: number;
+    leftMargin?: number;
+    rightMargin?: number;
+    spaceBefore?: number;
+    spaceAfter?: number;
+    lineSpacing?: number;
+  };
+
+  /** A project's merged stylesheet plus its default font settings. */
+  export type StyleInfo = {
+    defaultFont?: string;
+    defaultFontSize?: number;
+    markers: { [marker: string]: MarkerStyleInfo };
+  };
+
+  /** Provides the project's merged stylesheet as StyleInfo */
+  export type StyleInfoProjectInterfaceDataTypes = {
+    /** The merged stylesheet for the given book number */
+    StyleInfo: DataProviderDataType<number, StyleInfo | undefined, never>;
+  };
+
+  /** Provides the project's merged stylesheet (usfm.sty + custom.sty) */
+  export type IStyleInfoProjectDataProvider =
+    IProjectDataProvider<StyleInfoProjectInterfaceDataTypes> & {
+      /** Gets the merged stylesheet (usfm.sty + custom.sty) for the book's stylesheet */
+      getStyleInfo(bookNum: number): Promise<StyleInfo | undefined>;
+      /**
+       * This data cannot be changed this way. The backend does not implement `setStyleInfo` at all
+       * (the C# project data provider registers only `getStyleInfo`), so every call rejects at
+       * runtime.
+       *
+       * Note: the merged stylesheet is derived from the project's `usfm.sty` + `custom.sty`, so
+       * change those files rather than writing through this setter.
+       */
+      setStyleInfo(
+        styleInfo: StyleInfo,
+      ): Promise<DataProviderUpdateInstructions<StyleInfoProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the style info changes
+       *
+       * @param bookNum Tells the provider what changes to listen for
+       * @param callback Function to run with the updated style info for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeStyleInfo(
+        bookNum: number,
+        callback: (styleInfo: StyleInfo | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion StyleInfo Types
 
   // #region Versification Types
 
@@ -1175,6 +1306,403 @@ declare module 'platform-scripture' {
     };
 
   // #endregion Versification Types
+
+  // #region Pt9 Interlinear Types
+
+  /**
+   * One lexeme reference inside a PT9 interlinear cluster: the lexicon lexeme it selects and, when
+   * the user chose a specific sense, the id of that sense.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearLexemeRef = {
+    /**
+     * Lexeme id, e.g. `Word:greetings` or `Stem:run` (`Type:Form` with an optional homograph).
+     * Absent only when the cluster element is corrupt (no id attribute); consumers should count and
+     * drop such references.
+     */
+    lexemeId?: string;
+    /**
+     * Id of the selected sense within the lexeme's lexicon entry, when one was chosen. Sense ids
+     * are 8 characters of Base64, so `/` and `+` are legal. Stored in PT9's XML as `GlossId` for
+     * historical reasons; it references a sense, not a gloss.
+     */
+    senseId?: string;
+  };
+
+  /**
+   * One glossed cluster in a verse. `index` and `length` locate the cluster in the verse text as
+   * PT9 recorded it; they index PT9's own string, not any text this provider returns.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearCluster = {
+    index: number;
+    length: number;
+    /** True when the user excluded this occurrence from the interlinear. */
+    excluded: boolean;
+    /** The cluster's lexemes in order; more than one means a morphological word parse. */
+    lexemes: Pt9InterlinearLexemeRef[];
+  };
+
+  /**
+   * One punctuation adjustment PT9 recorded for a verse's back translation output.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearPunctuation = {
+    index: number;
+    length: number;
+    beforeText?: string;
+    afterText?: string;
+  };
+
+  /**
+   * One verse's interlinear data. Only verses whose key parses as a verse reference are served:
+   * PT9's own read drops the rest (e.g. Send/Receive conflict-marker keys), and so does this.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearVerse = {
+    /** Verse reference as PT9 stored it, e.g. `JAS 1:2`. */
+    reference: string;
+    /** PT9's hash of the verse text at approval time; absent when the verse was never approved. */
+    approvedHash?: string;
+    clusters: Pt9InterlinearCluster[];
+    punctuations: Pt9InterlinearPunctuation[];
+  };
+
+  /**
+   * One book's interlinear data for one gloss language. `glossLanguage` and `bookId` come from the
+   * file's own attributes, not from its file name.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearBook = {
+    glossLanguage?: string;
+    bookId?: string;
+    verses: Pt9InterlinearVerse[];
+    /** Project-relative path this book was parsed from - its key in the manifest. */
+    filePath: string;
+    /**
+     * True when `filePath` is the path PT9's own reader loads this language and book from. A false
+     * value marks Send/Receive merge residue or a hand-placed copy, so the same language and book
+     * can appear more than once; the canonical entry is the one PT9 itself would read.
+     */
+    isCanonicalPath: boolean;
+  };
+
+  /**
+   * One gloss of a lexicon sense in one target language.
+   *
+   * @experimental
+   */
+  export type Pt9LexiconGloss = {
+    language?: string;
+    text: string;
+  };
+
+  /**
+   * One sense of a lexicon entry, carrying the id that interlinear clusters reference.
+   *
+   * @experimental
+   */
+  export type Pt9LexiconSense = {
+    id?: string;
+    glosses: Pt9LexiconGloss[];
+  };
+
+  /**
+   * One lexicon entry: the lexeme's morphological type (one of `Phrase`, `Word`, `Lemma`, `Stem`,
+   * `Prefix`, `Suffix`, or `Infix`; an unknown name fails the file as corrupt), its form, its
+   * homograph number, and its senses.
+   *
+   * @experimental
+   */
+  export type Pt9LexiconEntry = {
+    /**
+     * PT9's composed lexeme id - `Type:Form`, with `:Homograph` appended only when it is not 1 -
+     * the exact string that cluster `lexemeId`s and word-parse analyses reference, so joins need
+     * not re-derive the grammar.
+     */
+    id: string;
+    type: string;
+    form: string;
+    homograph: number;
+    senses: Pt9LexiconSense[];
+  };
+
+  /**
+   * The known morphological breakdowns of one surface word. Each analysis is an ordered list of
+   * lexeme ids.
+   *
+   * @experimental
+   */
+  export type Pt9WordParse = {
+    word: string;
+    analyses: string[][];
+  };
+
+  /**
+   * The project's PT9 lexicon: gloss entries by lexeme plus the legacy word analyses that older
+   * Paratext versions stored inside Lexicon.xml. Served as PT9 reads it: forms corrected to the
+   * project's normalization, `language` the project's language id, empty legacy analyses dropped.
+   *
+   * @experimental
+   */
+  export type Pt9Lexicon = {
+    language?: string;
+    entries: Pt9LexiconEntry[];
+    legacyAnalyses: Pt9WordParse[];
+  };
+
+  /**
+   * One configured interlinearization. Setups come from the project's setups file when present,
+   * merged with the setups Paratext 9 reconstructs from legacy project settings; the merge is
+   * computed on read and never writes to the project, and it runs only when PT9 itself would run it
+   * for the local user (a non-observer not yet stamped as converted), so a setup deleted after its
+   * one-time conversion is not resurrected. Settings-derived setups resolve model names against the
+   * locally installed projects, as PT9 itself does, so a setup whose model text is not installed is
+   * absent.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearSetup = {
+    /** Interlinearization type name as PT9 stores it, e.g. `Glossing`, `BackTranslation`. */
+    type: string;
+    languageId?: string;
+    /** Display name the user gave the language, for setups created without a model text. */
+    languageName?: string;
+    /** Font used for the gloss language, for setups created without a model text. */
+    fontName?: string;
+    /** Font size for the gloss language; 0 when the setup never set one. */
+    fontSize: number;
+    /** Text direction for the gloss language. */
+    rightToLeft: boolean;
+    /** Name of the model text this interlinearization reads from; absent when it has none. */
+    modelScrTextName?: string;
+    /**
+     * Hex id of the model text; served whenever PT9 stored one, including for model-less setups,
+     * which mint an id as their settings key.
+     */
+    modelScrTextId?: string;
+    /** True when the model text is a resource project. */
+    modelIsResource: boolean;
+    /** True when the project being interlinearized and its model text are related languages. */
+    relatedLanguages: boolean;
+    /** True when approved verses export to the export project as they are approved. */
+    exportOnApprove: boolean;
+    /** Name of the project approved verses export to; absent when the setup exports nowhere. */
+    exportScrTextName?: string;
+    /** Hex id of the project approved verses export to. */
+    exportScrTextId?: string;
+  };
+
+  /**
+   * A Paratext project's complete PT9 interlinear data, parsed from the project's files.
+   * `hasAssociatedLexicalProject` is true when the project's lexicon lives in an associated
+   * external lexical project (e.g. FieldWorks) rather than in Lexicon.xml, so an absent `lexicon`
+   * does not mean the project has no gloss data; such a project's lexical data is resolved through
+   * the platform's Lexicon extension rather than through this interface.
+   *
+   * Files are read with Paratext 9's own semantics, never more strictly: a duplicate verse
+   * reference, lexicon key, or wordform keeps the last occurrence; a cluster missing its Range
+   * element gets range (0, 0); and a malformed boolean or unknown enum name fails the whole file
+   * the same way it would fail in Paratext 9. The consequence deliberately differs, though: PT9's
+   * per-file loads quietly serve an empty file in a corrupt one's place, costing one book silently,
+   * while here one bad file fails the whole request, so corruption is visible and no partial
+   * payload ever poses as complete data.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearProjectData = {
+    setups: Pt9InterlinearSetup[];
+    books: Pt9InterlinearBook[];
+    lexicon?: Pt9Lexicon;
+    wordAnalyses: Pt9WordParse[];
+    hasAssociatedLexicalProject: boolean;
+  };
+
+  /**
+   * Map of project-relative file path to the lowercase SHA-256 hex of that file's current bytes: an
+   * opaque change-detection token per file, covering the interlinear book files, the lexicon, and
+   * the stored word analyses. Only interlinear file content is change-detected: the
+   * {@link Pt9InterlinearProjectData} payload's `setups` (from the setups file or rebuilt from
+   * project settings) and `hasAssociatedLexicalProject` derive partly from project settings and can
+   * change the payload without any hash changing. Path separators are forward slashes; a backslash
+   * inside a key is part of a file name, never a separator. Empty when the project has no
+   * interlinear data.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearProjectManifest = { [filePath: string]: string };
+
+  /**
+   * Data types the PT9 interlinear projectInterface exposes via its base
+   * {@link IProjectDataProvider}. Both are read-only - the Paratext project's interlinear files on
+   * disk are the authoritative source; `set*` is not supported and throws if called. The interface
+   * does not track interlinear file changes, though project-wide update events reach these data
+   * types like any others; poll `getPt9InterlinearManifest` to detect changes.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearProjectInterfaceDataTypes = {
+    /** Per-file SHA-256 hex, for change detection without transferring content. */
+    Pt9InterlinearManifest: DataProviderDataType<undefined, Pt9InterlinearProjectManifest, never>;
+    /** The parsed interlinear data. */
+    Pt9InterlinearData: DataProviderDataType<undefined, Pt9InterlinearProjectData, never>;
+  };
+
+  /**
+   * Read-only access to a Paratext project's persisted PT9 interlinear data, parsed from the
+   * project's interlinear files, for importing legacy interlinear data into an interlinearizer.
+   * Advertised on every unpublished local project - published (resource) projects are distributed
+   * archives that do not carry interlinear authoring data - so a consumer reads "interface
+   * unsupported" as "no PT9 interlinear import available for this project". Advertisement does not
+   * follow `platform.isEditable`: an unpublished project whose Editable setting is off still
+   * advertises this interface.
+   *
+   * Both data types are read-only: `set*` is unsupported and throws if called; the authoritative
+   * source is the files on disk, not this projectInterface. The interface never tracks interlinear
+   * file changes - editing those files fires no update. Subscribers still receive project-wide
+   * update events, which today only book management operations emit - nothing emits one on
+   * Send/Receive, the operation that actually changes interlinear files - and which say nothing
+   * about whether interlinear data changed. Poll `getPt9InterlinearManifest` and compare hashes to
+   * detect changes.
+   *
+   * Paratext saves interlinear files by two renames, so a concurrent save can make any read
+   * transiently fail while a file is mid-replacement; retrying the call is safe.
+   *
+   * Reads are not coordinated with Send/Receive: a sync that lands mid-read can produce a manifest
+   * or payload mixing pre- and post-sync files, each individually valid. A consumer that persists
+   * converted data together with its manifest and re-polls the manifest afterward will observe the
+   * mismatch and can re-read.
+   *
+   * Acquire via `papi.projectDataProviders.get('platformScripture.Pt9Interlinear', projectId)`
+   * (backend) or the `useProjectDataProvider('platformScripture.Pt9Interlinear', projectId)` React
+   * hook (frontend).
+   *
+   * @example Probe cheaply and fetch the payload only when something changed:
+   *
+   * ```typescript
+   * const pdp = await papi.projectDataProviders.get(
+   *   'platformScripture.Pt9Interlinear',
+   *   projectId,
+   * );
+   * const manifest = await pdp.getPt9InterlinearManifest();
+   * if (!hashesMatch(manifest, storedHashes)) {
+   *   const data = await pdp.getPt9InterlinearData();
+   *   // Convert and persist `data` together with `manifest` for the next comparison.
+   * }
+   * ```
+   *
+   * @experimental
+   */
+  export type IPt9InterlinearProjectDataProvider =
+    IProjectDataProvider<Pt9InterlinearProjectInterfaceDataTypes> & {
+      /**
+       * The change-detection probe: reads and hashes every interlinear file, so it is cheap
+       * relative to transferring and parsing the content, not free. Throws if the project directory
+       * or a file found by the scan cannot be read, so an unreadable project never poses as one
+       * with no data and a caller never receives a partial manifest. Shares the data read's size
+       * cap: files over it throw the same too-large error instead of being hashed, so a probe never
+       * reads more than a servable corpus.
+       *
+       * @returns The lowercase SHA-256 hex of each covered PT9 interlinear file's current bytes
+       *   (see {@link Pt9InterlinearProjectManifest} for what is covered), keyed by project-relative
+       *   path; empty when the project has no interlinear data.
+       * @experimental
+       */
+      getPt9InterlinearManifest(): Promise<Pt9InterlinearProjectManifest>;
+      /**
+       * Read-only - throws if called. The authoritative source is the Paratext project's
+       * interlinear files on disk.
+       *
+       * @param newValue Typed `never`: no value is accepted.
+       * @returns Never resolves; the returned promise always rejects.
+       * @experimental
+       */
+      setPt9InterlinearManifest(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to the manifest. Emits the current value on subscription (per
+       * `retrieveDataImmediately`, default true) and again on any project-wide update event (today
+       * emitted only by book management operations - Send/Receive, the operation that actually
+       * changes interlinear files, emits none); the interface does not track interlinear file
+       * changes themselves, so an update says nothing about whether interlinear data changed. The
+       * manifest is small, so the default `deeply-equal` subscriber mode is cheap and suppresses
+       * the no-change callbacks those events would otherwise produce, though each update still
+       * costs a read and hash of every interlinear file.
+       *
+       * @param selector Always `undefined`: the manifest is argument-less, whole-project data.
+       * @param callback Receives the manifest, or a {@link PlatformError} when retrieving it after
+       *   an update fails.
+       * @param options Subscription behavior; the defaults fit this data type.
+       * @returns Unsubscriber that ends the subscription.
+       * @experimental
+       */
+      subscribePt9InterlinearManifest(
+        selector: undefined,
+        callback: (manifest: Pt9InterlinearProjectManifest | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+
+      /**
+       * Returns the project's PT9 interlinear data parsed from its interlinear files. Throws if the
+       * project directory or a file found by the scan cannot be read, or a file cannot be parsed,
+       * so an unreadable project never poses as one with no data and a caller never receives a
+       * partial payload. Also throws, with an error message starting `PT9 interlinear data is too
+       * large`, when the project's interlinear files exceed the size cap - a response over the
+       * WebSocket's message limit would tear down the whole connection, so the request fails
+       * instead. The cap bounds the files' source bytes (realistic data serializes smaller than its
+       * indented on-disk XML; the serialized size itself cannot be confirmed at that layer). The
+       * machine-readable contract for recognizing the condition is the `RESOURCE_EXHAUSTED`
+       * platform error code on the thrown PlatformError; the message prefix remains for consumers
+       * that see only the message, since error types do not cross the RPC boundary.
+       *
+       * @returns Setups, per-book cluster data, the lexicon, and stored word analyses; empty lists
+       *   when the project has no interlinear data.
+       * @experimental
+       */
+      getPt9InterlinearData(): Promise<Pt9InterlinearProjectData>;
+      /**
+       * Read-only - throws if called. See {@link setPt9InterlinearManifest}.
+       *
+       * @param newValue Typed `never`: no value is accepted.
+       * @returns Never resolves; the returned promise always rejects.
+       * @experimental
+       */
+      setPt9InterlinearData(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to the parsed data. Emits the current value on subscription (per
+       * `retrieveDataImmediately`, default true) and again on any project-wide update event (today
+       * emitted only by book management operations - Send/Receive, the operation that actually
+       * changes interlinear files, emits none); the interface does not track interlinear file
+       * changes themselves, so an update says nothing about whether interlinear data changed. Every
+       * update re-fetches the whole payload whatever the subscriber options, and one previous
+       * payload stays retained per subscriber for the subscription's lifetime; `whichUpdates: '*'`
+       * skips only the deep comparison and then delivers no-change callbacks. Prefer subscribing to
+       * the manifest and fetching the data only when its hashes actually changed.
+       *
+       * @param selector Always `undefined`: the payload is argument-less, whole-project data.
+       * @param callback Receives the payload, or a {@link PlatformError} when retrieving it after an
+       *   update fails.
+       * @param options Subscription behavior; the retention and re-fetch costs above apply in every
+       *   mode.
+       * @returns Unsubscriber that ends the subscription.
+       * @experimental
+       */
+      subscribePt9InterlinearData(
+        selector: undefined,
+        callback: (data: Pt9InterlinearProjectData | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion Pt9 Interlinear Types
 
   // #region Check Types
 
@@ -1551,6 +2079,19 @@ declare module 'platform-scripture' {
     scope: 'all' | 'book';
     /** If scope is 'book', then this is the ID of the book whose results are now invalid */
     bookId?: string;
+  };
+
+  /**
+   * Payload for the `platformScripture.focusFindSearch` network event, which asks one already-open
+   * Find web view to put the caret in its search box.
+   *
+   * Addressed rather than broadcast: more than one Find web view can be open at once in Power mode,
+   * and taking the caret away from the user's current position is only correct for the panel the
+   * invoke actually resolved. Every other Find web view ignores the event.
+   */
+  export type FindFocusSearchEvent = {
+    /** Id of the Find web view whose search box should take focus. */
+    webViewId: string;
   };
 
   /**
@@ -2317,7 +2858,9 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IStyleInfoProjectDataProvider,
     IVersificationProjectDataProvider,
+    IPt9InterlinearProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
     ITextConnectionSettingsProjectDataProvider,
@@ -2329,8 +2872,10 @@ declare module 'papi-shared-types' {
     CheckDetails,
     CheckCreatorFunction,
     CheckResultsInvalidated,
+    FindFocusSearchEvent,
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
+    IFindHistoryDataProvider,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -2345,8 +2890,11 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    'platformScripture.StyleInfo': IStyleInfoProjectDataProvider;
     /** @experimental */
     'platformScripture.Versification': IVersificationProjectDataProvider;
+    /** @experimental */
+    'platformScripture.Pt9Interlinear': IPt9InterlinearProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
     'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
@@ -2370,6 +2918,8 @@ declare module 'papi-shared-types' {
      * Simple interface. See {@link IRecentlyOpenedProjectsService}.
      */
     'platformScripture.recentlyOpenedProjects': IRecentlyOpenedProjectsService;
+    /** Data provider for the user's find search history and last search term */
+    'platformScripture.findHistory': IFindHistoryDataProvider;
   }
 
   export interface CommandHandlers {
@@ -2391,39 +2941,141 @@ declare module 'papi-shared-types' {
 
     'platformScripture.invalidateCheckResults': (details: CheckResultsInvalidated) => Promise<void>;
 
+    /**
+     * Open the characters inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened characters inventory web view, or `undefined` if no web view
+     *   id was provided or the web view has no project (nothing is opened in that case).
+     */
     'platformScripture.openCharactersInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.openRepeatedWordsInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.openMarkersInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.openPunctuationInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.openChecksSidePanel': (
-      projectId?: string | undefined,
+      webViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Find / Replace UI for a project. The single optional argument is the calling
-     * editor's `webViewId` (when invoked from an editor's menu, so the Find UI can inherit the
-     * editor's project + scroll group). Pass `undefined` to open without an editor context.
+     * Open the repeated-words inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened repeated-words inventory web view, or `undefined` if no web
+     *   view id was provided or the web view has no project (nothing is opened in that case).
      */
-    'platformScripture.openFind': (
+    'platformScripture.openRepeatedWordsInventory': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the markers inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened markers inventory web view, or `undefined` if no web view id
+     *   was provided or the web view has no project (nothing is opened in that case).
+     */
+    'platformScripture.openMarkersInventory': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the punctuation inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened punctuation inventory web view, or `undefined` if no web view
+     *   id was provided or the web view has no project (nothing is opened in that case).
+     */
+    'platformScripture.openPunctuationInventory': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the checks side panel next to a scripture editor.
+     *
+     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The
+     *   editor's project and scroll group are resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`, and the panel is placed relative to that editor
+     *   tab.
+     * @returns Id of the newly opened checks side panel web view, or `undefined` if no editor web
+     *   view id was provided or the web view has no project (nothing is opened in that case).
+     */
+    'platformScripture.openChecksSidePanel': (
       editorWebViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Markers Checklist web view. Resolves the target project from the supplied
-     * `webViewId` (of an editor tab) when provided.
+     * Open the Find / Replace UI for a project, bringing it to the front. Reuses an existing find
+     * web view rather than opening a new one when possible, reloading it when the resolved project,
+     * the project's editability, or the triggering editor differs from what the existing web view
+     * holds, or when there is text to pre-fill.
      *
+     * When no project can be resolved — no editor web view id was passed, or the one passed holds
+     * no project — this opens nothing and creates nothing, but still brings an already-open find
+     * web view to the front unchanged, so that in Simple mode (where Find is a permanent tab)
+     * invoking Find always lands on that tab rather than appearing to do nothing.
+     *
+     * Every path that fronts a find web view also puts the caret in its search box, so an invoke
+     * leaves the user able to type immediately. Bringing a tab to the front focuses the web view's
+     * iframe but lands on its `body`, which is why this is done explicitly rather than left to the
+     * docking framework.
+     *
+     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The
+     *   project, scroll group, and editability for the Find / Replace UI are resolved from it
+     *   internally via `papi.webViews.getOpenWebViewDefinition`.
+     * @param selectedText Text to pre-fill the search box with (e.g. the editor's current selection
+     *   when invoked via Ctrl+F). Pass `undefined` to open without a pre-filled search.
+     * @param sourceProjectId Explicit project/resource id to search, overriding the project
+     *   resolved from `editorWebViewId`. Passed by resource panels (model text, Bible texts,
+     *   commentaries) whose displayed resource differs from the tab's own project.
+     * @returns Id of the find web view — newly opened, reloaded, or (when no project could be
+     *   resolved) the existing one brought to front — or `undefined` when no project could be
+     *   resolved and no find web view was open.
+     */
+    'platformScripture.openFind': (
+      editorWebViewId?: string | undefined,
+      selectedText?: string | undefined,
+      sourceProjectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Re-point an already-open Find / Replace web view at a different project, so it searches that
+     * project instead of the one it was opened for. Clears any pre-filled search text restrictions
+     * tied to the previous project's results by rebuilding the web view.
+     *
+     * Creates nothing: when no Find web view is open this does nothing and returns `undefined`. Use
+     * `platformScripture.openFind` to open one.
+     *
+     * Editability is not a parameter here: the Find web view reads `platform.isEditable` for
+     * whichever project it is bound to and withholds Replace / Replace All on its own. Re-pointing
+     * at a published resource therefore leaves the text searchable with the replace controls
+     * withheld, rather than offering replacements the project would reject.
+     *
+     * @param projectId Id of the project the Find / Replace UI should search from now on.
+     * @param editorWebViewId Id of the editor web view Find should act on: the one it focuses, and
+     *   whose text it selects and highlights when a result is clicked. Pass this whenever the
+     *   re-point accompanies a new or replaced editor, since a replaced editor tab mints a new id
+     *   and Find silently skips those actions once the id it holds no longer resolves. Omit to
+     *   leave the id Find already holds untouched.
+     * @returns Id of the re-pointed find web view, or `undefined` if no find web view was open.
+     */
+    'platformScripture.updateFindProject': (
+      projectId: string,
+      editorWebViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the Markers Checklist web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The target project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the opened markers checklist web view, or `undefined` if no web view id was
+     *   provided or the web view has no project (nothing is opened in that case), or if the
+     *   provider did not create one.
      * @experimental
      */
     'platformScripture.openMarkersChecklist': (
@@ -2439,22 +3091,27 @@ declare module 'papi-shared-types' {
     'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
 
     /**
-     * Open the unified Manage Books dialog (FN-008, 2026-05-01) for the active scripture project.
-     * Opens the dialog as a tab web view; the dialog itself supports View / Create / Delete / Copy
-     * / Import action modes and an inline book-chooser grid.
+     * Open the unified Manage Books dialog (FN-008, 2026-05-01) as a centered floating window. The
+     * dialog supports View / Create / Delete / Copy / Import action modes and an inline
+     * book-chooser grid. Only one Manage Books dialog is open at a time (FN-003): if one is already
+     * open, it is reloaded with the newly resolved project and brought to front instead of opening
+     * a second window.
      *
-     * The single optional argument is either an editor's `webViewId` (when invoked from a
-     * scripture-editor menu) or a literal project id (when invoked from the main menu or from
-     * another extension). The handler probes the value with
-     * `papi.webViews.getOpenWebViewDefinition` — if it resolves, the dialog opens pre-targeted at
-     * that web view's project; otherwise the value is treated as a project id and the dialog opens
-     * for that project directly. Pass `undefined` to open the dialog with the project picker
-     * visible.
-     *
+     * @param webViewIdOrProjectId Either an editor's `webViewId` (when invoked from a
+     *   scripture-editor menu) or a literal project id (when invoked from the main menu or from
+     *   another extension). The handler probes the value with
+     *   `papi.webViews.getOpenWebViewDefinition` — if it resolves to a web view with a project, the
+     *   dialog opens pre-targeted at that project; otherwise the value itself is treated as the
+     *   project id. Omit to open the dialog with the project picker visible.
+     * @param intent Pass `'createMissingBook'` to open the dialog on its Create-books section with
+     *   the calling editor's current book pre-selected, instead of the default view.
+     * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
+     *   — or `undefined` if the provider did not create one.
      * @experimental
      */
     'platformScripture.openManageBooks': (
-      webViewIdOrProjectId?: string | undefined,
+      webViewIdOrProjectId?: string,
+      intent?: 'createMissingBook',
     ) => Promise<string | undefined>;
 
     /**
@@ -2613,6 +3270,52 @@ declare module 'papi-shared-types' {
      * Corresponds to the `StructureProtected` field in Paratext's `Settings.xml`.
      */
     'platformScripture.structureProtected': boolean;
+
+    /**
+     * The separator string inserted between chapter and verse numbers when formatting a Scripture
+     * reference (e.g. the `:` in `Mt 1:3`). Corresponds to `ChapterVerseSeparator` in Paratext's
+     * `Settings.xml`. Paratext's registered default is `.`.
+     */
+    'platformScripture.chapterVerseSeparator': string;
+
+    /**
+     * The separator string inserted between the start and end verse numbers of a verse range (e.g.
+     * the `-` in `Mt 1:3-5`). Corresponds to `RangeIndicator` in Paratext's `Settings.xml` (the
+     * Paratext 9 C# property is named `VerseRangeSeparator`, but the underlying Settings.xml tag is
+     * `RangeIndicator`).
+     */
+    'platformScripture.verseRangeSeparator': string;
+
+    /**
+     * The default caller character assigned to newly inserted footnotes (`\f`). Corresponds to
+     * `DefaultFootnoteCaller` in Paratext's `Settings.xml`.
+     */
+    'platformScripture.defaultFootnoteCaller': string;
+
+    /**
+     * The default caller character assigned to newly inserted cross-references (`\x`). Corresponds
+     * to `DefaultCrossRefCaller` in Paratext's `Settings.xml`.
+     */
+    'platformScripture.defaultCrossRefCaller': string;
+
+    /**
+     * The auto-generated footnote caller sequence for the project's LANGUAGE: a space-separated
+     * character-set string (e.g. `a b c ... z`), possibly empty. LANGUAGE-backed — Paratext 9
+     * stores it as a writing-system character set (`ScrLanguage.FootnoteCallers`, Paratext repo,
+     * ParatextData/Languages/ScrLanguage.cs:290-300), NOT a `Settings.xml` tag — and read-only
+     * through the settings surface. Empty means "no sequence defined": consumers apply PT9's own
+     * fallback of `a`–`z` (`UsfmXsltExtensions.GetNthCaller`).
+     */
+    'platformScripture.footnoteCallers': string;
+
+    /**
+     * The auto-generated cross-reference caller sequence for the project's LANGUAGE: a
+     * space-separated character-set string, possibly empty. LANGUAGE-backed
+     * (`ScrLanguage.CrossReferenceCallers`), NOT a `Settings.xml` tag, and read-only through the
+     * settings surface. Empty means "no sequence defined": consumers apply PT9's own fallback of
+     * `†` (ViewUsfmXhtmlConverter.cs:73-74).
+     */
+    'platformScripture.crossRefCallers': string;
   }
 
   export interface NetworkEvents {
@@ -2625,5 +3328,16 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platformScripture.openMarkersChecklistSettings': undefined;
+    /**
+     * Emitted by `platformScripture.openFind` to ask one already-open Find web view to put the
+     * caret in its search box, so that invoking Find lands the user somewhere they can type. Only
+     * the Find web view whose id the payload names reacts.
+     *
+     * Not emitted when the invoke rebuilds the Find web view; that path carries the request in the
+     * web view's own state instead, because an event would race the new web view's subscription.
+     *
+     * @experimental
+     */
+    'platformScripture.focusFindSearch': FindFocusSearchEvent;
   }
 }

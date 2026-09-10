@@ -13,8 +13,17 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models
 import cloneDeep from 'lodash/cloneDeep';
 import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
 import { ChevronsUpDown } from 'lucide-react';
+import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
 import { TabType } from './docking-framework-internal.model';
 import { PanelExtraContent } from './panel-extra-content.component';
+import { HEADLESS_GROUP, TAB_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.util';
+
+// Re-exported for existing consumers of these group-name constants from this module; the
+// definitions themselves live in `dock-tab-group.util.ts` so `simple-layout.data.ts` can use
+// them without importing this file (which pulls in the dialogs barrel, and from there a cycle back
+// through `use-project-picker-data.hook.ts` to `web-view.service-host.ts`, which imports the simple
+// layout builder that `simple-layout.data.ts` feeds).
+export { TAB_GROUP, TAB_GROUP_RESOURCES, HEADLESS_GROUP };
 
 /**
  * The default initial size for floating tabs in CSS `px` units. Can be overridden by tabTypes'
@@ -34,23 +43,6 @@ const DOCK_FLOAT_OFFSET = 28;
  */
 const MAX_FLOAT_WIDTH_FRACTION = 0.8;
 const MAX_FLOAT_HEIGHT_FRACTION = 0.85;
-// NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
-// Platform.
-// Appears in DOM as `dock-style-card` and `dock-style-platform-bible`.
-export const TAB_GROUP = 'card platform-bible';
-
-// Simple-mode column groups. Different groups can't share a panel, so giving simple-mode columns
-// distinct groups prevents tabs from being dragged between columns (rc-dock's tabLocked only blocks
-// drag-to-create-new-panel, not drag-between-existing-panels). The 'card platform-bible' prefix
-// preserves shared CSS styling — see the .dock-style-* selectors.
-export const TAB_GROUP_RESOURCES = 'card platform-bible resources';
-
-/**
- * Group for simple-mode columns whose tab bar should be invisible (home, editor). Tabs in this
- * group are locked and the dock-bar is hidden via CSS in `dock-layout-wrapper.component.scss`. The
- * `'platform-bible'` token keeps the shared `.dock-style-platform-bible` styling rules in play.
- */
-export const HEADLESS_GROUP = 'headless platform-bible';
 
 /**
  * Build the rc-dock group config for `TAB_GROUP`. The shape depends on `platform.interfaceMode`:
@@ -92,9 +84,10 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
 
 /**
  * WebViewTypes that make up Simple mode's fixed 3-column layout, mapped to the rc-dock group each
- * is confined to while pinned there. Kept in sync with the webViewTypes hardcoded in
- * `simple-layout.data.ts` (Columns 1/2) — Column 3 also includes `scriptureTextGrid` (Text
- * Collection), which isn't part of that static default layout but joins Column 3 at runtime once
+ * is confined to while pinned there. Kept in sync with two sources: every webViewType hardcoded in
+ * `simple-layout.data.ts` (all of Columns 1 and 2, and all of Column 3 except `scriptureTextGrid`),
+ * plus `scriptureTextGrid` (Text Collection) itself, which is absent from that static layout and
+ * instead joins Column 3 at runtime from `default-layout-supplement.json` once its feature flag is
  * enabled.
  */
 const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
@@ -104,6 +97,7 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   'platformScriptureEditor.commentaries': TAB_GROUP_RESOURCES,
   'legacyCommentManager.commentListPanel': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.scriptureTextGrid': TAB_GROUP_RESOURCES,
+  'platformScripture.find': TAB_GROUP_RESOURCES,
 };
 
 /**
@@ -119,6 +113,12 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
  * Everything else — floating tabs/dialogs, and these same webViewTypes when `isClosable` is `true`
  * (e.g. opened freely in Power mode, where they aren't confined to a fixed column) — gets the
  * default `TAB_GROUP`, matching pre-existing behavior.
+ *
+ * Reading `isClosable` here is what makes six providers across three extensions each compute
+ * `isClosable: interfaceMode === 'power'` for themselves. PT-4405 centralizes it: the two halves
+ * needed to decide pinning already live in this module and `readCachedInterfaceMode()`, so the
+ * renderer can derive it for any webViewType in {@link FIXED_LAYOUT_WEBVIEW_GROUPS} and the per-
+ * provider copies can go away.
  */
 export function getTabGroup(tabInfo: TabInfo): string {
   if (tabInfo.isClosable !== false || tabInfo.tabType !== TAB_TYPE_WEBVIEW || !tabInfo.data)
@@ -132,16 +132,15 @@ export function getTabGroup(tabInfo: TabInfo): string {
 
 /**
  * Outer inset around the whole dock layout, relative to its positioned parent. Power mode keeps the
- * original 8px gap on every side below the main toolbar (48px top, matching `tw:h-12`); Simple mode
- * removes that gap on the left/right/bottom and uses a 56px top clearance instead, matching the
- * taller `tw:h-14` Simple-mode toolbar — see
+ * original 8px gap on every side below the main toolbar; Simple mode removes that gap on the
+ * left/right/bottom and uses the taller Simple-mode toolbar's clearance instead — see
  * `docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md`, Section 7.
  */
 export function getDockLayoutOuterInset(isPowerMode: boolean): CSSProperties {
   if (isPowerMode) {
-    return { position: 'absolute', top: 48, bottom: 8, left: 8, right: 8 };
+    return { position: 'absolute', top: getToolbarHeight(true), bottom: 8, left: 8, right: 8 };
   }
-  return { position: 'absolute', top: 56, bottom: 0, left: 0, right: 0 };
+  return { position: 'absolute', top: getToolbarHeight(false), bottom: 0, left: 0, right: 0 };
 }
 
 /** Initial sizes for each tab in CSS `px` units if created as floating tabs */

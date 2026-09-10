@@ -1,5 +1,6 @@
 import { FC, LegacyRef, useMemo, useState } from 'react';
-import { Ban } from 'lucide-react';
+import { Ban, Check } from 'lucide-react';
+import { stripMarkerNestingPrefix } from '@/components/advanced/marker-palette-filter.util';
 import {
   Command,
   CommandEmpty,
@@ -21,9 +22,10 @@ export const MARKER_MENU_STRING_KEYS = Object.freeze([
   '%markerMenu_disallowed_label%',
   '%markerMenu_noResults%',
   '%markerMenu_searchPlaceholder%',
-  // These two keys are not read by this component directly; they are provided here so callers can
-  // localize them and pass the result into the optional `searchPlaceholder` prop to override the
-  // default search-field placeholder.
+  // These three keys are not read by this component directly; they are provided here so callers
+  // can localize them and pass the result into the optional `searchPlaceholder` prop to override
+  // the default search-field placeholder.
+  '%markerMenu_searchPlaceholder_character%',
   '%markerMenu_searchPlaceholder_insert%',
   '%markerMenu_searchPlaceholder_paragraph%',
 ] as const);
@@ -65,6 +67,26 @@ export interface MarkerMenuItem {
    * selected.
    */
   isDisallowed?: boolean;
+  /**
+   * How much of the consumer's current selection this marker covers: `'all'`, `'partial'`, or
+   * `'none'`. Optional and additive — with no value, no selection affordance renders and no
+   * `aria-checked` is set, which is how consumers that do not track a selection behave.
+   *
+   * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this affects
+   * neither visibility nor selectability. It is display only.
+   */
+  selectionState?: 'all' | 'partial' | 'none';
+  /**
+   * Whether the consumer currently has no operation for this row, so it must not be selectable.
+   * Optional and additive — with no value the row is selectable exactly as it has always been.
+   *
+   * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this says
+   * nothing about the marker itself and so renders no trailing label: those two describe a property
+   * of the marker, while this describes the consumer's momentary inability to act on it. It also
+   * does not affect visibility — the row stays listed, because a row that disappears reads as "this
+   * marker does not exist here" rather than "you cannot do that to it right now."
+   */
+  isDisabled?: boolean;
   /** Function to be triggered when the marker or command is selected */
   action: () => void;
 }
@@ -94,6 +116,29 @@ function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; class
 }
 
 /**
+ * Leading selection indicator for a marker row, on the start side per the Component Choices
+ * guideline. Rendered only when the consumer supplies a selection state, so rows without one keep
+ * the layout they have always had.
+ *
+ * A checked row means the marker is on the selection — whether on all of it or only part of it. UX
+ * chose this two-glyph reading over a three-glyph one (decided 2026-08-06): a dash for partial read
+ * as a disabled checkbox rather than as "some of this", and an empty box for `'none'` made a
+ * single-select picker look multi-select. The distinction is not lost, only moved: `aria-checked`
+ * still reports `mixed` for a partial row, so the tri-state survives for screen-reader users while
+ * the visual stays binary. The `'none'` box still reserves its width so rows stay aligned.
+ */
+function MarkerSelectionStateIndicator({ state }: { state: 'all' | 'partial' | 'none' }) {
+  return (
+    <div
+      data-slot="marker-selection-state"
+      className="tw:flex tw:w-4 tw:min-w-4 tw:items-center tw:justify-center"
+    >
+      {state !== 'none' && <Check size={16} />}
+    </div>
+  );
+}
+
+/**
  * Function that renders the marker menu command item for both the marker matches and the title
  * matches
  */
@@ -107,21 +152,53 @@ function MarkerMenuCommandItem({
   return (
     <CommandItem
       className="tw:flex tw:gap-2 tw:hover:bg-accent"
-      disabled={item.isDisallowed || item.isDeprecated}
+      disabled={item.isDisallowed || item.isDeprecated || item.isDisabled}
+      // Absent for items with no selection state, so existing consumers' rows are unchanged.
+      // Never pair this with `data-checked`: CommandItem renders its own trailing check for that,
+      // which would double the checkmark.
+      aria-checked={
+        item.selectionState === undefined
+          ? undefined
+          : // `as const` keeps the literal types ('mixed', true, false) instead of widening to
+            // `string | boolean`, which is required for assignability to CommandItem's
+            // `aria-checked` prop type (boolean | 'false' | 'true' | 'mixed' | undefined).
+            ({ all: true, partial: 'mixed', none: false } as const)[item.selectionState]
+      }
       onSelect={item.action}
     >
+      {item.selectionState !== undefined && (
+        <MarkerSelectionStateIndicator state={item.selectionState} />
+      )}
       <div className="tw:w-8 tw:min-w-8">
         {item.marker ? (
-          <span className="tw:text-xs">{item.marker}</span>
+          // Monospace: a USFM marker is a code, not prose, and should read as one. Deliberately
+          // inherits the row's own foreground rather than taking a marker-specific colour.
+          <span className="tw:font-mono tw:text-xs">{item.marker}</span>
         ) : (
           <div>
             <MenuMarkerIcon icon={item.icon} />
           </div>
         )}
       </div>
-      <div>
-        <p className="tw:text-sm">{item.title}</p>
-        {item.subtitle && <p className="tw:text-xs tw:text-muted-foreground">{item.subtitle}</p>}
+      {/* Title and detail sit side by side, detail trailing and subordinate. Both truncate rather
+          than wrap — consumers pin this popover as narrow as 200px — and the detail's much larger
+          shrink factor means it gives up its space first, so the title, which identifies the row,
+          keeps as much as it can.
+
+          Native `title` attributes rather than the Tooltip component: a Radix tooltip inside a cmdk
+          list fights the list's own hover and focus handling. */}
+      <div className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2">
+        <p className="tw:min-w-0 tw:shrink tw:truncate tw:text-sm" title={item.title}>
+          {item.title}
+        </p>
+        {item.subtitle && (
+          <p
+            className="tw:min-w-0 tw:shrink-[9999] tw:truncate tw:text-end tw:text-xs tw:text-muted-foreground"
+            title={item.subtitle}
+          >
+            {item.subtitle}
+          </p>
+        )}
       </div>
       {(item.isDisallowed || item.isDeprecated) && (
         <CommandShortcut className="tw:font-sans">
@@ -144,7 +221,10 @@ export function MarkerMenu({
   const [commandSearch, setCommandSearch] = useState<string>('');
 
   const [codeMatchItems, titleMatchItems] = useMemo(() => {
-    const query = commandSearch.trim().toLowerCase();
+    // A leading `+` is USFM nesting syntax (`\+nd` nests inside an open char span), not part of the
+    // marker code — strip it so `+nd` resolves to the bare `nd` item. The shared helper is the one
+    // strip rule for every marker-matching site, so this menu and the palettes cannot drift.
+    const query = stripMarkerNestingPrefix(commandSearch.trim().toLowerCase());
     if (!query) {
       // Hide disallowed markers until specifically searched, so the menu isn't cluttered with
       // entries the user cannot insert.
@@ -180,6 +260,10 @@ export function MarkerMenu({
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}
         placeholder={searchPlaceholder ?? localizedStrings['%markerMenu_searchPlaceholder%']}
+        // Picker semantics: the list is the whole point here, and nothing else in this menu claims
+        // Space. Only a LEADING space is intercepted, so titles containing spaces ("Cross
+        // Reference") are still searchable.
+        spaceSelectsHighlightedItem
       />
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>

@@ -6,7 +6,13 @@
  * behalf.
  */
 
-import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
+// Type-only, deliberately: this module is the overlay service's cross-process CONTRACT, and a
+// runtime value import from `platform-bible-react` here pulled the whole component library into
+// every consumer of these types. The implementation half lives in
+// `overlay-palette-filter.util.ts`.
+import type { PaletteFilterMode } from 'platform-bible-react/experimental';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
@@ -96,28 +102,54 @@ export interface PopoverRequest {
 /**
  * A single item in a command palette. Items are displayed in a searchable, filterable list. The
  * user types to filter and selects one item.
+ *
+ * Extends the shared {@link PaletteItem} contract (id/label/description/badge/disabled/muted) with
+ * the presentation extras only this overlay renders.
  */
-export type CommandPaletteItem = {
-  /** Unique identifier returned when this item is selected */
-  id: string;
-  /** Primary display text (e.g., marker code like "ft" or command name) */
-  label: string | LocalizeKey;
-  /** Secondary description text displayed below the label */
-  description?: string | LocalizeKey;
+export type CommandPaletteItem = PaletteItem & {
   /** Optional icon displayed to the left of the label */
   icon?: string;
-  /** Optional badge text (e.g., "Deprecated", "Disallowed") */
-  badge?: string | LocalizeKey;
   /** Optional group key for visual sectioning with group headers */
   group?: string;
-  /** Whether the item is grayed out and non-selectable. Defaults to false. */
-  disabled?: boolean;
 };
+
+/**
+ * A {@link CommandPaletteItem} text field that palette filtering may match against. See
+ * {@link CommandPaletteRequest.searchFields}.
+ */
+export type PaletteSearchField = 'label' | 'description' | 'badge';
 
 /** Request payload for {@link IOverlayService.showCommandPalette}. */
 export interface CommandPaletteRequest {
   /** The selectable items to display */
   items: CommandPaletteItem[];
+  /**
+   * Which item text fields the filter text matches against. Defaults to `['label', 'description',
+   * 'badge']` — every text field the palette displays — which suits general command palettes (a
+   * command is often found by a word from its description). Palettes whose label is the whole
+   * identity opt into `['label']`: for marker palettes the label IS the marker code, and
+   * description matching buried exact typed markers under description hits.
+   *
+   * Matching and ranking: label matches come first, ranked exact-first (see
+   * {@link PaletteFilterMode}); items matching only on the OTHER searched fields follow in their
+   * original order. Passive palettes prefix-match the label only regardless of this option (PT9
+   * marker-dropdown semantics — the passive flavor exists for in-document marker typing).
+   */
+  searchFields?: readonly PaletteSearchField[];
+  /**
+   * When `true`, the palette matches by plain CONTAINMENT only (whole-phrase, then all-words),
+   * never by cmdk's per-character fuzzy scoring. Defaults to `false`: an ordinary focused palette
+   * fuzzy-matches, so `gcb` finds "Git: Create Branch".
+   *
+   * Set this when an exact, predictable match list matters more than forgiving lookup — marker
+   * palettes do, because the rendered list participates in commit semantics (typing a marker and
+   * pressing Space must agree byte-for-byte with what is displayed). Palettes with
+   * {@link CommandPaletteRequest.keyForwarding} and passive palettes always match by containment
+   * regardless of this option: their filtered list is resolved by the HOST (commits and forwarded
+   * keys are answered from it), and the host's filter must agree exactly with what is on screen —
+   * cmdk's scorer is not reimplemented host-side.
+   */
+  disableFuzzyMatching?: boolean;
   /**
    * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
    * positioned adjacent to this point. If omitted, centers in the viewport.
@@ -133,7 +165,68 @@ export interface CommandPaletteRequest {
   maxHeight?: number;
   /** Whether clicking outside dismisses the palette. Defaults to true. */
   dismissOnClickOutside?: boolean;
+  /**
+   * When true, renders without a search input and without stealing focus from the requesting
+   * WebView. Filter text and the highlighted selection are driven externally via
+   * {@link IOverlayService.updateCommandPalette} and committed via
+   * {@link IOverlayService.commitCommandPaletteSelection} instead of the palette's own search box
+   * and keyboard handling. Defaults to false (the palette owns its own search input and focus, as
+   * today).
+   *
+   * @remarks
+   * Passive-palette filtering and commit resolution match the externally supplied filter text
+   * case-insensitively against the PREFIX of each item's `label`: a leading `+` in the filter is
+   * stripped first (so `"+w"` matches the same items as `"w"`), and an empty or omitted filter
+   * shows every item. `LocalizeKey` labels are resolved to localized text when the palette is
+   * shown, so matching always runs against the same label text the palette displays.
+   */
+  passive?: boolean;
+  /**
+   * Keys the REQUESTING session claims while this palette is open, and where to send them.
+   *
+   * The palette and the session that opened it live in different documents, so whichever holds
+   * focus is the only one that sees a keystroke. A palette that takes focus therefore silently
+   * takes the session's keys with it: its commit semantics stop running, and a local default (e.g.
+   * cmdk's own navigation) answers instead. Declaring the claimed keys closes that — the palette
+   * forwards exactly those to {@link PaletteKeyForwarding.onKey} and acts on none of them itself.
+   *
+   * A focus-stealing (non-passive) palette is what makes this necessary; a passive one never takes
+   * focus, so its requester already receives every key and forwarding is inert there. Requesters
+   * still declare it for both, so one code path covers a palette that unexpectedly receives a key.
+   * Omit it entirely and the palette behaves exactly as it did before forwarding existed.
+   *
+   * @remarks
+   * The handler is called synchronously, in the palette's own document. This is a direct function
+   * reference rather than serialized data: the overlay service is renderer-only and a requesting
+   * WebView is a same-origin iframe sharing the renderer's `papi`, so no boundary is crossed. The
+   * forwarded value is a plain `ForwardedPaletteKeyEvent` rather than a live DOM event, which keeps
+   * it free of the requester's realm.
+   */
+  keyForwarding?: PaletteKeyForwarding;
 }
+
+/**
+ * How `filterPaletteItems` (overlay-palette-filter.util.ts) matches filter text against items — one
+ * mode per palette flavor:
+ *
+ * - `'passive'` — case-insensitive PREFIX match on `label` only, whatever
+ *   {@link CommandPaletteRequest.searchFields} says. Passive palettes show bare marker codes (`f`,
+ *   `fe`, `fig`) filtered by the marker prefix the user has typed into the document, mirroring
+ *   PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in the filter
+ *   text is stripped before matching, so `"+w"` matches the same items as `"w"`.
+ * - `'active'` — case-insensitive CONTAINMENT match over the request's
+ *   {@link CommandPaletteRequest.searchFields} (default: label, description, and badge). Label
+ *   matches rank first, exact-first, so an exact marker match cannot be buried under items whose
+ *   descriptions happen to contain the typed letter; marker palettes additionally opt into
+ *   label-only matching.
+ *
+ * Label matches rank exact-first in both modes — see `filterPaletteItems`.
+ *
+ * Re-exported from `platform-bible-react`, the home of the `filterAndRankPaletteItems` that
+ * `filterPaletteItems` delegates label matching to, so the mode this service accepts and the mode
+ * that function implements cannot drift apart.
+ */
+export type { PaletteFilterMode };
 
 // ── Service Interface ──
 
@@ -220,6 +313,10 @@ export interface IOverlayService {
    * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
    * the selected item's `id`, or `undefined` if dismissed.
    *
+   * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
+   * the palette is shown, so all filtering — the palette's own search box and text forwarded via
+   * {@link updateCommandPalette} — matches against the text the user actually sees.
+   *
    * @param request The items, optional anchor position, and display options
    * @param webViewId The ID of the WebView requesting the command palette
    * @returns The selected item's ID, or `undefined` if dismissed
@@ -231,6 +328,48 @@ export interface IOverlayService {
     request: CommandPaletteRequest,
     webViewId: string,
   ): Promise<string | undefined>;
+  /**
+   * Updates the filter text and/or moves the highlighted selection of the active command palette
+   * for the given WebView. No-op if no command palette is active for that WebView.
+   *
+   * Unlike the popover family above (keyed by the overlay ID returned from `showPopover`), the
+   * command palette mutators are keyed by `webViewId` instead. The service enforces one command
+   * palette per WebView at a time (see this interface's class docs), so the requesting WebView's
+   * own ID is a sufficient handle — passive-mode callers drive the palette without ever seeing an
+   * overlay ID.
+   *
+   * @param webViewId The ID of the WebView whose command palette should be updated
+   * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
+   *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the
+   *   (controlled) search input — callers forward keystrokes this way when the cross-frame focus
+   *   handoff loses and the user's typing lands in their WebView instead of the palette.
+   */
+  updateCommandPalette(
+    webViewId: string,
+    update: { filterText?: string; moveSelection?: number },
+  ): Promise<void>;
+  /**
+   * Commits the currently highlighted item of the active command palette for the given WebView,
+   * resolving its `showCommandPalette` promise with that item's `id` (mirrors how a click on a
+   * command palette item resolves the promise). If the highlighted item is `disabled`, moves
+   * forward to the next enabled item in the filtered list; if none are enabled, no-ops. No-op if no
+   * command palette is active for that WebView.
+   *
+   * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+   *
+   * @param webViewId The ID of the WebView whose command palette selection should be committed
+   */
+  commitCommandPaletteSelection(webViewId: string): Promise<void>;
+  /**
+   * Dismisses the active command palette for the given WebView, resolving its `showCommandPalette`
+   * promise with `undefined`. Works for both active and passive palettes. No-op if no command
+   * palette is active for that WebView.
+   *
+   * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+   *
+   * @param webViewId The ID of the WebView whose command palette should be dismissed
+   */
+  dismissCommandPalette(webViewId: string): Promise<void>;
 }
 
 // ── Internal Overlay Store Types ──
@@ -312,8 +451,26 @@ export type OverlayEntry =
       webViewId: string;
       /** The original request */
       request: CommandPaletteRequest;
-      /** Items to render */
+      /**
+       * Items to render, with any `LocalizeKey` `label`/`description`/`badge` text already resolved
+       * to localized strings at show time — filtering, commit resolution, and rendering all read
+       * from here so they always agree on each item's text.
+       */
       items: CommandPaletteItem[];
+      /**
+       * Current filter text. Mutable — updated in place by `updateCommandPalette` for BOTH passive
+       * and active palettes: a passive palette's list is driven by this filter text directly, while
+       * an active palette uses it to drive its controlled cmdk input from forwarded keystrokes.
+       * Undefined when unset or cleared — never the empty string (the store normalizes `''` to
+       * undefined).
+       */
+      filterText?: string;
+      /**
+       * Index of the highlighted item within `filterPaletteItems(items, filterText)`. Mutable —
+       * updated in place by `updateCommandPalette`'s `moveSelection`, clamped to the filtered
+       * list's bounds. Defaults to 0 at creation.
+       */
+      selectedIndex: number;
       /** Document-relative position (translated + clamped), or undefined for centered */
       position?: { x: number; y: number };
       /** Settles the caller's promise with the selected item ID, or undefined if dismissed */

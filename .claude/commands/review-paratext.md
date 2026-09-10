@@ -34,6 +34,8 @@ Store the result as `MODEL_NAME` for use in all subsequent commit messages.
 
 Also determine the current Claude Code **session URL** (e.g. `https://claude.ai/code/session_<id>`) and store it as `SESSION_URL`. Look for it in the session/transcript context or an environment variable; if it cannot be determined, ask the author to paste their session URL, or fall back to the literal `<session URL>` for them to fill in. `SESSION_URL` is used for the `Session-URL:` commit trailer and the PR-body AI-assisted line, per the project's authorship convention (see CLAUDE.md).
 
+**VS Code extension carve-out:** if the environment variable `CLAUDE_CODE_ENTRYPOINT` starts with `claude-vscode` (or otherwise indicates this session is running in the Claude Code VS Code extension rather than claude.ai web), there is no session URL to find. Do not ask the author and do not use a placeholder — treat `SESSION_URL` as **not applicable** for the rest of this run. Wherever this document later says to append a `Session-URL:` trailer to a commit or an AI-assisted session-link line to a PR body, omit that line entirely instead when `SESSION_URL` is not applicable.
+
 ### Step 0.5 — Introduce the review process
 
 Output the following to the author before doing anything else:
@@ -79,9 +81,12 @@ If `$BRANCH` is `main`, stop and tell the author:
 
 ```bash
 git status --porcelain
+git diff -- package-lock.json | head -n 40
 ```
 
-If there are uncommitted changes, inform the author:
+**Worktree-transient noise check:** inside a git worktree, `npm install`/`npm ci` rewrites `package-lock.json`'s top-level `"name"` field to match the worktree directory's basename (npm treats the checkout directory as the local package name). This produces a permanent, harmless, feature-unrelated local diff that disappears when the worktree is disposed of — it must never be treated as review content. The `name` field sits at the top of the file, so the 40-line cap above is enough to see it without spending tokens on the rest of a potentially huge lockfile diff. If the `package-lock.json` diff is confined to that `"name"` field (and/or `packages[""].name`) changing to `$(basename $(git rev-parse --show-toplevel))` — nothing else — treat it as **worktree noise**: exclude it from the uncommitted-changes count/list below, from Step 1.3's file count and analyzer input, from Step 4.1's quality-check scope, from Step 4.2's findings and summary, and from Step 5.1's final commit. Never mention it to the author unless they ask. If `package-lock.json` has other changes beyond the name field, do not apply this exclusion — treat the whole file normally.
+
+If there are uncommitted changes (excluding any worktree noise), inform the author:
 
 > "You have uncommitted changes. During the review, I will stage any fixes I make. All uncommitted changes — yours and mine — will be committed together in a single commit at the end.
 >
@@ -89,7 +94,7 @@ If there are uncommitted changes, inform the author:
 >
 > Would you like to commit all your current working changes now with a commit message you provide — or say 'continue' to fold them into the final review commit?"
 
-- If the author provides a commit message: run `git add -A` and commit with their message (append `Co-Authored-By: $MODEL_NAME <noreply@anthropic.com>` and `Session-URL: $SESSION_URL` to the commit body). Then continue.
+- If the author provides a commit message: run `git add -A` (excluding any file flagged as worktree noise above — `git restore --staged` it before committing if it got staged) and commit with their message (append `Co-Authored-By: $MODEL_NAME <noreply@anthropic.com>` and `Session-URL: $SESSION_URL` to the commit body). Then continue.
 - If the author says to continue: proceed with the working changes included in the review.
 
 ### Step 1.3 — Auto-detect base branch and compute diff range
@@ -126,7 +131,7 @@ fi
 
 **If BASE_BRANCH is UNKNOWN**: ask the author: "Could not auto-detect your base branch. Which branch should I diff against?" Accept their input, then re-run the diff range portion of the script above using that value.
 
-Store `BASE_BRANCH`, `MERGE_BASE`, `HEAD_SHA`, `FILE_COUNT`, and `INITIAL_COMMIT_COUNT` from the script output for use in all later steps.
+Store `BASE_BRANCH`, `MERGE_BASE`, `HEAD_SHA`, `FILE_COUNT`, and `INITIAL_COMMIT_COUNT` from the script output for use in all later steps. If Step 1.2 identified worktree noise, subtract it from `FILE_COUNT` and drop it from the "Changed files" list before storing — it must never reach the Phase 2 analyzer agents.
 
 Report to the author: "Analyzing $FILE_COUNT files changed since branching from `$BASE_BRANCH`."
 
@@ -539,10 +544,11 @@ If there are uncommitted changes, generate a descriptive commit message based on
 - Multiple fixes: `"fix: address review findings\n\n- Replace three-dot ellipses with proper … character\n- Add missing null check in FooComponent\n- Correct sentence case on dialog headings"`
 - If the only changes are from the quality check auto-formatter: `"chore: apply auto-formatting"`
 
-Then commit:
+Then commit. If Step 1.2 identified worktree noise (e.g. `package-lock.json`), stage everything else first and explicitly unstage it so it never enters the commit:
 
 ```bash
 git add -A
+git restore --staged package-lock.json 2>/dev/null || true  # only if Step 1.2 flagged it as worktree noise
 git commit -m "$(cat <<'EOF'
 <generated descriptive message>
 

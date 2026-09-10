@@ -13,23 +13,34 @@ import { networkObjectService } from '@shared/services/network-object.service';
 const onDidUpdateScrRef = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
 const onDidChangeReferenceHistory = getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY);
 
-let networkObject: IScrollGroupService;
-const initialize = createCachedInitializer(async () => {
+let networkObject: IScrollGroupService | undefined;
+
+/**
+ * Cached resolution of the scroll group network object.
+ *
+ * Main hosts the object (`main/services/scroll-group.service-host.ts`) and registers it before any
+ * window is created, so it is there for as long as the app is, and there is nothing to re-arm for:
+ * no window closing can take it away. `createCachedInitializer` still retries a FAILED resolution,
+ * which is the case that remains — a consumer that asks before the object has been announced.
+ */
+const initialize = createCachedInitializer(initializeScrollGroupService);
+
+async function initializeScrollGroupService(): Promise<void> {
   await networkObjectStatusService.waitForNetworkObject(
     { id: NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE },
     // Wait 30 seconds for the scroll group service to appear
     30000,
   );
 
-  const localWebViewService = await networkObjectService.get<IScrollGroupService>(
+  const scrollGroupNetworkObject = await networkObjectService.get<IScrollGroupService>(
     NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   );
-  if (!localWebViewService)
+  if (!scrollGroupNetworkObject)
     throw new Error(
       `${NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE} is not available as a network object`,
     );
-  networkObject = localWebViewService;
-});
+  networkObject = scrollGroupNetworkObject;
+}
 
 /**
  * JSDOC SOURCE scrollGroupService
@@ -39,6 +50,10 @@ const initialize = createCachedInitializer(async () => {
 export const scrollGroupService = createSyncProxyForAsyncObject<IScrollGroupService>(
   async () => {
     await initialize();
+    if (!networkObject)
+      throw new Error(
+        `${NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE} is not available as a network object`,
+      );
     return networkObject;
   },
   {

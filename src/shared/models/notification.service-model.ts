@@ -1,12 +1,14 @@
 import { CommandHandlers } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
+import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
+import type { WebViewId } from '@shared/models/web-view.model';
 
 export type Severity = 'info' | 'warning' | 'error';
 
 /**
  * The placements a notification can appear in, as a frozen array so it can be the single source of
  * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
- * `position` enum (which the service host spreads from this).
+ * `position` enum ({@link NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS} spreads from this).
  *
  * @experimental
  */
@@ -138,6 +140,14 @@ export interface PlatformNotification {
    * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
    * the value it had on the previous `send` for that id - omitting a field never clears it. Pass
    * the field explicitly to change it.
+   *
+   * The one exception is {@link webViewId}: which window a `send` runs in is decided in the main
+   * process before the renderer ever sees the notification to merge it, so omitting `webViewId` on
+   * an update does NOT keep routing to the window the original send resolved to - it always routes
+   * by the rules {@link webViewId} documents, using only what this call passed. An update that lands
+   * in a different window updates nothing: that window has never seen the id, so it opens a second
+   * notification with no merge applied, and the original stays up in the window it was routed to.
+   * Pass the same `webViewId` on every `send` that shares an id.
    */
   notificationId?: string | number;
   /**
@@ -148,6 +158,23 @@ export interface PlatformNotification {
    * seconds).
    */
   duration?: number;
+  /**
+   * Optional id of a web view this notification is about. When provided, the notification is routed
+   * to the window that owns that web view instead of the focused window — for a notification or
+   * prompt raised about a specific project or editor that may not be the one the user is currently
+   * looking at. Falls back to the focused window whenever the web view's window cannot be
+   * determined — it is open nowhere, a window that might have it could not be asked, or it is
+   * moving between windows.
+   *
+   * Omit for a generic notice, which should keep routing to the focused window — where the user is
+   * looking is the right place for something that is not about anything in particular.
+   *
+   * The narrowest key available: a notification about a project with no web view currently open has
+   * no `webViewId` to name, and routes to the focused window like a generic notice would.
+   *
+   * @experimental
+   */
+  webViewId?: WebViewId;
 }
 
 /**
@@ -179,3 +206,74 @@ export interface INotificationService {
 }
 
 export const NotificationServiceNetworkObjectName = 'NotificationService';
+
+/**
+ * OpenRPC documentation for the notification service network object.
+ *
+ * Attached in two places: each window's renderer registers its window-scoped name (e.g.
+ * `NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) with these docs, and the main process
+ * attaches the same docs when it registers its service router under the generic
+ * {@link NotificationServiceNetworkObjectName} — the name consumers actually call — so the public
+ * name does not show undocumented in `rpc.discover`.
+ *
+ * @experimental
+ */
+export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation = {
+  // Marked at the object level rather than per method, which fans the marker out over every method
+  // and the object's own existence method: the whole surface is experimental, including what
+  // dismissing means now that a notification is shown by one window out of several. Matches the
+  // `@experimental` tag above, which says the same thing to TypeScript consumers.
+  'x-experimental': true,
+  summary: 'Service that sends notifications to users in the UI',
+  methods: [
+    {
+      name: 'send',
+      summary: "Send a notification to the user's UI",
+      params: [
+        {
+          name: 'notification',
+          required: true,
+          summary: 'The notification to send',
+          schema: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' },
+              severity: { type: 'string' },
+              clickCommand: { type: 'string' },
+              clickCommandLabel: { type: 'string' },
+              secondaryClickCommand: { type: 'string' },
+              secondaryClickCommandLabel: { type: 'string' },
+              dismissClickCommand: { type: 'string' },
+              position: { type: 'string', enum: [...NOTIFICATION_POSITIONS] },
+              dismissible: { type: 'boolean' },
+              notificationId: { type: ['string', 'number'] },
+              duration: { type: 'number' },
+              webViewId: { type: 'string' },
+            },
+            required: ['message', 'severity'],
+          },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: ['string', 'number'] },
+      },
+    },
+    {
+      name: 'dismiss',
+      summary: "Dismiss a notification from the user's UI",
+      params: [
+        {
+          name: 'notificationId',
+          required: true,
+          summary: 'The ID of the notification to dismiss',
+          schema: { type: ['string', 'number'] },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  ],
+};

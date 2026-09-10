@@ -32,6 +32,32 @@ type BookItemProps = {
   commandValue?: string;
   /** When true, renders the item as disabled: suppresses onSelect and dims the visuals. */
   disabled?: boolean;
+  /**
+   * Short localized label naming why this item is greyed (e.g. "Not in project"). Passing a value
+   * renders the item greyed but fully selectable — the state for an item that is reachable yet
+   * outside the current context, such as a book present in an open resource but not in the active
+   * project.
+   *
+   * Distinct from `disabled`, which also suppresses selection; `disabled` takes precedence and a
+   * disabled item is never additionally dimmed. The label renders as visible text beside the book
+   * id, so the greying is never a colour-only signal and stays readable while the row is
+   * highlighted — the state and its explanation are one prop precisely so they cannot drift apart.
+   *
+   * An empty string counts as no reason, so the item renders undimmed. Callers resolving this from
+   * a localized string should fall back with `||` rather than `??`, since `??` passes an empty
+   * translation through and would silently drop the dimming.
+   */
+  dimmedReason?: string;
+  /**
+   * Complete localized sentence describing why this item is greyed, e.g. "Hebrews is not in this
+   * project" — used as the item's accessible name so a screen reader hears a full sentence rather
+   * than the bare `dimmedReason` label. Resolve it from a localized template that places the book
+   * name itself (`formatReplacementString`) rather than concatenating around a fragment, so
+   * translations control word order and punctuation.
+   *
+   * Ignored unless `dimmedReason` is also set. Falls back to `dimmedReason` when absent.
+   */
+  dimmedDescription?: string;
 };
 
 /**
@@ -55,6 +81,8 @@ export function BookItem({
   localizedBookNames,
   commandValue,
   disabled = false,
+  dimmedReason,
+  dimmedDescription,
 }: BookItemProps) {
   const isMouseClick = useRef(false);
 
@@ -94,6 +122,66 @@ export function BookItem({
     [bookId, localizedBookNames],
   );
 
+  const isDimmed = !!dimmedReason && !disabled;
+  // Built from the same localized values the row renders, not from the English canon name, so a
+  // localized name is never announced next to an English one. Both fall back to English when the
+  // caller passes no localized names, so the undimmed case is unchanged.
+  const baseAriaLabel = `${bookDisplayName} (${bookDisplayId})`;
+  // A dimmed row announces the caller's whole localized sentence instead of this name plus an
+  // appended fragment: the qualifier's position, punctuation, and any inflection of the book name
+  // belong to the translation, not to string concatenation here.
+  const ariaLabel = isDimmed
+    ? dimmedDescription || `${baseAriaLabel}, ${dimmedReason}`
+    : baseAriaLabel;
+
+  const commandItem = (
+    <CommandItem
+      ref={ref}
+      value={commandValue || `${bookId} ${Canon.bookIdToEnglishName(bookId)}`}
+      onSelect={handleSelect}
+      onMouseDown={handleMouseDown}
+      role="option"
+      aria-selected={isSelected}
+      aria-disabled={disabled || undefined}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      className={cn(
+        className,
+        disabled && 'tw:cursor-not-allowed tw:opacity-50',
+        // Mirrors NumberedItemGrid's dimmed-vs-disabled split — same tokens, so chapter/verse cells
+        // and book rows grey identically inside one popover: dimmed is presentation only, so it
+        // never sets aria-disabled or blocks onSelect, and it yields to disabled.
+        isDimmed && 'tw:bg-muted/50 tw:text-muted-foreground/50',
+      )}
+    >
+      {showCheck && (
+        <Check
+          className={cn(
+            'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
+            isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
+          )}
+        />
+      )}
+      <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
+      {isDimmed && (
+        // Visible rather than hover-only: cmdk never moves DOM focus onto an item (the input keeps
+        // it and highlights via data-selected), so a tooltip would never open for a keyboard user.
+        // Rendered text also survives the highlight, which recolours the row.
+        <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:italic">{dimmedReason}</span>
+      )}
+      <span
+        className={cn(
+          'tw:ms-2 tw:shrink-0 tw:text-xs',
+          // Inherits the row's dimmed colour instead of setting its own, so the whole row dims
+          // evenly rather than leaving the id at full strength beside a dimmed name.
+          !isDimmed && 'tw:text-muted-foreground',
+        )}
+      >
+        {bookDisplayId}
+      </span>
+    </CommandItem>
+  );
+
   return (
     <div
       className={cn(
@@ -106,31 +194,7 @@ export function BookItem({
         },
       )}
     >
-      <CommandItem
-        ref={ref}
-        value={commandValue || `${bookId} ${Canon.bookIdToEnglishName(bookId)}`}
-        onSelect={handleSelect}
-        onMouseDown={handleMouseDown}
-        role="option"
-        aria-selected={isSelected}
-        aria-disabled={disabled || undefined}
-        aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
-        disabled={disabled}
-        className={cn(className, disabled && 'tw:cursor-not-allowed tw:opacity-50')}
-      >
-        {showCheck && (
-          <Check
-            className={cn(
-              'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
-              isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
-            )}
-          />
-        )}
-        <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
-        <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
-          {bookDisplayId}
-        </span>
-      </CommandItem>
+      {commandItem}
     </div>
   );
 }

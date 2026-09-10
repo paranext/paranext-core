@@ -7,8 +7,11 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import type { DblResourceCatalog } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
-import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
+import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
+import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
+import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -28,62 +31,134 @@ let executionToken: ExecutionToken | undefined;
 let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
+let syncInFlight: Promise<void> | undefined;
 
-async function fetchAndCacheResources(): Promise<DblResourceData[] | undefined> {
+async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
-  if (!provider) return undefined;
+  // The contract itself lives in `dbl-catalog.utils` so it can be tested: this module imports web
+  // views through webpack's `?inline` loader and so cannot be loaded by the test runner.
+  const catalog = await resolveDblCatalog(provider);
+  if (catalog.status !== 'available') return catalog;
 
-  if (!(await provider.isGetDblResourcesAvailable())) return undefined;
-
-  const resources = await provider.getDblResources(undefined);
-  if (resources) {
-    cachedResources = resources;
-    if (executionToken)
+  cachedResources = catalog.resources;
+  // The catalog is already in hand, so a failed persistence write must not be reported as a failed
+  // fetch. `getCachedResources` rejects on failure and every host paints "couldn't load the list of
+  // available resources" with a retry — over a complete catalog, and a retry that appears to fix it
+  // only because it takes the cache fast path. Losing the cache costs a refetch next launch; losing
+  // the catalog costs the user the feature.
+  if (executionToken)
+    try {
       await papi.storage.writeUserData(
         executionToken,
         RESOURCES_CACHE_KEY,
         JSON.stringify(cachedResources),
       );
-  }
-  return resources;
+    } catch (e) {
+      logger.warn(`Failed to cache the DBL resource catalog: ${getErrorMessage(e)}`);
+    }
+  return catalog;
 }
 
 async function startBackgroundFetchResources(): Promise<void> {
   if (hasFetchStarted) return;
   hasFetchStarted = true;
   await fetchMutex.runExclusive(async () => {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      // Sequential retry delay requires awaiting inside the loop
-      // eslint-disable-next-line no-await-in-loop
-      if (attempt > 0) await wait(1000);
-
-      try {
-        // Need to have these await statements inside the loop to retry 10 times
-        // eslint-disable-next-line no-await-in-loop
-        const result = await fetchAndCacheResources();
-        if (result !== undefined) return;
-      } catch (e) {
-        logger.debug(`Background resource fetch attempt ${attempt + 1} failed: ${e}`);
-      }
-    }
-    logger.warn('Background DBL resources fetch failed after 10 attempts');
+    const result = await retryUntil(
+      async (attemptNumber) => {
+        try {
+          return await fetchAndCacheResources();
+        } catch (e) {
+          logger.debug(`Background resource fetch attempt ${attemptNumber} failed: ${e}`);
+          return undefined;
+        }
+      },
+      // A build with no DBL credentials has arrived at its answer; retrying it nine more times
+      // cannot change it. Only `notReady` is worth another attempt.
+      (catalog) => !!catalog && shouldStopBackgroundFetch(catalog),
+      { maxAttempts: 10, delayMs: 1000 },
+    );
+    if (result === undefined)
+      logger.warn('Background DBL resources fetch failed after 10 attempts');
   });
 }
 
-async function getCachedResources(): Promise<DblResourceData[] | undefined> {
-  if (cachedResources !== undefined) {
-    try {
-      // Checks to make sure all the `installed` flags are accurate
+/**
+ * Whether any C# resource project has been seen this session. The Paratext PDPF registers its
+ * projects after activation, and a metadata read that resolves first sees none — indistinguishable
+ * from a machine that genuinely has no read-only projects. Remembering the answer lets the retry
+ * below run when it can still discover something and stay out of the way afterwards.
+ */
+let haveLocalResourceProjectsAppeared = false;
+/** Whether the full wait below has already been spent without any resource project appearing. */
+let hasWaitedForLocalResourceProjects = false;
+
+const RESOURCE_PROJECT_WAIT_ATTEMPTS = 5;
+const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
+
+/**
+ * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
+ *
+ * The wait is what makes a newly-installed resource visible: a read that resolves before the
+ * factory registers returns only the TypeScript PDPFs, and a caller that trusts it concludes
+ * nothing is installed. It is spent at most once per session — once a resource project has been
+ * seen the factory is up and no wait is needed, and if the full budget passes with none seen the
+ * machine has none to find, so later calls return the first read immediately.
+ *
+ * @returns The project metadata, and whether any read-only (resource) project was in it
+ */
+async function getLocalProjectMetadata(): Promise<{
+  metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>;
+  hasResourceProjects: boolean;
+}> {
+  const readMetadata = () =>
+    papi.projectLookup.getMetadataForAllProjects({ includeProjectInterfaces: ['platform.base'] });
+  const hasResourceProject = (
+    metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>,
+  ) => metadata.some((m) => m.isEditable === false);
+
+  const shouldWait = !haveLocalResourceProjectsAppeared && !hasWaitedForLocalResourceProjects;
+  const metadata = shouldWait
+    ? await retryUntil(readMetadata, hasResourceProject, {
+        maxAttempts: RESOURCE_PROJECT_WAIT_ATTEMPTS,
+        delayMs: RESOURCE_PROJECT_WAIT_DELAY_MS,
+      })
+    : await readMetadata();
+
+  const hasResourceProjects = hasResourceProject(metadata);
+  if (hasResourceProjects) haveLocalResourceProjectsAppeared = true;
+  else if (shouldWait) hasWaitedForLocalResourceProjects = true;
+
+  return { metadata, hasResourceProjects };
+}
+
+/**
+ * Syncs installed flags on `cachedResources` against live project metadata from C#. Runs in the
+ * background so it never blocks a dialog open. Updates `cachedResources` and writes to storage when
+ * flags change.
+ */
+async function syncInstalledFlags(): Promise<void> {
+  if (cachedResources === undefined) return;
+  try {
+    const { metadata: localProjectMetadata, hasResourceProjects } = await getLocalProjectMetadata();
+    // No read-only project in the list means either C# has not registered yet or the machine has
+    // none. Syncing against it would mark every installed resource not-installed and persist that,
+    // and it can never mark anything installed, so there is nothing to gain by continuing.
+    if (!hasResourceProjects) return;
+
+    // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
+    // overwrite cachedResources between our map() and our assignment.
+    await fetchMutex.runExclusive(async () => {
+      if (cachedResources === undefined) return;
+
       let isChanged = false;
-      const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-      });
       const newCachedResources = cachedResources.map((resource) => {
         const matchingLocalProject = localProjectMetadata.find((localProject) =>
           // If the `projectId` is defined then tries to use that
           resource.projectId
             ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id
+            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
+              // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
+              resource.dblEntryUid !== '' &&
               localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
         );
 
@@ -101,10 +176,8 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
         return resource;
       });
 
-      // If a change was detected updates the cache
       if (isChanged) {
         cachedResources = newCachedResources;
-        // Writes the updated cached resources to user data
         if (executionToken)
           await papi.storage.writeUserData(
             executionToken,
@@ -112,22 +185,83 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
             JSON.stringify(cachedResources),
           );
       }
-    } catch (error: unknown) {
-      logger.warn(`Error getting cached resources: ${getErrorMessage(error)}`);
-    }
+    });
+  } catch (error: unknown) {
+    logger.warn(`Error syncing installed flags: ${getErrorMessage(error)}`);
+  }
+}
 
-    return cachedResources;
+/**
+ * Starts the installed-flag sync if one is not already running, and returns the promise for it.
+ * Callers that only need the catalog let it run in the background; callers whose answer depends on
+ * the flags being current await it and re-read `cachedResources` afterwards.
+ */
+function ensureInstalledFlagsSynced(): Promise<void> {
+  if (!syncInFlight) {
+    syncInFlight = syncInstalledFlags()
+      .catch((e) => logger.warn(`Background installed-flag sync failed: ${getErrorMessage(e)}`))
+      .finally(() => {
+        syncInFlight = undefined;
+      });
+  }
+  return syncInFlight;
+}
+
+async function getCachedResources(): Promise<DblResourceCatalog> {
+  if (cachedResources !== undefined) {
+    // Run the installed-flag sync in the background so the dialog open is never blocked by
+    // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
+    // the C# PDPF is still initializing). The next dialog open picks up the updated flags.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    ensureInstalledFlagsSynced();
+    return { status: 'available', resources: cachedResources };
   }
 
   return fetchMutex.runExclusive(async () => {
-    if (cachedResources !== undefined) return cachedResources;
+    if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
     try {
-      return fetchAndCacheResources();
+      // Awaited deliberately: returning the promise un-awaited from inside this `try` would let a
+      // rejection bypass the logging below entirely.
+      return await fetchAndCacheResources();
     } catch (e) {
-      logger.warn(`getCachedResources on-demand fetch failed: ${e}`);
-      return undefined;
+      // Rethrown rather than flattened to an "unavailable" result. A caller can offer a retry that
+      // might actually work for a failure; it cannot for a build with no DBL credentials, and
+      // collapsing the two here is what makes that distinction unrecoverable upstream.
+      logger.warn(`getCachedResources on-demand fetch failed: ${getErrorMessage(e)}`);
+      throw e;
     }
   });
+}
+
+/**
+ * Returns locally-installed, read-only resources that are NOT in the DBL catalog — e.g. VULGP83,
+ * TNN, TND, HBK. Useful for populating the Resource Picker's INSTALLED section with resources that
+ * were installed outside the DBL download flow.
+ *
+ * Convention: each synthetic entry uses `dblEntryUid === projectId` to mark it as non-DBL so that
+ * callers (e.g. `selectTextConnection`) can create a `ProjectReference` instead of a
+ * `DblResourceReference` when the user selects one.
+ */
+async function getLocalNonDblResources(): Promise<DblResourceData[]> {
+  try {
+    await getCachedResources();
+    // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
+    // `getCachedResources` returns before its background sync finishes. Wait for that sync and read
+    // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
+    // than emitted a second time as a synthetic non-DBL one.
+    await ensureInstalledFlagsSynced();
+    // An absent catalog means one has never been fetched on this profile (a fetched catalog is
+    // persisted and reloaded on activation), so there is nothing for these projects to duplicate
+    // and no reason to withhold them. Suppressing them here would hide side-loaded resources from
+    // exactly the offline, never-connected users most likely to have them.
+    const dblCatalog = cachedResources ?? [];
+
+    const { metadata: allMetadata } = await getLocalProjectMetadata();
+    return buildLocalNonDblResources(allMetadata, dblCatalog);
+  } catch (error: unknown) {
+    logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
+    return [];
+  }
 }
 
 let manageExtensions: ManageExtensions;
@@ -293,20 +427,30 @@ export async function activate(context: ExecutionActivationContext) {
     getCachedResources,
   );
 
+  const getLocalNonDblResourcesCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.getLocalNonDblResources',
+    getLocalNonDblResources,
+  );
+
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
     'platformGetResources.isSendReceiveAvailable',
     async () => {
-      let isSendReceiveAvailable: boolean = false;
-      if (context.elevatedPrivileges.manageExtensions) {
-        manageExtensions = context.elevatedPrivileges.manageExtensions;
-        const installedExtensions = await manageExtensions.getInstalledExtensions();
-        isSendReceiveAvailable = installedExtensions.packaged
-          .concat(installedExtensions.enabled)
-          .some((extension) => {
-            return extension.extensionName === 'paratextBibleSendReceive';
-          });
+      if (!context.elevatedPrivileges.manageExtensions) {
+        // `undefined`, not `false`: without the privilege there is nothing to check, so answering
+        // `false` would report "send/receive isn't in this build" on no evidence — and callers hide
+        // send/receive UI for the session on a `false`. `undefined` says "couldn't determine",
+        // which callers treat as unknown and fail open on.
+        logger.warn(
+          'platformGetResources cannot check whether send/receive is available without the manageExtensions privilege; reporting unknown',
+        );
+        return undefined;
       }
-      return isSendReceiveAvailable;
+
+      manageExtensions = context.elevatedPrivileges.manageExtensions;
+      const installedExtensions = await manageExtensions.getInstalledExtensions();
+      return installedExtensions.packaged.concat(installedExtensions.enabled).some((extension) => {
+        return extension.extensionName === 'paratextBibleSendReceive';
+      });
     },
   );
 
@@ -319,6 +463,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openHomeWebViewCommandPromise,
     await openNewTabWebViewCommandPromise,
     await getCachedResourcesCommandPromise,
+    await getLocalNonDblResourcesCommandPromise,
     await isSendReceiveAvailableCommandPromise,
   );
 

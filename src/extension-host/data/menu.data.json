@@ -41,6 +41,14 @@
         "command": "platform.quit"
       },
       {
+        "label": "%mainMenu_openNewWindow%",
+        "localizeNotes": "Application main menu > Project > Open new window",
+        "group": "platform.projectMisc",
+        "order": 1,
+        "command": "platform.createWindow",
+        "hiddenInterfaceModes": ["simple"]
+      },
+      {
         "label": "%mainMenu_helpInfo_visitGettingStartedPage%",
         "localizeNotes": "Application main menu > Help > Visit Getting Started Page",
         "group": "platform.helpInfo",
@@ -63,6 +71,13 @@
         "order": 3,
         "command": "platform.visitFeatureRoadmapPage",
         "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
+      },
+      {
+        "label": "%mainMenu_helpInfo_showTour%",
+        "localizeNotes": "Application main menu > Help > Show the tour",
+        "group": "platform.helpInfo",
+        "order": 4,
+        "command": "platform.showOnboardingTour"
       },
       {
         "label": "%mainMenu_feedbackForm_textArea%",
@@ -134,6 +149,34 @@
         "group": "platform.wordList",
         "order": 1,
         "command": "platform.openWordList"
+      }
+    ]
+  },
+  "defaultWebViewTabMenu": {
+    "groups": {
+      "platform.tabWindow": { "order": 100, "isExtensible": true, "isExperimental": true }
+    },
+    "items": [
+      {
+        "label": "%tab_contextMenu_floatPanel%",
+        "localizeNotes": "Tab context menu > Float tab",
+        "group": "platform.tabWindow",
+        "order": 100,
+        "command": "platform.floatTab"
+      },
+      {
+        "label": "%tab_contextMenu_moveTabToNewWindow%",
+        "localizeNotes": "Tab context menu > Move tab to new window",
+        "group": "platform.tabWindow",
+        "order": 200,
+        "command": "platform.moveWebViewToNewWindow"
+      },
+      {
+        "id": "platform.moveTabToWindow",
+        "label": "%tab_contextMenu_moveTabToWindow%",
+        "localizeNotes": "Tab context menu > Move tab to window (submenu listing the open windows)",
+        "group": "platform.tabWindow",
+        "order": 300
       }
     ]
   },

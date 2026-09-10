@@ -7,6 +7,12 @@
         "label": "%settings_platformScriptureEditor_enableScriptureTextGrid_label%",
         "description": "%settings_platformScriptureEditor_enableScriptureTextGrid_description%",
         "default": true
+      },
+      "platformScriptureEditor.markerSettleDelayMs": {
+        "label": "%settings_platformScriptureEditor_markerSettleDelayMs_label%",
+        "description": "%settings_platformScriptureEditor_markerSettleDelayMs_description%",
+        "isHidden": true,
+        "default": 1000
       }
     }
   }

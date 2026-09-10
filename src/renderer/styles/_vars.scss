@@ -16,9 +16,11 @@ $space--sm: 8px;
 $space--md: 16px;
 $space--lg: 36px;
 
-/* Z-INDEX — canonical scale lives in platform-bible-react/src/components/z-index.ts */
-$z-index--above-dock: 250;
-$z-index--footnote-editor: 300;
+/* Z-INDEX — canonical scale lives in platform-bible-react/src/components/z-index.ts.
+   Kept in agreement by `z-index.test.ts`, which reads this file: these two drifted for months
+   after one side was changed alone. */
+$z-index--above-dock: 600;
+$z-index--above-popover: 650;
 $z-index--overlay: 400;
 $z-index--modal-backdrop: 450;
 $z-index--modal: 500;

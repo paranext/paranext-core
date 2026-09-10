@@ -194,6 +194,29 @@ const config: StorybookConfig = {
         /^@shared\/services\/rpc-handler\.factory$/,
         join(__dirname, 'papi-stubs/rpc-handler.factory.ts'),
       ),
+      // The toolbar's sync status is derived entirely from Send/Receive commands and network events,
+      // none of which Storybook can answer — so without this the button can only ever render `idle`
+      // (then `unknown` a minute later). The mock lets a story name the status directly, and defaults
+      // to the same inert `idle` otherwise. Same reasoning as above re: NormalModuleReplacementPlugin
+      // vs `resolve.alias` (`@renderer/*` is a TsconfigPathsPlugin path).
+      new NormalModuleReplacementPlugin(
+        /^@renderer\/hooks\/use-sync-status\.hook$/,
+        join(__dirname, 'mocks/use-sync-status.hook.ts'),
+      ),
+      // One replacement stands in for the command service in EVERY story. It delegates to the real
+      // service, whose default is to reject — Storybook has no PAPI backend, so
+      // `papi-stubs/rpc-handler.factory.ts` answers with a JSON-RPC error. Two exceptions are
+      // global: the Send/Receive commands whose rejection would make the sync button's
+      // accepted-cancel state unreachable. A story can claim any command for itself by setting a
+      // responder via `mocks/command-service-mock-channel.ts`, which the stub reads at call time;
+      // that channel exists because `spyOn(commandService, 'sendCommand')` cannot work in Storybook
+      // 9 — webpack builds the module namespace with non-configurable getters and tags it
+      // `Symbol.toStringTag = 'Module'`, which is exactly what makes spying throw "Module namespace
+      // is not configurable in ESM". See the stub for details.
+      new NormalModuleReplacementPlugin(
+        /^@shared\/services\/command\.service$/,
+        join(__dirname, 'papi-stubs/command.service.ts'),
+      ),
     );
 
     // Remove the Storybook Webpack rules that we already have our own rules for

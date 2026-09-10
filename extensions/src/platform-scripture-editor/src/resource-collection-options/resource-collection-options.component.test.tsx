@@ -161,22 +161,37 @@ describe('ResourceCollectionOptions — TEXTS list', () => {
 });
 
 describe('ResourceCollectionOptions — Get Resources', () => {
-  it('fires onGetResources when the button is clicked', () => {
+  it('fires onGetResources when the button is clicked, with no arguments', () => {
     const props = renderComponent();
     fireEvent.click(screen.getByRole('button', { name: 'Get resources…' }));
     expect(props.onGetResources).toHaveBeenCalledTimes(1);
+    // Verify no React event is forwarded — passing the event over the PAPI websocket causes a
+    // circular-JSON error that silently drops the dialog-open RPC payload.
+    expect(props.onGetResources).toHaveBeenCalledWith();
   });
 });
 
 describe('ResourceCollectionOptions — disabled (no project/PDP bound)', () => {
-  it('disables Get Resources, checkboxes, and the remove control when disabled', () => {
+  it('disables the checkboxes and the remove control, but not Get Resources, when disabled', () => {
     renderComponent({
       disabled: true,
       bottom: [row('u1', 'My Text', { isUserRemovable: true })],
     });
-    expect(screen.getByRole('button', { name: 'Get resources…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Get resources…' })).toBeEnabled();
     expect(screen.getByRole('checkbox', { name: 'My Text' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Remove My Text from list' })).toBeDisabled();
+  });
+
+  // A button that renders enabled but whose handler is gated would still pass the enabled check
+  // above, so assert the callback actually fires.
+  it('fires onGetResources when the button is clicked while disabled', () => {
+    const props = renderComponent({
+      disabled: true,
+      bottom: [row('u1', 'My Text', { isUserRemovable: true })],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Get resources…' }));
+    expect(props.onGetResources).toHaveBeenCalledTimes(1);
+    expect(props.onGetResources).toHaveBeenCalledWith();
   });
 
   it('shows the disabled message when disabled', () => {

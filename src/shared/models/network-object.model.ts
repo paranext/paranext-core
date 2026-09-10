@@ -18,6 +18,12 @@ import {
  * call that method. This is because we don't want users of network objects to dispose of them. Only
  * the caller of `networkObjectService.set` should be able to dispose of the network object.
  *
+ * WARNING: this object's proxy is revoked as soon as the `onDidDispose` handlers return — the
+ * handlers are not awaited. An `async` handler may therefore read and call the object freely before
+ * its first `await`, but everything it touches afterward throws `TypeError: Cannot perform 'get' on
+ * a proxy that has been revoked`. Capture whatever you need (property values, results of calls you
+ * start immediately) before awaiting anything.
+ *
  * @see {@link networkObjectService}
  */
 export type NetworkObject<T extends NetworkableObject> = Omit<CanHaveOnDidDispose<T>, 'dispose'> &

@@ -3,16 +3,20 @@ import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
 import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
-import { resolveRegistrationValidity } from './resolve-registration-validity';
+import {
+  publishRegistrationValidity,
+  refreshRegistrationValidity,
+} from './registration-validity-store';
 import { pickBestSetupLanguage } from './pick-best-setup-language';
 
 /** What the app should currently render for first-run gating. */
 export type FirstRunStatus =
   | { kind: 'loading' }
   | { kind: 'app' }
-  | { kind: 'wizard'; step: FirstRunStep }
+  | { kind: 'wizard'; step: FirstRunStep; allowContinueWithoutRegistration?: boolean }
   | { kind: 'error' };
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
@@ -33,22 +37,15 @@ const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 // registration backend: the user just registered, so 'invalid' is almost certainly a server fluke.
 const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
 
-function readBooleanFlag(key: string): boolean {
-  try {
-    return localStorage.getItem(key) === 'true';
-  } catch {
-    // localStorage may be unavailable (sandboxed/test envs); treat as false.
-    return false;
-  }
-}
+// Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
+// startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
+let backgroundRecheckStarted = false;
 
-function writeBooleanFlag(key: string, value: boolean): void {
-  try {
-    localStorage.setItem(key, value ? 'true' : 'false');
-  } catch {
-    // Best-effort cache; a failed write just means the next startup re-resolves from scratch.
-  }
-}
+// Remembers that JUST_REGISTERED_KEY was set when this startup began. The durable flag is a
+// one-shot spent on the first read, but a startup can ask about registration more than once (the
+// Retry button re-enters resolveInternal), and the transient 'invalid' the flag exists to absorb
+// can just as easily land on the retry as on the first probe. See consumeJustRegisteredFlag.
+let justRegisteredThisStartup = false;
 
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
 export function isDemoMode(): boolean {
@@ -80,6 +77,10 @@ let status: FirstRunStatus = computeInitialStatus();
 // retryFirstRunResolution from starting a second run while one is already in flight.
 let resolvePromise: Promise<void> | undefined;
 let resolving = false;
+// Bumped when a resolution starts or a user action (continue-without-setup from the loading
+// watchdog) supersedes an in-flight one, so a late-settling resolveInternal can't clobber the
+// newer status. See applyStatus in resolveInternal.
+let resolutionGeneration = 0;
 
 const listeners = new Set<() => void>();
 
@@ -141,7 +142,19 @@ async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
   }
 }
 
-async function resolveInternal(): Promise<void> {
+async function resolveInternal(generation: number): Promise<void> {
+  // True once a user action superseded this run mid-flight (e.g. "continue without setup" from the
+  // loading watchdog while a slow probe was still awaiting). Gates both the in-memory status update
+  // AND the durable wizard-resume writes below (WIZARD_ACTIVE_KEY, firstRunComplete), so a
+  // late-settling run can neither clobber the user's status nor persist state that would resume the
+  // wizard at the wrong step on the next launch. Note the interface-language seed is only guarded at
+  // its boundaries: a bail landing inside seedInterfaceLanguageFromOsLocale's own awaits can still
+  // write platform.interfaceLanguage — that's harmless (it just sets the OS-matched UI language and
+  // never resumes the wizard), so the guard checks before and after the seed rather than atomically.
+  const isSuperseded = (): boolean => generation !== resolutionGeneration;
+  const applyStatus = (next: FirstRunStatus): void => {
+    if (!isSuperseded()) setStatus(next);
+  };
   try {
     // Demo/UX mode (PT-4219): bypass the real registration backend + relaunch entirely and drop the
     // user straight into the wizard from the top. Enablement only — never on in shipped builds.
@@ -149,7 +162,7 @@ async function resolveInternal(): Promise<void> {
     // WIZARD_ACTIVE_KEY, so leaving it unset keeps a later real first-run on the same profile from
     // wrongly resuming at the sync-consent step.
     if (isDemoMode()) {
-      setStatus({ kind: 'wizard', step: 'language' });
+      applyStatus({ kind: 'wizard', step: 'language' });
       return;
     }
 
@@ -163,7 +176,7 @@ async function resolveInternal(): Promise<void> {
       interfaceMode = readCachedInterfaceMode();
     }
     if (interfaceMode !== undefined && interfaceMode !== 'simple') {
-      setStatus({ kind: 'app' });
+      applyStatus({ kind: 'app' });
       return;
     }
 
@@ -209,31 +222,52 @@ async function resolveInternal(): Promise<void> {
           logger.warn(`Self-heal write of platform.syncOnStartup failed: ${getErrorMessage(e)}`);
         }
       }
-      setStatus({ kind: 'app' });
+      applyStatus({ kind: 'app' });
+      // Completed Simple-mode user: re-check registration in the background (not awaited) so a
+      // registration that has since become invalid can re-raise the wizard without regressing
+      // startup latency. Simple-mode is guaranteed here (non-simple returned early above).
+      startBackgroundRegistrationRecheck();
       return;
     }
 
     const wizardActive = readBooleanFlag(WIZARD_ACTIVE_KEY);
     // Consume the just-registered flag before resolving validity: the user set it just before
     // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
-    const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
-    if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
-    const registrationValidity = await resolveRegistrationValidity();
+    const justRegistered = consumeJustRegisteredFlag();
+    const registrationValidity = await refreshRegistrationValidity();
     const effectiveValidity =
       justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
+    // Record the answer the gate acted on, not the raw probe, so the reminder dot starts the session
+    // agreeing with the just-registered suppression decided here. A later forced re-check (opening
+    // the profile popover) can still re-probe past it.
+    // See `adr-registration-validity-once-per-session`.
+    //
+    // Deliberately ahead of the supersession check below, unlike every other side effect here. That
+    // guard exists to keep a superseded run from making *durable* writes; this is in-memory session
+    // state. The flag was already consumed above, so a run that bails out after consuming it and
+    // before publishing would spend the suppression without anyone acting on it, and the dot would
+    // then contradict a registration the user really did just complete.
+    if (effectiveValidity !== registrationValidity) publishRegistrationValidity(effectiveValidity);
     const decision = decideFirstRun({
       firstRunComplete: false,
       wizardActive,
       registrationValidity: effectiveValidity,
     });
 
+    // The registration probe above is the long await where the watchdog reveals the escape hatch, so
+    // it's where a "continue without setup" bail most likely lands. If that superseded us, the user
+    // is already in the app — skip the switch entirely so none of its persisted writes run. (Every
+    // durable write below sits in this switch; the reads/writes before the probe complete before the
+    // watchdog's reveal threshold, so they aren't reachable after a bail.)
+    if (isSuperseded()) return;
+
     switch (decision.action) {
       case 'completeThenShowApp':
         await markFirstRunComplete();
-        setStatus({ kind: 'app' });
+        applyStatus({ kind: 'app' });
         break;
       case 'waitForRegistration':
-        setStatus({ kind: 'error' });
+        applyStatus({ kind: 'error' });
         break;
       case 'startWizard':
         // Fresh start at the language step: default to the OS language if it has enough setup-dialog
@@ -246,27 +280,32 @@ async function resolveInternal(): Promise<void> {
         // introduces no new flash.)
         if (!wizardActive && decision.step === 'language') {
           await seedInterfaceLanguageFromOsLocale();
+          // seedInterfaceLanguageFromOsLocale is another await a bail could land across; re-check so
+          // WIZARD_ACTIVE_KEY isn't persisted for a run the user already superseded.
+          if (isSuperseded()) return;
         }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
-        setStatus({ kind: 'wizard', step: decision.step });
+        applyStatus({ kind: 'wizard', step: decision.step });
         break;
       default:
         // 'showApp' is unreachable here: we pass firstRunComplete: false above (the real flag was
         // checked and returned early). Defensive fallback.
-        setStatus({ kind: 'app' });
+        applyStatus({ kind: 'app' });
         break;
     }
   } catch (e) {
     logger.warn(`resolveFirstRunState failed: ${getErrorMessage(e)}`);
-    setStatus({ kind: 'error' });
+    applyStatus({ kind: 'error' });
   }
 }
 
 // Clears the `resolving` guard even if resolveInternal throws.
 async function runResolution(): Promise<void> {
   resolving = true;
+  resolutionGeneration += 1;
+  const generation = resolutionGeneration;
   try {
-    await resolveInternal();
+    await resolveInternal(generation);
   } finally {
     resolving = false;
   }
@@ -282,6 +321,78 @@ export async function resolveFirstRunState(): Promise<void> {
 }
 
 /**
+ * Reads and clears the just-registered flag, returning whether it was set at any point during this
+ * startup. The fresh-user startup path and the completed-user background re-check each consume it —
+ * a transient 'invalid' on the launch right after a re-register is treated as a backend fluke, not
+ * a re-nag.
+ *
+ * Clearing the durable flag and remembering the answer are deliberately separate. The flag grants
+ * exactly one launch of trust and must not survive into the next one, so it is cleared on the first
+ * read. But within that launch the answer has to outlive the read: an `'unknown'` probe routes the
+ * user to the "couldn't verify" screen without ever using the flag, and the transient `'invalid'`
+ * it was meant to absorb then arrives on the Retry — which, unguarded, mis-routes a user who just
+ * registered successfully back to the language step instead of resuming at sync consent.
+ */
+function consumeJustRegisteredFlag(): boolean {
+  if (readBooleanFlag(JUST_REGISTERED_KEY)) {
+    writeBooleanFlag(JUST_REGISTERED_KEY, false);
+    justRegisteredThisStartup = true;
+  }
+  return justRegisteredThisStartup;
+}
+
+/**
+ * For an already-onboarded Simple-mode user, re-check registration validity in the background —
+ * never awaited, never blocks startup. Only a definitive `'invalid'` raises the wizard at the
+ * `identify` step so the user can re-register; a down/slow backend resolves to `'unknown'` and is
+ * ignored, so an outage never re-onboards an established user (the key safety property). Honors
+ * `platform.showRegistrationReminderOnStartup` (default `true`): when explicitly `false`, does
+ * nothing. Runs at most once per startup and swallows all its own errors so it can never block or
+ * crash startup.
+ */
+async function startBackgroundRegistrationRecheck(): Promise<void> {
+  if (backgroundRecheckStarted) return;
+  backgroundRecheckStarted = true;
+  try {
+    // Consume the just-registered flag once per startup, before any early return, so a suppressed
+    // launch can't leave it stale (which could later swallow a legitimate wizard raise).
+    const justRegistered = consumeJustRegisteredFlag();
+    let reminderSuppressed = false;
+    try {
+      const value = await settingsService.get('platform.showRegistrationReminderOnStartup');
+      // Only an explicit `false` suppresses; a missing/errored/default value keeps showing.
+      reminderSuppressed = !isPlatformError(value) && value === false;
+    } catch (e) {
+      logger.warn(
+        `Could not read platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
+      );
+    }
+    if (reminderSuppressed) {
+      // This path consumed the one-shot just-registered flag above but returns before probing, so
+      // without this the flag is spent for nothing: the toolbar's own probe would publish the
+      // transient 'invalid' and nag all session about a registration the user just fixed. Matches
+      // what resolveInternal and IdentifyStep already do.
+      // See `adr-registration-validity-once-per-session`.
+      if (justRegistered) publishRegistrationValidity('valid');
+      return;
+    }
+    const validity = await refreshRegistrationValidity();
+    // Only a definitive 'invalid' raises the wizard; 'valid'/'unknown' leave the user in the app.
+    if (validity !== 'invalid') return;
+    // Suppress a single post-re-register transient 'invalid'; a still-invalid next launch re-raises.
+    if (justRegistered) {
+      // Match the suppression above so the reminder dot doesn't nag on the one launch right after
+      // re-registering. See `adr-registration-validity-once-per-session`.
+      publishRegistrationValidity('valid');
+      return;
+    }
+    setStatus({ kind: 'wizard', step: 'identify', allowContinueWithoutRegistration: true });
+  } catch (e) {
+    logger.warn(`Background registration re-check failed: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
  * Finish the wizard: persist completion, clear the active marker, reveal the app.
  *
  * @param options.skippedStep - The step that was skipped to end the wizard early (e.g.
@@ -290,6 +401,9 @@ export async function resolveFirstRunState(): Promise<void> {
  *   is best-effort: a failure is logged but does not block wizard completion.
  */
 export async function completeFirstRun(options?: { skippedStep?: FirstRunStep }): Promise<void> {
+  // Unlike continueWithoutRegistration, this doesn't bump resolutionGeneration: completeFirstRun is
+  // only reachable from the wizard UI, which renders after resolveInternal already set 'wizard' and
+  // returned — so no resolution is in flight whose late result could clobber this status.
   // Demo/UX mode: reveal the app but persist nothing, so the click-through re-runs on next launch.
   if (isDemoMode()) {
     setStatus({ kind: 'app' });
@@ -321,6 +435,9 @@ export async function completeFirstRun(options?: { skippedStep?: FirstRunStep })
  * then the user is in simple mode with no project and cannot open projects/resources.
  */
 export function continueWithoutRegistration(): void {
+  // Supersede any in-flight resolution (the user may reach this from the loading watchdog while a
+  // slow probe is still awaiting) so its late result can't override this choice.
+  resolutionGeneration += 1;
   setStatus({ kind: 'app' });
 }
 
@@ -342,5 +459,7 @@ export function resetFirstRunStore(): void {
   status = computeInitialStatus();
   resolvePromise = undefined;
   resolving = false;
+  backgroundRecheckStarted = false;
+  justRegisteredThisStartup = false;
   listeners.clear();
 }

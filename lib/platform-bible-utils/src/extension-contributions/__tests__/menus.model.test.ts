@@ -23,6 +23,7 @@ describe('menus.model — isExperimental field', () => {
       includeDefaults: undefined,
       topMenu: undefined,
       contextMenu: undefined,
+      tabMenu: undefined,
       isExperimental: true,
     };
     expect(m.isExperimental).toBe(true);
@@ -33,6 +34,7 @@ describe('menus.model — isExperimental field', () => {
     mainMenu,
     defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
     defaultWebViewContextMenu: { groups: {}, items: [] },
+    defaultWebViewTabMenu: { groups: {}, items: [] },
     webViewMenus: {},
   });
 
@@ -77,8 +79,74 @@ describe('menus.model — isExperimental field', () => {
       mainMenu: { columns: {}, groups: {}, items: [] },
       defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
       defaultWebViewContextMenu: { groups: {}, items: [] },
+      defaultWebViewTabMenu: { groups: {}, items: [] },
       webViewMenus: { 'a.b': { isExperimentl: true } },
     };
     expect(validate(doc)).toBe(false);
+  });
+});
+
+describe('menus.model — tab menu channel', () => {
+  const compileValidator = () => new Ajv2019({ allErrors: true }).compile(menuDocumentSchema);
+
+  const tabMenu = {
+    groups: { 'platform.tabWindow': { order: 1 } },
+    items: [
+      { label: '%float%', group: 'platform.tabWindow', order: 1, command: 'platform.floatTab' },
+    ],
+  };
+
+  const makeDoc = (overrides: object = {}) => ({
+    mainMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    defaultWebViewTabMenu: { groups: {}, items: [] },
+    webViewMenus: {},
+    ...overrides,
+  });
+
+  it('WebViewMenu carries a tab menu', () => {
+    const menu: WebViewMenu = {
+      includeDefaults: true,
+      topMenu: undefined,
+      contextMenu: undefined,
+      tabMenu: { groups: {}, items: [] },
+    };
+    expect(menu.tabMenu).toEqual({ groups: {}, items: [] });
+  });
+
+  it('accepts a platform default tab menu', () => {
+    expect(compileValidator()(makeDoc({ defaultWebViewTabMenu: tabMenu }))).toBe(true);
+  });
+
+  it('accepts a tab menu on a single web view', () => {
+    const doc = makeDoc({ webViewMenus: { 'a.b': { includeDefaults: true, tabMenu } } });
+    expect(compileValidator()(doc)).toBe(true);
+  });
+
+  it('accepts a document that contributes no platform default tab menu', () => {
+    // The channel is optional on both surfaces, matching the per-web-view `tabMenu` beside it, so
+    // that adding it did not break anything already constructing a whole menu document. A document
+    // without it simply contributes no platform tab items.
+    const { defaultWebViewTabMenu, ...docWithoutTabMenu } = makeDoc();
+    expect(defaultWebViewTabMenu).toBeDefined();
+    expect(compileValidator()(docWithoutTabMenu)).toBe(true);
+  });
+
+  it('still rejects an ill-formed platform default tab menu', () => {
+    // The positive control for the case above: optional must not mean unchecked, or dropping the
+    // key from `required` would leave the schema knowing nothing about the channel at all
+    const doc = makeDoc();
+    // A group order has to be a number; a string is the cheapest way to be ill-formed here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (doc.defaultWebViewTabMenu as unknown as { groups: Record<string, unknown> }).groups = {
+      'platform.tabWindow': { order: 'first' },
+    };
+    expect(compileValidator()(doc)).toBe(false);
+  });
+
+  it('rejects a multi-column menu in the tab menu, which renders as one column', () => {
+    const doc = makeDoc({ defaultWebViewTabMenu: { columns: {}, groups: {}, items: [] } });
+    expect(compileValidator()(doc)).toBe(false);
   });
 });

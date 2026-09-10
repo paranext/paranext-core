@@ -10,6 +10,18 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
  */
 export declare const BOOKS_PRESENT_DEFAULT = "";
 /**
+ * Book ids for all books that are not considered obsolete in the SIL Canon library, in canonical
+ * order.
+ *
+ * The list to fall back on when a project cannot say which books it has (see
+ * {@link getBookIdsFromBooksPresent}). It lives here rather than beside the book-picking UI because
+ * the navigation commands that share it run in the main process, which cannot import a React
+ * library.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const ALL_BOOK_IDS: readonly string[];
+/**
  * Converts a `platformScripture.booksPresent` flag string ('1' per present book, indexed by
  * canonical book number) into the list of present book ids
  *
@@ -27,6 +39,99 @@ export declare function getBookIdsFromBooksPresent(booksPresent: string): string
 export declare const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS: {
 	[x: string]: string;
 };
+/**
+ * The operations that drive an already-open palette from outside it — the shared driver contract
+ * between every palette host and consumer. Consumers reference it by name (`platform-bible-react`'s
+ * marker-palette keydown forwarding table calls it, and the `FootnoteEditor`'s host-supplied
+ * palette prop extends it with `show`); the renderer overlay service's per-WebView palette methods
+ * satisfy the shape structurally without naming the type. One contract instead of a structural
+ * re-declaration per layer.
+ *
+ * Return types are `void`: implementations may return promises (a `Promise<void>`-returning method
+ * satisfies a `void` signature), and callers treat all three as fire-and-forget.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export interface PaletteDriver {
+	/** Updates the filter text and/or moves the highlighted selection of the active palette. */
+	update(update: {
+		filterText?: string;
+		moveSelection?: number;
+	}): void;
+	/** Commits the currently highlighted palette item. */
+	commit(): void;
+	/** Dismisses the active palette without committing. */
+	dismiss(): void;
+}
+/**
+ * One keydown a palette FORWARDED to the session that requested it, instead of handling it itself.
+ *
+ * A palette rendered by the host (the renderer's overlay) and the session that opened it (a
+ * WebView) live in different documents, so whichever one holds focus is the only one that sees a
+ * keystroke. When the palette's own input wins that race, the keys the session claims never reach
+ * it — the session's commit semantics simply stop running. Forwarding closes that: the requester
+ * declares which keys it claims, and the palette hands those straight over rather than consuming
+ * them.
+ *
+ * Deliberately a plain-data shape with the two claim methods, not a DOM `KeyboardEvent`: the
+ * forwarded key crosses a document boundary, and this is exactly the surface a keydown handler
+ * needs. A real `KeyboardEvent` is structurally assignable to it, so one handler serves both the
+ * session's own listener and forwarded keys.
+ *
+ * Note this carries the key IDENTITY, unlike the app-window input announcement
+ * (`platform.onDidAppWindowInput`), which deliberately does not. That restriction is about
+ * broadcasting global input to arbitrary listeners; here a palette returns keystrokes only to the
+ * one session that opened it and explicitly asked for exactly these keys.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export interface ForwardedPaletteKeyEvent {
+	/** `KeyboardEvent.key` — the value matched against the requester's declared key list. */
+	key: string;
+	/**
+	 * `KeyboardEvent.keyCode`. Needed only for the legacy `229` "handled by IME" signal, which some
+	 * engines fire before `isComposing` flips true.
+	 */
+	keyCode: number;
+	/** Whether an IME composition is underway; such a key is never palette input. */
+	isComposing: boolean;
+	ctrlKey: boolean;
+	metaKey: boolean;
+	altKey: boolean;
+	shiftKey: boolean;
+	/**
+	 * `KeyboardEvent.getModifierState`, when the forwarder can supply it. Needed to tell an AltGr
+	 * chord apart from a real Ctrl+Alt chord: on Windows/Linux a character typed WITH AltGr held
+	 * arrives with `ctrlKey && altKey` both set, and without this signal a session dismisses on what
+	 * is actually ordinary typing on several European layouts. Optional so a plain-data forwarder
+	 * that cannot supply it stays valid — consumers must treat "absent" as "not held".
+	 */
+	getModifierState?(keyArg: string): boolean;
+	/** Stops the palette (and the browser) from acting on this key. */
+	preventDefault(): void;
+	/** Stops the key from propagating further in the palette's own document. */
+	stopPropagation(): void;
+}
+/**
+ * A requester's declaration that it owns some keys while its palette is open. Passed when showing
+ * the palette; the palette forwards every keydown whose `key` is in {@link keys} to {@link onKey} and
+ * does not act on it itself.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export interface PaletteKeyForwarding {
+	/**
+	 * `KeyboardEvent.key` values the requesting session claims. Anything not listed stays the
+	 * palette's own (arrow navigation, ordinary typing into its input, and so on).
+	 */
+	keys: readonly string[];
+	/**
+	 * Receives each forwarded key. The handler decides what to do with it, including whether to claim
+	 * it via `preventDefault`/`stopPropagation` — the palette does not claim on its behalf, so an
+	 * unclaimed key still behaves normally.
+	 */
+	onKey(event: ForwardedPaletteKeyEvent): void;
+}
 /**
  * Versification-dependent chapter/verse bounds used to roll navigation across chapter and book
  * boundaries. Lookups return `undefined` when the bound is unknown (e.g. no project versification
@@ -52,7 +157,7 @@ export type ScriptureBounds = {
  * @returns The closest present book id in that direction, or `undefined` if none exists
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function findAdjacentPresentBook(book: string, availableBooks: string[], direction: "next" | "previous"): string | undefined;
+export declare function findAdjacentPresentBook(book: string, availableBooks: readonly string[], direction: "next" | "previous"): string | undefined;
 /**
  * Previous chapter (verse 1), rolling across book boundaries. Steps back one chapter within the
  * current book when it is present and not at chapter 1; otherwise — at chapter 1, or when the
@@ -70,7 +175,7 @@ export declare function findAdjacentPresentBook(book: string, availableBooks: st
  * @returns The previous-chapter reference, or `undefined` if there is nowhere before it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availableBooks: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availableBooks: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Next chapter (verse 1), rolling across book boundaries. Steps forward one chapter within the
  * current book when it is present and not at its last chapter; otherwise — at the last chapter, or
@@ -88,7 +193,7 @@ export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availa
  * @returns The next-chapter reference, or `undefined` if there is nowhere after it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableBooks: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableBooks: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Previous book (chapter 1 verse 1): the closest previous present book, skipping absent books.
  * `scrRef.book` need not be present. Returns `undefined` when there is no present book before it.
@@ -101,7 +206,7 @@ export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableB
  * @returns Chapter 1 verse 1 of the closest previous present book, or `undefined` if none
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousBookRef(scrRef: SerializedVerseRef, availableBooks: string[]): SerializedVerseRef | undefined;
+export declare function getPreviousBookRef(scrRef: SerializedVerseRef, availableBooks: readonly string[]): SerializedVerseRef | undefined;
 /**
  * Next book (chapter 1 verse 1): the closest next present book, skipping absent books.
  * `scrRef.book` need not be present. Returns `undefined` when there is no present book after it.
@@ -111,7 +216,7 @@ export declare function getPreviousBookRef(scrRef: SerializedVerseRef, available
  * @returns Chapter 1 verse 1 of the closest next present book, or `undefined` if none
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBooks: string[]): SerializedVerseRef | undefined;
+export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBooks: readonly string[]): SerializedVerseRef | undefined;
 /**
  * Previous verse, matching Paratext 9 (`SIL.Scripture.VerseRef.PreviousVerse`) with books-present
  * awareness. Decrements within the chapter; from chapter 1 verse 1 goes to verse 0 (P9 assumes
@@ -135,7 +240,7 @@ export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBook
  * @returns The previous-verse reference, or `undefined` if there is nowhere before it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availableBooks?: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availableBooks?: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Next verse, matching Paratext 9 (`SIL.Scripture.VerseRef.NextVerse`) with books-present
  * awareness. Increments within the chapter until the last verse, then rolls to the next chapter's
@@ -157,7 +262,7 @@ export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availabl
  * @returns The next-verse reference, or `undefined` if there is nowhere after it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextVerseRef(scrRef: SerializedVerseRef, availableBooks?: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getNextVerseRef(scrRef: SerializedVerseRef, availableBooks?: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Resolve a physical arrow/bracket navigation direction to the logical reference-history direction
  * for the current UI layout direction. In LTR the left key goes back and the right key goes
@@ -173,5 +278,38 @@ export declare function getNextVerseRef(scrRef: SerializedVerseRef, availableBoo
  * @returns `'back'` or `'forward'` — the logical history direction the key should navigate
  */
 export declare function resolveReferenceHistoryDirection(physicalDirection: "left" | "right", interfaceDirection: "ltr" | "rtl"): "back" | "forward";
+/**
+ * Web view state key under which a web view declares the project ids whose scripture it displays
+ * beyond its own `projectId`.
+ *
+ * A web view that shows text from several projects at once — the Scripture Text Grid is the
+ * motivating case — is a single web view in the dock layout, so its members are invisible to
+ * anything reading open web view definitions. Declaring them here lets global navigation UI (the
+ * toolbar's book/chapter/verse control) offer those projects' books without knowing what the view
+ * is or how it chose them. The declaring view owns the resolution; readers just union the lists.
+ *
+ * Values written here MUST pass {@link isNavigableProjectIds}: installed project ids, not resource
+ * reference ids or DBL entry UIDs, since readers use them to open project data providers.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY = "navigableProjectIds";
+/**
+ * Narrows a value read from web view state to the shape
+ * {@link NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY} promises.
+ *
+ * Web view state is `Record<string, unknown>` written by whichever view owns it and persisted into
+ * saved layouts, so a reader can encounter a value from an older build or a buggy writer. Guard, do
+ * not assume.
+ *
+ * Checks SHAPE ONLY. A string that passes is not thereby a usable project id — an empty string, or
+ * an id whose project has since been removed, both pass. Readers open project data providers from
+ * these values, so validating individual ids stays the reader's job.
+ *
+ * @param value The raw value read from a web view's state
+ * @returns Whether `value` is an array of strings
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isNavigableProjectIds(value: unknown): value is string[];
 
 export {};

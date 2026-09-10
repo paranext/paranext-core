@@ -91,14 +91,17 @@ export type OtherSettingProps = Omit<
 >;
 
 /** Values from the useSetting hook to manage the setting */
+// Necessary for flexibility in handleChangeSetting, ProjectSettingValues and UserSettingValues are
+// not the same so it couldn't assign
+/* eslint-disable @typescript-eslint/no-explicit-any */
 type OtherSettingsControls = {
   setting: OtherSettingValues | PlatformError;
-  // Necessary for flexibility in handleChangeSetting, ProjectSettingValues and
-  // UserSettingValues are not the same so it couldn't assign
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setSetting: (newSetting: any) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
+  setSetting:
+    | ((newSetting: any) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
+    | undefined;
   isLoading: boolean;
 };
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
  * Represents either project or user settings, includes properties, controls, and validation

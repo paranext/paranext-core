@@ -5,6 +5,13 @@
 // __unknownAttributes mechanism. xmldom's child-list APIs may surface either
 // undefined or null for "absent", so we coalesce both at boundaries.
 /* eslint-disable no-type-assertion/no-type-assertion, no-null/no-null */
+// This extension pins @xmldom/xmldom to 0.8.x in its package.json because the `errorHandler` object
+// below is 0.8-only — 0.9 throws "errorHandler object is no longer supported, switch to onError!".
+// The repo root declares 0.9.x for the extension host's DOM globals, so without the pin this file
+// would resolve 0.9 and throw on every conversion.
+// TODO(PT-4445): migrate to 0.9's `onError` and drop the pin — or PT-4446, which drops the
+// dependency entirely since this converter only ever runs in a web view, which has a native
+// `DOMParser`.
 import { DOMParser } from '@xmldom/xmldom';
 import {
   USJ_TYPE,

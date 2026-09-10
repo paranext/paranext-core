@@ -1,7 +1,9 @@
 import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { expect, within } from 'storybook/test';
 import { Scope, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
@@ -11,10 +13,17 @@ import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../../.storybook/story.utils';
-import { Find, FIND_LOCALIZED_STRING_KEYS, type BookResultEntry } from './find.component';
+import {
+  Find,
+  FIND_LOCALIZED_STRING_KEYS,
+  type BookResultEntry,
+  type FindProject,
+} from './find.component';
 import { replacementContainsStructuralMarker } from './structure-protection.util';
+import { isFindQueryValid } from './find.utils';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 /**
  * `Find` is the find/replace UI for a Scripture project: a search input with recent searches, a
@@ -34,8 +43,29 @@ import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search
 const localizedStrings = getLocalizedStrings([...FIND_LOCALIZED_STRING_KEYS]);
 const scopeSelectorLocalizedStrings = getLocalizedStrings([...SCOPE_SELECTOR_STRING_KEYS]);
 const searchResultLocalizedStrings = getLocalizedStrings([...SEARCH_RESULT_LOCALIZED_STRING_KEYS]);
+// Owned by the webview container (WEB_VIEW_LOCALIZED_STRINGS in find.web-view.tsx), not the
+// presentational Find component, so it's resolved separately from the FIND_LOCALIZED_STRING_KEYS set.
+const searchInterruptedErrorString = getLocalizedStrings(['%webView_find_searchInterruptedError%'])[
+  '%webView_find_searchInterruptedError%'
+];
 
 const DEFAULT_SEARCH_TERM = 'God';
+
+/** Sample projects for the project selector — not wired to real search data. */
+const STORY_PROJECTS: FindProject[] = [
+  { id: 'web', shortName: 'WEB', fullName: 'World English Bible' },
+  { id: 'esv', shortName: 'ESV', fullName: 'English Standard Version' },
+];
+
+/**
+ * Sample open tabs — WEB is open in two scroll groups, demonstrating the picker's disambiguation
+ * between duplicate instances of the same project.
+ */
+const STORY_OPEN_TABS: ProjectSelectorOpenTab[] = [
+  { projectId: 'web', scrollGroupId: 0 },
+  { projectId: 'web', scrollGroupId: 1 },
+  { projectId: 'esv', scrollGroupId: 2 },
+];
 
 // Seed USX for the books we search across, so results can render verse context and the search
 // engine has real text to scan.
@@ -78,6 +108,9 @@ const booksPresent = Canon.allBookIds
   .map((bookId) => (availableBookIds.includes(bookId) ? '1' : '0'))
   .join('');
 
+// The story project is scripture-only, so Find has no extra material to explain withholding.
+const hasExcludedExtraMaterial = false;
+
 const localizedBookData = new Map<string, LocalizedBookData>([
   ['GEN', { localizedId: 'Genesis', localizedName: 'Genesis' }],
   ['JHN', { localizedId: 'John', localizedName: 'John' }],
@@ -89,6 +122,7 @@ type SearchParams = {
   wordRestriction: WordRestriction;
   searchTextType: SearchTextType;
   isRegexAllowed: boolean;
+  ignoreWhitespaceDifferences: boolean;
   scope: Scope;
   selectedBookIds: string[];
   verseRef: SerializedVerseRef;
@@ -101,8 +135,10 @@ function escapeRegExp(value: string): string {
 
 /**
  * Build the regular expression for the current search params (or `undefined` for an empty term or
- * an invalid user-supplied regex). Honors match-case, the word-boundary restriction, and the
- * allow-regex toggle the same way the real find job's options would.
+ * an invalid user-supplied regex). Honors match-case, the word-boundary restriction, the
+ * allow-regex toggle and ignore-whitespace-differences the same way the real find job's options
+ * would. Ignore-diacritics is not emulated here — the real engine NFD-normalizes the source text to
+ * apply it, which this fixture-backed harness does not do.
  */
 function buildSearchRegex(params: SearchParams): RegExp | undefined {
   if (!params.term) return undefined;
@@ -115,7 +151,11 @@ function buildSearchRegex(params: SearchParams): RegExp | undefined {
       return undefined;
     }
   }
-  const escaped = escapeRegExp(params.term);
+  // Let a run of whitespace in the term match any run of whitespace in the text, rather than
+  // rewriting the term — the same relax-the-match approach buildSearchRegex takes.
+  const escaped = params.ignoreWhitespaceDifferences
+    ? escapeRegExp(params.term).replace(/\s+/gu, '\\s+')
+    : escapeRegExp(params.term);
   switch (params.wordRestriction) {
     case 'wholeWord':
       return new RegExp(`\\b${escaped}\\b`, flags);
@@ -200,6 +240,12 @@ type HarnessConfig = {
   searchTerm?: string;
   /** Initial mode. */
   activeMode?: 'find' | 'replace';
+  /** Hide the find/replace toggle entirely (simple interface mode — find-only). */
+  hideModeToggle?: boolean;
+  /** Present the project picker as a flat list with no scroll-group letters (simple interface mode). */
+  hideScrollGroups?: boolean;
+  /** Initial replace-preview options (layout/shape/color/etc.); defaults to the standard defaults. */
+  previewOptions?: PreviewOptions;
   /** Initial scope. */
   scope?: Scope;
   /** Initial selected books for the `selectedBooks` scope. */
@@ -210,6 +256,10 @@ type HarnessConfig = {
   searchProgress?: number;
   /** Total results the job reports (fixed-state stories only). */
   totalNumberOfResults?: number;
+  /** The find-job error message (fixed-state stories only; requires `searchStatus: 'errored'`). */
+  searchError?: string;
+  /** Whether the active project can be edited. When false, Replace / Replace All are disabled. */
+  isEditable?: boolean;
   /** Start with every result already in the replaced state (the Replaced showcase). */
   initiallyReplacedAll?: boolean;
   /** Initial replace term (defaults to a sample word). */
@@ -219,6 +269,10 @@ type HarnessConfig = {
    * a paragraph/verse/chapter marker disables Replace with an explanatory tooltip.
    */
   isStructureProtected?: boolean;
+  /** Showcase the empty state when no scripture project is open anywhere. */
+  noOpenProjects?: boolean;
+  /** Showcase the project selector while the project metadata fetch is still in flight. */
+  isLoadingProjects?: boolean;
 };
 
 /**
@@ -233,6 +287,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
 
   const [searchTerm, setSearchTerm] = useState(config.searchTerm ?? DEFAULT_SEARCH_TERM);
   const [recentSearches, setRecentSearches] = useState<string[]>(['Lord', 'beginning']);
+  const [selectedProjectId, setSelectedProjectId] = useState('web');
+  const [selectedScrollGroupId, setSelectedScrollGroupId] = useState(0);
   const [scope, setScope] = useState<Scope>(config.scope ?? 'selectedBooks');
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>(
     config.selectedBookIds ?? ['GEN', 'JHN'],
@@ -241,10 +297,15 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
+  const [ignoreWhitespaceDifferences, setIgnoreWhitespaceDifferences] = useState(false);
+  const [ignoreDiacritics, setIgnoreDiacritics] = useState(false);
 
   const [activeMode, setActiveMode] = useState<'find' | 'replace'>(config.activeMode ?? 'find');
   const [replaceTerm, setReplaceTerm] = useState(config.replaceTerm ?? 'Yahweh');
   const [preserveCase, setPreserveCase] = useState(false);
+  const [previewOptions, setPreviewOptions] = useState<PreviewOptions>(
+    config.previewOptions ?? DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  );
 
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
 
@@ -258,6 +319,10 @@ function FindHarness({ config }: { config: HarnessConfig }) {
     replacedKeysRef.current = replacedKeys;
   }, [replacedKeys]);
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Wired like the web view so the clear button's focus return is exercisable here: without both of
+  // these the button drops focus to the document body on click, which is the bug they prevent.
+  // eslint-disable-next-line no-null/no-null
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const verseRef = useMemo<SerializedVerseRef>(
     () => ({ book: 'GEN', chapterNum: 1, verseNum: 1 }),
@@ -269,6 +334,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
     return runSearch({
       term: searchTerm,
       shouldMatchCase,
+      ignoreWhitespaceDifferences,
       wordRestriction,
       searchTextType,
       isRegexAllowed,
@@ -281,6 +347,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
     config.results,
     searchTerm,
     shouldMatchCase,
+    ignoreWhitespaceDifferences,
     wordRestriction,
     searchTextType,
     isRegexAllowed,
@@ -410,7 +477,12 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   }, []);
 
   const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
-  const liveSearchStatus: FindJobStatus | undefined = searchTerm.trim()
+  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge —
+  // this exact divergence (the harness's own copy dropped the empty-term check) shipped once
+  // already (see PT-4343 review) and made the NoBooksSelected story pass despite testing the wrong
+  // rule.
+  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  const liveSearchStatus: FindJobStatus | undefined = isSearchQueryValid
     ? completedStatus
     : undefined;
   const searchStatus: FindJobStatus | undefined = isLive ? liveSearchStatus : config.searchStatus;
@@ -424,38 +496,67 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const isStructureProtected = config.isStructureProtected ?? false;
   const isReplacementStructureChanging =
     isStructureProtected && replacementContainsStructuralMarker(replaceTerm);
+  const isEditable = config.isEditable ?? true;
 
   return (
     <Find
       localizedStrings={localizedStrings}
       scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
       searchResultLocalizedStrings={searchResultLocalizedStrings}
+      projects={config.noOpenProjects ? [] : STORY_PROJECTS}
+      selectedProjectId={selectedProjectId}
+      selectedScrollGroupId={selectedScrollGroupId}
+      openTabs={config.noOpenProjects ? [] : STORY_OPEN_TABS}
+      isLoadingProjects={config.isLoadingProjects ?? false}
+      noOpenProjects={config.noOpenProjects ?? false}
+      onSelectProjectScrollGroup={(newProjectId, newScrollGroupId) => {
+        setSelectedProjectId(newProjectId);
+        setSelectedScrollGroupId(newScrollGroupId);
+      }}
+      onSelectProject={(newProjectId) => {
+        setSelectedProjectId(newProjectId);
+        // Stands in for the web view's `resolveSelectedProjectScrollGroup` call: the simple-mode
+        // picker reports no group, so the story targets the project's first open tab.
+        const tab = STORY_OPEN_TABS.find((openTab) => openTab.projectId === newProjectId);
+        if (tab) setSelectedScrollGroupId(tab.scrollGroupId);
+      }}
+      onOpenProjectInGroup={() => {}}
       searchTerm={searchTerm}
       recentSearches={recentSearches}
       scope={scope}
       verseRef={verseRef}
       booksPresent={booksPresent}
+      hasExcludedExtraMaterial={hasExcludedExtraMaterial}
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
+      ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
+      ignoreDiacritics={ignoreDiacritics}
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
       activeMode={activeMode}
+      hideModeToggle={config.hideModeToggle}
+      hideScrollGroups={config.hideScrollGroups}
+      previewOptions={previewOptions}
+      onPreviewOptionsChange={setPreviewOptions}
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       isReplacing={false}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
+      isEditable={isEditable}
       results={displayedResults}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
       searchStatus={searchStatus}
-      searchError={undefined}
+      searchError={isLive ? undefined : config.searchError}
       searchProgress={config.searchProgress ?? 0}
       totalNumberOfResults={totalNumberOfResults}
       numberOfHiddenResults={numberOfHiddenResults}
       isPostReplaceSearch={false}
+      searchInputRef={searchInputRef}
+      onFocusSearchInput={() => searchInputRef.current?.focus()}
       onSearchTermChange={setSearchTerm}
       onStartSearch={() => addRecentSearchItem(searchTerm)}
       onStopSearch={() => {}}
@@ -464,6 +565,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       setSearchTextType={setSearchTextType}
       setWordRestriction={setWordRestriction}
       setShouldMatchCase={setShouldMatchCase}
+      setIgnoreWhitespaceDifferences={setIgnoreWhitespaceDifferences}
+      setIgnoreDiacritics={setIgnoreDiacritics}
       setIsRegexAllowed={setIsRegexAllowed}
       onToggleMode={setActiveMode}
       onReplaceTermChange={setReplaceTerm}
@@ -512,6 +615,17 @@ export const ReplaceMode: Story = {
   decorators: [createDecorator({ activeMode: 'replace' })],
 };
 
+/**
+ * Simple interface mode. Replace is not offered, so the find/replace toggle is gone, and the
+ * project picker is a flat list with no scroll-group letters — simple mode hides
+ * `ScrollGroupSelector` from both toolbars, so a group letter would name something the user cannot
+ * see or change. Compare with the other stories, where `web` appears twice (groups A and B) and
+ * every row carries its group badge.
+ */
+export const SimpleMode: Story = {
+  decorators: [createDecorator({ hideModeToggle: true, hideScrollGroups: true })],
+};
+
 /** An in-progress search — the progress bar and Cancel button show while results stream in. */
 export const InProgress: Story = {
   decorators: [
@@ -555,4 +669,108 @@ export const StructureProtected: Story = {
   decorators: [
     createDecorator({ activeMode: 'replace', isStructureProtected: true, replaceTerm: '\\p text' }),
   ],
+};
+
+/**
+ * The active project is read-only (`platform.isEditable` is false). A persistent note explains why
+ * above the replace controls (not just a hover tooltip), and Replace / Replace All are disabled
+ * with the same explanation on hover, even though there's a focused result to replace. Find itself
+ * stays fully live and interactive since search never mutates the project.
+ */
+export const ReadOnly: Story = {
+  decorators: [createDecorator({ activeMode: 'replace', isEditable: false })],
+};
+
+/**
+ * `selectedBooks` scope with no books chosen: the search term is non-empty but the query can't run,
+ * so the results area shows a dedicated "select a book" placeholder rather than the generic idle
+ * prompt or a stuck loading spinner. Pick a book from the scope selector to see the search resume.
+ */
+export const NoBooksSelected: Story = {
+  decorators: [createDecorator({ scope: 'selectedBooks', selectedBookIds: [] })],
+};
+
+/**
+ * The find-job poll stalled (e.g. the data provider dropped during an extended idle period) and
+ * gave up after several seconds of retries — the status bar shows an error instead of leaving the
+ * last-seen progress bar frozen with no feedback.
+ */
+export const SearchInterrupted: Story = {
+  decorators: [
+    createDecorator({
+      live: false,
+      results: [],
+      searchStatus: 'errored',
+      searchError: searchInterruptedErrorString,
+    }),
+  ],
+};
+
+/**
+ * No scripture project is open anywhere. The project selector and the results area both show a "no
+ * open projects" placeholder instead of their normal content.
+ */
+export const NoOpenProjects: Story = {
+  decorators: [createDecorator({ live: false, results: [], noOpenProjects: true })],
+};
+
+/**
+ * The project metadata fetch is still in flight. `projects` is empty but tabs ARE open, so the
+ * selector shows a loading affordance rather than falsely claiming no projects are open.
+ */
+export const LoadingProjects: Story = {
+  decorators: [createDecorator({ live: false, results: [], isLoadingProjects: true })],
+};
+
+/**
+ * Regression guard for the "Showing" row widening the panel. The panel is pinned to a 260px column
+ * — the shape Find is docked into in Simple mode — and the play function asserts that the panel
+ * does not scroll horizontally and that the scope summary is the element that clips.
+ *
+ * Before the fix the trigger kept its full content width: `tw:min-w-0` is inert against the
+ * `tw:shrink-0` every shadcn `Button` carries in its base class, so the row pushed past the panel
+ * and the whole web view grew a horizontal scrollbar.
+ *
+ * The assertions run when the story is opened in Storybook (Interactions panel), NOT in CI: the
+ * `storybook (chromium)` vitest project is scoped to `lib/platform-bible-react/.storybook`, and
+ * bundled-extension stories are collected only by the repo-root Storybook config, which has no
+ * vitest browser project. They become automatic if that changes; the layout assertion needs real
+ * layout, so jsdom cannot host it.
+ */
+export const NarrowPanelClipsScopeSummary: Story = {
+  decorators: [
+    createDecorator({ scope: 'selectedBooks', selectedBookIds: ['GEN', 'EXO', 'LEV'] }),
+    (Story) => (
+      <div data-testid="find-panel" className="tw:w-[260px] tw:overflow-x-auto">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+
+    await step('The panel does not scroll horizontally', async () => {
+      const panel = canvas.getByTestId('find-panel');
+      // The regression: scrollWidth exceeding clientWidth IS the horizontal scrollbar.
+      await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth);
+    });
+
+    await step('The scope summary is the element that gives, by clipping', async () => {
+      const summary = canvas.getByText('GEN, EXO, LEV');
+      await expect(summary.getBoundingClientRect().width).toBeLessThanOrEqual(
+        canvas.getByTestId('find-panel').clientWidth,
+      );
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The scope trigger must clip its summary rather than widen the row. Asserted by ' +
+          "comparing the panel's scrollWidth against its clientWidth in a 260px column. Runs " +
+          'in the Interactions panel, not in CI — bundled-extension stories have no vitest ' +
+          'browser project.',
+      },
+    },
+  },
 };

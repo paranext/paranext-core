@@ -8,7 +8,7 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
   useIsPowerMode: vi.fn(() => true),
 }));
 
-vi.mock('@renderer/services/theme.service-host', () => ({
+vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
   localThemeService: {},
 }));

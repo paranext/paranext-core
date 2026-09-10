@@ -73,7 +73,7 @@ Read changed files and assess whether the changes accomplish what the author sta
 
 Flag (Critical or Important):
 
-- Incomplete implementations (stubs, TODOs in new code)
+- Incomplete implementations (stubs, untracked TODOs in new code — a TODO naming an open ticket is a deliberate deferral, not an omission)
 - Dead code added
 - Logic issues or bugs
 - Mismatches between `PURPOSE` and what the code actually does
@@ -124,6 +124,7 @@ Check:
 - Dead/unreachable code
 - Unclear variable or function naming
 - Indecipherable [initialisms and abbreviations](../../.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations) in identifiers, types, comments, or localization keys
+- Backward-facing comments: notes that only record development history (ticket/PR IDs for in-PR work, review-finding IDs, stage/epic tags, dated dev notes). See [forward-facing-comments.md](../rules/code-quality/forward-facing-comments.md). A `PT-XXXX` that points forward is fine — TODOs, a constraint/rationale, a deep link; the test is whether it survives the merge, not the presence of an ID
 
 ---
 

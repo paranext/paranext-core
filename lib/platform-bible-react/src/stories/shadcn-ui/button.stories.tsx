@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
+import { X } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
+import { Input } from '@/components/shadcn-ui/input';
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
@@ -8,7 +10,7 @@ const meta: Meta<typeof Button> = {
   tags: ['autodocs', 'test'],
   argTypes: {
     variant: {
-      options: ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'],
+      options: ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'subtle'],
       control: { type: 'select' },
     },
     size: {
@@ -64,6 +66,7 @@ export const VariantsDemo: Story = {
       <Button variant="secondary">Secondary</Button>
       <Button variant="ghost">Ghost</Button>
       <Button variant="link">Link</Button>
+      <Button variant="subtle">Subtle</Button>
     </div>
   ),
   parameters: {
@@ -138,6 +141,13 @@ export const Link: Story = {
   args: {
     children: 'Link Button',
     variant: 'link',
+  },
+};
+
+export const Subtle: Story = {
+  args: {
+    children: 'Subtle Button',
+    variant: 'subtle',
   },
 };
 
@@ -296,5 +306,30 @@ export const ComplexInteraction: Story = {
       await expect(button).toBeInTheDocument();
       await expect(args.onClick).toHaveBeenCalledTimes(3);
     });
+  },
+};
+
+export const PressNudgeWithCallerTranslate: Story = {
+  render: () => (
+    <div className="tw:relative tw:w-64">
+      <Input aria-label="Search" className="tw:w-full tw:ps-2 tw:pe-8" defaultValue="Search term" />
+      <Button
+        aria-label="Clear search"
+        className="tw:absolute tw:end-1 tw:top-1/2 tw:-translate-y-1/2"
+        onClick={fn()}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <X />
+      </Button>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Hold the clear button down: it should nudge 1px and stay vertically centered. Centering it with `tw:-translate-y-1/2` is one common way to place an icon button inside an input, and it is the case the pressed-state nudge used to break.',
+      },
+    },
   },
 };

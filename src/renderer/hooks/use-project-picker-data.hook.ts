@@ -1,8 +1,9 @@
 import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
+import { useDeferredDockLayoutRead } from '@renderer/hooks/use-deferred-dock-layout-read.hook';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
-import { webViews } from '@renderer/services/papi-frontend.service';
+import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-shard';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
@@ -40,6 +41,10 @@ const PDPF_REGISTRATION_DEBOUNCE_MS = 200;
  * before the layering PDPF that provides this interface registers). Published resources also carry
  * this interface via the Scripture Extender layering PDPF, so the current project and recent
  * projects (both always scripture or resource projects) resolve from the same filtered fetch.
+ *
+ * `src/main/startup-readiness.util.ts` deliberately keeps its own copy of this literal for its
+ * startup readiness gate (see that file's rationale for why it isn't shared). If you change this
+ * one, consider whether that one should change too.
  */
 const PICKER_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
 const PICKER_METADATA_FILTER: ProjectMetadataFilterOptions = {
@@ -91,28 +96,92 @@ function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
 }
 
 export type ProjectPickerData = {
-  currentProject: ProjectItem | undefined;
+  /**
+   * The active Scripture editor's project. Named for Simple mode - where there is exactly one
+   * project tab, so this unambiguously is "the current project" - because every consumer only reads
+   * it in a Simple-mode context (the Power-mode toolbar hides the control that would show it). In
+   * Power mode this still resolves (to whichever editor tab happens to be first), but that value is
+   * not meaningful UI state there and MUST NOT be treated as a deliberate selection - see the
+   * cache-writing effect below.
+   */
+  currentSimpleProject: ProjectItem | undefined;
   recentProjects: ProjectItem[];
   /** All projects, with recentProjects already excluded. */
   allProjects: ProjectItem[];
   /** Set when fetching details for the current project fails. */
-  currentProjectError: string | undefined;
+  currentSimpleProjectError: string | undefined;
   isLoading: boolean;
 };
 
+/**
+ * The three project lists the picker shows, plus the current project and its loading/error state.
+ *
+ * The flow, so the stages below can be checked against a whole: which project is ACTIVE comes from
+ * a DEFERRED read of this window's dock layout, requested on every web view event (deferred because
+ * a close event is emitted before the dock has adopted the new layout) and held in state as the
+ * project id itself → the project METADATA comes from one service fan-out per refresh generation,
+ * cached and shared by all three sections, invalidated only by events that can change which
+ * projects exist → each section derives from those two, with its own failure handling, and the
+ * current project falls back to a direct single-project lookup when it is absent from the shared
+ * snapshot. Each stage has its own note where it is declared.
+ */
 export function useProjectPickerData(): ProjectPickerData {
-  // Two independent refresh generations, so cheap "which project is active?" updates don't drag in
+  // Two independent invalidation signals, so cheap "which project is active?" updates don't drag in
   // the expensive project-metadata fan-out:
-  // - metadataRefreshCounter invalidates the shared metadata fetch. Bumped only by events that can
-  //   change the SET of available projects (extensions reloading, C# project-list changes).
-  // - webViewRefreshCounter re-derives the current project from the open web views. Bumped by web
-  //   view open/update/close - frequent during startup tab restoration - which re-runs only the
-  //   cheap getAllOpenWebViewDefinitions query and reuses the cached metadata.
+  // - metadataRefreshCounter is a GENERATION that invalidates the shared metadata fetch. Bumped
+  //   only by events that can change the SET of available projects (extensions reloading, C#
+  //   project-list changes), since "go refetch the list" has no value to compare against.
+  // - activeEditorProjectId is the derived VALUE itself, re-read from the open web views on web
+  //   view open/update/close - frequent during startup tab restoration - which costs only the
+  //   cheap local web view enumeration and reuses the cached metadata.
   const [metadataRefreshCounter, setMetadataRefreshCounter] = useState(0);
-  const [webViewRefreshCounter, setWebViewRefreshCounter] = useState(0);
-  const [currentProjectError, setCurrentProjectError] = useState<string | undefined>(undefined);
+  const readActiveEditorProjectId = useCallback((): string | undefined => {
+    // THIS window's open web views, from the local dock layout — the same source
+    // `navigation-target.util` resolves the main editor from. Deliberately not the `webViews`
+    // network object, whose `getAllOpenWebViewDefinitions` fans out across every window: the
+    // picker names the project of the editor in this window and feeds a toolbar that navigates
+    // this window's target, so a background window's editor must never become this window's
+    // current project.
+    try {
+      return findFirstEditorWebViewDefinition(getAllOpenWebViewDefinitionsSync())?.projectId;
+    } catch (e) {
+      // Loud rather than quiet: this read runs deferred, after the dock has adopted its new layout
+      // (see `useDeferredDockLayoutRead`), so by this point this window's dock layout is
+      // registered. A throw here means it never was, which is an anomaly worth finding in a log
+      // rather than the ordinary timing of a first render. Both the enumeration and resolving the
+      // editor from it are inside the try, so neither can escape a deferred callback and become an
+      // unhandled error.
+      logger.warn(
+        `ProjectPicker: could not enumerate this window's web views: ${getErrorMessage(e)}`,
+      );
+      return undefined;
+    }
+  }, []);
+
+  // Held as a VALUE rather than derived from a refresh counter. A web view event that leaves the
+  // active editor's project unchanged produces the same string, and `useState` bails out on an
+  // unchanged value — so the burst of web view events a project switch fires cannot re-render this
+  // hook's consumer. A counter would re-render on every event by construction, because its value
+  // changes even when the thing it stands in for did not. Those are network events, so every
+  // window's web view activity re-reads it; the read above sees only THIS window's dock layout, so
+  // another window's event resolves the same id and this update bails out.
+  //
+  // Starts undefined because there is no read during render: enumerating open web views
+  // deliberately touches the WebViewState keep-alive set, which a discarded or double-invoked
+  // render must not do, and a render-phase read could not see this window's dock layout on a first
+  // render anyway. The deferred read below fills it in, one commit later at the outside.
+  const [activeEditorProjectId, setActiveEditorProjectId] = useState<string | undefined>(undefined);
+  const [currentSimpleProjectError, setCurrentSimpleProjectError] = useState<string | undefined>(
+    undefined,
+  );
   const refreshMetadata = useCallback(() => setMetadataRefreshCounter((n) => n + 1), []);
-  const refreshActiveEditor = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
+  const { requestRead: refreshActiveEditor } = useDeferredDockLayoutRead(
+    useCallback(
+      () => setActiveEditorProjectId(readActiveEditorProjectId()),
+      [readActiveEditorProjectId],
+    ),
+  );
+
   // When getMetadataForAllProjects rejects (e.g. a PDPF's getAvailableProjects RPC times out
   // during startup), isRetryPending becomes true and the effect below schedules a re-fetch after
   // METADATA_FETCH_RETRY_DELAY_MS — by which time the extension host has typically drained its
@@ -120,6 +189,13 @@ export function useProjectPickerData(): ProjectPickerData {
   // unavailable host does not loop forever.
   const [isRetryPending, setIsRetryPending] = useState(false);
   const fetchRetryCountRef = useRef(0);
+  // A SECOND budget, for the current-project lookup, because that failure is independent of the
+  // shared fan-out's. The two cannot share `fetchRetryCountRef`: the fan-out's success handler
+  // resets it every generation, and it runs before this hook's own await, so a lookup that fails
+  // while the fan-out succeeds would read a budget of 0 forever and retry for the life of the
+  // window. Spent where the retry is armed rather than when the timer fires, since the shared
+  // timer serves both budgets and cannot tell which one asked for it.
+  const currentProjectRetryCountRef = useRef(0);
 
   const onDidOpenWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW), []);
   useEvent(onDidOpenWebView, refreshActiveEditor);
@@ -127,6 +203,16 @@ export function useProjectPickerData(): ProjectPickerData {
   useEvent(onDidUpdateWebView, refreshActiveEditor);
   const onDidCloseWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW), []);
   useEvent(onDidCloseWebView, refreshActiveEditor);
+  // The first read. Declared AFTER the `useEvent` calls so it is requested once the subscriptions
+  // are attached and an event fired in the gap cannot be missed.
+  //
+  // This is a fast path, not a synchronization point. It is what makes the picker name the current
+  // project on the common startup, where the dock layout has registered and loaded its saved layout
+  // by the time this deferred read runs; if the layout loads later than that, correctness comes from
+  // the open event above, at the cost of the picker naming no current project for an extra render.
+  useEffect(() => {
+    refreshActiveEditor();
+  }, [refreshActiveEditor]);
   const onDidReloadExtensions = useMemo(
     () => getNetworkEvent('platform.onDidReloadExtensions'),
     [],
@@ -240,17 +326,11 @@ export function useProjectPickerData(): ProjectPickerData {
     return entry.promise;
   }, [metadataRefreshCounter]);
 
-  const [currentProject, isCurrentProjectLoading] = usePromise<ProjectItem | undefined>(
+  const [currentSimpleProject, isCurrentSimpleProjectLoading] = usePromise<ProjectItem | undefined>(
     useCallback(async () => {
-      // Referenced so this callback re-runs on web view events (open/update/close) to pick up the
-      // active editor, without invalidating the metadata cache.
-      // eslint-disable-next-line no-unused-expressions
-      webViewRefreshCounter;
-      const allDefs = await webViews.getAllOpenWebViewDefinitions();
-      const editorDef = findFirstEditorWebViewDefinition(allDefs);
-      const currentProjectId = editorDef?.projectId;
+      const currentProjectId = activeEditorProjectId;
       if (!currentProjectId) {
-        setCurrentProjectError(undefined);
+        setCurrentSimpleProjectError(undefined);
         return undefined;
       }
       try {
@@ -260,7 +340,8 @@ export function useProjectPickerData(): ProjectPickerData {
         const key = normalizeProjectId(currentProjectId);
         const m = metadata.find((md) => normalizeProjectId(md.id) === key);
         if (m) {
-          setCurrentProjectError(undefined);
+          setCurrentSimpleProjectError(undefined);
+          currentProjectRetryCountRef.current = 0;
           return metadataToProjectItem(m);
         }
         // Miss: the active editor references a project not in the USJ-filtered snapshot yet - e.g.
@@ -270,20 +351,33 @@ export function useProjectPickerData(): ProjectPickerData {
         // wedging on an error card. Display fields are identical either way - the interface filter
         // only decides list inclusion, not which fields a project carries.
         const single = await projectLookupService.getMetadataForProject(currentProjectId);
-        setCurrentProjectError(undefined);
+        setCurrentSimpleProjectError(undefined);
+        currentProjectRetryCountRef.current = 0;
         return metadataToProjectItem(single);
       } catch (e) {
         logger.error(
           `ProjectPicker: could not fetch details for current project ${currentProjectId}: ${getErrorMessage(e)}`,
         );
-        setCurrentProjectError('Unable to load current project details');
+        setCurrentSimpleProjectError('Unable to load current project details');
+        // Arm the same bounded retry timer the shared metadata fetch uses. `usePromise` re-runs
+        // only when its callback identity changes, and neither of this callback's inputs changes
+        // while the same editor stays open — so without arming it here, a lookup that failed once
+        // leaves the error card up for the life of the window. The retry bumps the metadata
+        // generation, which is what changes the identity and re-runs this. Bounded by this lookup's
+        // OWN budget, spent here, so a project that cannot be resolved at all stops after
+        // MAX_METADATA_FETCH_RETRIES attempts; the budget is restored above whenever the project
+        // does resolve, so a transient failure that heals does not permanently spend it.
+        if (currentProjectRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) {
+          currentProjectRetryCountRef.current += 1;
+          setIsRetryPending(true);
+        }
         return {
           id: currentProjectId,
           fullName: 'Unable to load current project details',
           shortName: '???',
         };
       }
-    }, [getAllMetadata, webViewRefreshCounter]),
+    }, [getAllMetadata, activeEditorProjectId]),
     undefined,
   );
 
@@ -348,12 +442,12 @@ export function useProjectPickerData(): ProjectPickerData {
   );
 
   return {
-    currentProject,
+    currentSimpleProject,
     recentProjects,
     allProjects,
-    currentProjectError,
+    currentSimpleProjectError,
     isLoading:
-      isCurrentProjectLoading ||
+      isCurrentSimpleProjectLoading ||
       isRecentIdsLoading ||
       isRecentProjectsLoading ||
       isAllProjectsLoading,

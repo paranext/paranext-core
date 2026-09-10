@@ -28,6 +28,47 @@ namespace TestParanextDataProvider.Projects
         [TearDown]
         public void TearDown() => SendReceiveWriteLock.ResetForTests();
 
+        // ---- NormalizeProjectIds (the ids an arm will actually block) ----
+
+        [Test]
+        public void NormalizeProjectIds_DropsEmptyIdsAndCollapsesCaseVariants()
+        {
+            // Bracket code publishes "these projects are syncing" alongside the arm. Running the
+            // caller's raw list through this is what keeps that announcement from naming projects the
+            // gate is not blocking — a blank entry and a case-variant duplicate would otherwise reach
+            // the UI as a nameless row and a repeated one.
+            var normalized = SendReceiveWriteLock.NormalizeProjectIds(
+                ["", "proj1", "PROJ1", "proj2"]
+            );
+
+            Assert.That(normalized, Is.EquivalentTo(new[] { "proj1", "proj2" }));
+        }
+
+        [Test]
+        public void NormalizeProjectIds_MatchesTheSetSetSyncingActuallyArms()
+        {
+            // The whole point of the helper: what it returns is what IsBlocked will answer for.
+            var raw = new[] { "", "proj1", "PROJ1" };
+
+            var normalized = SendReceiveWriteLock.NormalizeProjectIds(raw);
+            SendReceiveWriteLock.SetSyncing(raw);
+
+            Assert.Multiple(() =>
+            {
+                foreach (var projectId in normalized)
+                    Assert.That(
+                        SendReceiveWriteLock.IsBlocked(projectId),
+                        Is.True,
+                        $"'{projectId}' was announced as syncing, so the gate must block it"
+                    );
+                Assert.That(
+                    SendReceiveWriteLock.IsBlocked("proj2"),
+                    Is.False,
+                    "an id the helper did not return must not be blocked"
+                );
+            });
+        }
+
         // ---- IsBlocked (pure per-project data) ----
 
         [Test]

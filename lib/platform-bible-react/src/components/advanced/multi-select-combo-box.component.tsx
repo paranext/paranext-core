@@ -162,7 +162,12 @@ export function MultiSelectComboBox({
         </PopoverTrigger>
         <PopoverContent align="start" className="tw:w-full tw:p-0">
           <Command>
-            <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
+            <CommandInput
+              placeholder={`Search ${placeholder.toLowerCase()}...`}
+              // Picker semantics: the option list is the whole point of this control and a leading
+              // space in the search box is meaningless, so Space picks the highlighted option.
+              spaceSelectsHighlightedItem
+            />
             {hasToggleAllFeature && (
               <div className="tw:flex tw:justify-between tw:border-b tw:p-2">
                 <Button variant="ghost" size="sm" onClick={handleSelectAll}>

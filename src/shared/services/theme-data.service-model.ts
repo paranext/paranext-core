@@ -9,7 +9,10 @@ import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import { IDataProvider } from './papi-core.service';
+// Straight from the interface rather than through `papi-core.service`, which re-exports this model
+// so its `DataProviders` augmentation reaches `papi.d.ts`: going through the aggregator would make
+// the two import each other. `theme.service-model.ts` already imports it this way.
+import { IDataProvider } from '@shared/models/data-provider.interface';
 
 /** JSDOC DESTINATION themeDataServiceProviderName */
 export const themeDataServiceProviderName = 'platform.themeDataServiceDataProvider';
@@ -23,7 +26,11 @@ export const themeDataServiceObjectToProxy = Object.freeze({
   dataProviderName: themeDataServiceProviderName,
 });
 
-// Data Type to initialize data provider engine with
+/**
+ * Data types this data provider serves
+ *
+ * @experimental
+ */
 export type ThemeDataDataTypes = {
   AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
 };
@@ -39,6 +46,8 @@ declare module 'papi-shared-types' {
 /**
  * Service that provides aggregated theme contributions from the platform and extensions. Serves
  * theme contribution info to the theme service
+ *
+ * @experimental
  */
 export type IThemeDataService = {
   /** JSDOC DESTINATION getAllThemes */

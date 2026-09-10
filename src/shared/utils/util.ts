@@ -1,8 +1,27 @@
 import { ProcessType } from '@shared/global-this.model';
-import { charAt, indexOf, isString, stringLength, substring } from 'platform-bible-utils';
+import { isString } from 'platform-bible-utils';
+
+/**
+ * Source (no anchors, no flags) of the hex-grouped shape a durable window id has. Shared so every
+ * matcher that needs to recognize a window id by shape (a scoped web view id's suffix, a per-window
+ * storage key's prefix) spells the shape out once rather than once per matcher.
+ *
+ * Deliberately NOT an RFC-4122 pattern, and it has to stay that way even though every id minted now
+ * comes from `createUuid()` and is RFC-4122. A window id reaches disk only on builds that persist
+ * one, and the first of those minted it with `newGuid()` (`platform-bible-utils`), which does not
+ * constrain the variant nibble: measured over 20,000 samples, about half of its output fails an
+ * RFC-4122 pattern. Profiles carrying those ids are in use, so tightening this would stop
+ * recognizing about half of what they hold — orphaning the per-window storage those keys name,
+ * since the prune matches positively on this shape, and breaking suffix stripping on scoped web
+ * view ids. Tightening it needs a migration of persisted ids first.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const WINDOW_ID_SHAPE_PATTERN_SOURCE =
+  '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-const NONCE_CHARS_LENGTH = stringLength(NONCE_CHARS);
+const NONCE_CHARS_LENGTH = NONCE_CHARS.length;
 /**
  * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
  * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
@@ -14,7 +33,7 @@ const NONCE_CHARS_LENGTH = stringLength(NONCE_CHARS);
 export function newNonce(): string {
   let nonce = '';
   for (let i = 0; i < 32; i++)
-    nonce += charAt(NONCE_CHARS, Math.floor(Math.random() * NONCE_CHARS_LENGTH));
+    nonce += NONCE_CHARS.charAt(Math.floor(Math.random() * NONCE_CHARS_LENGTH));
   return nonce;
 }
 
@@ -97,13 +116,17 @@ export function serializeRequestType(category: string, directive: string): Seria
 export function deserializeRequestType(requestType: SerializedRequestType): RequestType {
   if (!requestType) throw new Error('deserializeRequestType: must be a non-empty string');
 
-  const colonIndex = indexOf(requestType, REQUEST_TYPE_SEPARATOR);
-  if (colonIndex <= 0 || colonIndex >= stringLength(requestType) - 1)
+  // Native string methods: the index below is produced and consumed in the same index space, so
+  // the split lands in the same place either way, and this runs on every message crossing PAPI.
+  // Converting any one of these four calls without the others would mix index spaces — see
+  // `.claude/rules/code-quality/native-string-vs-grapheme-helpers.md`.
+  const colonIndex = requestType.indexOf(REQUEST_TYPE_SEPARATOR);
+  if (colonIndex <= 0 || colonIndex >= requestType.length - 1)
     throw new Error(
       `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR} (${requestType})`,
     );
-  const category = substring(requestType, 0, colonIndex);
-  const directive = substring(requestType, colonIndex + 1);
+  const category = requestType.substring(0, colonIndex);
+  const directive = requestType.substring(colonIndex + 1);
   return { category, directive };
 }
 

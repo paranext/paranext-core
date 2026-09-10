@@ -1,11 +1,4 @@
-import {
-  stringLength,
-  UnsubscriberAsync,
-  PlatformEventHandler,
-  substring,
-  startsWith,
-  PlatformError,
-} from 'platform-bible-utils';
+import { UnsubscriberAsync, PlatformEventHandler, PlatformError } from 'platform-bible-utils';
 import { NetworkableObject } from '@shared/models/network-object.model';
 
 /** Various options to adjust how the data provider subscriber emits updates */
@@ -244,6 +237,13 @@ export type DataProviderInternal<TDataTypes extends DataProviderDataTypes = Data
   >;
 
 /** The functions that a data provider has for each data type */
+/**
+ * Prefixes that mark a data provider function, longest-match-independent: `find` below returns the
+ * first prefix that matches, so this list is only order-neutral because no entry is a prefix of
+ * another. Adding one that is — `sub`, or `getAll` — would make the strip below cut the wrong
+ * number of characters depending on where it landed in this array, and produce a data type name
+ * that silently does not match the engine's.
+ */
 const dataProviderFunctionPrefixes = ['set', 'get', 'subscribe'];
 
 /**
@@ -255,12 +255,12 @@ const dataProviderFunctionPrefixes = ['set', 'get', 'subscribe'];
 export function getDataProviderDataTypeFromFunctionName<
   TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
 >(fnName: string) {
-  const fnPrefix = dataProviderFunctionPrefixes.find((prefix) => startsWith(fnName, prefix));
+  const fnPrefix = dataProviderFunctionPrefixes.find((prefix) => fnName.startsWith(prefix));
   if (!fnPrefix) throw new Error(`${fnName} is not a data provider data type function`);
 
   // Assert the expected return type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return substring(fnName, stringLength(fnPrefix)) as DataTypeNames<TDataTypes>;
+  return fnName.substring(fnPrefix.length) as DataTypeNames<TDataTypes>;
 }
 
 export default DataProviderInternal;

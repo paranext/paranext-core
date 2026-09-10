@@ -4,7 +4,7 @@ import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
 import {
@@ -14,7 +14,8 @@ import {
 } from './resource-cell-view.component';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
-import { sliceUsjToVerse } from './verse-display.utils';
+import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
+import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
@@ -52,8 +53,9 @@ type ResourceCellProps = {
 /**
  * One resource, the focused chapter or verse. Reuses the resource-text-panel render path: fetch the
  * chapter, feed it to Editorial, which navigates to `scrRef`. In verse mode, feeds Editorial only
- * the slice for `scrRef.verseNum` (via `sliceUsjToVerse`) instead of the whole chapter. Delegates
- * layout and the downloading/failed visuals to `ResourceCellView`.
+ * that verse's slice instead of the whole chapter — a verse-0 reference shows verse 1
+ * ({@link resolveDisplayVerseNum}). Delegates layout and the downloading/failed visuals to
+ * `ResourceCellView`.
  */
 export function ResourceCell({
   resourceRef,
@@ -68,6 +70,12 @@ export function ResourceCell({
   onReorderKeyDown,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+
+  // The grid's picker offers commentaries, so a cell can be rendering handbook/notes markers. Load
+  // that resource's marker stylesheet the same way the resource panel does; without it the markers
+  // render unstyled. A no-op for any project that is not a supported commentary, and each cell owns
+  // the `<style>` element it injects, so cells showing different commentaries do not fight.
+  useCommentaryMarkerStyles(resourceRef.projectId);
 
   // #region Chapter fetch — data method returns [data, setData, isLoading]; isLoading is index 2.
   // `projectId` may be undefined for unavailable resources; both hooks must still be called
@@ -110,8 +118,13 @@ export function ResourceCell({
     () =>
       resourceRef.projectId === undefined
         ? 'unavailable'
-        : deriveCellState({ usjPossiblyError, isLoading }),
-    [resourceRef.projectId, usjPossiblyError, isLoading],
+        : deriveCellState({
+            usjPossiblyError,
+            isLoading,
+            currentBookNum: Canon.bookIdToNumber(scrRef.book),
+            projectId: resourceRef.projectId,
+          }),
+    [resourceRef.projectId, usjPossiblyError, isLoading, scrRef.book],
   );
 
   // #region Zoom — computed here so the callbacks and bound-state are available for the view's
@@ -145,6 +158,12 @@ export function ResourceCell({
     () => (isPlatformError(usjPossiblyError) ? undefined : usjPossiblyError),
     [usjPossiblyError],
   );
+  useEffect(() => {
+    if (isPlatformError(usjPossiblyError))
+      logger.warn(
+        `ScriptureTextGrid: chapter data error for ${resourceRef.resourceId}: ${getErrorMessage(usjPossiblyError)}`,
+      );
+  }, [usjPossiblyError, resourceRef.resourceId]);
   const extraValidMarkers = useExtraValidMarkers(usj);
   const options: EditorOptions = useMemo(
     () => ({
@@ -155,13 +174,50 @@ export function ResourceCell({
     }),
     [textDirection, extraValidMarkers],
   );
-  // Slice depends on scrRef.verseNum (unlike the chapter fetch memo above, which intentionally
-  // omits it — the chapter is identical across verses, but the slice is not).
+  // Only the USJ fed to the editor is resolved — `scrRef` passes through untouched. Keying the memo
+  // on the resolved verse (not scrRef.verseNum) also keeps 1:0 -> 1:1 from re-feeding identical
+  // content.
+  const displayVerseNum = resolveDisplayVerseNum(scrRef.verseNum);
+  const isFallenForward = displayVerseNum !== scrRef.verseNum;
+
+  // Fall-forward is display-only: we hand the editor verse 1's text while telling it verse 0, and
+  // that resolved verse must never reach the shared scroll group — it would drag the Scripture
+  // Editor off the intro the user came from. `Editorial`'s reference plugin stays mounted when
+  // read-only (`Editor.tsx` gates it on `scrRef && onScrRefChange` only) and reports selections that
+  // disagree with `scrRef`, so this swallows any such echo in a fallen-forward verse cell.
+  //
+  // DEFENSE-IN-DEPTH, NOT A FIX FOR A LIVE REPORT. `$resolvePosition` refuses to describe a position
+  // in a document with no BookNode and no ChapterNode (upstream invariant I5), and `sliceUsjToVerse`
+  // drops both — so today the plugin is silent in verse mode and this branch is unreachable. It is
+  // kept because it costs nothing and is the right shape if slices ever become addressable. Don't
+  // read it as evidence that a write-back currently happens; the next person to touch this should
+  // not reason from a mechanism that isn't there. Holds against platform-editor 0.8.15 — both the
+  // published package and `dev-packages/scripture-editors`, which `postinstall` ->
+  // `link-dev-packages` yalc-links over `node_modules`. Read the LINKED build when checking this,
+  // not whatever version `package-lock.json` names; the two can disagree.
+  //
+  // The guard belongs here, not upstream in `ScriptureReferencePlugin`. Gating that plugin on
+  // `isReadonly` would break the read-only surfaces that need it: it is bidirectional (it also moves
+  // the caret to `scrRef`), and read-only click-to-sync — which this grid's CHAPTER mode and the
+  // Resource Viewer depend on, both feeding a whole chapter so the document is addressable — would
+  // go with it. A read-only editor reporting its caret is correct; the bug would be ours, since WE
+  // told it a reference we then contradicted. Full reasoning, and what a future single-verse surface
+  // must copy: `adr-single-verse-surfaces-resolve-verse-zero-to-one`.
+  const handleScrRefChange = useCallback(
+    (nextScrRef: SerializedVerseRef) => {
+      if (viewMode === 'verse' && isFallenForward) return;
+      setScrRef(nextScrRef);
+    },
+    [viewMode, isFallenForward, setScrRef],
+  );
+
+  // Slice depends on the verse, unlike the chapter fetch memo above, which intentionally omits it —
+  // the chapter is identical across verses, but the slice is not.
   const verseSlice = useMemo(() => {
     if (viewMode !== 'verse') return undefined;
     if (!usjPossiblyError || isPlatformError(usjPossiblyError)) return undefined;
-    return sliceUsjToVerse(usjPossiblyError, scrRef.verseNum);
-  }, [viewMode, usjPossiblyError, scrRef.verseNum]);
+    return sliceUsjToVerse(usjPossiblyError, displayVerseNum);
+  }, [viewMode, usjPossiblyError, displayVerseNum]);
 
   useEffect(() => {
     if (state !== 'ready' || !usjPossiblyError || isPlatformError(usjPossiblyError)) return;
@@ -198,7 +254,7 @@ export function ResourceCell({
         <Editorial
           ref={editorRef}
           scrRef={scrRef}
-          onScrRefChange={setScrRef}
+          onScrRefChange={handleScrRefChange}
           options={options}
           logger={logger}
         />

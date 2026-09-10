@@ -30,6 +30,7 @@ High-level guidelines that should shape both writing and reviewing code. The top
 - **Follow existing patterns and code**
   - Respect separation of execution environments (processes, extension/renderer). Don't pass functions or class instances over the PAPI. Don't use `instanceof` on values that may have crossed execution environments — see [MDN's note](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/instanceof#instanceof_and_multiple_realms).
   - Prefer string unions over multiple interdependent booleans. Instead of `didError`, `isRunning`, `didComplete`, use a finite state union. This reduces contradictory states and increases flexibility.
+- **Comments face forward, not backward** — a comment must help someone who reads the code later and never saw the change that introduced it. Applies to TypeScript and C# alike; see [forward-facing comments](../../.claude/rules/code-quality/forward-facing-comments.md) for the strip-the-PR-context test and the cut/keep lists.
 - **Prioritize sustainability**
   - As the code owner, you're responsible for maintaining what you approve in your area.
   - If you aren't comfortable with the change, don't approve it.
@@ -57,7 +58,7 @@ High-level guidelines that should shape both writing and reviewing code. The top
 - **Prefer path aliases for imports**: `import ... from '<alias>/...'` over long relative paths. Webpack is configured to understand the aliases.
 - **`async/await` by default**: Use `Promise.then()` only when there's a concrete reason, and comment the reason.
 - **`throw new Error()`**, not `throw Error()`.
-- **Bundled deps belong in `devDependencies`**: Webpack bundles non-`external` imports into the final output, so those packages are `devDependencies`. See [this discussion](https://reviewable.io/reviews/paranext/paranext-core/380#-NcPBady7ifJq0YLZtwN).
+- **Bundled deps belong in `devDependencies`**: Webpack bundles non-`external` imports into the final output, so those packages are `devDependencies`. See [this discussion](https://reviewable.io/reviews/paranext/paranext-core/380#-NcPBady7ifJq0YLZtwN). This does **not** cost a bundled package its third-party notice: `.erb/scripts/third-party-notices/shipping-set.ts` finds what ships by reading webpack's own module manifests (plus a stylesheet scan and `release/app`'s unbundled closure), not by reading dependency sections. Do not move a package to `dependencies` to get it a notice — if one is missing, the shipping-set derivation is what needs fixing.
 - **Prefer TSDoc over JSDoc** in TypeScript. TSDoc does not duplicate types in the comment — TypeScript already has them.
 - **Namespace-prefix shared-library exported types**: Types exported from `lib/platform-bible-react` (or any other shared library) should carry a feature/namespace prefix so they stay collision-proof across the whole monorepo. Consumers re-import them under a short alias at the module boundary for component-local readability (`import { SomeFeatureAlertEntry as AlertEntry } from 'platform-bible-react'`). Known violation of this rule: the bare `AlertEntry` exported from `platform-scripture`'s `manage-books-dialog.types.ts` — which also collides in name with the unrelated C# `AlertEntry` (`c-sharp/ParatextUtils/AlertEntry.cs`) — is slated for a prefixed rename if it is ever promoted to the shared library.
 
@@ -433,7 +434,10 @@ Before creating utility functions:
    - `lib/platform-bible-utils/src/scripture/` — scripture utilities
    - `lib/platform-bible-utils/src/string-util.ts` — string manipulation
    - `lib/platform-bible-utils/src/index.ts` — all public exports
-2. If it exists, use it — import from `platform-bible-utils`.
+2. If it exists, use it — import from `platform-bible-utils`. The one exception is `string-util.ts`,
+   whose functions are grapheme-aware replacements for methods `String` already has: those are a
+   deliberate choice with a real cost, not a default. See
+   [native-string-vs-grapheme-helpers.md](../../.claude/rules/code-quality/native-string-vs-grapheme-helpers.md).
 3. If it doesn't exist, create it in the appropriate shared location (see Placement below).
 
 ### Utility Placement

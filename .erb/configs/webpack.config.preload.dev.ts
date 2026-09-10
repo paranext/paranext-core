@@ -29,6 +29,24 @@ const configuration: webpack.Configuration = {
     },
   },
 
+  // Persistent caching. This build is spawned concurrently with the renderer's first compile, so
+  // what it really costs is CPU contention during the window that is blank on screen.
+  cache: {
+    type: 'filesystem',
+    cacheDirectory: path.join(
+      webpackPaths.rootPath,
+      'node_modules',
+      '.cache',
+      'webpack-preload-dev',
+    ),
+    buildDependencies: {
+      config: [__filename, path.resolve(__dirname, 'webpack.config.base.ts')],
+      tsconfig: [path.resolve(webpackPaths.rootPath, 'tsconfig.json')],
+      patches: webpackPaths.patchFiles,
+    },
+    compression: 'gzip',
+  },
+
   plugins: [
     new BundleAnalyzerPlugin({
       analyzerMode: process.env.ANALYZE === 'true' ? 'server' : 'disabled',
@@ -61,8 +79,6 @@ const configuration: webpack.Configuration = {
     __dirname: false,
     __filename: false,
   },
-
-  watch: true,
 };
 
 const preloadConfig = merge(baseConfig, configuration);

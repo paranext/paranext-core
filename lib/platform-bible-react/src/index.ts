@@ -80,7 +80,11 @@ export {
   default as FootnoteEditor,
   INLINE_APPLY_DEBOUNCE_MS,
   type FootnoteEditorProps,
+  type FootnoteEditorMarkerPalette,
+  markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
+// The marker-palette session/keydown/filter utilities are exported from `./experimental.ts` —
+// they are new, still-moving API surface.
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
@@ -167,6 +171,10 @@ export {
 export { default as Toolbar } from './components/advanced/toolbar.component';
 export type { ToolbarProps } from './components/advanced/toolbar.component';
 export {
+  ToolbarCompoundLabel,
+  type ToolbarCompoundLabelProps,
+} from './components/advanced/toolbar-compound-label/toolbar-compound-label.component';
+export {
   default as UiLanguageSelector,
   type LanguageInfo,
   type UiLanguageSelectorProps,
@@ -209,6 +217,10 @@ export type {
 } from './components/basics/cancel-accept-buttons.component';
 export { default as DestructiveKeyConfirmation } from './components/basics/destructive-key-confirmation.component';
 export type { DestructiveKeyConfirmationProps } from './components/basics/destructive-key-confirmation.component';
+export { default as DisabledActionTooltip } from './components/basics/disabled-action-tooltip.component';
+export type { DisabledActionTooltipProps } from './components/basics/disabled-action-tooltip.component';
+export { DisabledTooltipWrapper } from './components/basics/disabled-tooltip-wrapper.component';
+export type { DisabledTooltipWrapperProps } from './components/basics/disabled-tooltip-wrapper.component';
 export { default as UndoRedoButtons } from './components/basics/undo-redo-buttons.component';
 export { UNDO_REDO_BUTTONS_STRING_KEYS } from './components/basics/undo-redo-buttons.component';
 export type {
@@ -218,6 +230,8 @@ export type {
 export { default as ResultsCard } from './components/basics/results-card.component';
 export { EmptyState } from './components/basics/empty-state.component';
 export type { EmptyStateProps } from './components/basics/empty-state.component';
+export { RetryableErrorView } from './components/basics/retryable-error-view.component';
+export type { RetryableErrorViewProps } from './components/basics/retryable-error-view.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
@@ -263,6 +277,14 @@ export {
 export * from './components/shadcn-ui/button-group';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
+export {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from './components/shadcn-ui/empty';
 export { Input } from './components/shadcn-ui/input';
 export { Kbd, KbdGroup } from './components/shadcn-ui/kbd';
 export { Label } from './components/shadcn-ui/label';
@@ -300,9 +322,12 @@ export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
+export { default as useRetryablePromise } from './hooks/use-retryable-promise.hook';
+export type { RetryablePromiseState } from './hooks/use-retryable-promise.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';
+export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
 export {
   pickTabIconUrl,
   useTabIconSelection,
@@ -317,12 +342,32 @@ export {
   type UseListboxProps,
   type ListboxOption,
 } from './hooks/listbox-keyboard-navigation.hook';
+// `getShrinkStep` and `SHRINK_STEP_HYSTERESIS_PX` are deliberately NOT re-exported: they are the
+// hook's internals, and the per-toolbar threshold constants are tuning values the ADR expects to
+// move. Exporting either would make changing them a consumer-visible change. Tests import them by
+// module path instead.
+export { useShrinkStep } from './hooks/use-shrink-step.hook';
+
+// Contexts
+export {
+  ShrinkStepContext,
+  ShrinkStepOverrideContext,
+  useShrinkStepValue,
+  useShrinkStepOverride,
+  SHRINK_STEP,
+} from './context/shrink-step.context';
+export {
+  ShrinkStepOverride,
+  type ShrinkStepOverrideProps,
+} from './context/shrink-step-override.component';
 
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
+  Z_INDEX_CONNECTION_LOST,
   Z_INDEX_FIRST_RUN,
-  Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_ABOVE_POPOVER,
+  Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,

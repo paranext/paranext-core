@@ -192,7 +192,13 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
         style={popoverContentStyle}
       >
         <Command>
-          <CommandInput placeholder={textPlaceholder} className="tw:text-inherit" />
+          <CommandInput
+            placeholder={textPlaceholder}
+            className="tw:text-inherit"
+            // Picker semantics: the option list is the whole point of this control and a leading
+            // space in the search box is meaningless, so Space picks the highlighted option.
+            spaceSelectsHighlightedItem
+          />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
             {isGroupedOptions(options) ? (

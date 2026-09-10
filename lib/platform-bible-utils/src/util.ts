@@ -34,6 +34,50 @@ export function deepClone<T>(obj: T): T {
 }
 
 /**
+ * Message of the error with which a pending debounced invocation's promise rejects when
+ * {@link DebouncedFunction.cancel} is called. Compare a caught error's message against this to
+ * distinguish cancellation from real errors.
+ */
+export const DEBOUNCE_CANCELED_ERROR_MESSAGE = 'Debounced function invocation was canceled';
+
+/**
+ * A debounced function with `cancel` and `flush` methods to abandon or immediately run any pending
+ * invocation (lodash-style lifecycle controls).
+ *
+ * @template TFunc - The type of the function being debounced.
+ */
+// We don't know the parameter types since this function can be anything and can return anything
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((
+  ...args: Parameters<TFunc>
+) => Promise<ReturnType<TFunc>>) & {
+  /**
+   * Cancel any pending debounced invocation. The promise returned by the most recent call rejects
+   * with an error whose message is {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
+   *
+   * IMPORTANT: because cancellation _rejects_ that promise, every call whose result you might later
+   * cancel MUST handle its rejection (await in a try/catch, or attach a `.catch`, filtering on
+   * {@link DEBOUNCE_CANCELED_ERROR_MESSAGE} to distinguish cancellation from a real error).
+   * Fire-and-forget callers that ignore the returned promise will get an unhandled promise
+   * rejection when `cancel()` runs.
+   */
+  cancel: () => void;
+  /**
+   * Run the pending debounced invocation NOW (synchronously, with the most recently passed
+   * arguments) instead of waiting out the remaining delay, and clear the timer so it does not fire
+   * a second time.
+   *
+   * Useful at lifecycle boundaries where the trailing window would otherwise lose the final
+   * invocation (unmount, blur, pagehide) or run it against changed context (see the
+   * platform-scripture-editor extension's debounced PDP save).
+   *
+   * @returns The same promise the pending calls received (resolving/rejecting with the flushed
+   *   invocation's outcome), or `undefined` when nothing was pending (in which case nothing runs).
+   */
+  flush: () => Promise<ReturnType<TFunc>> | undefined;
+};
+
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @template TFunc - A function type that takes any arguments and returns void. This is the type of
@@ -41,39 +85,98 @@ export function deepClone<T>(obj: T): T {
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
- * @returns Function that, when called, only calls the function passed in at maximum every delay ms
+ * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
+ *   The returned function also has a `cancel` method to abandon any pending invocation (canceling
+ *   makes the pending invocation's promise reject with an error whose message is
+ *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}) and a `flush` method to run the pending invocation
+ *   immediately instead of waiting out the delay.
  */
 // We don't know the parameter types since this function can be anything and can return anything
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function debounce<TFunc extends (...args: any[]) => any>(
   fn: TFunc,
   delay = 300,
-): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>> {
+): DebouncedFunction<TFunc> {
   let timeout: ReturnType<typeof setTimeout>;
   let promise: Promise<ReturnType<TFunc>> | undefined;
   let promiseResolve: (value: ReturnType<TFunc> | PromiseLike<ReturnType<TFunc>>) => void;
   let promiseReject: (reason?: unknown) => void;
+  // The most recently passed arguments while an invocation is pending; undefined when none is.
+  // Shared between the trailing-edge timer and `flush` so both run exactly the same invocation.
+  let pendingArgs: Parameters<TFunc> | undefined;
 
-  return (...args) => {
-    clearTimeout(timeout);
+  // The promise every caller waiting on the currently pending invocation shares, minted on demand
+  // so an invocation always has exactly one promise to settle.
+  const pendingPromise = (): Promise<ReturnType<TFunc>> => {
     if (!promise)
       promise = new Promise((resolve, reject) => {
         promiseResolve = resolve;
         promiseReject = reject;
       });
-
-    timeout = setTimeout(async () => {
-      try {
-        promiseResolve(await fn(...args));
-      } catch (e) {
-        promiseReject(e);
-      } finally {
-        promise = undefined;
-      }
-    }, delay);
-
     return promise;
   };
+
+  // Runs one invocation with the given args, settling the promise that is pending as it starts.
+  // `fn` itself is invoked synchronously (before any await), which is what lets `flush` run the
+  // pending call even in teardown paths (pagehide/beforeunload) where async work never resumes.
+  //
+  // The promise and its settlers are captured AT ENTRY and the stored promise is detached
+  // immediately, before the first await: this invocation's outcome must reach the callers who were
+  // waiting on IT, and a call arriving while it settles is a DIFFERENT invocation that needs its
+  // own promise. One promise shared across both would settle the newer caller with the older
+  // call's result and discard the newer outcome — including a rejection — unobserved.
+  const runInvocation = async (args: Parameters<TFunc>): Promise<void> => {
+    const resolveInvocation = promiseResolve;
+    const rejectInvocation = promiseReject;
+    promise = undefined;
+    try {
+      resolveInvocation(await fn(...args));
+    } catch (e) {
+      rejectInvocation(e);
+    }
+  };
+
+  const debouncedFn = (...args: Parameters<TFunc>): Promise<ReturnType<TFunc>> => {
+    clearTimeout(timeout);
+    const callPromise = pendingPromise();
+
+    pendingArgs = args;
+    timeout = setTimeout(() => {
+      const argsToRun = pendingArgs;
+      // Cleared BEFORE invoking so a re-schedule from inside `fn` is not wiped out
+      pendingArgs = undefined;
+      if (argsToRun) runInvocation(argsToRun);
+    }, delay);
+
+    return callPromise;
+  };
+
+  debouncedFn.cancel = () => {
+    clearTimeout(timeout);
+    pendingArgs = undefined;
+    if (promise) {
+      promiseReject(new Error(DEBOUNCE_CANCELED_ERROR_MESSAGE));
+      promise = undefined;
+    }
+  };
+
+  debouncedFn.flush = () => {
+    if (pendingArgs === undefined) return undefined;
+    clearTimeout(timeout);
+    const argsToRun = pendingArgs;
+    // Cleared BEFORE invoking so a re-schedule from inside `fn` is not wiped out
+    pendingArgs = undefined;
+    // Pending args always have a promise to settle, but not always a stored one: a call made while
+    // the previous invocation was settling leaves args pending after that invocation detached the
+    // promise. Minting here keeps flush's contract — it returns `undefined` only when nothing runs.
+    const flushedPromise = pendingPromise();
+    runInvocation(argsToRun);
+    return flushedPromise;
+  };
+
+  // Type assertion is necessary to cast the internal implementation type to the public API type
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return debouncedFn as DebouncedFunction<TFunc>;
 }
 
 /**
@@ -195,6 +298,45 @@ export function wait(ms: number) {
 export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number) {
   const timeout = wait(maxWaitTimeInMS).then(() => undefined);
   return Promise.any([timeout, fn()]);
+}
+
+/**
+ * Repeatedly runs an async attempt until its result is accepted or the attempt budget is exhausted,
+ * waiting a fixed delay between tries (never after the last). Always resolves to the last result —
+ * it never throws on exhaustion, so the caller decides what a give-up result means.
+ *
+ * This is the fixed-attempts + fixed-delay retry shape shared by flaky-startup probes (e.g.
+ * `resolveRegistrationValidity`, and the missing-handler retry in `requestWithRetry`). For
+ * deadline- or abort-driven retries with variable backoff (e.g. `requestSessionSyncWithBootRetry`
+ * in startup-tasks), use a bespoke loop instead — this helper deliberately does not cover those.
+ *
+ * @param attempt Runs one try; receives the 1-based attempt number and resolves to a result.
+ * @param isDone Returns `true` when `attempt`'s result is acceptable and retrying should stop.
+ * @param options.maxAttempts Total tries; clamped to at least 1. Defaults to 3.
+ * @param options.delayMs Delay between tries. Defaults to 0.
+ * @returns The first accepted result, or the last attempt's result if none qualified.
+ */
+export async function retryUntil<TResult>(
+  attempt: (attemptNumber: number) => Promise<TResult>,
+  isDone: (result: TResult) => boolean,
+  options?: { maxAttempts?: number; delayMs?: number },
+): Promise<TResult> {
+  const maxAttempts = Math.max(1, options?.maxAttempts ?? 3);
+  const delayMs = options?.delayMs ?? 0;
+  let attemptNumber = 1;
+  for (;;) {
+    // Await inside the loop on purpose: try one at a time so each retry gives whatever we're waiting
+    // on more time to become ready.
+    // eslint-disable-next-line no-await-in-loop
+    const result = await attempt(attemptNumber);
+    // Return before the backoff on both success and the final attempt, so we never wait after the
+    // last try.
+    if (isDone(result) || attemptNumber >= maxAttempts) return result;
+    attemptNumber += 1;
+    // Await inside the loop on purpose: back off before the next attempt.
+    // eslint-disable-next-line no-await-in-loop
+    await wait(delayMs);
+  }
 }
 
 /**

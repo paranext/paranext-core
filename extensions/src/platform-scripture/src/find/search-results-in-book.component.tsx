@@ -9,8 +9,10 @@ import { LocalizedBookData } from './find-types';
 import SearchResult, {
   FindLogger,
   HidableFindResult,
+  ReplaceConfig,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
+import { PreviewOptions } from './replace-preview-types';
 
 type SearchResultsInBookProps = {
   /**
@@ -24,11 +26,17 @@ type SearchResultsInBookProps = {
   /** The list of search results in this book */
   results: HidableFindResult[];
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
   /** The index of the currently focused/selected result in this list */
   focusedResultIndex: number | undefined;
-  /** Callback function called when the user clicks on a search result */
+  /** Callback function called when the user clicks on (selects) a search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when a result card receives browser focus (e.g. Tab navigation) */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user double-clicks a result (focus shifts to the editor) */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user clicks a result's scripture reference (focus shifts to the editor) */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss a result */
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on a result */
@@ -39,6 +47,21 @@ type SearchResultsInBookProps = {
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /**
+   * Whether replace is blocked for a reason unrelated to `isReplacing` (project is read-only, or
+   * structure is locked and the pending replacement would change it). Forwarded to each result so
+   * the per-result Replace button/keyboard shortcut can't bypass the same gate the toolbar Replace
+   * / Replace All buttons enforce.
+   */
+  isReplaceBlocked: boolean;
+  /** Explanation shown in a tooltip while `isReplaceBlocked` is true. Forwarded to each result. */
+  replaceBlockedTooltipText: string;
+  /** Configuration for the replacement preview (used in replace mode). Forwarded to each result. */
+  replaceConfig?: ReplaceConfig;
+  /** Options controlling how the replace preview is displayed. Forwarded to each result. */
+  previewOptions?: PreviewOptions;
+  /** Whether the project has AllowInvisibleChars enabled. Forwarded to each result. */
+  allowInvisibleCharacters?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -54,12 +77,20 @@ export function SearchResultsInBook({
   localizedBookData,
   focusedResultIndex,
   onResultClick,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onCancelReplace,
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  isReplaceBlocked,
+  replaceBlockedTooltipText,
+  replaceConfig,
+  previewOptions,
+  allowInvisibleCharacters,
   logger,
 }: SearchResultsInBookProps) {
   const [usjBook, setUsjBook] = useState<Usj | undefined>(undefined);
@@ -94,6 +125,17 @@ export function SearchResultsInBook({
     }
   }, [usjBook, bookId, logger]);
 
+  // Cache the USFM string once per book so individual result cards don't each serialize the book.
+  const cachedUsfm = useMemo(() => {
+    if (!usjReaderWriter) return undefined;
+    try {
+      return usjReaderWriter.toUsfm();
+    } catch (error) {
+      logger?.warn(`Find: failed to serialize USFM for book ${bookId}:`, error);
+      return undefined;
+    }
+  }, [usjReaderWriter, bookId, logger]);
+
   const firstReplacedIndex = results.findIndex((r) => r.isReplaced);
 
   return (
@@ -105,14 +147,23 @@ export function SearchResultsInBook({
           globalResultsIndex={index}
           isSelected={index === focusedResultIndex}
           usjReaderWriter={usjReaderWriter}
+          cachedUsfm={cachedUsfm}
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
+          onResultFocus={onResultFocus}
+          onResultDoubleClick={onResultDoubleClick}
+          onResultReferenceClick={onResultReferenceClick}
           onHideResult={onHideResult}
           onReplace={onReplace}
           onCancelReplace={index === firstReplacedIndex ? onCancelReplace : undefined}
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
+          isReplaceBlocked={isReplaceBlocked}
+          replaceBlockedTooltipText={replaceBlockedTooltipText}
+          replaceConfig={replaceConfig}
+          previewOptions={previewOptions}
+          allowInvisibleCharacters={allowInvisibleCharacters}
           logger={logger}
         />
       ))}

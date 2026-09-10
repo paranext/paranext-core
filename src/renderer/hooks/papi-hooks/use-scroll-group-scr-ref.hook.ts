@@ -6,7 +6,7 @@ import {
   onDidChangeVersification,
   onDidUpdateScrRef,
   setScrRefSync,
-} from '@renderer/services/scroll-group.service-host';
+} from '@renderer/services/scroll-group.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent, usePromise } from 'platform-bible-react';
@@ -146,7 +146,7 @@ export function useScrollGroupScrRef(
   );
 
   // Bump a generation counter when any tracked project's versification changes mid-session so every
-  // consumer re-runs its conversion once (see scroll-group.service-host emit). Blunt by design:
+  // consumer re-runs its conversion once (see the scroll group service's emit). Blunt by design:
   // versification changes are rare and deliberate.
   const [versificationGeneration, setVersificationGeneration] = useState(0);
   useEvent(

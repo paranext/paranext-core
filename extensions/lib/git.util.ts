@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import replaceInFile from 'replace-in-file';
 import { minimatch } from 'minimatch';
+import * as prettier from 'prettier';
 import { subtreeRootFolder } from '../webpack/webpack.util';
 
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/git.util.ts
@@ -321,11 +322,308 @@ async function deleteUnusedPackageLockIfPresent(repoRootRelativePath: string): P
   }
 }
 
+/**
+ * The license every extension bundled in this repository carries.
+ *
+ * The upstream templates are MIT, because an extension built from one and shipped by somebody else
+ * should be free to choose its own terms. An extension bundled _here_ is part of Platform.Bible and
+ * is AGPL-3.0-or-later along with the rest of the application — so the license is stamped as part
+ * of adapting the template to this repository, alongside the path and type-name rewrites, rather
+ * than left for whoever creates the extension to remember. See LICENSING.md and
+ * `adr-licensing-boundary`.
+ */
+export const BUNDLED_EXTENSION_LICENSE = 'AGPL-3.0-or-later';
+
+/**
+ * The repository's own AGPL text, which is what every bundled extension's LICENSE is copied from.
+ *
+ * The REPO ROOT copy, deliberately, not `extensions/LICENSE`. `extensions/` is a git subtree of the
+ * multi-extension template, and the template is MIT - so a template merge brings the template's own
+ * `LICENSE` in with it, and reading the canonical text from inside the subtree meant a merge could
+ * hand every extension the MIT text to be "corrected" to. The root `LICENSE` is outside the subtree
+ * and no merge can reach it.
+ */
+const CANONICAL_LICENSE_PATH = 'LICENSE';
+
+/** A line only the AGPL text carries, so the canonical copy is checked rather than assumed. */
+const AGPL_TITLE = /GNU AFFERO GENERAL PUBLIC LICENSE/i;
+
+/**
+ * The AGPL text this repository stamps into extension folders.
+ *
+ * Verified rather than trusted. Everything below copies this over an extension's existing LICENSE
+ * on the grounds that the extension DECLARES these terms, so reading the wrong file here does not
+ * fail loudly - it writes the wrong license text into twelve folders and logs that it restored the
+ * right one.
+ */
+async function readCanonicalLicense(root: string = repoRoot): Promise<string> {
+  const file = path.join(root, CANONICAL_LICENSE_PATH);
+  const text = await fs.readFile(file, 'utf8');
+  if (!AGPL_TITLE.test(text))
+    throw new Error(
+      `${CANONICAL_LICENSE_PATH} is not the ${BUNDLED_EXTENSION_LICENSE} text, so it cannot be ` +
+        'copied into extension folders that declare it. Every bundled extension would be given a ' +
+        'license text that contradicts its own declaration.',
+    );
+  return text;
+}
+
+/**
+ * Sets `license` in a JSON file, keeping it beside `version` when the field is not there yet.
+ *
+ * PRECONDITION: the caller has already decided that this FOLDER may be stamped.
+ * `decideLicenseStamp` is what makes that decision, and it makes it for the folder rather than per
+ * file - an extension deliberately given other terms is left alone there, before this is ever
+ * called. A second per-file check here would be unreachable through the only caller, and worse than
+ * unreachable: it would read as the decision while `decideLicenseStamp` was actually making it, so
+ * a future caller could reasonably believe this function is safe to call on any folder. It is not.
+ */
+async function stampLicenseInJson(
+  repoRootRelativePath: string,
+  root: string = repoRoot,
+): Promise<boolean> {
+  const file = path.join(root, repoRootRelativePath);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch (error: unknown) {
+    // Not every extension folder has every file; nothing to stamp is not a failure.
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;
+    throw error;
+  }
+  // Idempotence only - the folder-level decision above is what protects an extension deliberately
+  // given other terms.
+  if (parsed.license === BUNDLED_EXTENSION_LICENSE) return false;
+
+  // One mechanism for one placement decision: copy the file's own key order, putting `license`
+  // after `version` where the field was absent, and append it if there was no `version` to follow.
+  const stamped: Record<string, unknown> = {};
+  Object.entries(parsed).forEach(([key, value]) => {
+    stamped[key] = key === 'license' ? BUNDLED_EXTENSION_LICENSE : value;
+    if (key === 'version' && parsed.license === undefined)
+      stamped.license = BUNDLED_EXTENSION_LICENSE;
+  });
+  if (!('license' in stamped)) stamped.license = BUNDLED_EXTENSION_LICENSE;
+
+  // Formatted with Prettier rather than written straight out of `JSON.stringify`, because this
+  // reprints the WHOLE file rather than editing the one field, and the two disagree: Prettier keeps
+  // a short array inline (`"commands": ["dotnet-csharpier"]`) where `JSON.stringify` always expands
+  // it across three lines. `update-from-templates` runs this over every extension folder, so the
+  // disagreement would surface far from here - as `npm run format:check` failing in an unrelated CI
+  // step after a template merge, against a file nobody edited.
+  await fs.writeFile(
+    file,
+    await formatJson(`${JSON.stringify(stamped, undefined, 2)}\n`, file),
+    'utf8',
+  );
+  return true;
+}
+
+/** Formats JSON text the way `npm run format` would, so a rewritten manifest stays check-clean. */
+async function formatJson(text: string, file: string): Promise<string> {
+  const config = await prettier.resolveConfig(file);
+  return prettier.format(text, { ...config, filepath: file, parser: 'json' });
+}
+
+/**
+ * The `license` an extension folder's JSON file declares, and whether the file is there at all.
+ *
+ * The two are different facts and the caller needs both: an ABSENT file says nothing about the
+ * extension's terms, while a file present with no `license` field is one this repository may
+ * stamp.
+ */
+async function readDeclaredLicense(
+  repoRootRelativePath: string,
+  root: string = repoRoot,
+): Promise<DeclaredLicense> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(path.join(root, repoRootRelativePath), 'utf8'));
+    return {
+      file: repoRootRelativePath,
+      present: true,
+      license: parsed.license,
+      licenseIsDeliberate: parsed.licenseIsDeliberate,
+    };
+  } catch (error: unknown) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+      return {
+        file: repoRootRelativePath,
+        present: false,
+        license: undefined,
+        licenseIsDeliberate: undefined,
+      };
+    throw error;
+  }
+}
+
+/**
+ * One extension JSON file's `license` declaration, as `readDeclaredLicense` reports it.
+ *
+ * `licenseIsDeliberate` is the extension's own statement that its `license` was chosen rather than
+ * inherited - see `decideLicenseStamp`.
+ */
+export type DeclaredLicense = {
+  file: string;
+  present: boolean;
+  license: unknown;
+  licenseIsDeliberate?: unknown;
+};
+
+/**
+ * Whether this repository may stamp its license onto an extension folder, from what its files say.
+ *
+ * Decided for the FOLDER, not per file. Per file, an extension declaring `Apache-2.0` in
+ * `package.json` with no `license` in `manifest.json` gets the manifest rewritten to AGPL while the
+ * package.json keeps its own terms: two files in one folder declaring different licenses, and no
+ * text copied for either.
+ *
+ * An ABSENT file says nothing - a manifest-only extension is stamped from its manifest alone - but
+ * a folder with neither file is not an extension this can say anything about.
+ *
+ * `MIT` and an absent field are both read as "nobody has decided this yet", because that is what
+ * the extension template leaves behind. An extension whose MIT is a DECISION - a bundled extension
+ * publishing a runtime-linked surface, which LICENSING.md's MIT section says must stay MIT so
+ * third-party authors do not inherit AGPL obligations - is indistinguishable from the template
+ * default by value alone, and would be relicensed by a routine `update-from-templates` run. So it
+ * says so instead: `"licenseIsDeliberate": true` beside the `license` field, in either file, and
+ * nothing here overwrites the declaration or the text that accompanies it.
+ */
+export function decideLicenseStamp(declarations: DeclaredLicense[]): {
+  stamp: boolean;
+  reason?: string;
+} {
+  const present = declarations.filter((declaration) => declaration.present);
+  if (!present.length) return { stamp: false };
+  // Stated rather than inferred: the value alone cannot tell "this was decided" from "nobody has
+  // looked at it".
+  const deliberate = present.find(({ licenseIsDeliberate }) => licenseIsDeliberate === true);
+  if (deliberate)
+    return {
+      stamp: false,
+      reason:
+        `${deliberate.file} sets "licenseIsDeliberate": true, so its ` +
+        `"${String(deliberate.license)}" is a decision rather than the template's default.`,
+    };
+  // Neither the template's value nor this repository's: somebody chose these terms on purpose, and
+  // nothing here may overwrite the field or the text that goes with them.
+  const chosen = present.find(
+    ({ license }) =>
+      license !== undefined && license !== 'MIT' && license !== BUNDLED_EXTENSION_LICENSE,
+  );
+  if (chosen)
+    return {
+      stamp: false,
+      reason:
+        `${chosen.file} declares "${String(chosen.license)}", which is neither the template's ` +
+        "license nor this repository's.",
+    };
+  return { stamp: true };
+}
+
+/**
+ * Puts this repository's license text in one folder, unless the text already there is it.
+ *
+ * The text is COMPARED, not merely tested for presence: a merge from the MIT template reintroduces
+ * the template's own `LICENSE`, so a folder can hold a license file stating terms the field beside
+ * it does not.
+ *
+ * @param folderPath Folder to write into, relative to `root`. Also the label the log names.
+ * @param canonical This repository's license text, as `readCanonicalLicense` read it.
+ * @param whoseTerms Who declares these terms, completing "it did not match the <license> text ...".
+ * @param root Repository root the folder path is resolved against.
+ */
+async function writeCanonicalLicenseInto(
+  folderPath: string,
+  canonical: string,
+  whoseTerms: string,
+  root: string = repoRoot,
+): Promise<void> {
+  const licenseFile = path.join(root, folderPath, 'LICENSE');
+  let current: string | undefined;
+  try {
+    current = await fs.readFile(licenseFile, 'utf8');
+  } catch {
+    current = undefined;
+  }
+  if (current === canonical) return;
+  await fs.writeFile(licenseFile, canonical, 'utf8');
+  console.log(
+    current === undefined
+      ? `Added ${BUNDLED_EXTENSION_LICENSE} LICENSE to ${folderPath}`
+      : `Replaced the LICENSE in ${folderPath}: it did not match the ` +
+          `${BUNDLED_EXTENSION_LICENSE} text ${whoseTerms}`,
+  );
+}
+
+/**
+ * Gives an extension folder this repository's license: the `license` field in its `package.json`
+ * and `manifest.json`, and a copy of the AGPL text beside them.
+ *
+ * The text is copied rather than referenced because each extension is redistributed as its own
+ * folder, and a license field naming terms whose text is nowhere in the folder states an obligation
+ * without discharging it.
+ *
+ * The text is compared, not merely tested for presence - see `writeCanonicalLicenseInto`. Copying
+ * it only when NO file exists leaves the one state that is worse than either: a merge from the MIT
+ * template reintroduces the template's own `LICENSE`, the JSON fields above are corrected to AGPL,
+ * and the folder then declares AGPL-3.0-or-later while shipping the text of a different license.
+ *
+ * "An extension deliberately given other terms is left alone" is decided for the FOLDER, not per
+ * file - see `decideLicenseStamp` for what deciding it per file costs.
+ *
+ * The declaration is read from whichever of the two files the folder HAS. Read from `package.json`
+ * alone, `declared` is permanently undefined for a manifest-only extension
+ * (`extensions/src/c-sharp-provider-test/` is one), leaving its hand-placed LICENSE never verified
+ * against the terms it declares and never repaired.
+ */
+export async function stampExtensionLicense(
+  extensionFolderPath: string,
+  root: string = repoRoot,
+): Promise<void> {
+  const manifestFiles = [
+    `${extensionFolderPath}/package.json`,
+    `${extensionFolderPath}/manifest.json`,
+  ];
+  // Wrapped rather than passed as a bare reference: `Array.prototype.map` supplies the index as the
+  // second argument, which is the `root` parameter here.
+  const declarations = await Promise.all(
+    manifestFiles.map((file) => readDeclaredLicense(file, root)),
+  );
+  const decision = decideLicenseStamp(declarations);
+  if (!decision.stamp) {
+    if (decision.reason) console.log(`Left ${extensionFolderPath} alone: ${decision.reason}`);
+    return;
+  }
+
+  // Read BEFORE anything is written. `readCanonicalLicense` refuses a root `LICENSE` that is not
+  // the AGPL text, so reading it after the JSON fields are stamped leaves exactly the state this
+  // function's docstring calls worse than either: the folder declares AGPL-3.0-or-later while the
+  // text beside it is a different license, or absent. A re-run cannot repair that either -
+  // `stampLicenseInJson` returns early for a folder already declaring the value, so the throw comes
+  // back before any text is copied. Nothing is stamped unless the text that has to accompany the
+  // declaration is in hand.
+  const canonical = await readCanonicalLicense(root);
+
+  const stamped = await Promise.all(manifestFiles.map((file) => stampLicenseInJson(file, root)));
+
+  await writeCanonicalLicenseInto(extensionFolderPath, canonical, 'this extension declares', root);
+
+  if (stamped.some(Boolean))
+    console.log(`Set license to ${BUNDLED_EXTENSION_LICENSE} in ${extensionFolderPath}`);
+}
+
 /** Format the `extensions/` root folder after a merge from the multi-extension template. */
 export async function formatExtensionsRoot() {
   // Delete `extensions/package-lock.json` if present — it is unused because `extensions/` is an npm
   // workspace
   await deleteUnusedPackageLockIfPresent(`${subtreeRootFolder}/package-lock.json`);
+
+  // The subtree root's own LICENSE. It is inside the subtree, so a merge from the MIT
+  // multi-extension template replaces it with the template's, while every extension folder BELOW it
+  // is corrected to AGPL. `extensions/` is part of this application, so its license is this
+  // repository's.
+  const canonical = await readCanonicalLicense();
+  await writeCanonicalLicenseInto(subtreeRootFolder, canonical, 'this repository is under');
 }
 
 /**
@@ -352,6 +650,11 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
 
   // Delete package-lock.json if present — it is unused because this folder is an npm workspace
   await deleteUnusedPackageLockIfPresent(`${extensionFolderPath}/package-lock.json`);
+
+  // Stamp this repository's license over the template's. Done on every format pass, not only on
+  // creation, so a template merge that reintroduces the template's MIT value is corrected the same
+  // way a reintroduced `../paranext-core` path is.
+  await stampExtensionLicense(extensionFolderPath);
 
   // Get the basename of the extension folder for use in replacements
   const extensionName = path.basename(extensionFolderPath);

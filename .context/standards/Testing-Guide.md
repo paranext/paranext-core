@@ -67,6 +67,32 @@ git stash pop
 
 **If a test passes without the implementation, it proves nothing and must be rewritten.**
 
+#### Exception: `test.fails` tripwires for a KNOWN, deliberately unfixed defect
+
+A `test.fails` case inverts Vitest's verdict: the case passes while the body throws and turns **red
+the moment the defect it names is fixed**. That makes it a tripwire, not a broken test — the way to
+record a defect you have deliberately chosen not to fix yet so that fixing it cannot pass unnoticed.
+It is the one place where "a case that goes green without an implementation change" is the intended
+alarm rather than a bug in the test.
+
+Use it only for a defect that is **known, reproduced, and deferred to a named ticket**, and only with
+all three of:
+
+- A `TODO(PT-XXXX)` on the case itself naming the specific defect it pins — not only on the
+  `describe` block, and not only in the production file. Whoever fixes the ticket must meet the
+  reference in the case they are about to turn red.
+- An instruction in that comment to **drop the `.fails`, not delete the case**, once the defect is
+  fixed. Deleting it throws away the coverage the tripwire was standing in for.
+- An assertion specific enough that the documented failure is the one being pinned. `test.fails`
+  passes when the body throws for **any** reason, so a case can stay green while no longer pinning
+  the bug it names — prefer asserting on the specific failure over letting an arbitrary throw count.
+
+Do NOT reach for it to park a test that is merely inconvenient, flaky, or unfinished. A test with no
+named defect and no ticket is a skipped test wearing a disguise; skip it explicitly instead.
+
+Live example: the three reconnect blockers in
+`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4435.
+
 ### Continuous Testing Frequency
 
 | Trigger               | Scope                   | Time Budget |
@@ -369,6 +395,8 @@ export default defineConfig(async () => {
       // Warms the lazy one-time ICU init behind Intl.* so it never lands inside a test's
       // timeout window on a slow CI worker. See vitest.setup.ts for the rationale.
       setupFiles: ['./vitest.setup.ts'],
+      // Must stay comfortably above vitest.setup.ts's asyncUtilTimeout — see note below.
+      testTimeout: 15000,
       include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     },
   };
@@ -378,6 +406,16 @@ export default defineConfig(async () => {
 > The workspace configs (`extensions/vitest.config.ts`, `lib/platform-bible-utils/vite.config.ts`,
 > `lib/platform-bible-react/vitest.config.ts`) reference this same repo-root `vitest.setup.ts` via a
 > relative `setupFiles` path, so every vitest worker warms Intl once before any timed test.
+
+> **`testTimeout` vs. `asyncUtilTimeout`.** `vitest.setup.ts` also raises testing-library's own
+> `asyncUtilTimeout` — the deadline a bare `waitFor`/`findBy*` gives up at — independently of
+> vitest's per-test `testTimeout`. `testTimeout`'s clock starts at the beginning of the test body,
+> while a given `waitFor` call only starts its own `asyncUtilTimeout` countdown when that call is
+> reached, so whichever deadline elapses first wins. Every project that loads this shared setup
+> file must keep its own `testTimeout` comfortably above `asyncUtilTimeout` — not just nominally
+> above it, since any work a test does before reaching the `waitFor` call eats into that margin —
+> or a failing `waitFor` is reported as vitest's bare timeout instead of testing-library's richer
+> error (with its DOM dump), silently losing the more useful failure message.
 
 ### Key Dependencies
 
@@ -431,6 +469,16 @@ npm run test --workspace=lib/platform-bible-react
 # Run tests with coverage
 npm run test:core -- --coverage
 ```
+
+**`npm test` needs Playwright's browsers installed.** `lib/platform-bible-react`'s vitest config
+includes a `storybook (chromium)` project that runs stories in a real browser, so a checkout that
+has never run `npx playwright install` fails there rather than in any `.test.ts` file. CI installs
+them before running tests; locally, run it once.
+
+That project is also the repo's main source of flaky test runs: its story files are timing-sensitive
+under parallel load, and a full `npm test` can fail a different handful of them each time while every
+one passes in isolation. Before chasing a story failure, re-run that project on its own with
+`--no-file-parallelism` — if it goes green, the failure was contention, not a regression.
 
 ---
 
@@ -796,27 +844,66 @@ internal class DummyPapiClient : PapiClient
 
 ### TypeScript: Service Testing with Mocks
 
+> This example is executable and is meant to stay that way — it has shipped broken repeatedly
+> while being corrected by eye. `npm run verify:testing-guide` extracts the fence **verbatim**
+> and typechecks, lints and runs it; lint-staged runs it automatically whenever this file is
+> staged, so it does not depend on anyone remembering.
+
 ```typescript
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStore } from '@shared/services/shared-store.service';
 
+// Mock EVERY member the code under test touches, not just the one being asserted on — a missing
+// member is `undefined` at the call site, and the resulting throw is usually swallowed by the
+// service's own try/catch and surfaces only as a rejected promise.
 vi.mock('@shared/services/network.service', () => ({
-  createNetworkEventEmitter: vi.fn(),
+  createCoreMultiSourceEventEmitter: vi.fn(),
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
+  registerRequestHandler: vi.fn(),
+}));
+
+// The same rule applies to collaborators, not just the module under assertion. `initialize` logs,
+// and the real logger module configures transports at import time, so leaving it unmocked gives a
+// copied test load-time side effects it never asked for.
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 describe('sharedStoreService', () => {
-  const mockEmitter = { emit: vi.fn(), subscribe: vi.fn(), dispose: vi.fn() };
+  // `event` matters as much as `emit`: the service subscribes through it during initialization.
+  const mockEmitter = {
+    emit: vi.fn(),
+    event: vi.fn(),
+    subscribe: vi.fn(),
+    subscribeOnce: vi.fn(),
+    dispose: vi.fn(),
+    emitLocal: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(networkService.createNetworkEventEmitter).mockReturnValue(mockEmitter);
+    // The factory returns the emitter alongside a promise for its central registration; the
+    // service consumes that promise in the background, so a mock must supply both. The cast is
+    // unavoidable: `PlatformEventEmitter` has private fields, so no object literal is assignable
+    // to it and the mock will not typecheck without it.
+    vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue(
+      // Needed for testing
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      {
+        emitter: mockEmitter,
+        registeredEmitterPromise: Promise.resolve(mockEmitter),
+      } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
+    );
   });
 
   it('should initialize with network event emitter', async () => {
     await initializeSharedStore(networkService);
-    expect(networkService.createNetworkEventEmitter).toHaveBeenCalledWith('shared-store:change');
+    expect(networkService.createCoreMultiSourceEventEmitter).toHaveBeenCalledWith(
+      'shared-store:change',
+      expect.anything(),
+    );
   });
 });
 ```
@@ -952,16 +1039,11 @@ For more thorough invariant verification with random input generation, see [Prop
 
 ## Test Categorization
 
-Test categorization enables fast feedback during development by running subsets of tests based on speed requirements.
+Test categorization enables fast feedback during development: run the subset of tests that covers what you just changed instead of the whole suite.
 
 ### Categories
 
-| Category        | Time Budget | When to Run     | Scope               |
-| --------------- | ----------- | --------------- | ------------------- |
-| **Smoke**       | < 10s       | After each edit | Core functionality  |
-| **Critical**    | < 60s       | Every 3–5 edits | Feature tests       |
-| **Full**        | < 5 min     | Before commit   | Complete suite      |
-| **Integration** | No limit    | CI only         | Cross-process tests |
+C# categories describe **what a test verifies**, not a speed tier. The ones that exist in `c-sharp-tests/` are `Contract` (API/behavior contracts — the bulk of the suite), `Acceptance`, `GoldenMaster`, `Integration`, `Critical`, `Invariant`, `Regression`, `EdgeCase`, `Infrastructure`, `ErrorPath`, and `DiskVerification`. There is no `Smoke`, `Full`, `Unit`, `Fast`, or `Slow` category — confirm a name with `git grep '\[Category(' c-sharp-tests/` before filtering on it. `.claude/skills/test-runner/categories.md` documents what each category covers and the full filter syntax; during TDD the useful order is `Contract`, then `Integration`, then `Acceptance`, then the whole suite.
 
 ### Tagging Tests
 
@@ -969,7 +1051,7 @@ Test categorization enables fast feedback during development by running subsets 
 
 ```csharp
 [Test]
-[Category("Smoke")]
+[Category("Contract")]
 public void BasicOperation_Works() { }
 
 [Test]
@@ -983,18 +1065,16 @@ public void ImportantFeature_HandlesEdgeCase() { }
 describe.concurrent('Smoke tests', () => {
   test('basic operation works', () => {});
 });
-
-// Or use file naming: feature.smoke.test.ts, feature.critical.test.ts
 ```
 
 ### Running by Category
 
 ```bash
-# C# — run only smoke tests
-dotnet test --filter "Category=Smoke"
+# C# — run one category (there is no root solution, so name the test project)
+dotnet test c-sharp-tests/ --filter "Category=Critical"
 
 # TypeScript — run a specific test name pattern
-npm test -- --testNamePattern="Smoke"
+npm run test:core -- --run -t "Smoke"
 ```
 
 ---
@@ -1108,13 +1188,21 @@ End-to-end testing verifies complete user workflows across all processes (Electr
 
 E2E tests that verify user flows MUST interact through visible UI only:
 
-- Use `cdp.fixture` for all per-feature E2E tests (connects to the running app via CDP).
+- Pick the fixture from how the test gets its app: `isolated.fixture` for a spec under
+  `tests/isolated/` (a fresh Electron per test), `cdp.fixture` for one under `tests/attached/`
+  (attaches to an app you started yourself).
 - Click menu items, buttons, and fill forms through the UI.
 - NEVER use `papi.fixture` or `app.fixture` for per-feature tests.
 - NEVER send JSON-RPC commands to set up UI state.
 - NEVER import `sendPapiCommand` from helpers in per-feature tests.
 
 Note: `app.fixture` is retained for CI smoke tests only (launches standalone Electron).
+
+**Isolated-suite setup exception:** specs under `e2e-tests/tests/isolated/` run against a fresh
+temp profile with no projects and no project-open UI, so their *setup* necessarily goes through
+PAPI (`sendPapiCommandWhenRegistered` to open an editor, flip `platform.isEditable`, etc.). The
+rule still governs the behavior under test: once setup completes, the asserted user flow itself
+must be driven and observed through visible UI only.
 
 ### Opening a Project and Its Tool Menus (PT10 Navigation Pattern)
 
@@ -1176,34 +1264,51 @@ async function clickEditorMenuItem(page: Page, projectName: string, itemLabel: R
 
 ### Test Location
 
-Create E2E tests in: `e2e-tests/tests/{feature}/`
+Where a spec lives is decided by how it gets its app, and that choice also picks its config:
+
+- `tests/isolated/{feature}/` — the default. Each test launches its own Electron, so specs are
+  self-contained and can run in CI. Uses `isolated.fixture` and `playwright.config.ts`.
+- `tests/attached/` — for specs that must attach to an app you started yourself (`refresh.sh`),
+  because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
+  Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
+  port 8876 is bound, which is exactly the state these specs need.
+- `tests/enhanced-resources/`, `tests/manage-books/`, `tests/markers-checklist/` — older
+  local-only suites that also use `cdp.fixture` and the CDP config. They are not part of any
+  standard run (see their READMEs for what collects each and why), so put new work in one of the
+  three directories above rather than extending them.
+- `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
+  tests.
 
 ```
 e2e-tests/
 ├── fixtures/
-│   ├── cdp.fixture.ts           # Connects to running app via CDP (DEFAULT for features)
+│   ├── cdp.fixture.ts           # Connects to running app via CDP (for tests/attached/)
 │   ├── app.fixture.ts           # Launches fresh Electron (CI smoke tests only)
 │   ├── papi.fixture.ts          # @deprecated — CI smoke tests only
 │   ├── papi-live.fixture.ts     # Connects to already-running app's WebSocket (command-surface verification)
-│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (state-mutating tests)
+│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (DEFAULT for features)
 │   ├── comment.fixture.ts       # Comment-testing fixture (+ comment-test-helpers.ts)
 │   └── helpers.ts               # waitForAppReady(), sendPapiCommand()  (tree non-exhaustive)
 ├── playwright-cdp.config.ts     # Config for CDP mode (no setup/teardown)
 ├── playwright.config.ts         # Config for standalone mode (with setup/teardown)
 └── tests/
-    └── {feature}/
-        └── {feature}.spec.ts
+    ├── isolated/                 # Default: one Electron per test (playwright.config.ts)
+    │   └── {feature}/
+    │       └── {feature}.spec.ts
+    ├── attached/                 # Attaches to an app you started (playwright-cdp.config.ts)
+    ├── smoke/                    # What CI runs
+    └── _example/                 # Templates
 ```
 
 ### Fixture Selection
 
 | Fixture       | Mode                               | When to Use                               | Provides                  |
 | ------------- | ---------------------------------- | ----------------------------------------- | ------------------------- |
-| `cdp.fixture`      | Connects to running app (CDP 9223)        | **Default for all per-feature E2E tests** | `mainPage`                |
+| `cdp.fixture`      | Connects to running app (CDP 9223)        | Specs that attach to an app you started   | `mainPage`                |
 | `app.fixture`      | Launches fresh Electron                   | CI smoke tests, standalone testing        | `electronApp`, `mainPage` |
 | `papi.fixture`     | Extends app.fixture + WebSocket           | **Deprecated** — CI smoke tests only      | `papiClient` + app.fixture |
 | `papi-live.fixture`| Connects to already-running app (WS 8876) | Command-surface verification only (see below) | `papiLive`                |
-| `isolated.fixture` | Launches an isolated Electron per test    | Tests that mutate application state       | fresh app per test        |
+| `isolated.fixture` | Launches an isolated Electron per test    | **Default for all per-feature E2E tests** | fresh app per test        |
 
 ### Command-Surface Verification (papi-live.fixture)
 
@@ -1248,7 +1353,7 @@ if (res.error) expect(RESERVED, res.error.message).not.toContain(res.error.code)
 
 ### E2E Test Templates
 
-**UI Interaction Tests (cdp.fixture — default for per-feature tests):**
+**UI Interaction Tests (cdp.fixture — for specs under `tests/attached/`):**
 
 ```typescript
 import { test, expect } from '../../fixtures/cdp.fixture';
@@ -1268,7 +1373,7 @@ test.describe('{Feature} E2E Tests', () => {
 });
 ```
 
-**Render Smoke Test (cdp.fixture):**
+**Render Smoke Test (cdp.fixture — for specs under `tests/attached/`):**
 
 ```typescript
 import { test, expect } from '../../fixtures/cdp.fixture';
@@ -1323,15 +1428,26 @@ A cross-screen journey test that only checks `toBeVisible()` proves the page ren
 **IMPORTANT**: Always use the `--config` flag when running Playwright from the repo root. Without `--config`, Playwright uses defaults — the `--project` flag won't work, no dev server is started, and bare `npx playwright test` (without a test path) will discover vitest `.test.ts` files and fail.
 
 ```bash
-# CDP mode (default — app already running via ./.erb/scripts/refresh.sh)
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
+# CDP mode (app already running via ./.erb/scripts/refresh.sh)
+# Swap tests/attached/ for tests/enhanced-resources/, tests/manage-books/ or
+# tests/markers-checklist/ to run one of the local-only suites.
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
 
 # CDP mode with HTML report
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
 npx playwright show-report e2e-tests/playwright-report
 
-# Standalone mode (CI — launches own Electron, port 8876 must be free)
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright.config.ts --project=development --reporter=list
+# Standalone mode (launches its own Electron, port 8876 must be free). Each project in
+# playwright.config.ts has its own testDir, so path-filter inside it: `isolated` →
+# tests/isolated/** (most feature tests), `smoke` → tests/smoke/** (what CI runs, via
+# `npm run test:e2e:smoke`), `enhanced-resources` → tests/enhanced-resources/**.
+npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated --reporter=list
+
+# WSL2: wrap a standalone-mode run so its Electron windows do not take over the Windows desktop.
+# Only works when the app is launched inside the wrap — CDP mode attaches to an app started by
+# ./.erb/scripts/refresh.sh, which on Linux already runs it under its own Xvfb.
+# A bare Xvfb has no window manager, so compositor-dependent suites can behave differently.
+e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated
 ```
 
 ### Failure Analysis

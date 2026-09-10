@@ -26,7 +26,7 @@ function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo 
 }
 
 vi.mock('../../../shared/services/logger.service');
-vi.mock('@renderer/services/theme.service-host', () => ({
+vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
   localThemeService: {},
 }));
@@ -69,6 +69,7 @@ describe('Dock Layout Component', () => {
         'platformScriptureEditor.commentaries',
         'legacyCommentManager.commentListPanel',
         'platformScriptureEditor.scriptureTextGrid',
+        'platformScripture.find',
       ].forEach((webViewType) => {
         expect(getTabGroup(makeWebViewTabInfo(webViewType, false))).toBe(TAB_GROUP_RESOURCES);
       });

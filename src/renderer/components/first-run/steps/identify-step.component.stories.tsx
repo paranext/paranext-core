@@ -1,10 +1,19 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { expect, fn, spyOn, within, userEvent, waitFor } from 'storybook/test';
-import * as commandService from '@shared/services/command.service';
+import { expect, fn, within, userEvent, waitFor } from 'storybook/test';
+// Deep relative (not aliased) so tsc follows only the dependency-free channel, never the
+// webpack-only mock it drives. Same reasoning as the first-run language mock.
+import {
+  resetCommandServiceMock,
+  setCommandServiceMock,
+} from '../../../../../.storybook/mocks/command-service-mock-channel';
 import { IdentifyStep } from './identify-step.component';
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
+// The registry site a non-production environment resolves to. ParatextData maps Development, Test,
+// and QualityAssurance all to this one host; only Production differs. Used here to show the "Visit
+// Paratext Registry" link following the selected environment rather than always Production.
+const NON_PRODUCTION_REGISTRY_URL = 'https://registry-dev.paratext.org';
 
 const meta: Meta<typeof IdentifyStep> = {
   title: 'First run/IdentifyStep',
@@ -23,16 +32,38 @@ type Story = StoryObj<typeof IdentifyStep>;
 export const Default: Story = {};
 
 /**
+ * The "Visit Paratext Registry" link points at whichever registry the selected server environment
+ * uses (resolved via `paratextRegistration.getParatextRegistryUrl`), not a hardcoded production
+ * URL. Here a non-production environment is selected, so the link targets the development registry
+ * site.
+ */
+export const RegistryLinkFollowsSelectedServer: Story = {
+  beforeEach: () => {
+    // Route by command name so the mount-time URL lookup returns the non-production site while
+    // any other command (none are triggered here) resolves harmlessly.
+    setCommandServiceMock((command) =>
+      command === 'paratextRegistration.getParatextRegistryUrl'
+        ? NON_PRODUCTION_REGISTRY_URL
+        : undefined,
+    );
+    return () => resetCommandServiceMock();
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: /visit paratext registry/i });
+    await waitFor(() => expect(link).toHaveAttribute('href', NON_PRODUCTION_REGISTRY_URL));
+  },
+};
+
+/**
  * Name entered; Save and restart is enabled because demo mode skips backend validation.
  *
  * Toggle demo mode via: `localStorage.setItem('platform-bible.firstRunDemoMode', 'true')`
  */
 export const FilledValid: Story = {
-  parameters: {
-    beforeEach: () => {
-      localStorage.setItem(DEMO_MODE_KEY, 'true');
-      return () => localStorage.removeItem(DEMO_MODE_KEY);
-    },
+  beforeEach: () => {
+    localStorage.setItem(DEMO_MODE_KEY, 'true');
+    return () => localStorage.removeItem(DEMO_MODE_KEY);
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -48,12 +79,10 @@ export const FilledValid: Story = {
  * a correctly-formatted code are entered; the error appears after the validation debounce.
  */
 export const InvalidCode: Story = {
-  parameters: {
-    beforeEach: () => {
-      // Replaces sendCommand so every validation attempt returns false (not found).
-      const spy = spyOn(commandService, 'sendCommand').mockResolvedValue(false);
-      return () => spy.mockRestore();
-    },
+  beforeEach: () => {
+    // Every command answers false, which is what a validation attempt reads as "not found".
+    setCommandServiceMock(() => false);
+    return () => resetCommandServiceMock();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -66,19 +95,47 @@ export const InvalidCode: Story = {
 };
 
 /**
+ * Re-register mode (background re-check re-raised the wizard for an already-onboarded user whose
+ * registration went invalid). Adds two affordances not present in fresh onboarding: a "Continue
+ * without registration" escape hatch and a "Don't show this on startup again" suppression
+ * checkbox.
+ */
+export const ReRegisterMode: Story = {
+  args: { allowContinueWithoutRegistration: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole('button', { name: /continue without registration/i }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole('checkbox', { name: /don't show this on startup again/i }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
  * Registration saved and platform.restart called — the form is replaced by a restart indicator. The
  * restart promise never resolves (the real process reboots here), so the restart view stays visible
  * until the story is reset.
  */
 export const RestartPending: Story = {
-  parameters: {
-    beforeEach: () => {
-      const spy = spyOn(commandService, 'sendCommand')
-        .mockResolvedValueOnce(true) // validateParatextRegistrationData → valid
-        .mockResolvedValueOnce(undefined) // setParatextRegistrationData → ok
-        .mockReturnValueOnce(new Promise<never>(() => {})); // platform.restart → never settles
-      return () => spy.mockRestore();
-    },
+  beforeEach: () => {
+    // Route by command name so the mount-time registry-URL lookup can't consume the
+    // validation/save mocks off a positional queue (it would leave Save disabled). Restart never
+    // settles because the real process reboots here.
+    setCommandServiceMock((command) => {
+      switch (command) {
+        case 'paratextRegistration.validateParatextRegistrationData':
+          return true;
+        case 'paratextRegistration.setParatextRegistrationData':
+          return undefined;
+        case 'platform.restart':
+          return new Promise<never>(() => {});
+        default:
+          return undefined;
+      }
+    });
+    return () => resetCommandServiceMock();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

@@ -291,6 +291,88 @@ export const ScrollGroupBinding: Story = {
 
 // #endregion
 
+// #region flat list (no open tabs, no scroll groups)
+
+const sampleProjectsAndResources: ProjectSelectorProject[] = [
+  ...sampleProjects,
+  {
+    id: 'na28',
+    shortName: 'NA28',
+    fullName: 'Nestle-Aland 28th Edition (Greek NT)',
+    language: 'Greek',
+    languageCode: 'el',
+  },
+  {
+    id: 'bhs',
+    shortName: 'BHS',
+    fullName: 'Biblia Hebraica Stuttgartensia',
+    language: 'Hebrew',
+    languageCode: 'he',
+  },
+  {
+    id: 'lxx',
+    shortName: 'LXX',
+    fullName: 'Septuagint',
+    language: 'Greek',
+    languageCode: 'el',
+  },
+];
+
+export const SimpleFlatList: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={sampleProjectsAndResources}
+        openTabs={[]}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        buttonPlaceholder="Select a project or resource"
+        ariaLabel="Project or resource"
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The simplest possible display: single-select with `mode="project"` and `openTabs={[]}`. No scroll-group chips render on any row, no "Opened project & resource tabs" section appears, and `partitionAndSort` collapses to a single flat, unheaded list. Sample data mixes projects (HPUX, TP1, SCHL1951) and resources (NA28, BHS, LXX) — note the component itself does not visually distinguish the two; they render identically. The "Group by open tabs" toggle is still present in the filter menu (no way to hide it) but has no visible effect while `openTabs` is empty.',
+      },
+    },
+  },
+};
+
+export const SimpleFlatMultiSelect: Story = {
+  render: () => {
+    const [pairs, setPairs] = useState<ProjectSelectorProjectPair[]>([
+      { projectId: 'esvus16' },
+      { projectId: 'bhs' },
+    ]);
+    return (
+      <ProjectSelector
+        mode="project-multi"
+        projects={sampleProjectsAndResources}
+        openTabs={[]}
+        selection={{ pairs }}
+        onChangeSelection={({ pairs: next }) => setPairs(next)}
+        buttonPlaceholder="Select projects and resources"
+        ariaLabel="Projects and resources"
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multi-select without scroll groups: `mode="project-multi"` with `openTabs={[]}`. Every row corresponds to a single `{ projectId }` pair (no `scrollGroupId`), so no chips, no "Open" buttons, and no bound-but-closed synthetic rows appear. The trigger label reads "N: short1, short2, ..." driven by the default `getSelectedText`.',
+      },
+    },
+  },
+};
+
+// #endregion
+
 // #region no projects
 
 export const NoProjects: Story = {

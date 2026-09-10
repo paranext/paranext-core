@@ -19,7 +19,6 @@ import {
   PlatformEvent,
   PlatformEventEmitter,
   deepEqual,
-  endsWith,
   getAllObjectFunctionNames,
   getErrorMessage,
   groupBy,
@@ -27,7 +26,6 @@ import {
   isErrorMessageAboutRegistryAuthFailure,
   isString,
   newPlatformError,
-  startsWith,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
@@ -69,9 +67,15 @@ const SUBSCRIBE_PLACEHOLDER = {};
 /**
  * Gets the id for the data provider network object with the given name Don't add the suffix to the
  * provider name if it's already there to avoid duplication
+ *
+ * Exported because anything that has a provider NAME and needs to recognize that provider's network
+ * object — `useDataProvider`'s re-lookup listener, for one — has to derive the id the same way this
+ * service does rather than assume the name is the id.
+ *
+ * @experimental
  */
-const getDataProviderObjectId = (providerName: string) => {
-  return endsWith(providerName, `-${DATA_PROVIDER_LABEL}`)
+export const getDataProviderObjectId = (providerName: string) => {
+  return providerName.endsWith(`-${DATA_PROVIDER_LABEL}`)
     ? providerName
     : `${providerName}-${DATA_PROVIDER_LABEL}`;
 };
@@ -395,8 +399,12 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
         let newDataProviderMethod: // eslint-disable-next-line @typescript-eslint/no-explicit-any
         DataProviderInternal<DataProviderTypes[DataProviderName]>[any] | undefined;
 
-        // If they want a subscriber, build a subscribe function specific to the data type used
-        if (isString(prop) && startsWith(prop, 'subscribe')) {
+        // If they want a subscriber, build a subscribe function specific to the data type used.
+        // Native `startsWith` — property name and prefix are both ASCII by construction; see
+        // `.claude/rules/code-quality/native-string-vs-grapheme-helpers.md`. Reusing one
+        // `GraphemeString` is not an option either: this trap runs on every property access and
+        // receives a fresh key string each time.
+        if (isString(prop) && prop.startsWith('subscribe')) {
           const dataType =
             getDataProviderDataTypeFromFunctionName<DataProviderTypes[DataProviderName]>(prop);
           // Subscribe to run the callback when data changes. Also immediately calls callback with the current value
@@ -446,7 +454,7 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
         // These request functions should not have to change after they're set for the first time.
         if (
           isString(prop) &&
-          (startsWith(prop, 'get') || startsWith(prop, 'subscribe') || prop === 'notifyUpdate') &&
+          (prop.startsWith('get') || prop.startsWith('subscribe') || prop === 'notifyUpdate') &&
           (prop in obj || prop in dataProviderInternal)
         )
           return false;
@@ -462,7 +470,7 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
       has(obj, prop) {
         if (prop in dataProviderInternal) return true;
         // This proxy provides subscribe methods, so make sure they seem to exist
-        if (isString(prop) && startsWith(prop, 'subscribe')) return true;
+        if (isString(prop) && prop.startsWith('subscribe')) return true;
         return prop in obj;
       },
     },
@@ -689,8 +697,8 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
       // If the function was decorated with @ignore, do not consider it a special function
       if (dataProviderEngineUntyped[fnName].isIgnored) return 'other';
 
-      if (startsWith(fnName, 'get')) return 'get';
-      if (startsWith(fnName, 'set')) return 'set';
+      if (fnName.startsWith('get')) return 'get';
+      if (fnName.startsWith('set')) return 'set';
       return 'other';
     },
     (fnName, fnType) => {
@@ -819,68 +827,135 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
     REGISTER_DATA_PROVIDER_TIMEOUT_MS,
   );
 
-  // Create a networked update event
-  const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
-  // Per-instance data provider events have dynamic names that can't be declared in
-  // NetworkEvents. Cast the name to satisfy the constraint; the payload type is recovered
-  // from the surrounding function's generic context.
-  /* eslint-disable no-type-assertion/no-type-assertion */
-  const onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
-    dynamicEventName as NetworkEventTypes,
-    {
-      notification: {
-        // Mark the update event experimental in lockstep with the provider's methods, so an
-        // experimental provider's `<id>:onDidUpdate` isn't surfaced as non-experimental.
-        'x-experimental': documentation?.['x-experimental'],
-        summary: 'Emitted when the data served by this data provider changes.',
-        params: [
-          {
-            name: 'updateInstructions',
-            required: true,
-            summary: 'Which data types changed (or all/none).',
-            schema: {},
-          },
-        ],
+  /**
+   * The provider's networked update emitter. Declared outside the `try` so the failure path can
+   * dispose it: the update event is centrally registered before the network object is, so a failure
+   * between those steps (e.g. losing the object-name race to another process) would otherwise leave
+   * the event name registered under this process's live connection — and a registered single-source
+   * event name rejects every future attempt to host this provider, app-wide, for as long as this
+   * process stays connected.
+   */
+  let onDidUpdateEmitter:
+    | PlatformEventEmitter<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>
+    | undefined;
+
+  /**
+   * The provider once it is on the network. Declared outside the `try` for the same reason as the
+   * emitter: a failure after this point has to unregister it, or a registration that threw would
+   * still leave a provider published under this name that nothing holds a disposable for.
+   */
+  let disposableDataProvider: DisposableDataProviders[DataProviderName] | undefined;
+
+  try {
+    // Create a networked update event
+    const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
+    // Per-instance data provider events have dynamic names that can't be declared in
+    // NetworkEvents. Cast the name to satisfy the constraint; the payload type is recovered
+    // from the surrounding function's generic context.
+    /* eslint-disable no-type-assertion/no-type-assertion */
+    onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
+      dynamicEventName as NetworkEventTypes,
+      {
+        notification: {
+          // Mark the update event experimental in lockstep with the provider's methods, so an
+          // experimental provider's `<id>:onDidUpdate` isn't surfaced as non-experimental.
+          'x-experimental': documentation?.['x-experimental'],
+          summary: 'Emitted when the data served by this data provider changes.',
+          params: [
+            {
+              name: 'updateInstructions',
+              required: true,
+              summary: 'Which data types changed (or all/none).',
+              schema: {},
+            },
+          ],
+        },
       },
-    },
-  )) as unknown as PlatformEventEmitter<
-    DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
-  >;
-  /* eslint-enable no-type-assertion/no-type-assertion */
+    )) as unknown as PlatformEventEmitter<
+      DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
+    >;
+    /* eslint-enable no-type-assertion/no-type-assertion */
 
-  // Build the data provider
-  const dataProviderInternal = buildDataProvider(
-    dataProviderEngine,
-    dataProviderVariable.promise,
-    onDidUpdateEmitter,
-  );
+    // Build the data provider
+    const dataProviderInternal = buildDataProvider(
+      dataProviderEngine,
+      dataProviderVariable.promise,
+      onDidUpdateEmitter,
+    );
 
-  // Set up the data provider to be a network object so other processes can use it
-  // Now that we are using shared interface types for data providers, `networkObjectService.set` is
-  // messing up all the string template types when it runs it through `DisposableNetworkObject`
-  // which has `Omit`. So we need to pass through `unknown` to get to the correct type
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const disposableDataProvider = (await networkObjectService.set(
-    dataProviderObjectId,
-    dataProviderInternal,
-    dataProviderType,
-    dataProviderAttributes,
-    documentation,
-  )) as unknown as DisposableDataProviders[DataProviderName];
+    // Set up the data provider to be a network object so other processes can use it
+    // Now that we are using shared interface types for data providers, `networkObjectService.set` is
+    // messing up all the string template types when it runs it through `DisposableNetworkObject`
+    // which has `Omit`. So we need to pass through `unknown` to get to the correct type
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    disposableDataProvider = (await networkObjectService.set(
+      dataProviderObjectId,
+      dataProviderInternal,
+      dataProviderType,
+      dataProviderAttributes,
+      documentation,
+    )) as unknown as DisposableDataProviders[DataProviderName];
 
-  // Get the local network object proxy for the data provider so the provider can't be disposed
-  // outside the service that registered the provider engine. Assert type without NetworkObject.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const dataProvider = (await networkObjectService.get<DataProviders[DataProviderName]>(
-    dataProviderObjectId,
-  )) as DataProviders[DataProviderName];
+    // Get the local network object proxy for the data provider so the provider can't be disposed
+    // outside the service that registered the provider engine. Assert type without NetworkObject.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const dataProvider = (await networkObjectService.get<DataProviders[DataProviderName]>(
+      dataProviderObjectId,
+    )) as DataProviders[DataProviderName];
 
-  // Update the dataProviderVariable so the internal data provider (specifically its subscribe
-  // function) can access the dataProvider appropriately
-  if (dataProvider) dataProviderVariable.resolveToValue(dataProvider);
-  else throw Error(`Unable to get network object for data provider: ${dataProviderObjectId}`);
+    // Update the dataProviderVariable so the internal data provider (specifically its subscribe
+    // function) can access the dataProvider appropriately
+    if (dataProvider) dataProviderVariable.resolveToValue(dataProvider);
+    else throw Error(`Unable to get network object for data provider: ${dataProviderObjectId}`);
 
-  return disposableDataProvider;
+    return disposableDataProvider;
+  } catch (e) {
+    // Unwind everything this registration managed to put on the network, so a caller that saw it
+    // throw is left with nothing half-published. Which step to undo depends on how far it got, and
+    // the two are not independent: disposing the published provider also disposes its update emitter
+    // (layered on in `buildDataProvider`), and the emitter throws if it is disposed twice.
+    //
+    // Both branches are wrapped so a cleanup failure cannot mask the registration error that
+    // actually caused this.
+    if (disposableDataProvider) {
+      // The provider is on the network. Unregistering it is what makes this a full rollback: leaving
+      // it published while unregistering only its update event would leave a provider consumers can
+      // resolve and subscribe to but that can never notify them of anything.
+      try {
+        await disposableDataProvider.dispose();
+      } catch (disposeError) {
+        // An error rather than a warning: the provider stays published under a name nothing holds a
+        // disposable for any more, so nothing can unregister it and nothing can re-register that
+        // name for the rest of the session. There is no recovery short of a restart.
+        logger.error(
+          `Failed to unregister the network object while cleaning up the failed registration of data provider ${providerName}, so that name stays claimed by an unusable provider for the rest of this session: ${getErrorMessage(disposeError)}`,
+        );
+      }
+    } else if (onDidUpdateEmitter) {
+      // The update event was registered but the object never was, so the emitter is on its own.
+      // Disposing it sends the unregister; otherwise the event name would stay centrally registered
+      // under this live connection and reject every future attempt to host this provider.
+      try {
+        onDidUpdateEmitter.dispose();
+      } catch (disposeError) {
+        // Same permanence as the branch above: the event name stays centrally registered under this
+        // connection, so every future attempt to host this provider is rejected until a restart.
+        logger.error(
+          `Failed to dispose the update event emitter while cleaning up the failed registration of data provider ${providerName}, so that event name stays claimed for the rest of this session: ${getErrorMessage(disposeError)}`,
+        );
+      }
+    }
+    // Nothing below settles this variable on the failure path, so without this it would sit until
+    // its timeout and reject ~30 seconds after the fact, far from the cause and pointing nowhere
+    // useful. Settling it here makes a failed registration fail fast and attributably. The
+    // rejection is marked handled first because no caller holds this variable when registration
+    // failed — the real error still reaches the caller from the rethrow below.
+    if (!dataProviderVariable.hasSettled) {
+      dataProviderVariable.promise.catch(() => {});
+      dataProviderVariable.rejectWithReason(getErrorMessage(e));
+    }
+    throw e;
+  }
 }
 
 /**

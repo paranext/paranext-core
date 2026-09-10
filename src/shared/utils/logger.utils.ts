@@ -1,5 +1,4 @@
 import { ProcessType } from '@shared/global-this.model';
-import { includes, split } from 'platform-bible-utils';
 import { getProcessType, isRenderer } from '@shared/utils/internal-util';
 import chalk from 'chalk';
 import { MainLogger, RendererLogger } from 'electron-log';
@@ -68,11 +67,11 @@ function identifyCaller(): string | undefined {
   const { stack } = new Error();
   if (!stack) return undefined;
   let details: ParsedErrorLine;
-  const lines = split(stack, '\n');
+  const lines = stack.split('\n');
   // Start at 3 to skip the "Error" line, this function's stack frame, and this function's caller
   for (let lineNumber = 3; lineNumber < lines.length; lineNumber += 1) {
     // Skip over all logging library frames to get to the real call
-    if (!includes(lines[lineNumber], 'node_modules') && !includes(lines[lineNumber], 'node:')) {
+    if (!lines[lineNumber].includes('node_modules') && !lines[lineNumber].includes('node:')) {
       details = parseErrorLine(lines[lineNumber]);
       if (details) break;
     }
@@ -96,7 +95,7 @@ export function formatLog(message: string, serviceName: string) {
   // Remove the new line at the end of every message coming from stdout from other processes
   const messageTrimmed = message.trimEnd();
   const openTag = `[${serviceName}]`;
-  if (includes(messageTrimmed, '\n')) {
+  if (messageTrimmed.includes('\n')) {
     const closeTag = `[/${serviceName}]`;
     // Multi-line
     return `${openTag}\n${messageTrimmed}\n${closeTag}`;

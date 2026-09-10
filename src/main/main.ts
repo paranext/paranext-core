@@ -6,13 +6,23 @@
  * using webpack. This gives us some performance wins.
  */
 
-import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  powerMonitor,
+  RenderProcessGoneDetails,
+  screen,
+  session,
+  shell,
+} from 'electron';
 import os from 'os';
 import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
+import { announceAppWindowInput, startAppWindowInputEvent } from '@main/app-window-input.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
@@ -23,15 +33,116 @@ import {
   APP_VERSION,
   startAppService,
 } from '@main/services/app.service-host';
+import { startDialogServiceRouter } from '@main/services/dialog.service-router';
+import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
+import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
+import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
+import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
+import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
-import { performShutdownTasks } from '@main/shutdown-tasks';
+import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
+import type { WindowCloseDecision } from '@main/services/window-close-decision.service';
 import { performStartupTasks } from '@main/startup-tasks';
+import { startNotificationServiceRouter } from '@main/services/notification.service-router';
+import {
+  flushPersistedScrollGroupState,
+  getScrollGroupStateForNewWindow,
+  startScrollGroupServiceHost,
+} from '@main/services/scroll-group.service-host';
+import {
+  flushPersistedThemeState,
+  getCurrentThemeForNewWindow,
+  getCurrentThemeSync,
+  onDidChangeCurrentTheme,
+  startThemeServiceHost,
+} from '@main/services/theme.service-host';
+import {
+  getWindowIdsWithServiceShard,
+  getWindowServiceShard,
+  onDidRegisterWindowServiceShard,
+  startWindowServiceRouter,
+} from '@main/services/window.service-router';
+import {
+  canStartupSyncFireNow,
+  isAppQuitRequested,
+  isAppShuttingDown,
+  markQuitRequested,
+  resetShutdownLatchesForNewSession,
+  runShutdownTasksOnce,
+  shouldWindowCloseAbortReadinessWait,
+} from '@main/services/shutdown-latch.service';
+import { setAppShutdownSignal } from '@main/services/rpc-server';
+import {
+  getWebViewShard,
+  setWebViewWindowCreator,
+  startWebViewServiceRouter,
+} from '@main/services/web-view.service-router';
+import {
+  addWindow,
+  announceRoutingTargetChange,
+  countWindowsThatCouldBeTheLastOne,
+  doesNavigationReplaceRendererRegistrations,
+  focusWindow,
+  getFocusedWindowId,
+  getTargetWindowId,
+  getTrackedWindows,
+  getWindowById,
+  getWindowIdOf,
+  getWindows,
+  handleWindowBlurred,
+  isWindowAbandoned,
+  isWindowClosing as isWindowMarkedClosing,
+  isWindowTracked,
+  isWindowReady,
+  wasWindowEverReady,
+  markWindowAbandoned,
+  markWindowClosing,
+  markWindowNotReady,
+  markWindowReady,
+  removeWindow,
+  setFocusedWindowId,
+  setWindowPendingContentPredicate,
+} from '@main/services/window-state.service';
+import { confirmCloseAllWindows } from '@main/services/close-all-prompt.service';
+import { decideWindowClose } from '@main/services/window-close-decision.service';
+import {
+  assignEntryToWindow,
+  handleWindowRemoved,
+  initializeWindowLayoutPersistence,
+  isWindowPendingContent,
+  loadWindowLayouts,
+  markWindowPendingContent,
+  isPrimaryWindow,
+  setMainWindowId,
+  setPendingContentChangeListener,
+  trackLegacyWindow,
+  trackNewWindow,
+  updateWindowBounds,
+  writeNow,
+} from '@main/services/window-layout-persistence.service';
+import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
+import { summarizeWindows } from '@main/window-summary.util';
+import {
+  DEFAULT_WINDOW_HEIGHT,
+  DEFAULT_WINDOW_WIDTH,
+  ensureBoundsVisibleOnSomeDisplay,
+} from '@main/window-bounds.util';
+import {
+  decideRendererCrashReload,
+  MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS,
+  NO_RENDERER_CRASH_RELOADS_YET,
+} from '@main/renderer-crash-reload-budget.util';
+import {
+  WINDOW_EMPTIED_REQUEST_TYPE,
+  type WindowBoundsState,
+  type WindowLayoutEntry,
+} from '@shared/data/window-layout-persistence.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
   CommandLineArgs,
@@ -42,14 +153,19 @@ import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
   DEV_MODE_QUERY_PARAMETER,
+  IS_MAIN_WINDOW_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  SCROLL_GROUP_STATE_QUERY_PARAMETER,
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
+  THEME_STATE_QUERY_PARAMETER,
+  WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
@@ -60,17 +176,16 @@ import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
-import windowStateKeeper from 'electron-window-state';
-import { CommandNames } from 'papi-shared-types';
+import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
   serialize,
+  ThemeDefinitionExpanded,
   UnsubscriberAsyncList,
   wait,
+  waitForDuration,
 } from 'platform-bible-utils';
-import { windowService } from '@shared/services/window.service';
-import { themeService } from '@shared/services/theme.service';
 
 // #region Helper functions
 
@@ -101,11 +216,7 @@ const setZoomFactor = async (factor: number): Promise<void> => {
   }
 };
 
-/**
- * Reset the zoom factor of the app's main window to 1.0 (100%)
- *
- * @param mainWindow The main BrowserWindow instance
- */
+/** Reset the zoom factor of the app to 1.0 (100%) */
 const resetZoomFactor = async () => {
   try {
     return await settingsService.reset('platform.zoomFactor');
@@ -115,7 +226,7 @@ const resetZoomFactor = async () => {
   }
 };
 
-/** Increase the zoom factor of the app's main window by 0.1, up to a maximum of 3.0 */
+/** Increase the zoom factor of all application windows by 0.1, up to a maximum of 3.0 */
 const zoomIn = async () => {
   const currentZoom = await getZoomFactor();
   if (currentZoom < MAX_ZOOM_FACTOR) {
@@ -124,7 +235,7 @@ const zoomIn = async () => {
   }
 };
 
-/** Decrease the zoom factor of the app's main window by 0.1, down to a minimum of 0.5 */
+/** Decrease the zoom factor of all application windows by 0.1, down to a minimum of 0.5 */
 const zoomOut = async () => {
   const currentZoom = await getZoomFactor();
   if (currentZoom > MIN_ZOOM_FACTOR) {
@@ -153,6 +264,28 @@ if (!isFirstInstance) {
 // #endregion
 
 const PROCESS_CLOSE_TIME_OUT_MS = 2000;
+
+/**
+ * How long a window gets to finish closing on its own before it is destroyed outright.
+ *
+ * Generous next to the page teardown it is waiting for — pruning this window's stored web view
+ * state — because the only cost of waiting is a window that is already on its way out staying on
+ * screen a moment longer.
+ */
+const WINDOW_CLOSE_TIME_OUT_MS = 10000;
+
+/** How long to coalesce a window's resize/move events before capturing its bounds */
+const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
+
+/**
+ * How a window being created relates to the persisted window-layouts structure: it restores a saved
+ * entry, it is the single window of a legacy startup (no structure — its renderer falls back to the
+ * pre-multi-window saved layout, placed at the previous bounds keeper's state), or — when omitted —
+ * it is a new mid-session window that starts empty.
+ */
+type WindowRestoreInfo =
+  | { kind: 'entry'; entry: WindowLayoutEntry }
+  | { kind: 'legacy'; boundsState?: WindowBoundsState };
 
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
@@ -199,20 +332,200 @@ async function openExternal(url: string) {
   return true;
 }
 
+/**
+ * Name of the Terms of Service document `electron-builder.json5` lists in `extraResources`.
+ *
+ * `globalThis.resourcesPath` is the repository root in development and the install directory's
+ * `resources` folder when packaged, so the same relative name finds the document in both.
+ */
+const TERMS_OF_SERVICE_FILE_NAME = 'TERMS-OF-SERVICE.md';
+
+/**
+ * Open the Terms of Service document that ships beside the application.
+ *
+ * `shell.openPath` hands the file to whatever the operating system opens Markdown with, which is
+ * not guaranteed to be anything: a stock Windows machine registers no handler for `.md`. When
+ * nothing does, reveal the document in the file manager so the user can still reach it.
+ *
+ * THROWS when the open failed, even though the reveal was attempted. `shell.openPath` RESOLVES with
+ * an error string rather than rejecting and `shell.showItemInFolder` returns `void`, so a function
+ * that only logged could not report either failure - and both can fail together inside the snap,
+ * whose confinement does not reach `org.freedesktop.FileManager1`. The caller is a dialog the user
+ * clicked a license link in; it needs to be able to say the document did not open.
+ */
+async function openTermsOfService() {
+  const termsOfServicePath = path.join(globalThis.resourcesPath, TERMS_OF_SERVICE_FILE_NAME);
+  const openError = await shell.openPath(termsOfServicePath);
+  if (!openError) return;
+  logger.warn(
+    `Could not open ${termsOfServicePath}: ${openError}. Revealing it in the file manager instead.`,
+  );
+  shell.showItemInFolder(termsOfServicePath);
+  throw new Error(`Could not open the Terms of Service at ${termsOfServicePath}: ${openError}`);
+}
+
 async function main() {
   // This is the run boundary the startup-waterfall parser keys on (main + process-start).
   markStartup(STARTUP_MARK_PROCESS_START);
 
+  // Before the first socket can close: main owns the shutdown latch, and the socket-close handler
+  // that needs it deliberately does not import it. See `setAppShutdownSignal`.
+  setAppShutdownSignal(isAppShuttingDown);
+
   // The network service has to start first, and it uses the shared store after initialization
-  await networkService.initialize();
+  try {
+    await networkService.initialize();
+  } catch (error) {
+    // Everything below — including the `app.whenReady()` that creates windows and the quit
+    // handlers — is registered further down in this function, so letting this reject would leave a
+    // live process with no window, no way to quit, and the single-instance lock still held, which
+    // blocks every later launch too. Exit instead, so the failure is visible and relaunch works.
+    logger.error(
+      `Could not start the PAPI network service, so the app cannot run: ${getErrorMessage(error)}`,
+    );
+    app.exit(1);
+    return;
+  }
   markStartup('network-service-up');
   await initializeSharedStoreService(networkService);
+
+  // Register the app-window input event so the window's mouse/keyboard hooks below can announce
+  // the gestures that dismiss transient overlays
+  await startAppWindowInputEvent();
 
   // The network object status service relies on seeing everything else start up later
   await startNetworkObjectStatusService();
 
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
+
+  // Claim every app-global network name before any window is created, so a renderer never has to
+  // race for one. The service routers claim generic names (e.g. "WebViewService",
+  // "platform.openSettings") that renderers answer for behind window-scoped shards; the scroll group
+  // and theme service hosts claim names they answer for themselves, since a scroll group and the
+  // theme are app-global rather than per window.
+  // Started together rather than one after another: each claims its own set of names and none reads
+  // anything another one registers, so serializing them only adds their round trips together on the
+  // startup path every window is waiting behind.
+  // Settled rather than raced to the first rejection: they run together, so `Promise.all` would
+  // report whichever failed first and discard what the others went on to say. Startup still stops
+  // here — a name that never registered is one nothing answers for the rest of the session — it just
+  // stops naming everything that went wrong instead of one thing.
+  const globalServiceStarts = [
+    { name: 'WebView service router', started: startWebViewServiceRouter() },
+    { name: 'dialog service router', started: startDialogServiceRouter() },
+    { name: 'Usersnap service router', started: startUsersnapServiceRouter() },
+    {
+      name: 'BookChapterControl service router',
+      started: startBookChapterControlServiceRouter(),
+    },
+    { name: 'onboarding tour service router', started: startOnboardingTourServiceRouter() },
+    { name: 'scripture navigation commands', started: startScrollGroupNavigationCommands() },
+    { name: 'notification service router', started: startNotificationServiceRouter() },
+    { name: 'window service router', started: startWindowServiceRouter() },
+    { name: 'scroll group service host', started: startScrollGroupServiceHost() },
+    { name: 'theme service host', started: startThemeServiceHost() },
+  ];
+  const globalServiceOutcomes = await Promise.allSettled(
+    globalServiceStarts.map(({ started }) => started),
+  );
+  const failedGlobalServiceNames = globalServiceOutcomes
+    .map((outcome, index) => {
+      if (outcome.status === 'fulfilled') return undefined;
+      const { name } = globalServiceStarts[index];
+      logger.error(`Failed to start the ${name}: ${getErrorMessage(outcome.reason)}`);
+      return name;
+    })
+    .filter((name) => name !== undefined);
+  if (failedGlobalServiceNames.length > 0)
+    throw new Error(
+      `Could not start the app-global services in main: ${failedGlobalServiceNames.join(', ')}. Each failure is logged above.`,
+    );
+
+  // Window layout persistence must register its request handlers before any window exists so a
+  // renderer's layout load can never race the registration
+  await initializeWindowLayoutPersistence();
+
+  // The routing target passes over a window that is still waiting for its routed content the same
+  // way it passes over one whose close has begun: the window takes OS focus the moment it is
+  // shown, and anything focus-routed into it before its content arrives is destroyed if the
+  // operation that created it fails and closes it. Injected because the pending-content mark lives
+  // with window-layout persistence, which the window-state tracker does not import.
+  setWindowPendingContentPredicate(isWindowPendingContent);
+  // The other half of that injection: the tracker reads the mark but has nothing to tell it the
+  // mark changed, so a window gaining or losing one moves the routing target with no event —
+  // leaving the routers that hold a resolved shard pointed at the window routing just left.
+  setPendingContentChangeListener(announceRoutingTargetChange);
+
+  // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
+  // that decides what happens next must already be registered
+  const handleWindowEmptied = createWindowEmptinessHandler({
+    // Which windows may stand in as another window's reason to close is the window-state tracker's
+    // rule, whole — see `countWindowsThatCouldBeTheLastOne` for what it leaves out and why
+    countWindows: countWindowsThatCouldBeTheLastOne,
+    // The primary reopens Home when emptied rather than closing; only its ✕ and Quit close it
+    isPrimaryWindow,
+    closeWindow: (windowId) => getWindowById(windowId)?.close(),
+    // A report names its own subject and arrives over the network, so the id is the caller's word.
+    // The tracker is what knows whether that word describes a window this process has.
+    isWindowTracked,
+    markWindowClosing,
+    // The shared registry, not only this handler's own decisions: a window the user is closing can
+    // report empty mid-teardown, and it must get the same "closing" answer instead of a second close
+    isWindowClosing: isWindowMarkedClosing,
+    // The reporting window's own reading, asked whenever the answer could still change — a close
+    // for most windows, or the primary's Home dock for the primary
+    hasContentArrivedSinceEmptyReport: async (windowId) => {
+      // A window that is not serving requests cannot be asked, and waiting on one that will never
+      // answer would hold up every window's decision behind it. `false` is what the handler reads
+      // as "could not tell" — the same answer as "still empty," since either way the report
+      // stands: it was the window's own word about its own dock.
+      if (!isWindowReady(windowId)) return false;
+      const shard = await getWebViewShard(windowId);
+      if (!shard) return false;
+      return shard.hasContentArrivedSinceEmptyReport();
+    },
+  });
+  await networkService.registerRequestHandler(
+    WINDOW_EMPTIED_REQUEST_TYPE,
+    async (...args) => handleWindowEmptied(args[0], args[1]),
+    {
+      method: {
+        'x-experimental': true,
+        summary: "Report a window's dock empty and learn whether it closes or docks Home",
+        params: [
+          {
+            name: 'windowId',
+            required: true,
+            summary: 'Id of the window reporting itself empty',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'reason',
+            required: true,
+            summary: 'Why the window is empty',
+            schema: { type: 'string', enum: ['emptied-by-removal', 'born-empty'] },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            'Whether the window should dock Home, that it is being closed, or that it should stay as it is because content reached it after it reported',
+          schema: { type: 'object' },
+        },
+      },
+    },
+  );
+
+  // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
+  // call until its renderer has registered. Its window service shard appearing is that signal, and
+  // routing waits for it rather than following focus alone — see `getTargetWindowId`.
+  onDidRegisterWindowServiceShard((readyWindowId) => markWindowReady(readyWindowId));
+  // The index has been listening since its module was evaluated, which is well before this line,
+  // and the announcement it heard is never repeated. Reconciling here is what makes the two
+  // orderings equivalent, so a window that registered in the meantime is not left unroutable for
+  // the rest of the session.
+  getWindowIdsWithServiceShard().forEach((readyWindowId) => markWindowReady(readyWindowId));
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
@@ -237,12 +550,28 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
-  // Signals for the fire-and-forget startup tasks: an abort controller so the Power-mode boot-race
-  // retry loop stops the moment the app begins quitting (wired below), and a window-interactive
-  // clock so a startup sync that only registers late isn't fired onto an editor the user is already
-  // using (see performStartupTasks / STARTUP_SYNC_FRESHNESS_WINDOW_MS).
+  // Signals for the fire-and-forget startup tasks:
+  //
+  // - `startupTasksAbort` stops the startup tasks the moment the app starts going down by either
+  //   route, quit or last-window close. This is the long-standing behavior and is what Power mode's
+  //   boot-race retry loop runs on; nothing about the Simple-mode readiness gate changes it.
+  // - `startupReadinessAbort` stops only Simple mode's readiness wait, and is deliberately NOT
+  //   aborted by a macOS last-window close: there the app stays resident, the startup tasks run once
+  //   per process, and a dock reactivation still wants that session's startup sync. Kept separate so
+  //   that exception cannot leak into Power mode's loop.
+  // - a window-interactive clock, so a Power-mode startup sync that only registers late isn't fired
+  //   onto an editor the user is already using (see performStartupTasks /
+  //   STARTUP_SYNC_FRESHNESS_WINDOW_MS).
   const startupTasksAbort = new AbortController();
+  const startupReadinessAbort = new AbortController();
   let mainWindowInteractiveAt: number | undefined;
+
+  /**
+   * Whether this process has already created a window. Latched for the life of the process, not per
+   * session: the command-line and environment flags that describe how to show a window belong to
+   * the launch that set them, and nothing that happens afterwards is that launch again.
+   */
+  let hasCreatedWindowThisProcess = false;
 
   // Fire-and-forget startup tasks (initial S/R). Must not block window creation. In Simple mode the
   // S/R command is served by the .NET data provider and is driven through the retrying
@@ -255,6 +584,13 @@ async function main() {
     try {
       await performStartupTasks({
         abortSignal: startupTasksAbort.signal,
+        readinessAbortSignal: startupReadinessAbort.signal,
+        // Answers the state neither abort signal can describe: resident, not quitting, no windows —
+        // where macOS leaves the app after its last window closes. `getWindows` already filters out
+        // destroyed windows, so a window mid-teardown does not keep this true; the latch is what
+        // keeps "no window YET" (the app still coming up) from reading as "went windowless".
+        canFireStartupSync: () =>
+          canStartupSyncFireNow(getWindows().length, hasCreatedWindowThisProcess),
         getWindowInteractiveElapsedMs: () =>
           mainWindowInteractiveAt === undefined
             ? undefined
@@ -265,9 +601,16 @@ async function main() {
     }
   })();
 
-  // Keep a global reference of the window object. If you don't, the window will
-  // be closed automatically when the JavaScript object is garbage collected.
-  let mainWindow: BrowserWindow | undefined;
+  // `before-quit` fires ahead of every window's `close`, so recording it here is what lets a
+  // window's close handler tell a whole-app quit from a single window closing. Both this and the
+  // shared shutdown-task run live in `shutdown-latch.service` because they are per session rather
+  // than per process — see `resetShutdownLatchesForNewSession`, called from `createWindow`.
+  //
+  // Distinct from the `isAppQuitting` guard on `will-quit` further below, which tracks whether that
+  // handler's graceful shutdown has already started.
+  app.on('before-quit', () => {
+    markQuitRequested();
+  });
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme
 
@@ -276,10 +619,25 @@ async function main() {
   const args = process.argv.slice(1);
 
   function handleUri(uri: string) {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    // A deep link normally arrives while the app is in the background — that is the point of one —
+    // so no window has OS focus and the fallback below is the ordinary path, not the edge case. It
+    // asks where routed calls go, which is the window the user was last working in; the oldest
+    // tracked window would be an arbitrary choice that also repoints routing there by focusing it.
+    // Translated through the tracker rather than read off the window: `getFocusedWindow()` answers
+    // with a BrowserWindow, whose `id` is Electron's own and names nothing the platform knows.
+    // `focusWindow` takes a platform id, and the two are different values for the same window.
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    const windowIdToRaise =
+      (focusedWindow ? getWindowIdOf(focusedWindow) : undefined) ?? getTargetWindowId();
+    // Deliberately NOT gated on `isApplicationFocused()` the way the in-app raises are. That gate
+    // exists to stop us pulling the app in front of whatever the user is working in; this path
+    // runs precisely when the app does not own the foreground, so the gate would suppress every
+    // raise it exists to perform — the user asked for this window by following the link. Raising
+    // through the service rather than the `BrowserWindow` directly is what earns the rest: it is a
+    // no-op instead of a throw on a window that has closed, so a raise can never drop the URI
+    // before it is dispatched below, and an activation the OS refuses leaves the taskbar flashing,
+    // which on this path is the whole signal the user gets that the link landed.
+    if (windowIdToRaise !== undefined) focusWindow(windowIdToRaise);
     logger.debug(`Main is handling uri ${uri}`);
     // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
     // when we get there
@@ -311,10 +669,9 @@ async function main() {
   // Note that this condition (`process.defaultApp`) is not quite the same as whether we're
   // packaged, so we're not using `globalThis.isPackaged` here.
   if (process.defaultApp && args.length > 2) args[2] = path.resolve(args[2]);
-  const uriSchemeHandlerWasSet = app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args);
-  if (!uriSchemeHandlerWasSet) {
+  if (!app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args)) {
     logger.error(
-      `Failed to set myself (${launchPath} with arguments ${args}) as handler for ${APP_URI_SCHEME}://... URIs, reason unknown`,
+      `Could not register ${launchPath} (arguments: ${args}) as the ${APP_URI_SCHEME}:// URI handler. Electron reported the failure without a cause, so links using this scheme will not open the app.`,
     );
   }
   if (process.platform === 'darwin') {
@@ -351,7 +708,12 @@ async function main() {
 
   if (isDebug) {
     const electronDebug = await import('electron-debug');
-    electronDebug.default();
+    // electron-debug docks DevTools into the window, which takes roughly 555px of a 1280px-wide
+    // window. That is fine for a human, but it silently shrinks the renderer for anything driving
+    // the UI, so layout-sensitive automation ends up interacting with a squeezed dock where tabs
+    // sit under web views. Automated runs set PT_NO_DEVTOOLS so the window they measure is the
+    // window a user would see; F12 still opens DevTools on demand.
+    electronDebug.default({ showDevTools: process.env.PT_NO_DEVTOOLS !== 'true' });
   }
 
   /** Install extensions into the Chromium renderer process */
@@ -367,22 +729,67 @@ async function main() {
   }
 
   /** Sets up the electron BrowserWindow renderer process */
-  const createWindow = async () => {
-    if (isDebug) {
-      await installExtensions();
-    }
+  const createWindow = async (
+    restoreInfo?: WindowRestoreInfo,
+    creationOptions?: { pendingContent?: boolean },
+    // The platform id comes back alongside the window because this is the only place that has it:
+    // it is minted here and is not readable from the BrowserWindow, so a caller that needs to name
+    // the window afterwards would otherwise have to look it up by identity.
+  ): Promise<{ window: BrowserWindow; windowId: string }> => {
+    // The menu and the `platform.createWindow` command stay live through a quit, because every
+    // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
+    // takes. Opening a window in that gap would start a session the app is in no position to serve:
+    // the latch reset below would clear the shared run mid-flight, so a window closing afterwards
+    // would start a second one and the windows still waiting would stop waiting for anything.
+    // Thrown rather than returned quietly: `platform.createWindow` and the menu item both await
+    // this, and resolving with nothing would report a window that does not exist as created.
+    // Asked of both routes the app takes down, not just a quit: closing the last window with the X
+    // button never sets the quit flag, and that gap is precisely as long as the shared run this
+    // guard exists to protect.
+    if (isAppShuttingDown())
+      throw new Error('Cannot create a window while the application is quitting');
 
-    // Load the previous state with fallback to defaults
-    const mainWindowState = windowStateKeeper({
-      defaultWidth: 1024,
-      defaultHeight: 728,
-    });
+    const isFirstWindow = getWindows().length === 0;
+
+    // A window is being created where there were NONE, so the app is alive and whatever brought
+    // the last one down is finished. On macOS that is not the same as process start: closing the
+    // final window runs the shutdown tasks and leaves the app resident, and reactivating from the
+    // dock lands here — so without this the second and every later session would come down without
+    // syncing.
+    //
+    // Only when there were none. A window opened alongside living windows is not a new session,
+    // and resetting there replaces the quit signal the close path may already be waiting on: a
+    // primary showing the close-all question holds the OLD signal, so a quit afterwards would
+    // settle only the new one, the question would never resolve, and the app would sit half-quit
+    // with its latch set.
+    if (isFirstWindow) resetShutdownLatchesForNewSession();
+
+    // The flags the process was launched with describe how to show the window that launch is
+    // producing, and nothing after it. "No windows tracked" is not that window: on macOS the app
+    // stays resident after its last window closes, so a dock click — a window the USER asked for —
+    // arrives with nothing tracked and would be minimized or maximized by a flag from a launch that
+    // is long over.
+    const isFirstWindowOfProcess = !hasCreatedWindowThisProcess;
+    hasCreatedWindowThisProcess = true;
+
+    // This window's saved placement — its entry's, or the previous single-window keeper's for a
+    // legacy startup — validated against the displays connected right now so a window can never
+    // come back on a monitor that is gone. A window with no saved placement gets defaults.
+    const savedBoundsState =
+      restoreInfo?.kind === 'entry' ? restoreInfo.entry : restoreInfo?.boundsState;
+    const boundsState = savedBoundsState
+      ? ensureBoundsVisibleOnSomeDisplay(
+          savedBoundsState,
+          screen.getAllDisplays(),
+          screen.getPrimaryDisplay(),
+        )
+      : undefined;
 
     // If --window-size (or --windowSize) is specified, use those dimensions instead of the saved
     // window state. Useful for automation/headless runs on Windows where xvfb is unavailable.
     const windowSizeArg = getCommandLineArgument(CommandLineArgs.WindowSize);
-    let windowWidth = mainWindowState.width;
-    let windowHeight = mainWindowState.height;
+    let windowWidth = boundsState?.bounds?.width ?? DEFAULT_WINDOW_WIDTH;
+    let windowHeight = boundsState?.bounds?.height ?? DEFAULT_WINDOW_HEIGHT;
     let sizeMatch: RegExpExecArray | undefined;
     if (windowSizeArg) {
       sizeMatch = /^([1-9]\d*)[x,]([1-9]\d*)$/i.exec(windowSizeArg) ?? undefined;
@@ -396,19 +803,25 @@ async function main() {
       }
     }
 
-    mainWindow = new BrowserWindow({
+    // Deliberately no `title` here, and nothing in main may call `setTitle` on a window either.
+    // Each renderer names its own window by publishing a page title, which Electron carries to the
+    // native title; that is what the OS switcher shows and what other windows read when they offer
+    // this one as a move target. A title set from this process does not stick: at construction it
+    // lasts only until the renderer publishes its first page title, and a runtime call holds only
+    // until the renderer's next page-title change — either way the main process cannot hold a name
+    // against the renderer's own naming. Until the renderer's first title arrives, Electron answers
+    // `getTitle()` with its own default, which is why `summarizeWindows` reads a window's readiness
+    // rather than trusting its title.
+    const newWindow = new BrowserWindow({
       show: true,
-      x: mainWindowState.x,
-      y: mainWindowState.y,
+      ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
       width: windowWidth,
       height: windowHeight,
-      minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
+      minWidth: WINDOW_MIN_WIDTH_PX,
       icon: getAssetPath('icon.png'),
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
+      titleBarStyle: 'hidden',
       // re-add window controls
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'darwin' && process.platform !== 'linux'
+      ...(process.platform !== 'darwin'
         ? {
             titleBarOverlay: {
               height: TITLE_BAR_BUTTON_HEIGHT,
@@ -427,32 +840,159 @@ async function main() {
     // the waterfall's Total span.
     markStartupOnce('window-created');
 
+    // Track this window immediately, which is also where it is given the platform id everything
+    // downstream names it by. Electron's own `BrowserWindow.id` is never used past this point, and
+    // the id stays valid in the `closed` handler after the window itself is gone.
+    //
+    // A window restoring a persisted entry is handed that entry's own durable id, rather than a
+    // fresh mint, so per-window state keyed by it (see `local-storage.service.ts`) survives the
+    // restart.
+    const windowId = addWindow(
+      newWindow,
+      restoreInfo?.kind === 'entry' ? restoreInfo.entry.windowId : undefined,
+    );
+
+    // Tie the window to its persisted identity so layout persistence can serve and save it
+    if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entry.windowId);
+    else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
+    else trackNewWindow(windowId);
+
+    if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
+
+    // Track which window is focused for multi-window command routing
+    newWindow.on('focus', () => {
+      setFocusedWindowId(windowId);
+    });
+    // The other half of focus tracking: a blur with no focus following it is the whole application
+    // going to the background, which is what isApplicationFocused answers from
+    newWindow.on('blur', () => {
+      handleWindowBlurred(windowId);
+    });
+
     // Set our custom protocol handler to load assets from extensions
     extensionAssetProtocolService.initialize();
 
     // Set our custom protocol handler to load Enhanced Resources binary assets (papi-er://)
     enhancedResourceProtocolService.initialize();
 
-    // Register listeners on the window, so the state is updated automatically
-    // (the listeners will be removed when the window is closed)
-    // and restore the maximized or full screen state
-    mainWindowState.manage(mainWindow);
-
-    // If a valid window size was specified, override any maximized/fullscreen state that manage() restored.
-    // setSize() is ignored on a maximized/fullscreen window, so explicitly exit those states first.
-    if (windowSizeArg && sizeMatch && windowWidth && windowHeight) {
-      if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false);
-      if (mainWindow.isMaximized()) mainWindow.unmaximize();
-      mainWindow.setSize(windowWidth, windowHeight);
+    // Restore the saved maximized/full-screen state — unless a valid --window-size was given,
+    // which takes precedence and means "exactly this size, in the normal state"
+    if (!(windowSizeArg && sizeMatch)) {
+      if (boundsState?.isFullScreen) newWindow.setFullScreen(true);
+      else if (boundsState?.isMaximized) newWindow.maximize();
     }
 
-    // Add several listeners to the main window to log events
-    mainWindow.webContents.on('unresponsive', () => logger.warn('mainWindow unresponsive'));
-    mainWindow.webContents.on('responsive', () => logger.warn('mainWindow responsive'));
-    mainWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) =>
-      logger.warn(`mainWindow render process gone: ${JSON.stringify(details)}`),
-    );
-    mainWindow.webContents.on(
+    /**
+     * This window's current placement for persistence. Mirrors the previous window-state keeper:
+     * the normal bounds (and the display they are on) are captured only while the window is in its
+     * normal state, so maximizing/minimizing/full-screening cannot overwrite the last normal
+     * placement — only flip the flags.
+     */
+    const captureWindowBoundsState = (): WindowBoundsState => {
+      const isMaximized = newWindow.isMaximized();
+      const isFullScreen = newWindow.isFullScreen();
+      const capturedState: WindowBoundsState = { isMaximized, isFullScreen };
+      if (!isMaximized && !isFullScreen && !newWindow.isMinimized()) {
+        const { x, y, width, height } = newWindow.getBounds();
+        capturedState.bounds = { x, y, width, height };
+        capturedState.displayBounds = { ...screen.getDisplayMatching(capturedState.bounds).bounds };
+      }
+      return capturedState;
+    };
+
+    // Feed this window's placement to layout persistence as it changes, debounced since
+    // resize/move fire continuously during a drag
+    let boundsCaptureTimeout: ReturnType<typeof setTimeout> | undefined;
+    const cancelPendingBoundsCapture = () => {
+      if (boundsCaptureTimeout) {
+        clearTimeout(boundsCaptureTimeout);
+        boundsCaptureTimeout = undefined;
+      }
+    };
+    const captureBoundsSoon = () => {
+      cancelPendingBoundsCapture();
+      boundsCaptureTimeout = setTimeout(() => {
+        boundsCaptureTimeout = undefined;
+        if (newWindow.isDestroyed()) return;
+        updateWindowBounds(windowId, captureWindowBoundsState());
+      }, BOUNDS_CAPTURE_DEBOUNCE_MS);
+    };
+    newWindow.on('resize', captureBoundsSoon);
+    newWindow.on('move', captureBoundsSoon);
+
+    // Add several listeners to the window to log events
+    newWindow.webContents.on('unresponsive', () => logger.warn(`Window ${windowId} unresponsive`));
+    newWindow.webContents.on('responsive', () => logger.warn(`Window ${windowId} responsive`));
+    // What this window has spent of its crash-reload budget. Per window, because a crash loop is
+    // one window's page failing rather than the app's.
+    let crashReloadBudget = NO_RENDERER_CRASH_RELOADS_YET;
+    newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) => {
+      logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
+      // Everything this window registered died with its renderer, so routing has to move to a window
+      // that can answer rather than spending the network service's registration retry on handlers
+      // that no longer exist.
+      markWindowNotReady(windowId);
+
+      // Nothing else brings a dead renderer back: Electron leaves the window there with no page in
+      // it, and the `onDidRegisterWindowServiceShard` subscription that would mark this window ready
+      // again only ever hears from a page that is running. Without the reload below the window stays
+      // out of the routable set for the rest of the session — a window still on screen, still
+      // holding its tabs' worth of the user's work, that every fan-out reports as unreachable and
+      // every routed call refuses to go to.
+      //
+      // A clean exit is the renderer going away on purpose, which is what a window being taken down
+      // looks like from here, so it gets no reload — and neither does a window whose close has
+      // already begun, which is on its way out with its shutdown work in flight.
+      if (
+        details.reason === 'clean-exit' ||
+        newWindow.isDestroyed() ||
+        isWindowMarkedClosing(windowId) ||
+        isAppShuttingDown()
+      )
+        return;
+
+      // A renderer that came back and ran for a while recovered, so its next crash starts the budget
+      // over; one that dies again straight away is looping, and stops after the cap.
+      const reloadDecision = decideRendererCrashReload(crashReloadBudget, Date.now());
+      if (!reloadDecision.shouldReload) {
+        logger.error(
+          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Close the window and open a new one.`,
+        );
+        // The reload was the only thing that would ever have put this window back in the app, so
+        // the window has to stop being treated as one that is coming back. `markWindowNotReady`
+        // above leaves it looking like a window that is mid-recovery, and every fan-out in the app
+        // refuses to answer while one of those exists — for a window that is never recovering, that
+        // is the rest of the session.
+        //
+        // Marked whatever the window had managed to do before it died. A renderer that never got as
+        // far as registering leaves nothing behind for the fan-outs to refuse over, but it is the
+        // same window in the same state, and one flag recorded on both paths is what keeps this
+        // from needing a second mechanism for the case that is harder to see.
+        //
+        // The window is deliberately left open and tracked. It is still on screen with the user's
+        // tabs' worth of layout behind it, and closing it here would rewrite the persisted window
+        // layout without it — taking away the one recovery they have left, which is to quit and
+        // relaunch.
+        markWindowAbandoned(windowId);
+        return;
+      }
+      crashReloadBudget = reloadDecision.budget;
+      logger.warn(
+        `Reloading window ${windowId} after its renderer died (attempt ${reloadDecision.attempt} of ${MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS}); it becomes routable again when its window service shard reappears`,
+      );
+      newWindow.webContents.reload();
+    });
+    // A reload replaces the page and everything it registered, the same as a crash does. This also
+    // fires for the very first load, before the window was ever ready, which changes nothing.
+    //
+    // Deliberately NOT `did-start-loading`: that is a whole-tab signal with no frame information,
+    // and every web view in the app is an in-page iframe in this page, so it fires again every time
+    // the user opens a tab — which would strip a fully working window of its readiness with nothing
+    // to restore it. See `doesNavigationReplaceRendererRegistrations` for which navigations count.
+    newWindow.webContents.on('did-start-navigation', (details) => {
+      if (doesNavigationReplaceRendererRegistrations(details)) markWindowNotReady(windowId);
+    });
+    newWindow.webContents.on(
       // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
       'did-fail-load',
       (
@@ -463,18 +1003,33 @@ async function main() {
         isMainFrame: boolean,
       ) => {
         logger.warn(
-          `mainWindow failed to load "${validatedURL}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
+          `Window ${windowId} failed to load "${validatedURL}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
         );
       },
     );
 
-    mainWindow.webContents.on('before-input-event', async (_, event) => {
+    /** Helper to call setFocus on this specific window's service data provider */
+    const setWindowFocus = async (
+      specifier: import('@shared/services/window.service-model').SetFocusSpecifier,
+    ) => {
+      const windowService = await getWindowServiceShard(windowId);
+      if (windowService) await windowService.setFocus(specifier);
+      else logger.debug(`Window service for window ${windowId} not available yet`);
+    };
+
+    newWindow.webContents.on('before-input-event', async (_, event) => {
       // Key up seems not to change focus in Windows, so we will only change on keyDown
       if (event.type !== 'keyDown') return;
 
+      // Announce Escape so overlays rendered in the parent document dismiss no matter which frame
+      // has focus. Deliberately no preventDefault — the focused frame still gets the key and may
+      // act on it too (e.g. the scripture editor closes its marker palette), and dismissing an
+      // already-dismissed overlay is a no-op.
+      announceAppWindowInput(event);
+
       // Announce a possible focus change
       try {
-        await windowService.setFocus('detect');
+        await setWindowFocus('detect');
       } catch (e) {
         logger.warn(
           `Failed to instruct window service to detect focus on ${event.type} ${event.key}: ${getErrorMessage(e)}`,
@@ -482,13 +1037,17 @@ async function main() {
       }
     });
 
-    mainWindow.webContents.on('before-mouse-event', async (_, event) => {
+    newWindow.webContents.on('before-mouse-event', async (_, event) => {
       // Mouse up and other events seem not to change focus in Windows, so we will only change on mouseDown
       if (event.type !== 'mouseDown') return;
 
+      // Announce the click so overlays rendered in the parent document dismiss even when it lands
+      // inside a WebView iframe, whose events never reach the parent document
+      announceAppWindowInput(event);
+
       // Announce a possible focus change
       try {
-        await windowService.setFocus('detect');
+        await setWindowFocus('detect');
       } catch (e) {
         logger.warn(
           `Failed to instruct window service to detect focus on ${event.type} ${event.button}: ${getErrorMessage(e)}`,
@@ -502,82 +1061,93 @@ async function main() {
      */
     const windowCloseUnsubscribers = new UnsubscriberAsyncList('Window close unsubscribers');
 
-    mainWindow.on('ready-to-show', async () => {
-      logger.info('mainWindow is ready to show');
-      // Anchor the startup-sync freshness clock to when the window first becomes interactive (see
+    newWindow.on('ready-to-show', async () => {
+      logger.info(`Window ${windowId} is ready to show`);
+      // Anchor the startup-sync freshness clock to when the first window becomes interactive (see
       // the startup-tasks signals above): a late-registering startup sync is only fired if the user
-      // hasn't yet had the window long enough to be editing.
-      mainWindowInteractiveAt ??= performance.now();
-      if (!mainWindow) throw new Error('"mainWindow" is not defined');
-      if (process.env.START_MINIMIZED) {
-        logger.info('mainWindow is starting minimized due to START_MINIMIZED env variable');
-        mainWindow.minimize();
+      // hasn't yet had the window long enough to be editing. Windows the user opens later are not
+      // part of startup, so they must not move this clock.
+      if (isFirstWindow) {
+        mainWindowInteractiveAt ??= performance.now();
+      }
+      // Startup flags only apply to the first window, not windows opened later by the user
+      if (isFirstWindowOfProcess && process.env.START_MINIMIZED) {
+        logger.info(`Window ${windowId} is starting minimized due to START_MINIMIZED env variable`);
+        newWindow.minimize();
       } else {
-        mainWindow.show();
+        newWindow.show();
         // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
         markStartupOnce('window-shown');
-        if (getCommandLineSwitch(CommandLineArgs.Maximize)) {
-          logger.info('mainWindow is starting maximized due to --maximize command-line switch');
-          mainWindow.maximize();
+        if (isFirstWindowOfProcess && getCommandLineSwitch(CommandLineArgs.Maximize)) {
+          logger.info(
+            `Window ${windowId} is starting maximized due to --maximize command-line switch`,
+          );
+          newWindow.maximize();
         }
       }
 
       // Adjust the Window button colors based on the current theme
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      if (process.platform !== 'darwin' && process.platform !== 'linux') {
+      if (process.platform !== 'darwin') {
+        const paintTitleBarForTheme = (newTheme: ThemeDefinitionExpanded) => {
+          if (!newTheme.cssVariables.primary) {
+            logger.warn(
+              `Failed to set title bar window button colors: New theme primary color is falsy!`,
+            );
+            return;
+          }
+
+          // Convert oklch color to hex format for Electron compatibility
+          let symbolColorHex: string;
+          try {
+            symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
+          } catch (e) {
+            logger.warn(
+              `Failed to set title bar window button colors: Could not convert primary color '${newTheme.cssVariables.primary}' to hex: ${getErrorMessage(e)}`,
+            );
+            return;
+          }
+
+          // A destroyed window has no title bar left to color. The unsubscribe that runs when
+          // this window closes normally gets here first, but a theme change in flight at that
+          // moment can still arrive afterwards — and painting it would otherwise be reported as
+          // a color conversion problem, which is the one thing it is not.
+          if (newWindow.isDestroyed()) return;
+
+          try {
+            newWindow.setTitleBarOverlay({
+              color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
+              symbolColor: symbolColorHex,
+              height: TITLE_BAR_BUTTON_HEIGHT,
+            });
+          } catch (e) {
+            logger.warn(
+              `Failed to set title bar window button colors on window ${windowId}: ${getErrorMessage(e)}`,
+            );
+          }
+        };
+
+        // Read and subscribed locally, not through the theme data provider: the provider is
+        // registered by this very process, so going through it would put a JSON-RPC round trip
+        // between the theme changing and the object in the next module that already knows.
+        //
+        // Guarded because this runs inside an `async` handler, where a throw is an unhandled
+        // rejection at window creation rather than a caught error. Colouring caption buttons is not
+        // worth that, and the subscription below is isolated for the same reason.
         try {
-          windowCloseUnsubscribers.add(
-            await themeService.subscribeCurrentTheme(undefined, (newTheme) => {
-              if (isPlatformError(newTheme)) {
-                logger.warn(
-                  `Failed to set title bar window button colors: Failed to get new current theme: ${getErrorMessage(
-                    newTheme,
-                  )}`,
-                );
-                return;
-              }
-              if (!newTheme.cssVariables.primary) {
-                logger.warn(
-                  `Failed to set title bar window button colors: New theme primary color is falsy!`,
-                );
-                return;
-              }
-
-              // Convert oklch color to hex format for Electron compatibility
-              try {
-                const symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
-
-                mainWindow?.setTitleBarOverlay({
-                  color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
-                  symbolColor: symbolColorHex,
-                  height: TITLE_BAR_BUTTON_HEIGHT,
-                });
-              } catch (e) {
-                logger.warn(
-                  `Failed to set title bar window button colors: Could not convert primary color '${newTheme.cssVariables.primary}' to hex: ${getErrorMessage(e)}`,
-                );
-              }
-            }),
-          );
+          paintTitleBarForTheme(getCurrentThemeSync());
         } catch (e) {
           logger.warn(
-            `Failed to subscribe to current theme to adjust window button colors: ${getErrorMessage(
-              e,
-            )}`,
+            `Failed to set title bar window button colors on window ${windowId}: ${getErrorMessage(e)}`,
           );
         }
+        windowCloseUnsubscribers.add(onDidChangeCurrentTheme(paintTitleBarForTheme));
       }
     });
 
-    if (process.platform === 'darwin') {
-      (async () => {
-        try {
-          windowCloseUnsubscribers.add(await subscribeCurrentMacosMenubar());
-        } catch (error) {
-          logger.info(`Failed to build the macOS menubar ${error}`);
-        }
-      })();
-    }
+    // NOTE: the macOS menubar is NOT subscribed here. `Menu.setApplicationMenu` is process-global,
+    // so one subscription serves every window; subscribing per window would rebuild and re-set the
+    // same application menu once per open window on every change. It is subscribed once at startup
+    // instead — see the `darwin` block next to `createWindow()`'s first call.
 
     // The reason this code is here and not in the `app.on('will-quit')` code is that the
     // `will-quit` event only gets triggered after all windows have been closed (including this
@@ -587,57 +1157,255 @@ async function main() {
     // when you click on the close button for the main window, it immediately fires the `close`
     // event, superseding the app:`before-quit` event and this process needs to be able to hang
     // the window until the sync completes.
-    let isWindowClosing = false;
-    mainWindow.on('close', async (event) => {
-      // A second close click while the first shutdown is still running falls through to Electron's
-      // default close on purpose: with the shutdown sync's request timeout disabled by the
-      // extension, the bounded wait below can hold the window up to AUTO_SYNC_MAX_DURATION_MS with
-      // no feedback, and this fall-through is the user's only escape hatch until a real
-      // feedback/cancel UX exists (tracked on the shutdown-cancel follow-up ticket). It abandons
-      // the in-flight sync mid-flight — same risk profile as force-quitting the app.
-      if (isWindowClosing) return;
+    let isCloseInProgress = false;
+    /**
+     * Whether this window is showing the close-all question. Distinct from a close in progress: no
+     * shutdown work has started, nothing is latched, and a cancel leaves the window exactly as it
+     * was — so a further close arriving now must be ignored, not treated as an escape.
+     */
+    let isAskingAboutClose = false;
+    /**
+     * Whether this window's close is the app going down, decided on the first pass through the
+     * close handler below.
+     *
+     * Read again in the `closed` handler, which has to tell a deliberate close — rewrite the
+     * persisted window-layouts structure without this window — from a quit, where the structure was
+     * already flushed with this window still in it and must not be rewritten smaller. It cannot
+     * decide that for itself: by then the window is out of the tracked list, so the quit test below
+     * would no longer give the same answer.
+     */
+    let isAppGoingDown = false;
+    newWindow.on('close', async (event) => {
+      // A second close click while the first close is still working falls through to Electron's
+      // default close on purpose: with the sync's request timeout disabled by the extension, the
+      // bounded wait below can hold the window up to AUTO_SYNC_MAX_DURATION_MS with no feedback,
+      // and this fall-through is the user's only escape hatch until a real feedback/cancel UX
+      // exists (PT-4001 tracks the missing shutdown-sync feedback). It abandons the in-flight sync
+      // mid-flight — same risk profile as force-quitting the app.
+      if (isCloseInProgress) return;
 
-      // Prevents the main window from initially closing
+      // Prevents the window from initially closing. First, and ahead of every decision this handler
+      // makes: Electron reads `defaultPrevented` when this synchronous stretch returns, so anything
+      // that throws above this line lets the window close with none of the shutdown work below ever
+      // running — and an async listener's throw becomes a rejected promise Electron never sees.
+      // Below the `isCloseInProgress` guard, though: the second close click has to reach Electron's
+      // default close, which is the user's only escape from the wait this handler is about to start.
       event.preventDefault();
-      isWindowClosing = true;
-      // The app is on its way down: stop the startup boot-race retry loop so it can't fire a startup
-      // sync after this shutdown sync, or reach a network connection that is about to be torn down.
-      startupTasksAbort.abort();
 
+      // While the question below is open, a further `close` on this window must not reach the
+      // escape hatch above, which exists for a close stuck in the bounded sync wait and would take
+      // this window down with none of its shutdown work. A second ✕ where the dialog is not truly
+      // modal is simply ignored; the open question still stands. A quit-driven close (Cmd+Q, OS
+      // logout) is ignored here too — the question is taken down by that same quit and the
+      // decision resolves from it, so the shutdown work runs from THAT pass and this one has
+      // nothing to add.
+      if (isAskingAboutClose) return;
+
+      // Closing the primary window while others are open takes every window with it, so the user
+      // is asked first. Decided before anything is marked closing: a cancelled close is not a close
+      // at all, and a window latched as closing that then stays open would be inert for the rest
+      // of the session. On confirm the quit latch is already set by the time this resolves, which
+      // is what makes every other window's handler record its layout as staying for next session.
+      // Secondary windows and a primary on its own skip the question and close.
+      // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows.
+      isAskingAboutClose = true;
+      let decision: WindowCloseDecision;
       try {
-        await performShutdownTasks();
+        decision = await decideWindowClose(windowId, () => confirmCloseAllWindows(newWindow));
+      } catch (e) {
+        // Whatever threw here — the primary/window-count checks `decideWindowClose` runs before it
+        // ever asks, or marking the quit latch after an answer — a failure to put the question to
+        // the user is already reported and folded into `stay-open` inside the decision itself, so
+        // this is a DIFFERENT failure. Nothing has been latched and the window is already prevented
+        // from closing, so leaving it open is the safe outcome — but silently would be
+        // indistinguishable from the user cancelling, and the next ✕ would ask again with no record
+        // of why the first did nothing.
+        logger.warn(`Could not decide how to close window ${windowId}: ${getErrorMessage(e)}`);
+        decision = 'stay-open';
       } finally {
-        // `event.preventDefault()` above suppresses Electron's default close; destroy() here
-        // triggers the 'closed' event and allows the app to quit.
-        mainWindow?.destroy();
+        isAskingAboutClose = false;
+      }
+      // A cancelled close is not a close: nothing was latched, so the next close click asks again
+      if (decision === 'stay-open') return;
+
+      // Only now is this a close in progress, and only now may a second click reach the escape
+      // hatch: the wait it escapes from starts below, not during the question.
+      isCloseInProgress = true;
+      if (decision === 'quit-all') {
+        // Told to close now, ahead of this window's own shutdown work, so all of them go down
+        // together rather than after this one has finished. Each runs its own handler and finds
+        // the quit latch already set.
+        getWindows().forEach((otherWindow) => {
+          // Excluded by IDENTITY, not by id: `windowId` is this window's id in whichever namespace
+          // the app mints them, and comparing across namespaces would let the primary miss itself
+          // and close itself re-entrantly.
+          if (otherWindow === newWindow || otherWindow.isDestroyed()) return;
+          // A window already on its way out has a close handler mid-flight. Telling it to close
+          // again lands on its `isCloseInProgress` guard, which returns WITHOUT preventing the
+          // close — the escape hatch — so Electron would destroy it before its bounds flush. Looked
+          // up by the platform id, not Electron's own `.id`: the two namespaces no longer coincide.
+          const otherWindowId = getWindowIdOf(otherWindow);
+          if (otherWindowId !== undefined && isWindowMarkedClosing(otherWindowId)) return;
+          otherWindow.close();
+        });
+      }
+
+      // Everything from here down is inside the guard: the window is now prevented from closing and
+      // latched as closing, so a throw that escaped would strand it exactly there — visible, inert,
+      // and (from an async listener) reported only as a rejection Electron never sees.
+      //
+      // The fan-out above is deliberately outside it, and survives being so: each sibling's own
+      // close handler is async, so a throw inside one becomes a rejected promise rather than an
+      // exception travelling back through `close()` into this loop, and the process-level
+      // unhandled-rejection handler reports it.
+      try {
+        // Recorded before the decision below, and read by every window's handler, so that windows
+        // closing at the same moment agree on what is happening rather than each leaving the
+        // shutdown tasks to the other. Announces to arbitrary subscribers as it goes, which is the
+        // other reason it sits below `preventDefault()`.
+        markWindowClosing(windowId);
+
+        // Shutdown tasks belong to the app going down, not to a window going away. Two ways the app
+        // goes down, and both have to be caught here: every remaining window closing at once, and a
+        // quit (Cmd+Q, menu Quit, OS logout) — which does NOT show up as a last-window close, since
+        // Electron closes every window and `isAppQuitRequested` is set from `before-quit`, which
+        // fires ahead of any `close`.
+        isAppGoingDown = isAppShuttingDown();
+
+        if (isAppGoingDown) {
+          // The app is on its way down: stop the startup tasks so they can't fire a startup sync
+          // after this shutdown sync, or reach a network connection that is about to be torn down.
+          // Unconditional, as it has always been — Power mode's boot-race retry loop in particular
+          // must stop here on every platform.
+          startupTasksAbort.abort();
+
+          // Simple mode's readiness wait is the one thing that may outlive this close: on macOS the
+          // app stays resident and the startup tasks run once per PROCESS, so aborting here would
+          // drop the startup sync for good even though a dock reactivation still wants it. The
+          // predicate explains why the platform, and not the quit flag alone, has to decide. A wait
+          // that does survive still cannot fire into a windowless app — `canFireStartupSync` above
+          // is re-checked immediately before the sync goes out.
+          if (shouldWindowCloseAbortReadinessWait(process.platform)) startupReadinessAbort.abort();
+
+          // Flush the window-layouts structure so this window's entry holds what it had open when
+          // the app went down. Capture its placement first so the flush holds its freshest bounds.
+          //
+          // On a multi-window quit every window flushes, and the flushes queue behind one another
+          // while the windows go down around them. A flush writes the structure as it stands when
+          // it reaches the front of the queue — so the LAST flush, the one that survives on disk,
+          // is only complete because a window going down with the app keeps its entry (see
+          // `handleWindowRemoved`'s disposition below).
+          //
+          // Only on this path: a window closing while the app stays up is leaving the structure,
+          // and its `closed` handler below rewrites the structure without it.
+          try {
+            cancelPendingBoundsCapture();
+            updateWindowBounds(windowId, captureWindowBoundsState());
+            await writeNow();
+          } catch (e) {
+            // Losing the structure costs the user their window arrangement. Skipping the shutdown
+            // tasks below would cost them their unsynced edits, which nothing can write back once
+            // the app is gone — so a persistence failure is logged and the shutdown continues.
+            logger.warn(`Could not persist window layouts during shutdown: ${getErrorMessage(e)}`);
+          }
+
+          // On a multi-window quit every window reaches this line, so the tasks are shared rather
+          // than run once per window — each window waits on the same run before destroying itself.
+          await runShutdownTasksOnce(performShutdownTasks);
+        } else {
+          // The app stays up, but this window's editors go with it. Only this window can say what
+          // it had open, so a sync that runs after it is gone can never cover it — the fan-out asks
+          // the windows that are still there. Held open for the sync for the same reason the app
+          // shutdown is: there is nothing left to write the edits back later.
+          await performWindowCloseTasks(windowId);
+        }
+      } catch (e) {
+        // The window still goes down via the `finally` below; what this adds is the report, which a
+        // rejected promise out of an async listener would not give us.
+        logger.warn(`Window ${windowId} close handling failed: ${getErrorMessage(e)}`);
+      } finally {
+        // Out of the routable set before the renderer goes. `closed` is what removes the window from
+        // the tracked list, and until that fires a fan-out would still ask a window that cannot
+        // answer — and report the coverage of whatever it was doing as incomplete because of it.
+        markWindowNotReady(windowId);
+        // The escape hatch above takes the window down on a second close click, which can happen
+        // any time during the wait this handler just came out of
+        if (newWindow.isDestroyed()) {
+          logger.debug(
+            `Window ${windowId} was already destroyed by the time its shutdown work finished`,
+          );
+        } else if (isAppGoingDown) {
+          // `event.preventDefault()` above suppresses Electron's default close; destroy() here
+          // triggers the 'closed' event and allows the app to quit.
+          newWindow.destroy();
+        } else {
+          // Closed rather than destroyed, because the app is staying up and the page still has
+          // teardown of its own to run — `destroy()` skips `beforeunload`, which is what prunes
+          // this window's stored web view state. The second pass through this handler stops at
+          // the `isCloseInProgress` guard above, leaving Electron's default close to run.
+          newWindow.close();
+          // A renderer that never finishes that teardown would otherwise leave the window on screen
+          // and in limbo for the rest of the session: it is out of the routable set and recorded as
+          // closing, and only the window actually going away puts either back — so every fan-out
+          // skips it silently and the app treats the next window close as the last one. Bounded so
+          // the close always completes; losing the page teardown is the smaller loss.
+          const forceCloseTimeout = setTimeout(() => {
+            if (newWindow.isDestroyed()) return;
+            logger.warn(
+              `Window ${windowId} did not finish closing within ${WINDOW_CLOSE_TIME_OUT_MS} ms; destroying it`,
+            );
+            newWindow.destroy();
+          }, WINDOW_CLOSE_TIME_OUT_MS);
+          newWindow.once('closed', () => clearTimeout(forceCloseTimeout));
+        }
       }
     });
 
-    mainWindow.on('closed', async () => {
-      mainWindow = undefined;
+    newWindow.on('closed', async () => {
+      // Everything here is keyed off the ID captured while the window was alive. The BrowserWindow
+      // is destroyed by now, and reading a property off it can throw — which would abandon the rest
+      // of this teardown, leaving the window tracked forever and the app never told it closed.
+      removeWindow(newWindow, windowId);
+
+      // What this window's disappearance means for its entry. A deliberate close — the app stays up
+      // — takes the entry with it, and the structure is rewritten without it below so the window
+      // does not come back next session. A window going down with the app is NOT leaving the
+      // structure: it has to be there next session, so its entry stays — including in every flush
+      // still queued behind this moment.
+      // After the announcement above, which is synchronous and must not wait on a disk write, and
+      // before the unsubscribers below, which spend the network service's whole registration retry
+      // failing against a renderer that is already gone.
+      cancelPendingBoundsCapture();
+      handleWindowRemoved(windowId, isAppGoingDown ? 'entry-stays' : 'entry-goes-with-it');
+      // A window told to close counts as gone from the moment it is told, and stops counting for
+      // real only here — its close runs the async work above, and it is open and counted for all of
+      // it. Told or not, every window passes through here, and untracked ids are ignored.
+      handleWindowEmptied.handleWindowGone(windowId);
+      if (!isAppGoingDown) await writeNow();
+
       try {
         await windowCloseUnsubscribers.runAllUnsubscribers();
       } catch (e) {
-        logger.warn(`Window close unsubscribers failed: ${getErrorMessage(e)}`);
+        logger.warn(`Window ${windowId} close unsubscribers failed: ${getErrorMessage(e)}`);
       }
     });
 
     // This sets the menu on Windows and Linux
     // 'null' to interact with external API
     // eslint-disable-next-line no-null/no-null
-    mainWindow.setMenu(null);
+    newWindow.setMenu(null);
 
     // Open urls in the user's browser
     // Note that webviews can get to this handler with window.open and anchor tags with
-    // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
-    mainWindow.webContents.setWindowOpenHandler((handlerDetails) => {
+    // target="_blank". Please revise web-view.service-shard.ts as necessary if you make changes here
+    newWindow.webContents.setWindowOpenHandler((handlerDetails) => {
       // Only allow https urls
       (async () => {
         try {
           openExternal(handlerDetails.url);
         } catch (e) {
           logger.warn(
-            `mainWindow could not open external url "${handlerDetails.url}" from windowOpenHandler. ${e}`,
+            `Window ${windowId} could not open external url "${handlerDetails.url}" from windowOpenHandler. ${e}`,
           );
         }
       })();
@@ -648,29 +1416,52 @@ async function main() {
     // Built URL search parameters for use in `src/renderer/global-this.model.ts`
     const searchParamsObject: Record<string, string> = {
       [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+      // Durable (see `WindowLayoutEntry.windowId`), and settled when the window was tracked above —
+      // so the renderer's per-window storage, keyed by this same id, works from the first render in
+      // every interface mode rather than waiting on a request to main after the load.
+      [WINDOW_ID]: windowId,
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
     if (globalThis.startupMarks) searchParamsObject[STARTUP_MARKS_QUERY_PARAMETER] = '';
+    // Tells the renderer which chrome to draw: the main window keeps the top-level menu, secondary
+    // windows do not. Sent as a presence flag like the two above rather than a value.
+    if (isFirstWindow) searchParamsObject[IS_MAIN_WINDOW_QUERY_PARAMETER] = '';
+
+    // The scroll group state travels with the window rather than being asked for after it loads, so
+    // the toolbar and every scroll-group-following web view render the reference the app is actually
+    // on instead of the default reference followed by a jump. Omitted when this process has none
+    // yet, which is the case the renderer's own fallback covers.
+    const scrollGroupStateForWindow = getScrollGroupStateForNewWindow();
+    if (scrollGroupStateForWindow)
+      searchParamsObject[SCROLL_GROUP_STATE_QUERY_PARAMETER] = serialize(scrollGroupStateForWindow);
+
+    // The current theme travels with the window for the same reason, and matters even earlier: the
+    // window's own stylesheet and the one baked into every web view it restores are read during the
+    // first render, so a window that had to ask for the theme would paint the default and flash.
+    // Omitted when this process has none yet, which is the case the renderer's own fallback covers.
+    const currentThemeForWindow = getCurrentThemeForNewWindow();
+    if (currentThemeForWindow)
+      searchParamsObject[THEME_STATE_QUERY_PARAMETER] = serialize(currentThemeForWindow);
 
     // If the URL doesn't load, we might need to show something to the user
     const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
-    mainWindow.loadURL(urlToLoad).catch((e) => {
-      logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
+    newWindow.loadURL(urlToLoad).catch((e) => {
+      logger.error(`Window ${windowId} could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
     // Register zoom keyboard shortcuts. MacOS already supports this natively
-    mainWindow.webContents.on('before-input-event', (event, input) => {
+    newWindow.webContents.on('before-input-event', (event, input) => {
       // Just act on keyDown and ignore keyUp. Could cause trouble if we need to preventDefault on keyUp
       if (input.type === 'keyUp') return;
 
       // F12: Open dev tools in both development and production
       if (input.key === 'F12') {
         event.preventDefault();
-        if (mainWindow?.webContents.isDevToolsOpened()) {
-          mainWindow.webContents.closeDevTools();
+        if (newWindow.webContents.isDevToolsOpened()) {
+          newWindow.webContents.closeDevTools();
         } else {
-          mainWindow?.webContents.openDevTools();
+          newWindow.webContents.openDevTools();
         }
         return;
       }
@@ -678,8 +1469,8 @@ async function main() {
       // keyboard tab navigation - Ctrl+Tab and Ctrl+Shift+Tab
       if (input.control && input.key === 'Tab') {
         event.preventDefault();
-        if (input.shift) windowService.setFocus('previousTab');
-        else windowService.setFocus('nextTab');
+        if (input.shift) setWindowFocus('previousTab');
+        else setWindowFocus('nextTab');
         return;
       }
 
@@ -770,8 +1561,8 @@ async function main() {
         // keyboard tab group navigation - Ctrl+PgUp and Ctrl+PgDown
         if (input.control && (input.key === 'PageUp' || input.key === 'PageDown')) {
           event.preventDefault();
-          if (input.key === 'PageUp') windowService.setFocus('previousTabGroup');
-          else windowService.setFocus('nextTabGroup');
+          if (input.key === 'PageUp') setWindowFocus('previousTabGroup');
+          else setWindowFocus('nextTabGroup');
           return;
         }
 
@@ -783,75 +1574,192 @@ async function main() {
       // More keyboard tab navigation - Cmd+Shift+[]
       if (input.meta && input.shift && (input.key === '[' || input.key === ']')) {
         event.preventDefault();
-        if (input.key === '[') windowService.setFocus('previousTab');
-        else windowService.setFocus('nextTab');
+        if (input.key === '[') setWindowFocus('previousTab');
+        else setWindowFocus('nextTab');
         return;
       }
 
       // keyboard tab group navigation - Cmd+Option+Up and Cmd+Option+Down
       if (input.meta && input.alt && (input.key === 'ArrowUp' || input.key === 'ArrowDown')) {
         event.preventDefault();
-        if (input.key === 'ArrowUp') windowService.setFocus('previousTabGroup');
-        else windowService.setFocus('nextTabGroup');
+        if (input.key === 'ArrowUp') setWindowFocus('previousTabGroup');
+        else setWindowFocus('nextTabGroup');
       }
     });
 
     // Set initial zoom factor from settings
-    mainWindow.webContents.on('did-finish-load', async () => {
-      if (mainWindow && mainWindow.webContents) {
-        try {
-          const zoom = await getZoomFactor();
-          mainWindow.webContents.setZoomFactor(zoom);
-        } catch (e) {
-          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
-        }
+    newWindow.webContents.on('did-finish-load', async () => {
+      try {
+        const zoom = await getZoomFactor();
+        newWindow.webContents.setZoomFactor(zoom);
+      } catch (e) {
+        logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
       }
     });
 
-    // Update zoomfactor when the setting changes
-    settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
-      const zoomFactor = () => {
-        if (isPlatformError(newZoomFactor)) {
-          logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
-          return DEFAULT_ZOOM_FACTOR;
-        }
-        return newZoomFactor;
-      };
-      if (mainWindow && mainWindow.webContents) {
-        try {
-          mainWindow.webContents.setZoomFactor(zoomFactor());
-        } catch (e) {
-          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
-        }
-      }
-    });
+    // Update zoom factor when the setting changes (per-window subscription with cleanup)
+    try {
+      windowCloseUnsubscribers.add(
+        await settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
+          const zoomFactor = isPlatformError(newZoomFactor)
+            ? (() => {
+                logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
+                return DEFAULT_ZOOM_FACTOR;
+              })()
+            : newZoomFactor;
+          try {
+            newWindow.webContents.setZoomFactor(zoomFactor);
+          } catch (e) {
+            logger.error(`Failed to update zoom factor: ${getErrorMessage(e)}`);
+          }
+        }),
+      );
+    } catch (e) {
+      logger.warn(`Failed to subscribe to zoom factor changes: ${getErrorMessage(e)}`);
+    }
 
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
     // new AppUpdater();
+
+    return { window: newWindow, windowId };
+  };
+
+  // The router that serves `openWebView` starts before this closure exists, so it is handed the
+  // window facilities once they are real. A caller that reaches the router first (e.g. an extension
+  // opening a window from `activate()`) waits, bounded, for this call rather than failing outright —
+  // so this must stay wired without first waiting for extension-host readiness: a wait here for an
+  // extension-host ready signal would deadlock against that wait.
+  setWebViewWindowCreator({
+    createPendingContentWindow: async () =>
+      (await createWindow(undefined, { pendingContent: true })).windowId,
+    closeWindow: (windowId) => {
+      // Rolling back an open that never delivered must not put the close-all question on screen,
+      // and it cannot: a window still waiting for its content never answers for the application, so
+      // this close is never read as the primary's. That exclusion is what makes the rollback safe to
+      // do without asking, and it is the reason no guard stands here — one would only ever refuse a
+      // close the router does not await, leaving a blank window standing while the caller is told
+      // the rollback succeeded.
+      getWindowById(windowId)?.close();
+    },
+  });
+
+  /**
+   * Create the app's windows from the persisted window-layouts structure: one window per saved
+   * entry, in entry order — except in simple interface mode, which is single-window, so only the
+   * main entry's window is created and the other entries stay preserved in the structure. With no
+   * usable structure (first run, or an upgrade from the single-window keeper), one legacy window is
+   * created whose renderer falls back to the pre-multi-window saved layout.
+   *
+   * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
+   * close path flushed the structure when that window went down).
+   */
+  const restoreWindows = async () => {
+    const plan = await loadWindowLayouts();
+    if (plan.kind === 'legacy') {
+      const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
+      setMainWindowId(legacyWindow.windowId);
+      return;
+    }
+
+    // The main entry's window is created first — before the interface-mode read below, which can
+    // block on the extension host early in startup — so the first window never waits on it. The
+    // saved structure keeps entry order regardless of window creation order.
+    const { entries, mainEntryIndex } = plan;
+    const mainWindow = await createWindow({
+      kind: 'entry',
+      entry: entries[mainEntryIndex],
+    });
+    setMainWindowId(mainWindow.windowId);
+    if (entries.length <= 1) return;
+
+    // Simple mode is single-window: restore only the main window no matter how many entries the
+    // structure holds. Same when the mode cannot be read — restoring too few is recoverable
+    // because an entry not assigned to a window this session is preserved in the structure, while
+    // restoring too many would put a Power user's secondary windows on a Simple user's screen.
+    let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+    try {
+      interfaceMode = await settingsService.get('platform.interfaceMode');
+    } catch (e) {
+      logger.warn(
+        `Could not read platform.interfaceMode; restoring only the main window: ${getErrorMessage(e)}`,
+      );
+    }
+    if (interfaceMode !== 'power') return;
+
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      if (entryIndex !== mainEntryIndex) {
+        // Sequential on purpose: creating windows one at a time keeps the tracked window order
+        // (and so the focus fallback and save order) deterministic
+        // eslint-disable-next-line no-await-in-loop
+        await createWindow({ kind: 'entry', entry: entries[entryIndex] });
+      }
+    }
   };
 
   app.on('window-all-closed', () => {
-    // Respect the OSX convention of having the application in memory even
-    // after all windows have been closed
-    if (process.platform !== 'darwin') {
+    // The macOS convention of keeping the application resident after its last window closes only
+    // applies when no quit is in flight. Every window's `close` handler calls `preventDefault()`
+    // to run its shutdown work, and that cancels a requested quit — so a quit that closed the
+    // windows must be re-issued here, or the app stays resident with zero windows and `will-quit`
+    // never runs.
+    if (process.platform !== 'darwin' || isAppQuitRequested()) {
       app.quit();
     }
   });
+
+  /**
+   * Ends the one process-global macOS menubar subscription. Undefined off macOS, before the
+   * subscription is made, and once it has been run — the quit teardown below runs it exactly once.
+   */
+  let unsubscribeMacosMenubar: (() => Promise<boolean>) | undefined;
 
   let isAppQuitting = false;
   app.on('will-quit', async (e) => {
     if (!isAppQuitting) {
       logger.info('Main process is quitting');
+      // Before anything that can fail or wait: the scroll group and theme hosts let their stores lag
+      // memory so a held-down navigation key does not fsync per verse and a dragged colour picker
+      // does not fsync per frame, and this is the last moment that lag can be closed. Synchronous
+      // and unconditional, so quitting right after navigating or changing the theme still opens on
+      // the right reference, in the right theme, next time.
+      flushPersistedScrollGroupState();
+      flushPersistedThemeState();
       // Stop the startup boot-race retry loop before networkService.shutdown() tears down the
       // connection, so a late retry can't resurrect it (a no-op if the window close already aborted).
       startupTasksAbort.abort();
+      // A real quit ends the Simple-mode readiness wait too, including the macOS last-window-close
+      // case the window handler deliberately let through — that exception exists for an app that
+      // stays resident, and this one is not.
+      startupReadinessAbort.abort();
 
       // Prevent closing before graceful shutdown is complete.
       // Also, in the future, this should allow a "are you sure?" dialog to display.
       e.preventDefault();
       isAppQuitting = true;
+
+      // Cleared before it is run so a second pass through here cannot run it again
+      const unsubscribeMenubar = unsubscribeMacosMenubar;
+      unsubscribeMacosMenubar = undefined;
+      if (unsubscribeMenubar) {
+        // Bounded like every other wait on this path. The unsubscribe is an RPC to the extension
+        // host, which is still up at this point and should answer at once — but an extension host
+        // that has stopped answering would otherwise hold the whole quit for the request timeout,
+        // and a subscription left behind in a process that is about to exit costs nothing.
+        const didFinishUnsubscribing = await waitForDuration(async () => {
+          try {
+            await unsubscribeMenubar();
+          } catch (error) {
+            logger.warn(`Failed to unsubscribe the macOS menubar: ${getErrorMessage(error)}`);
+          }
+          return true;
+        }, PROCESS_CLOSE_TIME_OUT_MS);
+        if (!didFinishUnsubscribing)
+          logger.warn(
+            `The macOS menubar did not unsubscribe within ${PROCESS_CLOSE_TIME_OUT_MS} ms; quitting anyway`,
+          );
+      }
 
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
@@ -871,12 +1779,16 @@ async function main() {
 
   app
     .whenReady()
-    .then(() => {
+    .then(async () => {
       // Set up ipc handlers
       ipcMain.handle(
         'electronAPI:env.test',
         (_event, message: string) => `From main.ts: test ${message}`,
       );
+
+      // powerMonitor throws if touched before 'ready', so this is registered here rather than at
+      // module load time.
+      registerPowerMonitorListeners(powerMonitor);
 
       // When packaged, the app loads from file:// which has an opaque (null) origin and sends no
       // Referer header. YouTube embeds require a non-null HTTP/HTTPS Referer and show Error 153
@@ -894,12 +1806,58 @@ async function main() {
         },
       );
 
-      createWindow();
+      // Install Chromium devtools extensions once (not per-window)
+      if (isDebug) {
+        await installExtensions();
+      }
 
-      app.on('activate', () => {
-        // On macOS it's common to re-create a window in the app when the
+      // Subscribe to macOS menubar once globally (not per-window). Its unsubscribe is handed to the
+      // ordered teardown in `will-quit` rather than registered as a second listener there: a second
+      // listener runs on the FIRST emission, while that teardown has only begun, and `will-quit` is
+      // emitted again after the teardown re-quits, so it would run twice as well as too early.
+      if (process.platform === 'darwin') {
+        try {
+          unsubscribeMacosMenubar = await subscribeCurrentMacosMenubar();
+        } catch (error) {
+          logger.info(`Failed to build the macOS menubar ${error}`);
+        }
+      }
+
+      // Caught here rather than left to reject this chain: `createWindow` refuses outright during a
+      // quit and the restore reads from disk, so this can fail — and a rejection would skip the
+      // `activate` registration below, which is the only thing that brings windows back on macOS
+      // after the last one closes.
+      try {
+        await restoreWindows();
+      } catch (e) {
+        logger.error(`Failed to restore windows at startup: ${getErrorMessage(e)}`);
+      }
+
+      // Collapse overlapping restores: 'activate' can fire again (rapid dock clicks) while a
+      // previous restore is still creating windows — and before the first window exists, the
+      // no-windows guard below does not catch that. A second concurrent restoreWindows run would
+      // reset the layout persistence tracking mid-restore and create duplicate windows, so late
+      // callers await the in-flight run instead of starting their own.
+      let restoreWindowsInFlight: Promise<void> | undefined;
+      app.on('activate', async () => {
+        // On macOS it's common to re-create windows in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (!mainWindow) createWindow();
+        //
+        // Asking whether the app is on its way down as well as counting windows, because for the
+        // moment between a window being destroyed and its `closed` handler stopping tracking it,
+        // the two disagree: the window is out of the count already but is still recorded as
+        // closing. `createWindow` refuses in that state, correctly — reporting the refusal as a
+        // failure to restore windows is what this avoids.
+        if (getWindows().length !== 0 || isAppShuttingDown()) return;
+        try {
+          if (!restoreWindowsInFlight)
+            restoreWindowsInFlight = restoreWindows().finally(() => {
+              restoreWindowsInFlight = undefined;
+            });
+          await restoreWindowsInFlight;
+        } catch (e) {
+          logger.error(`Failed to restore windows on activate: ${getErrorMessage(e)}`);
+        }
       });
 
       return undefined;
@@ -956,6 +1914,92 @@ async function main() {
         result: {
           name: 'return value',
           schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.createWindow',
+    async () => {
+      await createWindow();
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary: 'Create a new application window',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getFocusedWindowId',
+    async () => {
+      // The honest answer about focus, not the window calls are routed to. Those differ while a
+      // newly opened window has OS focus but has not finished starting, and callers of this command
+      // are asking about the window the user is looking at.
+      return getFocusedWindowId();
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary: 'Get the ID of the currently focused window',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getWindows',
+    async () => {
+      // Read on call rather than pushed on change: callers want this at the moment they offer the
+      // user a choice of windows and never again, so there is nothing to keep in sync.
+      //
+      // Offered windows are ones that can still take the work: a window whose close has begun is
+      // on its way out, and one whose renderer is dead with no reload coming can never receive
+      // anything. Picking either sends the user's action nowhere. A window that has not finished
+      // starting is deliberately still offered — it is on screen, the user can see it, and work
+      // sent to it lands once it is ready. Its name is the one thing it cannot supply yet, which is
+      // why its readiness travels with it.
+      const availableWindows = getTrackedWindows()
+        .filter(({ windowId }) => !isWindowMarkedClosing(windowId) && !isWindowAbandoned(windowId))
+        .map(({ windowId, window }) => ({
+          windowId,
+          getTitle: () => window.getTitle(),
+          wasEverReady: wasWindowEverReady(windowId),
+        }));
+      return summarizeWindows(availableWindows, isPrimaryWindow);
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'List every open window with the title it is currently showing, for offering the user ' +
+          'a choice of window. Titles follow each window’s own content, so they can repeat',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                windowId: { type: 'string' },
+                label: { type: 'string' },
+                isMain: { type: 'boolean' },
+              },
+              required: ['windowId', 'label', 'isMain'],
+            },
+          },
         },
       },
     },
@@ -1085,13 +2129,30 @@ async function main() {
   );
 
   commandService.registerCommand(
+    'platform.openTermsOfService',
+    async () => {
+      await openTermsOfService();
+    },
+    {
+      method: {
+        summary: 'Open the Terms of Service document that ships with the application',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
     'platform.zoomIn',
     async () => {
       await zoomIn();
     },
     {
       method: {
-        summary: 'Increase the zoom factor of the main window by 10%',
+        summary: 'Increase the zoom factor of all application windows by 10%',
         params: [],
         result: {
           name: 'return value',
@@ -1108,7 +2169,7 @@ async function main() {
     },
     {
       method: {
-        summary: 'Decrease the zoom factor of the main window by 10%',
+        summary: 'Decrease the zoom factor of all application windows by 10%',
         params: [],
         result: {
           name: 'return value',

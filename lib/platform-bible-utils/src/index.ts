@@ -4,6 +4,7 @@ export { Collator } from './intl/intl-collator';
 export { DateTimeFormat } from './intl/intl-date-time-format';
 export { DocumentCombiner } from './document-combiner';
 export { EventRollingTimeCounter } from './event-rolling-time-counter';
+export { GraphemeString, MAX_PADDING_LENGTH } from './grapheme-string';
 export { Mutex } from './promises/mutex';
 export { MutexMap } from './promises/mutex-map';
 export { NonValidatingDocumentCombiner } from './non-validating-document-combiner';
@@ -52,7 +53,7 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
-export { usfmMarkers, isBlockMarker } from './markers/usfm-markers';
+export { usfmMarkers, isBlockMarker, isCharacterMarker } from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -61,6 +62,7 @@ export { Section } from './scripture/scripture-util';
 export {
   createSyncProxyForAsyncObject,
   debounce,
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
   deepClone,
   getAllObjectFunctionNames,
   getErrorMessage,
@@ -69,6 +71,7 @@ export {
   isErrorMessageAboutRegistryAuthFailure,
   isString,
   newGuid,
+  retryUntil,
   wait,
   waitForDuration,
 } from './util';
@@ -104,6 +107,7 @@ export {
   includes,
   indexOf,
   isLocalizeKey,
+  isolateBidi,
   isWhiteSpace,
   lastIndexOf,
   normalize,
@@ -137,7 +141,14 @@ export { computeEffectiveStructureProtection } from './structure-protection.util
 // Types
 export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
 export type { NameablePhysicalKey } from './keyboard-util';
-export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
+export type {
+  DebouncedFunction,
+  DeepPartial,
+  KebabCase,
+  Prettify,
+  ReplaceType,
+  UnionToIntersection,
+} from './util';
 export type {
   Dispose,
   OnDidDispose,
@@ -193,7 +204,9 @@ export type {
   Localized,
 } from './extension-contributions/menus.model';
 export { menuDocumentSchema } from './extension-contributions/menus.model';
+export type { PaletteItem } from './palette.types';
 export type { DblResourceData, ResourceType } from './resources.model';
+export { doesCatalogRowCoverProject } from './resources.model';
 export type {
   ExtensionControlledProjectSetting,
   ExtensionControlledSetting,
@@ -275,7 +288,8 @@ export type {
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';
-export type { MarkerCategoryType as CategoryType, Marker } from './markers/usfm-marker.model';
-// MarkerType is a (string) enum used as a runtime value (e.g. comparing `marker.type ===
-// MarkerType.Paragraph`), so it must be a value export, not a type-only export.
-export { MarkerType } from './markers/usfm-marker.model';
+export type { Marker } from './markers/usfm-marker.model';
+// MarkerType and CategoryType are (string) enums used as runtime values (e.g. comparing
+// `marker.type === MarkerType.Paragraph` or `marker.category === CategoryType.DivisionMarks`), so
+// they must be value exports, not type-only exports.
+export { MarkerType, MarkerCategoryType as CategoryType } from './markers/usfm-marker.model';

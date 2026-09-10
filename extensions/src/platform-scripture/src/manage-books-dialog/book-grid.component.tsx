@@ -27,6 +27,7 @@ import {
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -352,6 +353,20 @@ export type BookGridSelectorProps = {
    * Genesis". When omitted, the inner `<button>` is given a fallback aria-label of the book id.
    */
   getRowAriaLabel?: (item: BookGridItem) => string;
+  /**
+   * Book id to scroll into view — used when Manage Books is launched targeting a specific book.
+   * Expands the book's group if the user had collapsed it. Keep this set until `onScrolledToBook`
+   * fires: the grid retries as `items` arrive, so passing it before the project's book list has
+   * loaded is safe. Pass `undefined` once handled.
+   */
+  scrollToBook?: string;
+  /**
+   * Called once the grid has actually scrolled `scrollToBook` into view. The owner is expected to
+   * clear `scrollToBook` in response, which is what makes the scroll one-shot; the grid cannot own
+   * that itself because it is conditionally rendered and unkeyed (filtering to nothing unmounts
+   * it), so any grid-local "already done" flag would be lost and re-fire on the next mount.
+   */
+  onScrolledToBook?: () => void;
 };
 
 export function BookGridSelector({
@@ -370,6 +385,8 @@ export function BookGridSelector({
   hideGroupSelectAll,
   onRangeToggle,
   getRowAriaLabel,
+  scrollToBook,
+  onScrolledToBook,
 }: BookGridSelectorProps) {
   const groups = useMemo<{ label?: string; items: BookGridItem[] }[]>(() => {
     if (groupBy === 'none') {
@@ -579,6 +596,61 @@ export function BookGridSelector({
     gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 170 : 100}px, 1fr))`,
   };
 
+  // Using null for React ref compatibility
+  // eslint-disable-next-line no-null/no-null
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll the launched book into view. A layout effect so the scroll lands before paint — the user
+  // never sees the grid at the top and then jump. Re-runs until it succeeds, then tells the owner,
+  // which clears `scrollToBook` and stops it; each `return` below is a "not yet, try again" rather
+  // than a give-up, which is what makes this correct on the primary first-launch path where the grid
+  // mounts before the project's books have loaded.
+  //
+  // Hidden case: intentionally not handled. `scrollIntoView` no-ops inside a `display: none` iframe,
+  // but this grid is only ever given `scrollToBook` by the create-missing-book launch, which floats
+  // and fronts the dialog in the same interaction — so it always has layout when this runs. No
+  // visibility catch-up is warranted here; if a future caller passes `scrollToBook` to a grid that
+  // can mount hidden, it needs `useViewVisibility` (see `useBcvSyncScroll` for the reference
+  // consumer).
+  useLayoutEffect(() => {
+    if (!scrollToBook) return;
+
+    // Not in the grid's universe (yet, or at all — the launch can name a book outside the dialog's
+    // canon range). Stay pending so the next `items` change retries.
+    const owningGroup = groups.find((g) => g.items.some((item) => item.book === scrollToBook));
+    if (!owningGroup) return;
+
+    // Pills only render inside an expanded group, so a collapsed group would swallow the launch
+    // entirely — no scroll, and a footer count for a selection whose pill is nowhere on screen.
+    // Expand it and let the re-run do the scrolling once the pill exists.
+    const owningLabel = owningGroup.label;
+    if (owningLabel !== undefined && userCollapsedGroups.has(owningLabel)) {
+      setUserCollapsedGroups((prev) => {
+        const next = new Set(prev);
+        next.delete(owningLabel);
+        return next;
+      });
+      return;
+    }
+
+    // `CSS.escape` because this interpolates a value into a selector. Book ids are constrained today,
+    // but an unescaped quote would throw `SyntaxError` from inside a layout effect — during commit,
+    // where no error boundary catches it — taking the dialog down to a blank panel.
+    const target = scrollContainerRef.current?.querySelector(
+      `[data-book="${CSS.escape(scrollToBook)}"]`,
+    );
+    if (!target) return;
+    target.scrollIntoView({ block: 'center' });
+
+    // Hand the roving tabindex to the book we scrolled to. Without this, `focusedIndex` stays at 0 —
+    // the sole `tabIndex={0}` holder — so the user's first Tab would focus book 0 and scroll the
+    // grid straight back to the top, undoing the scroll we just did.
+    const flatIndex = flatBooks.findIndex((item) => item.book === scrollToBook);
+    if (flatIndex >= 0) setFocusedIndex(flatIndex);
+
+    onScrolledToBook?.();
+  }, [scrollToBook, groups, userCollapsedGroups, flatBooks, onScrolledToBook]);
+
   const outOfScopeText = localizedStrings?.outOfScope ?? 'Out of scope';
   const untrackedText = localizedStrings?.untracked ?? 'Untracked';
   const selectAllTemplate = localizedStrings?.selectAllInGroup ?? 'Select all in {0}';
@@ -778,6 +850,7 @@ export function BookGridSelector({
 
   return (
     <div
+      ref={scrollContainerRef}
       className={cn(
         // The prior `overflow-auto`
         // produced a permanent vertical scrollbar in Import mode because the

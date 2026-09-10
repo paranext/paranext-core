@@ -14,7 +14,10 @@
  * UUID from `simple-layout.data.ts`, not by localized text. This makes the tests locale-independent
  * and immune to translation changes.
  *
- * The Comment List Panel's fixed UUID in the simple layout is COMMENT_LIST_PANEL_UUID below.
+ * The Comment List Panel's fixed UUID in the simple layout is COMMENT_LIST_PANEL_UUID below. Match
+ * it as a PREFIX: the renderer suffixes every web view id from a shared layout with the window it
+ * was loaded into (`-w1`, `-w2`, ...) so two windows never collide on one id, so the rendered
+ * `data-web-view-id` is the UUID plus that suffix rather than the bare UUID.
  *
  * ## Tab overflow
  *
@@ -54,9 +57,10 @@ import {
 const DEFAULT_WEBSOCKET_PORT = 8876;
 const SETTINGS_TIMEOUT_MS = 60_000;
 /**
- * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits four PAPI
- * commands. Each command opens a panel and can take several seconds; the combined response can
- * exceed the default 30 s PAPI request timeout. Use a generous timeout.
+ * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits five PAPI
+ * commands (four for a read-only resource). Each command opens a panel and can take several
+ * seconds; the combined response can exceed the default 30 s PAPI request timeout. Use a generous
+ * timeout.
  */
 const OPEN_EDITOR_TIMEOUT_MS = 150_000;
 
@@ -92,10 +96,10 @@ const SCRIPTURE_EDITOR_SLOT_UUID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
 async function waitForSimpleLayout(mainPage: Page): Promise<void> {
   await Promise.all([
     expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`),
+      mainPage.locator(`.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
     ).toBeAttached({ timeout: 120_000 }),
     expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id="${SCRIPTURE_EDITOR_SLOT_UUID}"]`),
+      mainPage.locator(`.platform-tab-title[data-web-view-id^="${SCRIPTURE_EDITOR_SLOT_UUID}"]`),
     ).toBeAttached({ timeout: 120_000 }),
   ]);
   // Wait for any workspace-updating overlay to clear. It can appear (and reappear) during dock
@@ -112,7 +116,7 @@ async function waitForSimpleLayout(mainPage: Page): Promise<void> {
  * regardless of whether the title resolved.
  */
 function commentsFrameLocator(mainPage: Page) {
-  return mainPage.frameLocator(`iframe[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`);
+  return mainPage.frameLocator(`iframe[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`);
 }
 
 /**
@@ -162,7 +166,7 @@ async function openScriptureEditor(
  */
 async function clickCommentsTab(mainPage: Page, actionTimeoutMs = 30_000): Promise<void> {
   const tabTitle = mainPage.locator(
-    `.platform-tab-title[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`,
+    `.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`,
   );
   if (await tabTitle.isVisible()) {
     await tabTitle.click({ timeout: actionTimeoutMs });
@@ -174,9 +178,13 @@ async function clickCommentsTab(mainPage: Page, actionTimeoutMs = 30_000): Promi
   // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
   await mainPage
     .locator('[role="listbox"] [role="option"]')
-    .filter({ has: mainPage.locator(`[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`) })
+    .filter({ has: mainPage.locator(`[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`) })
     .click({ timeout: 5_000 });
 }
+
+// Own this spec's Electron app so it is not inherited from another spec that has already replaced
+// the Column 2 scripture-editor slot waitForSimpleLayout waits for. See comment.fixture.ts.
+test.use({ commentAppOwner: 'comments-tab' });
 
 test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   // First 3 tests: app startup (up to 180 s) + waitForSimpleLayout (up to 120 s) + test actions.
@@ -207,16 +215,16 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   });
 
   test('Comments tab is visible in Column 3 in the English UI', async ({ mainPage }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
     // The UUID-based locator confirms the tab is in the DOM regardless of scroll position.
     await expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`),
+      mainPage.locator(`.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
     ).toBeAttached();
   });
 
   test('selecting the Comments tab displays the panel', async ({ mainPage }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     // Assert on rendered panel UI, not just the iframe body: the body is "attached" as soon as
@@ -244,17 +252,17 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   test('when a project has comments, at least one is visible in the Comments tab', async ({
     mainPage,
   }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(project, ['GEN 1:1'], ['Visible comment for PT-4068 test']);
 
     // Point the panel at the test project. We call openCommentListPanel directly rather than
-    // going through openScriptureEditor/openOrUpdateRelatedPanels: the latter triggers three
-    // concurrent dock rebuilds (model text + two resource text panels) that call getWebView for
-    // the comment list panel while the sentinel is in flight, occasionally overwriting it with
-    // the previously-open developer project. Calling directly here is safe because
-    // waitForSimpleLayout already confirmed the dock is stable (overlay gone).
+    // going through openScriptureEditor/openOrUpdateRelatedPanels: the latter triggers four
+    // concurrent dock rebuilds (model text, two resource text panels, and the Scripture Text Grid)
+    // that call getWebView for the comment list panel while the sentinel is in flight,
+    // occasionally overwriting it with the previously-open developer project. Calling directly
+    // here is safe because waitForSimpleLayout already confirmed the dock is stable (overlay gone).
     await waitForPapiMethodRegistered(
       'command:legacyCommentManager.openCommentListPanel',
       DEFAULT_WEBSOCKET_PORT,
@@ -278,7 +286,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   test('filter toolbar stays visible when the comment list is scrolled to the bottom (PT-4070)', async ({
     mainPage,
   }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     // Seed enough threads to force the comment list to scroll. GEN 1 has 31 verses, so 30
@@ -345,7 +353,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   // first attempt (relying on Playwright's worker-relaunch retry to recover — a guaranteed slow
   // flake, and a hard failure under --retries=0).
   test('filter dropdowns are operable with the keyboard (PT-4070)', async ({ mainPage }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     // The toolbar renders in the loaded state even with zero threads, but seed a few so the panel
@@ -400,7 +408,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
     mainPage,
   }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(projectScroll, ['GEN 3:1'], ['PT-4070 scope-option test']);
@@ -454,7 +462,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   test('Comments tab updates when the active project changes (PT-4069)', async ({ mainPage }) => {
     // Two openScriptureEditor calls on top of normal startup. 10 minutes is comfortable.
     test.setTimeout(600_000);
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(projectA, ['GEN 1:1'], ['Project A unique comment text']);
@@ -474,7 +482,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
 
     await clickCommentsTab(mainPage);
     await expect(
-      mainPage.locator(`iframe[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`),
+      mainPage.locator(`iframe[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
     ).toBeAttached({ timeout: 30_000 });
     const commentsFrame = commentsFrameLocator(mainPage);
     await expect(commentsFrame.locator('body')).toContainText('Project A unique comment text', {

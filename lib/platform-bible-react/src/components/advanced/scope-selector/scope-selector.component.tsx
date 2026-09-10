@@ -30,6 +30,7 @@ import {
   formatScrRef,
   formatScrRefRange,
   LocalizedStringValue,
+  Section,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -130,6 +131,11 @@ interface ScopeSelectorProps {
    * value contains localized versions of the ID and full book name
    */
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
+  /**
+   * Optional explanations, by section, for why that section has no available books. Forwarded to
+   * {@link SelectBooks} and shown as a tooltip on that section's disabled quick-select button.
+   */
+  disabledSectionExplanations?: Partial<Record<Section, string>>;
   /** Optional ID that is applied to the root element of this component */
   id?: string;
 
@@ -208,6 +214,7 @@ export function ScopeSelector({
   onSelectedBookIdsChange,
   localizedStrings,
   localizedBookNames,
+  disabledSectionExplanations,
   id,
   variant = 'radio',
   rangeStart,
@@ -511,6 +518,7 @@ export function ScopeSelector({
       onChangeSelectedBookIds={isInBooksDialog ? setDraftSelectedBookIds : onSelectedBookIdsChange}
       localizedStrings={localizedStrings}
       localizedBookNames={localizedBookNames}
+      disabledSectionExplanations={disabledSectionExplanations}
     />
   );
 

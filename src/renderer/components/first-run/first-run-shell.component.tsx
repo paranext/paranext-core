@@ -64,9 +64,11 @@ const KEYS: LocalizeKey[] = [
 export function FirstRunShell({
   entryStep,
   stepComponents = DEFAULT_STEP_COMPONENTS,
+  allowContinueWithoutRegistration,
 }: {
   entryStep: FirstRunStep;
   stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
+  allowContinueWithoutRegistration?: boolean;
 }) {
   const [step, setStep] = useState<FirstRunStep>(entryStep);
   const [canProceed, setCanProceed] = useState<boolean | undefined>(true);
@@ -205,6 +207,7 @@ export function FirstRunShell({
           setCanProceed={setCanProceed}
           setCanSkip={setCanSkip}
           setManagesOwnFooter={setManagesOwnFooter}
+          allowContinueWithoutRegistration={allowContinueWithoutRegistration}
         />
 
         {error && (

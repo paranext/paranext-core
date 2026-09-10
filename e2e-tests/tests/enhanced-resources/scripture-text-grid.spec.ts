@@ -579,7 +579,7 @@ test.describe('Scripture Text Grid accessibility', () => {
         type: 'project',
         name: 'AccName A',
         id: ACC_RESOURCE_A_ID,
-        isResourceShownByDefault: true,
+        isInTextCollection: true,
       },
     ]);
 
@@ -599,8 +599,8 @@ test.describe('Scripture Text Grid accessibility', () => {
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'Tab A', id: ACC_RESOURCE_A_ID, isResourceShownByDefault: true },
-      { type: 'project', name: 'Tab B', id: ACC_RESOURCE_B_ID, isResourceShownByDefault: true },
+      { type: 'project', name: 'Tab A', id: ACC_RESOURCE_A_ID, isInTextCollection: true },
+      { type: 'project', name: 'Tab B', id: ACC_RESOURCE_B_ID, isInTextCollection: true },
     ]);
 
     const stg = await openScriptureTextGrid(mainPage);
@@ -613,7 +613,10 @@ test.describe('Scripture Text Grid accessibility', () => {
     await mainPage.keyboard.press('Tab');
     // Read the active element from INSIDE the frame document so focus escaping the iframe
     // fails the test rather than passing vacuously.
-    const focused = await stg.frame.evaluate(() => ({
+    // `FrameLocator` has no `evaluate` (Playwright 1.58). Going through a locator inside the
+    // frame runs this in the FRAME's document, which is the point: reading
+    // `document.activeElement` from the parent would pass even if focus escaped the iframe.
+    const focused = await stg.frame.locator('body').evaluate(() => ({
       role: document.activeElement?.getAttribute('role') ?? undefined,
       label: document.activeElement?.getAttribute('aria-label') ?? undefined,
     }));
@@ -628,8 +631,8 @@ test.describe('Scripture Text Grid accessibility', () => {
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'Ring A', id: ACC_RESOURCE_A_ID, isResourceShownByDefault: true },
-      { type: 'project', name: 'Ring B', id: ACC_RESOURCE_B_ID, isResourceShownByDefault: true },
+      { type: 'project', name: 'Ring A', id: ACC_RESOURCE_A_ID, isInTextCollection: true },
+      { type: 'project', name: 'Ring B', id: ACC_RESOURCE_B_ID, isInTextCollection: true },
     ]);
 
     const stg = await openScriptureTextGrid(mainPage);
@@ -658,7 +661,7 @@ test.describe('Scripture Text Grid accessibility', () => {
         type: 'project',
         name: 'Announce A',
         id: ACC_RESOURCE_A_ID,
-        isResourceShownByDefault: true,
+        isInTextCollection: true,
       },
     ]);
 

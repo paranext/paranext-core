@@ -9,7 +9,7 @@ import {
   onDidOpenWebView,
   onDidUpdateWebView,
   updateWebViewDefinitionSync,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 import { initAutoSyncEditBlockDriver } from './auto-sync-edit-block-driver';
 
 vi.mock('@renderer/services/auto-sync-blocking-store', () => ({
@@ -17,7 +17,7 @@ vi.mock('@renderer/services/auto-sync-blocking-store', () => ({
   subscribeToAutoSyncBlocking: vi.fn(),
 }));
 
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   getAllOpenWebViewDefinitionsSync: vi.fn(),
   onDidOpenWebView: vi.fn(),
   onDidUpdateWebView: vi.fn(),

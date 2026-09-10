@@ -62,7 +62,10 @@ function createDecorator(config: DecoratorConfig) {
           saveState: config.saveState ?? SaveState.HasNotSaved,
           saveError: config.saveError ?? '',
           onSaveAndRestart: () =>
-            alertCommand('paratextRegistration.setParatextDataInternetSettings', internetSettings),
+            alertCommand(
+              'paratextRegistration.internetSettingsDataProvider → setInternetSettings',
+              internetSettings,
+            ),
         }}
       />
     );

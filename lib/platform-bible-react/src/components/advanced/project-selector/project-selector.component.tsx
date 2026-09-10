@@ -197,6 +197,16 @@ type CommonProps = {
    * alphabetically by `versificationName`.
    */
   priorityVersificationId?: string;
+  /**
+   * When true, the funnel/filter menu next to the search box is not rendered. Defaults to `false`.
+   *
+   * For a picker whose rows are ALL open tabs (so "Group by open tabs" only toggles a section
+   * heading over an otherwise identical list) and which is single-select (so "Show selected only"
+   * never renders), the menu reduces to a control with no meaningful effect. Set this to drop the
+   * affordance rather than present an inert one. Grouping still applies per
+   * `defaultGroupByOpenTabs`; only the user-facing toggle goes away.
+   */
+  hideFilterMenu?: boolean;
 };
 
 export type ProjectSelectorProps =
@@ -859,14 +869,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       ? handleOpenProjectInGroup
       : undefined;
 
-  // The trigger used to expose its untruncated label via the native `title`
-  // attribute, which surfaces a
-  // browser-default yellow tooltip — inconsistent with the rest of the app's
-  // shadcn tooltip styling. We now wrap the PopoverTrigger in a shadcn
-  // Tooltip so the surrounding consumer's TooltipProvider (e.g. manage-books
-  // dialog at line ~1944) styles the popup. The native `title` is dropped
-  // unconditionally; if the consumer hasn't installed a TooltipProvider the
-  // tooltip simply doesn't render.
+  // The trigger's untruncated label is exposed through the shadcn Tooltip wrapped around the
+  // PopoverTrigger below, never through a native `title` attribute: `title` surfaces the
+  // browser-default yellow tooltip, inconsistent with the app's shadcn tooltip styling. Keep
+  // `title` off this button so the two tooltips can never both appear.
   const triggerButton = (
     <Button
       variant={props.buttonVariant ?? 'outline'}
@@ -924,9 +930,13 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   onValueChange={setQuery}
                   placeholder={strings.searchPlaceholder}
                   className="tw:border-0"
+                  // Picker semantics: with nothing typed, Space picks the highlighted project
+                  // (the Enter UX) — the project list is the whole point here and a leading space
+                  // is meaningless in a project name search.
+                  spaceSelectsHighlightedItem
                 />
               </div>
-              {!props.groupByVersification && (
+              {!props.groupByVersification && !props.hideFilterMenu && (
                 <FilterMenu
                   groupByOpenTabs={groupByOpenTabs}
                   onChangeGroupByOpenTabs={setGroupByOpenTabs}

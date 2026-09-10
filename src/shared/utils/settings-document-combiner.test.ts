@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { Localized, SettingsContribution, slice } from 'platform-bible-utils';
+import { Localized, SettingsContribution } from 'platform-bible-utils';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import { SettingsDocumentCombiner } from '@shared/utils/settings-document-combiner';
 import {
@@ -14,7 +14,7 @@ vi.mock('@shared/services/localization.service', () => ({
     async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
       [localizeKey: string]: string;
     }> {
-      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+      return Object.fromEntries(keys.map((key) => [key, key.slice(1, -1)]));
     },
   },
 }));

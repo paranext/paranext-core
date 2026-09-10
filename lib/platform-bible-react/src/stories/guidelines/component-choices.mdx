@@ -56,3 +56,22 @@ Make sure to
 <iframe src="https://embed.figma.com/design/hJirMCWP9O9riw39Gd5zyl/Design-System-Figma?node-id=0-1&embed-host=paratext-design-system" width="100%" height="400" style={{border: "none"}}>
   Your browser does not support iframes.
 </iframe>
+
+## Zero states
+
+When a list, grid, or panel has nothing to show, say so — do not leave the region blank.
+
+For a plain one-line message, use
+
+- [EmptyState](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-emptystate--docs) - takes a single localized `message` and renders it in a `role="status"` region
+
+For a zero state that needs media, a heading, or a call to action, use
+
+- [Empty](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-empty--docs) - the composition `Empty` / `EmptyHeader` / `EmptyMedia` / `EmptyTitle` / `EmptyDescription` / `EmptyContent`
+
+Make sure to
+
+- Say what is empty and what the user can do next, not just "No items"
+- Add `role="status"` yourself when using `Empty` for a region whose content just changed, and keep that element mounted across the change so it is announced
+- Pass a border width (`tw:border`) when you want `Empty`'s dashed outline - the component sets the dashed style only
+- Nest your own heading element inside `EmptyTitle` when the zero state is a region's entire content, since `EmptyTitle` renders a `<div>`

@@ -55,3 +55,12 @@ export const FormDisabled: Story = {
   decorators: [createDecorator('VpnRequired')],
   args: { disabled: true },
 };
+
+/**
+ * Footer note suppressed for space-constrained hosts such as the first-run wizard step. The "Coming
+ * soon" badges still mark the unavailable options.
+ */
+export const WithoutFooter: Story = {
+  decorators: [createDecorator('VpnRequired')],
+  args: { showFooter: false },
+};

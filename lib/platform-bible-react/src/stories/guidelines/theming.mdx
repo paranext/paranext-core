@@ -73,10 +73,10 @@ components that use the same variables should track the selection.
 
 ## In the running application
 
-The Paranext renderer loads built-in theme definitions from
+The app's main process loads built-in theme definitions from
 [themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json)
 (Platform and Paratext families) and applies the same HSL tokens as `index.css` for those (see
-[theme.service-host.ts](https://github.com/paranext/paranext-core/blob/main/src/renderer/services/theme.service-host.ts)).
+[theme.service-host.ts](https://github.com/paranext/paranext-core/blob/main/src/main/services/theme.service-host.ts)).
 Keep `index.css` and `themes.data.json` in sync when you change theme colors. End-user theme
 selection is handled by the platform theme service, not Storybook.
 

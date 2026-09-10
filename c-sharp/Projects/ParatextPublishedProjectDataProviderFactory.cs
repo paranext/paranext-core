@@ -7,7 +7,9 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// PDP factory dedicated to <em>published</em> Paratext projects (the same projects
 /// <c>platform.isPublished</c> reports as true). The factory advertises every projectInterface the
-/// regular factory does EXCEPT <c>legacyCommentManager.comments</c>, because:
+/// regular factory does EXCEPT the unpublished-only ones. <c>platformScripture.Pt9Interlinear</c>
+/// is excluded because published projects are distributed archives that do not carry interlinear
+/// authoring data. <c>legacyCommentManager.comments</c> is excluded because:
 /// <list type="bullet">
 ///   <item>Published projects are read-only at the storage layer -
 ///     <c>ResourceProjectFileManager.SetXml</c> throws
@@ -38,9 +40,9 @@ namespace Paranext.DataProvider.Projects;
 ///     <see cref="ParatextProjectDataProvider"/>.<c>VerifyUserCanCreateComments</c> remains
 ///     load-bearing for creation.</item>
 ///   <item><strong>Note-only project types</strong> (<c>ConsultantNotes</c>,
-///     <c>GlobalConsultantNotes</c>, <c>GlobalAnthropologyNotes</c>): filtered out before any
-///     factory sees them by <c>ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly)</c>.
-///     Not served by any factory today; out of scope for this PR.</item>
+///     <c>GlobalConsultantNotes</c>, <c>GlobalAnthropologyNotes</c>): filtered out by the
+///     <c>IsResourceProject</c> guard in <c>GetAllResourceScrTexts</c> (these project types
+///     are not resource projects). Not served by any factory today.</item>
 /// </list>
 ///
 /// <para>

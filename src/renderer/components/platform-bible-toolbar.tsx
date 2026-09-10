@@ -1,5 +1,7 @@
 import logo from '@assets/icon.png';
 import { ReferenceHistoryButtons } from '@renderer/components/reference-history-buttons.component';
+import { SyncStatusButton } from '@renderer/components/sync-status-button.component';
+import { useBackendSyncActivity } from '@renderer/hooks/use-backend-sync-activity.hook';
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useData,
@@ -9,14 +11,16 @@ import {
   useRecentScriptureRefs,
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
+import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-availability.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
-import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import {
   registerBookChapterControlHandle,
   TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
@@ -27,13 +31,13 @@ import {
 } from 'platform-bible-utils/experimental';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
-import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { CircleCheck, HomeIcon } from 'lucide-react';
+import { HomeIcon } from 'lucide-react';
 import {
   Badge,
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   BookChapterControlHandle,
   Button,
@@ -46,14 +50,15 @@ import {
   SelectTrigger,
   SelectValue,
   ScrollGroupSelector,
-  Spinner,
+  SHRINK_STEP,
   Toolbar,
+  ToolbarCompoundLabel,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  useEvent,
   usePromise,
+  useShrinkStepValue,
 } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -61,40 +66,157 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
-// Heuristic delay before retrying the send/receive availability check on startup. The extension
-// host may not be ready when the toolbar first mounts. onDidReloadExtensions handles recovery
-// after that initial window, so a single retry here is sufficient.
-const SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS = 2000;
+// Stable identity for the "nothing extra to offer" case, so the memo below does not hand
+// BookChapterControl a fresh empty array on every render.
+const EMPTY_BOOK_IDS: string[] = [];
 
 // Visual breathing room between content and the native buttons on top of the live-measured overlay
 // width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
 // getToolbarOSReservedSpaceClassName) because the live measurement is exact, unlike that guess.
 const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 
+// Simple mode packs a project selector, the reference-history buttons and the BCV control into the
+// title bar. Together they want more room than the app's minimum window width leaves once the OS
+// caption buttons are reserved, so two mechanisms share the job of fitting them — and neither one
+// hides a control, because the Toolbar's `overflow-hidden` would clip it silently rather than
+// signal it.
+//
+// The bar's contents SHRINK: `min-w-0` on the Toolbar's content area (see toolbar.component.tsx)
+// defeats the `min-width: auto` floor a flex item gets by default, so the row can absorb the
+// squeeze instead of pushing its trailing controls under that clip.
+//
+// Individual controls then COLLAPSE by width: `useShrinkStep` publishes a discrete step from a
+// measured width and the labels below pick a shorter form at each one.
+// `adr-toolbar-shrink-measurement` records why that measurement is done in JS rather than
+// with CSS container queries — their failure mode here is silent.
+
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openHome%',
-  '%toolbar_sync%',
-  '%toolbar_sync_open_status%',
-  '%toolbar_sync_status_synced%',
-  '%toolbar_sync_status_syncing%',
   '%projectPicker_toolbar_select_project%',
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
 ];
 
+/**
+ * Radix's `SelectValue` hard-codes `style={{ pointerEvents: 'none' }}` on its span and discards any
+ * `className` or `style` passed to it, so anything rendered inside it is invisible to the pointer:
+ * no `:hover`, no pointer events, and a native `title` that can never open. `pointer-events` is
+ * inherited, so re-declaring `auto` on the descendant that needs it restores hit-testing for that
+ * subtree only. Presses still reach the trigger, which is an ancestor and gets the bubbled event.
+ */
+const POINTER_EVENTS_INSIDE_SELECT_VALUE = 'tw:pointer-events-auto';
+
+/**
+ * The project selector's trigger label.
+ *
+ * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which `Toolbar`
+ * publishes. `PlatformBibleToolbar` _renders_ `Toolbar`, so a hook call there would sit above the
+ * provider and read the widest step forever. This renders as `Toolbar`'s descendant, so it sees the
+ * real value.
+ */
+function ProjectSelectorLabel({
+  fullName,
+  shortName,
+  errorMessage,
+}: {
+  fullName: string;
+  shortName: string;
+  errorMessage?: string;
+}) {
+  const shrinkStep = useShrinkStepValue();
+  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
+
+  // An error replaces the label rather than sharing it. Putting it in the compound label's
+  // secondary slot would clip it mid-sentence and then drop it entirely at the narrowest step,
+  // leaving red text as the only signal that anything is wrong.
+  if (errorMessage) {
+    return (
+      <span
+        className={cn(
+          'tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive',
+          POINTER_EVENTS_INSIDE_SELECT_VALUE,
+        )}
+        title={errorMessage}
+      >
+        {errorMessage}
+      </span>
+    );
+  }
+
+  return (
+    <ToolbarCompoundLabel
+      // The short name is the identifying part, so it is the field that must survive — but it reads
+      // second, hence `secondaryFirst`.
+      primary={isAtMinimum ? shortName : `(${shortName})`}
+      secondary={fullName}
+      secondaryFirst
+      showSecondary={!isAtMinimum}
+      fullText={`${fullName} (${shortName})`}
+      className={POINTER_EVENTS_INSIDE_SELECT_VALUE}
+    />
+  );
+}
+
+/**
+ * The project selector's trigger, sized to the space the toolbar currently has.
+ *
+ * The width floor lives here rather than inline at the call site for the same reason
+ * {@link ProjectSelectorLabel} is its own component: the step comes from `ShrinkStepContext`, which
+ * `Toolbar` publishes, so it can only be read from a component rendered as `Toolbar`'s descendant.
+ *
+ * The floor has to move with the step or dropping the full name buys nothing — the label would just
+ * get shorter inside a box still reserving 192px, and the space it was supposed to free would come
+ * out of `BookChapterControl` instead.
+ */
+function ProjectSelectorTrigger({
+  placeholder,
+  children,
+}: {
+  placeholder: string | undefined;
+  children?: ReactNode;
+}) {
+  const shrinkStep = useShrinkStepValue();
+
+  return (
+    <SelectTrigger
+      data-testid="toolbar-project-selector"
+      className={cn(
+        'tw:max-w-64 tw:border-0 tw:bg-transparent',
+        // Still a floor at the narrowest step, just a smaller one: `min-w-24` (96px) is the
+        // measured width a short project name needs (~97px for `ESVUS16`, including the trigger's
+        // padding and chevron), so the name stays readable while the trigger remains a comfortable
+        // click target. Not `min-w-0`: with everything else in the row shrinkable too, the trigger
+        // would collapse to just its chevron.
+        shrinkStep >= SHRINK_STEP.MINIMUM ? 'tw:min-w-24' : 'tw:min-w-48',
+      )}
+    >
+      <SelectValue placeholder={placeholder}>{children}</SelectValue>
+    </SelectTrigger>
+  );
+}
+
 export function PlatformBibleToolbar() {
-  const { currentProject, recentProjects, allProjects, currentProjectError } =
+  const { currentSimpleProject, recentProjects, allProjects, currentSimpleProjectError } =
     useProjectPickerData();
 
-  const isPowerMode = useIsPowerMode();
+  // One subscription for both answers, since the toolbar gates controls on each. `isSimpleMode` is
+  // deliberately not `!isPowerMode`: the simple-only controls below must never appear in power
+  // mode, so they wait for the mode to be known rather than rendering on the 'simple' placeholder
+  // that stands in for an unresolved read. Power-only controls can use `isPowerMode` as-is — that
+  // test already fails closed while the mode is unknown.
+  const [interfaceMode, , isInterfaceModeKnown] = useInterfaceMode();
+  const isPowerMode = interfaceMode === 'power';
+  const isSimpleMode = isInterfaceModeKnown && interfaceMode === 'simple';
 
   // The resolved navigation target: the tracked (last-selected) web view's saved definition or,
   // failing that, the main project editor's — same rule `useProjectPickerData` uses to find the
@@ -132,6 +254,12 @@ export function PlatformBibleToolbar() {
     resolvedWebView?.definition.projectId,
   );
 
+  // The baseline is the navigation target's own project — its definition `projectId`. For a view
+  // that displays something other than its own project (a resource panel, whose `projectId` is the
+  // container whose reference list is shown; the Scripture Text Grid, which hosts many), that means
+  // the books of the resource on screen are offered as additional and labelled as outside the
+  // project. That is deliberate: the baseline tracks the project the user is working in, not
+  // whatever a panel happens to be rendering, so the unqualified list stays stable as panels change.
   const [booksPresentPossiblyError] = useProjectSetting(
     resolvedWebView?.definition.projectId,
     'platformScripture.booksPresent',
@@ -146,14 +274,43 @@ export function PlatformBibleToolbar() {
     }
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
+  const projectBookIds = useMemo(() => getBookIdsFromBooksPresent(booksPresent), [booksPresent]);
   // Stable identity per booksPresent value — BookChapterControl memoizes its book list (and the
   // filtering/matching derived from it) on this function's identity, so a fresh closure every
   // render would recompute all of that on every toolbar render
-  const fetchActiveBookIds = useCallback(
-    () => getBookIdsFromBooksPresent(booksPresent),
-    [booksPresent],
-  );
+  const fetchActiveBookIds = useCallback(() => projectBookIds, [projectBookIds]);
   const getActiveBookIds = booksPresent ? fetchActiveBookIds : undefined;
+
+  // Simple mode is the only mode this ships in: it has a single, global book/chapter/verse control,
+  // so widening its book list is unambiguous. Power mode's own controls are left as they are for
+  // that team to decide on; the component API stays open to them either way. Gated on
+  // `!isPowerMode` rather than the stricter `isSimpleMode` for the same reason as the availability
+  // probe below: this is a prefetch, so starting it while the mode is still unknown means the
+  // widened list is ready the moment we learn the mode is simple. The cost is that a power user
+  // whose mode has not resolved yet briefly opens the project's data provider and one booksPresent
+  // subscription for a result nothing there reads.
+  const openProjectBookIds = useOpenProjectBookIds(
+    resolvedWebView?.definition.projectId,
+    !isPowerMode,
+  );
+  const additionalBookIds = useMemo(() => {
+    // `isSimpleMode`, not `!isPowerMode`: unlike the prefetch above, this feeds rendered content —
+    // the widened book list and the "show more books" affordance that comes with it — so an
+    // unresolved read must not put simple mode's list in front of a power user.
+    if (!isSimpleMode) return EMPTY_BOOK_IDS;
+    // BookChapterControl renders exactly the book list it is given, so the current book has to come
+    // from here or a reference on a book the active project lacks would be missing from its own
+    // picker.
+    if (projectBookIds.includes(scrRef.book) || openProjectBookIds.includes(scrRef.book))
+      return openProjectBookIds;
+    return [...openProjectBookIds, scrRef.book];
+  }, [isSimpleMode, projectBookIds, openProjectBookIds, scrRef.book]);
+  // Stable identity per value, for the same reason fetchActiveBookIds is memoized above:
+  // BookChapterControl memoizes its book list on this function's identity.
+  const fetchAdditionalBookIds = useCallback(() => additionalBookIds, [additionalBookIds]);
+  // Undefined rather than a function returning an empty list: the control offers no "show more
+  // books" toggle when there is nothing extra to offer.
+  const getAdditionalBookIds = additionalBookIds.length > 0 ? fetchAdditionalBookIds : undefined;
 
   // Register the top BookChapterControl's imperative handle only while it is enabled — a React 19
   // cleanup callback ref so registration tracks both mount/unmount and the enabled state. When
@@ -199,6 +356,10 @@ export function PlatformBibleToolbar() {
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
+    bookChapterControlLocalizedStringKeys,
+  );
+
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
@@ -210,8 +371,6 @@ export function PlatformBibleToolbar() {
 
       // no need to reserve space for macos "traffic lights" when in full screen
       if (osPlatform === 'darwin' && isFullScreen) return undefined;
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      if (osPlatform === 'linux') return undefined;
       return osPlatform;
     }, []),
 
@@ -257,16 +416,29 @@ export function PlatformBibleToolbar() {
         }
       : undefined;
 
-  // Live-subscribed (not a one-shot fetch): the extension host calls notifyUpdate('*') on this
-  // data provider both when platform.interfaceMode changes (menu-data.service-host.ts) and when
-  // contributions resync (which also covers localized-string loading completing), so this always
-  // reflects the current mode and current localization without needing to reopen the menu —
-  // matching the pattern web-view.component.tsx already uses for WebViewMenu.
-  const [menuDataPossiblyError] = useData(menuDataService.dataProviderName).MainMenu(
-    undefined,
-    MAIN_MENU_DEFAULT,
-  );
+  // Live-subscribed (not a one-shot fetch) in the main window: the extension host calls
+  // notifyUpdate('*') on this data provider both when platform.interfaceMode changes
+  // (menu-data.service-host.ts) and when contributions resync (which also covers localized-string
+  // loading completing), so the main window's menu always reflects the current mode and current
+  // localization without needing to reopen it — matching the pattern web-view.component.tsx already
+  // uses for WebViewMenu. A secondary window never subscribes at all (see below), so it gets no live
+  // updates because it draws no menu to update.
+  // Only the main window draws the menu, so only the main window subscribes: passing `undefined` as
+  // the data provider source skips the subscription entirely rather than paying for a merged,
+  // localized menu in every window and discarding it. Same idiom as web-view.component.tsx's
+  // `webViewType && shouldShowToolbar ? menuDataService.dataProviderName : undefined`.
+  const [menuDataPossiblyError] = useData(
+    globalThis.isMainWindow ? menuDataService.dataProviderName : undefined,
+  ).MainMenu(undefined, MAIN_MENU_DEFAULT);
   const menuData = useMemo(() => {
+    // Secondary windows get identical chrome minus the top-level menu. `Toolbar` renders its
+    // menubar only when `menuData` is truthy, so withholding it here removes the menu.
+    //
+    // It does not remove ONLY the menu: the shared `PlatformMenubar` registers the Alt, Alt+P,
+    // Alt+L, Alt+N and Alt+H shortcuts, and it is mounted only when `menuData` is truthy — so those
+    // five die with it in secondary windows. That is intended (they open menus that are not there)
+    // and the shortcut catalog records it, but it is a real behavioural difference, not a no-op.
+    if (!globalThis.isMainWindow) return undefined;
     if (isPlatformError(menuDataPossiblyError)) {
       logger.warn(
         `Toolbar failed to get main menu data: ${getErrorMessage(menuDataPossiblyError)}`,
@@ -286,53 +458,34 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
-  // Default is `undefined` (not yet resolved); the command itself always returns `boolean`.
-  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
-    undefined,
-  );
+  // `undefined` while unknown — the render gate below treats that as available (fail open). Skipped
+  // in power mode, where nothing consumes the answer. Gated on `!isPowerMode` rather than the
+  // stricter `isSimpleMode` on purpose: this probe is a prefetch, so starting it while the mode is
+  // still unknown means the answer is ready the moment we learn the mode is simple, instead of
+  // making simple-mode users wait for two round trips in sequence. The cost is one wasted probe for
+  // a power user whose mode has not resolved yet.
+  const isSendReceiveAvailable = useSendReceiveAvailability({ enabled: !isPowerMode });
+  // Fail open a second way: even a settled `false` must not hide the indicator once the backend has
+  // reported a sync. `useSendReceiveAvailability` asks whether the send/receive EXTENSION is
+  // present, but syncs also start from paths that never touch it — `startup-tasks.ts` calls the
+  // dotnet `syncProjects` command directly — so an extension that is missing or failed to activate
+  // would otherwise leave a multi-minute sync with no surface at all in Simple mode, where the
+  // persistent toast is suppressed in favour of this indicator.
+  //
+  // Sticky, not live: a gate on "is syncing right now" unmounts the control in the same commit the
+  // sync finishes, so the outcome the user was waiting for is never painted and never announced, and
+  // the status hook's seed loop is torn down mid-flight. Once a sync has been seen this stays true
+  // for the session. Reads a store the renderer seeds once at startup, so it costs no subscription
+  // and no request here. See `useBackendSyncActivity`.
+  const hasBackendSynced = useBackendSyncActivity();
 
-  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced'>('idle');
-
-  const handleSyncStateChanged = useCallback(
-    ({ isSyncing }: { isSyncing: boolean }) => setSyncState(isSyncing ? 'syncing' : 'synced'),
-    [],
-  );
-
-  const onSyncStateChanged = useMemo(
-    () => getNetworkEvent<{ isSyncing: boolean }>('paratextBibleSendReceive.onSyncStateChanged'),
-    [],
-  );
-  useEvent(onSyncStateChanged, handleSyncStateChanged);
-
-  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  const checkIfSendReceiveAvailable = useCallback(async () => {
+  const openHome = useCallback(async () => {
     try {
-      // This command comes from an extension and is not typed in CommandHandlers.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
-      setIsSendReceiveAvailable(isAvailable);
+      await sendCommand('platformGetResources.openHome');
     } catch (e) {
-      // Don't set false — a throw means the extension host wasn't ready yet (startup race), not
-      // that the extension is absent. Schedule a retry so the button isn't permanently hidden.
-      logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
-      retryTimeoutRef.current = setTimeout(
-        checkIfSendReceiveAvailable,
-        SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS,
-      );
+      logger.warn(`Toolbar caught an error while trying to open Home: ${getErrorMessage(e)}`);
     }
   }, []);
-
-  useEffect(() => {
-    checkIfSendReceiveAvailable();
-    return () => clearTimeout(retryTimeoutRef.current);
-  }, [checkIfSendReceiveAvailable]);
-
-  const onDidReloadExtensions = useMemo(
-    () => getNetworkEvent('platform.onDidReloadExtensions'),
-    [],
-  );
-  useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
 
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
@@ -340,8 +493,9 @@ export function PlatformBibleToolbar() {
         menuData={menuData}
         onSelectMenuItem={handleMenuCommand}
         className={cn(
-          // If the toolbar height changes, the top inset for the workspace updating overlay and
-          // getDockLayoutOuterInset (platform-dock-layout-positioning.util.ts) will need updating too.
+          // If these heights change, update POWER_MODE_TOOLBAR_HEIGHT / SIMPLE_MODE_TOOLBAR_HEIGHT
+          // in toolbar-height.util.ts to match. Every layer positioned below the toolbar reads its
+          // clearance from there, so that is the only other place to change.
           isPowerMode ? 'tw:h-12' : 'tw:h-14',
           'tw:bg-transparent',
           // Only reserve the static guess when there's no live measurement to reserve it above instead.
@@ -358,48 +512,52 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {isSendReceiveAvailable !== false && (
-              // Fail open. Show the button whenever send/receive is available — including
-              // while the availability probe is still unresolved (undefined), e.g. the extension
-              // host is busy/hung during a startup auto-sync. Visibility must not hinge on that
-              // probe resolving; only a confirmed `false` (extension genuinely absent) hides it.
-              <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      data-testid="toolbar-sync-button"
-                      variant="ghost"
-                      size="sm"
-                      className="pr-twp tw:h-8 tw:shrink-0"
-                      onClick={() => {
-                        sendCommand('paratextBibleSendReceive.openSyncStatus').catch((e: unknown) =>
-                          logger.warn(
-                            `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
-                          ),
-                        );
-                      }}
-                    >
-                      {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
-                      {syncState === 'synced' && (
-                        <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
-                      )}
-                      {
-                        {
-                          idle: localizedStrings['%toolbar_sync%'],
-                          syncing: localizedStrings['%toolbar_sync_status_syncing%'],
-                          synced: localizedStrings['%toolbar_sync_status_synced%'],
-                        }[syncState]
-                      }
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="tw:font-light">
-                      {localizedStrings['%toolbar_sync_open_status%']}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            {/* toolbar-sync-area: always in the DOM so onboarding-tour step 4
+                (onboarding-tour.component.tsx) can target [data-testid="toolbar-sync-area"]
+                regardless of whether the sync button itself renders — that button stays
+                conditional so the toolbar remains compact when sync is unavailable.
+                This wrapper displaces SyncStatusButton as the flex item in the config area's
+                shrinking row, so it has to be transparent to that shrinking: `shrink` and
+                `min-w-0` pass the row's pressure through to the button, which truncates its own
+                label (see its className). `shrink-0` here would pin the wrapper's width and
+                silently undo that. `display: contents` would be tidier still, but it gives the
+                wrapper no box, and Tour measures this element to place the spotlight.
+                empty:hidden keeps the wrapper out of the flex flow when the button is absent, so
+                it contributes no gap-2 spacing while staying in the DOM at zero size — which is
+                how Tour skips the step.
+                In plain Platform.Bible the wrapper is always empty and the tour runs with four
+                stops rather than five: Send/Receive ships only in Paratext 10 Studio, so
+                `platformGetResources.isSendReceiveAvailable` settles to `false`, and no dotnet
+                sync can raise `hasBackendSynced` either (`GetSyncActivity` is hardcoded idle in
+                `ParatextProjectSendReceiveService`). A four-stop tour in this build is correct,
+                not a regression. */}
+            <div data-testid="toolbar-sync-area" className="tw:min-w-0 tw:shrink tw:empty:hidden">
+              {isSimpleMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
+                // Simple mode only, by UX decision: power mode deliberately has no toolbar Sync
+                // because syncing already surfaces itself there — a notification while it runs,
+                // progress inside the Sync dialog, and progress in an open editor window — and power
+                // users start a sync per project from the Home view.
+                //
+                // Fail open on availability: `undefined` means not known yet (the extension host is
+                // busy, or the send/receive extension is still activating), and the button must not
+                // hinge on that resolving. A settled `false` hides it — unless the backend has
+                // reported a sync, which is a surface the user needs regardless of what the extension
+                // probe says (see `hasBackendSynced` above).
+                //
+                // The cost of failing open is one seed-retry loop for the extension's CLAIM in builds
+                // with no send/receive at all, restarted on each Simple/Power toggle since that unmounts
+                // and remounts this. An unregistered command is not cheap to fail: `sendCommand` routes
+                // through `requestWithRetry`, so one read rejects only after `MAX_REQUEST_ATTEMPTS`
+                // attempts at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~10s, `rpc.model.ts`). Availability
+                // settles to `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` (5s) there, so this unmounts
+                // while that loop's FIRST read is still retrying. The backend activity signal costs
+                // nothing here either way: it is seeded once at startup by `initSyncActivityService`
+                // and read from a store, not re-seeded per mount.
+                // TODO(PT-4233): A one-shot capability probe would fit a permanently-absent claim
+                // command better than a retry loop does.
+                <SyncStatusButton />
+              )}
+            </div>
             {marketingVersion !== '' && (
               <TooltipProvider delayDuration={TOOLTIP_DELAY}>
                 <Tooltip>
@@ -430,11 +588,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="tw:h-8"
-                  onClick={() => {
-                    // This command comes from an extension and is not typed in CommandHandlers.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                    (sendCommand as any)('platformGetResources.openHome');
-                  }}
+                  onClick={openHome}
                 >
                   <HomeIcon />
                 </Button>
@@ -447,9 +601,9 @@ export function PlatformBibleToolbar() {
             </Tooltip>
           </TooltipProvider>
         )}
-        {!isPowerMode && (
+        {isSimpleMode && (
           <Select
-            value={currentProject?.id ?? ''}
+            value={currentSimpleProject?.id ?? ''}
             onValueChange={async (projectId: string) => {
               try {
                 await openProject(projectId);
@@ -461,27 +615,21 @@ export function PlatformBibleToolbar() {
             }}
             disabled={!hasProjectPickerItems}
           >
-            <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
-              <SelectValue
-                placeholder={
-                  hasProjectPickerItems
-                    ? localizedStrings['%projectPicker_toolbar_select_project%']
-                    : localizedStrings['%projectPicker_toolbar_no_projects%']
-                }
-              >
-                {currentProject && (
-                  <span
-                    className={cn(
-                      'tw:min-w-0 tw:flex-1 tw:truncate',
-                      currentProjectError && 'tw:text-destructive',
-                    )}
-                  >
-                    {currentProjectError ??
-                      `${currentProject.fullName} (${currentProject.shortName})`}
-                  </span>
-                )}
-              </SelectValue>
-            </SelectTrigger>
+            <ProjectSelectorTrigger
+              placeholder={
+                hasProjectPickerItems
+                  ? localizedStrings['%projectPicker_toolbar_select_project%']
+                  : localizedStrings['%projectPicker_toolbar_no_projects%']
+              }
+            >
+              {currentSimpleProject && (
+                <ProjectSelectorLabel
+                  fullName={currentSimpleProject.fullName}
+                  shortName={currentSimpleProject.shortName}
+                  errorMessage={currentSimpleProjectError}
+                />
+              )}
+            </ProjectSelectorTrigger>
             {hasProjectPickerItems && (
               <SelectContent>
                 {projectPickerItems.map((p) => (
@@ -514,6 +662,8 @@ export function PlatformBibleToolbar() {
           showTriggerChevron={!isPowerMode}
           disabled={isBookChapterControlDisabled}
           getActiveBookIds={getActiveBookIds}
+          getAdditionalBookIds={getAdditionalBookIds}
+          localizedStrings={bookChapterControlLocalizedStrings}
           recentSearches={recentScriptureRefs}
           onAddRecentSearch={addRecentScriptureRef}
         />
