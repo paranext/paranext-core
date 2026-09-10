@@ -1320,3 +1320,105 @@ Typecheck, lint, extension tests — clean/PASS. Commit `Standard view: route in
 - [ ] **Step 2: Hand QA** using the `app-runner` and `visual-verification` skills (check `lsof -ti:8876` first — another session may own the app). Set `platform.interfaceMode: power`. Open an editable project in Standard view and walk the §2 matrix of the spec: caller click with pane hidden/shown; row click with caret-where-clicked; typing in the row editor updates the text (check the `.SFM` on disk after the debounce); Insert footnote (Ctrl+T or menu) lands the caret in the pane editor; X button hides the pane and focuses the text; the highlighted caller shows the blue top/bottom border; switch to Simple mode and confirm the popover and no pane reveal; open a resource (read-only) in Standard view and confirm caller click → pane scroll and row click → text scroll + highlight. Record results in the final report.
 
 - [ ] **Step 3: Push** `git push -u origin pt-4189-footnote-pane-editing` from the core worktree. Draft PRs (via the `pr-creator` skill) are opened by the orchestrator after review: the editor PR against `main` on the editor worktree's `origin` (`eten-tech-foundation/scripture-editors`), and the core PR against `main`, noting that core CI needs `platform-yalc` to carry the editor change.
+
+---
+
+### Task 13: `FootnotesLayout` selection survives live edits and USJ echoes (core)
+
+Runs after Task 8 and before Task 9.
+
+**Files:**
+- Modify: `extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx` (the `usj` effect's `setSelectedFootnote` updater, ~lines 120-140, and the reorder comment just above the `focusRequest` effect)
+- Test: `extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.test.tsx` (extend)
+
+**Interfaces:**
+- Consumes: `editingFootnoteIndex` prop (Task 8).
+- Produces: no new props. Two behavior guarantees Task 9 relies on: (1) after a `usj` change that keeps the selected note's marker+content at the same index, `selectedFootnote.footnote` is the NEW list's object at that index (so `FootnoteList`'s identity-based row highlight keeps working after a PDP echo); (2) while `editingFootnoteIndex` is set and still in range, the selection stays on that index no matter how the note's content changes (the user is editing it), and `onSelectedFootnoteChange` is not called with `undefined` mid-edit.
+
+- [ ] **Step 1: Failing tests**
+
+Append to the component test file (reuse `renderPane`, `usjWithTwoNotes`, `note`, `localizedStrings`, `useWebViewStateMock`):
+
+```tsx
+describe('FootnotesLayout selection across USJ changes', () => {
+  it('keeps the selected row highlighted after an echo that re-creates the same notes', () => {
+    const onSelectedFootnoteChange = vi.fn();
+    const props = { showMarkers: true, useWebViewState: useWebViewStateMock, localizedStrings, onClose: () => {}, onSelectedFootnoteChange };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes} focusRequest={{ index: 1 }}><div /></FootnotesLayout>,
+    );
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    // A fresh USJ object with identical content (what a PDP echo looks like over IPC).
+    const echo: Usj = JSON.parse(JSON.stringify(usjWithTwoNotes));
+    rerender(<FootnotesLayout {...props} usj={echo} focusRequest={{ index: 1 }}><div /></FootnotesLayout>);
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
+  });
+
+  it('keeps the editing row selected while its content changes under live-apply', () => {
+    const onSelectedFootnoteChange = vi.fn();
+    const props = {
+      showMarkers: true, useWebViewState: useWebViewStateMock, localizedStrings, onClose: () => {},
+      onSelectedFootnoteChange, editingFootnoteIndex: 1,
+      renderEditingFootnote: () => <div data-testid="row-editor" />,
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes} focusRequest={{ index: 1 }}><div /></FootnotesLayout>,
+    );
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(1);
+    const edited: Usj = {
+      ...usjWithTwoNotes,
+      content: [
+        usjWithTwoNotes.content[0],
+        usjWithTwoNotes.content[1],
+        { type: 'para', marker: 'p', content: [{ type: 'verse', marker: 'v', number: '1' }, 'a ', note('alpha'), ' b ', note('beta typed more')] },
+      ],
+    };
+    rerender(<FootnotesLayout {...props} usj={edited} focusRequest={{ index: 1 }}><div /></FootnotesLayout>);
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(1);
+    expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
+    expect(screen.getByTestId('row-editor')).toBeInTheDocument();
+  });
+});
+```
+
+If `FootnoteList` renders `aria-selected` differently on this branch (check `footnote-list.component.tsx`), assert on the attribute it actually sets (`data-state="selected"` is the other candidate).
+
+Run: `cd extensions/src/platform-scripture-editor && npx vitest run platform-scripture-editor-footnotes.component.test.tsx` — the two new tests FAIL.
+
+- [ ] **Step 2: Implement**
+
+In the `usj` effect's `setSelectedFootnote` updater:
+
+```ts
+setSelectedFootnote((currentSelected) => {
+  if (!currentSelected) return undefined;
+  const { index, footnote } = currentSelected;
+  if (index < 0 || index >= newFootnotes.length) return undefined;
+  const fresh = newFootnotes[index];
+  // The row being edited is the selection by definition: its content changes on every
+  // live-apply, so content equality must not decide whether it stays selected.
+  const isEditingRow = editingFootnoteIndex !== undefined && index === editingFootnoteIndex;
+  if (
+    isEditingRow ||
+    (fresh.marker === footnote.marker && deepEqualAcrossIframes(fresh.content, footnote.content))
+  ) {
+    // Re-point at the new list's object: FootnoteList marks the selected row by identity.
+    return { footnote: fresh, index };
+  }
+  return undefined;
+});
+```
+
+Add `editingFootnoteIndex` to that effect's dependency array (the effect re-parses `usj` when it changes — acceptable; if that re-parse is undesirable, read `editingFootnoteIndex` through a ref mirrored by its own effect and keep the deps as they were). Because the preserved selection is now a NEW object, `selectionRequest` identity changes on every echo, which re-runs `FootnoteList`'s `scrollIntoView({ block: 'nearest' })` on an already-visible row (a no-op) and re-fires `onSelectedFootnoteChange(index)` with the same index (the consumer's `highlightNote` is idempotent). Say both in a short comment.
+
+Also fix the reorder comment above the `focusRequest` effect: the stale write it describes is the USJ effect's `setFootnotes` (not this effect's), and the point is that in the commit where `usj` changed, `footnotes` still holds the previous parse until the USJ effect runs.
+
+- [ ] **Step 3: Verify + commit**
+
+Whole component test file green (Task 5 + Task 8 tests included); lint clean; `npx tsc --noEmit -p extensions/tsconfig.json 2>&1 | grep footnotes.component` prints nothing. Commit:
+
+```bash
+git add extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.test.tsx
+git commit -m "Keep the footnotes pane selection across USJ echoes and while a row is being edited"
+```
