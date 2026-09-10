@@ -1866,8 +1866,8 @@ step, no automation. Just a record.
 - **Consequences:** `paratext-10-studio` generates and commits its own pair, copies it over this
   repository's in its clone before packaging, and runs `--verify-shipping-set` on every platform
   and `--verify` on Linux against its own lock. The overlay cannot extend the committed corpus
-  index, so an identifier a downstream entry needs (`PSF-2.0`, `OpenSSL`, `blessing` and `TCL`
-  today) is added to `allowed` here.
+  index, so an identifier a downstream entry needs (`PSF-2.0`, `OpenSSL`, `blessing`, `TCL` and
+  `ZPL-2.1` today) is added to `allowed` here.
   The omission direction for a separate program has no generic source: a copyleft override with no
   `separateProgram` link still blocks, and a program added by any other route with no entry is the
   gap PT-4560 records for static content. **Revisit** when the extension template emits module
