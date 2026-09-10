@@ -71,6 +71,20 @@ const configMain: webpack.Configuration = merge(configBase, {
         { from: 'package.json', to: './', noErrorOnMissing: true },
         // We need to distribute the manifest.json to inform Platform.Bible about the extension
         { from: 'manifest.json', to: './' },
+        // Distribute the license text alongside the manifest that declares it. This extension is
+        // stamped `license: 'AGPL-3.0-or-later'` and `npm run package` zips this output as a
+        // redistributable of its own, so a declared license with no accompanying text in the folder
+        // states an obligation without discharging it.
+        // `to` names the file explicitly, and `toType: 'file'` is required rather than decorative:
+        // copy-webpack-plugin infers `'dir'` for any destination with no file extension, which
+        // nests the text inside a newly created `LICENSE/` directory instead of copying it as a
+        // file named `LICENSE` - and that reads as a shipped license to any check that looks only
+        // at the name. Dropping `to` from a pattern written out here, as this one is, is not the
+        // alternative: with no `to` the destination defaults to the output directory, which
+        // `toType: 'file'` then makes webpack try to open as a file (EISDIR). Patterns built by
+        // `getCopyFilePatternsForExtension` in `extensions/webpack/webpack.util.ts` are a different
+        // case - it synthesises `to` before the pattern reaches the plugin.
+        { from: 'LICENSE', to: 'LICENSE', noErrorOnMissing: true, toType: 'file' },
       ],
     }),
   ],
