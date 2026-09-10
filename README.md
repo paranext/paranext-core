@@ -234,7 +234,7 @@ npm run move-platform-yalc
 
 It resets your local branch to origin's state, rebases it onto `origin/main`, checks that this repo's `package-lock.json` still matches the editor's dependencies, and force-pushes **only if that passes** — so a move that would break every core build stops before the push rather than after it. `-- --dry-run` stops short of pushing; `-- --skip-verify` is the emergency hatch. Give it a token first (`export GITHUB_TOKEN=$(gh auth token)`) — the check reads this repo through the GitHub API and the unauthenticated budget is 60 requests an hour.
 
-Moving the branch by hand — `git rebase origin/main && git push --force-with-lease` — skips all of that. It does not notice a dirty tree; it rebases whatever your local copy of the branch happens to hold, which on a branch that is force-pushed by design is routinely not origin's state, so you can publish a rebase of a stale base; it publishes commits that exist only on your machine instead of refusing them; and above all it does not check the lockfile, which is the one failure that reaches everybody else.
+Moving the branch by hand skips all of that — most importantly the lockfile check, which is the one failure that breaks every build here rather than only the mover's.
 
 To manually set up `scripture-editors` to be staged locally (this should all be done automatically during `npm install`):
 
@@ -264,19 +264,19 @@ To manually set up `scripture-editors` to be staged locally (this should all be 
 
 #### Getting your `scripture-editors` changes into this repo
 
-After editing `scripture-editors`, rebuild and re-stage it with:
+Pick by what you need the change to show up in:
 
-```bash
-npm run build:editor
-```
+| You want to                                           | Run, in this repo                                 |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| see it in the running dev app                         | `npm run build:editor`                            |
+| run tests, typecheck, or a production build           | `npm run stage-dev-packages -- --local`           |
+| pick up a change to the editor's own **dependencies** | commit in `scripture-editors`, then `npm install` |
 
-That builds **whatever your `scripture-editors` checkout currently contains — uncommitted changes included** — stages it, and rebuilds the webpack DLL. **Both halves matter for the running dev app**: the dev renderer serves `@eten-tech-foundation/platform-editor` out of the DLL, so re-staging alone leaves the app running the old editor while your tests and lint pass against the new one. Restart the dev server afterward to pick it up.
+`--local` is the whole difference between the first two and a normal install: it stages **your working tree, uncommitted changes included**, instead of the revision [`dev-packages.json`](./dev-packages.json) pins. `npm run build:editor` is that plus a webpack DLL rebuild, and the dev app needs both halves — the dev renderer serves `@eten-tech-foundation/platform-editor` out of the DLL, so staging alone leaves the app running the old editor while your tests and lint pass against the new one. Restart the dev server afterwards.
 
-If you only need the staged copy refreshed — for tests, typecheck, or a production build — `npm run stage-dev-packages -- --local` does that part alone. (Without `--local`, `stage-dev-packages` builds the _pinned revision_, refusing to run while your checkout has uncommitted changes.)
+The dependency case is the odd one out because npm, not this repo, has to install whatever the editor now declares, and that only happens on a full `npm install` — which stages a _committed_ revision and refuses to run against a checkout with uncommitted changes. So commit in `scripture-editors` first; committing on a branch of your own is enough. (A lockfile built from uncommitted editor work would record a dependency closure nobody else can reproduce, which the pre-commit hook blocks you from committing anyway.)
 
-If your change **added, removed, or bumped one of `scripture-editors`' own dependencies**, this repo's tree and `package-lock.json` need to be updated to match — nothing here restates those dependencies; the staged package's own manifest is what npm reads. **Commit the `scripture-editors` change first, then run `npm install` here.** `npm install` stages a committed revision and refuses to run against a checkout with uncommitted changes, so running it mid-edit fails; and a lockfile built from uncommitted editor work records a dependency closure nobody else can reproduce, which the pre-commit hook blocks you from committing anyway. Committing on a branch of your own is enough — `npm install` stages that branch rather than moving you off it.
-
-A regular `npm install` never moves your `scripture-editors` checkout off a branch of your own. It brings the checkout up to the pinned revision when it is somewhere nothing is being kept — detached, on `main`, or on the pinned branch itself — and otherwise leaves it exactly where it is, warns, and stages that instead. Developing both repos at once therefore works the way you would expect: keep your editor branch checked out, and this repo builds against it.
+`npm install` leaves your editor checkout alone unless it is somewhere nothing is being kept — a clean checkout on `main`, or on the pinned branch itself, which is force-pushed by design. On a branch of your own, or parked on a detached commit, it warns and stages what it finds rather than moving you. So developing both repos at once works the way you would expect: keep your editor branch checked out and this repo builds against it.
 
 #### Install and build
 
@@ -402,7 +402,7 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 1. Prepare each repository in your [`dev-packages.json`](./dev-packages.json) depending on what kind of release you are publishing:
 
    - Release candidate, alpha, etc.: rebase `release-prep` on `main` if it has not been rebased already for this release cycle.
-   - Full release: create a release of that repository, then set its `revision` in [`dev-packages.json`](./dev-packages.json) to that release's tag. These packages are not published to npm — this repo builds them from source and stages them — so removing the entry is not an option: nothing would stage, and the `file:` specifiers that depend on the staged folders would fail to resolve.
+   - Full release: create a release of that repository, then set its `revision` in [`dev-packages.json`](./dev-packages.json) to that release's tag. These packages are not published to npm — this repo stages them from a checkout of that revision — so a release is pinned by naming its tag here.
 
 2. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
 
