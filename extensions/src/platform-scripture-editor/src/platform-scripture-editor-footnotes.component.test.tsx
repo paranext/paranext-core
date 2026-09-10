@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 
 vi.mock('@papi/frontend', () => ({
@@ -278,5 +278,99 @@ describe('FootnotesLayout selection across USJ changes', () => {
     // because `editingFootnoteIndex` changed.
     expect(screen.getAllByRole('option')[0]).toBe(rowsBefore[0]);
     expect(screen.getByTestId('row-editor')).toBeInTheDocument();
+  });
+});
+
+describe('FootnotesLayout list identity across USJ changes', () => {
+  it("keeps the editing row mounted when only a note's content changes", () => {
+    let mounts = 0;
+    function RowEditor() {
+      useEffect(() => {
+        mounts += 1;
+      }, []);
+      return <div data-testid="row-editor" />;
+    }
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => <RowEditor />,
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+        <div />
+      </FootnotesLayout>,
+    );
+    const rowBefore = screen.getAllByRole('option')[0];
+    expect(mounts).toBe(1);
+    const edited: Usj = {
+      ...usjWithTwoNotes,
+      content: [
+        usjWithTwoNotes.content[0],
+        usjWithTwoNotes.content[1],
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '1' },
+            'a ',
+            note('alpha'),
+            ' b ',
+            note('beta typed more'),
+          ],
+        },
+      ],
+    };
+    rerender(
+      <FootnotesLayout {...props} usj={edited}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(mounts).toBe(1);
+    expect(screen.getAllByRole('option')[0]).toBe(rowBefore);
+  });
+
+  it('remounts the rows when a note is added or removed', () => {
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+        <div />
+      </FootnotesLayout>,
+    );
+    const rowBefore = screen.getAllByRole('option')[0];
+    const withThree: Usj = {
+      ...usjWithTwoNotes,
+      content: [
+        usjWithTwoNotes.content[0],
+        usjWithTwoNotes.content[1],
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '1' },
+            'a ',
+            note('alpha'),
+            ' b ',
+            note('beta'),
+            ' c ',
+            note('gamma'),
+          ],
+        },
+      ],
+    };
+    rerender(
+      <FootnotesLayout {...props} usj={withThree}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+    expect(screen.getAllByRole('option')[0]).not.toBe(rowBefore);
   });
 });

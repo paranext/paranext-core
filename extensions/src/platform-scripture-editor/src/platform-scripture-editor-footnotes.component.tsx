@@ -133,8 +133,14 @@ export function FootnotesLayout({
       });
       const newFootnotes = usjReaderWriter.findAllNotes();
 
-      setFootnotes(newFootnotes);
-      setFootnoteListKey((prev) => prev + 1);
+      setFootnotes((current) => {
+        // The list id tells FootnoteList its rows are new. Only additions and deletions make them
+        // new; a content edit (every live-applied keystroke in the row editor) or a same-shape
+        // echo must keep the rows — and the editing row's editor — mounted. Reordering with an
+        // unchanged count is not detected; the listId contract already treats it as unlikely.
+        if (current.length !== newFootnotes.length) setFootnoteListKey((prev) => prev + 1);
+        return newFootnotes;
+      });
 
       setSelectedFootnote((currentSelected) => {
         if (!currentSelected) return undefined;
