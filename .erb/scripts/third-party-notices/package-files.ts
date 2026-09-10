@@ -1,0 +1,208 @@
+/**
+ * Reads what a package's own files say: the manifest's declared license expression, the license
+ * text(s) it bundles, and any `NOTICE` shipped beside them.
+ *
+ * For npm, license TEXT comes from licensee (`detect.rb`/`identify.ts`) rather than from this
+ * module, because there it doubles as the second signal `policy.ts` reconciles against the
+ * manifest. NuGet has no such second signal - `nuget-license` reports nuspec metadata only - so its
+ * bundled text is read here purely to be REPRODUCED, never to classify.
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { compareStrings } from './compare';
+import { codeOf } from './read-json';
+import type { NamedText } from './types';
+
+/**
+ * Matches an Apache-style attribution notice.
+ *
+ * A NOTICE is not a license and must not be reported as one, but Apache-2.0 section 4(d) requires
+ * its attributions to travel with every redistribution - an obligation the license text alone does
+ * not discharge. Kept separate from license files for that reason: several packages ship a NOTICE
+ * and no license file at all, and treating the NOTICE as their license text would suppress the
+ * canonical text they actually need.
+ *
+ * Matched ANYWHERE in the stem rather than anchored to the start of it, and applied alongside
+ * `NOT_LICENSE_TEXT` for the same reason `EMBEDDED_LICENSE_FILE` is. An anchored pattern reads only
+ * the first word, which misses every convention that puts a qualifier in front of it -
+ * `THIRD-PARTY-NOTICES.TXT` is what the .NET runtime packages ship and what this repository's own
+ * document is called, and `ThirdPartyNotices.txt` is the same file under Microsoft's other
+ * spelling. `static-assets.ts` documents the same trap for the tree it scans.
+ */
+const NOTICE_FILE = /notices?/i;
+
+/** Matches a file whose contents are a license grant to reproduce. */
+const LICENSE_FILE = /^(LICEN[CS]E|COPYING)([._-].*)?$/i;
+
+/**
+ * Extensions a license or notice file never has.
+ *
+ * A package root may hold `license.js` or `license.svg`; reproducing one of those verbatim inside a
+ * legal document would be worse than reporting no text at all, and nothing about the filename says
+ * it is not prose. Binary formats are excluded for a stronger reason than clutter: reading one as
+ * UTF-8 yields replacement characters, and a fenced block of those corrupts the artifact.
+ */
+const NOT_LICENSE_TEXT =
+  /\.(js|cjs|mjs|jsx|tsx?|mts|cts|map|json|svg|png|jpe?g|gif|ico|css|node|wasm|pdf|rtf|docx?|zip|gz|exe|dll|nupkg|snupkg|nuspec|sha512|p7s|pdb|targets|props|xml)$/i;
+
+/**
+ * Matches a license file whose name does not BEGIN with the word, which `LICENSE_FILE` requires.
+ *
+ * Nineteen `Microsoft.*` NuGet packages ship their grant as `dotnet_library_license.txt` - 9,451
+ * bytes opening "MICROSOFT SOFTWARE LICENSE TERMS / MICROSOFT .NET LIBRARY", verbatim the license
+ * their nuspec `<licenseUrl>` points at - and several more use `MIT-LICENSE.txt`. A match anchored
+ * to the start of the name reports every one of them as bundling no license text.
+ *
+ * Applied to the STEM, so an extension can never be read as the word, and only alongside
+ * `NOT_LICENSE_TEXT` - `nuget-license.nuspec` and `nuget-license.nupkg` both end in `-license`
+ * before their extension and are emphatically not prose.
+ *
+ * Sound only where a second signal already establishes what the package is licensed under, because
+ * a loosely-matched filename may then be read to REPRODUCE terms but never to decide them. A
+ * verdict path has no such margin: for npm the license file IS the signal `policy.ts` reconciles
+ * the manifest against, and licensee (`detect.rb`) is what selects it there.
+ */
+const EMBEDDED_LICENSE_FILE = /(^|[._-])licen[cs]e($|[._-])/i;
+
+/**
+ * Whether a file name (not a path) is one whose contents should be reproduced as license text.
+ *
+ * See `EMBEDDED_LICENSE_FILE` for why this is looser than a bare `LICENSE_FILE` match, and for the
+ * condition that makes the looseness sound: a second signal has to establish what the package is
+ * licensed under before a loosely-matched filename is read only to REPRODUCE terms. Both callers
+ * meet it - a NuGet package's nuspec metadata, and a bundled extension's declared `manifest.json`
+ * license.
+ */
+export function isLicenseTextFileName(name: string): boolean {
+  if (NOT_LICENSE_TEXT.test(name)) return false;
+  return LICENSE_FILE.test(name) || EMBEDDED_LICENSE_FILE.test(name.replace(/\.[^.]*$/, ''));
+}
+
+/** Whether a file name (not a path) is an attribution notice to reproduce alongside the license. */
+export function isNoticeFileName(name: string): boolean {
+  if (NOT_LICENSE_TEXT.test(name)) return false;
+  // The STEM, so an extension can never be read as the word - the same discipline
+  // `isLicenseTextFileName` applies for `EMBEDDED_LICENSE_FILE`.
+  return NOTICE_FILE.test(name.replace(/\.[^.]*$/, ''));
+}
+
+/**
+ * Normalizes reproduced text: LF line endings, no leading or trailing blank lines.
+ *
+ * Shared with `render.ts`, which normalizes the same texts again on the way into the document, and
+ * shared rather than restated because the two must not drift: the committed artifact is
+ * BYTE-COMPARED against freshly generated output, so a difference between the normalisation applied
+ * when a text is read and the one applied when it is written shows up as a permanent spurious diff
+ * with nothing naming the cause.
+ */
+export function normalizeText(text: unknown): string {
+  return String(text ?? '')
+    .replace(/\r\n?/g, '\n')
+    .trim();
+}
+
+/**
+ * Reads a text file, or `undefined` when the file does not exist.
+ *
+ * ENOENT is an answer - the package ships no such file - and nothing else is. EACCES, EMFILE and
+ * ELOOP describe a file that may well exist and hold a NOTICE this document is obliged to
+ * reproduce, so they propagate rather than being reported as absence: a permissive verdict drawn
+ * from absent information is what drops an Apache-2.0 section 4(d) notice at exit 0, from the one
+ * module whose job is finding the files that discharge it. `readJsonFile` in `read-json.ts` makes
+ * the same distinction for structural reads.
+ *
+ * Line endings are normalized to LF: some upstream files are CRLF, and git normalizes them on
+ * commit. Without this the committed artifact would never match freshly generated output, so it
+ * would show a spurious diff on every run.
+ */
+export function readTextFile(file: string): string | undefined {
+  try {
+    return normalizeText(fs.readFileSync(file, 'utf8'));
+  } catch (error: unknown) {
+    if (codeOf(error) === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+/**
+ * Every file in `dir` whose name `matches`, as `{ name, text }`, in filename order so the committed
+ * artifact stays byte-stable across runs and platforms.
+ *
+ * A symlink answers `false` to `isFile()`, and a package's top-level metadata file is a symlink
+ * often enough (pnpm-style stores, workspace links) that filtering on `isFile()` alone silently
+ * loses it.
+ */
+function readPackageFiles(
+  dir: string | undefined,
+  matches: (name: string) => boolean,
+): NamedText[] {
+  if (!dir) return [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (error: unknown) {
+    // Same distinction as `readTextFile`: a directory that is not there ships no license or notice
+    // files, while one that cannot be read may hold every one of them.
+    if (codeOf(error) === 'ENOENT') return [];
+    throw error;
+  }
+  return (
+    entries
+      .filter((entry) => entry.isFile() || entry.isSymbolicLink())
+      .map((entry) => entry.name)
+      .filter(matches)
+      .sort(compareStrings)
+      // `flatMap` rather than `.map().filter(...)`: `readTextFile` returns `string | undefined`
+      // for a file it could not read, and filtering on truthiness does not narrow the element type.
+      .flatMap((name) => {
+        const text = readTextFile(path.join(dir, name));
+        return text ? [{ name, text }] : [];
+      })
+  );
+}
+
+/** Every license file a NuGet package ships, including one whose name does not begin with the word. */
+export function readNugetLicenseFiles(dir: string | undefined): NamedText[] {
+  return readPackageFiles(dir, isLicenseTextFileName);
+}
+
+/** Every `NOTICE` a package ships. */
+export function readPackageNotices(dir: string | undefined): NamedText[] {
+  return readPackageFiles(dir, isNoticeFileName);
+}
+
+/**
+ * The license expression an npm manifest declares, normalizing the two legacy forms npm used before
+ * SPDX strings.
+ *
+ * Returns `undefined` rather than a placeholder when the manifest declares nothing: `parseDeclared`
+ * already reports that as "no license declared", and inventing a string here would make an absent
+ * declaration indistinguishable from a package that literally declares the word UNKNOWN.
+ */
+export function declaredLicenseField(manifest: {
+  license?: unknown;
+  licenses?: unknown;
+}): string | undefined {
+  if (typeof manifest.license === 'string') return manifest.license;
+  // `'type' in ...` before reading it: narrowing `unknown` with `typeof === 'object'` yields
+  // `object`, which has no properties at all, and this repo bans the type assertion that would
+  // otherwise be reached for here.
+  if (
+    manifest.license &&
+    typeof manifest.license === 'object' &&
+    'type' in manifest.license &&
+    typeof manifest.license.type === 'string'
+  )
+    return manifest.license.type;
+  // The legacy array form listed several licenses to mean a choice between them, which is exactly
+  // what an SPDX `OR` expression says.
+  if (Array.isArray(manifest.licenses)) {
+    const joined = manifest.licenses
+      .map((entry) => (typeof entry === 'string' ? entry : entry?.type))
+      .filter((entry) => typeof entry === 'string' && entry.length > 0)
+      .join(' OR ');
+    return joined || undefined;
+  }
+  return undefined;
+}
