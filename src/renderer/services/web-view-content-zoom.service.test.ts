@@ -536,7 +536,7 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
-  it('gives a reload a fresh grace instead of instantly reapplying a fallback grant inherited from the old content', async () => {
+  it('clears a stale whole-iframe zoom left by the old content at reload, then gives the pane a fresh grace instead of instantly reapplying it', async () => {
     settings['platform.webViewContentZoom'] = 1.3;
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
@@ -546,12 +546,11 @@ describe('web-view-content-zoom.service', () => {
       vi.advanceTimersByTime(1000);
       expect(iframe.style.zoom).toBe('1.3'); // the fallback grant earned by the old content
 
-      // The reload's new content hasn't rendered anything yet, so nothing has touched the
-      // iframe element's own style; clearing it here isolates what the load hook itself does
-      // with the grant it inherits, from whatever the old content happened to leave behind.
-      iframe.style.zoom = '';
+      // The reload's new content hasn't rendered anything yet, and an in-place reload does not
+      // itself touch the iframe element's own style — the stale zoom stays on it until the load
+      // hook explicitly clears it.
       applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe(''); // the inherited grant must not be reapplied instantly
+      expect(iframe.style.zoom).toBe(''); // the stale zoom is cleared at once, not left applied
 
       vi.advanceTimersByTime(999);
       expect(iframe.style.zoom).toBe('');
