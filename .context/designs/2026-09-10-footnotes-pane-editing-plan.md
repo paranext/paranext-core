@@ -1287,6 +1287,14 @@ Rename `openFootnoteEditorOnNewNote` to `openNoteEditorOnNewNote` and branch on 
 
 `handleEditorialUsjChange` already calls it when `editingNoteKey.current` is unset; keep that. In the `editingNoteKey.current` branch, the re-key line (`editingNoteIsNew.current = false` on `insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1])`) must ALSO update the session key for the pane surface: `editingNoteKey.current = insertedNodeKey;` (the inline editor's live-apply re-keys the note; the next render passes the new key to `FootnoteEditor`, whose `noteKeyRef` follows the prop). For the popover the key is likewise re-synced (`FootnoteEditor` already mirrors the prop), so do it for both.
 
+- [ ] **Step 2b: Session integrity while a pane row editor is open**
+
+`FootnoteEditor` reloads its document only when its `noteOps` prop changes identity (a changed `noteKey` is mirrored into a ref without a reload), and `FootnoteList` remounts the editing row only when the note count changes (Task 14). So, inside `handleEditorialUsjChange` while `paneEditingIndex !== undefined`:
+
+- The session's own live-apply (`insertedNodeKey` present and `ops?.[1]` is NOT a note insert): set `editingNoteKey.current = insertedNodeKey` and do NOT touch `editingNoteOps.current` — the row editor is the source of that change, and a fresh `noteOps` identity would reload it mid-typing and reset the caret.
+- Any other change (typing elsewhere in the text, undo, a PDP echo, a note inserted or deleted): `const index = editorRef.current?.getNoteIndex(editingNoteKey.current)`. If `undefined`, the note is gone → `closeFootnoteEditor(false)` (existing behavior). Otherwise refresh `editingNoteOps.current = editorRef.current?.getNoteOps(editingNoteKey.current)` (a new identity — the row editor reloads to the note's current content, which is correct because the change did not originate there) and, if `index !== paneEditingIndex`, `setPaneEditingIndex(index)` so the editor row follows the note when notes before it are added or removed.
+- Also on any view/editability change that leaves the pane surface, call `editorRef.current?.highlightNote(undefined)` next to the session end, so a Standard-view caller highlight does not survive into Formatted view.
+
 - [ ] **Step 2: Session ends**
 
 - Chapter-change effect (the one that clears `footnotePaneFocusRequest`): also `closeFootnoteEditor(false)` when `paneEditingIndex !== undefined` — simplest: call `closeFootnoteEditor(false)` unconditionally there if `editingNoteKey.current` is set (check the popover path is not already closed elsewhere on chapter change; avoid a double close).
