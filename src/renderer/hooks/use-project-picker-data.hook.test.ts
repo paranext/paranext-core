@@ -311,7 +311,10 @@ describe('useProjectPickerData', () => {
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
       metadataList([
         { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1', isEditable: true },
-        { id: 'proj-r2', fullName: 'Full proj-r2', name: 'Short proj-r2', isEditable: true },
+        // Read-only, and deliberately still in the recent-ids list: a project the user can open but
+        // not edit is still a project they can reach, and this recent row must keep marking it
+        // rather than dropping it from the recents section.
+        { id: 'proj-r2', fullName: 'Full proj-r2', name: 'Short proj-r2', isEditable: false },
       ]) as never,
     );
 
@@ -324,11 +327,13 @@ describe('useProjectPickerData', () => {
       id: 'proj-r1',
       fullName: 'Full proj-r1',
       shortName: 'Short proj-r1',
+      isEditable: true,
     });
     expect(result.current.recentProjects[1]).toMatchObject({
       id: 'proj-r2',
       fullName: 'Full proj-r2',
       shortName: 'Short proj-r2',
+      isEditable: false,
     });
   });
 

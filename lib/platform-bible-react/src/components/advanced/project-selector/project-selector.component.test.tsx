@@ -804,6 +804,17 @@ describe('footerAction', () => {
     expect(screen.getByText('No projects found')).toBeInTheDocument();
   });
 
+  it('omits the separator when there are no projects, so no rule floats under the empty message', async () => {
+    const user = setupUser();
+    renderWithFooter({ projects: [] });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // eslint-disable-next-line no-null/no-null
+    expect(screen.queryByTestId('project-selector-footer-separator')).toBe(null);
+  });
+
   it('keeps its separator visible while a search query is active', async () => {
     const user = setupUser();
     renderWithFooter({});

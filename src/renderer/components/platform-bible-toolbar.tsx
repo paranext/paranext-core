@@ -208,6 +208,7 @@ function ToolbarProjectSelector({
   recentIds,
   currentProject,
   currentProjectError,
+  pendingProject,
   isLoading,
   localizedStrings,
   onSelectProject,
@@ -217,6 +218,11 @@ function ToolbarProjectSelector({
   recentIds: readonly string[];
   currentProject: ProjectItem | undefined;
   currentProjectError: string | undefined;
+  /**
+   * The project the user just picked, named ahead of `currentProjectError` — see
+   * `renderTriggerLabel`.
+   */
+  pendingProject: ProjectItem | undefined;
   isLoading: boolean;
   localizedStrings: LanguageStrings;
   onSelectProject: (projectId: string) => void;
@@ -308,13 +314,23 @@ function ToolbarProjectSelector({
   // open.
   const renderTriggerLabel = useCallback(
     (selected: ProjectSelectorProject | undefined) => {
+      // A pending selection wins over a stale error: the user already picked a different project
+      // than the one that failed to resolve, so the trigger names their new pick rather than
+      // continuing to report the previous project's error until the editor catches up.
+      if (pendingProject)
+        return (
+          <ProjectSelectorLabel
+            fullName={pendingProject.fullName}
+            shortName={pendingProject.shortName}
+          />
+        );
       if (currentProjectError)
         return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
       const named = selected ?? currentProject;
       if (!named) return placeholder;
       return <ProjectSelectorLabel fullName={named.fullName} shortName={named.shortName} />;
     },
-    [currentProject, currentProjectError, placeholder],
+    [pendingProject, currentProject, currentProjectError, placeholder],
   );
 
   const selectorLocalizedStrings = useMemo(
@@ -356,15 +372,15 @@ function ToolbarProjectSelector({
       isLoading={isLoading}
       localizedStrings={selectorLocalizedStrings}
       ariaLabel={localizedStrings['%projectPicker_toolbar_aria_label%']}
-      buttonPlaceholder={placeholder}
       commandEmptyMessage={localizedStrings['%projectPicker_no_results%']}
       buttonVariant="ghost"
       buttonClassName={cn(
         'tw:w-auto tw:max-w-64 tw:border-0 tw:bg-transparent',
         // Still a floor at the narrowest step, just a smaller one: `min-w-24` (96px) is the
-        // measured width a short project name needs, so the name stays readable while the trigger
-        // remains a comfortable click target. Not `min-w-0`: with everything else in the row
-        // shrinkable too, the trigger would collapse to just its chevron.
+        // measured width a short project name needs (~97px for `ESVUS16`, including the trigger's
+        // padding and chevron), so the name stays readable while the trigger remains a comfortable
+        // click target. Not `min-w-0`: with everything else in the row shrinkable too, the trigger
+        // would collapse to just its chevron.
         shrinkStep >= SHRINK_STEP.MINIMUM ? 'tw:min-w-24' : 'tw:min-w-48',
       )}
     />
@@ -862,6 +878,7 @@ export function PlatformBibleToolbar() {
             recentIds={recentIds}
             currentProject={displayedProject}
             currentProjectError={currentSimpleProjectError}
+            pendingProject={pendingProject}
             isLoading={isProjectPickerLoading}
             localizedStrings={localizedStrings}
             onSelectProject={handleSelectProject}

@@ -1421,8 +1421,13 @@ export function ProjectSelector(props: ProjectSelectorProps) {
               {props.footerAction && (
                 <>
                   {/* `alwaysRender`: a plain CommandSeparator returns null as soon as cmdk's
-                      `state.search` is non-empty, so the footer would lose its rule mid-search. */}
-                  <CommandSeparator alwaysRender data-testid="project-selector-footer-separator" />
+                      `state.search` is non-empty, so the footer would lose its rule mid-search.
+                      Only rendered when a section above it actually has rows — with none, the
+                      empty message is the only thing above the footer, and a rule under it with
+                      nothing to divide reads as a stray line rather than a separator. */}
+                  {filteredRows.length > 0 && (
+                    <CommandSeparator alwaysRender data-testid="project-selector-footer-separator" />
+                  )}
                   {/* `forceMount` keeps this out of cmdk's registered-item set, so `filtered.count`
                       stays 0 on an empty list and CommandEmpty still renders — while the node
                       remains inside CommandList, where `getValidItems()` finds it for arrow-key,

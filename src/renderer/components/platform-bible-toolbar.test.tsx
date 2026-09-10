@@ -1810,4 +1810,23 @@ describe('PlatformBibleToolbar — pending project display', () => {
     expect(trigger).toHaveTextContent('far');
     expect(trigger).not.toHaveTextContent('Test no projects');
   });
+
+  it('names the newly picked project instead of a stale error for the project that failed to resolve', async () => {
+    // The current project failed to resolve (currentSimpleProjectError is set), and the user then
+    // picks a different one from the popover. The trigger must name their new pick at once rather
+    // than continuing to show the error, which would otherwise persist until the hook's promise
+    // re-runs on the editor opening.
+    await renderSimpleToolbarWith({
+      currentSimpleProject: undefined,
+      currentSimpleProjectError: 'Project failed to load',
+      allProjects: [NEW_PROJECT],
+    });
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Project failed to load');
+
+    selectProjectFromPopover('new');
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('NEW');
+    expect(trigger).not.toHaveTextContent('Project failed to load');
+  });
 });
