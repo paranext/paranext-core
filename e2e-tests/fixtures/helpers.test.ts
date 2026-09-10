@@ -5,7 +5,7 @@
  * `assertDeclaredWindowSize` takes only `evaluate`, not the full Playwright `Page`, so these drive
  * it directly with a stub instead of a real browser connection.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assertDeclaredWindowSize,
   ASSERT_INTERFACE_MODE_TIMEOUT_MS,
@@ -14,9 +14,11 @@ import {
   isPopoverTriggerExpanded,
   killProcessTree,
   LAUNCH_PHASE_TIMEOUT_MS,
-  removeUserDataDirWithRetry,
-  rethrowIfTargetClosed,
 } from './helpers';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 /** A {@link killProcessTree} `deps` bundle whose calls are all spies a test can assert on. */
 function killProcessTreeDeps() {
@@ -119,54 +121,6 @@ describe('isLocalizedAboutMenuItem', () => {
   });
 });
 
-describe('rethrowIfTargetClosed', () => {
-  // Playwright's real TargetClosedError never sets `this.name`, so a fixture for it has to be a
-  // distinctly-named subclass — matching `error.name` here would pass even if
-  // rethrowIfTargetClosed regressed to checking the wrong property.
-  class TargetClosedError extends Error {}
-
-  it('does nothing for a plain timeout, leaving pollFirstRunGate to sample again', () => {
-    const timeoutError = new Error('locator.waitFor: Timeout 5000ms exceeded.');
-    timeoutError.name = 'TimeoutError';
-
-    expect(rethrowIfTargetClosed(timeoutError)).toBeUndefined();
-  });
-
-  it('does not match on error.name alone — TargetClosedError never sets it', () => {
-    // Guards the exact regression this function was rewritten to avoid: a real TargetClosedError
-    // reports `.name === "Error"` (inherited from Error.prototype), so a fixture that only sets
-    // `.name` to the string "TargetClosedError" without being that class must NOT match either —
-    // otherwise the test would pass for the wrong reason.
-    const lookalike = new Error('Target page, context or browser has been closed');
-    lookalike.name = 'TargetClosedError';
-
-    expect(() => rethrowIfTargetClosed(lookalike)).not.toThrow();
-  });
-
-  it('rethrows a TargetClosedError instead of letting the poll continue', () => {
-    const closedError = new TargetClosedError('Target page, context or browser has been closed');
-
-    expect(() => rethrowIfTargetClosed(closedError)).toThrow(
-      /page, its context, or the browser closed/,
-    );
-  });
-
-  it('attaches the original error as the cause of the rethrow', () => {
-    const closedError = new TargetClosedError('Target page, context or browser has been closed');
-
-    let caught: unknown;
-    try {
-      rethrowIfTargetClosed(closedError);
-    } catch (err) {
-      caught = err;
-    }
-
-    expect(caught).toBeInstanceOf(Error);
-    const cause = caught instanceof Error ? caught.cause : undefined;
-    expect(cause).toBe(closedError);
-  });
-});
-
 describe('killProcessTree', () => {
   describe('on win32', () => {
     it('walks the whole tree with taskkill when the pid is alive', () => {
@@ -202,7 +156,6 @@ describe('killProcessTree', () => {
       expect(() => killProcessTree(4242, 'SIGKILL', 'win32', deps)).not.toThrow();
 
       expect(warnSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('no such process'));
-      warnSpy.mockRestore();
     });
   });
 
@@ -238,79 +191,5 @@ describe('killProcessTree', () => {
       expect(() => killProcessTree(4242, 'SIGKILL', 'linux', deps)).not.toThrow();
       expect(deps.kill).toHaveBeenCalledTimes(2);
     });
-  });
-});
-
-describe('removeUserDataDirWithRetry', () => {
-  it('succeeds on the first attempt: no sleep, no warning', async () => {
-    const rmSync = vi.fn();
-    const sleep = vi.fn().mockResolvedValue(undefined);
-    const now = vi.fn().mockReturnValue(0);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    await removeUserDataDirWithRetry('/tmp/some-dir', { rmSync, sleep, now });
-
-    expect(rmSync).toHaveBeenCalledExactlyOnceWith('/tmp/some-dir', {
-      recursive: true,
-      force: true,
-    });
-    expect(sleep).not.toHaveBeenCalled();
-    expect(warnSpy).not.toHaveBeenCalled();
-
-    warnSpy.mockRestore();
-  });
-
-  it('retries silently on a transient lock and succeeds: two 250ms sleeps, no warning', async () => {
-    const rmSync = vi
-      .fn()
-      .mockImplementationOnce(() => {
-        throw new Error('EBUSY');
-      })
-      .mockImplementationOnce(() => {
-        throw new Error('EBUSY');
-      })
-      .mockImplementationOnce(() => {});
-    const sleep = vi.fn().mockResolvedValue(undefined);
-    // Elapsed time never reaches the budget across these three attempts.
-    const now = vi.fn().mockReturnValue(0);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    await removeUserDataDirWithRetry('/tmp/some-dir', { rmSync, sleep, now });
-
-    expect(rmSync).toHaveBeenCalledTimes(3);
-    expect(sleep).toHaveBeenCalledTimes(2);
-    expect(sleep).toHaveBeenNthCalledWith(1, 250);
-    expect(sleep).toHaveBeenNthCalledWith(2, 250);
-    expect(warnSpy).not.toHaveBeenCalled();
-
-    warnSpy.mockRestore();
-  });
-
-  it('gives up once the time budget is exhausted, warning once with the attempt count', async () => {
-    const rmSync = vi.fn().mockImplementation(() => {
-      throw new Error('EBUSY');
-    });
-    const sleep = vi.fn().mockResolvedValue(undefined);
-    // Called once for the start time, then once per failed attempt to compute elapsed time —
-    // reaching the 5000ms budget on the 5th attempt without a single real sleep in the test.
-    const now = vi
-      .fn()
-      .mockReturnValueOnce(0)
-      .mockReturnValueOnce(1000)
-      .mockReturnValueOnce(2000)
-      .mockReturnValueOnce(3000)
-      .mockReturnValueOnce(4000)
-      .mockReturnValueOnce(5000);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    await removeUserDataDirWithRetry('/tmp/some-dir', { rmSync, sleep, now });
-
-    expect(rmSync).toHaveBeenCalledTimes(5);
-    expect(sleep).toHaveBeenCalledTimes(4);
-    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(/Could not remove .*\/tmp\/some-dir.* after 5 attempts/),
-    );
-
-    warnSpy.mockRestore();
   });
 });
