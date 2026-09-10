@@ -1,5 +1,17 @@
-import { describe, expect, it } from 'vitest';
-import { platformSettings, coreSettingsValidators } from './core-settings-info.data';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@extension-host/services/papi-backend.service', () => ({
+  localization: {
+    getLocalizedString: vi.fn(async () => 'Allowed range is {lowerLimit} to {upperLimit}.'),
+  },
+}));
+vi.mock('@shared/services/localization.service', () => ({
+  localizationService: { getAvailableInterfaceLanguages: vi.fn(async () => ({ en: {} })) },
+}));
+
+// Import the module under test after the mocks above so its module-level code sees them.
+// eslint-disable-next-line import/first
+import { coreSettingsValidators, platformSettings } from './core-settings-info.data';
 
 describe('platform.syncOnStartup setting', () => {
   it('is declared as a hidden setting with a true default', () => {
@@ -62,5 +74,41 @@ describe('platform.firstRunComplete setting', () => {
     // that: any refactor either changes the production signature or drops the runtime-guard coverage.
     // eslint-disable-next-line no-type-assertion/no-type-assertion -- deliberately violating the compile-time type to exercise the runtime type guard
     await expect(validator?.(123 as never, false, {})).resolves.toBe(false);
+  });
+});
+
+describe('content zoom settings', () => {
+  it('declares the new Zoom setting first in the General group and the memory setting hidden', () => {
+    const [group] = Array.isArray(platformSettings) ? platformSettings : [platformSettings];
+    const keys = Object.keys(group.properties);
+    expect(keys[0]).toBe('platform.webViewContentZoom');
+    expect(group.properties['platform.webViewContentZoom']).toMatchObject({
+      label: '%settings_platform_webViewContentZoom_label%',
+      description: '%settings_platform_webViewContentZoom_description%',
+      default: 1,
+    });
+    expect(group.properties['platform.webViewContentZoomMemory']).toMatchObject({
+      default: {},
+      isHidden: true,
+    });
+  });
+
+  it('validates the default zoom range with a localized message', async () => {
+    const validate = coreSettingsValidators['platform.webViewContentZoom'];
+    if (!validate) throw new Error('validator missing');
+    await expect(validate(1.2, 1, {})).resolves.toBe(true);
+    await expect(validate(0.4, 1, {})).rejects.toThrow('Allowed range is 0.5 to 3.');
+    await expect(validate(Number.NaN, 1, {})).resolves.toBe(false);
+  });
+
+  it('validates the memory as a record of in-range numbers', async () => {
+    const validate = coreSettingsValidators['platform.webViewContentZoomMemory'];
+    if (!validate) throw new Error('validator missing');
+    await expect(
+      validate({ 'editor:p1:main': 1.5, 'editor:p1:footnotes': 0.9 }, {}, {}),
+    ).resolves.toBe(true);
+    await expect(validate({ 'editor:p1:main': 9 }, {}, {})).resolves.toBe(false);
+    // @ts-expect-error ts(2322) - intentional bad input
+    await expect(validate({ 'editor:p1:main': 'big' }, {}, {})).resolves.toBe(false);
   });
 });
