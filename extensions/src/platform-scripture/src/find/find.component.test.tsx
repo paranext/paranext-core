@@ -5,7 +5,8 @@ import '@testing-library/jest-dom';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { ProjectSelectorOpenTab, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {

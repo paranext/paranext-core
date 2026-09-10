@@ -2,7 +2,8 @@ import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { expect, within } from 'storybook/test';
-import { ProjectSelectorOpenTab, Scope, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { Scope, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,

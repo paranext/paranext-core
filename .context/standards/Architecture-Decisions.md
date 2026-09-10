@@ -2105,6 +2105,32 @@ step, no automation. Just a record.
   section alphabetically. `RowSection` needed an `id` for React keys, since two custom sections can
   share a `kind` and both lack a `label`.
 
+## adr-project-selector-stays-experimental: ProjectSelector keeps its experimental entry point while its shape is still moving
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** `ProjectSelector` is the platform's shared project/resource picker, and the picker
+  lane adds capabilities to it across several consecutive work items — caller-supplied sections and
+  a row type indicator here, an "All projects…" footer affordance and further consumers after. The
+  question was whether to move it to the stable barrel now, on the strength of its consumer count,
+  or leave it on `platform-bible-react/experimental` until the surface settles.
+- **Decision:** It stays on `experimental`. The capabilities land; the barrel move does not. The
+  stable barrel is a support promise, and the component is still acquiring props with each
+  consumer — `customSections`, `renderProjectIndicator`, and the footer affordance deferred to the
+  next item all arrived or will arrive after the promotion was first proposed.
+- **Alternatives considered:**
+  - **Promote now.** Rejected: it fixes the public shape at the point of greatest churn. Names that
+    are free to change today (`hideFilterMenu`, which no longer matches the "view options" concept
+    the control now expresses) become breaking changes the moment the component is supported.
+  - **Promote with the experimental barrel kept as a deprecated re-export.** Rejected: that entry
+    point's own header declares no stability guarantee and promises no deprecation cycle, so the
+    shim would buy nothing while putting the component in two bundles.
+- **Consequences:** Consumers import from `platform-bible-react/experimental` and accept the
+  no-guarantee contract, which is what they already did. Renames and prop reshapes stay free until
+  promotion. Promotion becomes its own work item, whose entry criterion is that a consumer can be
+  added without adding a prop — and it should carry the API-surface TSDoc and localized-key
+  conventions the stable barrel expects, rather than bundling them into a capability change.
+
 ## adr-project-selector-type-stays-free-form: ProjectSelectorProject.type is a free-form string, not a closed union
 
 - **Date:** 2026-09-09

@@ -13,7 +13,6 @@ import {
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  ProjectSelectorOpenTab,
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   sonner,
@@ -22,6 +21,7 @@ import {
   useRunWhenVisible,
   useViewVisibility,
 } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   debounce,
   DEBOUNCE_CANCELED_ERROR_MESSAGE,

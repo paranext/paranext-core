@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  PROJECT_SELECTOR_STRING_KEYS,
   SelectedSettingsSidebarItem,
   SettingsSidebarContentSearch,
   usePromise,
 } from 'platform-bible-react';
+import { PROJECT_SELECTOR_STRING_KEYS } from 'platform-bible-react/experimental';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import {
   filterProjectSettingsContributionsByProjectInterfaces,

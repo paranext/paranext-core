@@ -26,7 +26,7 @@ import {
   PROJECT_SELECTOR_STRING_KEYS,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';

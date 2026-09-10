@@ -124,20 +124,6 @@ export {
 } from './components/advanced/multi-select-combo-box.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
-  default as ProjectSelector,
-  PROJECT_SELECTOR_STRING_KEYS,
-  type ProjectSelectorProps,
-  type ProjectSelectorProject,
-  type ProjectSelectorOpenTab,
-  type ProjectSelectorProjectPair,
-  type ProjectSelectorLocalizedStrings,
-  type ProjectSelectorSection,
-  type ProjectSelectorGroupingOption,
-  type ProjectSelectorSelection,
-  type ProjectSelectorMultiSelection,
-  type ProjectSelectorScrollGroupSelection,
-} from './components/advanced/project-selector/project-selector.component';
-export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
   type ProjectInfo,
