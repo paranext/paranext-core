@@ -108,7 +108,25 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     let areas = [];
     let activeArea;
     const styleElement = () => document.getElementById('${CONTENT_ZOOM_STYLE_ELEMENT_ID}');
+    // The main area's rule is always the style element's base rule (no ="…" value); a named
+    // area's rule may already be baked into the markup too (a pane reopening with a persisted
+    // per-area zoom level) - seed those from the sheet before the first refresh so ensureRule
+    // below never inserts a second, functionally-identical rule for one it did not itself insert.
     const ruled = new Set([MAIN]);
+    const seedRuled = () => {
+      const element = styleElement();
+      const sheet = element && element.sheet;
+      if (!sheet) return;
+      const prefix = '[' + ATTR + '="';
+      Array.from(sheet.cssRules).forEach((rule) => {
+        const text = rule.cssText || '';
+        const start = text.indexOf(prefix);
+        if (start === -1) return;
+        const end = text.indexOf('"]', start);
+        if (end === -1) return;
+        ruled.add(text.slice(start + prefix.length, end));
+      });
+    };
     const ensureRule = (areaId) => {
       if (ruled.has(areaId)) return;
       const element = styleElement();
@@ -147,6 +165,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (!activeArea || areas.indexOf(activeArea) === -1) setActive(areas[0]);
     };
     const start = () => {
+      seedRuled();
       refresh();
       new MutationObserver(refresh).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
     };
@@ -227,7 +246,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         badge.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;' +
           'padding:4px 10px;border-radius:6px;font:600 13px/1.4 system-ui,sans-serif;' +
           'background:var(--popover,#1c2321);color:var(--popover-foreground,#fff);' +
-          'box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:1;transition:opacity .25s ease';
+          'box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:1';
         document.body.appendChild(badge);
       }
       const corner = cornerOf(areaId);
@@ -235,11 +254,15 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       badge.style.right = corner.right + 'px';
       badge.dataset.area = areaId;
       badge.textContent = text;
+      // Reduced motion still hides the badge on schedule, as a hard cut instead of a fade (an
+      // opacity-0 pointer-events:none box left in place would otherwise sit at the corner forever).
+      // Computed fresh on every call so a badge element reused across shows picks up a live
+      // preference change rather than the transition it was first created with.
+      const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      badge.style.transition = reduce ? 'none' : 'opacity .25s ease';
       badge.style.opacity = '1';
       if (hideTimer) clearTimeout(hideTimer);
-      const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       hideTimer = setTimeout(() => {
-        if (reduce) { badge.textContent = ''; return; }
         badge.style.opacity = '0';
       }, ${INDICATOR_VISIBLE_MS});
     };
