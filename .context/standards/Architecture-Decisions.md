@@ -3093,6 +3093,6 @@ step, no automation. Just a record.
   `doesCatalogRowCoverProject` with it. The pull channel means every consumer that installs a
   resource must call `refreshInstalledFlags` before re-reading the catalog; the Get Resources dialog
   and the shared `useInstallDblResource` hook do, and a future consumer that forgets gets a stale
-  read rather than an error. `INSTALL_STATUS_GATE_TIMEOUT_MS` is the first bounded lock wait in
-  `c-sharp/`.
+  read rather than an error. `INSTALL_STATUS_GATE_TIMEOUT_MS` is the first `Monitor.TryEnter` in
+  `c-sharp/`, though not its first bounded wait — `SendReceiveWriteLock.DrainTimeout` predates it.
 - **Source:** PT-4484; reviewed by the contracts, architecture, tests, and clarity PR reviewers.

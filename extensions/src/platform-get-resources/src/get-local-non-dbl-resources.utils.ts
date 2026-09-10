@@ -67,8 +67,9 @@ export function buildLocalNonDblResources(
       displayName: m.name ?? m.id,
       fullName: m.fullName ?? m.name ?? m.id,
       bestLanguageName: m.language ?? '',
-      // Best-effort: a project id need not start with the DBL entry uid it was installed from, so
-      // a commentary whose ids diverge is classified as a plain ScriptureResource.
+      // Best-effort: a project id need not start with the DBL entry uid it was installed from
+      // (see `adr-dbl-install-status-from-backend`), so a commentary whose ids diverge is
+      // classified as a plain ScriptureResource.
       type: [...LOCAL_COMMENTARY_UIDS].some((uid) => m.id.toLowerCase().startsWith(uid))
         ? 'CommentaryResource'
         : 'ScriptureResource',

@@ -11,7 +11,7 @@ function row(overrides: Partial<DblResourceData> & { dblEntryUid: string }): Dbl
     type: 'ScriptureResource',
     size: 0,
     installed: false,
-    updateAvailable: true,
+    updateAvailable: false,
     projectId: '',
     ...overrides,
   };

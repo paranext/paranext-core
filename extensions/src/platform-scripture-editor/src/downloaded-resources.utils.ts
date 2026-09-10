@@ -78,8 +78,9 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
  * the DBL entry it was installed from — ParatextData records the entry uid in the project's
  * settings and matches on that — so a resource whose ids diverge is reported as not downloaded even
  * when it is installed. Resolving the reference through the catalog's `projectId` (the value the
- * backend reports) is the fix, and it has to move this function's callers with it, so it is
- * deliberately left for its own change rather than done here.
+ * backend reports) is the fix; it has to move this function's callers and
+ * `doesCatalogRowCoverProject` with it, so it is tracked as follow-up work rather than carried
+ * here. See `adr-dbl-install-status-from-backend`.
  */
 export function matchesDownloaded(
   project: DownloadedResource,

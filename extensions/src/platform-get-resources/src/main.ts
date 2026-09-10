@@ -127,9 +127,12 @@ async function getLocalProjectMetadata(): Promise<
 }
 
 /**
- * Syncs installed flags on `cachedResources` against the install status reported by C#. Runs in the
- * background so it never blocks a dialog open. Updates `cachedResources` and writes to storage when
- * flags change.
+ * Syncs installed flags on `cachedResources` against the install status reported by C#. Updates
+ * `cachedResources` and writes to storage when flags change.
+ *
+ * Whether this blocks the caller is the caller's choice: `getCachedResources` fires it in the
+ * background so opening a dialog never waits, while `refreshInstalledFlags` awaits it under a cap
+ * because its caller needs a change it just made to be reflected.
  *
  * The status has to come from the backend rather than being inferred from the local project list: a
  * resource project's id is unrelated to the DBL entry it was installed from (the entry uid lives in

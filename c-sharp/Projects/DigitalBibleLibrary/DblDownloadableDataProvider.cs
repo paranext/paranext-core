@@ -360,11 +360,25 @@ internal class DblResourcesDataProvider(
 
         ScrTextCollection.RefreshScrTexts();
 
-        // Verify through ExistingScrText, which finds the resource by the DBL id in the installed
-        // project's settings. Checking whether InstalledScrText is still in the collection instead
-        // reports a successful install as a failure whenever the project it created is keyed on an
-        // id unrelated to the DBL entry uid.
-        if (GetInstalledProjectId(installableResource) == "")
+        // Install() reports nothing, so success is inferred from two independent signals, because
+        // neither alone covers both cases:
+        //
+        // ExistingScrText finds the resource by the DBL id in the installed project's settings, so
+        // it is the signal that works for a fresh install. On its own it cannot see a failed
+        // UPDATE: for an already-installed resource it resolved before Install() ran, and
+        // Install() has silent-failure paths (download failed, CheckResource rejected the bundle,
+        // unsupported migration) that throw nothing, so an update that achieved nothing still
+        // looks installed.
+        //
+        // InstalledScrText is assigned only at the end of a completed install, which covers that
+        // gap. On its own it reports a successful install as a failure whenever the project the
+        // install created is keyed on an id unrelated to the DBL entry uid. Note it persists on
+        // the cached InstallableResource across calls, so it proves an install completed at some
+        // point on this instance, not that this call completed.
+        if (
+            installableResource.InstalledScrText is null
+            || GetInstalledProjectId(installableResource) == ""
+        )
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,

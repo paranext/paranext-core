@@ -16,7 +16,8 @@ import commentaryOverrides from './marker-styles/commentary-overrides.scss?inlin
 
 // Keyed on DBL entry UID (lowercase), matched against a projectId by `startsWith`. That is a
 // best-effort match, not a rule: a resource project's id is unrelated to the DBL entry it came
-// from, so a commentary whose ids diverge falls through and renders without its marker styles.
+// from (see `adr-dbl-install-status-from-backend`), so a commentary whose ids diverge falls
+// through and renders without its marker styles.
 // This map overlaps with the C# `CommentariesWhiteList` in DblDownloadableDataProvider.cs but may
 // include additional legacy UIDs for resources installed under a UID that was later reassigned in
 // the DBL catalog — those legacy UIDs ensure locally-installed resources still receive their marker
@@ -57,8 +58,8 @@ const COMMENTARY_STYLES_BY_DBL_ENTRY_UID: Record<string, string> = {
  * stylesheets does not work in this environment.
  *
  * Matching is done by `projectId` rather than `platform.name` because the project name is
- * user-editable and not unique, while a locally-installed DBL resource's projectId is prefixed by
- * its DBL entry UID — globally unique and stable.
+ * user-editable and not unique. See the note on the map above for why the `startsWith` match
+ * against the DBL entry UID is best-effort rather than guaranteed.
  *
  * @param projectId The project whose id should be checked against the commentary allowlist. For a
  *   resource panel, pass the _resource's_ project id (the one whose content is actually being

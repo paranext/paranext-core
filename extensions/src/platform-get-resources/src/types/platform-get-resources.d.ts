@@ -26,14 +26,14 @@ declare module 'platform-get-resources' {
      * project id.
      *
      * Never contacts the DBL, so it is cheap enough to call on a UI refresh — but not free: it
-     * waits up to two seconds for another DBL operation (a fetch, install, or uninstall) to release
-     * the catalog before giving up.
+     * waits a bounded few seconds for another DBL operation (a fetch, install, or uninstall) to
+     * release the catalog before giving up.
      *
      * @returns The local project id of each catalogued resource. The map is empty in three cases it
      *   does not distinguish: the catalog has not been fetched yet this session, another DBL
-     *   operation still held it when the two-second wait expired, or the catalog was fetched and is
-     *   genuinely empty. Treat an empty map as "no answer" and keep the values you already have —
-     *   reading it as "nothing is installed" would clear every installed flag.
+     *   operation still held it when that wait expired, or the catalog was fetched and is genuinely
+     *   empty. Treat an empty map as "no answer" and keep the values you already have — reading it
+     *   as "nothing is installed" would clear every installed flag.
      */
     recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
     /**

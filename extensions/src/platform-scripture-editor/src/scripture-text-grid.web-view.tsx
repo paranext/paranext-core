@@ -25,6 +25,7 @@ import {
 } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
   getOrderedScriptureTextGridContents,
@@ -227,14 +228,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup. It
   // also supplies the DBL `fullName` shown as the long name in the View Options list.
-  // Re-fetched on `refreshCounter` bumps so a newly-installed resource's `installed` flag is
-  // current when `toGridResources` resolves it.
+  // Re-fetched on `refreshCounter` bumps, which the install path fires only after waiting for the
+  // catalog's installed flags to be brought up to date — this read itself does not wait for them.
   const [cachedResources, isLoadingCachedResources] = usePromise(
     useCallback(
       () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
       // refreshCounter is a refresh-trigger counter: the factory doesn't use its value, but each
-      // bump creates a new function reference so usePromise re-runs and re-validates installed
-      // flags — necessary after any installation completes.
+      // bump creates a new function reference so usePromise re-runs — necessary after any
+      // installation completes.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [refreshCounter],
     ),
@@ -304,6 +305,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   }, [projectId, candidateProjectId, resources]);
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
+
+  // Bumping the cache key is what makes the grid re-resolve, so it is this panel's "re-resolve the
+  // resource list" step and belongs in the hook's `onInstalled`.
+  const handleResourceInstalled = useCallback(() => setRefreshCounter((k) => k + 1), []);
+  const installResource = useInstallDblResource(
+    dblResourcesProvider,
+    'scripture text grid',
+    handleResourceInstalled,
+  );
 
   // Fire first-open overlay init once per resolved projectId. The server-side marker makes repeated
   // calls safe; this guard just avoids redundant round-trips within a single web-view lifetime.
@@ -420,18 +430,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         const pending = { id: resource.dblEntryUid, name: resource.displayName };
         setInstalling((prev) => [...prev, pending]);
         try {
-          await dblResourcesProvider.installDblResource(resource.dblEntryUid);
-        } catch (e: unknown) {
+          // Installs, waits for the catalog's installed flags to catch up, then bumps the cache
+          // key. The wait is the point: `getCachedResources` answers from a cache it corrects in
+          // the background, so re-reading without it returns the flags from before this install.
+          await installResource(resource.dblEntryUid);
+        } catch {
+          // `installResource` already logged the cause; this panel's channel for it is the toast.
           papi.notifications.send({ message: INSTALL_FAILED_KEY, severity: 'error' });
-          logger.warn(`Failed to install resource ${resource.dblEntryUid}: ${getErrorMessage(e)}`);
           return;
         } finally {
           setInstalling((prev) => prev.filter((info) => info.id !== resource.dblEntryUid));
         }
-        // Resource was just installed; bump the cache key so `getCachedResources` re-validates the
-        // `installed` flag — without this, `cachedResources` loaded at mount still shows the resource
-        // as not-installed and `toGridResources` can't resolve it to a projectId.
-        setRefreshCounter((k) => k + 1);
       }
 
       if (!textConnectionPdp) {
@@ -455,7 +464,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`);
       });
     },
-    [dblResourcesProvider, textConnectionPdp],
+    [dblResourcesProvider, installResource, textConnectionPdp],
   );
 
   const selectedResourceIds = useMemo(

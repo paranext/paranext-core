@@ -25,7 +25,8 @@ export type DblResourceData = {
  * unrelated to the DBL entry it was installed from: ParatextData records the entry uid in the
  * project's settings and matches on that, so the prefix holds for many installed resources and not
  * for others. The authoritative answer is the `projectId` the backend reports, which is why the
- * exact-match branch is tried first and wins for any row that has been reconciled against disk.
+ * exact-match branch is tried first and wins for any row that has been reconciled against disk. See
+ * `adr-dbl-install-status-from-backend`.
  *
  * Both branches require the row to have been reconciled against disk at least once (`installed`, or
  * a non-empty `projectId`). A never-synced row carries `installed: false, projectId: ''`, and
