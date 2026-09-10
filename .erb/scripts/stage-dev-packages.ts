@@ -119,6 +119,18 @@ function getDevRepoPath(folder: string): string {
   return path.resolve(REPO_ROOT, '..', folder);
 }
 
+/**
+ * Whether this path is the clone this repo created and manages under `dev-packages/`, as opposed to
+ * a developer's own checkout picked up from the sibling directory.
+ *
+ * The managed clone is disposable — this script made it and is free to move it anywhere. A sibling
+ * is somebody's working copy that merely happens to sit next to this repo, so what is safe to do to
+ * it is a narrower question.
+ */
+function isManagedClone(repo: DevRepo, repoPath: string): boolean {
+  return repoPath === path.resolve(REPO_ROOT, 'dev-packages', repo.folder);
+}
+
 /** Environment for commands run inside a dev repo. */
 function devRepoEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
@@ -178,7 +190,17 @@ function runPnpm(args: string, cwd: string): void {
 
 /** Clones the given dev repo into `dev-packages/<folder>` if it is not already present locally. */
 function cloneRepoIfNeeded(repo: DevRepo): void {
-  if (fs.existsSync(getDevRepoPath(repo.folder))) return;
+  const existing = getDevRepoPath(repo.folder);
+  if (fs.existsSync(existing)) {
+    // A directory is not a clone. A clone killed partway through (SIGKILL, a full disk) leaves one
+    // behind with no `.git`, and treating it as a checkout turns every later run into a confusing
+    // "has no revision <pin>" for a repo that was never cloned at all.
+    if (!fs.existsSync(path.resolve(existing, '.git')))
+      throw new Error(
+        `${existing} exists but is not a git checkout — no .git in it. An interrupted clone leaves this behind.\n\nRemove it and let this script clone again:\n\n  rm -rf "${existing}"\n`,
+      );
+    return;
+  }
 
   const devPackagesDir = path.resolve(REPO_ROOT, 'dev-packages');
   fs.mkdirSync(devPackagesDir, { recursive: true });
@@ -301,18 +323,28 @@ function checkoutRevision(repo: DevRepo): void {
     encoding: 'utf8',
   }).trim();
 
-  // Only move a checkout that is not somewhere deliberate. A detached HEAD is where a previous run
-  // left it, `main` is where a fresh clone starts, and the pinned branch is force-pushed upstream
-  // by design — none of the three is work worth protecting. Any other branch is somebody's, and
-  // this script has no business moving it, wherever the checkout lives.
+  // Only move a checkout that is not somewhere deliberate. `main` is where a fresh clone starts and
+  // the pinned branch is force-pushed upstream by design, so neither is work worth protecting. Any
+  // other branch is somebody's, and this script has no business moving it, wherever it lives.
+  //
+  // A detached HEAD depends on whose checkout it is. In the clone this script manages it is just
+  // where a previous run left a tag or commit pin, and moving it is the whole point. In a sibling
+  // it is a developer parked on a commit to look at it — reached only when that commit is not the
+  // pinned one, since an already-at-the-target checkout returned above — and moving that is how a
+  // plain `npm install` silently relocates a checkout somebody was reading.
+  const isDeliberatelyDetached = currentBranch === 'HEAD' && !isManagedClone(repo, repoPath);
   const isSomebodysBranch =
-    currentBranch !== 'HEAD' && currentBranch !== 'main' && currentBranch !== repo.revision;
+    isDeliberatelyDetached ||
+    (currentBranch !== 'HEAD' && currentBranch !== 'main' && currentBranch !== repo.revision);
 
   if (isSomebodysBranch) {
+    const where = isDeliberatelyDetached
+      ? `is detached at ${resolve('HEAD').slice(0, 9)}`
+      : `is on "${currentBranch}"`;
     console.warn(
-      `\nWARNING: ${repoPath} is on "${currentBranch}", not the pinned "${repo.revision}".\n` +
+      `\nWARNING: ${repoPath} ${where}, not the pinned "${repo.revision}".\n` +
         `Leaving it alone and staging what it has, so nothing you are working on is lost.\n` +
-        `Whatever this app runs is built from that branch, not from the pinned revision.\n` +
+        `Whatever this app runs is built from that state, not from the pinned revision.\n` +
         `To stage the pinned revision instead: git -C "${repoPath}" checkout ${repo.revision}\n`,
     );
     return;
@@ -428,6 +460,40 @@ function prepareStagedManifest(stagingDir: string, stagingFolderByName: Map<stri
 }
 
 /**
+ * Whether a package's `dist/` is a build that can actually be copied, rather than merely present.
+ *
+ * `dist/` existing is not the same as a build finishing: an `nx build`/`extract-api` interrupted by
+ * Ctrl-C, an OOM kill, or a sleep leaves a partial directory behind, and the next run would skip
+ * the build, stage the partial output, and stamp it with a marker that looks exactly like a good
+ * one. There is no completion sentinel to read, so this asks the manifest what the package promises
+ * consumers — `main`, `module`, `types`, and the files its `exports` map points at — and treats the
+ * build as usable only when all of it is on disk.
+ */
+function isBuiltOutputUsable(packageDir: string): boolean {
+  if (!fs.existsSync(path.resolve(packageDir, 'dist'))) return false;
+
+  const manifest = JSON.parse(fs.readFileSync(path.resolve(packageDir, 'package.json'), 'utf8'));
+  const targets = new Set<string>();
+  ['main', 'module', 'types', 'typings'].forEach((field) => {
+    if (typeof manifest[field] === 'string') targets.add(manifest[field]);
+  });
+  // `exports` nests arbitrarily (subpath -> condition -> ... -> path), so walk it for strings
+  // rather than assuming a shape.
+  const collect = (node: unknown) => {
+    if (typeof node === 'string') {
+      if (node.startsWith('./')) targets.add(node);
+      return;
+    }
+    if (node && typeof node === 'object') Object.values(node).forEach(collect);
+  };
+  collect(manifest.exports);
+
+  return [...targets]
+    .filter((target) => target.includes('dist/'))
+    .every((target) => fs.existsSync(path.resolve(packageDir, target)));
+}
+
+/**
  * Copies a package's publishable files into `dev-packages/staging/<stagingFolder>`, building first
  * only when there is nothing to copy.
  *
@@ -490,10 +556,14 @@ function stagePackage(
 }
 
 function stageDevPackages(): void {
+  // Named in the failure message below: with several repos and packages staged in one run, "failed
+  // to stage dev packages" alone does not say which one was in flight.
+  let inFlight: string | undefined;
   console.log(`Staging dev packages for file: consumption${isLocalMode ? ' (local mode)' : ''}...`);
 
   try {
     DEV_REPOS.forEach((repo) => {
+      inFlight = repo.folder;
       if (isLocalMode) {
         if (!fs.existsSync(getDevRepoPath(repo.folder)))
           throw new Error(
@@ -519,7 +589,7 @@ function stageDevPackages(): void {
       const mustBuild =
         isLocalMode ||
         repo.devPackages.some(
-          (devPackage) => !fs.existsSync(path.resolve(repoPath, devPackage.packagePath, 'dist')),
+          (devPackage) => !isBuiltOutputUsable(path.resolve(repoPath, devPackage.packagePath)),
         );
 
       // Only a build needs the dev repo's dependencies installed. Skipping this is the difference
@@ -538,14 +608,18 @@ function stageDevPackages(): void {
         }),
       );
 
-      repo.devPackages.forEach((devPackage) =>
-        stagePackage(repo, devPackage, stagingFolderByName, sourceStamp, mustBuild),
-      );
+      repo.devPackages.forEach((devPackage) => {
+        inFlight = `${repo.folder}/${devPackage.packagePath}`;
+        stagePackage(repo, devPackage, stagingFolderByName, sourceStamp, mustBuild);
+      });
+      inFlight = undefined;
     });
 
     console.log('Successfully staged dev packages');
   } catch (error) {
-    console.error('Error: Failed to stage dev packages.');
+    console.error(
+      `Error: Failed to stage dev packages${inFlight ? ` while working on ${inFlight}` : ''}.`,
+    );
     console.error('Error object:', error);
     if (error instanceof Error) console.error('Stack:', error.stack);
     // Not `process.exit`: it tears down the process synchronously, dropping anything still

@@ -78,11 +78,34 @@ function getMissingStagedDependencies(): string[] {
     Object.keys(manifest.dependencies ?? {}).forEach((dependencyName) => {
       // `file:` specifiers point at sibling staged folders, which are linked, not installed.
       if (manifest.dependencies?.[dependencyName].startsWith('file:')) return;
-      if (!fs.existsSync(path.resolve(REPO_ROOT, 'node_modules', dependencyName)))
+      // Looked up from the staged package outward rather than only in the root `node_modules`: npm
+      // may legitimately nest a copy under the staged folder when the root holds an incompatible
+      // version, and a root-only check would call that "not installed" and fail the install with a
+      // diagnosis pointing at the lockfile.
+      if (!isDependencyInstalledFrom(path.resolve(STAGING_ROOT, folder), dependencyName))
         missing.add(dependencyName);
     });
   });
   return [...missing];
+}
+
+/**
+ * Whether `dependencyName` is installed anywhere Node would find it from `fromDir`.
+ *
+ * Walks the `node_modules` chain by hand rather than asking `require.resolve`: a package whose
+ * `exports` map declares no `.` entry — `@lexical/react`, which the editor depends on, is exactly
+ * this — throws there even though it is installed and imported by subpath everywhere it is used.
+ * Treating that as missing would fail every install with a lockfile diagnosis that is not the
+ * problem. Presence of the directory is what this needs to know.
+ */
+function isDependencyInstalledFrom(fromDir: string, dependencyName: string): boolean {
+  let dir = fromDir;
+  for (;;) {
+    if (fs.existsSync(path.resolve(dir, 'node_modules', dependencyName))) return true;
+    const parent = path.dirname(dir);
+    if (parent === dir) return false;
+    dir = parent;
+  }
 }
 
 /**
@@ -159,11 +182,21 @@ function postinstall(): void {
   console.log(
     '\nThe staged dev packages do not match what npm resolved this run — they were created or\nchanged after it had already built the dependency tree. Running the install again to pick them\nup...\n',
   );
-  execSync('npm install', {
-    stdio: 'inherit',
-    cwd: REPO_ROOT,
-    env: { ...process.env, [RERUN_GUARD]: '1' },
-  });
+  try {
+    execSync('npm install', {
+      stdio: 'inherit',
+      cwd: REPO_ROOT,
+      env: { ...process.env, [RERUN_GUARD]: '1' },
+    });
+  } catch {
+    // The nested install has already printed its own reason, and it runs this same script, so its
+    // message is the actionable one. Rethrowing would stack a second stack trace from this process
+    // on top of it for the one cause.
+    console.error(
+      '\nThe repeat install failed; its error is above. Nothing here can repair that — fix what it\nreports and run `npm install` again.\n',
+    );
+    process.exitCode = 1;
+  }
 }
 
 postinstall();

@@ -47,9 +47,6 @@ launchSettings.json
 dev-appdata/
 c-sharp/**/*.BAK
 
-# yalc
-.yalc
-yalc.lock
 
 # Local dev packages checked out for linking during CI or local development
 dev-packages/

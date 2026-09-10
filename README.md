@@ -246,14 +246,18 @@ To manually set up `scripture-editors` to be staged locally (this should all be 
    # go back to paranext-core
    cd ../paranext-core
    ```
-2. Install dependencies in `scripture-editors` (if you are using [Volta](#javascript-tool-manager), you must set the environment variable [`VOLTA_FEATURE_PNPM` to `1`](https://docs.volta.sh/advanced/pnpm)):
+2. Run `npm install` in this repo. The preinstall script stages each package from `scripture-editors` into `dev-packages/staging/`, building it only when the pinned revision has no committed `dist/` to copy.
+
+   Only that build needs `scripture-editors`' own dependencies, so install them only if you are editing the editor (if you are using [Volta](#javascript-tool-manager), you must set the environment variable [`VOLTA_FEATURE_PNPM` to `1`](https://docs.volta.sh/advanced/pnpm)):
+
    ```bash
    # from paranext-core
    cd ../scripture-editors
    pnpm install
    cd ../paranext-core
    ```
-3. Run `npm install` in this repo. The preinstall script builds each package in `scripture-editors` and stages it into `dev-packages/staging/`.
+
+**A sibling checkout is used and moved, not just read.** When `../scripture-editors` exists, `npm install` here stages from it rather than from its own clone under `dev-packages/` — and staging brings that checkout to the pinned revision, fetching and switching branches in it. It refuses to touch a checkout with uncommitted changes, and leaves one alone with a warning when it is on a branch of your own or parked on a detached commit; a clean checkout on `main` or on the pinned branch is moved. If you would rather keep your own clone out of this entirely, move it somewhere that is not a sibling of this repo and let `npm install` manage its own under `dev-packages/scripture-editors`.
 
 #### Getting your `scripture-editors` changes into this repo
 
