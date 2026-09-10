@@ -155,8 +155,8 @@ describe('canResolveResourceSelection', () => {
   });
 
   it('withholds resolving while the catalog is still arriving', () => {
-    // The window PT-4470 reports: a configured resource whose catalog entry has not landed is
-    // absent from the filtered rows, so auto-correct would persist a fallback over the user's pick.
+    // A configured resource whose catalog entry has not landed is absent from the filtered rows,
+    // so auto-correct would persist a fallback over the user's pick.
     expect(canResolveResourceSelection({ ...SETTLED, isCatalogReady: false })).toBe(false);
   });
 

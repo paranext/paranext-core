@@ -2,8 +2,9 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
+import { newPlatformError } from 'platform-bible-utils';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -14,6 +15,8 @@ const {
   mockChapterUsj,
   mockUseResourcePickerResources,
   mockSetUsj,
+  mockDialogResolve,
+  mockSelectTextConnection,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   // Shared rather than created per `Editorial` instance, so a test can assert the panel actually
@@ -28,6 +31,15 @@ const {
     true,
   ]),
   mockUseResourcePickerResources: vi.fn(() => [[], false]),
+  // Holds the latest resource-picker resolve callback, re-registered on every render of the
+  // panel. The default throws rather than no-ops so a test that picks before the panel has
+  // rendered fails saying so, instead of silently asserting against a pick that never happened.
+  mockDialogResolve: {
+    current: (resource: unknown): void => {
+      throw new Error(`No resource picker callback registered; tried to pick ${String(resource)}`);
+    },
+  },
+  mockSelectTextConnection: vi.fn(),
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -54,6 +66,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_resourcePanel_installFailedOffline%': "Couldn't install. Check your connection.",
       '%webView_resourcePanel_retry%': 'Try again',
       '%webView_resourcePanel_downloadResources%': 'Download resources',
+      '%webView_resourcePanel_loading%': 'Loading…',
       '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%': 'More info',
       '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%': 'Less info',
       '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%': 'Bible texts detail here.',
@@ -75,7 +88,16 @@ vi.mock('@papi/frontend/react', () => ({
   })),
   useProjectSetting: vi.fn(() => ['ltr', false]),
   useSetting: vi.fn(() => ['simple', false]),
-  useDialogCallback: vi.fn(() => vi.fn()),
+  // Captures the pick callback so a test can drive a resource pick without opening a dialog.
+  // `showResourcePicker` (what the hook returns) is still a no-op.
+  useDialogCallback: (
+    _command: unknown,
+    _options: unknown,
+    onResolve: (resource: unknown) => void,
+  ) => {
+    mockDialogResolve.current = onResolve;
+    return vi.fn();
+  },
   usePromise: vi.fn(() => [undefined, false]),
 }));
 
@@ -160,7 +182,7 @@ vi.mock('./use-is-online.hook', () => ({
 }));
 
 vi.mock('./select-dbl-resource', () => ({
-  selectTextConnection: vi.fn(),
+  selectTextConnection: (...args: unknown[]) => mockSelectTextConnection(...args),
 }));
 
 vi.mock('./scripture-text-grid/dbl-resource-lookup.utils', () => ({
@@ -249,6 +271,7 @@ function renderZeroState(resourceType: 'ScriptureResource' | 'Commentary' = 'Scr
 
 afterEach(() => {
   vi.restoreAllMocks();
+  mockSelectTextConnection.mockReset();
   // `mockChapterUsj` is hoisted and shared, so an implementation set by one test would otherwise
   // outlive it. Restore the real hook's default-value contract.
   mockChapterUsj.mockImplementation((_selector: unknown, defaultValue: unknown) => [
@@ -302,12 +325,12 @@ function renderWithResource() {
   return render(<ResourceTextPanel {...makeProps()} />);
 }
 
-// What the panel puts in its content area before the first chapter of a resource has arrived. The
-// panel already carries both branches that answer this — `resolveResourceContentState`'s `'loading'`
-// and the render's `!usjFromPdp` spinner — but seeding the subscription with a blank USJ made both
-// unreachable, because a blank USJ is neither `undefined` nor falsy. Reproduced live: the editor
-// mounted holding nothing and painted Lexical's "Enter some Scripture…" prompt, an invitation to
-// type in a text the reader cannot edit.
+// What the panel puts in its content area before the first chapter of a resource has arrived.
+// Two branches answer this — `resolveResourceContentState`'s `'loading'` and the render's
+// `!usjFromPdp` spinner — and both depend on the subscription being seeded with `undefined`: a
+// blank USJ is neither `undefined` nor falsy, so it reaches neither, and `Editorial` mounts holding
+// nothing, painting Lexical's "Enter some Scripture…" prompt — an invitation to type in a text the
+// reader cannot edit.
 describe('ResourceTextPanel — content area before the first chapter arrives', () => {
   it('mounts the editor once a chapter has actually arrived', () => {
     // Positive control for the assertion below: without it, "no editor" would pass against a panel
@@ -327,10 +350,14 @@ describe('ResourceTextPanel — content area before the first chapter arrives', 
     expect(screen.getByTestId('editorial')).toBeInTheDocument();
   });
 
-  it('shows a spinner instead of an empty editor while the chapter is still on its way', () => {
-    const { container } = renderWithResource();
+  it('shows a labelled waiting state instead of an empty editor while the chapter is on its way', () => {
+    // Asserted through the live region and its text rather than the spinner's utility class: the
+    // announcement IS the behaviour here, and a bare spinner tells assistive tech nothing. The
+    // text rather than the accessible name because `role="status"` does not take its name from
+    // content — what a screen reader reports is the region's content.
+    renderWithResource();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
-    expect(container.querySelector('[class*="animate-spin"]')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading…');
   });
 
   it('feeds the arrived chapter into the editor', () => {
@@ -346,5 +373,79 @@ describe('ResourceTextPanel — content area before the first chapter arrives', 
     mockChapterUsj.mockImplementation(() => [chapter, undefined, false]);
     renderWithResource();
     expect(mockSetUsj).toHaveBeenCalledWith(chapter);
+  });
+});
+
+// A pick is an `await` chain over a settings write and an install, and nothing stops the user
+// picking again while one runs. `isSelecting` gates more than the label: it suppresses
+// `useDblResourceAutoInstall`, so releasing it while a pick is still working re-arms auto-install
+// alongside that pick's own install of a different resource.
+describe('ResourceTextPanel — overlapping resource picks', () => {
+  /** A pick whose completion the test controls. */
+  function deferred() {
+    let settle: () => void = () => {};
+    const promise = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    return { promise, settle };
+  }
+
+  it('keeps reporting "Selecting…" until the pick the user made LAST finishes', async () => {
+    const first = deferred();
+    const second = deferred();
+    mockSelectTextConnection
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+
+    renderWithResource();
+    const pick = mockDialogResolve.current;
+
+    await act(async () => {
+      pick({ dblEntryUid: 'a' });
+      pick({ dblEntryUid: 'b' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Selecting…');
+
+    // The superseded pick settles first. It does not own the flag, so it must not clear it.
+    await act(async () => {
+      first.settle();
+      await first.promise;
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Selecting…');
+
+    await act(async () => {
+      second.settle();
+      await second.promise;
+    });
+    expect(screen.queryByText('Selecting…')).not.toBeInTheDocument();
+  });
+});
+
+// A chapter read can fail transiently — a resource still installing, a provider that recovers — so
+// the named failure carries a way out. The retry has to produce a genuinely NEW subscription, not
+// just a repaint: `useData` keys its subscription on the selector by reference, so the assertion
+// is that the panel hands `ChapterUSJ` a selector object it has not seen before.
+describe('ResourceTextPanel — retrying a failed chapter read', () => {
+  it('re-subscribes with a fresh selector for the same reference', async () => {
+    mockChapterUsj.mockImplementation(() => [
+      newPlatformError(new Error('Could not read chapter.')),
+      undefined,
+      false,
+    ]);
+
+    renderWithResource();
+
+    const selectorsBefore = mockChapterUsj.mock.calls.map((call) => call[0]);
+    const retry = screen.getByRole('button', { name: 'Try again' });
+
+    await act(async () => {
+      retry.click();
+    });
+
+    const selectorAfter = mockChapterUsj.mock.calls.at(-1)?.[0];
+    // Same reference being read...
+    expect(selectorAfter).toEqual(selectorsBefore.at(-1));
+    // ...but never an object the hook was already subscribed to, which is what forces a resubscribe.
+    expect(selectorsBefore).not.toContain(selectorAfter);
   });
 });

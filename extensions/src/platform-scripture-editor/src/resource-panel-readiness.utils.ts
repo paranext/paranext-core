@@ -110,40 +110,63 @@ export function canPublishResourcePanelProjectIds(
 }
 
 /**
+ * The sources a panel's SELECTION readiness is decided from.
+ *
+ * The same three async sources as {@link ResourcePanelReadinessInput}, whose field docs apply
+ * unchanged, minus `matchingCount` — which panel a configured item belongs to does not bear on
+ * whether a row's absence is genuine — plus the panel's own row readiness.
+ */
+export type ResourceSelectionReadinessInput = Omit<ResourcePanelReadinessInput, 'matchingCount'> & {
+  /**
+   * Whether the panel's own rows have been built. Defaults to `true` for a panel whose rows come
+   * straight from the list and the catalog; a panel that also unions in locally-downloaded projects
+   * must pass its own readiness.
+   *
+   * Defaulted here, while `resolveResourceSelection` refuses to default its settlement flags, and
+   * the difference is not an inconsistency: this one describes a THIRD source that most panels do
+   * not have, so `true` is the correct reading of "no such source to wait for". A missing
+   * settlement flag has no correct reading — its safe-looking default, `false`, renders no resource
+   * at all — so it is required instead.
+   */
+  arePanelRowsReady?: boolean;
+};
+
+/**
  * Whether a resource panel's sources have SETTLED enough to decide its selection.
  *
  * Distinct from {@link canPublishResourcePanelProjectIds}, which asks whether the displayed project
  * id can be trusted and therefore waits for a catalog that actually arrived. Selection asks a
  * different question — "is this row's absence from the filtered list real, or has its source simply
- * not landed?" — and a catalog that definitively FAILED answers it just as well as one that
- * arrived: nothing more is coming, so the rows in hand are all the rows there will be.
+ * not landed?" — and a catalog that definitively FAILED answers it well enough to DISPLAY on: the
+ * rows in hand are all the rows there are for now.
  *
- * That difference is load-bearing rather than pedantic. `isCatalogReady` stays `false` for the rest
- * of the session after a catalog failure, while locally-downloaded rows still arrive and are still
- * selectable. Waiting for readiness here would leave the panel with no selection, hence no resource
- * project id, hence a permanent spinner — and no reachable retry, because the panel is `configured`
- * and so never renders `PanelReadinessView`. Failing closed is safe where it means "declare
- * nothing"; here it would mean "show nothing".
+ * `isCatalogReady` stays `false` for the rest of the session after a catalog failure, while
+ * locally-downloaded rows still arrive and are still selectable. Waiting for readiness here would
+ * leave the panel with no selection, hence no resource project id, hence a permanent spinner — and
+ * no reachable retry, because the panel is `configured` and so never renders `PanelReadinessView`.
+ * Failing closed is safe where it means "declare nothing"; here it would mean "show nothing".
  *
- * @param input.listState The effective resource reference list's state (see
- *   `useEffectiveResourceReferenceList`)
- * @param input.isCatalogReady Whether the DBL resource catalog has finished loading and delivered
- * @param input.hasCatalogError Whether the catalog fetch failed, so no entry is still on its way
- * @param input.arePanelRowsReady Whether the panel's own rows have been built. Defaults to `true`
- *   for a panel whose rows come straight from the list and the catalog; a panel that also unions in
- *   locally-downloaded projects must pass its own readiness.
- * @returns True when an absence from the filtered rows can be read as genuine
+ * "For now" is the limit of what a failure settles, and it is why this answer governs display only.
+ * A failed catalog is retryable (`refetchCatalog`), and a DBL reference with no catalog row
+ * resolves to nothing at all, so a selection can be absent purely because the fetch failed. Writing
+ * a fallback over it on that evidence loses the pick permanently — unseen, since the panel is
+ * showing the catalog-error view at the time. Callers therefore pass this to
+ * `resolveResourceSelection`'s `areSourcesSettled` and the stricter
+ * {@link canPublishResourcePanelProjectIds} to its `mayPersistCorrection`.
+ *
+ * Worth knowing what this does NOT decide. Given the panel's own readiness gate, every state in
+ * which the panel actually renders content already implies this is true — so in practice the answer
+ * does its work in the states where content is NOT rendered, by withholding the auto-correct that
+ * would otherwise run behind an error or loading view where the reader cannot see it.
+ *
+ * @param input See {@link ResourceSelectionReadinessInput}.
+ * @returns True when an absence from the filtered rows can be read as genuine for display purposes
  */
 export function canResolveResourceSelection({
   listState,
   isCatalogReady,
   hasCatalogError,
   arePanelRowsReady = true,
-}: {
-  listState: EffectiveResourceReferenceListState;
-  isCatalogReady: boolean;
-  hasCatalogError: boolean;
-  arePanelRowsReady?: boolean;
-}): boolean {
+}: ResourceSelectionReadinessInput): boolean {
   return listState.status === 'ready' && arePanelRowsReady && (isCatalogReady || hasCatalogError);
 }
