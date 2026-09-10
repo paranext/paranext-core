@@ -77,7 +77,7 @@ export function assertExternalExtensionsRecorded(
   names: string[],
   table: Record<string, ExternalExtension>,
 ): void {
-  const unrecorded = names.filter((name) => !(name in table));
+  const unrecorded = names.filter((name) => !Object.hasOwn(table, name));
   if (unrecorded.length)
     throw new Error(
       `the installer packs ${unrecorded.map((name) => `"${name}"`).join(', ')} from outside this ` +
