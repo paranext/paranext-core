@@ -834,7 +834,15 @@ export function Find({
   };
 
   return (
-    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
+    // Scrolling here rather than letting the document scroll, with the scrollbar shown
+    // unconditionally. A search re-runs whenever a filter changes, so the panel's height crosses the
+    // viewport boundary often; when the document was the scroller, its scrollbar appeared and
+    // disappeared on each change, and every toggle narrowed the viewport by the scrollbar's width.
+    // That shifted this right-aligned toolbar sideways, which anything anchored to it — the filters
+    // popover — visibly followed. `scroll` rather than `auto` because merely reserving the gutter
+    // holds the width but still lets the bar itself blink in and out at that same threshold.
+    // Clipping the overflow would hold the width too, but silently hides content in a short panel.
+    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:overflow-y-scroll tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
         {/* Project selector + Find/Replace toggle share one row. The responsiveness guideline caps a
@@ -1195,7 +1203,11 @@ export function Find({
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={resultsContainerRef}
-        className="tw:min-h-48 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
+        // `overflow-y-scroll` rather than `auto`: changing a filter re-runs the search, which empties
+        // this list and refills it, so under `auto` the scrollbar disappears and comes back on every
+        // change and visibly blinks. Showing it unconditionally costs an empty track when results are
+        // few, which is quieter than a bar flashing on each keystroke.
+        className="tw:min-h-48 tw:flex-1 tw:space-y-2 tw:overflow-y-scroll tw:pe-2"
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}

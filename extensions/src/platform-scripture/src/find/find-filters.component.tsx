@@ -101,10 +101,16 @@ export function FindFilters({
       {/* The height cap and internal scrolling are load-bearing, and PopoverContent — unlike
           DropdownMenuContent — does not supply them. Without them this panel outgrows a short web
           view, so moving focus down it scrolls the document instead, and the popper repositions on
-          every keypress. Scrolling inside the panel keeps it anchored. */}
+          every keypress. Scrolling inside the panel keeps it anchored.
+
+          `overflow-y-scroll` rather than `auto` because the popper recomputes the available height
+          on each re-render, and a filter change re-renders; under `auto` those small differences
+          take the content across the threshold where a scrollbar is needed and the bar flickers in
+          and out. This content is taller than the space it gets, so the scrollbar is always
+          warranted — showing it unconditionally just stops it blinking. */}
       <PopoverContent
         align="end"
-        className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
+        className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-x-hidden tw:overflow-y-scroll tw:p-3"
       >
         {/* 1. Match content in */}
         <fieldset className="tw:mb-3">
