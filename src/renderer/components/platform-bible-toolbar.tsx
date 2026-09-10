@@ -196,7 +196,7 @@ function ProjectSelectorLabel({
 function ToolbarProjectSelector({
   projects,
   recentIds,
-  currentProjectId,
+  currentProject,
   currentProjectError,
   isLoading,
   localizedStrings,
@@ -205,7 +205,7 @@ function ToolbarProjectSelector({
 }: {
   projects: ProjectItem[];
   recentIds: readonly string[];
-  currentProjectId: string | undefined;
+  currentProject: ProjectItem | undefined;
   currentProjectError: string | undefined;
   isLoading: boolean;
   localizedStrings: LanguageStrings;
@@ -290,14 +290,21 @@ function ToolbarProjectSelector({
 
   // Supplying `renderTriggerLabel` hands this function the whole trigger label, `buttonPlaceholder`
   // included, so the nothing-selected case has to be answered here or the trigger renders empty.
+  //
+  // `selected` is whichever list entry carries the selected id, and the open project is not always
+  // one: `useProjectPickerData` resolves the active editor's project by a direct metadata lookup
+  // when the shared snapshot lacks it, so it can be current without appearing in either list. Name
+  // it from what the toolbar already knows in that case — the placeholder is for genuinely nothing
+  // open.
   const renderTriggerLabel = useCallback(
     (selected: ProjectSelectorProject | undefined) => {
       if (currentProjectError)
         return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
-      if (!selected) return placeholder;
-      return <ProjectSelectorLabel fullName={selected.fullName} shortName={selected.shortName} />;
+      const named = selected ?? currentProject;
+      if (!named) return placeholder;
+      return <ProjectSelectorLabel fullName={named.fullName} shortName={named.shortName} />;
     },
-    [currentProjectError, placeholder],
+    [currentProject, currentProjectError, placeholder],
   );
 
   const selectorLocalizedStrings = useMemo(
@@ -327,7 +334,7 @@ function ToolbarProjectSelector({
       // Empty on purpose: `openTabs` drives the scroll-group chips and the "Opened tabs" section,
       // and Simple mode exposes neither.
       openTabs={EMPTY_OPEN_TABS}
-      selection={{ projectId: currentProjectId }}
+      selection={{ projectId: currentProject?.id }}
       onChangeSelection={handleChangeSelection}
       customSections={customSections}
       availableGroupings={CUSTOM_ONLY_GROUPINGS}
@@ -773,7 +780,7 @@ export function PlatformBibleToolbar() {
           <ToolbarProjectSelector
             projects={pickerProjects}
             recentIds={recentIds}
-            currentProjectId={currentSimpleProject?.id}
+            currentProject={currentSimpleProject}
             currentProjectError={currentSimpleProjectError}
             isLoading={isProjectPickerLoading}
             localizedStrings={localizedStrings}

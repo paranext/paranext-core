@@ -293,19 +293,18 @@ vi.mock('platform-bible-react/experimental', async (importOriginal) => {
   };
 });
 
+/** Shared no-op body for the ResizeObserver stub's methods, none of which observe anything. */
+const doNothing = () => {};
+
 // Radix Tooltip uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
-// implementation. The methods intentionally don't use `this` since they're empty stubs.
+// implementation.
 beforeAll(() => {
   global.ResizeObserver = class {
-    // jsdom stub: empty no-op intentionally has no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    observe() {}
-    // jsdom stub: empty no-op intentionally has no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    unobserve() {}
-    // jsdom stub: empty no-op intentionally has no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    disconnect() {}
+    observe = doNothing;
+
+    unobserve = doNothing;
+
+    disconnect = doNothing;
   };
 });
 
@@ -1362,6 +1361,27 @@ describe('PlatformBibleToolbar project selector label', () => {
     expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Test select a project');
   });
 
+  it('names the open project even when it is missing from both picker lists', async () => {
+    // `useProjectPickerData` resolves the active editor's project by a direct metadata lookup when
+    // the shared snapshot does not carry it, so the current project can legitimately be absent from
+    // `recentProjects` and `allProjects`. Falling through to the placeholder there would tell the
+    // user nothing is open while their project is on screen.
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('Test Project (TP)');
+    expect(trigger).not.toHaveTextContent('Test select a project');
+  });
+
   it('offers the whole error message on hover once the visible text is clipped', async () => {
     const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
     vi.mocked(useProjectPickerData).mockReturnValue({
@@ -1389,7 +1409,7 @@ describe('PlatformBibleToolbar project selector label', () => {
     // Routing the error through the label's droppable field would leave the user with a red short
     // name and no statement of what went wrong.
     const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
-    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+    vi.mocked(useProjectPickerData).mockReturnValue({
       currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
       recentProjects: [],
       allProjects: [],
