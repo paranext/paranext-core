@@ -24,11 +24,13 @@ import {
   getContentZoomBootstrapScript,
   getContentZoomStyleElement,
 } from '@renderer/services/web-view-content-zoom.bootstrap-script';
-// This closes a two-way dependency: web-view-content-zoom.service.ts imports this shard's own
-// web-view-definition primitives (getSavedWebViewDefinitionSync and friends), and this shard needs
-// the zoom service's functions to wire each web view's per-window bootstrap. Every name crossing
-// either direction is a hoisted `function`/`async function` declaration, so neither module can
-// observe the other mid-initialization no matter which one the module graph evaluates first.
+// This module imports the zoom service's getLastFocusedTabId dependency (still injected as a
+// direct import there, unlike the four shard functions injected below) from window.service-shard,
+// which itself imports several web-view-definition functions from this file. window.service-shard's
+// side of that pairing is unrelated to content zoom and out of scope here; every name crossing any
+// of these three imports is a hoisted `function`/`async function` declaration, so none of the three
+// modules can observe another mid-initialization no matter which one the module graph evaluates
+// first.
 // eslint-disable-next-line import/no-cycle
 import {
   adjustContentZoom,
@@ -3609,8 +3611,15 @@ export const initialize = () => {
     });
 
     // Not awaited: its startup prune does a project lookup, and no web view should wait on that to
-    // open.
-    initializeContentZoomService().catch((e) =>
+    // open. Injects this shard's own web-view-definition functions so the zoom service never
+    // imports them back (that import would close a cycle with this file's own import of the zoom
+    // service, above).
+    initializeContentZoomService({
+      getDefinition: getSavedWebViewDefinitionSync,
+      updateDefinition: (webViewId, update) => updateWebViewDefinitionSync(webViewId, update),
+      getAllOpenDefinitions: getAllOpenWebViewDefinitionsSync,
+      onDidUpdateWebView,
+    }).catch((e) =>
       logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
     );
 

@@ -6,12 +6,6 @@ vi.mock('@shared/services/logger.service', () => ({
 vi.mock('@shared/services/settings.service', () => ({ settingsService: {} }));
 vi.mock('@shared/services/localization.service', () => ({ localizationService: {} }));
 vi.mock('@shared/services/project-lookup.service', () => ({ projectLookupService: {} }));
-vi.mock('@renderer/services/web-view.service-shard', () => ({
-  getSavedWebViewDefinitionSync: vi.fn(),
-  updateWebViewDefinitionSync: vi.fn(),
-  getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
-  onDidUpdateWebView: vi.fn(() => () => {}),
-}));
 vi.mock('@renderer/services/window.service-shard', () => ({ getLastFocusedTabId: vi.fn() }));
 vi.mock('@renderer/services/overlays/overlay-coordinates', () => ({ getWebViewIframe: vi.fn() }));
 
@@ -108,6 +102,8 @@ describe('web-view-content-zoom.service', () => {
       getIframe: () => iframe,
       getDefinition: (id: string) => definitions.get(id),
       updateDefinition,
+      getAllOpenDefinitions: () => [...definitions.values()],
+      onDidUpdateWebView: () => () => false,
       getLastFocusedTabId: () => lastFocused,
       settings: {
         get: async (key: string) => settings[key],
@@ -276,8 +272,6 @@ describe('web-view-content-zoom.service', () => {
       state: {},
     });
     setContentZoomAreas('editor-2', ['main', 'footnotes']);
-    const shard = await import('@renderer/services/web-view.service-shard');
-    vi.mocked(shard.getAllOpenWebViewDefinitionsSync).mockReturnValue([...definitions.values()]);
     showIndicator.mockClear();
     memoryCallbacks.forEach((cb) => cb({ 'editor:proj-A:footnotes': 1.4 }));
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { footnotes: 1.4 } });
@@ -286,8 +280,6 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('ignores a stale memory echo for an area that already has a newer pending write', async () => {
-    const shard = await import('@renderer/services/web-view.service-shard');
-    vi.mocked(shard.getAllOpenWebViewDefinitionsSync).mockReturnValue([...definitions.values()]);
     await adjustContentZoom('editor-1', 1, 'main'); // 1.1, flushed below
     await __flushContentZoomMemoryForTesting();
     await adjustContentZoom('editor-1', 1, 'main'); // 1.2, still only pending
