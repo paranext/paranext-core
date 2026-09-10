@@ -5,6 +5,7 @@ import {
   FrameLocator,
   Page,
 } from '@playwright/test';
+import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -93,14 +94,25 @@ export interface ElectronAppContext {
 }
 
 /**
+ * Resolves after `ms` milliseconds. The one function every inline `setTimeout`-backed delay in this
+ * file goes through, so a caller that wants to fake or inject the wait has a single seam instead of
+ * a `new Promise((resolve) => setTimeout(resolve, ms))` to spot and swap at each site.
+ */
+export function sleep(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
  * Wait for the given port to stop accepting connections (i.e., be free). Used after teardown to
  * ensure the previous Electron's extension-host WebSocket server has released port 8876 before the
- * next test launches. On Windows, killing the Electron main process does not always kill the
- * extension-host child process immediately; without this wait, the next `waitForWebSocketReady`
- * connects to the dying extension host rather than the new one, causing "Settings service
- * undefined" errors.
+ * next test launches. Even after {@link killProcessTree} has reached the whole tree, the
+ * extension-host child process does not always release the port immediately; without this wait, the
+ * next `waitForWebSocketReady` connects to the dying extension host rather than the new one,
+ * causing "Settings service undefined" errors.
  */
-async function waitForPortFree(port: number, timeout: number): Promise<void> {
+async function waitForPortFree(port: number, timeout: number): Promise<boolean> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
     // Sequential polling: each probe must finish before starting the next.
@@ -125,16 +137,15 @@ async function waitForPortFree(port: number, timeout: number): Promise<void> {
         resolve(true); // Connection refused → port is free
       });
     });
-    if (isFree) return;
+    if (isFree) return true;
     // Sequential polling: each probe must complete before the next starts.
     // eslint-disable-next-line no-await-in-loop
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 250);
-    });
+    await sleep(250);
   }
   // Do not throw — if the port is never freed within the window, log and proceed; the next
   // launch will fail its own waitForWebSocketReady with a clearer error.
   console.warn(`[teardown] Port ${port} still in use after ${timeout}ms — proceeding anyway`);
+  return false;
 }
 
 /** Wait for the WebSocket server to be ready on the specified port. */
@@ -169,9 +180,7 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
       // Sequential polling: each attempt must finish (or time out) before the next;
       // parallelizing would defeat the retry/backoff.
       // eslint-disable-next-line no-await-in-loop
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 500);
-      });
+      await sleep(500);
     }
   }
   throw new Error(`WebSocket server not ready on port ${port} after ${timeout}ms`);
@@ -360,6 +369,18 @@ export async function setWindowWidth(
       timeout: WINDOW_WIDTH_SETTLE_TIMEOUT_MS,
     })
     .toBeLessThanOrEqual(WINDOW_WIDTH_SETTLE_TOLERANCE_PX);
+
+  // `window.innerWidth` settling is not the toolbar re-rendering: its `useShrinkStep`
+  // ResizeObserver callback runs a frame later, so a caller that measures right after the poll
+  // above can still catch a pre-shrink `scrollWidth` against a post-shrink `clientWidth`. Two rAFs
+  // guarantee that callback (which runs before the next frame's paint) has landed before this
+  // returns.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
 }
 
 /**
@@ -557,6 +578,75 @@ function unreachableDescription(lastReadError: unknown): string {
   return `unknown (every read of the settings service failed; the last said: ${reason})`;
 }
 
+/** Seams {@link killProcessTree} calls through, so a test can watch or fake them. */
+export interface KillProcessTreeDeps {
+  isPidAlive: (pid: number) => boolean;
+  execFileSync: (file: string, args: readonly string[], options: ExecFileSyncOptions) => unknown;
+  kill: (pid: number, signal: NodeJS.Signals) => boolean;
+}
+
+const defaultKillProcessTreeDeps: KillProcessTreeDeps = {
+  isPidAlive,
+  execFileSync,
+  kill: (pid, signal) => process.kill(pid, signal),
+};
+
+/**
+ * Kill an OS process AND everything it spawned, addressed the way the platform actually makes that
+ * possible.
+ *
+ * On POSIX, `-pid` signals the whole process group a `detached: true` launch put the process in;
+ * `pid` alone is the fallback for whatever that misses. Windows has no process groups, so `-pid`
+ * throws there and a plain `process.kill(pid, …)` reaches exactly one process — and for an Electron
+ * app launched by Playwright that process is not even the app: on Windows Playwright starts
+ * Electron through `shell: true` (`playwright-core/lib/server/electron/electron.js`), so
+ * `electronApp.process().pid` names a `cmd.exe` wrapper, and killing it leaves `electron.exe` and
+ * its whole tree — renderer and utility processes, the extension host, the `dotnet watch` .NET data
+ * provider with its own descendants — running as if nothing happened. The orphaned app keeps the
+ * fixed WebSocket port bound, so the next launch's server fails with EADDRINUSE and its renderer
+ * connects to the leftover app instead of its own, and it holds the Chromium cache files the
+ * profile cleanup then cannot delete. `taskkill /pid <pid> /t /f` asks Windows to walk the tree
+ * down from that wrapper instead of signalling one pid.
+ *
+ * `deps` lets a test substitute every OS call this makes without touching a real process.
+ *
+ * On win32, `signal` is not used: `taskkill /f` is always a forced kill, so passing `'SIGTERM'`
+ * there does not ask for — or get — a graceful stop.
+ */
+export function killProcessTree(
+  pid: number,
+  signal: NodeJS.Signals,
+  platform: NodeJS.Platform = process.platform,
+  deps: KillProcessTreeDeps = defaultKillProcessTreeDeps,
+): void {
+  if (platform === 'win32') {
+    if (!deps.isPidAlive(pid)) return;
+    try {
+      deps.execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], {
+        stdio: 'pipe',
+        timeout: 10_000,
+      });
+    } catch (error) {
+      console.warn(
+        `taskkill for pid ${pid} did not complete cleanly: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    return;
+  }
+  try {
+    deps.kill(-pid, signal);
+  } catch {
+    // Process group may already be gone — fall back to single-process kill
+    try {
+      deps.kill(pid, signal);
+    } catch {
+      /* already dead */
+    }
+  }
+}
+
 /**
  * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
  * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
@@ -622,7 +712,9 @@ export async function launchElectronApp(
     console.error('Failed to launch Electron:', error);
     // Clean up the temp directory created above — launch never succeeded. Preserved profiles are
     // kept even here so a failed relaunch does not destroy the state under investigation.
-    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
+    // removeUserDataDirBestEffort never throws, so a lingering Windows lock here can only warn — it
+    // cannot replace `error` below or skip the restore that follows.
+    if (!opts.preserveUserDataDir) removeUserDataDirBestEffort(userDataDir);
     // Unconditional, not gated on whether THIS call pinned: restoreAppGlobalState() is a safe
     // no-op when nothing is pinned, and a relaunch chain's LATER launch failing must still restore
     // the EARLIER launch's still-active pin — nothing else ever will, since that responsibility
@@ -636,22 +728,14 @@ export async function launchElectronApp(
   try {
     await waitForWebSocketReady(DEFAULT_WEBSOCKET_PORT, PROCESS_READY_TIMEOUT);
   } catch (error) {
-    // Launch succeeded but WebSocket never became ready — kill the orphaned
-    // Electron process and clean up the temp directory before propagating.
+    // Launch succeeded but WebSocket never became ready — kill the orphaned Electron tree (not just
+    // the pid Playwright hands back; see killProcessTree) and clean up the temp directory before
+    // propagating.
     console.error('WebSocket readiness check failed after Electron launch:', error);
     const proc = electronApp.process();
-    if (proc?.pid) {
-      try {
-        process.kill(-proc.pid, 'SIGKILL');
-      } catch {
-        try {
-          proc.kill('SIGKILL');
-        } catch {
-          /* already dead */
-        }
-      }
-    }
-    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
+    if (proc?.pid) killProcessTree(proc.pid, 'SIGKILL');
+    // See the matching comment above: removeUserDataDirBestEffort cannot throw here either.
+    if (!opts.preserveUserDataDir) removeUserDataDirBestEffort(userDataDir);
     // See the matching comment above: unconditional and safe either way.
     restoreAppGlobalState();
     throw error;
@@ -674,6 +758,25 @@ export async function launchElectronApp(
     appPid: electronApp.process().pid,
     preserveUserDataDir: opts.preserveUserDataDir,
   };
+}
+
+/**
+ * Best-effort removal of a user-data directory: never throws, so a stuck removal only warns instead
+ * of replacing — or, called from a launch failure path, being the only thing that ran after — an
+ * error that already sent the caller here.
+ *
+ * The retry is `fs.rmSync`'s own `maxRetries`/`retryDelay` (linear backoff: `retryDelay * attempt`,
+ * ~5s total across 6 retries), which already covers EBUSY/EMFILE/ENFILE/ENOTEMPTY/EPERM. It exists
+ * because a file lock here can outlive {@link killProcessTree} by a fraction of a second, not by
+ * seconds: on Windows, Chromium's utility process releases its cache journal (e.g.
+ * `Cache\No_Vary_Search\journal.baj`) moments after the tree is killed, not the instant it is.
+ */
+function removeUserDataDirBestEffort(userDataDir: string): void {
+  try {
+    fs.rmSync(userDataDir, { recursive: true, force: true, maxRetries: 6, retryDelay: 250 });
+  } catch (error) {
+    console.warn(`[teardown] Could not remove ${userDataDir}: ${error}`);
+  }
 }
 
 /**
@@ -701,27 +804,12 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
     `[teardown] Closing Electron app... pid=${pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
   );
 
-  // On Linux, processLauncher.js spawns Electron with `detached: true`, making
-  // Electron the leader of its own process group. Child processes inherit the
-  // write-ends of Electron's stdout/stderr pipes; killing only the Electron PID
-  // leaves those write-ends open forever. The fix is to kill the ENTIRE process
-  // group (-pid).
-  // NodeJS is the ambient @types/node namespace; the strict staged-file lint
-  // config has no node environment, so it cannot see the global.
-  // eslint-disable-next-line no-undef
-  const killGroup = (sig: NodeJS.Signals) => {
-    if (!pid) return;
-    try {
-      process.kill(-pid, sig);
-    } catch {
-      // Process group may already be gone — fall back to single-process kill
-      try {
-        process.kill(pid, sig);
-      } catch {
-        /* already dead */
-      }
-    }
-  };
+  // On Linux, processLauncher.js spawns Electron with `detached: true`, making Electron the leader
+  // of its own process group; its .NET data-provider and extension-host children inherit the
+  // write-ends of Electron's stdout/stderr pipes, so signalling only that one pid leaves those
+  // write-ends open. On Windows `pid` above is not even Electron's — Playwright launches it through
+  // a `cmd.exe` wrapper there — so a plain kill of it leaves the wrapper's whole child tree running.
+  // See {@link killProcessTree} for how each platform reaches the rest of the tree.
 
   /** Whether the Electron OS process is still running, per the best signal available. */
   const isProcessAlive = (): boolean => {
@@ -742,27 +830,22 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
         `[teardown] Playwright handle already disposed but pid ${pid} is still alive — killing anyway...`,
       );
     console.log('[teardown] Sending SIGKILL to process group...');
-    killGroup('SIGKILL');
+    if (pid) killProcessTree(pid, 'SIGKILL');
     console.log('[teardown] Waiting for appClosed after SIGKILL (up to 3s)...');
-    await Promise.race([
-      appClosed,
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, 3_000);
-      }),
-    ]);
+    await Promise.race([appClosed, sleep(3_000)]);
     console.log('[teardown] Done waiting after SIGKILL');
   } else if (!electronProcess) {
     console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
   }
 
   // Wait for the extension-host's WebSocket server (port 8876) to release the port before the next
-  // launch. On Windows, killing the Electron main process does not immediately kill child
-  // processes — the extension host can outlive the main process and keep port 8876 bound, causing
-  // the next test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
+  // launch. Even a full-tree kill does not free it instantly — the extension host can take a moment
+  // to unbind after being signalled, and keep port 8876 bound in the meantime, causing the next
+  // test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
   // preserve-and-return path too, since a relaunch reuses the same fixed port 8876.
   console.log('[teardown] Waiting for port 8876 to be free...');
-  await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
-  console.log('[teardown] Port 8876 is free');
+  const portFreed = await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
+  if (portFreed) console.log('[teardown] Port 8876 is free');
 
   // A preserved profile stays on disk so a later launch can relaunch into it (see
   // LaunchElectronAppOptions.preserveUserDataDir). The last teardown of a relaunch chain runs with
@@ -775,21 +858,9 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
 
   console.log('[teardown] Cleaning up user data dir...');
 
-  // Clean up the isolated user-data directory. On some platforms file locks
-  // may linger briefly after the process group is killed, so retry once.
-  try {
-    fs.rmSync(userDataDir, { recursive: true, force: true });
-  } catch {
-    console.warn('[teardown] First rmSync attempt failed — retrying in 3s...');
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 3_000);
-    });
-    try {
-      fs.rmSync(userDataDir, { recursive: true, force: true });
-    } catch (e) {
-      console.warn(`[teardown] Could not remove ${userDataDir}: ${e}`);
-    }
-  }
+  // Clean up the isolated user-data directory. See removeUserDataDirBestEffort for why this retries
+  // rather than trusting the first attempt.
+  removeUserDataDirBestEffort(userDataDir);
 
   // After the app has closed, so its own shutdown writes cannot land on top of what is restored.
   // Not reached when preserveUserDataDir returned above (an intermediate teardown of a relaunch
@@ -935,9 +1006,7 @@ export async function waitForPapiMethodRegistered(
     // Sequential polling: each attempt must finish (or time out) before the next;
     // parallelizing would defeat the retry/backoff.
     // eslint-disable-next-line no-await-in-loop
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, sleepMs);
-    });
+    await sleep(sleepMs);
   }
   throw new Error(`PAPI method "${methodName}" not listed in rpc.discover within ${timeoutMs}ms`);
 }
@@ -999,9 +1068,7 @@ export async function waitForProjectMetadata(
     // Sequential polling: each attempt must finish (or time out) before the next;
     // parallelizing would defeat the retry/backoff.
     // eslint-disable-next-line no-await-in-loop
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, sleepMs);
-    });
+    await sleep(sleepMs);
   }
   throw new Error(
     `Project lookup did not report ${description} within ${timeoutMs}ms (PDP factories may not be registered).`,
@@ -1082,9 +1149,7 @@ export async function waitForMainMenuItem(
     // Sequential polling: each attempt must finish (or time out) before the next;
     // parallelizing would defeat the retry/backoff.
     // eslint-disable-next-line no-await-in-loop
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, sleepMs);
-    });
+    await sleep(sleepMs);
   }
   throw new Error(`Main menu never reported ${description} within ${timeoutMs}ms.`);
 }
@@ -1945,14 +2010,18 @@ export function preConfigureRecentlyOpenedProjects(projectIds: string[]): () => 
 }
 
 /**
- * Escape a value for use inside an XML attribute.
+ * Escape a value for safe use inside XML, either as an attribute value or as element text content.
+ *
+ * Covers the full attribute-value set (`&`, `<`, `>`, `"`, `'`) — escaping the quote characters is
+ * unnecessary in a text node, but harmless there, so this one escaper serves both call shapes
+ * instead of each needing its own narrower version.
  *
  * Needed because one caller feeds in the machine's registered Paratext display name, which is free
  * text a person chose. ParatextData parses the result with `XmlSerializer`, which throws on
  * malformed XML rather than degrading — so an unescaped quote or ampersand in a real name would
  * fail every comment spec on that machine with a corrupt-XML error naming nothing relevant.
  */
-function xmlEscapeAttribute(value: string): string {
+export function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -1976,7 +2045,7 @@ export function addUsersToProject(projectDir: string, users: string[]): void {
   const userEntries = users
     .map(
       (name) =>
-        `  <User UserName="${xmlEscapeAttribute(name)}" FirstUser="false" UnregisteredUser="false">
+        `  <User UserName="${escapeXml(name)}" FirstUser="false" UnregisteredUser="false">
     <Role>TeamMember</Role>
     <AllBooks>true</AllBooks>
     <Books/>
@@ -2082,9 +2151,10 @@ interface StuckGateObservations {
  * first.
  *
  * The three states overlap in their signals: the error screen shows a heading, an alert AND an
- * escape hatch simultaneously. Racing "a hatch appeared" against "a heading appeared" therefore
- * reaches either answer for one app state, depending on which locator settles first — so the race
- * establishes only THAT the gate is stuck, and this decides what it is.
+ * escape hatch simultaneously. A single snapshot can therefore show both a hatch and a heading at
+ * once for one app state — so the snapshot only establishes THAT the gate is stuck, and this
+ * decides what it is, from what the snapshot holds together rather than from which field it
+ * happened to check first.
  */
 export function decideStuckGateAction({
   escapeHatchVisible,
@@ -2125,13 +2195,23 @@ export const TOP_LEVEL_ERROR_SELECTOR = '[role="alert"]:has(h1)';
 type FirstRunGateOutcome = 'settled' | 'inconclusive';
 
 /**
- * What one leg of the stuck-gate race should report, given what it caught.
- *
- * A leg timing out just means the gate has not reached that leg's state yet within the budget —
- * ordinary and quiet. The page, its context, or the browser closing out from under the wait is a
- * different kind of failure: there is no gate left to be stuck, and reporting `'inconclusive'`
- * would hide that behind what looks like a merely slow first run. Rethrown, with the original error
- * attached as `cause`, so it rejects the whole race instead of being collapsed here.
+ * One snapshot of everything {@link pollFirstRunGate} needs to decide what the first-run gate is
+ * doing, read together so the fields describe a single instant rather than several separate reads
+ * that could straddle a state change.
+ */
+interface FirstRunGateSample {
+  gateVisible: boolean;
+  escapeHatchVisible: boolean;
+  headingVisible: boolean;
+  onErrorScreen: boolean;
+}
+
+/**
+ * Rethrow a {@link FirstRunGateSample} read failure that means the page, its context, or the browser
+ * closed out from under {@link pollFirstRunGate} — there is no gate left to recover, so reporting
+ * `'inconclusive'` and letting the poll continue would hide that behind what looks like a merely
+ * slow first run. Any other error is left alone: it just means this iteration's read caught nothing
+ * usable, which is ordinary and quiet, so the poll tries again next iteration.
  *
  * Told apart by `error.constructor.name`, not `error.name` or the error message: Playwright's
  * `TargetClosedError` class (`playwright-core/lib/client/errors.js`) never sets `this.name` in its
@@ -2140,14 +2220,91 @@ type FirstRunGateOutcome = 'settled' | 'inconclusive';
  * exported from `@playwright/test`, so there is nothing to `instanceof` against; its constructor
  * name survives because Playwright ships this file unminified.
  */
-export function resolveRaceLeg(error: unknown): 'inconclusive' {
+export function rethrowIfTargetClosed(error: unknown): void {
   if (error instanceof Error && error.constructor.name === 'TargetClosedError')
     throw new Error(
       'e2e precondition: the page, its context, or the browser closed while waiting for the ' +
         'first-run gate to resolve — there is no gate left to recover.',
       { cause: error },
     );
-  return 'inconclusive';
+}
+
+/**
+ * Poll a first-run-gate sample until it clears, shows a recognisably stuck state, or the budget
+ * runs out — one snapshot per iteration, deliberately not a race of several `waitFor` calls against
+ * each other.
+ *
+ * `Promise.race` never cancels its losers. On the ordinary path — the gate clears within a poll or
+ * two — every losing `waitFor` would keep polling for up to its own full timeout (the caller's
+ * entire remaining readiness budget, up to ~90 s) after the function that raced them has already
+ * returned. Playwright records each of those dangling waits as a failed step in the trace/HTML
+ * report even though the test passes, and if the page closes before a losing wait times out — the
+ * common case, since most tests finish in well under 90 s — it rejects with `TargetClosedError`
+ * after the race has already settled and nobody is left to handle it: an unhandled rejection
+ * Playwright attributes to whatever happens to be running at that moment. Reading every
+ * discriminator together, once per iteration, leaves nothing outstanding once this returns.
+ *
+ * @param sample Takes one snapshot of the gate's current DOM state. Must not itself time out —
+ *   `dismissStuckFirstRunGate` passes non-auto-waiting reads (`isVisible`/`count`), never a
+ *   `waitFor`, so a slow read never leaves this loop blocked past `timeout`.
+ * @param timeout Budget for the whole poll.
+ * @param deps Sleep/clock seams, injected so tests can drive the loop without waiting in real time;
+ *   defaults to real timers.
+ * @returns `'cleared'` once the gate is gone; the sample itself once it shows a recognisable stuck
+ *   state (an escape hatch or a heading) — the caller needs that exact snapshot, since it is
+ *   already the single consistent observation {@link decideStuckGateAction} requires, not a cue to
+ *   read again; `'inconclusive'` if neither happened within the budget, OR if 3 samples in a row
+ *   fail to read anything (a non-retriable failure, e.g. a selector that will never match, should
+ *   not burn the whole ~90s budget silently — the first such failure is logged once, with a stable
+ *   `[e2e-first-run-gate]` prefix, and the streak resets on the next successful sample).
+ */
+export interface PollFirstRunGateDeps {
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+}
+
+const defaultPollFirstRunGateDeps: PollFirstRunGateDeps = { sleep, now: () => Date.now() };
+
+/** Consecutive sample failures {@link pollFirstRunGate} tolerates before giving up early. */
+const MAX_CONSECUTIVE_SAMPLE_FAILURES = 3;
+
+export async function pollFirstRunGate(
+  sample: () => Promise<FirstRunGateSample>,
+  timeout: number,
+  deps: PollFirstRunGateDeps = defaultPollFirstRunGateDeps,
+): Promise<'cleared' | 'inconclusive' | FirstRunGateSample> {
+  const start = deps.now();
+  let hasWarnedOnSampleFailure = false;
+  let consecutiveSampleFailures = 0;
+  for (;;) {
+    let current: FirstRunGateSample | undefined;
+    try {
+      // Sequential polling: each sample must finish before the next is taken.
+      // eslint-disable-next-line no-await-in-loop
+      current = await sample();
+    } catch (error) {
+      rethrowIfTargetClosed(error);
+      // Anything else means nothing recognisable came back this iteration. Keep polling — most
+      // reads like this are ordinary and quiet — but log the first one (once, not every 100ms) and
+      // give up after a short streak of them, so a failure that will never clear on its own does
+      // not silently claim the whole remaining budget.
+      if (!hasWarnedOnSampleFailure) {
+        console.warn(`[e2e-first-run-gate] Sample read failed, will keep polling: ${error}`);
+        hasWarnedOnSampleFailure = true;
+      }
+      consecutiveSampleFailures += 1;
+      if (consecutiveSampleFailures >= MAX_CONSECUTIVE_SAMPLE_FAILURES) return 'inconclusive';
+    }
+    if (current) {
+      consecutiveSampleFailures = 0;
+      if (!current.gateVisible) return 'cleared';
+      if (current.escapeHatchVisible || current.headingVisible) return current;
+    }
+    if (deps.now() - start >= timeout) return 'inconclusive';
+    // Sequential polling: each sample must finish before the next is taken.
+    // eslint-disable-next-line no-await-in-loop
+    await deps.sleep(100);
+  }
 }
 
 /**
@@ -2182,51 +2339,34 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
   const dialogHeading = firstRunDialog.getByRole('heading', { level: 1 });
   const errorScreen = firstRunDialog.locator(TOP_LEVEL_ERROR_SELECTOR);
 
-  // The race establishes only WHETHER the gate cleared or is stuck showing something; what it is
-  // stuck on is decided afterwards, from the screen itself. Racing the discriminators against each
-  // other would let one app state reach either answer depending on which locator settled first.
-  //
-  // Each leg swallows its own TIMEOUT so the race reports what it SAW rather than rejecting: a
-  // rejection makes the gate's ordinary loading flash a hard failure whenever the remaining budget
-  // is short, which is exactly when this is called. A leg whose page/context/browser closed out
-  // from under it is a different matter — see resolveRaceLeg — and is left to reject the race.
-  const settled = await Promise.race([
-    firstRunDialog
-      .waitFor({ state: 'hidden', timeout })
-      .then(() => 'cleared' as const)
-      .catch((err: unknown) => resolveRaceLeg(err)),
-    escapeHatch
-      .waitFor({ state: 'visible', timeout })
-      .then(() => 'stuck' as const)
-      .catch((err: unknown) => resolveRaceLeg(err)),
-    dialogHeading
-      .waitFor({ state: 'visible', timeout })
-      .then(() => 'stuck' as const)
-      .catch((err: unknown) => resolveRaceLeg(err)),
-  ]);
-
-  if (settled === 'cleared') return 'settled';
-
-  let action: ReturnType<typeof decideStuckGateAction> | 'inconclusive' = 'inconclusive';
-  if (settled === 'stuck') {
-    // Read concurrently, not one after another: a gate that resolves between two sequential awaits
-    // would leave them describing two different instants, which is exactly the inconsistent
-    // combination decideStuckGateAction's own precedence (gateStillShowing decides first) exists to
-    // rule out — but only if the three readings are actually a single snapshot in time.
-    const [escapeHatchVisible, errorScreenCount, gateStillShowing] = await Promise.all([
-      escapeHatch.isVisible(),
-      errorScreen.count(),
+  // See pollFirstRunGate's own docblock for why this polls one snapshot per iteration rather than
+  // racing the three `waitFor`s against each other. Local to this call: `isVisible`/`count` never
+  // auto-wait or time out, so the sample itself needs no timeout of its own.
+  const polled = await pollFirstRunGate(async () => {
+    const [gateVisible, escapeHatchVisible, headingVisible, errorScreenCount] = await Promise.all([
       firstRunDialog.isVisible(),
+      escapeHatch.isVisible(),
+      dialogHeading.isVisible(),
+      errorScreen.count(),
     ]);
-    action = decideStuckGateAction({
+    return {
+      gateVisible,
       escapeHatchVisible,
+      headingVisible,
       onErrorScreen: errorScreenCount > 0,
-      gateStillShowing,
-    });
-  }
+    };
+  }, timeout);
 
-  // The gate resolved while it was being examined, which is the outcome this whole step wants.
-  if (action === 'cleared') return 'settled';
+  if (polled === 'cleared') return 'settled';
+  if (polled === 'inconclusive') return 'inconclusive';
+
+  // `polled` is already the single consistent observation decideStuckGateAction needs — reading the
+  // DOM again here could land after the gate moved on and describe an instant this call never saw.
+  const action = decideStuckGateAction({
+    escapeHatchVisible: polled.escapeHatchVisible,
+    onErrorScreen: polled.onErrorScreen,
+    gateStillShowing: polled.gateVisible,
+  });
 
   if (action === 'wizard')
     throw new Error(

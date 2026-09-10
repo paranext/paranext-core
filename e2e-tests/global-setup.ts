@@ -258,11 +258,21 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       cwd: rootDir,
       stdio: ['ignore', devServerLog, devServerLog],
       shell: true,
-      // Create a new process group so global-teardown can kill the entire tree: on POSIX via
-      // process.kill(-pid) (without this, the shell child inherits the parent's PGID and
-      // process.kill(-pid) throws ESRCH), on Windows via `taskkill /t` instead, since `detached`
-      // does not create an addressable process group there.
-      detached: true,
+      // POSIX: create a new process group so global-teardown can kill the entire tree via
+      // process.kill(-pid) — without this, the shell child inherits the parent's PGID and
+      // process.kill(-pid) throws ESRCH. Windows has no addressable process group for `detached` to
+      // create, so global-teardown reaches the tree there via `taskkill /t` instead (see
+      // killProcessTree), and `detached` itself is left off: combined with `windowsHide` below, node
+      // requests DETACHED_PROCESS on Windows, and Windows silently ignores CREATE_NO_WINDOW whenever
+      // DETACHED_PROCESS is also set — the two flags this spawn asks for lose to each other,
+      // reopening the visible console window `windowsHide` exists to suppress. Splitting them by
+      // platform keeps both properties: a killable tree on POSIX, no console window on Windows.
+      detached: process.platform !== 'win32',
+      // A detached (and/or shell-wrapped) child gets its own console window on Windows unless told
+      // otherwise — Node's own doc for `detached`: "On Windows, ... the child process will have its
+      // own console window". Without this, every isolated-suite run opens a visible cmd window
+      // nobody asked for, on top of the app windows under test.
+      windowsHide: true,
       // Must clear ELECTRON_RUN_AS_NODE for the env to be clean.
       // SKIP_START_MAIN tells the webpack dev server's setupMiddlewares to skip
       // spawning start:main — Playwright launches Electron directly via electron.launch().

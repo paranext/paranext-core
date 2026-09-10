@@ -47,3 +47,41 @@ These belong to no subset; run them by path (see "How to run").
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
 - `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
 - `verse-navigation/` (one Electron per worker) — tests for verse navigation keyboard shortcuts
+
+## Running on Windows
+
+Run the suite the same way as anywhere else, from a normal PowerShell or cmd prompt:
+
+```
+npm run test:e2e:isolated all
+```
+
+Each test launches and tears down its own app window. Windows has no Xvfb equivalent to keep those
+windows off the desktop, so expect them to open and close in front of you for the whole run — leave
+the machine alone and keep the session unlocked while it runs. A locked session (Win+L), or anything
+else that steals focus, breaks the tests that assert real window focus (the `multi-window` subset).
+
+A healthy teardown prints `[teardown] Port 8876 is free` between tests, with no `still in use` or
+`EBUSY` lines.
+
+### If it goes wrong
+
+- **Tests fail at their full timeout one after another, some passing only on the automatic
+  retry** — usually alongside `PAPI websocket server failed to bind: listen EADDRINUSE: address
+already in use ::1:8876` in the new app's log and `Settings service undefined` in the test
+  output. This means something is still holding port 8876 — an app instance you started
+  separately, or an orphan left by a run that crashed or was interrupted with Ctrl+C. Find and
+  clear it:
+  ```
+  netstat -ano | findstr :8876
+  tasklist /FI "IMAGENAME eq electron.exe"
+  npm run stop
+  ```
+  `npm run stop` stops every app and dotnet process on the machine by name, so use it only once
+  nothing else on the machine needs them running.
+- **Leftover `%LOCALAPPDATA%\Temp\paranext-e2e-*` folders** are safe to delete once no app is
+  running — each one is a temporary profile from a past run.
+- **A test that fails only around window focus or activation** — check whether the session was
+  locked or another window stole focus during the run.
+- **A test reported as "skipped"** means its worker died, not that it was intentionally excluded —
+  treat it as a failure and read the first failing test in that file.

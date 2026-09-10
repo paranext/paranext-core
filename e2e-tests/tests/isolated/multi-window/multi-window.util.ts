@@ -11,6 +11,7 @@
  */
 import { ElectronApplication, Page, expect } from '@playwright/test';
 import {
+  killProcessTree,
   sendPapiRequestOnce,
   waitForOverlayGone,
   waitForPapiMethodRegistered,
@@ -732,13 +733,7 @@ export async function quitAppAndWaitForExit(
     }),
   ]);
 
-  if (electronProcess.pid) {
-    try {
-      process.kill(-electronProcess.pid, 'SIGKILL');
-    } catch {
-      /* process group already gone */
-    }
-  }
+  if (electronProcess.pid) killProcessTree(electronProcess.pid, 'SIGKILL');
 
   return exitResult;
 }
