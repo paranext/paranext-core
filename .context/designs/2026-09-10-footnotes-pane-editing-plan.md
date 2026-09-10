@@ -537,28 +537,27 @@ git commit -m "feat(platform): EditorRef.highlightNote applies PT9's selected-ca
 
 **Files:**
 - Regenerate: `packages/platform/dist/**`, `packages/platform/etc/platform-editor.api.md`
-- Modify: `packages/platform/package.json` — bump `version` to `0.8.17`
+- Do NOT bump `packages/platform/package.json`'s `version`: the repo's bump-versions/publish workflow owns versioning.
 
 - [ ] **Step 1: Typecheck + lint**
 
 Run: `$SHIM_ENV pnpm nx typecheck @eten-tech-foundation/platform-editor` and `$SHIM_ENV pnpm nx lint @eten-tech-foundation/platform-editor` (and the same for `shared-react`). Expected: clean.
 
-- [ ] **Step 2: Bump version, build, extract API**
+- [ ] **Step 2: Build, extract API**
 
-Set `"version": "0.8.17"` in `packages/platform/package.json`. Then:
 `$SHIM_ENV pnpm nx build @eten-tech-foundation/platform-editor --skip-nx-cache && $SHIM_ENV pnpm nx extract-api @eten-tech-foundation/platform-editor --skip-nx-cache`
 Expected: `packages/platform/dist/index.d.ts` contains `getNoteIndex(noteKey: string)`, `getNoteKey(noteIndex: number)`, and `highlightNote(noteKeyOrIndex`; `etc/platform-editor.api.md` diff shows the three new members and nothing removed.
 
 - [ ] **Step 3: Commit the artifacts**
 
 ```bash
-git add packages/platform/package.json packages/platform/dist packages/platform/etc/platform-editor.api.md
-git commit -m "build(platform): 0.8.17 — rebuild dist and API report for getNoteIndex/highlightNote"
+git add packages/platform/dist packages/platform/etc/platform-editor.api.md
+git commit -m "build(platform): rebuild dist and API report for getNoteIndex/getNoteKey/highlightNote"
 ```
 
-- [ ] **Step 4: Publish into the core worktree via yalc**
+- [ ] **Step 4: Publish into the core worktree via yalc (publish + link, NEVER `yalc push`)**
 
-From `packages/platform`: `$SHIM_ENV npx tsx ../../scripts/prepare-publish.ts && $SHIM_ENV npx yalc publish --no-scripts` then `git restore package.json` (prepare-publish rewrites it; the version bump from Step 2 must survive — check `git diff` shows nothing after the restore because the bump was committed). In the core worktree root: `npx yalc add @eten-tech-foundation/platform-editor --no-pure` is NOT what main uses; use `npm run editor:link` (yalc link, `--no-pure`) and verify `grep -c highlightNote node_modules/@eten-tech-foundation/platform-editor/dist/index.d.ts` prints ≥ 1. Then `cd lib/platform-bible-react && npm run typecheck` in core — expected clean (PBR imports the editor's types).
+`yalc push` rewires every paranext-core checkout registered in the yalc store (several sibling worktrees are), so it is forbidden here. From `packages/platform`: `$SHIM_ENV npx tsx ../../scripts/prepare-publish.ts && $SHIM_ENV npx yalc publish --no-scripts`, then `git restore package.json` (prepare-publish rewrites it; `git status` must be clean afterwards). Then in the core worktree root (`/home/tj_co/source/repos/workspaces/pt-4189-footnote-pane-editing/paranext-core`): `npm run editor:link` and verify `grep -c "highlightNote" node_modules/@eten-tech-foundation/platform-editor/dist/index.d.ts` prints ≥ 1 and `grep -c "getNoteKey" …` prints ≥ 1. Then `cd lib/platform-bible-react && npm run typecheck` in core — expected clean. Do not run `npm install` in core (it would re-run the postinstall's dev-package linking against the wrong branch).
 
 - [ ] **Step 5: Push the editor branch**
 
