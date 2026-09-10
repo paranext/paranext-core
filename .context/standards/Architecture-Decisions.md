@@ -3484,7 +3484,8 @@ step, no automation. Just a record.
   a second key leaves both plugs declared. The rename therefore lives in a `patch-package` patch on
   `app-builder-lib`'s template. `base` is the single source of truth for the pairing, enforced
   against the patched template and the workflow runners by
-  `.erb/scripts/electron-builder-snap-config.test.ts`.
+  `.erb/scripts/electron-builder-snap-config.test.ts`, and against the snap that build produces by
+  `.erb/scripts/assert-generated-snap-metadata.ts`, which every snap-building workflow runs.
 - **Alternatives:** Override the attributes under the template's name — rejected, empirically: it
   makes every existing install a coin flip. Declare a second, correctly-named plug in config —
   rejected: config cannot remove the template's plug, so both ship and collide. Neutralise the

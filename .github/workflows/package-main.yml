@@ -151,6 +151,9 @@ jobs:
           USE_HARD_LINKS: false
         run: |
           npx electron-builder build --publish never --linux
+          # Before the artifact upload below: this workflow's snap is the one shared internally, so
+          # a bad one should fail here rather than be published as a build someone can install.
+          npm run assert:snap-metadata
 
       - name: Rename Windows exe to include GitHub Action Run ID
         if: ${{ matrix.os == env.OS_WINDOWS }}
@@ -189,8 +192,11 @@ jobs:
           path: |
             ./release/build/*.dmg
 
+      # `!cancelled()` rather than the implicit `success()`: this workflow's snap is the one shared
+      # internally, so a build that fails the metadata check is exactly the one someone needs to
+      # unsquash to see what shipped. The default gate would discard it and keep every passing one.
       - name: Rename Linux snap to include GitHub Action Run ID
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
         run: |
           for file in ./release/build/*.snap; do
             newName="${file%.snap}-${{ github.run_id }}.snap"
@@ -199,7 +205,7 @@ jobs:
           done
 
       - name: Upload Linux artifacts
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
         uses: actions/upload-artifact@v4
         with:
           name: app-linux
