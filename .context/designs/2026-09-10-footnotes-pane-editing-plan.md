@@ -1422,3 +1422,97 @@ Whole component test file green (Task 5 + Task 8 tests included); lint clean; `n
 git add extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.test.tsx
 git commit -m "Keep the footnotes pane selection across USJ echoes and while a row is being edited"
 ```
+
+---
+
+### Task 14: `FootnotesLayout` keeps the editing row mounted across content-only USJ changes (core)
+
+Runs after Task 9 and before Task 10.
+
+**Files:**
+- Modify: `extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx` (the `usj` effect's `setFootnoteListKey` call)
+- Test: `extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.test.tsx` (extend)
+
+**Why:** `FootnoteList` keys rows as `${listId}-${index}`, and `FootnotesLayout` passes `footnoteListKey` as `listId`, bumping it on EVERY `usj` change. With the pane fed from the editor's live document, every live-applied keystroke in the inline row editor changes `usj`, bumps the key, and remounts the editing row — which reloads the session-start `noteOps` and re-applies `initialCaretPosition`, visibly reverting typed text. The `listId` contract (`footnotes.types.ts`) says it "should change whenever the list changes (due to additions, deletions or — unlikely — reordering)", not on every content edit.
+
+**Interfaces:**
+- Produces: `footnoteListKey` changes only when the number of notes changes (additions/deletions). Content-only changes and same-count echoes keep the key, so row elements and the editing row's editor stay mounted. (Reordering with an unchanged count is not detected — the contract already calls it unlikely; say so in a comment.)
+
+- [ ] **Step 1: Failing tests**
+
+Append to the component test file (reuse `renderPane`, `usjWithTwoNotes`, `note`, `localizedStrings`, `useWebViewStateMock`):
+
+```tsx
+describe('FootnotesLayout list identity across USJ changes', () => {
+  it('keeps the editing row mounted when only a note\'s content changes', () => {
+    let mounts = 0;
+    function RowEditor() {
+      useEffect(() => { mounts += 1; }, []);
+      return <div data-testid="row-editor" />;
+    }
+    const props = {
+      showMarkers: true, useWebViewState: useWebViewStateMock, localizedStrings, onClose: () => {},
+      editingFootnoteIndex: 1, renderEditingFootnote: () => <RowEditor />,
+    };
+    const { rerender } = render(<FootnotesLayout {...props} usj={usjWithTwoNotes}><div /></FootnotesLayout>);
+    const rowBefore = screen.getAllByRole('option')[0];
+    expect(mounts).toBe(1);
+    const edited: Usj = {
+      ...usjWithTwoNotes,
+      content: [
+        usjWithTwoNotes.content[0],
+        usjWithTwoNotes.content[1],
+        { type: 'para', marker: 'p', content: [{ type: 'verse', marker: 'v', number: '1' }, 'a ', note('alpha'), ' b ', note('beta typed more')] },
+      ],
+    };
+    rerender(<FootnotesLayout {...props} usj={edited}><div /></FootnotesLayout>);
+    expect(mounts).toBe(1);
+    expect(screen.getAllByRole('option')[0]).toBe(rowBefore);
+  });
+
+  it('remounts the rows when a note is added or removed', () => {
+    const props = { showMarkers: true, useWebViewState: useWebViewStateMock, localizedStrings, onClose: () => {} };
+    const { rerender } = render(<FootnotesLayout {...props} usj={usjWithTwoNotes}><div /></FootnotesLayout>);
+    const rowBefore = screen.getAllByRole('option')[0];
+    const withThree: Usj = {
+      ...usjWithTwoNotes,
+      content: [
+        usjWithTwoNotes.content[0],
+        usjWithTwoNotes.content[1],
+        { type: 'para', marker: 'p', content: [{ type: 'verse', marker: 'v', number: '1' }, 'a ', note('alpha'), ' b ', note('beta'), ' c ', note('gamma')] },
+      ],
+    };
+    rerender(<FootnotesLayout {...props} usj={withThree}><div /></FootnotesLayout>);
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+    expect(screen.getAllByRole('option')[0]).not.toBe(rowBefore);
+  });
+});
+```
+
+(`useEffect` import from `react` in the test file if not already present.) Run: `cd extensions/src/platform-scripture-editor && npx vitest run platform-scripture-editor-footnotes.component.test.tsx` — the first test FAILS (2 mounts); the second passes already (keep it as the regression pin for the contract).
+
+- [ ] **Step 2: Implement**
+
+In the `usj` effect, replace the unconditional `setFootnoteListKey((prev) => prev + 1)` with a bump only when the parsed note count differs from the current list's count. Read the current count through the functional `setFootnotes` updater or a ref (the effect's deps must stay `[usj]`):
+
+```ts
+setFootnotes((current) => {
+  // The list id tells FootnoteList its rows are new. Only additions and deletions make them new;
+  // a content edit (every live-applied keystroke in the row editor) or a same-shape echo must keep
+  // the rows — and the editing row's editor — mounted. Reordering with an unchanged count is not
+  // detected; the listId contract already treats it as unlikely.
+  if (current.length !== newFootnotes.length) setFootnoteListKey((prev) => prev + 1);
+  return newFootnotes;
+});
+```
+
+If calling a setter inside another setter's updater trips React's lint/warnings, use a `footnotesCountRef` mirrored where `footnotes` is set, compare against `newFootnotes.length`, and bump outside the updater. Keep the `selectedFootnote` re-pointing logic (Task 13) unchanged.
+
+- [ ] **Step 3: Verify + commit**
+
+Whole component test file green; lint clean; `npx tsc --noEmit -p extensions/tsconfig.json 2>&1 | grep footnotes.component` prints nothing. Commit:
+
+```bash
+git add extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.test.tsx
+git commit -m "Bump the footnotes list id only when notes are added or removed"
+```
