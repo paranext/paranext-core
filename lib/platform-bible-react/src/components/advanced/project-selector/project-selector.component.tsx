@@ -80,6 +80,18 @@ import {
   type RowSection,
 } from './project-selector.rows';
 
+/**
+ * An action row pinned below the project list — "More projects…", "Browse the server…". Expressed
+ * as data rather than a render prop on purpose: the selector owns the markup so the row stays
+ * keyboard-reachable, which a caller-rendered `<button>` would not be.
+ */
+export type ProjectSelectorFooterAction = {
+  /** Localized row label. */
+  label: string;
+  /** Run when the row is activated. The popover closes afterwards. */
+  onSelect: () => void;
+};
+
 export type {
   ProjectSelectorOpenTab,
   ProjectSelectorMultiSelection,
@@ -414,6 +426,14 @@ type CommonProps = {
    * supplied, so the type stays reachable by hover and by screen reader.
    */
   renderProjectIndicator?: (project: ProjectSelectorProject) => ReactNode;
+  /**
+   * An action row rendered below every section, separated from the list. Use it for an affordance
+   * that opens a different surface — the sections partition rows, so they cannot express one.
+   *
+   * The row stays available when the list is empty, which is when an escape hatch matters most, and
+   * the "no projects" empty state still renders alongside it.
+   */
+  footerAction?: ProjectSelectorFooterAction;
 };
 
 /**
@@ -439,9 +459,8 @@ export type ProjectSelectorProps =
        */
       triggerLabelFormat?: 'shortName' | 'shortNameAndFullName';
       /**
-       * Render the trigger's label yourself, in place of the derived `shortName` /
-       * `shortName - fullName` string. Receives the selected project, or `undefined` when nothing
-       * is selected.
+       * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
+       * fullName` string. Receives the selected project, or `undefined` when nothing is selected.
        *
        * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
        * deliberate rather than an omission: a caller reaching for this prop is rendering a label
@@ -1399,6 +1418,29 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   {index < sections.length - 1 && <CommandSeparator />}
                 </Fragment>
               ))}
+              {props.footerAction && (
+                <>
+                  {/* `alwaysRender`: a plain CommandSeparator returns null as soon as cmdk's
+                      `state.search` is non-empty, so the footer would lose its rule mid-search. */}
+                  <CommandSeparator alwaysRender data-testid="project-selector-footer-separator" />
+                  {/* `forceMount` keeps this out of cmdk's registered-item set, so `filtered.count`
+                      stays 0 on an empty list and CommandEmpty still renders — while the node
+                      remains inside CommandList, where `getValidItems()` finds it for arrow-key,
+                      Home/End and Enter navigation. An explicit `value` stops cmdk deriving one
+                      from the localized label, which could collide with a project name. */}
+                  <CommandItem
+                    forceMount
+                    value="platform.footerAction"
+                    data-testid="project-selector-footer-action"
+                    onSelect={() => {
+                      props.footerAction?.onSelect();
+                      setOpen(false);
+                    }}
+                  >
+                    {props.footerAction.label}
+                  </CommandItem>
+                </>
+              )}
             </CommandList>
           </Command>
         </TooltipProvider>

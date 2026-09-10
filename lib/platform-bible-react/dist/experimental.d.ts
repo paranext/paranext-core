@@ -174,6 +174,17 @@ export type ProjectSelectorScrollGroupSelection = {
 	projectId?: string;
 	scrollGroupId?: ScrollGroupId;
 };
+/**
+ * An action row pinned below the project list — "More projects…", "Browse the server…". Expressed
+ * as data rather than a render prop on purpose: the selector owns the markup so the row stays
+ * keyboard-reachable, which a caller-rendered `<button>` would not be.
+ */
+export type ProjectSelectorFooterAction = {
+	/** Localized row label. */
+	label: string;
+	/** Run when the row is activated. The popover closes afterwards. */
+	onSelect: () => void;
+};
 /** Type definition for the localized strings used in this component */
 export type ProjectSelectorLocalizedStrings = {
 	/** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
@@ -423,6 +434,14 @@ type CommonProps = {
 	 * supplied, so the type stays reachable by hover and by screen reader.
 	 */
 	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
+	/**
+	 * An action row rendered below every section, separated from the list. Use it for an affordance
+	 * that opens a different surface — the sections partition rows, so they cannot express one.
+	 *
+	 * The row stays available when the list is empty, which is when an escape hatch matters most, and
+	 * the "no projects" empty state still renders alongside it.
+	 */
+	footerAction?: ProjectSelectorFooterAction;
 };
 /**
  * Props for {@link ProjectSelector}, discriminated by `mode`. Every mode shares the list, trigger
@@ -448,9 +467,8 @@ export type ProjectSelectorProps = (CommonProps & {
 	 */
 	triggerLabelFormat?: "shortName" | "shortNameAndFullName";
 	/**
-	 * Render the trigger's label yourself, in place of the derived `shortName` /
-	 * `shortName - fullName` string. Receives the selected project, or `undefined` when nothing
-	 * is selected.
+	 * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
+	 * fullName` string. Receives the selected project, or `undefined` when nothing is selected.
 	 *
 	 * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
 	 * deliberate rather than an omission: a caller reaching for this prop is rendering a label
