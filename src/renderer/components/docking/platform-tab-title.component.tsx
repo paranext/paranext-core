@@ -210,7 +210,11 @@ const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeK
   // the only thing that can be "standing unconfirmed"; move-to-an-existing-window never sets it.
   'reached-new-window-unconfirmed': '%tab_contextMenu_moveTabToNewWindow_failedUnconfirmed%',
   'possibly-closed': '%tab_contextMenu_moveTab_failedMayHaveClosed%',
-  'already-moving': '%tab_contextMenu_moveTabToNewWindow_failedAlreadyMoving%',
+  // Destination-neutral on purpose. `moveWebView` raises this refusal before it looks at `target`,
+  // so what it reports is that *some* move of this tab is already running — and the destination
+  // that matters is the in-flight move's, which neither handler knows. Naming a new window here
+  // would be wrong whenever the first move targeted an existing one.
+  'already-moving': '%tab_contextMenu_moveTab_failedAlreadyMoving%',
 };
 
 /**

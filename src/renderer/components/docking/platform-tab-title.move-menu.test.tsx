@@ -652,7 +652,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     await waitFor(() =>
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%tab_contextMenu_moveTabToNewWindow_failedAlreadyMoving%',
+          message: '%tab_contextMenu_moveTab_failedAlreadyMoving%',
           severity: 'error',
         }),
       ),
@@ -888,6 +888,33 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
           message: '%tab_contextMenu_moveTab_failedReopenedElsewhere%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
+  it('reports the already-moving refusal without naming a destination it cannot know', async () => {
+    // `moveWebView` raises this refusal before it looks at `target`, and both move actions reach
+    // the same message map — so the copy has to describe the tab, not where this call was headed.
+    // The destination that matters belongs to the move already in flight, which neither handler
+    // knows. Driven through the existing-window submenu because that is the path a new-window
+    // -specific string would be wrong for.
+    globalThis.windowId = '22222222-2222-4222-8222-222222222222';
+    vi.mocked(sendCommand).mockImplementation(async (command: string) => {
+      if (command === 'platform.getWindows') return [MAIN_WINDOW, OTHER_WINDOW];
+      throw new Error('[webViewMoveFailure:already-moving] nope');
+    });
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
+    fireEvent.click(screen.getByTestId('open-menu'));
+
+    fireEvent.click(await screen.findByText('MRK — wgPIDGIN'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTab_failedAlreadyMoving%',
           severity: 'error',
         }),
       ),
