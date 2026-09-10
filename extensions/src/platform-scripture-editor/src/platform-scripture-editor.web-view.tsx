@@ -917,10 +917,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * The editor's live document — what it currently holds, ahead of the debounced PDP save — or
-   * `undefined` until this chapter's content reaches the editor. The footnotes pane renders from
-   * this (falling back to `usjFromPdp`) so the pane and `EditorRef.getNoteIndex` index the SAME
-   * document: `usjFromPdp` lags the editor by the save debounce, and inside that window the two
-   * disagree about which note a given index names.
+   * `undefined` when there is none to show yet. The footnotes pane renders from this (falling back
+   * to `usjFromPdp`) so the pane and `EditorRef.getNoteIndex` index the SAME document: `usjFromPdp`
+   * lags the editor by the save debounce, and inside that window the two disagree about which note
+   * a given index names.
+   *
+   * Published only while the pane is RENDERED — once when it becomes rendered, and on every editor
+   * change thereafter — plus on each external load. Index agreement matters only to a pane the user
+   * can see, and publishing on every change regardless would put a whole-chapter `getUsj()` and a
+   * web-view re-render on the typing hot path of every view, pane or not.
    */
   const [liveEditorUsj, setLiveEditorUsj] = useState<Usj | undefined>(undefined);
 
@@ -1164,6 +1169,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editingNoteKey.current = undefined;
           editingNoteOps.current = undefined;
           editingNoteSessionRefreshedAt.current = undefined;
+          setPaneEditingIndex(undefined);
         }
         if (decision.action === 'ignore-expanded' || decision.action === 'ignore-popover-open')
           return;
@@ -1210,6 +1216,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         editingNoteKey.current = noteNodeKey;
         editingNoteOps.current = [noteOp];
         editingNoteSessionRefreshedAt.current = Date.now();
+        // The two surfaces are exclusive: a row editor left open in the pane must go before the
+        // popover takes the session over.
+        setPaneEditingIndex(undefined);
         setShowFootnoteEditor(true);
       },
     }),
@@ -2611,6 +2620,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     footnotesPaneRenderedRef.current = footnotesPaneRendered;
   }, [footnotesPaneRendered]);
+  // A pane that has just become rendered needs the editor's current document up front: editor
+  // changes are published only while it IS rendered, so without this it would open onto whatever
+  // document was current the last time it was visible. `undefined` (no document in the editor yet)
+  // correctly falls the pane back to `usjFromPdp`.
+  useEffect(() => {
+    if (footnotesPaneRendered) setLiveEditorUsj(editorRef.current?.getUsj());
+  }, [footnotesPaneRendered]);
   // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
   // entire layout phase of each render. If a useLayoutEffect fires during a chapter-change render
   // (e.g. footnote-editor closing), this ref still holds the OLD chapter's setter — preventing
@@ -3215,10 +3231,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         saveUsjToPdpIfUpdatedRef.current,
         chapterKeyRef.current,
       );
-      // Republish the editor's live document for the footnotes pane. The pane and
-      // `EditorRef.getNoteIndex` must index the SAME document, and `usjFromPdp` lags the editor by
-      // the save debounce, so the pane cannot wait for the save to land.
-      setLiveEditorUsj(editorRef.current?.getUsj() ?? usj);
+      // Republish the editor's live document for the footnotes pane, which cannot wait for the
+      // debounced save to land: it and `EditorRef.getNoteIndex` must index the SAME document. Only
+      // while the pane is rendered — see `liveEditorUsj` for why this stays off the hot path
+      // otherwise.
+      if (footnotesPaneRenderedRef.current) setLiveEditorUsj(editorRef.current?.getUsj() ?? usj);
       if (editingNoteKey.current) {
         // Any editor change that lands while the note-editing session is open counts as
         // interaction with it — most importantly the popover's own save path (replaceEmbedUpdate
@@ -4000,7 +4017,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   onClose={hideFootnotesPane}
                   showMarkers={options.view?.markerMode !== 'hidden'}
                   focusRequest={footnotePaneFocusRequest}
-                  editingFootnoteIndex={paneEditingIndex}
+                  editingFootnoteIndex={
+                    noteEditingSurface === 'pane' ? paneEditingIndex : undefined
+                  }
                   renderEditingFootnote={renderPaneFootnoteEditor}
                   // Only where the pane IS the editing surface: elsewhere (and in a read-only text)
                   // a row click selects rather than opens a row editor.
