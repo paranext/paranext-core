@@ -24,8 +24,9 @@ function install(
   webViewId: string,
   html: string,
   bound?: Partial<Bound>,
+  levels: { [areaId: string]: number } = {},
 ): { papi: PapiLike; bound: Bound } {
-  document.head.innerHTML = getContentZoomStyleElement('n', 1, {});
+  document.head.innerHTML = getContentZoomStyleElement('n', 1, levels);
   document.body.innerHTML = html;
   const papi: PapiLike = {
     commands: { sendCommand: vi.fn(async () => undefined) },
@@ -59,8 +60,9 @@ function wheel(init: WheelEventInit, target: EventTarget = window): WheelEvent {
 }
 
 /**
- * Two frames: the mutation observer schedules its refresh on the frame after the mutation's
- * microtask.
+ * Settles past the mutation observer's refresh, which the bootstrap runs directly off the
+ * observer's own microtask callback (no `requestAnimationFrame` involved) — two frames is a
+ * generous upper bound that also has margin for a slow CI worker.
  */
 async function nextFrame(): Promise<void> {
   await new Promise((resolve) => {
@@ -72,6 +74,23 @@ function byId(id: string): HTMLElement {
   const element = document.getElementById(id);
   if (!element) throw new Error(`missing #${id}`);
   return element;
+}
+
+/**
+ * Jsdom has no real `window.matchMedia`; stub it so `(prefers-reduced-motion: reduce)` resolves as
+ * given.
+ */
+function stubMatchMedia(reducedMotion: boolean): void {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: query === '(prefers-reduced-motion: reduce)' ? reducedMotion : false,
+    media: query,
+    onchange: undefined,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
 }
 
 describe('content-zoom bootstrap script', () => {
@@ -215,6 +234,48 @@ describe('content-zoom bootstrap script', () => {
     expect(rules.some((text) => text.includes('"inner"'))).toBe(false);
   });
 
+  it('does not duplicate a rule the style element already baked in for a persisted area level', async () => {
+    const { bound } = install('wv-9', TWO_AREAS, undefined, { footnotes: 0.9 });
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-9', [
+      'main',
+      'footnotes',
+    ]);
+    const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
+    const footnoteRules = sheet
+      ? Array.from(sheet.cssRules).filter((rule) => rule.cssText.includes('"footnotes"'))
+      : [];
+    expect(footnoteRules).toHaveLength(1);
+  });
+
+  it('treats multiple elements sharing one area id as a single area', async () => {
+    const html =
+      '<div id="toolbar">bar</div>' +
+      '<div data-platform-content-zoom-root id="main"><p id="verse" tabindex="0">text</p></div>' +
+      '<div data-platform-content-zoom-root="footnotes" id="foot1"><p id="note1" tabindex="0">note 1</p></div>' +
+      '<div data-platform-content-zoom-root="footnotes" id="foot2"><p id="note2" tabindex="0">note 2</p></div>';
+    const { bound } = install('wv-10', html);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-10', [
+      'main',
+      'footnotes',
+    ]);
+    expect(wheel({ deltaY: -100, ctrlKey: true }, byId('note1')).defaultPrevented).toBe(true);
+    expect(wheel({ deltaY: -100, ctrlKey: true }, byId('note2')).defaultPrevented).toBe(true);
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-10', 1, 'footnotes'],
+      ['wv-10', 1, 'footnotes'],
+    ]);
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    api.showIndicator('footnotes', '120 %');
+    const badge = document.getElementById('platform-content-zoom-indicator');
+    expect(badge?.dataset.area).toBe('footnotes');
+  });
+
   it('shows a transient indicator on the named area', () => {
     install('wv-8', TWO_AREAS);
     // The bootstrap script defines this global; the double underscore marks it as an internal
@@ -227,6 +288,48 @@ describe('content-zoom bootstrap script', () => {
     expect(badge?.textContent).toBe('120 %');
     expect(badge?.getAttribute('aria-live')).toBe('polite');
     expect(badge?.dataset.area).toBe('footnotes');
+  });
+
+  it('hides the indicator by fading out after 1.1 s, keeping its text', () => {
+    install('wv-11', TWO_AREAS);
+    stubMatchMedia(false);
+    vi.useFakeTimers();
+    try {
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      const api = window.__platformContentZoom;
+      if (!api) throw new Error('indicator api missing');
+      api.showIndicator('footnotes', '120 %');
+      const badge = document.getElementById('platform-content-zoom-indicator');
+      vi.advanceTimersByTime(1200);
+      expect(badge?.style.opacity).toBe('0');
+      expect(badge?.style.transition).not.toBe('none');
+      expect(badge?.textContent).toBe('120 %');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hides the indicator instantly, with no fade, under reduced motion', () => {
+    install('wv-12', TWO_AREAS);
+    stubMatchMedia(true);
+    vi.useFakeTimers();
+    try {
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      const api = window.__platformContentZoom;
+      if (!api) throw new Error('indicator api missing');
+      api.showIndicator('footnotes', '120 %');
+      const badge = document.getElementById('platform-content-zoom-indicator');
+      vi.advanceTimersByTime(1200);
+      expect(badge?.style.opacity).toBe('0');
+      expect(badge?.style.transition).toBe('none');
+      expect(badge?.textContent).toBe('120 %');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('bakes the default, the known levels, the base rule and the named-area rules into the style element', () => {
