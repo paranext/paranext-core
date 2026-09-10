@@ -63,12 +63,29 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
 }
 
 /**
- * Clicks the primary action button (Next on intermediate steps, Done on the last step). Uses a
- * regex so it matches whichever label the localization provides.
+ * Waits for the tour's step-counter text to differ from `previousText` — or for the counter to
+ * disappear entirely, which happens when a Done click closes the tour. Either outcome is proof that
+ * the triggering click's transition actually rendered, not just that the click resolved: the tour
+ * re-measures its target on every step change and has no Escape listener (and, once Done closes it,
+ * no dialog) for a frame while it does that.
+ */
+async function waitForStepCounterChange(page: Page, previousText: string | null): Promise<void> {
+  const stepCounter = getTourDialog(page).getByTestId('tour-step-counter');
+  await expect(stepCounter).not.toHaveText(previousText ?? '', { timeout: 5_000 });
+}
+
+/**
+ * Clicks the primary action button (Next on intermediate steps, Done on the last step) and waits
+ * for the step counter to actually change before returning, so callers always see a settled step
+ * rather than a mid-transition frame. Uses a regex so it matches whichever label the localization
+ * provides.
  */
 export async function advanceTour(page: Page): Promise<void> {
   const dialog = getTourDialog(page);
+  const stepCounter = dialog.getByTestId('tour-step-counter');
+  const stepBeforeClick = await stepCounter.textContent();
   await dialog.getByRole('button', { name: /^(Next|Done)$/i }).click();
+  await waitForStepCounterChange(page, stepBeforeClick);
 }
 
 /** Clicks the Back button to return to the previous step. */
@@ -99,10 +116,9 @@ export async function advanceToLastStep(page: Page): Promise<void> {
     await nextButton.click();
     // Wait for the step-transition re-render to actually land before deciding whether to keep
     // going: a bare isVisible() right after the click can still observe the outgoing step's Next
-    // button mid-transition and return early, silently skipping a step. The step counter changing
-    // is proof the new step has mounted.
+    // button mid-transition and return early, silently skipping a step.
     // eslint-disable-next-line no-await-in-loop
-    await expect(stepCounter).not.toHaveText(stepBeforeClick ?? '', { timeout: 5_000 });
+    await waitForStepCounterChange(page, stepBeforeClick);
   }
 }
 
