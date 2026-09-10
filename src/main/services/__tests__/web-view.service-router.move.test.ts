@@ -1177,7 +1177,7 @@ describe('a web view that is between windows on a move', () => {
   });
 
   test('a source window whose own readopt genuinely failed does not get folded into while recovery is still choosing the next window', async () => {
-    // The third gap the review found. Unlike the sibling test above, the source rung here actually
+    // The third gap in this invariant. Unlike the sibling test above, the source rung here actually
     // RUNS — nothing is closing when recovery starts — and its own readopt genuinely fails: a
     // rejected adopt, not a close decided mid-flight (that is the separate "began closing while it
     // readopted" case covered elsewhere in this file). The gap is what happens next: recovery has
@@ -1186,9 +1186,10 @@ describe('a web view that is between windows on a move', () => {
     // default) is deliberately left out of the initial wiring so that await hangs waiting for its
     // shard to be announced, the same wait a real cold-started window would cause, letting the test
     // observe state while it is pending. Only once the source rung has already failed does its own
-    // close get decided — simulating the race the review found. Without clearing the field the
-    // instant the source's readopt settles, it stays pointing at the source window all through the
-    // following await, and that window's own close-time enumeration would wrongly fold the view in.
+    // close get decided — simulating the race this invariant exists to close. Without clearing the
+    // field the instant the source's readopt settles, it stays pointing at the source window all
+    // through the following await, and that window's own close-time enumeration would wrongly fold
+    // the view in.
     const owner = sourceWindowShard('view-7', { projectId: 'project-7' });
     const target = windowShard([]);
     target.adoptWebView.mockRejectedValue(new Error('target provider exploded'));

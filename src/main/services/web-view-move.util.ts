@@ -480,10 +480,11 @@ async function readoptAfterFailedMove(
  * Run one recovery rung's readopt while `moveInFlight.destinationWindowId` names the window it is
  * aimed at, for exactly that readopt's duration and no longer — see the invariant on
  * {@link WebViewMoveInFlight.destinationWindowId}. Setting the field before the call and leaving the
- * clearing for whatever code happens to run next is exactly how three earlier fixes to that field
- * each closed one gap and opened another; a `finally` here makes the clear happen on every exit —
- * success, a handled failure inside {@link readoptAfterFailedMove}, or a throw — so a rung that goes
- * through this helper cannot omit it, and a rung added later has no path that skips it either.
+ * clearing to whatever code happens to run next leaves it naming a window whose readopt has already
+ * ended, which is what a stale destination is; a `finally` here makes the clear happen on every
+ * exit — success, a handled failure inside {@link readoptAfterFailedMove}, or a throw — so a rung
+ * that goes through this helper cannot omit it, and a rung added later has no path that skips it
+ * either.
  *
  * @param moveInFlight This move's own record in the in-flight register, updated in place — the
  *   register holds this exact object, not a copy
