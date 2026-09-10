@@ -87,8 +87,8 @@ import {
 import { moveWebView } from '@main/services/web-view-move.util';
 
 /**
- * Names this router no longer defines but still offers, because callers reach the web view
- * machinery through the router and moving them out is not a reason to make every caller say so.
+ * Names this router does not define but still offers, because callers reach the web view machinery
+ * through the router and moving them out is not a reason to make every caller say so.
  * `getWebViewShard` is read by `scroll-group-navigation.commands.ts` and `main.ts`;
  * `setWebViewWindowCreator` is how `main.ts` wires the creator once its window-creating closure
  * exists.

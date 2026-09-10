@@ -4533,8 +4533,11 @@ step, no automation. Just a record.
   view now keeps one globally-unique id, minted once, for its whole life across any number of moves
   — so the entry is deleted outright rather than kept as a superseded record: its "deduplicating by
   id is unsound" reasoning and its "mint an identity at the adopt" deferred alternative would read as
-  live prior art for a design this PR replaced. See `adr-web-view-ids-are-unique-from-birth` for the
-  current decision. Slug retired, not reused; the original text is in git history.
+  live prior art for the design that replaced it. See `adr-web-view-ids-are-unique-from-birth` for
+  the current decision, whose Context restates what the retired design was and why it went. Slug
+  retired, not reused. The verbatim original text is not recoverable from `main`'s history: the
+  entry was added and retired within one squash-merged change, so `main` never carried it — the
+  usual carve-out wording assumes a retirement one release after the entry landed.
 
 ## adr-web-view-ids-are-unique-from-birth: A web view id is minted once, globally unique, and never rewritten again
 
@@ -4557,11 +4560,18 @@ step, no automation. Just a record.
   unaffected; it already did this. `mint-web-view-ids.util.ts` (replacing
   `window-scoped-web-view-ids.util.ts`) does the minting for the renderer's three materialization
   sites: `simple-layout.builder.ts` building a Simple-mode layout, the default-layout supplement's
-  merge (re-keyed by `webViewType`, since a minted id can no longer serve as "is this entry already
-  present" — see the PR's commit re-keying `default-layout-supplement.util.ts`), and the baked test
-  layout's own materialization in `web-view.service-shard.ts`. A **persisted** id — anything loaded from a saved layout — is left exactly as saved: there
-  is no migration, and none is needed, because a persisted id was never window-scoped or stripped in
-  the first place under this scheme; it is just an ordinary string. Once minted, a view's id is never
+  merge (re-keyed by `webViewType`, since a minted id cannot serve as "is this entry already
+  present"), and the baked test
+  layout's own materialization in `web-view.service-shard.ts`. A **persisted** id — anything loaded from a saved layout — is left exactly as saved, and there
+  is no migration. What that costs is worth stating plainly rather than waving away: a layout
+  written by a build between #2730 (2026-09-04) and this change, **in Power mode only** (`saveLayout`
+  returns early in Simple), carries `<id>-w<N>` window-scoped ids. Nothing rewrites them, so the
+  per-web-view state stored under the unscoped spelling is not found and `cleanupOldWebViewState`
+  sweeps it at the next launch. Tabs, panels and window bounds all survive — ids are preserved
+  verbatim — so what is lost is per-web-view UI state for those profiles. The affected set is small
+  because the last GA release predates the scoping scheme entirely, and a pre-multi-window legacy
+  layout is unaffected (its ids were never scoped). A migration was judged not worth writing for a
+  pre-release window of a few days; the outcome is accepted, not overlooked. Once minted, a view's id is never
   rewritten again for any reason, including a move: capture returns the id it already had, and adopt
   answers with the same id it was handed. The main-process move/fold-in logic
   (`web-view-ownership.util.ts`, `web-view-move.util.ts`, `web-view.service-router.ts`) is simplified
