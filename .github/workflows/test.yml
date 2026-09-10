@@ -28,6 +28,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # A unit-test flake on one runner must not cancel the others: the blocking E2E suite runs only
+      # on Linux, so cancelling it because Windows was slow leaves the PR with no signal at all.
+      fail-fast: false
       matrix:
         # Make sure these match with the env values above
         os: [windows-latest, macos-15, ubuntu-22.04]
