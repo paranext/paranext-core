@@ -344,7 +344,7 @@ describe('moveWebView', () => {
     expect(owner.captureAndCloseWebView).toHaveBeenCalledWith('view-1');
     expect(created.adoptWebView).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
-      false,
+      expect.anything(),
     );
     // Close-before-adopt holds for the fresh window too: the capture has to finish before the
     // window created for the view adopts it

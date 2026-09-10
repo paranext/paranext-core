@@ -6,7 +6,6 @@ import type {
   WebViewDefinition,
   WebViewId,
 } from '@shared/models/web-view.model';
-import { isWindowAwaitingFirstActivation } from '@renderer/services/window-activation.util';
 
 // The service shard logs through the shared logger, which warns on every call when it cannot tell
 // which process it is running in
@@ -107,20 +106,16 @@ async function shardOverDockRecordingAdds() {
     getAllWebViewDefinitions: () => [],
     getWebViewDefinition: () => LIVE_DEFINITION,
     // The real dock resolves an unspecified `activateWithoutDocumentFocus` through this same
-    // latch; this stand-in does too, so `addWebViewToDock`'s recorded call args are what a real
-    // dock would have been asked for rather than the request this door forwards unresolved.
+    // latch; this stand-in leaves it unresolved, so `addWebViewToDock`'s recorded call args are
+    // the request this door actually forwards rather than what a real dock's own fallback would
+    // resolve it to. That fallback is the dock's own logic — see
+    // `platform-dock-layout-storage.document-focus.test.ts`.
     addWebViewToDock: (
       webView: Parameters<PapiDockLayout['addWebViewToDock']>[0],
       layout: Parameters<PapiDockLayout['addWebViewToDock']>[1],
       shouldBringToFront: boolean | undefined,
       activateWithoutDocumentFocus: boolean | undefined,
-    ) =>
-      addWebViewToDock(
-        webView,
-        layout,
-        shouldBringToFront,
-        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
-      ),
+    ) => addWebViewToDock(webView, layout, shouldBringToFront, activateWithoutDocumentFocus),
     simpleLayout: EMPTY_LAYOUT,
     testLayout: EMPTY_LAYOUT,
   } as unknown as PapiDockLayout;
@@ -200,12 +195,19 @@ beforeEach(() => {
 });
 
 describe('content arriving through a door that names no caller', () => {
-  test('a reload in a window the user has not activated does not take document focus', async () => {
+  test('a reload states no withholding opinion of its own, in either latch state', async () => {
     // A reload names no window and carries no say over focus: an extension asks for it, and it
     // re-docks wherever the view already lives. If that is a window main opened in the background,
     // taking document focus there focuses the iframe, and that focus stays latent until the window
-    // itself is raised — an uncontrolled focus here risks the same caret-ownership defect as a
-    // fresh open, through a door no caller passes a flag to.
+    // itself is activated — an uncontrolled focus here risks the same caret-ownership defect as a
+    // fresh open, through a door no caller passes a flag to. What this door owes is to leave the
+    // decision unspecified so the dock resolves it in the one place that fallback lives (covered
+    // against the real dock in `platform-dock-layout-storage.document-focus.test.ts`).
+    //
+    // One test, not a case and a control: the latch state cannot change what this door forwards,
+    // because the door has no opinion to state either way. A second test setting the latch the
+    // other way would assert the identical value under a name promising the opposite outcome, and
+    // neither could fail on it.
     globalThis.wasWindowCreatedWithoutActivation = true;
     const { shard, addWebViewToDock } = await shardOverDockRecordingAdds();
     await primeProvider();
@@ -216,23 +218,7 @@ describe('content arriving through a door that names no caller', () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      true,
-    );
-  });
-
-  test('a reload in a window the user has activated docks normally', async () => {
-    // The control: withholding is what a background window does, not what a reload does.
-    globalThis.wasWindowCreatedWithoutActivation = false;
-    const { shard, addWebViewToDock } = await shardOverDockRecordingAdds();
-    await primeProvider();
-
-    await shard.reloadWebView('test.type', 'open-view');
-
-    expect(addWebViewToDock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      false,
+      undefined,
     );
   });
 });
