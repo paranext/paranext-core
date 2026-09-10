@@ -1,4 +1,16 @@
 {
+  "%about_ariaLabel_opensTermsOfService%": {
+    "deprecationInfo": {
+      "date": "2026-09-10",
+      "message": "The Terms of Service now open in a window the application owns rather than in the operating system's handler for Markdown files. The new key is %about_ariaLabel_opensTermsOfService_2%."
+    }
+  },
+  "%about_error_couldNotOpenTermsOfService%": {
+    "deprecationInfo": {
+      "date": "2026-09-10",
+      "message": "The document ships as TERMS-OF-SERVICE.html rather than TERMS-OF-SERVICE.md, so the message names a different file. The new key is %about_error_couldNotOpenTermsOfService_2%."
+    }
+  },
   "%about_db_ip_attribution_intro%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;  Internet safety features use data&#xA;from &quot;%"
   },

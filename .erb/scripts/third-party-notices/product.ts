@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import JSON5 from 'json5';
+import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
 import type { ProductBlock } from './types';
 
 /** The parts of `electron-builder.json5` this pipeline reads. */
@@ -43,6 +44,12 @@ export function assertProductMatchesPackaging(
   configName: string,
 ): void {
   if (!product) {
+    if (config.productName === undefined)
+      throw new Error(
+        `${configName} sets no "productName", so this run cannot establish what it builds. The ` +
+          'document names the product in its first sentence - set productName, or declare a ' +
+          '"product" block in the overlay.',
+      );
     if (config.productName !== DEFAULT_PRODUCT_NAME)
       throw new Error(
         `${configName} builds "${config.productName}" but the notices policy declares no ` +
@@ -56,10 +63,45 @@ export function assertProductMatchesPackaging(
         'what the document calls the product and the repository is where it says the product is ' +
         'built. Fill both in, or remove the block.',
     );
+  // `repository` is cross-checked against nothing - unlike `name`, which has to equal
+  // `productName` - so a template value would otherwise print into the document's opening
+  // paragraph. The same refusal the separate-program and external-extension tables apply.
+  const placeholder = (['name', 'repository'] as const).find((field) =>
+    PLACEHOLDER_TEMPLATE_VALUE.test(String(product[field] ?? '')),
+  );
+  if (placeholder)
+    throw new Error(
+      `the notices policy "product" block records "${placeholder}" as ` +
+        `"${product[placeholder]}", which is still the template placeholder. Replace it with the ` +
+        'value it asks for.',
+    );
+  // Read for truthiness by `render.ts`, where it decides whether the document states that UBS's
+  // permission covers this product - so "false", "no" or any other non-empty string would assert
+  // a third party's licence grant. The same rule `nonBooleanOverrideFlag` applies to its flags.
+  if (product.isParatext !== undefined && typeof product.isParatext !== 'boolean')
+    throw new Error(
+      `the notices policy "product" block records "isParatext" as "${product.isParatext}", which ` +
+        "is not a boolean. It decides whether the document states that UBS's permission to " +
+        'distribute the lexical database covers this product, and any non-empty value at all ' +
+        'would otherwise read as "yes" - record true or false.',
+    );
   if (config.productName !== product.name)
     throw new Error(
       `the notices policy "product" block names "${product.name}", but ${configName} builds ` +
         `"${config.productName}". The document describes what the packaging config builds, so ` +
         'the two have to agree - fix whichever is wrong.',
+    );
+  // UBS's permission to distribute the lexical database names Paratext. A product CALLED Paratext
+  // that is not recorded as covered by it would make the document say the permission is specific to
+  // Paratext and then that it does not extend to this product - two statements about the same
+  // artifact that a reader cannot reconcile. Refused rather than rendered: which one is wrong is a
+  // determination, not something this pipeline can pick.
+  if (/paratext/i.test(product.name) && product.isParatext !== true)
+    throw new Error(
+      `the notices policy "product" block names "${product.name}" and does not record ` +
+        '"isParatext": true. UBS permits the lexical database\'s distribution in Paratext, so the ' +
+        'document would state that the permission is specific to Paratext and then that it does ' +
+        `not extend to ${product.name}. Record "isParatext": true if the permission covers this ` +
+        'product, or rename it if it does not.',
     );
 }

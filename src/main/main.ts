@@ -2100,7 +2100,15 @@ async function main() {
   commandService.registerCommand(
     'platform.openTermsOfService',
     async () => {
-      await openTermsOfServiceWindow(openExternal);
+      // Parented to the window the user clicked the link in, so Electron closes the document with
+      // it and counts it against that window rather than keeping the application alive on its own.
+      // Falls back to any tracked window: the parent only has to be an application window, and the
+      // focused one is merely the best guess at which.
+      const focusedWindowId = getFocusedWindowId();
+      const parent =
+        (focusedWindowId ? getWindowById(focusedWindowId) : undefined) ??
+        getTrackedWindows()[0]?.window;
+      await openTermsOfServiceWindow(openExternal, parent);
     },
     {
       method: {
