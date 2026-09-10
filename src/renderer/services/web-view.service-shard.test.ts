@@ -3085,13 +3085,11 @@ describe('content zoom wiring', () => {
     await import('@renderer/services/web-view.service-shard');
 
     // The bootstrap sends these over an untyped channel, so a malformed payload (a number where
-    // an area id belongs) is a real possibility, not just a type-checker artifact. Routing the
-    // call through a plain `Function`-typed reference reaches the runtime guard with one, without
-    // a type assertion papering over the very mismatch under test.
-    const reportAreas: Function = window.reportContentZoomAreasById;
-    const reportActiveArea: Function = window.reportContentZoomActiveAreaById;
-    reportAreas.apply(undefined, ['wv-1', ['main', 42, 'footnotes']]);
-    reportActiveArea.apply(undefined, ['wv-1', 42]);
+    // an area id belongs) is a real possibility, not just a type-checker artifact.
+    // @ts-expect-error ts(2345) - passing a number in the area-id array to exercise the runtime guard
+    window.reportContentZoomAreasById('wv-1', ['main', 42, 'footnotes']);
+    // @ts-expect-error ts(2345) - passing a number as the area id to exercise the runtime guard
+    window.reportContentZoomActiveAreaById('wv-1', 42);
 
     expect(setContentZoomAreasMock).toHaveBeenCalledWith('wv-1', ['main', 'footnotes']);
     expect(setContentZoomActiveAreaMock).not.toHaveBeenCalled();
