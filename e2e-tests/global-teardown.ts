@@ -15,8 +15,6 @@ import { killProcessTree, restoreAppGlobalState, restoreLeakedSettings } from '.
  * of Electron's stubborn descendants (no `dotnet watch` child surviving its parent), so a graceful
  * stop is preferred where one is available — the signal only matters on POSIX, since
  * `killProcessTree`'s win32 branch always forces via `taskkill /f` regardless of what is passed.
- * Verified on native Windows: the run leaves no `node.exe` behind, and every following run starts
- * its own dev server cleanly.
  */
 export function killDevServerProcess(pid: number, platform: NodeJS.Platform): void {
   killProcessTree(pid, 'SIGTERM', platform);
