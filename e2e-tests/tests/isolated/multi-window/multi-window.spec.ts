@@ -67,7 +67,7 @@
  *
  * `npm run test:e2e:isolated multi-window`
  */
-import type { ElectronApplication, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   sendPapiRequestOnce,
@@ -78,7 +78,6 @@ import {
   APP_QUITTING_LOG,
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
-  OS_FOCUS_COOPERATION_BUDGET_MS,
   RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
@@ -94,9 +93,9 @@ import {
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
+  waitForWindowToBeRaised,
   closeWindowLikeAUser,
   widenWindowForToolbarReference,
-  withPlatformWindow,
 } from './multi-window.util';
 
 // #region log markers
@@ -373,35 +372,6 @@ async function tabHasWindowFocusRing(page: Page, tabTitleText: string): Promise<
     const header = titleEl?.closest('.dock-tab-active');
     return header?.classList.contains('platform-dock-tab-window-focus') ?? false;
   }, tabTitleText);
-}
-
-/**
- * Wait for the main process to route to `windowId` after something INSIDE THE APP already asked the
- * OS to raise it (`web-view.service-router.ts`'s cross-window reveal calling `focusWindow`) —
- * deliberately never drives focus itself the way {@link focusWindowAndWaitForRouting} does, since
- * doing so would prove this test's own focus-forcing worked rather than the app's raise. Simulates
- * the compositor's own focus delivery only once a cooperation budget elapses without it, for the
- * same reason {@link focusWindowAndWaitForRouting} does: this suite's WSLg/Weston compositor is
- * known to sometimes ignore programmatic re-activation of an already-shown window, regardless of
- * which code inside the app asked for it.
- */
-async function waitForWindowToBeRaised(
-  electronApp: ElectronApplication,
-  windowId: string,
-  timeoutMs: number,
-): Promise<void> {
-  const startTime = Date.now();
-  await pollUntil(
-    async () => {
-      if (Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS) {
-        await withPlatformWindow(electronApp, windowId, (win) => win.emit('focus'));
-      }
-      return getFocusedWindowId();
-    },
-    (focusedId) => focusedId === windowId,
-    timeoutMs,
-    `main process to route to window ${windowId} after it was asked to be raised`,
-  );
 }
 
 // #endregion

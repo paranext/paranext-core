@@ -10,13 +10,19 @@
  * cannot exercise: mocks have no renderer to start, no dock to empty, and no emptiness report
  * racing the adopt.
  *
- * Two tests, each launching its own Electron instance (the isolated fixture is test-scoped and each
- * launch costs 30+ seconds, so related assertions are grouped into one instance):
+ * Three tests, each launching its own Electron instance (the isolated fixture is test-scoped and
+ * each launch costs 30+ seconds, so related assertions are grouped into one instance):
  *
- * 1. The USER'S route: right-click a web view's tab, choose "Move tab to new window". The web view
+ * 1. Foreground withholding: a window a move creates to hold the destination web view is not something
+ *    the user asked for — they may be working in an entirely different application — so it must
+ *    appear without pulling the OS foreground away from wherever they are. Moving a web view out of
+ *    window 1 into a brand new window leaves window 1 holding both OS focus and the routing target,
+ *    while the created window comes up visible but unfocused. Every other test here depends on a
+ *    created window activating normally, so this is the one place that pins the opposite.
+ * 2. The USER'S route: right-click a web view's tab, choose "Move tab to new window". The web view
  *    leaves the window it was in, a second window comes up holding it, the window it left docks a
  *    Home tab of its own, and the app ends with two windows.
- * 2. The COMMAND routes, where the id a move answers with is observable: `moveWebViewToWindow` into an
+ * 3. The COMMAND routes, where the id a move answers with is observable: `moveWebViewToWindow` into an
  *    already-open window, then `moveWebViewToNewWindow` back out of it. The first move empties its
  *    source window — the PRIMARY, which docks a Home tab of its own rather than closing, since only
  *    its ✕ and the Quit menu close it; the second move leaves its source window holding its other
@@ -278,7 +284,7 @@ test.use({
 test.describe('moving a web view between windows', () => {
   // Each test pays full app startup (up to ~180 s worst case) plus one or two extra window
   // startups — a move to a new window contains a whole cold renderer start of its own — and the
-  // second test adds a third move and a window close on top of that.
+  // third test adds a third move and a window close on top of that.
   test.setTimeout(480_000);
 
   test('a window created for a moved web view does not take the foreground', async ({
