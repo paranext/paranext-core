@@ -223,15 +223,18 @@ paragraph's fix — loudly, not with stale packages. The check on `scripture-edi
 `platform-yalc` branch watches for this so the person updating that branch is reminded to open the
 core PR.
 
-Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc` when this repo is on `main` and `release-prep` when this repo is on `release-prep`. `platform-yalc` exists so a breaking change can land on `scripture-editors`' `main` before build servers pick it up; move it forward only once this repo is ready for it. To make your local development and build servers use changes from `scripture-editors/main`, rebase that branch onto `main` and force-push. Example:
+Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc` when this repo is on `main` and `release-prep` when this repo is on `release-prep`. `platform-yalc` exists so a breaking change can land on `scripture-editors`' `main` before build servers pick it up; move it forward only once this repo is ready for it.
+
+To make your local development and build servers use changes from `scripture-editors/main`, use that repo's own script rather than moving the branch by hand:
 
 ```bash
-# from a clone of scripture-editors (or adjust path accordingly)
-git fetch origin
-git checkout platform-yalc
-git rebase origin/main
-git push --force-with-lease
+# from a clone of scripture-editors, with platform-yalc checked out and a clean tree
+npm run move-platform-yalc
 ```
+
+It resets your local branch to origin's state, rebases it onto `origin/main`, checks that this repo's `package-lock.json` still matches the editor's dependencies, and force-pushes **only if that passes** — so a move that would break every core build stops before the push rather than after it. `-- --dry-run` stops short of pushing; `-- --skip-verify` is the emergency hatch. Give it a token first (`export GITHUB_TOKEN=$(gh auth token)`) — the check reads this repo through the GitHub API and the unauthenticated budget is 60 requests an hour.
+
+Moving the branch by hand — `git rebase origin/main && git push --force-with-lease` — skips all of that. It does not notice a dirty tree; it rebases whatever your local copy of the branch happens to hold, which on a branch that is force-pushed by design is routinely not origin's state, so you can publish a rebase of a stale base; it publishes commits that exist only on your machine instead of refusing them; and above all it does not check the lockfile, which is the one failure that reaches everybody else.
 
 To manually set up `scripture-editors` to be staged locally (this should all be done automatically during `npm install`):
 
