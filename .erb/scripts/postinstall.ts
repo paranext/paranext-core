@@ -27,6 +27,9 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+// Explicit `.ts`: this runs under bare `node` with type stripping, where extensionless resolution
+// of a TypeScript file does not work.
+const { diffStagedAgainstLock, isEnvFlagEnabled } = require('./stage-dev-packages.util.ts');
 
 const REPO_ROOT: string = path.resolve(__dirname, '..', '..');
 const STAGING_ROOT: string = path.resolve(REPO_ROOT, 'dev-packages', 'staging');
@@ -39,29 +42,8 @@ type Manifest = {
   dependencies?: Record<string, string>;
 };
 
-/**
- * The dependency sections npm records for a `file:` package and validates against the lockfile.
- *
- * `peerDependenciesMeta` belongs here even though it declares no package: it is what marks a peer
- * optional, so removing an entry turns that peer into a required one and pulls it into the closure.
- * Kept in step with `COMPARED_SECTIONS` in scripture-editors' `verify-consumer-lockfile-sync.mjs`,
- * which performs the same comparison from the other side.
- */
-const COMPARED_SECTIONS = [
-  'dependencies',
-  'peerDependencies',
-  'peerDependenciesMeta',
-  'optionalDependencies',
-] as const;
-
-/**
- * The dependency sections this compares, as parsed from a staged manifest or a lockfile entry.
- * Entry values are `unknown` because `peerDependenciesMeta` holds objects where the others hold
- * version-range strings.
- */
-type DependencySections = Partial<
-  Record<(typeof COMPARED_SECTIONS)[number], Record<string, unknown>>
->;
+/** The dependency sections of a staged manifest or lockfile entry that get compared. */
+type DependencySections = Record<string, Record<string, unknown> | undefined>;
 
 /** The staging folder names `dev-packages.json` declares, which are the only ones that count. */
 function getDeclaredStagingFolders(): string[] {
@@ -104,19 +86,6 @@ function getMissingStagedDependencies(): string[] {
 }
 
 /**
- * Whether an environment variable is set to something meaning "on".
- *
- * `!!process.env.X` is true for `"0"`, `"false"` and `"no"`. `CI=false` is set explicitly by
- * several container images and CI-emulation shells, and reading it as "on" here turns the
- * repairable fresh-clone re-run into a hard failure whose diagnosis is wrong.
- */
-function isEnvFlagEnabled(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized !== '' && normalized !== '0' && normalized !== 'false' && normalized !== 'no';
-}
-
-/**
  * Describes every place `package-lock.json`'s record of a staged package disagrees with the
  * manifest actually staged.
  *
@@ -134,36 +103,15 @@ function getStagedLockMismatches(): string[] {
     fs.readFileSync(lockPath, 'utf8'),
   );
 
-  const mismatches: string[] = [];
-  getDeclaredStagingFolders().forEach((folder: string) => {
+  return getDeclaredStagingFolders().flatMap((folder: string) => {
     const manifestPath = path.resolve(STAGING_ROOT, folder, 'package.json');
-    if (!fs.existsSync(manifestPath)) return;
-    const staged: DependencySections = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-
-    const lockEntry = lock.packages?.[`dev-packages/staging/${folder}`];
-    if (!lockEntry) {
-      mismatches.push(`package-lock.json has no entry for dev-packages/staging/${folder}`);
-      return;
-    }
-
-    COMPARED_SECTIONS.forEach((section) => {
-      const stagedSection = staged[section] ?? {};
-      const recordedSection = lockEntry[section] ?? {};
-      new Set([...Object.keys(stagedSection), ...Object.keys(recordedSection)]).forEach((name) => {
-        // Structural, because `peerDependenciesMeta` entries are objects. Both sides are parsed
-        // from JSON npm wrote, so key order is stable. `JSON.stringify` of an absent entry is
-        // `undefined`, which compares equal only to another absent one.
-        const stagedValue = JSON.stringify(stagedSection[name]);
-        const recordedValue = JSON.stringify(recordedSection[name]);
-        if (stagedValue === recordedValue) return;
-        mismatches.push(
-          `${folder} ${section}.${name}: staged package declares ${stagedValue ?? 'nothing'}, ` +
-            `package-lock.json records ${recordedValue ?? 'nothing'}`,
-        );
-      });
-    });
+    if (!fs.existsSync(manifestPath)) return [];
+    return diffStagedAgainstLock(
+      folder,
+      JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
+      lock.packages?.[`dev-packages/staging/${folder}`],
+    );
   });
-  return mismatches;
 }
 
 function runBuildChain(): void {

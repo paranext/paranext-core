@@ -39,6 +39,14 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+// Explicit `.ts`: this runs under bare `node` with type stripping, where extensionless resolution
+// of a TypeScript file does not work.
+const {
+  getExpectedMarker,
+  isEnvFlagEnabled,
+  normalizeRepoUrl,
+  shapeStagedManifest,
+} = require('./stage-dev-packages.util.ts');
 
 const REPO_ROOT: string = path.resolve(__dirname, '..', '..');
 const STAGING_ROOT: string = path.resolve(REPO_ROOT, 'dev-packages', 'staging');
@@ -59,19 +67,6 @@ const STAGING_FORMAT = 2;
 
 /** Build from the current checkout state instead of the pinned revision; always rebuild. */
 const isLocalMode: boolean = process.argv.includes('--local');
-
-/**
- * Whether an environment variable is set to something meaning "on".
- *
- * `!!process.env.X` is true for `"0"`, `"false"` and `"no"`, so the natural way to turn one of
- * these flags back off instead turns it on — and the flags here choose between staging the pinned
- * revision and staging whatever a checkout happens to hold, which is invisible once it goes wrong.
- */
-function isEnvFlagEnabled(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized !== '' && normalized !== '0' && normalized !== 'false' && normalized !== 'no';
-}
 
 /** Resolve the pinned revision against the checkout's existing refs rather than fetching. */
 const isFetchSkipped: boolean =
@@ -217,22 +212,7 @@ function verifyOrigin(repo: DevRepo, repoPath: string): void {
   }
 
   const origin = execSync('git remote get-url origin', { cwd: repoPath, encoding: 'utf8' }).trim();
-  // Reduce every URL form git accepts for one repo to `<host>/<path>` before comparing. Only the
-  // repo identity matters here, not the transport: anyone who pushes to the dev repo has an SSH
-  // remote (`git@github.com:org/repo.git`), which is the same repo as the HTTPS `cloneUrl` and must
-  // not be reported as a move.
-  const normalize = (url: string) =>
-    url
-      .trim()
-      .replace(/\/+$/, '')
-      .replace(/\.git$/, '')
-      // Drop the scheme (`https://`, `ssh://`, `git+https://`) and any `user@` prefix, then turn
-      // scp-style `host:org/repo` into `host/org/repo`.
-      .replace(/^[a-z+]+:\/\//i, '')
-      .replace(/^[^@/]+@/, '')
-      .replace(/^([^/:]+):/, '$1/')
-      .toLowerCase();
-  if (normalize(origin) === normalize(repo.cloneUrl)) return;
+  if (normalizeRepoUrl(origin) === normalizeRepoUrl(repo.cloneUrl)) return;
 
   // Keep the previous URL under a remote named for its organization rather than overwriting it, so
   // the old location stays reachable and the change is trivially reversible.
@@ -368,12 +348,8 @@ function getSourceStamp(repoPath: string): string {
 }
 
 /** What a marker written by this version of the script, for this source state, would say. */
-function getExpectedMarker(sourceStamp: string, devPackage: DevPackage): string {
-  // `packagePath` is part of the identity because the source commit alone does not determine what
-  // was staged: repointing a package at a different path in `dev-packages.json` leaves both the
-  // commit and the destination folder unchanged, so without this the staged copy would keep
-  // satisfying the freshness check and never be rebuilt from the new path.
-  return `${sourceStamp}${isLocalMode ? '-local' : ''} path=${devPackage.packagePath} format=${STAGING_FORMAT}`;
+function markerFor(sourceStamp: string, devPackage: DevPackage): string {
+  return getExpectedMarker(sourceStamp, devPackage.packagePath, isLocalMode, STAGING_FORMAT);
 }
 
 /**
@@ -390,9 +366,7 @@ function isStagingCurrent(repo: DevRepo, sourceStamp: string): boolean {
     // The staging folders are gitignored, so they look disposable; deleting one's contents by hand
     // leaves the marker behind, and keying on it alone would skip staging forever afterwards.
     if (!fs.existsSync(path.resolve(stagingDir, 'package.json'))) return false;
-    return (
-      fs.readFileSync(markerPath, 'utf8').trim() === getExpectedMarker(sourceStamp, devPackage)
-    );
+    return fs.readFileSync(markerPath, 'utf8').trim() === markerFor(sourceStamp, devPackage);
   });
 }
 
@@ -445,31 +419,11 @@ function getPublishedFiles(packageDir: string): string[] {
  */
 function prepareStagedManifest(stagingDir: string, stagingFolderByName: Map<string, string>): void {
   const manifestPath = path.resolve(stagingDir, 'package.json');
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-
-  delete manifest.exports?.['.']?.development;
-  delete manifest.devDependencies;
-  // Volta pins the dev repo's toolchain; it means nothing in a consumer's tree.
-  delete manifest.volta;
-
-  // Every section npm records for a `file:` package. `optionalDependencies` is included even though
-  // nothing declares one today: npm resolves it like `dependencies`, so a `workspace:` specifier
-  // left there would fail the install with `Unsupported URL Type "workspace:"` naming a file inside
-  // a gitignored staging folder that nobody edited.
-  ['dependencies', 'peerDependencies', 'optionalDependencies'].forEach((section) => {
-    const deps: Record<string, string> | undefined = manifest[section];
-    if (!deps) return;
-    Object.entries(deps).forEach(([name, specifier]) => {
-      if (!specifier.startsWith('workspace:')) return;
-      const stagingFolder = stagingFolderByName.get(name);
-      if (!stagingFolder)
-        throw new Error(
-          `${manifestPath} depends on "${name}" with specifier "${specifier}", but "${name}" is not staged. Add it to dev-packages.json so it can be resolved.`,
-        );
-      deps[name] = `file:../${stagingFolder}`;
-    });
-  });
-
+  const manifest = shapeStagedManifest(
+    JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
+    stagingFolderByName,
+    manifestPath,
+  );
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, undefined, 2)}\n`);
 }
 
@@ -531,7 +485,7 @@ function stagePackage(
   // stamp indistinguishable from a real staging run, leaving that build in place indefinitely.
   fs.writeFileSync(
     path.resolve(stagingDir, STAGED_FROM_MARKER),
-    `${getExpectedMarker(sourceStamp, devPackage)}\n`,
+    `${markerFor(sourceStamp, devPackage)}\n`,
   );
 }
 
