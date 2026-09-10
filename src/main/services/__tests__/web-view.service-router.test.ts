@@ -7,9 +7,6 @@ import {
   setWebViewWindowCreator,
   startWebViewServiceRouter,
   testingWebViewServiceRouter,
-  webViewContentZoomIn,
-  webViewContentZoomOut,
-  webViewContentZoomReset,
 } from '@main/services/web-view.service-router';
 import {
   getRegisteredRouter,
@@ -1874,10 +1871,13 @@ describe('web view service router', () => {
     test('forwards an explicit web view id and area to its owning window shard', async () => {
       const owner = windowShardWithContentZoom(['wv-1']);
       withWindows({ 1: windowShardWithContentZoom([]), 2: owner });
+      const zoomIn = await getCommandHandler('platform.webViewContentZoomIn');
+      const zoomOut = await getCommandHandler('platform.webViewContentZoomOut');
+      const zoomReset = await getCommandHandler('platform.webViewContentZoomReset');
 
-      await webViewContentZoomIn('wv-1', 'footnotes');
-      await webViewContentZoomOut('wv-1', undefined);
-      await webViewContentZoomReset('wv-1', 'main');
+      await zoomIn('wv-1', 'footnotes');
+      await zoomOut('wv-1', undefined);
+      await zoomReset('wv-1', 'main');
 
       expect(owner.adjustContentZoom).toHaveBeenNthCalledWith(1, 'wv-1', 1, 'footnotes');
       expect(owner.adjustContentZoom).toHaveBeenNthCalledWith(2, 'wv-1', -1, undefined);
@@ -1888,26 +1888,55 @@ describe('web view service router', () => {
       const focused = windowShardWithContentZoom([]);
       withWindows({ 1: focused, 2: windowShardWithContentZoom([]) });
       mocks.getFocusedWindowId.mockReturnValue('1');
+      const zoomIn = await getCommandHandler('platform.webViewContentZoomIn');
 
-      await webViewContentZoomIn(undefined, undefined);
+      await zoomIn(undefined, undefined);
 
       expect(focused.adjustContentZoom).toHaveBeenCalledWith(undefined, 1, undefined);
+    });
+
+    test('does nothing, and does not throw, when no id is given and no window is focused', async () => {
+      const shards = { 1: windowShardWithContentZoom([]), 2: windowShardWithContentZoom([]) };
+      withWindows(shards);
+      mocks.getFocusedWindowId.mockReturnValue(undefined);
+      const zoomIn = await getCommandHandler('platform.webViewContentZoomIn');
+
+      await expect(zoomIn(undefined, undefined)).resolves.toBeUndefined();
+      expect(shards[1].adjustContentZoom).not.toHaveBeenCalled();
+      expect(shards[2].adjustContentZoom).not.toHaveBeenCalled();
     });
 
     test('does nothing, and does not throw, when no window owns the named web view', async () => {
       const shards = { 1: windowShardWithContentZoom([]), 2: windowShardWithContentZoom([]) };
       withWindows(shards);
+      const zoomIn = await getCommandHandler('platform.webViewContentZoomIn');
 
-      await expect(webViewContentZoomIn('gone-view', undefined)).resolves.toBeUndefined();
+      await expect(zoomIn('gone-view', undefined)).resolves.toBeUndefined();
       expect(shards[1].adjustContentZoom).not.toHaveBeenCalled();
       expect(shards[2].adjustContentZoom).not.toHaveBeenCalled();
     });
 
+    test('rejects rather than guessing when a window that could hold the named web view is unreachable', async () => {
+      // The window that could not be asked is the one holding the web view here — falling back to
+      // "not found" would zoom nothing when the id may well be open in the window that never
+      // answered; see the sibling case for moveWebView/reloadWebView above.
+      const crashed = windowShardWithContentZoom(['wv-1']);
+      withWindows(
+        { 1: windowShardWithContentZoom([]), 2: crashed },
+        { unreachableWindowIds: ['2'] },
+      );
+      const zoomIn = await getCommandHandler('platform.webViewContentZoomIn');
+
+      await expect(zoomIn('wv-1', undefined)).rejects.toThrow('unreachable');
+      expect(crashed.adjustContentZoom).not.toHaveBeenCalled();
+    });
+
     test('rejects a non-string web view id or area id', async () => {
       withWindows({ 1: windowShardWithContentZoom(['wv-1']) });
+      const zoomIn = await getCommandHandler('platform.webViewContentZoomIn');
 
-      await expect(webViewContentZoomIn(42, undefined)).rejects.toThrow('web view id');
-      await expect(webViewContentZoomIn('wv-1', 7)).rejects.toThrow('area id');
+      await expect(zoomIn(42, undefined)).rejects.toThrow('web view id');
+      await expect(zoomIn('wv-1', 7)).rejects.toThrow('area id');
     });
   });
 });
