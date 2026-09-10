@@ -6,7 +6,6 @@ import type {
   WebViewDefinition,
   WebViewId,
 } from '@shared/models/web-view.model';
-import { isWindowAwaitingFirstActivation } from '@renderer/services/window-activation.util';
 
 // The service shard logs through the shared logger, which warns on every call when it cannot tell
 // which process it is running in
@@ -107,8 +106,10 @@ function makeDockLayout(
           (projectId === undefined || webView.projectId === projectId),
       ),
     // The real dock resolves an unspecified `activateWithoutDocumentFocus` through this same
-    // latch; this stand-in does too, so the injected mock's recorded call args are what a real
-    // dock would have been asked for rather than the request this door forwards unresolved.
+    // latch; this stand-in leaves it unresolved, so the injected mock's recorded call args are
+    // the request this door actually forwards rather than what a real dock's own fallback would
+    // resolve it to. That fallback is the dock's own logic — see
+    // `platform-dock-layout-storage.document-focus.test.ts`.
     updateWebViewDefinition: (
       webViewId: WebViewId,
       updateInfo: Parameters<PapiDockLayout['updateWebViewDefinition']>[1],
@@ -119,7 +120,7 @@ function makeDockLayout(
         webViewId,
         updateInfo,
         shouldBringToFront,
-        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
+        activateWithoutDocumentFocus,
       ),
     simpleLayout: EMPTY_LAYOUT,
     testLayout: EMPTY_LAYOUT,
@@ -228,11 +229,19 @@ describe("openWebView's '?' reuse search", () => {
       module.openWebView('test.type', { type: 'tab' } as Layout, { existingProjectId: 'B' }),
     ).rejects.toThrow(/existingProjectId requires existingId/);
   });
-  test('a view reused in a window the user has not activated is raised without document focus', async () => {
+  test('a reuse states no withholding opinion of its own, in either latch state', async () => {
     // A reuse raises an existing tab rather than docking a new one, so it reaches the dock by a
     // different door than a fresh open. Both doors open into the same window, and a raise that
-    // takes document focus focuses the tab's iframe — latently, until the window itself is raised,
-    // so an uncontrolled focus here carries the same caret-ownership risk as a fresh open.
+    // takes document focus focuses the tab's iframe — latently, until the window itself is
+    // activated — so an uncontrolled focus here carries the same caret-ownership risk as a fresh
+    // open. What this door owes is to leave the decision unspecified so the dock resolves it in the
+    // one place that fallback lives (covered against the real dock in
+    // `platform-dock-layout-storage.document-focus.test.ts`).
+    //
+    // One test, not a case and a control: the latch state cannot change what this door forwards,
+    // because the door has no opinion to state either way. A second test setting the latch the
+    // other way would assert the identical value under a name promising the opposite outcome, and
+    // neither could fail on it.
     globalThis.wasWindowCreatedWithoutActivation = true;
     const updateWebViewDefinition = vi.fn(() => true);
     const module = await openWebViewOver([testTypeWebView('view-a', 'A')], updateWebViewDefinition);
@@ -243,22 +252,7 @@ describe("openWebView's '?' reuse search", () => {
       findOptions({ bringToFront: true }),
     );
 
-    expect(updateWebViewDefinition).toHaveBeenCalledWith('view-a', {}, true, true);
-  });
-
-  test('a view reused in a window the user has activated is raised normally', async () => {
-    // The control for the test above: withholding focus is the exception, not what a raise does.
-    globalThis.wasWindowCreatedWithoutActivation = false;
-    const updateWebViewDefinition = vi.fn(() => true);
-    const module = await openWebViewOver([testTypeWebView('view-a', 'A')], updateWebViewDefinition);
-
-    await module.openWebView(
-      'test.type',
-      { type: 'tab' } as Layout,
-      findOptions({ bringToFront: true }),
-    );
-
-    expect(updateWebViewDefinition).toHaveBeenCalledWith('view-a', {}, true, false);
+    expect(updateWebViewDefinition).toHaveBeenCalledWith('view-a', {}, true, undefined);
   });
 
   test('a window layout arriving on a create reports a lost race, not a routing-contract break', async () => {
