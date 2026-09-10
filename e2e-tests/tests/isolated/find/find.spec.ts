@@ -38,11 +38,12 @@
  *
  * ## Stable selectors
  *
- * Tabs and iframes are matched by the fixed UUID the simple layout assigns the Find web view
- * ({@link FIND_WEB_VIEW_UUID}), via the `data-web-view-id` attribute, not by their localized text
- * label — Simple mode hides the tab label entirely once the column collapses. Match the UUID as a
- * PREFIX: the renderer suffixes every web view id from a shared layout with the window it was
- * loaded into (`-w1`, `-w2`, ...), so the rendered attribute is the UUID plus that suffix.
+ * Tabs and iframes are matched by the Find web view's `data-web-view-id`, not by their localized
+ * text label — Simple mode hides the tab label entirely once the column collapses. The id is
+ * resolved from the running app by web view type ({@link webViewIdForType}) and matched exactly:
+ * materializing the simple layout mints every web view a fresh id, so the constants in
+ * `simple-layout.data.ts` are the slot's identity in the data file and never appear in a rendered
+ * attribute.
  *
  * At 1280 px not every Column 3 tab fits the visible portion of the tab bar. rc-tabs renders all
  * tab nodes at all times but clips those that overflow, so `toBeAttached()` succeeds for a clipped
@@ -64,6 +65,7 @@ import {
 import {
   isPopoverTriggerExpanded,
   waitForAppReady,
+  waitForOpenWebViewIdByType,
   PROCESS_READY_TIMEOUT,
 } from '../../../fixtures/helpers';
 import {
@@ -84,17 +86,39 @@ test.describe.configure({ timeout: 180_000 });
 // Constants
 // ---------------------------------------------------------------------------
 
-/**
- * Fixed UUID for the Find tab in Column 3 of the simple layout. Source:
- * src/renderer/components/docking/simple-layout.data.ts
- */
-const FIND_WEB_VIEW_UUID = 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d';
+/** Web view type of the Find tab in Column 3 of the simple layout. */
+const FIND_WEBVIEW_TYPE = 'platformScripture.find';
 
 /**
- * Fixed UUID for the Commentaries tab, the Column 3 sibling used to take activation away from Find.
- * Source: src/renderer/components/docking/simple-layout.data.ts
+ * Web view type of the Commentaries tab, the Column 3 sibling used to take activation away from
+ * Find.
  */
-const COMMENTARIES_WEB_VIEW_UUID = '6c950d23-f8d7-4482-a384-93ea0481698b';
+const COMMENTARIES_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
+
+/**
+ * The live web view id for a type in this page, resolved once and reused.
+ *
+ * The ids in `simple-layout.data.ts` are the slot's identity in the data file, not the runtime
+ * tab's: materializing that layout mints every web view a fresh id, so no baked constant ever
+ * appears in a rendered `data-web-view-id`. Asking the running app which id a type actually got is
+ * the only way to name these tabs, and it is what the multi-window and comments suites do.
+ *
+ * Cached per page because every test in this file resolves the same two types, and the lookup polls
+ * the renderer.
+ */
+const webViewIdsByPage = new WeakMap<Page, Map<string, Promise<string>>>();
+function webViewIdForType(mainPage: Page, webViewType: string): Promise<string> {
+  let idsByType = webViewIdsByPage.get(mainPage);
+  if (!idsByType) {
+    idsByType = new Map();
+    webViewIdsByPage.set(mainPage, idsByType);
+  }
+  const cached = idsByType.get(webViewType);
+  if (cached) return cached;
+  const resolving = waitForOpenWebViewIdByType(mainPage, webViewType);
+  idsByType.set(webViewType, resolving);
+  return resolving;
+}
 
 /**
  * A common word present in the WEB project. Tests that need results rely on this term. If tests
@@ -151,25 +175,26 @@ let openedProjectId: string | undefined;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** The tab-title element for a Column 3 web view, matched by its layout UUID prefix. */
-function tabTitleForWebView(mainPage: Page, uuid: string): Locator {
-  return mainPage.locator(`.platform-tab-title[data-web-view-id^="${uuid}"]`);
+/** The tab-title element for a Column 3 web view, matched by its live web view id. */
+function tabTitleForWebView(mainPage: Page, webViewId: string): Locator {
+  return mainPage.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
 }
 
 /** The `.dock-tab` wrapper around a web view's tab title — this is what carries the active class. */
-function dockTabForWebView(mainPage: Page, uuid: string): Locator {
-  return mainPage.locator('.dock-tab').filter({ has: tabTitleForWebView(mainPage, uuid) });
+function dockTabForWebView(mainPage: Page, webViewId: string): Locator {
+  return mainPage.locator('.dock-tab').filter({ has: tabTitleForWebView(mainPage, webViewId) });
 }
 
 /**
  * FrameLocator for the Find panel's iframe.
  *
- * Uses the UUID-based `data-web-view-id` attribute (set by `web-view.component.tsx`) rather than
+ * Uses the `data-web-view-id` attribute (set by `web-view.component.tsx`) rather than
  * `iframe[title="Find"]`, which depends on the localization service having initialized before the
- * WebView's first `getWebView()` call. The UUID attribute is always present.
+ * WebView's first `getWebView()` call. The id attribute is always present.
  */
-function findPanelFrame(mainPage: Page): FrameLocator {
-  return mainPage.frameLocator(`iframe[data-web-view-id^="${FIND_WEB_VIEW_UUID}"]`);
+async function findPanelFrame(mainPage: Page): Promise<FrameLocator> {
+  const findId = await webViewIdForType(mainPage, FIND_WEBVIEW_TYPE);
+  return mainPage.frameLocator(`iframe[data-web-view-id="${findId}"]`);
 }
 
 /**
@@ -191,8 +216,9 @@ function resultsMessage(frame: FrameLocator): Locator {
  * If the tab title is scrolled outside the visible portion of the tab bar, hover the
  * `.dock-nav-more` overflow button to open the dropdown and activate it from there.
  */
-async function activateTab(mainPage: Page, uuid: string): Promise<void> {
-  const tabTitle = tabTitleForWebView(mainPage, uuid);
+async function activateTab(mainPage: Page, webViewType: string): Promise<void> {
+  const webViewId = await webViewIdForType(mainPage, webViewType);
+  const tabTitle = tabTitleForWebView(mainPage, webViewId);
   await expect(tabTitle).toBeAttached({ timeout: 120_000 });
 
   if (await tabTitle.isVisible()) {
@@ -204,11 +230,11 @@ async function activateTab(mainPage: Page, uuid: string): Promise<void> {
     // rc-tabs re-renders the tab title (including data-web-view-id) in the overflow popup.
     await mainPage
       .locator('[role="listbox"] [role="option"]')
-      .filter({ has: mainPage.locator(`[data-web-view-id^="${uuid}"]`) })
+      .filter({ has: mainPage.locator(`[data-web-view-id="${webViewId}"]`) })
       .click({ timeout: 5_000 });
   }
 
-  await expect(dockTabForWebView(mainPage, uuid)).toHaveClass(/dock-tab-active/, {
+  await expect(dockTabForWebView(mainPage, webViewId)).toHaveClass(/dock-tab-active/, {
     timeout: 10_000,
   });
 }
@@ -220,8 +246,8 @@ async function activateTab(mainPage: Page, uuid: string): Promise<void> {
  * is visible from startup, so a visibility check would pass even if the activation did nothing.
  */
 async function activateFindTab(mainPage: Page): Promise<FrameLocator> {
-  await activateTab(mainPage, FIND_WEB_VIEW_UUID);
-  const frame = findPanelFrame(mainPage);
+  await activateTab(mainPage, FIND_WEBVIEW_TYPE);
+  const frame = await findPanelFrame(mainPage);
   await expect(frame.locator('#search-term')).toBeVisible({ timeout: 30_000 });
   return frame;
 }
@@ -597,8 +623,11 @@ test.describe('Find Panel Basics', () => {
     // always visible, so the only thing an invoke can change is which Column 3 tab is active and
     // where the caret lands — assert on those, not on the tab's existence.
     await openFindPanel(mainPage);
-    await activateTab(mainPage, COMMENTARIES_WEB_VIEW_UUID);
-    const findTab = dockTabForWebView(mainPage, FIND_WEB_VIEW_UUID);
+    await activateTab(mainPage, COMMENTARIES_WEBVIEW_TYPE);
+    const findTab = dockTabForWebView(
+      mainPage,
+      await webViewIdForType(mainPage, FIND_WEBVIEW_TYPE),
+    );
     // Assert the tab is there before asserting it is not active, so that a selector which matched
     // nothing could not satisfy the negated check below.
     await expect(findTab).toBeAttached();
@@ -608,7 +637,8 @@ test.describe('Find Panel Basics', () => {
 
     await expect(findTab).toHaveClass(/dock-tab-active/, { timeout: 15_000 });
     // Landing on the search box is the point of the invoke (see use-focus-search-on-invoke.hook.ts).
-    await expect(findPanelFrame(mainPage).locator('#search-term')).toBeFocused({ timeout: 15_000 });
+    const findFrame = await findPanelFrame(mainPage);
+    await expect(findFrame.locator('#search-term')).toBeFocused({ timeout: 15_000 });
   });
 
   test('should render the search input and scope selector', async ({ mainPage }) => {
