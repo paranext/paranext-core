@@ -140,3 +140,32 @@ describe('ProjectPicker', () => {
     expect(screen.queryByText('World English Bible')).not.toBeInTheDocument();
   });
 });
+
+describe('read-only projects', () => {
+  it('marks a read-only row and leaves an editable row unmarked', () => {
+    renderDialog({
+      currentProject: undefined,
+      recentProjects: [],
+      allProjects: [
+        { id: 'ed', fullName: 'Editable Project', shortName: 'ED', isEditable: true },
+        { id: 'ro', fullName: 'Readonly Project', shortName: 'RO', isEditable: false },
+      ],
+      localizedStrings: { ...STRINGS, '%projectPicker_readOnly_label%': 'Read-only' },
+    });
+
+    expect(screen.getAllByLabelText('Read-only')).toHaveLength(1);
+    expect(screen.getByText('Readonly Project')).toBeInTheDocument();
+    expect(screen.getByText('Editable Project')).toBeInTheDocument();
+  });
+
+  it('leaves a project with no isEditable metadata unmarked', () => {
+    renderDialog({
+      currentProject: undefined,
+      recentProjects: [],
+      allProjects: [{ id: 'ed', fullName: 'Editable Project', shortName: 'ED' }],
+      localizedStrings: { ...STRINGS, '%projectPicker_readOnly_label%': 'Read-only' },
+    });
+
+    expect(screen.queryByLabelText('Read-only')).toBeNull();
+  });
+});

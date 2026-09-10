@@ -12,7 +12,7 @@ import {
   useListbox,
   Z_INDEX_MODAL,
 } from 'platform-bible-react';
-import { CheckIcon } from 'lucide-react';
+import { CheckIcon, LockIcon } from 'lucide-react';
 import { RefObject, useMemo, useState } from 'react';
 
 export type ProjectItem = {
@@ -23,6 +23,13 @@ export type ProjectItem = {
   language?: string;
   /** Full localized language name shown as a tooltip over {@link language} (e.g. "English"). */
   languageDisplayName?: string;
+  /**
+   * Whether the project accepts edits. `false` marks a read-only project, which consumers surface
+   * with a read-only affordance. Absent means editable — the registered default for
+   * `platform.isEditable` is true, so a factory that leaves the metadata field unset must not be
+   * treated as read-only.
+   */
+  isEditable?: boolean;
 };
 
 /** Localization string keys used by {@link ProjectPicker}. */
@@ -33,6 +40,7 @@ export const PROJECT_PICKER_STRING_KEYS = Object.freeze([
   '%projectPicker_search_placeholder%',
   '%projectPicker_no_results%',
   '%projectPicker_current_project_label%',
+  '%projectPicker_readOnly_label%',
 ] as const);
 
 export type ProjectPickerLocalizedStrings = {
@@ -83,6 +91,7 @@ function ProjectSection({
   projects,
   currentProjectId,
   currentProjectLabel,
+  readOnlyLabel,
   onSelect,
   onFocusOption,
 }: {
@@ -90,6 +99,7 @@ function ProjectSection({
   projects: ProjectItem[];
   currentProjectId: string | undefined;
   currentProjectLabel: string;
+  readOnlyLabel: string;
   onSelect: (projectId: string) => void;
   onFocusOption: (id: string) => void;
 }) {
@@ -123,6 +133,9 @@ function ProjectSection({
           <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
             {p.id === currentProjectId && (
               <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-label={currentProjectLabel} />
+            )}
+            {p.isEditable === false && (
+              <LockIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-label={readOnlyLabel} />
             )}
             {p.shortName}
           </div>
@@ -197,6 +210,7 @@ export default function ProjectPicker({
     localizedStrings,
     '%projectPicker_current_project_label%',
   );
+  const readOnlyLabel = localizeString(localizedStrings, '%projectPicker_readOnly_label%');
 
   const listboxOptions = useMemo(
     () => [...sortedRecent, ...filteredAll].map((p) => ({ id: p.id })),
@@ -248,6 +262,7 @@ export default function ProjectPicker({
               projects={sortedRecent}
               currentProjectId={currentProject?.id}
               currentProjectLabel={currentProjectLabel}
+              readOnlyLabel={readOnlyLabel}
               onSelect={onSelect}
               onFocusOption={focusOption}
             />
@@ -256,6 +271,7 @@ export default function ProjectPicker({
               projects={filteredAll}
               currentProjectId={currentProject?.id}
               currentProjectLabel={currentProjectLabel}
+              readOnlyLabel={readOnlyLabel}
               onSelect={onSelect}
               onFocusOption={focusOption}
             />

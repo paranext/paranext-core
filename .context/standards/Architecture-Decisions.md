@@ -2105,6 +2105,29 @@ step, no automation. Just a record.
   section alphabetically. `RowSection` needed an `id` for React keys, since two custom sections can
   share a `kind` and both lack a `label`.
 
+## adr-project-selector-footer-action-is-data: `footerAction` is a data prop, not a render prop
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** The titlebar picker needs an "All projects…" affordance below the list.
+  `customSections` partitions rows and cannot express an action that opens a different surface.
+  cmdk 1.1.1 constrains how such a row can be built: navigation runs through `getValidItems()`,
+  which queries only inside `CommandList`, so a row rendered outside it is mouse-only — the
+  accessibility gap the bare `<button>` this work replaced.
+- **Decision:** `footerAction` is a **data** prop — `{ label, onSelect }` — not a render prop. The
+  selector owns the markup: a `forceMount` `CommandItem` inside `CommandList`, with an explicit
+  stable `value` and an `alwaysRender` separator.
+- **Alternatives considered:**
+  - **A render prop returning a `ReactNode`.** Rejected: it lets a consumer hand back a bare
+    `<button>`, reproducing the exact defect the prop exists to remove, and it cannot be enforced
+    by review at every future call site.
+  - **Rendering the action outside `CommandList`.** Rejected as mouse-only, for the same
+    `getValidItems()` reason the context describes.
+- **Consequences:** Callers cannot style the row or put arbitrary content in it; a future need for
+  that is a reason to widen the data shape, not to switch to a render prop. `forceMount` keeps the
+  row out of cmdk's registered-item set, so `CommandEmpty` still renders on an empty list — the two
+  behaviors are coupled and must be asserted together.
+
 ## adr-project-selector-stays-experimental: ProjectSelector keeps its experimental entry point while its shape is still moving
 
 - **Date:** 2026-09-10

@@ -193,6 +193,55 @@ export const NarrowRailTrigger: Story = {
   },
 };
 
+export const CompoundTriggerLabelWithFooterAction: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    const [dialogOpenCount, setDialogOpenCount] = useState(0);
+    return (
+      <div className="tw:flex tw:flex-col tw:gap-2">
+        <ProjectSelector
+          mode="project"
+          projects={sampleProjects}
+          openTabs={sampleOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+          ariaLabel="Project"
+          // A two-part label — short name leading, full name trailing in muted text — the shape a
+          // titlebar compound label takes when it owns the trigger's whole rendering, `undefined`
+          // included: see the prop's TSDoc for why the selector renders no tooltip of its own here.
+          renderTriggerLabel={(selected) =>
+            selected ? (
+              <span className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-1">
+                <span className="tw:truncate tw:font-medium">{selected.shortName}</span>
+                <span className="tw:min-w-0 tw:truncate tw:text-xs tw:opacity-60">
+                  {selected.fullName}
+                </span>
+              </span>
+            ) : (
+              'Select a project'
+            )
+          }
+          footerAction={{
+            label: 'More projects…',
+            onSelect: () => setDialogOpenCount((n) => n + 1),
+          }}
+        />
+        <p className="tw:text-xs tw:opacity-60">
+          &ldquo;More projects…&rdquo; selected {dialogOpenCount.toString()} time(s)
+        </p>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`renderTriggerLabel` and `footerAction` together, as the titlebar project picker combines them: the trigger renders a compound short-name/full-name label instead of the derived string, and a footer row below the last section opens a different surface (here, just a counter standing in for a "More projects…" dialog). The footer separator is a plain rule with `alwaysRender` so it survives an active search query, and it renders only when a section above it has rows.',
+      },
+    },
+  },
+};
+
 // #endregion
 
 // #region project-multi

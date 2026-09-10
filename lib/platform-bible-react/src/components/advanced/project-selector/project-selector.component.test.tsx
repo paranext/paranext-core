@@ -645,3 +645,222 @@ describe('renderProjectIndicator', () => {
     expect(screen.queryByTestId(/^indicator-/)).not.toBeInTheDocument();
   });
 });
+
+describe('renderTriggerLabel', () => {
+  it('renders the caller node as the trigger label instead of the derived string', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        renderTriggerLabel={(selected) => (
+          <span data-testid="custom-trigger-label">custom:{selected?.shortName ?? 'none'}</span>
+        )}
+      />,
+    );
+
+    expect(screen.getByTestId('custom-trigger-label')).toHaveTextContent('custom:WEB');
+  });
+
+  it('passes undefined to the callback when nothing is selected', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        renderTriggerLabel={(selected) => (
+          <span data-testid="custom-trigger-label">custom:{selected?.shortName ?? 'none'}</span>
+        )}
+      />,
+    );
+
+    expect(screen.getByTestId('custom-trigger-label')).toHaveTextContent('custom:none');
+  });
+
+  it('renders no tooltip of its own, so a caller label carrying one cannot double up', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        renderTriggerLabel={() => <span data-testid="custom-trigger-label">WEB</span>}
+      />,
+    );
+
+    await user.hover(screen.getByTestId('custom-trigger-label'));
+
+    // The selector's own tooltip renders the selected project's full name. With a caller-supplied
+    // label it must stay absent — `ToolbarCompoundLabel` brings its own truncation tooltip.
+    await expect(
+      waitFor(() => screen.getByText('World English Bible'), { timeout: 700 }),
+    ).rejects.toThrow();
+  });
+
+  it('still uses the derived string when the prop is absent', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveTextContent('WEB');
+  });
+
+  it('lets buttonClassName override the trigger button width', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        buttonClassName="tw:w-auto tw:max-w-64"
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveClass('tw:w-auto');
+    expect(trigger).not.toHaveClass('tw:w-[180px]');
+  });
+});
+
+describe('footerAction', () => {
+  function renderWithFooter({
+    projects = SAMPLE_PROJECTS,
+    onSelect = () => {},
+  }: {
+    projects?: ProjectSelectorProject[];
+    onSelect?: () => void;
+  }) {
+    return render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        buttonPlaceholder="Select a project"
+        ariaLabel="Project"
+        commandEmptyMessage="No projects found"
+        footerAction={{ label: 'More projects…', onSelect }}
+      />,
+    );
+  }
+
+  it('is reachable and activatable by keyboard, not only by pointer', async () => {
+    const user = setupUser();
+    const onSelect = vi.fn();
+    renderWithFooter({ onSelect });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // Walk down past every project row to the footer, then activate with Enter. cmdk drives
+    // navigation from `getValidItems()`, which only sees nodes inside CommandList — an item
+    // rendered outside it would be skipped here and this test would time out.
+    for (let i = 0; i < SAMPLE_PROJECTS.length + 1; i++) {
+      // Each keypress must land before the next is sent, so the highlight advances one row at a
+      // time; parallelizing would fire every ArrowDown before cmdk processes any of them.
+      // eslint-disable-next-line no-await-in-loop
+      await user.keyboard('{ArrowDown}');
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('project-selector-footer-action')).toHaveAttribute(
+        'data-selected',
+        'true',
+      ),
+    );
+    await user.keyboard('{Enter}');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('is present AND the empty message still renders when there are no projects', async () => {
+    const user = setupUser();
+    renderWithFooter({ projects: [] });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+    // Both, in one test: `forceMount` skips cmdk registration so `filtered.count` stays 0 and
+    // CommandEmpty renders. An ordinarily-registered footer item would satisfy the first
+    // assertion and silently break the second.
+    expect(await screen.findByTestId('project-selector-footer-action')).toBeInTheDocument();
+    expect(screen.getByText('No projects found')).toBeInTheDocument();
+  });
+
+  it('omits the separator when there are no projects, so no rule floats under the empty message', async () => {
+    const user = setupUser();
+    renderWithFooter({ projects: [] });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    // eslint-disable-next-line no-null/no-null
+    expect(screen.queryByTestId('project-selector-footer-separator')).toBe(null);
+  });
+
+  it('keeps its separator visible while a search query is active', async () => {
+    const user = setupUser();
+    renderWithFooter({});
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.type(screen.getByPlaceholderText(/search/i), 'ESV');
+
+    // The popover content renders through a portal, so the separator lives outside the render
+    // root — query the full document rather than the render container.
+    // `queryByTestId` returns `null` (Testing Library's own DOM query contract) when nothing
+    // matches, so the assertion must compare against `null` itself.
+    // eslint-disable-next-line no-null/no-null
+    expect(screen.queryByTestId('project-selector-footer-separator')).not.toBe(null);
+  });
+
+  it('does not collide with a project whose name matches the footer label', async () => {
+    const user = setupUser();
+    const onSelect = vi.fn();
+    const onChangeSelection = vi.fn();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={[{ id: 'more', shortName: 'More projects…', fullName: 'A real project' }]}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={onChangeSelection}
+        buttonPlaceholder="Select a project"
+        ariaLabel="Project"
+        footerAction={{ label: 'More projects…', onSelect }}
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.click(await screen.findByTestId('project-selector-footer-action'));
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onChangeSelection).not.toHaveBeenCalled();
+  });
+
+  it('closes the popover after the action runs', async () => {
+    const user = setupUser();
+    renderWithFooter({});
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.click(await screen.findByTestId('project-selector-footer-action'));
+
+    await waitFor(() => expect(screen.queryByTestId('project-selector-footer-action')).toBeNull());
+  });
+});
