@@ -85,10 +85,37 @@ const REWRITTEN_SECTIONS = ['dependencies', 'peerDependencies', 'optionalDepende
  * through untouched, so it is deliberately not modelled here.
  */
 export type StagedManifest = {
-  exports?: { '.'?: Record<string, unknown> };
+  /**
+   * Nests arbitrarily (subpath -> condition -> ... -> path), so it is deliberately left untyped and
+   * walked instead. See {@link stripDevelopmentConditions}.
+   */
+  exports?: unknown;
   devDependencies?: Record<string, string>;
   volta?: unknown;
 } & Partial<Record<(typeof REWRITTEN_SECTIONS)[number], Record<string, string>>>;
+
+/**
+ * Deletes every `development` export condition anywhere under `exports`.
+ *
+ * The condition points at the package's raw TypeScript under `src/`, which staging copies (`src` is
+ * in both dev packages' `files`), so a surviving condition lets a consumer bundler configured with
+ * `development` in its `conditionNames` resolve the staged package to untranspiled source and fail
+ * at build time — in the consumer's repo, with nothing naming staging as the cause.
+ *
+ * Walks rather than indexing a fixed path because `exports` nests arbitrarily: a condition can sit
+ * under any subpath and at any depth, and conditions-only shorthand puts one at the top level. A
+ * bare `development` key is always a condition, never a subpath — subpath keys start with `.`.
+ */
+function stripDevelopmentConditions(node: unknown): void {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    node.forEach(stripDevelopmentConditions);
+    return;
+  }
+  const conditions: { development?: unknown } = node;
+  delete conditions.development;
+  Object.values(node).forEach(stripDevelopmentConditions);
+}
 
 /**
  * Reshapes a dev package's manifest into the form npm consumes from a staged `file:` folder.
@@ -106,7 +133,7 @@ export function shapeStagedManifest(
   stagingFolderByName: Map<string, string>,
   describeManifest: string,
 ): StagedManifest {
-  delete manifest.exports?.['.']?.development;
+  stripDevelopmentConditions(manifest.exports);
   delete manifest.devDependencies;
   // Volta pins the dev repo's toolchain; it means nothing in a consumer's tree.
   delete manifest.volta;
@@ -180,4 +207,64 @@ export function isEnvFlagEnabled(value: string | undefined): boolean {
   if (!value) return false;
   const normalized = value.trim().toLowerCase();
   return normalized !== '' && normalized !== '0' && normalized !== 'false' && normalized !== 'no';
+}
+
+/**
+ * Where `stage-dev-packages` records commits it moved aside, relative to the repository root.
+ *
+ * A file rather than a return value because the two halves run in different processes: staging is
+ * `preinstall` and the announcement has to survive until the end of `postinstall`, which is the
+ * last thing `npm install` prints. Under `dev-packages/`, which is gitignored, so a rescue never
+ * shows up as a change to commit.
+ */
+export const RESCUED_COMMITS_FILE = 'dev-packages/.stage-rescues.json';
+
+/** One checkout whose commits `stage-dev-packages` moved aside before resetting it. */
+export type RescuedCommit = {
+  /** `dev-packages.json`'s folder name, to say which checkout this was. */
+  repoFolder: string;
+  /** Absolute path, so the recovery commands below can be pasted as they are printed. */
+  repoPath: string;
+  /** The branch that was reset. */
+  revision: string;
+  /** How many commits were on it that the remote did not have. */
+  commitCount: number;
+  /** The ref holding the pre-reset commit. */
+  rescueRef: string;
+};
+
+/**
+ * The announcement printed when a checkout's unpushed commits were moved aside.
+ *
+ * Deliberately loud, and deliberately printed twice - once by staging and once at the very end of
+ * `postinstall`. Staging runs as `preinstall`, so anything it says is followed by npm's own install
+ * output and a full build chain; a quiet line there is gone by the time the install finishes.
+ *
+ * The refs are not cleaned up by anything, which is the point: the reminder repeats on every
+ * install until the commits are dealt with, and deleting the ref is how that is said.
+ */
+export function formatRescuedCommitsBanner(rescues: RescuedCommit[]): string {
+  if (rescues.length === 0) return '';
+  const rule = '='.repeat(78);
+  const lines = ['', rule, '  UNPUSHED COMMITS WERE MOVED ASIDE - NOT LOST', rule, ''];
+  rescues.forEach((rescue) => {
+    lines.push(
+      `  ${rescue.repoFolder}: ${rescue.commitCount} commit(s) on "${rescue.revision}" were not on`,
+      '  the remote, so staging reset the branch past them. They are kept at:',
+      '',
+      `      ${rescue.rescueRef}`,
+      '',
+      '  To look at them, or put them back on a branch of their own:',
+      '',
+      `      git -C "${rescue.repoPath}" log ${rescue.rescueRef}`,
+      `      git -C "${rescue.repoPath}" branch <your-branch-name> ${rescue.rescueRef}`,
+      '',
+      '  This message repeats on every install until you delete the ref:',
+      '',
+      `      git -C "${rescue.repoPath}" update-ref -d ${rescue.rescueRef}`,
+      '',
+    );
+  });
+  lines.push(rule, '');
+  return lines.join('\n');
 }

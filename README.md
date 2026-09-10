@@ -278,6 +278,25 @@ The dependency case is the odd one out because npm, not this repo, has to instal
 
 `npm install` leaves your editor checkout alone unless it is somewhere nothing is being kept — a clean checkout on `main`, or on the pinned branch itself, which is force-pushed by design. On a branch of your own, or parked on a detached commit, it warns and stages what it finds rather than moving you. So developing both repos at once works the way you would expect: keep your editor branch checked out and this repo builds against it.
 
+Where it does move your checkout, it never discards commits. Anything on the branch that the remote does not have is parked on a `refs/stage-rescue/…` ref first, and the install prints how to get it back — at the end of its own output as well as when it happens, so it is not lost in the middle of a build. Nothing deletes those refs, so the notice repeats on every install until you deal with the commits and `git update-ref -d` the ref.
+
+#### Checking that what is staged matches this repo's lockfile
+
+```bash
+npm run verify:dev-packages
+```
+
+`package-lock.json` records each staged package's version and dependencies, but the packages themselves come from the branch [`dev-packages.json`](./dev-packages.json) pins, which moves independently of this repo's commits. A checkout of this repo can therefore stage an editor its own lockfile does not describe.
+
+A plain `npm install` here makes this check on its own and repairs what it can. This command is the check by itself, for the case that cannot: **a consumer repo**. Every repo that builds against this one installs it with `npm ci --ignore-scripts` — required, because this repo's `postinstall` builds an Electron DLL they have no use for — and that skips the check along with everything else. Run it in this repo's directory right after that install:
+
+```bash
+# in the paranext-core checkout, after: npm ci --ignore-scripts
+npm run verify:dev-packages
+```
+
+It reads the tree and reports; it never installs or repairs anything. It needs Node 22.18 or later, like `stage-dev-packages` — below that, invoke it the same way you invoke that one (`node --experimental-strip-types .erb/scripts/postinstall.ts --check`).
+
 #### Install and build
 
 Install dependencies:

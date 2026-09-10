@@ -32,6 +32,7 @@
     ".erb/scripts/startup-waterfall.ts",
     ".erb/scripts/startup-waterfall.util.ts",
     ".erb/scripts/stage-dev-packages.ts",
+    ".erb/scripts/stage-dev-packages.util.ts",
     ".erb/scripts/postinstall.ts",
     ".erb/scripts/notices-build-id.ts",
     ".erb/scripts/third-party-notices/*.ts",

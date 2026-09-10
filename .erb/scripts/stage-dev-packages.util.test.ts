@@ -1,9 +1,11 @@
 import {
   diffStagedAgainstLock,
+  formatRescuedCommitsBanner,
   getExpectedMarker,
   isEnvFlagEnabled,
   normalizeRepoUrl,
   shapeStagedManifest,
+  type RescuedCommit,
   type StagedManifest,
 } from './stage-dev-packages.util';
 
@@ -95,13 +97,48 @@ describe('shapeStagedManifest', () => {
 
     expect(shaped.devDependencies).toBeUndefined();
     expect(shaped.volta).toBeUndefined();
-    expect(shaped.exports?.['.']?.development).toBeUndefined();
     // The rest of the export map has to survive — it is how the package resolves at all.
-    expect(shaped.exports?.['.']?.import).toBe('./dist/index.js');
+    expect(shaped.exports).toEqual({ '.': { import: './dist/index.js' } });
     expect(shaped.dependencies).toEqual({
       '@eten-tech-foundation/scripture-utilities': 'file:../scripture-utilities',
       '@lexical/react': '^0.43.0',
     });
+  });
+
+  it('drops a development condition wherever it sits in the export map', () => {
+    // `src` is in both dev packages' `files`, so a surviving condition resolves the staged package
+    // to untranspiled TypeScript. `exports` nests arbitrarily, so the shapes below cover the four
+    // places npm lets a condition sit: under another condition, on a non-`.` subpath, in
+    // conditions-only shorthand at the top level, and inside a fallback array.
+    const manifest: StagedManifest = {
+      exports: {
+        '.': { import: { development: './src/index.ts', default: './dist/index.js' } },
+        './helpers': { development: './src/helpers.ts', default: './dist/helpers.js' },
+      },
+    };
+
+    const shaped = shapeStagedManifest(manifest, stagingFolders, 'package.json');
+
+    expect(shaped.exports).toEqual({
+      '.': { import: { default: './dist/index.js' } },
+      './helpers': { default: './dist/helpers.js' },
+    });
+
+    expect(
+      shapeStagedManifest(
+        { exports: { development: './src/index.ts', default: './dist/index.js' } },
+        stagingFolders,
+        'package.json',
+      ).exports,
+    ).toEqual({ default: './dist/index.js' });
+
+    expect(
+      shapeStagedManifest(
+        { exports: { '.': [{ development: './src/index.ts' }, './dist/index.js'] } },
+        stagingFolders,
+        'package.json',
+      ).exports,
+    ).toEqual({ '.': [{}, './dist/index.js'] });
   });
 
   it('rewrites workspace: specifiers in every section npm resolves', () => {
@@ -217,5 +254,48 @@ describe('isEnvFlagEnabled', () => {
     // `!!process.env.X` reads all but the first two of these as on, so the natural way to turn one
     // of these flags back off would instead turn it on.
     expect(isEnvFlagEnabled(value)).toBe(false);
+  });
+});
+
+describe('formatRescuedCommitsBanner', () => {
+  const rescue: RescuedCommit = {
+    repoFolder: 'scripture-editors',
+    repoPath: '/repos/paranext-core/dev-packages/scripture-editors',
+    revision: 'platform-yalc',
+    commitCount: 2,
+    rescueRef: 'refs/stage-rescue/platform-yalc/abc123def',
+  };
+
+  it('says nothing when nothing was moved aside', () => {
+    // Printed unconditionally at the end of every install, so an empty banner has to be empty
+    // rather than a set of rules around no content.
+    expect(formatRescuedCommitsBanner([])).toBe('');
+  });
+
+  it('names the ref, and a command that recovers the commits from it', () => {
+    // The whole value of parking a commit is that the ref can be found again. A banner that
+    // announces a rescue without naming the ref leaves the reflog as the only way back, which is
+    // the situation this exists to end.
+    const banner = formatRescuedCommitsBanner([rescue]);
+    expect(banner).toContain(rescue.rescueRef);
+    expect(banner).toContain(`git -C "${rescue.repoPath}" branch <your-branch-name>`);
+    expect(banner).toContain(`git -C "${rescue.repoPath}" log`);
+  });
+
+  it('says how to stop the reminder, since nothing deletes the ref', () => {
+    expect(formatRescuedCommitsBanner([rescue])).toContain('update-ref -d');
+  });
+
+  it('reports each checkout separately when more than one was reset', () => {
+    const other: RescuedCommit = {
+      ...rescue,
+      repoFolder: 'another-dev-repo',
+      repoPath: '/repos/paranext-core/dev-packages/another-dev-repo',
+      rescueRef: 'refs/stage-rescue/platform-yalc/9998887',
+    };
+    const banner = formatRescuedCommitsBanner([rescue, other]);
+    expect(banner).toContain('scripture-editors: 2 commit(s)');
+    expect(banner).toContain('another-dev-repo: 2 commit(s)');
+    expect(banner).toContain(other.rescueRef);
   });
 });

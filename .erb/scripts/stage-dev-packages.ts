@@ -42,6 +42,8 @@ const path = require('path');
 // Explicit `.ts`: this runs under bare `node` with type stripping, where extensionless resolution
 // of a TypeScript file does not work.
 const {
+  RESCUED_COMMITS_FILE,
+  formatRescuedCommitsBanner,
   getExpectedMarker,
   isEnvFlagEnabled,
   normalizeRepoUrl,
@@ -241,6 +243,46 @@ function verifyOrigin(repo: DevRepo, repoPath: string): void {
  * itself, which is force-pushed upstream by design. On any other branch it leaves the checkout
  * exactly as it is and stages that instead, saying so.
  */
+/**
+ * One checkout whose unpushed commits were moved aside. Mirrors `RescuedCommit` in the util, which
+ * this file reaches through `require` and so cannot import a type from.
+ */
+type RescuedCommit = {
+  repoFolder: string;
+  repoPath: string;
+  revision: string;
+  commitCount: number;
+  rescueRef: string;
+};
+
+/**
+ * Commits this run moved aside, filled in by `checkoutRevision` and reported once at the end.
+ *
+ * Reported at the end rather than where it happens: staging runs as `preinstall`, so a line printed
+ * mid-run is followed by the whole install and build chain before a developer sees a prompt again.
+ */
+const rescuedCommits: RescuedCommit[] = [];
+
+/**
+ * Announces this run's rescued commits, and leaves them for `postinstall` to announce again.
+ *
+ * The file is rewritten from scratch each run rather than appended to: it describes what THIS
+ * staging moved aside. `postinstall` prunes entries whose ref has since been deleted, which is how
+ * the reminder stops.
+ */
+function reportRescuedCommits(): void {
+  const recordPath = path.resolve(REPO_ROOT, RESCUED_COMMITS_FILE);
+  if (rescuedCommits.length === 0) {
+    // A run that moved nothing aside must not leave the last run's record behind for `postinstall`
+    // to re-announce.
+    fs.rmSync(recordPath, { force: true });
+    return;
+  }
+  fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+  fs.writeFileSync(recordPath, `${JSON.stringify(rescuedCommits, undefined, 2)}\n`);
+  console.warn(formatRescuedCommitsBanner(rescuedCommits));
+}
+
 function checkoutRevision(repo: DevRepo): void {
   const repoPath = getDevRepoPath(repo.folder);
 
@@ -349,7 +391,37 @@ function checkoutRevision(repo: DevRepo): void {
     // has you keep the old URL as a second remote, and with the same branch on two remotes git
     // refuses to guess (exit 128). The local branch is disposable in any case — it tracks a branch
     // that is rebased and force-pushed upstream as a matter of course.
-    console.log(`Updating ${repo.folder} to ${target}...`);
+    // `-B` discards whatever the local branch pointed at, and a commit that was never pushed then
+    // survives only in the reflog. Anything the remote does not have is therefore parked on a ref
+    // of its own first, and announced (see `formatRescuedCommitsBanner`).
+    //
+    // Parking rather than REFUSING, which is the obvious guard and the wrong one: the branch is
+    // rebased and force-pushed upstream as a matter of course, so after every editor bump each
+    // developer's local tip is a stale copy the remote no longer contains. A refusal cannot tell
+    // that from work somebody authored - `rev-list` reports both identically - so it would fire for
+    // everyone and stage a stale editor. Parking needs no such judgement: a ref for a stale tip
+    // costs nothing, and a ref for real work is the whole point.
+    const head = resolve('HEAD');
+    const unpushedCount = Number(
+      execSync(`git rev-list --count "${target}..HEAD"`, {
+        cwd: repoPath,
+        encoding: 'utf8',
+      }).trim(),
+    );
+    if (unpushedCount > 0) {
+      // Named by commit, so staging twice from two different tips parks both rather than the second
+      // overwriting the first.
+      const rescueRef = `refs/stage-rescue/${repo.revision}/${head.slice(0, 9)}`;
+      execSync(`git update-ref "${rescueRef}" ${head}`, { cwd: repoPath });
+      rescuedCommits.push({
+        repoFolder: repo.folder,
+        repoPath,
+        revision: repo.revision,
+        commitCount: unpushedCount,
+        rescueRef,
+      });
+    }
+    console.log(`Updating ${repo.folder} to ${target} (was at ${head.slice(0, 9)})...`);
     execSync(`git checkout -B "${repo.revision}" "${target}"`, { stdio: 'inherit', cwd: repoPath });
     return;
   }
@@ -540,9 +612,14 @@ function stagePackage(
   }
 
   console.log(`Staging ${devPackage.nxProject} into ${stagingDir}...`);
+  // Listed before the existing copy is removed: `npm pack --dry-run` is the step most likely to
+  // fail here (a `packagePath` that names no package, a transient npm error), and doing it first
+  // means such a failure aborts with the previous staged copy intact rather than leaving the folder
+  // deleted and `node_modules/<name>` a dangling symlink until the next install.
+  const publishedFiles = getPublishedFiles(packageDir);
   // Replace rather than merge so a file deleted upstream does not linger in the staged copy.
   fs.rmSync(stagingDir, { recursive: true, force: true });
-  getPublishedFiles(packageDir).forEach((file) => {
+  publishedFiles.forEach((file) => {
     const destination = path.resolve(stagingDir, file);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(path.resolve(packageDir, file), destination);
@@ -618,6 +695,7 @@ function stageDevPackages(): void {
     });
 
     console.log('Successfully staged dev packages');
+    reportRescuedCommits();
   } catch (error) {
     console.error(
       `Error: Failed to stage dev packages${inFlight ? ` while working on ${inFlight}` : ''}.`,

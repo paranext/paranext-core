@@ -29,7 +29,24 @@ const fs = require('fs');
 const path = require('path');
 // Explicit `.ts`: this runs under bare `node` with type stripping, where extensionless resolution
 // of a TypeScript file does not work.
-const { diffStagedAgainstLock, isEnvFlagEnabled } = require('./stage-dev-packages.util.ts');
+const {
+  RESCUED_COMMITS_FILE,
+  diffStagedAgainstLock,
+  formatRescuedCommitsBanner,
+  isEnvFlagEnabled,
+} = require('./stage-dev-packages.util.ts');
+
+/**
+ * Check-only mode: report whether the staged dev packages match `package-lock.json`, and do nothing
+ * else. This is what `npm run verify:dev-packages` runs.
+ *
+ * It exists for consumers. They install this repo with `npm ci --ignore-scripts` - required,
+ * because this script's build chain builds an Electron DLL they have no use for - and that skips
+ * the very check that says whether the editor they are about to build against is the one this
+ * repo's lockfile describes. Without a way to run the check alone, eight repositories build against
+ * whatever the pinned branch happened to hold at that moment, with nothing to notice the drift.
+ */
+const isCheckOnly = process.argv.includes('--check');
 
 const REPO_ROOT: string = path.resolve(__dirname, '..', '..');
 const STAGING_ROOT: string = path.resolve(REPO_ROOT, 'dev-packages', 'staging');
@@ -97,11 +114,19 @@ function getMissingStagedDependencies(): string[] {
  * this — throws there even though it is installed and imported by subpath everywhere it is used.
  * Treating that as missing would fail every install with a lockfile diagnosis that is not the
  * problem. Presence of the directory is what this needs to know.
+ *
+ * The walk stops at the repository root. Everything npm installs for a staged package lands at or
+ * below it — including the nested copy this walks outward to find — so a `node_modules` above it
+ * (`$HOME/node_modules`, `/node_modules`) holds something this repository did not install. Node
+ * would resolve through one, which is what makes the tree look complete on the one machine that has
+ * it: counting it here skips the repair re-run and reports success on a tree that breaks anywhere
+ * else.
  */
 function isDependencyInstalledFrom(fromDir: string, dependencyName: string): boolean {
   let dir = fromDir;
   for (;;) {
     if (fs.existsSync(path.resolve(dir, 'node_modules', dependencyName))) return true;
+    if (dir === REPO_ROOT) return false;
     const parent = path.dirname(dir);
     if (parent === dir) return false;
     dir = parent;
@@ -141,11 +166,63 @@ function runBuildChain(): void {
   execSync('npm run postinstall:build', { stdio: 'inherit', cwd: REPO_ROOT });
 }
 
+/**
+ * Re-announces commits `stage-dev-packages` moved aside, and forgets the ones already dealt with.
+ *
+ * Staging runs as `preinstall`, so what it printed is buried under npm's own output and a full
+ * build chain by the time the install ends. This is the last thing the install prints.
+ *
+ * A ref that no longer resolves has been dealt with, so its entry goes; when none are left the
+ * record goes too. That is what stops the reminder - nothing deletes these refs automatically,
+ * because the commits on them exist on exactly one machine.
+ */
+function announceRescuedCommits(): void {
+  // The nested repair install runs this same script; letting it announce would print the banner
+  // once from inside the nested run and again from this one.
+  if (isEnvFlagEnabled(process.env[RERUN_GUARD])) return;
+
+  const recordPath = path.resolve(REPO_ROOT, RESCUED_COMMITS_FILE);
+  if (!fs.existsSync(recordPath)) return;
+
+  let rescues: { repoPath: string; rescueRef: string }[];
+  try {
+    rescues = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
+  } catch {
+    // Nothing here is worth failing an install over, and a record this cannot read says nothing
+    // about the commits themselves - they are still on their refs, and git is where they are found.
+    return;
+  }
+
+  const live = rescues.filter((rescue) => {
+    try {
+      execSync(`git show-ref --verify --quiet "${rescue.rescueRef}"`, {
+        cwd: rescue.repoPath,
+        stdio: 'ignore',
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  if (live.length === 0) {
+    fs.rmSync(recordPath, { force: true });
+    return;
+  }
+  if (live.length !== rescues.length)
+    fs.writeFileSync(recordPath, `${JSON.stringify(live, undefined, 2)}\n`);
+  console.warn(formatRescuedCommitsBanner(live));
+}
+
 function postinstall(): void {
   const missing = getMissingStagedDependencies();
   const mismatches = getStagedLockMismatches();
 
   if (missing.length === 0 && mismatches.length === 0) {
+    if (isCheckOnly) {
+      console.log('The staged dev packages match package-lock.json.');
+      return;
+    }
     runBuildChain();
     return;
   }
@@ -154,6 +231,18 @@ function postinstall(): void {
     ...missing.map((name) => `${name} (declared by a staged package, not installed)`),
     ...mismatches,
   ];
+
+  // Check-only mode never repairs anything - it has no business running an install in a tree it was
+  // only asked about, least of all a consumer's CI checkout of this repo.
+  if (isCheckOnly) {
+    console.error(
+      `\nThe staged dev packages do not match this repo's package-lock.json:\n\n  ${problems.join(
+        '\n  ',
+      )}\n\nThe staged packages come from the branch dev-packages.json pins, which moves independently\nof this repo's commits, so a checkout of this repo can be older than what it stages. Building\nagainst this tree builds against dependencies this repo never resolved.\n\nIn this repo: run \`npm install\` and commit the package-lock.json change.\nConsuming this repo: use a paranext-core commit whose lockfile was refreshed against the\ncurrent pinned revision.\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   // `npm ci` cannot repair this: it installs the closure `package-lock.json` records and never
   // re-resolves, so a second pass would arrive here with the same missing dependencies. Only an
@@ -200,3 +289,5 @@ function postinstall(): void {
 }
 
 postinstall();
+// After everything, including the build chain, so it is the last thing the install prints.
+if (!isCheckOnly) announceRescuedCommits();
