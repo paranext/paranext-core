@@ -5,7 +5,8 @@
     "items": [
       {
         "label": "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%",
-        "localizeNotes": "Scripture Editor top menu > Project > Dictionary: SDBH/SDBG",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Scripture Editor top menu > Project > Dictionary: SDBH/SDBG. Hidden in Simple mode: the Dictionary is reached from its third-column tab there. TODO(PT-4545): that tab does not exist yet, so the Dictionary has no Simple entry point until it lands",
         "group": "platform.projectResources",
         "order": 100,
         "command": "platformLexicalTools.openDictionary"

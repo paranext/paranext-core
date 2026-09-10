@@ -17,7 +17,7 @@
  *
  * Frame: WebView content is hosted in `iframe[title="Enhanced Resource"]`.
  */
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from './er.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 

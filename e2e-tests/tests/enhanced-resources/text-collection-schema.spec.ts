@@ -15,7 +15,7 @@
  * - The admin gate on the referenced-resources write is enforced server-side; it is covered by the C#
  *   unit tests, not asserted here — this fixture runs as the default (admin) user.
  */
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from './er.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 
 // A stable test project id available in the e2e fixture data. Adjust to the fixture's known

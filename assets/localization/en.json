@@ -118,6 +118,7 @@
   "%mainMenu_file%": "File",
   "%mainMenu_help%": "Help",
   "%mainMenu_helpInfo_showTour%": "Show the tour",
+  "%mainMenu_helpInfo_visitCommunitySupportPage%": "Community support",
   "%mainMenu_helpInfo_visitFAQsPage%": "FAQs",
   "%mainMenu_helpInfo_visitFeatureRoadmapPage%": "Feature roadmap",
   "%mainMenu_helpInfo_visitGettingStartedPage%": "Getting started",

@@ -22,7 +22,7 @@
  * The zoom CSS property is applied inline (`style="zoom: 1.1"`) on the content wrapper div. In a
  * real Chromium (unlike jsdom), `locator('[style*="zoom"]')` reliably matches this element.
  */
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from './er.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import {
   closeAllNonHomeDockTabs,

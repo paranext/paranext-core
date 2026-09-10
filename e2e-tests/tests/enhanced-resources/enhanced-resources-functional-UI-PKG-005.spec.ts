@@ -25,7 +25,7 @@
  * - Uses `cdp.fixture` only (NOT `papi.fixture` or `app.fixture`).
  * - Navigates via visible UI; no `sendPapiCommand`.
  */
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from './er.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 

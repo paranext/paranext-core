@@ -24,7 +24,7 @@
  * No new fixtures or helpers are introduced.
  */
 import { FrameLocator } from '@playwright/test';
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from './er.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import {
   closeAllNonHomeDockTabs,

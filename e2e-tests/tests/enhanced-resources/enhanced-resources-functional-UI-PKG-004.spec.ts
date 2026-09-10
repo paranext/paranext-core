@@ -44,7 +44,7 @@
  * The test bodies are complete - component-builder activates them by removing `.fixme`.
  */
 
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from './er.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 

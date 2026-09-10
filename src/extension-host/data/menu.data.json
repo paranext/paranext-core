@@ -50,15 +50,16 @@
       },
       {
         "label": "%mainMenu_helpInfo_visitGettingStartedPage%",
-        "localizeNotes": "Application main menu > Help > Visit Getting Started Page",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Help > Visit Getting Started Page. Hidden in Simple mode: Simple's Help menu offers one support destination, Community support, rather than several overlapping web pages",
         "group": "platform.helpInfo",
         "order": 1,
         "command": "platform.visitGettingStartedPage",
         "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
       },
       {
-        "label": "%mainMenu_helpInfo_visitFAQsPage%",
-        "localizeNotes": "Application main menu > Help > Visit FAQs Page",
+        "label": "%mainMenu_helpInfo_visitCommunitySupportPage%",
+        "localizeNotes": "Application main menu > Help > Community support (opens the Support.Bible site, where translators find help from the wider community)",
         "group": "platform.helpInfo",
         "order": 2,
         "command": "platform.visitFAQsPage",
@@ -66,7 +67,8 @@
       },
       {
         "label": "%mainMenu_helpInfo_visitFeatureRoadmapPage%",
-        "localizeNotes": "Application main menu > Help > Visit Feature Roadmap Page",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Help > Visit Feature Roadmap Page. Hidden in Simple mode: the roadmap addresses people following the product's development rather than translators doing their work",
         "group": "platform.helpInfo",
         "order": 3,
         "command": "platform.visitFeatureRoadmapPage",
@@ -95,7 +97,8 @@
       },
       {
         "label": "%mainMenu_openDeveloperDocumentation%",
-        "localizeNotes": "Application main menu > Help > Open Developer Documentation",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Help > Open Developer Documentation. Hidden in Simple mode: it addresses extension developers, not translators",
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.openDeveloperDocumentationUrl",

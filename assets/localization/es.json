@@ -234,6 +234,7 @@
   "%mainMenu_file%": "Archivo",
   "%mainMenu_help%": "Ayuda",
   "%mainMenu_helpInfo_showTour%": "Mostrar el recorrido",
+  "%mainMenu_helpInfo_visitCommunitySupportPage%": "Soporte de la comunidad",
   "%mainMenu_helpInfo_visitFAQsPage%": "Preguntas frecuentes",
   "%mainMenu_helpInfo_visitFeatureRoadmapPage%": "Hoja de ruta de características",
   "%mainMenu_helpInfo_visitGettingStartedPage%": "Primeros pasos",

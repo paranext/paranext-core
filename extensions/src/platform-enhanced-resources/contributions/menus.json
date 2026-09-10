@@ -5,7 +5,8 @@
     "items": [
       {
         "label": "%platformEnhancedResources_mainMenu_openEnhancedResource%",
-        "localizeNotes": "Application main menu > Platform.bible > Open Enhanced Resource",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Platform.bible > Open Enhanced Resource. Hidden in Simple mode: enhanced resources are a Power-mode tool, and this item still opens a hard-coded resource rather than offering a picker",
         "group": "platform.projectResources",
         "order": 200,
         "command": "platformEnhancedResources.openEnhancedResource"

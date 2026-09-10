@@ -16,7 +16,7 @@
  * admin entry stays in the top section) persists.
  */
 import { Page } from '@playwright/test';
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from './er.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import {
   chapterViewOption,

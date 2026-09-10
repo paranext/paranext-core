@@ -81,6 +81,13 @@
   "%general_open%": {
     "fallbackKey": "%Paratext.Base.CommonForms.SelectScrTextsForm.SelectScrTextsForm.Text%"
   },
+  "%mainMenu_helpInfo_visitFAQsPage%": {
+    "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%",
+    "deprecationInfo": {
+      "date": "2026-09-10",
+      "message": "Relabeled to \"Community support\" so the name matches the Support.Bible destination the item has always opened. The new key is %mainMenu_helpInfo_visitCommunitySupportPage%."
+    }
+  },
   "%mainMenu_visitSupportBible%": {
     "fallbackKey": "%mainMenu_helpInfo_visitFAQsPage%"
   },
