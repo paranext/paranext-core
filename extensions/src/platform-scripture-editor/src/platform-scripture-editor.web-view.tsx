@@ -269,6 +269,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
+  '%webView_footnoteList_close%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -875,6 +876,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
+
+  /** Hides the footnotes pane and returns focus to the text, as PT9's pane close button does. */
+  const hideFootnotesPane = useCallback(() => {
+    setFootnotesPaneVisible(false);
+    editorRef.current?.focus();
+  }, [setFootnotesPaneVisible]);
 
   const isPowerModeRef = useRef(isPowerMode);
 
@@ -3784,6 +3791,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   usj={usjFromPdp}
                   onFootnoteSelected={handleFootnoteSelected}
                   useWebViewState={useWebViewState}
+                  localizedStrings={localizedStrings}
+                  onClose={hideFootnotesPane}
                   showMarkers={options.view?.markerMode !== 'hidden'}
                   focusRequest={footnotePaneFocusRequest}
                 >

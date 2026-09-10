@@ -1,6 +1,7 @@
 import { PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  Button,
   FootnoteList,
   ResizableHandle,
   ResizablePanel,
@@ -9,16 +10,19 @@ import {
 import {
   getErrorMessage,
   getPaneSizeLimits,
+  LanguageStrings,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { EditorWebViewMessage } from 'platform-scripture-editor';
 import { UseWebViewStateHook } from '@papi/core';
 import { logger } from '@papi/frontend';
+import { X } from 'lucide-react';
 import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 // TODO (PT-3657): calculate these dynamically:
 const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
+const footnoteCloseRowHeightPx = 24;
 const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
 const footnoteHeaderWidthPx = 50;
 const minimumEditorWidthPx = 100;
@@ -29,6 +33,9 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   usj: Usj;
   showMarkers: boolean;
   useWebViewState: UseWebViewStateHook;
+  localizedStrings: LanguageStrings;
+  /** Closes the pane, mirroring PT9's notes-pane close button. */
+  onClose: () => void;
   onFootnoteSelected?: (index: number) => void;
   /**
    * When set to a new object reference, requests that the pane select/highlight the footnote at
@@ -50,6 +57,8 @@ export function FootnotesLayout({
   usj,
   showMarkers,
   useWebViewState,
+  localizedStrings,
+  onClose,
   onFootnoteSelected,
   focusRequest,
 }: FootnotesLayoutProps) {
@@ -196,7 +205,7 @@ export function FootnotesLayout({
   } =
     footnotesPanePosition === 'bottom'
       ? getPaneSizeLimits(containerHeight, {
-          secondaryPaneMinSizePx: footnoteRowHeightPx,
+          secondaryPaneMinSizePx: footnoteRowHeightPx + footnoteCloseRowHeightPx,
           mainPaneMinSizePx: minimumEditorHeightPx,
         })
       : getPaneSizeLimits(containerWidth, {
@@ -279,6 +288,17 @@ export function FootnotesLayout({
           minSize={footnotesPaneMinPercent}
           maxSize={footnotesPaneMaxPercent}
         >
+          <div className="tw:flex tw:justify-end tw:shrink-0 tw:pr-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="tw:h-6 tw:w-6"
+              aria-label={localizedStrings['%webView_footnoteList_close%']}
+              onClick={onClose}
+            >
+              <X className="tw:h-4 tw:w-4" />
+            </Button>
+          </div>
           <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
             <FootnoteList
               classNameForItems="scripture-font"
