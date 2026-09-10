@@ -324,7 +324,7 @@ export function removeRevelationFromProject(project: CommentTestProject): void {
  * `ResourceReferenceList.CurrentFormatVersion` in `c-sharp/Projects/ResourceReferenceList.cs` —
  * keep in sync (neither source can be imported into the Playwright Node context).
  */
-const REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION = '1.1.0';
+export const REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION = '1.1.0';
 
 /**
  * Seeds a project's own `platformScripture.referencedProjectsAndResources` admin setting by writing
