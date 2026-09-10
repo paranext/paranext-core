@@ -433,9 +433,15 @@ let focusedWindowIdEmitter: PlatformEventEmitter<FocusedWindowIdEvent> | undefin
  * to every process. Call once during main-process startup, before any window is created — a window
  * takes OS focus as soon as it is shown, and a focus this early would otherwise announce nothing.
  *
- * A registration failure is logged and swallowed: renderers that would have reacted to this event
- * (e.g. a per-window active-tab focus ring) fall back to only ever showing their own window's ring,
- * which is not worth failing startup over.
+ * A registration failure is logged and swallowed. Each renderer still seeds its "am I the focused
+ * window" state from `platform.getFocusedWindowId` (registered separately, so it survives this
+ * failure): the window whose seed resolves focused clears `platform-window-not-focused` (added
+ * unconditionally at module load) and keeps its ring, while every other window keeps the class for
+ * good — no ring, and in Power mode no web-view `:focus` outline. This registration runs once at
+ * startup before any window exists, so the failure disables live updates for every window for the
+ * life of the process, including one that seeded focused and later genuinely loses OS focus and
+ * then wrongly keeps a ring it should not have. Degraded focus affordances are not worth failing
+ * startup over.
  */
 export async function startFocusedWindowIdEvent(): Promise<void> {
   try {

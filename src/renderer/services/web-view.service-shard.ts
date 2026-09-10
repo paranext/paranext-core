@@ -2610,14 +2610,16 @@ async function admitContentToDock(operation: string): Promise<void> {
  *   tab. Does nothing on an existing WebView
  * @param optionsDefaulted Options that affect what this method does. **YOU MUST RUN
  *   {@link getWebViewOptionsDefaults} ON THIS OBJECT BEFORE PASSING IT IN!**
- * @param activateWithoutDocumentFocus Whether to dock the content without taking document focus.
- *   Passed by the process that created this window when it created it in the background and the
- *   user has not activated it since; focusing the new tab would focus its iframe, which asks the
- *   browser to activate this window.
  * @param isReloadOfAnOpenWebView Whether the caller found this web view in this window's dock and
  *   is asking for it again, which is what makes the same web view's absence at the dock write
  *   meaningful — see the check there. An open and an adopt both name an id no tab here has yet, so
  *   there is nothing for them to have lost.
+ * @param activateWithoutDocumentFocus Whether to dock the content without taking document focus.
+ *   Passed by the process that created this window when it created it in the background and the
+ *   user has not activated it since; focusing the new tab focuses its iframe, and a `focus()`
+ *   inside a window that does not hold OS focus sets that document's active element without
+ *   activating the window — latently, until the window is next activated — so it would still claim
+ *   the caret for a window that was deliberately opened in the background.
  * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
  *   not create a WebView for this request.
  *

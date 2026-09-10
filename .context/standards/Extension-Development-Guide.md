@@ -258,17 +258,23 @@ When opening a WebView via `papi.webViews.openWebView()`, you can specify how it
 Additionally, `targetWindowId` **(experimental)** lets you open a WebView into a specific named window instead of the one the user is working in. Applies to `'tab'`, `'panel'`, and `'float'` layouts only; combining it with `'window'` is an error, and combining it with `'replace-tab'` is likewise an error—the tab being replaced already names the window. The open fails if no such window exists — it never falls back to another window. Window ids are platform-assigned and never reused, so an id names one window and only that window. Retrieve the id of the window your code is running in with `papi.window.getWindowId()`. That is not the same question as `platform.getFocusedWindowId`, which reports whichever window the user is looking at — it answers with a different window's id whenever yours is not the focused one.
 
 Two **experimental** commands expose moving a WebView between windows:
-`platform.moveWebViewToNewWindow(webViewId)` and
-`platform.moveWebViewToWindow(webViewId, targetWindowId)`. A move closes the WebView in its
-current window and reopens it — same `useWebViewState` state — in the target, so consumers see a
-close event then an open event, and a WebView controller reference held across a move must be
-re-acquired. The commands return the WebView's authoritative post-move id, which can differ from
-the id passed in: a WebView restored from a persisted layout carries a window-scoped id that a
-move does not keep, so use the returned id for anything after the move.
+`platform.moveWebViewToNewWindow(webViewId, isUserRequested?)` and
+`platform.moveWebViewToWindow(webViewId, targetWindowId, isUserRequested?)`. A move closes the
+WebView in its current window and reopens it — same `useWebViewState` state — in the target, so
+consumers see a close event then an open event, and a WebView controller reference held across a
+move must be re-acquired. The commands return the WebView's authoritative post-move id, which can
+differ from the id passed in: a WebView restored from a persisted layout carries a window-scoped
+id that a move does not keep, so use the returned id for anything after the move. The optional
+`isUserRequested` parameter marks a move that a person in this app asked for — e.g. a tab's own
+context menu — as opposed to an extension moving a view on its own; it defaults to `false`. A
+window the platform deliberately opened in the background is raised for a user-requested move and
+left alone otherwise.
 
 `existingId: '?'` reuse is **cross-window** (experimental): the search covers every window,
 prefers the window the user is working in when more than one matches, and raises the window
-where the match was found. The optional, **experimental** `existingProjectId` limits that search —
+where the match was found — unless that window is one the platform deliberately kept in the
+background and the user has not yet been in it, in which case content merely arriving there does
+not raise it. The optional, **experimental** `existingProjectId` limits that search —
 in every window, not just the one the call was headed for — to web views showing that project, so
 a match for the project asked for outranks a web view of the same type showing another one
 (combining it with a concrete `existingId` — or with no `existingId` at all — is an error). What a
