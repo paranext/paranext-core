@@ -205,8 +205,11 @@ export function mergeDefaultLayoutSupplement(
     // materialization and copies any other tab through unchanged. So a web view tab is recognized
     // by its `webViewType` (see `collectWebViewTypes`) and any other tab by its own `id` (see
     // `collectTabIds`). Keying this on `data.webViewType` instead would ask a different question
-    // than the mint answers, and the two disagree for the entry handled just below.
-    if (entry.tab.tabType === TAB_TYPE_WEBVIEW) {
+    // than the mint answers, and the two disagree for both malformed shapes a hand-edit can produce
+    // — the one handled just below, and its mirror (a tab that declares a type without being typed
+    // as a web view), which is why the record-back at the end of this loop branches the same way.
+    const isWebViewTab = entry.tab.tabType === TAB_TYPE_WEBVIEW;
+    if (isWebViewTab) {
       if (!entryWebViewType) {
         // Neither identity is available: the id is re-minted on every load and there is no type to
         // match on, so nothing can ever recognize this tab as already present. Merging it would
@@ -215,7 +218,7 @@ export function mergeDefaultLayoutSupplement(
         // costs one absent tab in a hand-edited file; merging it corrupts the layout on disk.
         onPlacementAnomaly?.(
           entry,
-          `tab '${entry.tab.id}' is a web view tab but declares no webViewType, so it has no identity that survives a reload; skipping it rather than re-appending it on every load`,
+          `webViewType is missing on a tab typed as a web view, so it has no identity that survives a reload; skipping it rather than appending it again on every load`,
         );
         return;
       }
@@ -260,10 +263,17 @@ export function mergeDefaultLayoutSupplement(
     // panel" — both mean append.
     panel.tabs =
       insertAt < 0 ? [...tabs, tab] : [...tabs.slice(0, insertAt), tab, ...tabs.slice(insertAt)];
-    if (entryWebViewType) existingWebViewTypes.add(entryWebViewType);
-    // Record the id the check above looks up. A tab with no web view type passes through the mint
-    // unchanged, so the id it carries in the layout is the one the entry declared.
-    else existingTabIds.add(entry.tab.id);
+    // Record whichever identity the check above looks up, branching the same way it does. Recording
+    // under a different key than the check reads is how a duplicate survives: the entry never lands
+    // in the set the next occurrence is tested against, and it contributes an identity it does not
+    // actually have, which can suppress a later entry that genuinely does.
+    //
+    // A tab that is not a web view passes through the mint unchanged, so the id it declared is the
+    // id its materialized tab keeps, and that id is what the check looks up. On the web view branch
+    // `entryWebViewType` is always set — the guard above returned for a web view tab without one —
+    // but that narrowing does not reach this far, so it is re-tested rather than asserted away.
+    if (!isWebViewTab) existingTabIds.add(entry.tab.id);
+    else if (entryWebViewType) existingWebViewTypes.add(entryWebViewType);
   });
 
   return layout;

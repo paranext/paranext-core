@@ -349,6 +349,62 @@ describe('mergeDefaultLayoutSupplement with a web-view entry that declares no we
   });
 });
 
+/**
+ * The mirror of `webViewEntryWithNoType`: a tab that is NOT typed as a web view but does declare a
+ * `data.webViewType`. `tabType` is the easy field to omit in a hand-edited supplement file, so this
+ * shape is at least as likely as the other one. The mint passes it through untouched, so its id is
+ * stable and its own id is the identity that dedup must both look up AND record — recording it by
+ * type instead would leave the id absent from the lookup set and add a type this entry does not
+ * actually contribute.
+ */
+const nonWebViewTabDeclaringAType: DefaultLayoutSupplementEntry = {
+  anchorWebViewType: 'platformScriptureEditor.bibleTexts',
+  tab: {
+    id: 'mislabeled-tab',
+    tabType: 'settings',
+    data: { id: 'mislabeled-tab', webViewType: 'platformScriptureEditor.scriptureTextGrid' },
+  },
+};
+
+describe('mergeDefaultLayoutSupplement records the identity its check looks up', () => {
+  it('dedups a second copy of a non-web-view tab that declares a type', () => {
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [nonWebViewTabDeclaringAType, nonWebViewTabDeclaringAType],
+      'simple',
+    );
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab', 'mislabeled-tab']);
+  });
+
+  it('does not let such a tab suppress a genuine web view of the type it names', () => {
+    // The mislabeled tab contributes no web view of that type, so recording it as one would make a
+    // later well-formed entry look already-present and silently drop it.
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [nonWebViewTabDeclaringAType, gridEntry],
+      'simple',
+    );
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
+      'platformScriptureEditor.scriptureTextGrid',
+    ]);
+    expect(tabsInFirstPanel(merged).map((t) => t.tabType)).toEqual([
+      'webView',
+      'settings',
+      'webView',
+    ]);
+  });
+
+  it('positive control: a genuine web view entry is still deduped by type within one merge', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry, gridEntry], 'simple');
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
+    ]);
+  });
+});
+
 /** Reads the `isClosable` a merged tab carries, which lives inside the tab's web view data. */
 function isClosableOf(tab: SavedTabInfo | undefined): boolean | undefined {
   // Tab data is `unknown` in the shared model; supplement tabs store a WebViewDefinition there.
