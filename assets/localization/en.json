@@ -1,8 +1,12 @@
 {
+  "%about_ariaLabel_opensTermsOfService%": "Opens in your default application for Markdown files",
+  "%about_copyright_format%": "Copyright © {years} SIL Global and United Bible Societies",
   "%about_db_ip_attribution_format%": "{intro} {websiteLink} ({license}, {terms})",
   "%about_db_ip_attribution_intro%": "Internet safety features use data from",
   "%about_db_ip_attribution_terms%": "Terms",
+  "%about_error_couldNotOpenTermsOfService%": "The Terms of Service could not be opened. The document is installed beside the application as TERMS-OF-SERVICE.md.",
   "%about_licenseLabel_format%": "License: {license}",
+  "%about_licenseLabel_termsOfService%": "Paratext Terms of Service",
   "%about_versionLabel_format%": "Version: {version}",
   "%acceptButton_tooltip%": "Save",
   "%ariaLabel_opensInBrowser%": "Opens externally in a browser window",
