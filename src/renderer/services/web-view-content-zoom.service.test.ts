@@ -285,6 +285,20 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
+  it('ignores a stale memory echo for an area that already has a newer pending write', async () => {
+    const shard = await import('@renderer/services/web-view.service-shard');
+    vi.mocked(shard.getAllOpenWebViewDefinitionsSync).mockReturnValue([...definitions.values()]);
+    await adjustContentZoom('editor-1', 1, 'main'); // 1.1, flushed below
+    await __flushContentZoomMemoryForTesting();
+    await adjustContentZoom('editor-1', 1, 'main'); // 1.2, still only pending
+    // The echo of the 1.1 write arriving after the 1.2 edit was already made locally.
+    memoryCallbacks.forEach((cb) => cb({ 'editor:proj-A:main': 1.1 }));
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.2');
+    await __flushContentZoomMemoryForTesting();
+    expect(settings[MEMORY]).toEqual({ 'editor:proj-A:main': 1.2 });
+  });
+
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
     setContentZoomAreas('editor-1', []);
     await adjustContentZoom('editor-1', 1);
