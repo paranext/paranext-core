@@ -209,16 +209,22 @@ describe('buildExpectedLiveIdentifiers / findMissingFromLive', () => {
 const LIVE_WINDOW_ID = '1f638eb7-cda2-460c-984d-f563db876704';
 /** A second live window id (uppercase-folded is covered separately below), from the same CI run. */
 const LIVE_WINDOW_ID_2 = 'f4cee79b-945c-4eff-8fb8-6d8049bc7281';
+/** A third live window id, from the CI run where the onboarding tour's shard went unrecognized. */
+const LIVE_WINDOW_ID_3 = '045e19fc-1046-44ff-9f5f-039511469aa9';
 
 describe('matchDynamicObjectId', () => {
   it.each([
     [
       `DialogService-${LIVE_WINDOW_ID}`,
-      'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
+      'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/Notification/OnboardingTourService)',
     ],
     [
       `NotificationService-${LIVE_WINDOW_ID_2}`,
-      'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
+      'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/Notification/OnboardingTourService)',
+    ],
+    [
+      `OnboardingTourService-${LIVE_WINDOW_ID_3}`,
+      'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/Notification/OnboardingTourService)',
     ],
     [
       `platform.windowServiceDataProvider-${LIVE_WINDOW_ID}-data`,
@@ -237,7 +243,7 @@ describe('matchDynamicObjectId', () => {
 
   it('matches a window id with uppercase hex digits (not RFC-4122-strict)', () => {
     expect(matchDynamicObjectId(`DialogService-${LIVE_WINDOW_ID.toUpperCase()}`)).toBe(
-      'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
+      'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/Notification/OnboardingTourService)',
     );
   });
 
@@ -289,7 +295,7 @@ describe('resolveNetworkObjectMethod', () => {
       objectId: `DialogService-${LIVE_WINDOW_ID}`,
       functionName: 'showDialog',
       matchedVia:
-        'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
+        'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/Notification/OnboardingTourService)',
     });
   });
 
