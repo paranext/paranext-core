@@ -1668,24 +1668,39 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | '
  *
  * @param options.resourceProjectId The project id the panel is reading from, or `undefined` if a
  *   resource has not resolved to one yet.
- * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet. A
- *   caller that seeds its data hook with a default (the Bible texts panel passes `EMPTY_USJ`) never
- *   passes `undefined`; for those, `resourceProjectId` not having resolved yet is what produces
- *   `'loading'`.
+ * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet.
+ *   Whether `undefined` can reach here at all is the caller's choice of seed for its data hook. A
+ *   caller seeding `undefined` (the Bible texts panel) says "nothing has arrived" through this
+ *   value directly. One seeding a blank USJ (`scripture-text-grid/resource-cell.component.tsx`)
+ *   never can, because a blank USJ is neither `undefined` nor falsy, and must distinguish
+ *   not-yet-arrived some other way — there, `resourceProjectId` not having resolved yet, plus the
+ *   `isLoading` its own `deriveCellState` takes.
  * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
  *   less means the panel has no book it can name, so no claim is made about one.
+ * @param options.isUsjSettled Whether the chapter subscription has stopped loading. Distinguishes a
+ *   `undefined` that has not arrived yet from one that IS the answer — the data type's `getData` is
+ *   `Usj | undefined` and the extender PDP returns `undefined` for a falsy USX, so a delivered
+ *   `undefined` is reachable and would otherwise spin forever. Used ONLY to escalate out of
+ *   `'loading'`, never to enter it: the flag is re-armed from an effect, so for one render after a
+ *   selector change it still reads settled — harmless here, because the value in hand at that
+ *   moment is the previous reference's USJ rather than `undefined`.
  * @returns Which of the four content states to render.
  */
 export function resolveResourceContentState({
   resourceProjectId,
   usjPossiblyError,
   currentBookNum,
+  isUsjSettled,
 }: {
   resourceProjectId: string | undefined;
   usjPossiblyError: unknown;
   currentBookNum: number;
+  isUsjSettled: boolean;
 }): ResourceContentState {
-  if (!resourceProjectId || usjPossiblyError === undefined) return 'loading';
+  if (!resourceProjectId) return 'loading';
+  // Nothing in hand. Still on its way until the subscription says otherwise; once it has settled,
+  // `undefined` is the delivered answer and there is no text to show.
+  if (usjPossiblyError === undefined) return isUsjSettled ? 'failed' : 'loading';
   if (!isPlatformError(usjPossiblyError)) return 'ready';
 
   // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then

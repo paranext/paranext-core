@@ -51,18 +51,42 @@ export function matchesSelectedResourceId(
  *    new resource shows up.
  * 3. Auto-correct otherwise — rewrite a legacy bare id to its namespaced form, or fall back to the
  *    first row that has something to display when the selection has left the list. A row with no
- *    `projectId` has no content, so selecting it would spin forever.
+ *    `projectId` has no content, so selecting it would spin forever. Only once the sources behind
+ *    `rows` have settled, though: until then a selection is missing because its source has not
+ *    landed, not because it is gone, and correcting on that overwrites the user's pick for good.
  *
- * @param rows The panel's filtered rows
- * @param selectedResourceId The persisted selection, namespaced or legacy-bare
- * @param pendingResourceId The row id of a pick still propagating, if any
+ * Takes an options object rather than positional arguments, matching `getResourcePanelReadiness`:
+ * two adjacent `string | undefined` ids and two booleans are all transposable without a type error,
+ * and each transposition silently changes the answer.
+ *
+ * @param options.rows The panel's filtered rows
+ * @param options.selectedResourceId The persisted selection, namespaced or legacy-bare
+ * @param options.pendingResourceId The row id of a pick still propagating, if any
+ * @param options.areSourcesSettled Whether the sources `rows` is filtered against have settled, so
+ *   that a selection's ABSENCE from them can be read as genuine (see
+ *   `canResolveResourceSelection`). Governs DISPLAY: a settled absence may fall back to another
+ *   row. Required rather than defaulted: the safe-looking default is `false`, and a caller that
+ *   silently got it would render no resource at all.
+ * @param options.mayPersistCorrection Whether an absence is settled in a way that will not be
+ *   undone, so a fallback derived from it may be WRITTEN BACK over the stored selection. Strictly
+ *   narrower than `areSourcesSettled`: a failed catalog settles what the rows are for now, but its
+ *   retry can still restore the missing row, and the stored id does not come back once overwritten.
+ *   See `canResolveResourceSelection` for why the two questions diverge.
  * @returns See {@link ResourceSelectionResolution}
  */
-export function resolveResourceSelection(
-  rows: PickerResource[],
-  selectedResourceId: string | undefined,
-  pendingResourceId: string | undefined,
-): ResourceSelectionResolution {
+export function resolveResourceSelection({
+  rows,
+  selectedResourceId,
+  pendingResourceId,
+  areSourcesSettled,
+  mayPersistCorrection,
+}: {
+  rows: PickerResource[];
+  selectedResourceId: string | undefined;
+  pendingResourceId: string | undefined;
+  areSourcesSettled: boolean;
+  mayPersistCorrection: boolean;
+}): ResourceSelectionResolution {
   const selectedRow = rows.find((row) => matchesSelectedResourceId(row, selectedResourceId));
   const displayRow = selectedRow ?? rows[0];
 
@@ -95,11 +119,24 @@ export function resolveResourceSelection(
     };
   }
 
+  // The selection is not among the rows. That is only evidence it is GONE once the sources the rows
+  // are filtered against have settled; while one is still arriving it is evidence of nothing, and
+  // both correcting the stored id and displaying `rows[0]` in its place would be wrong — the stored
+  // id would be overwritten by a resource the user never chose, and it does not come back.
+  if (!areSourcesSettled)
+    return { nextSelectedResourceId: undefined, shouldClearPending: false, selectedRow: undefined };
+
+  // Displaying a fallback and PERSISTING one are separate decisions, because they carry different
+  // costs when the settlement turns out to be temporary. Showing another row while the catalog is
+  // down is recoverable — the right row reappears on a successful retry. Writing that row over the
+  // stored id is not: the pick is gone before the reader ever sees the panel, since this window
+  // renders the catalog-error view rather than the selector.
   const firstUsable = rows.find((row) => row.projectId !== undefined);
   return {
-    nextSelectedResourceId: firstUsable
-      ? getResourceReferenceRowId(firstUsable.reference)
-      : undefined,
+    nextSelectedResourceId:
+      mayPersistCorrection && firstUsable
+        ? getResourceReferenceRowId(firstUsable.reference)
+        : undefined,
     shouldClearPending: false,
     selectedRow: displayRow,
   };

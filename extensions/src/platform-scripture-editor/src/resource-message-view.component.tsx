@@ -1,4 +1,5 @@
 import { EmptyState } from 'platform-bible-react';
+import type { ReactNode } from 'react';
 import { useFocusReplacedContent } from './use-focus-replaced-content.hook';
 
 export type ResourceMessageViewProps = {
@@ -21,6 +22,16 @@ export type ResourceMessageViewProps = {
    * screen-reader user gets no confirmation that their navigation applied at all.
    */
   announcementKey?: string;
+  /**
+   * A recovery control rendered under the message, for the states that have one. Omitted by the
+   * states that are genuinely terminal — an inert button in a state that withholds every other
+   * affordance is worse than no button.
+   *
+   * Sits inside the focusable wrapper so a keyboard user who lands on the message reaches it with
+   * the next Tab. The wrapper keeps `aria-label={message}`, which names the region rather than the
+   * control; the control names itself.
+   */
+  action?: ReactNode;
 };
 
 /**
@@ -51,6 +62,7 @@ export function ResourceMessageView({
   message,
   testId,
   announcementKey,
+  action,
 }: ResourceMessageViewProps) {
   const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
 
@@ -66,9 +78,10 @@ export function ResourceMessageView({
       data-testid={testId}
       tabIndex={-1}
       aria-label={message}
-      className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
+      className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:px-4 tw:outline-none"
     >
       <EmptyState message={message} className="tw:text-center" />
+      {action}
     </div>
   );
 }

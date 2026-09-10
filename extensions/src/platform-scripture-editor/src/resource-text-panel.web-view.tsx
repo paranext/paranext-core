@@ -1,5 +1,4 @@
 import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -23,7 +22,6 @@ import {
   useTabIconSelection,
   useViewVisibility,
   type TabIconUrls,
-  Spinner,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -35,7 +33,7 @@ import {
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ChevronDown } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
 import {
   hasNewScrollTarget,
@@ -49,6 +47,7 @@ import { useResourcePickerResources } from './use-resource-picker-resources.hook
 import type { PickerResource } from './downloaded-resources.utils';
 import {
   canPublishResourcePanelProjectIds,
+  canResolveResourceSelection,
   getResourcePanelReadiness,
   type ResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
@@ -143,6 +142,14 @@ type ResourceSelectorDropdownProps = {
   onSelectResource: (id: string) => void;
   onShowResourcePicker: () => void;
   downloadResourcesLabel: string;
+  /**
+   * Already-localized text for the trigger while no row is selected yet — the window where the
+   * panel is configured but its sources have not settled enough to resolve a selection.
+   *
+   * The trigger's only other content is a chevron, which contributes no text, so without this the
+   * button renders blank AND has no accessible name at all.
+   */
+  noSelectionLabel: string;
 };
 
 function ResourceSelectorDropdown({
@@ -152,6 +159,7 @@ function ResourceSelectorDropdown({
   onSelectResource,
   onShowResourcePicker,
   downloadResourcesLabel,
+  noSelectionLabel,
 }: ResourceSelectorDropdownProps) {
   return (
     <div className="tw:px-2 tw:py-1">
@@ -162,7 +170,7 @@ function ResourceSelectorDropdown({
             className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
           >
             <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-              {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : ''}
+              {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : noSelectionLabel}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
           </Button>
@@ -193,6 +201,33 @@ function ResourceSelectorDropdown({
       </DropdownMenu>
     </div>
   );
+}
+
+/**
+ * The panel's CONTENT-area waiting state, for a chapter that has not arrived yet.
+ *
+ * Distinct from the full-panel {@link LoadingView} the readiness and install states render: the
+ * selector header stays mounted above this one, so it sizes to the content area rather than the
+ * viewport.
+ *
+ * Labelled rather than a bare `Spinner`, matching the three message states it alternates with
+ * (`ResourceBookNotAvailable`, `ResourceBlankChapter`, `ResourceTextUnavailable`), all of which
+ * carry an accessible name. A bare spinner announces nothing at all, and this state is entered on
+ * every chapter navigation.
+ *
+ * @param label Already-localized status text, doubling as the state's accessible name.
+ * @param announcementKey Identifies WHICH chapter is being waited on. Remounts the live region on a
+ *   change so a move from one wait to the next is announced; a surviving `role="status"` holding
+ *   byte-identical text reports nothing.
+ */
+function ContentLoadingView({
+  label,
+  announcementKey,
+}: {
+  label: string;
+  announcementKey: string;
+}) {
+  return <LoadingView key={announcementKey} className="tw:flex-1" label={label} />;
 }
 
 globalThis.webViewComponent = function ResourceTextPanel({
@@ -280,11 +315,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  // "The catalog is done, however it turned out" — one name for a disjunction the panel needs in
+  // three places (picker rows, selection settlement, and the readiness input below). Distinct from
+  // `isCatalogReady`, which means "done AND delivered"; the difference is what the display/persist
+  // split turns on (see `adr-panel-readiness-splits-display-from-persistence`).
+  const isCatalogSettled = isCatalogReady || hasCatalogError;
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
     projectId,
     RESOURCE_PICKER_OPTIONS,
     dblResources,
-    isCatalogReady || hasCatalogError,
+    isCatalogSettled,
   );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -345,11 +385,26 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Committing a pick, holding still while one is in flight, migrating a legacy bare id and
   // falling back when the selection leaves the list are one decision, not four effects that can
   // disagree across renders. `resolveResourceSelection` makes it, and is tested directly.
-  const selection = resolveResourceSelection(
-    filteredResources,
+  const arePanelRowsReady = pickerResources !== undefined;
+  const selection = resolveResourceSelection({
+    rows: filteredResources,
     selectedResourceId,
     pendingResourceId,
-  );
+    areSourcesSettled: canResolveResourceSelection({
+      listState: effectiveResourcesState,
+      isCatalogReady,
+      hasCatalogError,
+      arePanelRowsReady,
+    }),
+    // Deliberately the stricter question. A failed catalog settles what the rows are well enough to
+    // display one, but its retry can still bring the selected row back, so a fallback derived from
+    // that absence must not be written over the stored pick.
+    mayPersistCorrection: canPublishResourcePanelProjectIds(
+      effectiveResourcesState,
+      isCatalogReady,
+      arePanelRowsReady,
+    ),
+  });
   const selectedRef = selection.selectedRow;
 
   useEffect(() => {
@@ -394,11 +449,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   usePublishNavigableProjectIds(
     useWebViewState,
     resourceProjectId ? [resourceProjectId] : [],
-    canPublishResourcePanelProjectIds(
-      effectiveResourcesState,
-      isCatalogReady,
-      pickerResources !== undefined,
-    ),
+    canPublishResourcePanelProjectIds(effectiveResourcesState, isCatalogReady, arePanelRowsReady),
   );
 
   // #endregion
@@ -456,6 +507,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
+  // Re-drives a failed chapter read. `useData` keys its subscription on the selector by REFERENCE
+  // (see `create-use-data-hook.util.ts`, whose runaway-loop guard exists precisely because a new
+  // selector identity resubscribes), so handing it an equal-but-new selector object tears the
+  // subscription down and opens a fresh one — a real second attempt, not a repaint. Bumped only by
+  // the reader pressing retry, so the identity is otherwise as stable as the reference it is
+  // derived from and the guard is never approached.
+  const [chapterRetryNonce, setChapterRetryNonce] = useState(0);
+  const retryChapterRead = useCallback(() => setChapterRetryNonce((nonce) => nonce + 1), []);
+
   const [usjPossiblyError, , isUsjLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
@@ -467,18 +527,30 @@ globalThis.webViewComponent = function ResourceTextPanel({
         verseNum: 1,
         versificationStr: scrRef.versificationStr,
       }),
-      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
+      // `chapterRetryNonce` is intentionally a dependency the returned value does not read: it is
+      // here to change this memo's IDENTITY, which is the whole retry mechanism, since `useData`
+      // keys its subscription on the selector by reference. The rule cannot express "same value,
+      // new identity", and every way of satisfying it is worse — putting the nonce INTO the
+      // selector changes what is sent to the PDP over IPC, and reading it in the factory body
+      // trips `no-void` or `no-unused-expressions`.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr, chapterRetryNonce],
     ),
-    EMPTY_USJ,
+    // Seeded with nothing rather than a blank USJ so that "no chapter has arrived yet" is
+    // representable. A blank USJ is neither `undefined` nor falsy, so it cannot reach the two
+    // branches that answer this — `resolveResourceContentState`'s `'loading'` and the render's
+    // `!usjFromPdp` spinner — and `Editorial` mounts holding nothing, painting Lexical's "Enter
+    // some Scripture…" prompt: an invitation to type in a text the reader cannot edit.
+    undefined,
   );
 
   const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
 
   // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
   // `useProjectData`'s underlying `useData` hook doesn't reset to its default when the selector
-  // (here, `scrRef`) changes — it keeps the previous chapter's USJ until the new subscription's
-  // first update lands, and its default is `EMPTY_USJ`, which is itself blank. Without the gate the
-  // panel would claim "empty" over a chapter that is still arriving, and again on first mount.
+  // (here, `scrRef`) changes — it keeps the PREVIOUS chapter's USJ until the new subscription's
+  // first update lands. Without the gate the panel would claim "empty" over a chapter that is still
+  // arriving, using a blank answer that belongs to the reference the reader just left.
   //
   // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
   const isBlankChapter = useMemo(
@@ -496,8 +568,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
         resourceProjectId,
         usjPossiblyError,
         currentBookNum: Canon.bookIdToNumber(scrRef.book),
+        isUsjSettled: !isUsjLoading,
       }),
-    [resourceProjectId, usjPossiblyError, scrRef.book],
+    [resourceProjectId, usjPossiblyError, scrRef.book, isUsjLoading],
   );
 
   // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a
@@ -553,8 +626,18 @@ globalThis.webViewComponent = function ResourceTextPanel({
     });
   }, [pickerResources]);
 
+  // Which pick is the current one. Two picks can overlap — each is an `await` chain over the
+  // settings write and an install, and nothing stops the user choosing again while one runs — and
+  // the `finally` below is unconditional, so without this the FIRST to settle clears `isSelecting`
+  // while the second is still working. That is not cosmetic: `isSelecting` is what suppresses
+  // `useDblResourceAutoInstall`, so clearing it early re-arms auto-install alongside the in-flight
+  // pick's own install of a different resource. Same guard as `use-dbl-resource-catalog.hook.ts`.
+  const selectGenerationRef = useRef(0);
+
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
+      selectGenerationRef.current += 1;
+      const generation = selectGenerationRef.current;
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
       retryInstall();
@@ -577,7 +660,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
           (writtenReference) => setPendingResourceId(getResourceReferenceRowId(writtenReference)),
         );
       } finally {
-        setIsSelecting(false);
+        // Only the newest pick owns the flag. A superseded one leaves it set so the panel keeps
+        // reporting "Selecting…" until the pick the user actually last made finishes.
+        if (generation === selectGenerationRef.current) setIsSelecting(false);
       }
     },
     [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall, markInstallFailed],
@@ -646,7 +731,20 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // without re-running when the panel comes back to the editor, the reader gets Lexical's "Enter
   // some Scripture…" placeholder (an edit invitation in a text they cannot edit) until the next USJ
   // happens to arrive.
-  useEffect(() => {
+  //
+  // A LAYOUT effect, not a passive one, because the render that decides to mount `Editorial` is the
+  // render where the chapter arrived — and the editor holds nothing until this feed runs. A passive
+  // effect runs after the browser has already painted, so that placeholder is shown for a frame on
+  // every arrival. React flushes layout effects after the DOM is mutated but before paint, and the
+  // child's `useImperativeHandle` handle is installed before this parent effect runs, so the feed
+  // lands in the same frame the editor appears in.
+  //
+  // The cost is that `setUsj` runs before paint, with a whole chapter's USJ, on a path that
+  // previously did not block. That is accepted rather than overlooked: the work is the same work
+  // either way — the editor is useless until it is fed — and deferring it past paint does not
+  // remove the cost, it only guarantees that the frame the reader sees first is the wrong one.
+  // Chapters are bounded by the largest chapter in scripture, not by anything that grows.
+  useLayoutEffect(() => {
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
   }, [usjFromPdp, contentState, isBlankChapter]);
 
@@ -868,9 +966,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const renderContent = () => {
     if (contentState === 'loading')
       return (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-          <Spinner />
-        </div>
+        <ContentLoadingView
+          label={localizedStrings['%webView_resourcePanel_loading%']}
+          announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+        />
       );
 
     if (contentState === 'bookNotAvailable')
@@ -904,6 +1003,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
           <ResourceTextUnavailable
             message={localizedStrings['%webView_resourcePanel_textUnavailable%']}
             announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+            retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
+            onRetry={retryChapterRead}
           />
         </div>
       );
@@ -914,9 +1015,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
     // cannot edit.
     if (!usjFromPdp)
       return (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-          <Spinner />
-        </div>
+        <ContentLoadingView
+          label={localizedStrings['%webView_resourcePanel_loading%']}
+          announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+        />
       );
 
     return (
@@ -945,6 +1047,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
         onSelectResource={setSelectedResourceId}
         onShowResourcePicker={showResourcePicker}
         downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
+        noSelectionLabel={localizedStrings['%webView_resourcePanel_loading%']}
       />
 
       {renderContent()}
