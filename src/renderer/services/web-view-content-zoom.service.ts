@@ -95,6 +95,9 @@ const pendingMemoryWrites = new Map<string, number | undefined>();
 
 let memoryWriteTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** The registered `beforeunload` flush listener, if any; guards against registering a second one. */
+let beforeUnloadListener: (() => void) | undefined;
+
 /** Test seam only. Production code never calls this. */
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
 export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>): void {
@@ -107,6 +110,10 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
     memoryWriteTimer = undefined;
   }
   memoryChain = Promise.resolve();
+  if (beforeUnloadListener !== undefined && typeof window !== 'undefined') {
+    window.removeEventListener('beforeunload', beforeUnloadListener);
+  }
+  beforeUnloadListener = undefined;
 }
 
 function asNumber(value: unknown): number {
@@ -482,6 +489,9 @@ function syncSiblingsFromMemory(memory: MemoryRecord): void {
     areas.forEach((areaId) => {
       const current = deps.getDefinition(definition.id) ?? definition;
       const key = buildContentZoomMemoryKey(id.kind, id.identity, areaId);
+      // A newer local edit for this key hasn't reached the setting yet; this echo predates it, so
+      // applying it would revert the area until the newer write's own echo arrives.
+      if (pendingMemoryWrites.has(key)) return;
       const remembered = isValidZoomFactor(memory[key]) ? memory[key] : undefined;
       if (getOwnLevels(current)[areaId] === remembered) return;
       if (writeOwnLevel(current, areaId, remembered)) changed = true;
@@ -542,11 +552,13 @@ export function initializeContentZoomService(): Promise<void> {
       if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
     });
     // Best effort: a debounced edit still in flight when the window closes gets one last chance
-    // to reach the setting rather than being silently dropped.
-    if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => {
+    // to reach the setting rather than being silently dropped. One listener per window; a test
+    // reset removes it so a later re-initialization can register its own.
+    if (typeof window !== 'undefined' && !beforeUnloadListener) {
+      beforeUnloadListener = () => {
         flushMemoryWrites();
-      });
+      };
+      window.addEventListener('beforeunload', beforeUnloadListener);
     }
     await pruneMemoryOfRemovedProjects().catch((e) =>
       logger.warn(`Content zoom: memory prune failed. ${getErrorMessage(e)}`),
