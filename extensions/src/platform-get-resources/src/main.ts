@@ -203,11 +203,33 @@ function ensureInstalledFlagsSynced(): Promise<void> {
   return syncInFlight;
 }
 
+/**
+ * Brings the derived flags up to date and resolves once they are, so the next read of the catalog
+ * sees them.
+ *
+ * `getCachedResources` deliberately does not wait for the sync, which makes it one refresh behind:
+ * it answers from the array it has and leaves the corrected one to the next call. For `installed`
+ * that is invisible, because the caller that just installed something already knows. For
+ * `updateAvailable` it is the whole defect — an updated resource keeps its "Update" badge, since
+ * nothing else about the row changes and no data-update event exists to announce the correction. A
+ * caller that has just changed local state awaits this first, then re-reads.
+ */
+async function refreshResourceFlags(): Promise<void> {
+  // Joining a sync that is already running is not enough: it may have read its project metadata
+  // before the change this caller just made, so it can resolve on pre-change state. Let that one
+  // finish first, then start one that is guaranteed to observe the change. Any sync another caller
+  // starts in between also began after the change, so it is equally good.
+  if (syncInFlight) await syncInFlight;
+  await ensureInstalledFlagsSynced();
+}
+
 async function getCachedResources(): Promise<DblResourceCatalog> {
   if (cachedResources !== undefined) {
     // Run the installed-flag sync in the background so the dialog open is never blocked by
     // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
-    // the C# PDPF is still initializing). The next dialog open picks up the updated flags.
+    // the C# PDPF is still initializing). This read therefore answers one refresh behind; a
+    // caller that needs the flags to reflect a change it just made awaits `refreshResourceFlags`
+    // before reading.
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     ensureInstalledFlagsSynced();
     return { status: 'available', resources: cachedResources };
@@ -428,6 +450,11 @@ export async function activate(context: ExecutionActivationContext) {
     getLocalNonDblResources,
   );
 
+  const refreshResourceFlagsCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.refreshResourceFlags',
+    refreshResourceFlags,
+  );
+
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
     'platformGetResources.isSendReceiveAvailable',
     async () => {
@@ -460,6 +487,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openNewTabWebViewCommandPromise,
     await getCachedResourcesCommandPromise,
     await getLocalNonDblResourcesCommandPromise,
+    await refreshResourceFlagsCommandPromise,
     await isSendReceiveAvailableCommandPromise,
   );
 

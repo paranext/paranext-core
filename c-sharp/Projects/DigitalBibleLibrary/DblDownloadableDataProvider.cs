@@ -284,9 +284,10 @@ internal class DblResourcesDataProvider(
             {
                 // Non-waiting on purpose. Everything else that holds this gate — a catalog
                 // download, an install, an uninstall — runs for seconds, far longer than a list
-                // refresh should block, so waiting could only delay the same empty answer. Two
-                // rechecks cannot contend with each other: the only caller runs inside the
-                // front end's single-flight installed-flag sync.
+                // refresh should block. Two rechecks cannot contend with each other: the only
+                // caller runs inside the front end's single-flight installed-flag sync. A
+                // contended gate therefore costs the caller its answer, not its responsiveness:
+                // the empty result means "unknown", and the front end keeps the flags it has.
                 Monitor.TryEnter(_providerGate, ref gateTaken);
                 if (!gateTaken || !_hasFetchedResources)
                     return [];

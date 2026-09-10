@@ -125,8 +125,15 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       const actionFunction = action === 'install' ? installResource : uninstallResource;
 
       return actionFunction(dblEntryUid)
-        .then(() => {
-          // Trigger a refetch so the resource list reflects the new installed state.
+        .then(async () => {
+          // Wait for the derived flags to catch up before refetching. `getCachedResources` answers
+          // from the array it already has and syncs in the background, so refetching straight away
+          // returns the pre-action flags. An install or removal survives that, because the row's
+          // spinner clears on `installed` flipping and the following refetch corrects it; an
+          // update does not, because nothing about the row changes except `updateAvailable` and
+          // there is no event to announce the correction — the row would keep offering "Update"
+          // until the dialog was reopened.
+          await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
           refetchResources();
           return undefined;
         })

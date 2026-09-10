@@ -498,11 +498,18 @@ step, no automation. Just a record.
 - **Decision:** Extend the read-path reconciliation rather than adding a write-path invalidation. A
   new no-network provider function, `recomputeDblResourcesUpdateStatus`, re-evaluates
   `InstallableResource.IsNewerThanCurrentlyInstalled()` over the already-loaded catalog snapshot,
-  and the front end's `syncInstalledFlags` applies it alongside the `installed` check. Because that
-  sync is single-flighted by `ensureInstalledFlagsSynced` and runs in the background, the recompute
-  happens at most once at a time and never on a path a caller waits on, however many views refresh
-  together. Resources absent from the result keep their cached value, so a not-yet-loaded catalog
-  or a busy provider gate degrades to the previous behavior instead of guessing. Skipping the
+  and the front end's `syncInstalledFlags` applies it alongside the `installed` check. The sync is
+  single-flighted by `ensureInstalledFlagsSynced`, so the recompute happens at most once at a time
+  however many views refresh together. Reads do not wait for it — `getCachedResources` answers from
+  the array it already has — which makes a read one refresh behind. That is invisible for
+  `installed`, whose caller already knows what it just did, but it is the whole defect for
+  `updateAvailable`: nothing else about an updated row changes, and there is no data-update event,
+  so the row keeps offering "Update" until the catalog is read a second time. A caller that has
+  just changed local state therefore awaits `refreshResourceFlags` and then re-reads, which is the
+  one path that does wait on the recompute. Resources absent from the result keep their cached
+  value, so a not-yet-loaded catalog or a busy provider gate degrades to the previous behavior
+  instead of guessing — including on that awaited path, where a contended gate leaves the stale
+  flag in place rather than blocking the user. Skipping the
   catalog fetch is sound because the DBL-side revision is the half that should stay fixed;
   ParatextData re-reads the *installed* revision on each call (`ExistingScrText` is a live
   `ScrTextCollection` lookup, and `InternalInstall` nulls the ScrText's FileManager before

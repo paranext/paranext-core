@@ -29,8 +29,9 @@ declare module 'platform-get-resources' {
      * operation (a fetch, install, or uninstall) currently holds the provider. Treat a resource
      * missing from the result as "unknown" and keep whatever value you have.
      *
-     * Comparing revisions across the whole catalog is not free, so call it on a background refresh
-     * rather than on a path a user is waiting on.
+     * Comparing revisions across the whole catalog is not free. Prefer a background refresh; the
+     * one path that waits on it is the refresh a caller runs straight after installing, updating or
+     * removing a resource, where the user is already waiting on their own action.
      *
      * @returns Whether an update is available, keyed by DBL Entry UID.
      */
@@ -133,6 +134,18 @@ declare module 'papi-shared-types' {
      *   change the answer.
      */
     'platformGetResources.getCachedResources': () => Promise<DblResourceCatalog>;
+
+    /**
+     * Brings the catalog's derived flags (`installed`, `projectId`, `updateAvailable`) up to date
+     * and resolves once they are.
+     *
+     * `getCachedResources` does not wait for that sync, so it is always one refresh behind: it
+     * answers from the array it already has. Call this after changing local state — installing,
+     * updating or removing a resource — and then re-read the catalog, or the read will return the
+     * flags from before the change. Without it an updated resource keeps its "update available"
+     * flag until the catalog is read a second time, because nothing else about the row changes.
+     */
+    'platformGetResources.refreshResourceFlags': () => Promise<void>;
 
     /**
      * Returns locally-installed, read-only resources that are NOT in the DBL catalog (e.g. VULGP83,
