@@ -746,8 +746,6 @@ type ClassifyContext = {
   common: CommonFields;
   declared: Declared;
   usableById: Map<string, DetectedFile>;
-  /** Names of the policy's `separatePrograms` entries - see the `separateProgram` link. */
-  separatePrograms: Set<string>;
 };
 
 /**
@@ -1131,7 +1129,8 @@ function applyOverride(ctx: ClassifyContext, override: Override): Verdict {
   // reproduces that identifier's canonical text on the program's behalf.
   if (override.separateProgram !== undefined) {
     const programName = String(override.separateProgram).trim();
-    if (!ctx.separatePrograms.has(programName))
+    const program = (ctx.policy.separatePrograms || {})[programName];
+    if (!program)
       return {
         ...common,
         ...blocked(
@@ -1148,6 +1147,26 @@ function applyOverride(ctx: ClassifyContext, override: Override): Verdict {
           `the "overrides" entry for "${key}" is linked to separate program "${programName}", ` +
             `so its "license" must be an SPDX expression, and "${override.license}" is not. The ` +
             "document reproduces the program's canonical license text under that identifier.",
+        ),
+      };
+    // The ENTRY admits, not the override. This path returns before the allowed/copyleft test
+    // below - deliberately, because a separately redistributed program is admitted under terms
+    // the policy's lists do not have to allow (Mercurial's GPL-2.0-or-later is the live case).
+    // What makes that safe is that a human read THOSE terms and recorded them on the program:
+    // so an override may only name an identifier the reviewed entry itself names. Otherwise a
+    // link to a reviewed GPL-2.0-or-later program would carry any identifier at all - an
+    // unreviewed copyleft one, or one on neither list - past the one gate this pipeline exists
+    // to enforce, and the document would reproduce a text the reviewer never read.
+    const unreviewedId = recorded.ids.find((id) => !(program.spdx || []).includes(id));
+    if (unreviewedId)
+      return {
+        ...common,
+        ...blocked(
+          `the "overrides" entry for "${key}" records ${override.license} and is linked to ` +
+            `separate program "${programName}", whose reviewed identifiers are ` +
+            `${(program.spdx || []).join(', ') || '(none)'}. A linked override is admitted by ` +
+            'the terms a human read for the program, so it cannot name ' +
+            `${unreviewedId} - fix whichever is wrong.`,
         ),
       };
     return {
@@ -1491,7 +1510,6 @@ export function classify({
     common,
     declared,
     usableById,
-    separatePrograms: new Set(Object.keys(policy.separatePrograms || {})),
   };
 
   const { exception, overridable } = readInstruments(ctx, signals, sha256);
