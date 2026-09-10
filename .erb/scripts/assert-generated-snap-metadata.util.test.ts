@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import {
@@ -105,6 +105,42 @@ describe('checkGeneratedSnapMetadata', () => {
     expect(problems[0]).toContain('default-provider');
   });
 
+  it('rejects a plug whose content tag points at a different platform snap', () => {
+    // `default-provider` decides which snap snapd installs; `content` decides whether the plug
+    // connects to that snap's slot, and defaults to the plug's own name when absent. So a plug can
+    // be named and provided correctly, install the right snap, and still auto-connect to nothing --
+    // mounting an empty $SNAP/gnome-platform. The template declares no `content`, so today's
+    // correctness is by default rather than by assertion, and `snap.plugs` accepts the attribute
+    // form that would set it.
+    const wrongContent = [
+      '  gnome-42-2204:',
+      '    interface: content',
+      '    content: gnome-3-28-1804',
+      `    target: ${GNOME_PLATFORM_TARGET}`,
+      '    default-provider: gnome-42-2204',
+    ].join('\n');
+
+    const problems = checkGeneratedSnapMetadata(metadata('core22', wrongContent));
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('content');
+    expect(problems[0]).toContain('gnome-3-28-1804');
+  });
+
+  it('accepts a plug that states the content tag it would default to', () => {
+    // Stating it explicitly is not a defect, so long as it matches. Without this the assertion
+    // above could be satisfied by rejecting any `content` key at all.
+    const explicitContent = [
+      '  gnome-42-2204:',
+      '    interface: content',
+      '    content: gnome-42-2204',
+      `    target: ${GNOME_PLATFORM_TARGET}`,
+      '    default-provider: gnome-42-2204',
+    ].join('\n');
+
+    expect(checkGeneratedSnapMetadata(metadata('core22', explicitContent))).toEqual([]);
+  });
+
   it('rejects a plug that is not a content interface', () => {
     const wrongInterface = [
       '  gnome-42-2204:',
@@ -145,10 +181,21 @@ describe('checkGeneratedSnapMetadata', () => {
     expect(problems[0]).toContain('base');
   });
 
-  it('reports metadata that is not a YAML mapping rather than throwing', () => {
-    // A truncated or reshaped artifact should fail as a checked problem, not as a bare TypeError
-    // from somewhere downstream.
+  it('reports metadata that parses but is not a mapping', () => {
+    // A reshaped artifact should fail as a checked problem naming the file, not as a bare TypeError
+    // from somewhere downstream. `just a string` is a valid YAML scalar, so this exercises the
+    // not-a-mapping branch rather than the parser.
     expect(checkGeneratedSnapMetadata('just a string')).toHaveLength(1);
+  });
+
+  it('reports metadata that does not parse as YAML at all', () => {
+    // Malformed YAML throws out of the parser rather than returning a value, so without this the
+    // branch above is the only one covered and the failure reaches the user as a bare
+    // YAMLParseError naming no snap and no file.
+    const problems = checkGeneratedSnapMetadata('plugs:\n\tgnome-42-2204: {}\n');
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('could not be parsed');
   });
 });
 
@@ -160,7 +207,10 @@ describe('resolveSnapArtifact', () => {
   });
 
   afterEach(() => {
-    rmSync(outDir, { recursive: true, force: true });
+    // Guarded because `force` suppresses ENOENT but not an invalid path: if `beforeEach` threw,
+    // `outDir` is undefined and an unguarded call fails with ERR_INVALID_ARG_TYPE, masking the
+    // real cause behind a teardown error.
+    if (outDir) rmSync(outDir, { recursive: true, force: true });
   });
 
   /** Puts a file in the output directory. Contents are irrelevant; only the name is matched on. */
@@ -200,7 +250,9 @@ describe('resolveSnapArtifact', () => {
   });
 
   it('does not mistake a directory named like a snap for the artifact', () => {
-    mkdtempSync(path.join(outDir, 'staging.snap-'));
+    // The name has to end in `.snap` for this to reach the isFile() check at all -- a directory
+    // whose name merely starts that way is rejected by the extension test and proves nothing.
+    mkdirSync(path.join(outDir, 'staging.snap'));
     expect(() => resolveSnapArtifact(outDir)).toThrow(/No snap artifact found/);
   });
 });

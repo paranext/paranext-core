@@ -308,12 +308,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package
 
-      # Reads `meta/snap.yaml` out of the snap the packaging step above built. The unit-level guard
-      # (.erb/scripts/electron-builder-snap-config.test.ts) checks the same GNOME platform pairing
-      # from the inputs; everything that turns those inputs into the shipped plug list lives in
-      # app-builder-lib's snap.js and is invisible from them. Linux-only because that is the leg
-      # that builds a snap, and it runs before the rename-for-upload step below so the artifact is
-      # still under its built name.
+      # Reads `meta/snap.yaml` out of the snap the packaging step above built; see
+      # .erb/scripts/assert-generated-snap-metadata.ts for why that is checked separately from the
+      # config. Linux-only because that is the leg that builds a snap.
       - name: check generated snap metadata
         if: ${{ matrix.os == env.OS_LINUX }}
         run: npm run assert:snap-metadata
@@ -378,8 +375,11 @@ jobs:
         run: |
           gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-linux-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
 
+      # `!cancelled()` rather than the implicit `success()`, matching the Playwright upload above: a
+      # snap that fails the metadata check is the one someone needs to unsquash to see what shipped,
+      # and the default gate would discard exactly that build while keeping every passing one.
       - name: Rename Linux snap to include GitHub Action Run ID
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
         run: |
           for file in ./release/build/*.snap; do
             newName="${file%.snap}-${{ github.run_id }}.snap"
@@ -388,7 +388,7 @@ jobs:
           done
 
       - name: Upload Linux artifacts
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
         uses: actions/upload-artifact@v4
         with:
           name: app-linux-test

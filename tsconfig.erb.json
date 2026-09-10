@@ -1,12 +1,23 @@
 {
   // Type-check gate for the build-time TypeScript under .erb, which the root tsconfig's `include`
-  // ("src", "assets") leaves out: the packaging clean-up entry point, the startup-waterfall parser
-  // + CLI, and the third-party-notices pipeline. Without this, a type error in any of them would
-  // keep CI green and surface only at manual runtime - and the notices pipeline is ~4,700 lines
-  // that decide which licenses may ship and then write the artifact asserting it, so a renamed
-  // verdict field has to fail here rather than produce a wrong document. Scoped to these files (not
-  // all of .erb/scripts) because the older scripts there carry pre-existing type issues from their
-  // own heavy deps and are out of scope.
+  // ("src", "assets") leaves out. Without this, a type error in any of it would keep CI green and
+  // surface only at manual runtime - and the notices pipeline alone is ~4,700 lines that decide
+  // which licenses may ship and then write the artifact asserting it, so a renamed verdict field
+  // has to fail here rather than produce a wrong document.
+  //
+  // `.erb/scripts` is covered by glob rather than by an allowlist, so a script added later is
+  // checked without anyone remembering to list it. An allowlist here previously left three new
+  // files unchecked, and nothing surfaced it: type-aware ESLint does not report compiler
+  // diagnostics, so `npm run lint` passes over uncovered files in silence.
+  //
+  // The two exclusions are not badly-typed scripts. Both import `../configs/webpack.paths`, which
+  // reaches dependency .d.ts files that fail under this project's settings - five errors inside
+  // `path-scurry`'s bundled `lru-cache`, one inside `tinyglobby`'s `fdir` - because `skipLibCheck`
+  // is off. Turning that on would cover them at the cost of weakening the gate for the notices
+  // pipeline it mainly exists to protect, which is the wrong trade. A new script importing
+  // `webpack.paths` will fail here with those same node_modules errors; exclude it too, or give it
+  // what it needs from `webpack.paths` without the import.
+  //
   // Test files are excluded for the same reason the root config excludes all `*.test.ts`: they rely
   // on Vitest's runtime rather than on tsc. Referenced by `npm run typecheck` via `typecheck:erb`.
   // Emits nothing - it is purely a gate.
@@ -20,13 +31,11 @@
     "incremental": false,
     "types": ["node"]
   },
-  "include": [
-    ".erb/scripts/clean.ts",
-    ".erb/scripts/startup-waterfall.ts",
-    ".erb/scripts/startup-waterfall.util.ts",
-    ".erb/scripts/notices-build-id.ts",
-    ".erb/scripts/third-party-notices/*.ts",
-    ".erb/configs/emit-shipped-modules-plugin.ts"
-  ],
-  "exclude": ["node_modules", "**/*.test.ts"]
+  "include": [".erb/configs/emit-shipped-modules-plugin.ts", ".erb/scripts/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    ".erb/scripts/bump-versions.ts",
+    ".erb/scripts/check-build-exists.ts"
+  ]
 }
