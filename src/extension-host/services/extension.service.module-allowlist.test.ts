@@ -76,6 +76,22 @@ describe('extension host require shim allowlist', () => {
   });
 });
 
+describe('renderer web view require shim allowlist', () => {
+  it(`dispatches from that map rather than comparing names in the shim — ${WIDENING_THE_GRANT}`, () => {
+    // The renderer's value is pinned below, under the license exception. That pin is only a guard
+    // while the shim is what consumes the value, for the reason the extension host's twin above
+    // gives - and web views are the larger of the two surfaces. `global-this-web-view.model.ts`
+    // pulls in React and `platform-bible-react`, which do not load outside a browser environment,
+    // so its source is read here instead of imported.
+    const source = readFileSync(
+      path.join(REPO, 'src/renderer/global-this-web-view.model.ts'),
+      'utf8',
+    );
+    expect(source).toContain('moduleMap.get(moduleName)');
+    expect(source).not.toMatch(/moduleName === /);
+  });
+});
+
 /**
  * Modules the two hosts supply that Platform.Bible itself authors.
  *
