@@ -46,9 +46,10 @@
  *   `ProjectDataProvider` name (`<name>-pdp`) — both are `DataProvider`s, so both end up suffixed
  *   `-pdp-data` on the wire ({@link PDP_PATTERN}).
  * - Per-window service shards: `DialogService-<id>`, `UsersnapService-<id>`,
- *   `BookChapterControlService-<id>`, `WebViewService-<id>`, `NotificationService-<id>` (plain
- *   network objects, no `-data` suffix), and `platform.windowServiceDataProvider-<id>-data` (a data
- *   provider engine, so it does carry the suffix) ({@link WINDOW_SHARD_NETWORK_OBJECT_PATTERN},
+ *   `BookChapterControlService-<id>`, `WebViewService-<id>`, `NotificationService-<id>`,
+ *   `OnboardingTourService-<id>` (plain network objects, no `-data` suffix), and
+ *   `platform.windowServiceDataProvider-<id>-data` (a data provider engine, so it does carry the
+ *   suffix) ({@link WINDOW_SHARD_NETWORK_OBJECT_PATTERN},
  *   {@link WINDOW_SHARD_DATA_PROVIDER_PATTERN}).
  * - Per-provider update events: any `<objectId>:onDidUpdate` notification, where `<objectId>` is
  *   itself either a snapshot-derived id or one of the dynamic ids above — every data provider (TS
@@ -370,8 +371,8 @@ export function findMissingFromLive(
 /**
  * Per-window network objects set directly via `networkObjectService.set` (no `-data` suffix): named
  * `{Label}-{windowId}` (see `book-chapter-control.service-shard.ts`, `dialog.service-shard.ts`,
- * `notification.service-shard.ts`, `usersnap.service-shard.ts`, and
- * `NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE` in `web-view.service-model.ts`).
+ * `notification.service-shard.ts`, `onboarding-tour.service-shard.ts`, `usersnap.service-shard.ts`,
+ * and `NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE` in `web-view.service-model.ts`).
  *
  * `{windowId}` is `globalThis.windowId` — the durable id `mintWindowId`
  * (`src/main/services/window-state.service.ts`) mints for a brand-new window (a GUID from
@@ -386,6 +387,7 @@ const WINDOW_SHARD_NETWORK_OBJECT_LABELS = [
   'BookChapterControlService',
   'WebViewService',
   'NotificationService',
+  'OnboardingTourService',
 ];
 export const WINDOW_SHARD_NETWORK_OBJECT_PATTERN = new RegExp(
   `^(?:${WINDOW_SHARD_NETWORK_OBJECT_LABELS.join('|')})-${WINDOW_ID_SHAPE_SOURCE}$`,
@@ -444,7 +446,7 @@ const DYNAMIC_OBJECT_ID_PATTERNS: ReadonlyArray<{
   requiredDynamicCategory?: string;
 }> = [
   {
-    name: 'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
+    name: 'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/Notification/OnboardingTourService)',
     test: WINDOW_SHARD_NETWORK_OBJECT_PATTERN,
   },
   {
