@@ -41,9 +41,12 @@ export function noteWindowActivated(): boolean {
 let tabAwaitingDocumentFocus: string | undefined;
 
 /**
- * When {@link tabAwaitingDocumentFocus} was last set, so a bounded consumer (see
- * {@link takeTabAwaitingDocumentFocusIfFresh}) can tell a note this window is still catching up on
- * from one so old that whatever raised the window has long since been refused or abandoned.
+ * When {@link tabAwaitingDocumentFocus} was last set, on the monotonic clock, so a bounded consumer
+ * (see {@link takeTabAwaitingDocumentFocusIfFresh}) can tell a note this window is still catching up
+ * on from one so old that whatever raised the window has long since been refused or abandoned.
+ *
+ * Monotonic rather than wall-clock: a backwards step would make an arbitrarily old note read as
+ * fresh, which is the one direction this bound exists to rule out.
  */
 let tabAwaitingDocumentFocusNotedAt: number | undefined;
 
@@ -60,7 +63,7 @@ let tabAwaitingDocumentFocusNotedAt: number | undefined;
  */
 export function noteTabAwaitingDocumentFocus(tabId: string): void {
   tabAwaitingDocumentFocus = tabId;
-  tabAwaitingDocumentFocusNotedAt = Date.now();
+  tabAwaitingDocumentFocusNotedAt = performance.now();
 }
 
 /**
@@ -97,7 +100,7 @@ export function takeTabAwaitingDocumentFocus(): string | undefined {
 export function takeTabAwaitingDocumentFocusIfFresh(maxAgeMs: number): string | undefined {
   if (tabAwaitingDocumentFocus === undefined || tabAwaitingDocumentFocusNotedAt === undefined)
     return undefined;
-  if (Date.now() - tabAwaitingDocumentFocusNotedAt > maxAgeMs) return undefined;
+  if (performance.now() - tabAwaitingDocumentFocusNotedAt > maxAgeMs) return undefined;
   return takeTabAwaitingDocumentFocus();
 }
 

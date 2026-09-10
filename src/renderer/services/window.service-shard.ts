@@ -60,7 +60,6 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-vie
 import { logger } from '@shared/services/logger.service';
 import {
   CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS,
-  isWindowAwaitingFirstActivation,
   noteWindowActivated,
   resetActivationLatchForTesting,
   takeTabAwaitingDocumentFocus,
@@ -213,13 +212,23 @@ document.documentElement.classList.add(CSS_CLASS_WINDOW_NOT_FOCUSED);
 function setIsThisWindowFocused(newValue: boolean): void {
   if (newValue === isThisWindowFocused) return;
   isThisWindowFocused = newValue;
-  // Hidden case: a class toggle and an emitted value are the entire effect — nothing here reads
-  // layout or geometry, so this keeps working identically whether this window's tab (in a
-  // multi-window setup each window is its own OS window, not a docked tab) is the visible one or
-  // not.
+  // Hidden case for the ring: a class toggle on the root element and an emitted value, neither of
+  // which reads layout or geometry, so both keep working identically whether this window's tab (in
+  // a multi-window setup each window is its own OS window, not a docked tab) is the visible one or
+  // not. The catch-up below is a different matter — see `runFocusCatchUpForRaisedWindow`.
   document.documentElement.classList.toggle(CSS_CLASS_WINDOW_NOT_FOCUSED, !newValue);
   onDidChangeIsThisWindowFocusedEmitter.emit(newValue);
-  if (newValue) runFocusCatchUpForRaisedWindow();
+  if (newValue) {
+    // Main names this window as the focused one only for a genuine activation: a withheld window's
+    // own first-paint self-focus is handed back before it is ever recorded (`shouldBounceFocusBack`
+    // in `src/main/window-activation.util.ts` decides that, and the handler returns without
+    // recording), so arriving here means the user really is in this window. Ending the withholding
+    // on that is what a declaration looks like from the renderer's side — and it is what lets the
+    // catch-up below run, since a window still marked as awaiting its first activation has no
+    // business taking document focus.
+    noteWindowActivated();
+    runFocusCatchUpForRaisedWindow();
+  }
 }
 
 // Seed this window's "am I the focused one" state from the current focused window id, then track
@@ -428,9 +437,18 @@ window.addEventListener('keydown', () => {
   endWithholdingAndCatchUp();
 });
 
-/** End the withholding on the user's first gesture, and give the waiting tab its focus */
+/**
+ * End the withholding on the user's first gesture, and give the waiting tab its focus.
+ *
+ * Deliberately not gated on this being the window's FIRST activation. The latch can already have
+ * been cleared by an OS focus transition (see {@link setIsThisWindowFocused}) while a note is still
+ * waiting: a raise the OS refuses never produces that transition, and the focus-driven catch-up
+ * declines a note older than its freshness bound. In both cases the user's own gesture is the only
+ * thing left that can hand the waiting tab its caret, so it must still be able to consume the
+ * note.
+ */
 function endWithholdingAndCatchUp(): void {
-  if (!noteWindowActivated()) return;
+  noteWindowActivated();
   const tabId = takeTabAwaitingDocumentFocus();
   if (tabId === undefined) return;
   // Reached synchronously, within the triggering gesture's own event handling, rather than through
@@ -459,14 +477,19 @@ function endWithholdingAndCatchUp(): void {
  * instead: a stale note is left alone rather than stealing focus into a tab the user never asked to
  * see.
  *
- * Guarded on {@link isWindowAwaitingFirstActivation} being false so a window still awaiting its
- * first activation — which can take OS focus on its own the moment its page first paints (see
- * `shouldBounceFocusBack` in `src/main/window-activation.util.ts`) — never has this fire for it;
- * `endWithholdingAndCatchUp`'s gesture path is the only catch-up such a window gets until the user
- * has actually done something in it.
+ * Reached only for a genuine activation, so it needs no withholding check of its own: a window's
+ * own first-paint self-focus is handed back by main without ever being recorded as focus, and
+ * {@link setIsThisWindowFocused} ends the withholding immediately before calling this.
+ *
+ * Hidden case: intentionally not handled. `focusTab` makes the tab active and focuses its iframe in
+ * one synchronous stack, so a tab that is not already its panel's active tab is still in a
+ * `display: none` pane when the focus lands and it goes to the document body instead. No door
+ * reaches that today — every path that changes a withheld window's active tab goes through
+ * `revealTabGroupAndSetDocumentFocusToTab`, which records whichever tab it just activated, and only
+ * the latest record is kept, so the record tracks the active tab rather than drifting from it. A
+ * new door that activates a tab without passing through there is what would break this assumption.
  */
 function runFocusCatchUpForRaisedWindow(): void {
-  if (isWindowAwaitingFirstActivation()) return;
   const tabId = takeTabAwaitingDocumentFocusIfFresh(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS);
   if (tabId === undefined) return;
   try {
