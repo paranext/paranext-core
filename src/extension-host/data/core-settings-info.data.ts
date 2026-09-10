@@ -2,6 +2,7 @@ import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
+import { isValidZoomFactor } from '@shared/utils/content-zoom.util';
 import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
@@ -10,6 +11,16 @@ export const platformSettings: SettingsContribution = [
     label: '%settings_platform_group1_label_alternative%',
     description: '%settings_platform_group1_description%',
     properties: {
+      'platform.webViewContentZoom': {
+        label: '%settings_platform_webViewContentZoom_label%',
+        description: '%settings_platform_webViewContentZoom_description%',
+        default: DEFAULT_ZOOM_FACTOR,
+      },
+      'platform.webViewContentZoomMemory': {
+        label: '%settings_platform_webViewContentZoomMemory_label%',
+        default: {},
+        isHidden: true,
+      },
       'platform.interfaceLanguage': {
         label: '%settings_platform_interfaceLanguage_label%',
         description: '%settings_platform_interfaceLanguage_description%',
@@ -118,6 +129,30 @@ const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
   return true;
 };
 
+const webViewContentZoomValidator: SettingValidator<'platform.webViewContentZoom'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  if (typeof newValue !== 'number' || Number.isNaN(newValue)) return false;
+  if (!isValidZoomFactor(newValue)) {
+    throw new Error(
+      formatReplacementString(
+        await localization.getLocalizedString({
+          localizeKey: '%settings_platform_zoomFactor_errorMessage%',
+        }),
+        { lowerLimit: MIN_ZOOM_FACTOR, upperLimit: MAX_ZOOM_FACTOR },
+      ),
+    );
+  }
+  return true;
+};
+
+const webViewContentZoomMemoryValidator: SettingValidator<
+  'platform.webViewContentZoomMemory'
+> = async (newValue): Promise<boolean> => {
+  if (typeof newValue !== 'object' || !newValue || Array.isArray(newValue)) return false;
+  return Object.values(newValue).every((value) => isValidZoomFactor(value));
+};
+
 const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
   newValue: string,
 ): Promise<boolean> => {
@@ -132,6 +167,8 @@ const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async
 };
 
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
+  'platform.webViewContentZoom': webViewContentZoomValidator,
+  'platform.webViewContentZoomMemory': webViewContentZoomMemoryValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
