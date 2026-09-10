@@ -110,7 +110,7 @@ export function FindFilters({
           warranted — showing it unconditionally just stops it blinking. */}
       <PopoverContent
         align="end"
-        className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-x-hidden tw:overflow-y-scroll tw:p-3"
+        className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
       >
         {/* 1. Match content in */}
         <fieldset className="tw:mb-3">
