@@ -18,6 +18,7 @@ import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.ho
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
+import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
@@ -34,7 +35,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { HomeIcon } from 'lucide-react';
+import { HomeIcon, LockIcon } from 'lucide-react';
 import {
   Badge,
   BOOK_CHAPTER_CONTROL_STRING_KEYS,
@@ -43,12 +44,6 @@ import {
   Button,
   cn,
   getToolbarOSReservedSpaceClassName,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
   ScrollGroupSelector,
   SHRINK_STEP,
   Toolbar,
@@ -59,14 +54,22 @@ import {
   TooltipTrigger,
   usePromise,
   useShrinkStepValue,
+  useTruncationTooltip,
 } from 'platform-bible-react';
+import {
+  ProjectSelector,
+  type ProjectSelectorProject,
+  type ProjectSelectorSection,
+} from 'platform-bible-react/experimental';
 import {
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
+  type LanguageStrings,
   LocalizeKey,
+  normalizeProjectId,
 } from 'platform-bible-utils';
-import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
+import { CSSProperties, useCallback, useMemo } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
@@ -75,6 +78,10 @@ const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 // Stable identity for the "nothing extra to offer" case, so the memo below does not hand
 // BookChapterControl a fresh empty array on every render.
 const EMPTY_BOOK_IDS: string[] = [];
+
+// Stable identities so the selector does not re-partition or re-render on every toolbar render.
+const EMPTY_OPEN_TABS: never[] = [];
+const CUSTOM_ONLY_GROUPINGS = ['custom'] as const;
 
 // Visual breathing room between content and the native buttons on top of the live-measured overlay
 // width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
@@ -105,16 +112,13 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_select_project%',
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
+  '%projectPicker_toolbar_aria_label%',
+  '%projectPicker_section_recent%',
+  '%projectPicker_section_projects_localOnly%',
+  '%projectPicker_search_placeholder%',
+  '%projectPicker_no_results%',
+  '%projectPicker_readOnly_label%',
 ];
-
-/**
- * Radix's `SelectValue` hard-codes `style={{ pointerEvents: 'none' }}` on its span and discards any
- * `className` or `style` passed to it, so anything rendered inside it is invisible to the pointer:
- * no `:hover`, no pointer events, and a native `title` that can never open. `pointer-events` is
- * inherited, so re-declaring `auto` on the descendant that needs it restores hit-testing for that
- * subtree only. Presses still reach the trigger, which is an ancestor and gets the bubbled event.
- */
-const POINTER_EVENTS_INSIDE_SELECT_VALUE = 'tw:pointer-events-auto';
 
 /**
  * The project selector's trigger label.
@@ -135,21 +139,37 @@ function ProjectSelectorLabel({
 }) {
   const shrinkStep = useShrinkStepValue();
   const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
+  const {
+    ref: errorRef,
+    open: isErrorClipHovered,
+    onPointerEnter: onErrorPointerEnter,
+    onPointerLeave: onErrorPointerLeave,
+  } = useTruncationTooltip<HTMLSpanElement>();
 
   // An error replaces the label rather than sharing it. Putting it in the compound label's
   // secondary slot would clip it mid-sentence and then drop it entirely at the narrowest step,
   // leaving red text as the only signal that anything is wrong.
+  //
+  // The whole message is offered through the app's own truncation tooltip, the mechanism
+  // {@link ToolbarCompoundLabel} uses: `ProjectSelector` keeps a native `title` off its trigger on
+  // purpose, so the browser default would never open here.
   if (errorMessage) {
     return (
-      <span
-        className={cn(
-          'tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive',
-          POINTER_EVENTS_INSIDE_SELECT_VALUE,
-        )}
-        title={errorMessage}
-      >
-        {errorMessage}
-      </span>
+      <TooltipProvider>
+        <Tooltip open={isErrorClipHovered}>
+          <TooltipTrigger asChild>
+            <span
+              ref={errorRef}
+              className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive"
+              onPointerEnter={onErrorPointerEnter}
+              onPointerLeave={onErrorPointerLeave}
+            >
+              {errorMessage}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{errorMessage}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
@@ -162,52 +182,186 @@ function ProjectSelectorLabel({
       secondaryFirst
       showSecondary={!isAtMinimum}
       fullText={`${fullName} (${shortName})`}
-      className={POINTER_EVENTS_INSIDE_SELECT_VALUE}
     />
   );
 }
 
 /**
- * The project selector's trigger, sized to the space the toolbar currently has.
+ * The Simple-mode project selector, sized and labelled for the space the toolbar currently has.
  *
- * The width floor lives here rather than inline at the call site for the same reason
- * {@link ProjectSelectorLabel} is its own component: the step comes from `ShrinkStepContext`, which
- * `Toolbar` publishes, so it can only be read from a component rendered as `Toolbar`'s descendant.
- *
- * The floor has to move with the step or dropping the full name buys nothing — the label would just
- * get shorter inside a box still reserving 192px, and the space it was supposed to free would come
- * out of `BookChapterControl` instead.
+ * A separate component rather than inline JSX for the same reason {@link ProjectSelectorLabel} is:
+ * the shrink step comes from `ShrinkStepContext`, which `Toolbar` publishes, so it can only be read
+ * from a component rendered as `Toolbar`'s descendant.
  */
-function ProjectSelectorTrigger({
-  placeholder,
-  children,
+function ToolbarProjectSelector({
+  projects,
+  recentIds,
+  currentProjectId,
+  currentProjectError,
+  isLoading,
+  localizedStrings,
+  onSelectProject,
+  onShowMoreProjects,
 }: {
-  placeholder: string | undefined;
-  children?: ReactNode;
+  projects: ProjectItem[];
+  recentIds: readonly string[];
+  currentProjectId: string | undefined;
+  currentProjectError: string | undefined;
+  isLoading: boolean;
+  localizedStrings: LanguageStrings;
+  onSelectProject: (projectId: string) => void;
+  onShowMoreProjects: () => void;
 }) {
   const shrinkStep = useShrinkStepValue();
 
+  // `ProjectItem` and `ProjectSelectorProject` invert the meaning of `language`: the item's is a
+  // BCP-47 tag and its `languageDisplayName` is the readable name, while the selector's `language`
+  // is the readable name and `languageCode` is the tag. Mapping them straight across type-checks
+  // and is wrong.
+  const selectorProjects = useMemo<ProjectSelectorProject[]>(
+    () =>
+      projects.map((project) => ({
+        id: project.id,
+        shortName: project.shortName,
+        fullName: project.fullName,
+        language: project.languageDisplayName,
+        languageCode: project.language,
+      })),
+    [projects],
+  );
+
+  const recentIndex = useMemo(() => {
+    const index = new Map<string, number>();
+    recentIds.forEach((id, position) => index.set(normalizeProjectId(id), position));
+    return index;
+  }, [recentIds]);
+
+  // Absent metadata means editable — the registered default for `platform.isEditable` is true — so
+  // this tests for an explicit `false` rather than for falsiness.
+  const readOnlyIds = useMemo(
+    () =>
+      new Set(
+        projects
+          .filter((project) => project.isEditable === false)
+          .map((project) => normalizeProjectId(project.id)),
+      ),
+    [projects],
+  );
+
+  // Memoized because `ProjectSelector` re-partitions the whole list whenever this array's identity
+  // changes — an inline literal would re-partition on every search keystroke.
+  const customSections = useMemo<ProjectSelectorSection[]>(
+    () => [
+      {
+        id: 'recent',
+        label: localizedStrings['%projectPicker_section_recent%'],
+        match: (project) => recentIndex.has(normalizeProjectId(project.id)),
+        // Recency, not alphabetical — alphabetical order defeats the section's purpose.
+        compare: (a, b) =>
+          (recentIndex.get(normalizeProjectId(a.id)) ?? Number.MAX_SAFE_INTEGER) -
+          (recentIndex.get(normalizeProjectId(b.id)) ?? Number.MAX_SAFE_INTEGER),
+      },
+      {
+        // Names its own boundary: this list is what is on this machine, so a project the user can
+        // reach on the server but has not downloaded is accounted for rather than silently absent.
+        id: 'yours',
+        label: localizedStrings['%projectPicker_section_projects_localOnly%'],
+        match: () => true,
+      },
+    ],
+    [localizedStrings, recentIndex],
+  );
+
+  const renderProjectIndicator = useCallback(
+    (project: ProjectSelectorProject) =>
+      readOnlyIds.has(normalizeProjectId(project.id)) ? (
+        <LockIcon
+          className="tw:h-3 tw:w-3 tw:shrink-0"
+          aria-label={localizedStrings['%projectPicker_readOnly_label%']}
+        />
+      ) : undefined,
+    [readOnlyIds, localizedStrings],
+  );
+
+  const placeholder =
+    selectorProjects.length > 0
+      ? localizedStrings['%projectPicker_toolbar_select_project%']
+      : localizedStrings['%projectPicker_toolbar_no_projects%'];
+
+  // Supplying `renderTriggerLabel` hands this function the whole trigger label, `buttonPlaceholder`
+  // included, so the nothing-selected case has to be answered here or the trigger renders empty.
+  const renderTriggerLabel = useCallback(
+    (selected: ProjectSelectorProject | undefined) => {
+      if (currentProjectError)
+        return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
+      if (!selected) return placeholder;
+      return <ProjectSelectorLabel fullName={selected.fullName} shortName={selected.shortName} />;
+    },
+    [currentProjectError, placeholder],
+  );
+
+  const selectorLocalizedStrings = useMemo(
+    () => ({ searchPlaceholder: localizedStrings['%projectPicker_search_placeholder%'] }),
+    [localizedStrings],
+  );
+
+  const footerAction = useMemo(
+    () => ({
+      label: localizedStrings['%projectPicker_toolbar_more_projects%'],
+      onSelect: onShowMoreProjects,
+    }),
+    [localizedStrings, onShowMoreProjects],
+  );
+
+  const handleChangeSelection = useCallback(
+    ({ projectId }: { projectId: string }) => {
+      if (projectId) onSelectProject(projectId);
+    },
+    [onSelectProject],
+  );
+
   return (
-    <SelectTrigger
-      data-testid="toolbar-project-selector"
-      className={cn(
-        'tw:max-w-64 tw:border-0 tw:bg-transparent',
+    <ProjectSelector
+      mode="project"
+      projects={selectorProjects}
+      // Empty on purpose: `openTabs` drives the scroll-group chips and the "Opened tabs" section,
+      // and Simple mode exposes neither.
+      openTabs={EMPTY_OPEN_TABS}
+      selection={{ projectId: currentProjectId }}
+      onChangeSelection={handleChangeSelection}
+      customSections={customSections}
+      availableGroupings={CUSTOM_ONLY_GROUPINGS}
+      defaultGrouping="custom"
+      hideFilterMenu
+      renderProjectIndicator={renderProjectIndicator}
+      renderTriggerLabel={renderTriggerLabel}
+      footerAction={footerAction}
+      isLoading={isLoading}
+      localizedStrings={selectorLocalizedStrings}
+      ariaLabel={localizedStrings['%projectPicker_toolbar_aria_label%']}
+      buttonPlaceholder={placeholder}
+      commandEmptyMessage={localizedStrings['%projectPicker_no_results%']}
+      buttonVariant="ghost"
+      buttonClassName={cn(
+        'tw:w-auto tw:max-w-64 tw:border-0 tw:bg-transparent',
         // Still a floor at the narrowest step, just a smaller one: `min-w-24` (96px) is the
-        // measured width a short project name needs (~97px for `ESVUS16`, including the trigger's
-        // padding and chevron), so the name stays readable while the trigger remains a comfortable
-        // click target. Not `min-w-0`: with everything else in the row shrinkable too, the trigger
-        // would collapse to just its chevron.
+        // measured width a short project name needs, so the name stays readable while the trigger
+        // remains a comfortable click target. Not `min-w-0`: with everything else in the row
+        // shrinkable too, the trigger would collapse to just its chevron.
         shrinkStep >= SHRINK_STEP.MINIMUM ? 'tw:min-w-24' : 'tw:min-w-48',
       )}
-    >
-      <SelectValue placeholder={placeholder}>{children}</SelectValue>
-    </SelectTrigger>
+    />
   );
 }
 
 export function PlatformBibleToolbar() {
-  const { currentSimpleProject, recentProjects, allProjects, currentSimpleProjectError } =
-    useProjectPickerData();
+  const {
+    currentSimpleProject,
+    recentProjects,
+    allProjects,
+    currentSimpleProjectError,
+    isLoading: isProjectPickerLoading,
+  } = useProjectPickerData();
 
   // One subscription for both answers, since the toolbar gates controls on each. `isSimpleMode` is
   // deliberately not `!isPowerMode`: the simple-only controls below must never appear in power
@@ -351,8 +505,23 @@ export function PlatformBibleToolbar() {
     },
   );
 
-  const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;
-  const hasProjectPickerItems = projectPickerItems.length > 0;
+  // The union of both sections. The hook returns them disjoint (`allProjects` already excludes
+  // recents), so concatenating cannot duplicate a project.
+  const pickerProjects = useMemo(
+    () => [...recentProjects, ...allProjects],
+    [recentProjects, allProjects],
+  );
+  const recentIds = useMemo(() => recentProjects.map((project) => project.id), [recentProjects]);
+  const handleSelectProject = useCallback(
+    (projectId: string) => {
+      openProject(projectId).catch((e: unknown) => {
+        logger.warn(
+          `Toolbar caught an error while trying to open project ${projectId}: ${getErrorMessage(e)}`,
+        );
+      });
+    },
+    [openProject],
+  );
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -601,52 +770,16 @@ export function PlatformBibleToolbar() {
           </TooltipProvider>
         )}
         {isSimpleMode && (
-          <Select
-            value={currentSimpleProject?.id ?? ''}
-            onValueChange={async (projectId: string) => {
-              try {
-                await openProject(projectId);
-              } catch (e: unknown) {
-                logger.warn(
-                  `Toolbar caught an error while trying to open project ${projectId}: ${getErrorMessage(e)}`,
-                );
-              }
-            }}
-            disabled={!hasProjectPickerItems}
-          >
-            <ProjectSelectorTrigger
-              placeholder={
-                hasProjectPickerItems
-                  ? localizedStrings['%projectPicker_toolbar_select_project%']
-                  : localizedStrings['%projectPicker_toolbar_no_projects%']
-              }
-            >
-              {currentSimpleProject && (
-                <ProjectSelectorLabel
-                  fullName={currentSimpleProject.fullName}
-                  shortName={currentSimpleProject.shortName}
-                  errorMessage={currentSimpleProjectError}
-                />
-              )}
-            </ProjectSelectorTrigger>
-            {hasProjectPickerItems && (
-              <SelectContent>
-                {projectPickerItems.map((p) => (
-                  <SelectItem key={p.id} value={p.id} className="tw:whitespace-normal">
-                    {p.fullName} ({p.shortName})
-                  </SelectItem>
-                ))}
-                <SelectSeparator />
-                <button
-                  type="button"
-                  className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-start tw:text-sm"
-                  onClick={() => showProjectPicker()}
-                >
-                  {localizedStrings['%projectPicker_toolbar_more_projects%']}
-                </button>
-              </SelectContent>
-            )}
-          </Select>
+          <ToolbarProjectSelector
+            projects={pickerProjects}
+            recentIds={recentIds}
+            currentProjectId={currentSimpleProject?.id}
+            currentProjectError={currentSimpleProjectError}
+            isLoading={isProjectPickerLoading}
+            localizedStrings={localizedStrings}
+            onSelectProject={handleSelectProject}
+            onShowMoreProjects={showProjectPicker}
+          />
         )}
         {typeof scrollGroupId === 'number' && (
           // Key on the scroll group so switching groups remounts and re-seeds the history state.
