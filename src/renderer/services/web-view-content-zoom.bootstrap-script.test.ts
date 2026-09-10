@@ -187,6 +187,20 @@ describe('content-zoom bootstrap script', () => {
     ]);
   });
 
+  it('leaves Ctrl+Shift+wheel and Ctrl+Alt+wheel untouched, matching the chords’ modifier rule', () => {
+    const { bound } = install('wv-5b', TWO_AREAS);
+    expect(
+      wheel({ deltaY: -100, ctrlKey: true, shiftKey: true }, byId('verse')).defaultPrevented,
+    ).toBe(false);
+    expect(
+      wheel({ deltaY: -100, ctrlKey: true, altKey: true }, byId('verse')).defaultPrevented,
+    ).toBe(false);
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+    // Positive control: the same gesture without the extra modifier is taken.
+    expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+    expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-5b', 1, 'main');
+  });
+
   it('is suppressed by an inner capture handler that stops propagation (Text Collection grid rule)', () => {
     const { bound } = install('wv-6', TWO_AREAS);
     const inner = document.createElement('div');
@@ -346,11 +360,49 @@ describe('content-zoom bootstrap script', () => {
       ':root{--platform-content-zoom-default:1.3;--platform-content-zoom-main:1.2;--platform-content-zoom-footnotes:0.9}',
     );
     expect(style).toContain(
-      '[data-platform-content-zoom-root]{zoom:var(--platform-content-zoom-main,var(--platform-content-zoom-default,1))}',
+      '[data-platform-content-zoom-root=""],[data-platform-content-zoom-root="main"]{zoom:var(--platform-content-zoom-main,var(--platform-content-zoom-default,1))}',
     );
     expect(style).toContain(
       '[data-platform-content-zoom-root="footnotes"]{zoom:var(--platform-content-zoom-footnotes,var(--platform-content-zoom-default,1))}',
     );
+  });
+
+  it('drops an out-of-range level and an ill-formed area id, and falls back to 100 % for an invalid default', () => {
+    const style = getContentZoomStyleElement('abc', Number.NaN, {
+      main: 99,
+      footnotes: 0.9,
+      'Bad Id': 1.2,
+    });
+    expect(style).toContain(
+      ':root{--platform-content-zoom-default:1;--platform-content-zoom-footnotes:0.9}',
+    );
+    expect(style).not.toContain('--platform-content-zoom-main:');
+    expect(style).not.toContain('Bad Id');
+  });
+
+  it('matches no rule against a nested marker or one carrying an ill-formed area id', async () => {
+    install('wv-13', TWO_AREAS);
+    const nested = document.createElement('div');
+    nested.id = 'nested';
+    nested.setAttribute('data-platform-content-zoom-root', 'inner');
+    byId('main').appendChild(nested);
+    const malformed = document.createElement('div');
+    malformed.id = 'malformed';
+    malformed.setAttribute('data-platform-content-zoom-root', 'Bad Id');
+    document.body.appendChild(malformed);
+    await nextFrame();
+    const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
+    const selectors = sheet
+      ? Array.from(sheet.cssRules).flatMap((rule) =>
+          rule instanceof CSSStyleRule ? [rule.selectorText] : [],
+        )
+      : [];
+    // The accepted areas are matched, so a miss below means the selectors really do exclude the
+    // rejected markers rather than the sheet being empty.
+    expect(selectors.some((selector) => byId('main').matches(selector))).toBe(true);
+    expect(selectors.some((selector) => byId('foot').matches(selector))).toBe(true);
+    expect(selectors.some((selector) => byId('nested').matches(selector))).toBe(false);
+    expect(selectors.some((selector) => byId('malformed').matches(selector))).toBe(false);
   });
 });
 
