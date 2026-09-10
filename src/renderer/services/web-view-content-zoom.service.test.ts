@@ -20,6 +20,7 @@ import {
   __flushContentZoomMemoryForTesting,
   __setContentZoomDepsForTesting,
   adjustContentZoom,
+  applyContentZoomForWebView,
   forgetContentZoom,
   getEffectiveContentZoom,
   getInitialContentZoomForWebView,
@@ -190,6 +191,14 @@ describe('web-view-content-zoom.service', () => {
     expect(settingsSet).not.toHaveBeenCalled();
   });
 
+  it('clamps at the minimum and does not write, or show the indicator, when nothing changes', async () => {
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 0.5 } };
+    await adjustContentZoom('editor-1', -1, 'main');
+    expect(updateDefinition).not.toHaveBeenCalled();
+    expect(settingsSet).not.toHaveBeenCalled();
+    expect(showIndicator).not.toHaveBeenCalled();
+  });
+
   it('coalesces an un-awaited burst of adjustments into one memory write per key', async () => {
     const first = adjustContentZoom('editor-1', 1, 'main');
     const second = adjustContentZoom('editor-1', 1, 'main');
@@ -202,6 +211,14 @@ describe('web-view-content-zoom.service', () => {
       'editor:proj-A:footnotes': 1.1,
     });
     expect(settingsSet).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the memory write behind the debounce delay, then flushes it in one call', async () => {
+    await adjustContentZoom('editor-1', 1, 'main');
+    expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
+    await __flushContentZoomMemoryForTesting();
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:proj-A:main': 1.1 });
   });
 
   it('skips the memory write and warns, without losing the pane update, when the memory read fails', async () => {
@@ -329,6 +346,15 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
+  it('does nothing and does not throw when the definition has vanished for a pane with reported areas', async () => {
+    setContentZoomAreas('ghost', ['main']);
+    await expect(adjustContentZoom('ghost', 1, 'main')).resolves.toBeUndefined();
+    await expect(resetContentZoom('ghost', 'main')).resolves.toBeUndefined();
+    expect(updateDefinition).not.toHaveBeenCalled();
+    expect(settingsSet).not.toHaveBeenCalled();
+    expect(showIndicator).not.toHaveBeenCalled();
+  });
+
   it('brings a sibling pane of the same project in line per area when the memory changes (live sharing)', async () => {
     definitions.set('editor-2', {
       id: 'editor-2',
@@ -375,6 +401,17 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-1', ['main']);
     expect(iframe.style.zoom).toBe('');
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+  });
+
+  it('applyContentZoomForWebView pushes the whole-view default without areas, and a per-area variable with them', () => {
+    setContentZoomAreas('editor-1', []);
+    applyContentZoomForWebView('editor-1');
+    expect(iframe.style.zoom).toBe('1');
+    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
+    setContentZoomAreas('editor-1', ['main']);
+    applyContentZoomForWebView('editor-1');
+    expect(iframe.style.zoom).toBe('');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
   });
 
   it('gives a late-reported area its remembered level', async () => {

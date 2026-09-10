@@ -5371,8 +5371,8 @@ declare module 'papi-shared-types' {
      */
     'platform.webViewContentZoomOut': (webViewId?: WebViewId, areaId?: string) => Promise<void>;
     /**
-     * Return one area of a web view's content to the default zoom set in Settings. Without an
-     * id, the focused window's last focused tab is the target; without an area, the pane's active
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
      * area.
      *
      * @experimental This command is unstable and may change or disappear without notice

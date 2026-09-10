@@ -128,14 +128,12 @@ vi.mock('@renderer/services/web-view-state.service', () => ({
 // asserts on these mocks directly rather than exercising the real service's settings/memory logic
 // (covered separately by that service's own test file).
 const {
-  initializeContentZoomServiceMock,
   getInitialContentZoomForWebViewMock,
   adjustContentZoomMock,
   resetContentZoomMock,
   setContentZoomAreasMock,
   setContentZoomActiveAreaMock,
 } = vi.hoisted(() => ({
-  initializeContentZoomServiceMock: vi.fn(async () => undefined),
   getInitialContentZoomForWebViewMock: vi.fn(async () => ({
     defaultZoom: 1.3,
     levels: { main: 1.2, footnotes: 0.9 },
@@ -146,7 +144,6 @@ const {
   setContentZoomActiveAreaMock: vi.fn(),
 }));
 vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
-  initializeContentZoomService: initializeContentZoomServiceMock,
   getInitialContentZoomForWebView: getInitialContentZoomForWebViewMock,
   adjustContentZoom: adjustContentZoomMock,
   resetContentZoom: resetContentZoomMock,

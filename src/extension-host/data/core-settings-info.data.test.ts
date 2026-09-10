@@ -111,4 +111,19 @@ describe('content zoom settings', () => {
     // @ts-expect-error ts(2322) - intentional bad input
     await expect(validate({ 'editor:p1:main': 'big' }, {}, {})).resolves.toBe(false);
   });
+
+  it('rejects a memory value that is not a plain record of numbers', async () => {
+    const validate = coreSettingsValidators['platform.webViewContentZoomMemory'];
+    if (!validate) throw new Error('validator missing');
+    /* eslint-disable no-null/no-null -- intentionally testing null rejection at runtime */
+    // @ts-expect-error ts(2345) - intentional bad input
+    await expect(validate(null, {}, {})).resolves.toBe(false);
+    // @ts-expect-error ts(2345) - intentional bad input
+    await expect(validate([1], {}, {})).resolves.toBe(false);
+    // @ts-expect-error ts(2345) - intentional bad input
+    await expect(validate('x', {}, {})).resolves.toBe(false);
+    // @ts-expect-error ts(2345) - intentional bad input
+    await expect(validate(42, {}, {})).resolves.toBe(false);
+    /* eslint-enable no-null/no-null */
+  });
 });
