@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -35,6 +35,17 @@ const BOOKS: Record<string, ManageBooksDialogBookInfo[]> = {
 
 const BOOK_IDS = ['GEN', 'EXO', 'MRK', 'LUK'];
 
+/**
+ * Projects carrying a versification, for the Create "Based on" picker — the only picker that groups
+ * by versification, so the only one whose fixtures need the field. `'4'` is English and `'3'` is
+ * Vulgate, so the list spans two buckets.
+ */
+const VERSIFIED_PROJECTS: ManageBooksDialogProject[] = [
+  { id: 'WEB', shortName: 'WEB', name: 'World English Bible', versificationId: '4' },
+  { id: 'KJV', shortName: 'KJV', name: 'King James Version', versificationId: '4' },
+  { id: 'VUL', shortName: 'VUL', name: 'Latin Vulgate', versificationId: '3' },
+];
+
 const noopMutation = async (): Promise<MutationResult> => ({
   success: true,
   warnings: [],
@@ -67,6 +78,26 @@ const isSectionActive = (sectionId: string) =>
 /** Book pills are `<li data-book="XXX" aria-selected>` inside the grid. */
 const isBookSelected = (container: HTMLElement, book: string) =>
   container.querySelector(`[data-book="${book}"]`)?.getAttribute('aria-selected') === 'true';
+
+/** Radix popovers and cmdk need pointer-event sequences jsdom does not synthesize on its own. */
+const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+
+/** Grouping axes this dialog's project data cannot support, so no picker may offer them. */
+const UNSUPPORTED_GROUPINGS = ['Language', 'Last used', 'Versification', 'Type'];
+
+/** The picker popover a trigger has opened, which Radix portals out of the trigger's subtree. */
+const openedPopover = (trigger: HTMLElement) =>
+  waitFor(() => {
+    const id = trigger.getAttribute('aria-controls');
+    const content = id ? document.getElementById(id) : undefined;
+    // `waitFor` needs a throw to keep retrying, and returns whatever the callback resolves to.
+    if (!content) throw new Error('the picker popover has not opened');
+    return content;
+  });
+
+/** Grouping options the open filter menu offers, in order, by visible label. */
+const groupingChoices = () =>
+  screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
 
 describe('ManageBooksDialog launch parameters', () => {
   it('opens on the launched section with the launched books selected', async () => {
@@ -144,5 +175,67 @@ describe('ManageBooksDialog launch parameters', () => {
 
     expect(isSectionActive('create')).toBe(true);
     expect(isBookSelected(container, 'EXO')).toBe(true);
+  });
+});
+
+describe('ManageBooksDialog project pickers', () => {
+  // The dialog's project data carries no language, type or last-used fields, so those groupings
+  // would file every row under one "Unknown …" heading — a menu whose every option makes the list
+  // worse. Asserting only the two offered options would still pass with the restriction deleted,
+  // so the absence of the unsupported axes is the load-bearing half of these tests.
+
+  /** Opens a picker and its view-options menu, whose trigger lives inside the picker's popover. */
+  async function openGroupingMenu(user: ReturnType<typeof setupUser>, trigger: HTMLElement) {
+    await user.click(trigger);
+    const popover = await openedPopover(trigger);
+    // Scope to the popover so the dialog's other controls can never satisfy the lookup.
+    await user.click(within(popover).getByLabelText('View options'));
+  }
+
+  it('offers only open-tabs grouping in the sidebar project picker', async () => {
+    const user = setupUser();
+    render(dialog());
+
+    const rail = await screen.findByTestId('manage-books-sidebar-project-trigger');
+    // The rail trigger is disabled until the project list has loaded, which would swallow a click.
+    await waitFor(() => expect(within(rail).getByRole('combobox')).toBeEnabled());
+    await openGroupingMenu(user, within(rail).getByRole('combobox'));
+
+    await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs']));
+    UNSUPPORTED_GROUPINGS.forEach((label) => {
+      expect(screen.queryByRole('menuitemradio', { name: label })).not.toBeInTheDocument();
+    });
+  });
+
+  it('offers only open-tabs grouping in the copy source picker', async () => {
+    const user = setupUser();
+    render(dialog({ initialSection: 'copy' }));
+
+    await waitFor(() => expect(isSectionActive('copy')).toBe(true));
+    await openGroupingMenu(user, screen.getByRole('combobox', { name: 'Select project' }));
+
+    await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs']));
+    UNSUPPORTED_GROUPINGS.forEach((label) => {
+      expect(screen.queryByRole('menuitemradio', { name: label })).not.toBeInTheDocument();
+    });
+  });
+
+  it('groups the create reference picker by versification with no way to regroup it', async () => {
+    const user = setupUser();
+    render(dialog({ initialSection: 'create', loadProjects: () => VERSIFIED_PROJECTS }));
+
+    await waitFor(() => expect(isSectionActive('create')).toBe(true));
+    const reference = await screen.findByTestId('manage-books-create-reference-trigger');
+    const trigger = within(reference).getByRole('combobox');
+    await user.click(trigger);
+    const popover = await openedPopover(trigger);
+
+    // Versification is the only axis worth switching to here, so the picker locks the list to it
+    // and drops the view-options affordance rather than exposing an inert one-item toggle.
+    await waitFor(() =>
+      expect(within(popover).getByText('English versification')).toBeInTheDocument(),
+    );
+    expect(within(popover).getByText('Vulgate versification')).toBeInTheDocument();
+    expect(within(popover).queryByLabelText('View options')).not.toBeInTheDocument();
   });
 });

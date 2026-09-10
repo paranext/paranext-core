@@ -7,10 +7,28 @@ export type ProjectSelectorMode = 'project' | 'project-multi' | 'projectScrollGr
 
 /** Minimal project metadata fed to the selector. */
 export type ProjectSelectorProject = {
+  /**
+   * Canonical project id, echoed back in `onChangeSelection` and matched against
+   * `ProjectSelectorOpenTab.projectId` case-insensitively. Must be unique within `projects`.
+   */
   id: string;
+  /** Short name shown as the row's first line and as the trigger label. */
   shortName: string;
+  /**
+   * Full name shown as the row's muted second line and as the tooltip title. Pass the short name
+   * (or omit the distinction upstream) when there is no longer name — the selector suppresses the
+   * second line rather than repeat it.
+   */
   fullName: string;
+  /**
+   * Human-readable language name (e.g. `"English"`). Surfaced in the row tooltip, searchable from
+   * the popover's search box, and used as the section heading when grouping by language.
+   */
   language?: string;
+  /**
+   * BCP-47-style language tag (e.g. `"en-US"`). Shown beside {@link language} in the row tooltip and
+   * searchable, so a user can find a project by its tag when several share a language name.
+   */
   languageCode?: string;
   /**
    * When `true`, the row for this project is rendered muted, is not selectable, and the
@@ -37,36 +55,16 @@ export type ProjectSelectorProject = {
    */
   versificationName?: string;
   /**
-   * Locale-stable type key for the "Group by type" option.
+   * Locale-stable type key for the "Group by type" option. Free-form on purpose: the selector
+   * groups rows by exact key equality (case-sensitive) and labels the bucket with whatever
+   * {@link typeName} the caller supplies, so it enforces no taxonomy of its own. Rows in one picker
+   * can mix Paratext project types with DBL resource types, and neither vocabulary is owned by this
+   * library — see the `adr-project-selector-type-stays-free-form` entry in
+   * `.context/standards/Architecture-Decisions.md` for why.
    *
-   * **This field is a free-form `string` on purpose — the selector does NOT enforce a taxonomy.**
-   * It groups rows by exact key equality (case-sensitive) and displays them under whatever
-   * {@link typeName} the caller supplies. No enum, no union, no wire contract, and no localization
-   * key set for the values is defined by this component.
-   *
-   * ### Why free-form?
-   *
-   * Rows in a single picker can come from more than one already-established taxonomy, and none of
-   * them are owned by `platform-bible-react`:
-   *
-   * - **Paratext project types** — the PT9 `ProjectType` enum, surfaced by the C# ParatextData
-   *   library via `ScrText.Settings.TranslationInfo.Type.InternalValue` and forwarded on the wire
-   *   as `ProjectSummary.ProjectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values include
-   *   `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
-   *   `"StudyBibleAdditions"`, `"ConsultantNotes"`, `"Transliteration"`,
-   *   `"TransliterationWithEncoder"`.
-   * - **DBL resource types** — the `ResourceType` union in `platform-bible-utils`
-   *   (`lib/platform-bible-utils/src/resources.model.ts`): `"ScriptureResource"`,
-   *   `"CommentaryResource"`, `"EnhancedResource"`, `"XmlResource"`, `"SourceLanguageResource"`.
-   *
-   * Constraining `type` to a hard-coded union would either duplicate one of those taxonomies (and
-   * quickly drift from its source of truth) or invent a new one, and neither buys the selector
-   * anything — grouping only needs equality.
-   *
-   * If a future consumer wants type-safety on the caller side, the recommended shape is a typed
-   * literal at the call site (e.g. `type: 'Standard' satisfies string`), not a widening of this
-   * type. Escalating this to a union is a deliberate, future decision — not something to add
-   * ad-hoc.
+   * A caller who wants type-safety over their own values should narrow at their own call site — a
+   * union of the types they actually produce, assigned into this field — rather than ask this type
+   * to carry it.
    */
   type?: string;
   /**
@@ -106,7 +104,12 @@ export type ProjectSelectorSection = {
 
 /** A project that is currently open in a specific scroll group. */
 export type ProjectSelectorOpenTab = {
+  /**
+   * The open project's id. Matched against {@link ProjectSelectorProject.id} case-insensitively, so
+   * a lowercased id from a tab's state still finds its project.
+   */
   projectId: string;
+  /** The scroll group this tab is bound to. Rendered as the row's chip letter (`0`→`A`, …). */
   scrollGroupId: ScrollGroupId;
   /**
    * Optional, pre-formatted "current scripture reference" for this scroll group (e.g. `"MAT
@@ -126,17 +129,17 @@ export type ProjectSelectorProjectPair = {
 };
 
 /** Selection shape for single `project` mode. */
-export type ProjectSelection = { projectId?: string };
+export type ProjectSelectorSelection = { projectId?: string };
 
 /**
  * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair; the
  * same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined when a
  * project that is not currently open anywhere is selected.
  */
-export type ProjectMultiSelection = { pairs: readonly ProjectSelectorProjectPair[] };
+export type ProjectSelectorMultiSelection = { pairs: readonly ProjectSelectorProjectPair[] };
 
 /** Selection shape for `projectScrollGroup` mode. */
-export type ProjectScrollGroupSelection = {
+export type ProjectSelectorScrollGroupSelection = {
   projectId?: string;
   scrollGroupId?: ScrollGroupId;
 };
@@ -201,19 +204,19 @@ export type ComputeRowsArgs =
       mode: 'project';
       projects: readonly ProjectSelectorProject[];
       openTabs: readonly ProjectSelectorOpenTab[];
-      selection: ProjectSelection;
+      selection: ProjectSelectorSelection;
     }
   | {
       mode: 'project-multi';
       projects: readonly ProjectSelectorProject[];
       openTabs: readonly ProjectSelectorOpenTab[];
-      selection: ProjectMultiSelection;
+      selection: ProjectSelectorMultiSelection;
     }
   | {
       mode: 'projectScrollGroup';
       projects: readonly ProjectSelectorProject[];
       openTabs: readonly ProjectSelectorOpenTab[];
-      selection: ProjectScrollGroupSelection;
+      selection: ProjectSelectorScrollGroupSelection;
     };
 
 // #endregion
@@ -679,10 +682,30 @@ function findDuplicateSectionId(sections: readonly ProjectSelectorSection[]): st
 }
 
 /**
+ * Duplicate ids already reported, so a misconfigured `customSections` array yields one warning per
+ * offending id rather than one per call. Partitioning runs on every keystroke in the selector's
+ * search box, and the caller cannot act on the same message repeated hundreds of times.
+ */
+const warnedDuplicateSectionIds = new Set<string>();
+
+function warnOnceAboutDuplicateSectionId(duplicateId: string): void {
+  if (warnedDuplicateSectionIds.has(duplicateId)) return;
+  warnedDuplicateSectionIds.add(duplicateId);
+  console.warn(
+    `ProjectSelector: duplicate custom section id "${duplicateId}" — matching is unaffected because ` +
+      `each section buckets by its own \`match\`, but sections sharing an id collide as React keys, which can cause stale or misapplied rendering.`,
+  );
+}
+
+/**
  * Bucket rows into caller-supplied sections, in the order supplied. A project lands in the first
  * section whose `match` accepts it; rows whose project matched nothing (or is absent from
- * `projectsById`) collect into a single trailing unlabeled section. Sections that end up empty are
- * omitted.
+ * `projectsById`) collect into a single trailing section headed by `unmatchedLabel`. Sections that
+ * end up empty are omitted.
+ *
+ * `unmatchedLabel` gives that trailing bucket an accessible name, so it does not render as a group
+ * of headingless rows below a bare separator. Omit it only when the caller genuinely wants no
+ * heading there.
  *
  * `match` is evaluated once per _project_, and the verdict applies to every row that project
  * produced — `project-multi` and `projectScrollGroup` fan one project out into a row per scroll
@@ -696,18 +719,14 @@ export function partitionByCustomSections(
   rows: readonly ProjectRow[],
   sections: readonly ProjectSelectorSection[],
   projectsById: ReadonlyMap<string, ProjectSelectorProject>,
+  unmatchedLabel?: string,
 ): RowSection[] {
   if (sections.length === 0) {
     return [{ kind: 'flat', rows: [...rows].sort(compareRows) }];
   }
 
   const duplicateId = findDuplicateSectionId(sections);
-  if (duplicateId !== undefined) {
-    console.warn(
-      `ProjectSelector: duplicate custom section id "${duplicateId}" — matching is unaffected because ` +
-        `each section buckets by its own \`match\`, but sections sharing an id collide as React keys, which can cause stale or misapplied rendering.`,
-    );
-  }
+  if (duplicateId !== undefined) warnOnceAboutDuplicateSectionId(duplicateId);
 
   // Resolve each project once, then reuse the verdict for all of its rows.
   const sectionIndexByProjectKey = new Map<string, number>();
@@ -760,6 +779,7 @@ export function partitionByCustomSections(
       kind: 'custom',
       id: UNMATCHED_SECTION_ID,
       rows: [...unmatched].sort(compareRows),
+      label: unmatchedLabel,
     });
   }
   return result;

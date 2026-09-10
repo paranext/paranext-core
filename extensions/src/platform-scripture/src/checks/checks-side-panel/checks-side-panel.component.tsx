@@ -2,6 +2,7 @@ import {
   Button,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
+  PROJECT_SELECTOR_STRING_KEYS,
   ProjectSelector,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
@@ -33,6 +34,8 @@ import { CHECK_CARD_STRING_KEYS, CheckCard, CheckStates } from './check-card.com
 export const CHECKS_SIDE_PANEL_STRING_KEYS = Object.freeze([
   ...LOCALIZED_STRINGS,
   ...CHECK_CARD_STRING_KEYS,
+  // The panel renders a ProjectSelector, so it also needs that component's localized strings.
+  ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const);
 
 /** A project (or resource) the user can select to run checks against. */
@@ -238,6 +241,7 @@ export function ChecksSidePanel({
             buttonClassName="tw:w-full tw:font-normal"
             popoverContentClassName="tw:w-[300px]"
             alignDropDown="start"
+            localizedStrings={localizedStrings}
           />
         </div>
 

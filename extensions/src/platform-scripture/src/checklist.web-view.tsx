@@ -4,6 +4,7 @@ import { useData, useLocalizedStrings, useProjectDataProvider } from '@papi/fron
 import {
   useEvent,
   ProjectSelector,
+  PROJECT_SELECTOR_STRING_KEYS,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
@@ -213,6 +214,9 @@ global.webViewComponent = function ChecklistWebView({
 
   const scopeSelectorStringKeys = useMemo(() => Array.from(SCOPE_SELECTOR_STRING_KEYS), []);
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(scopeSelectorStringKeys);
+
+  const projectSelectorStringKeys = useMemo(() => Array.from(PROJECT_SELECTOR_STRING_KEYS), []);
+  const [projectSelectorLocalizedStrings] = useLocalizedStrings(projectSelectorStringKeys);
 
   // ─── Service + editability ────────────────────────────────────────────────
 
@@ -664,10 +668,17 @@ global.webViewComponent = function ChecklistWebView({
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
           buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
+          localizedStrings={projectSelectorLocalizedStrings}
         />
       </div>
     ),
-    [comparativeProjects, comparativeOpenTabs, comparativeSelection, handleComparativeTextsChange],
+    [
+      comparativeProjects,
+      comparativeOpenTabs,
+      comparativeSelection,
+      handleComparativeTextsChange,
+      projectSelectorLocalizedStrings,
+    ],
   );
 
   // ─── ScopeSelector handlers (R1: snapshot at click-time) ─────────────────
@@ -787,6 +798,7 @@ global.webViewComponent = function ChecklistWebView({
             localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel
           }
           ariaLabel={localizedStrings['%markersChecklist_toolbar_primaryProject%']}
+          localizedStrings={projectSelectorLocalizedStrings}
         />
       </div>
     ),
@@ -796,6 +808,7 @@ global.webViewComponent = function ChecklistWebView({
       projectId,
       updateWebViewDefinition,
       localizedStrings,
+      projectSelectorLocalizedStrings,
       primaryProjectLabel,
     ],
   );

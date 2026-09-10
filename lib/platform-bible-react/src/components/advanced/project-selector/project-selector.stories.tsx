@@ -3,6 +3,7 @@
 // fits production code better than story fixtures.
 /* eslint-disable no-type-assertion/no-type-assertion */
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, within } from 'storybook/test';
 import { useState } from 'react';
 import { BookOpen, FileText } from 'lucide-react';
 import type { ScrollGroupId } from 'platform-bible-utils';
@@ -93,7 +94,7 @@ const sampleOpenTabs: ProjectSelectorOpenTab[] = [
 const meta: Meta<typeof ProjectSelector> = {
   title: 'Advanced/Project Selector',
   component: ProjectSelector,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   decorators: [
     (Story) => (
       <div className="tw:w-[320px] tw:p-4">
@@ -226,7 +227,7 @@ export const MultiProject: Story = {
     docs: {
       description: {
         story:
-          'Multi-select over `(projectId, scrollGroupId)` pairs. The same project open in two scroll groups renders as two rows, each independently selectable. Trigger label reads "N: short1 (A), short2 (B), ..." and truncates with ellipsis on overflow. Filter dropdown offers "Group by open tabs" and "Show selected only". Selected pairs whose tab is closed render with a struck chip and an "Open" button.',
+          'Multi-select over `(projectId, scrollGroupId)` pairs. The same project open in two scroll groups renders as two rows, each independently selectable. Trigger label reads "N: short1 (A), short2 (B), ..." and truncates with ellipsis on overflow. The view-options menu offers "Open tabs" under "Group by", plus a "Show selected only" filter. Selected pairs whose tab is closed render with a struck chip and an "Open" button.',
       },
     },
   },
@@ -340,7 +341,7 @@ export const SimpleFlatList: Story = {
     docs: {
       description: {
         story:
-          'The simplest possible display: single-select with `mode="project"` and `openTabs={[]}`. No scroll-group chips render on any row, no "Opened project & resource tabs" section appears, and `partitionAndSort` collapses to a single flat, unheaded list. Sample data mixes projects (HPUX, TP1, SCHL1951) and resources (NA28, BHS, LXX) — note the component itself does not visually distinguish the two; they render identically. The "Group by open tabs" toggle is still present in the filter menu (no way to hide it) but has no visible effect while `openTabs` is empty.',
+          'The simplest possible display: single-select with `mode="project"` and `openTabs={[]}`. No scroll-group chips render on any row, no "Opened project & resource tabs" section appears, and `partitionAndSort` collapses to a single flat, unheaded list. Sample data mixes projects (HPUX, TP1, SCHL1951) and resources (NA28, BHS, LXX) — note the component itself does not visually distinguish the two; they render identically. The view-options menu still offers the "Open tabs" grouping, which has no visible effect while `openTabs` is empty — pass `hideFilterMenu` (or `availableGroupings={[]}`, as the "No groupings offered" story does) to drop it.',
       },
     },
   },
@@ -384,7 +385,7 @@ const customSectionsSample: ProjectSelectorSection[] = [
 ];
 
 export const CustomSectionsSimple: Story = {
-  name: 'Custom sections (Simple — pinned, no filter menu)',
+  name: 'Custom sections (Simple — pinned, no view-options menu)',
   render: () => {
     const [projectId, setProjectId] = useState<string | undefined>('esvus16');
     return (
@@ -434,9 +435,36 @@ export const CustomSectionsPower: Story = {
     docs: {
       description: {
         story:
-          '`customSections` offered alongside the built-in groupings. Open the funnel icon and switch grouping in the menu to confirm the custom sections give way to the other options and come back when "Custom" is reselected.',
+          '`customSections` offered alongside the built-in groupings. Open the view-options menu and switch grouping to confirm the custom sections give way to the other options and come back when "Custom" is reselected.',
       },
     },
+  },
+  play: async ({ canvasElement, userEvent, step }) => {
+    // The popover, and the view-options menu inside it, both portal to the document body.
+    const body = within(canvasElement.ownerDocument.body);
+
+    const openViewOptions = async () => {
+      await userEvent.click(await body.findByLabelText('View options'));
+    };
+
+    await step('The picker opens on the custom sections', async () => {
+      await userEvent.click(body.getByRole('combobox', { name: 'Projects' }));
+      await expect(await body.findByText('Recent')).toBeInTheDocument();
+      await expect(body.getByText('Your projects')).toBeInTheDocument();
+    });
+
+    await step('Switching grouping replaces the custom sections', async () => {
+      await openViewOptions();
+      await userEvent.click(await body.findByRole('menuitemradio', { name: 'Language' }));
+      await expect(body.queryByText('Recent')).not.toBeInTheDocument();
+    });
+
+    await step('Reselecting "Custom" brings them back', async () => {
+      await openViewOptions();
+      await userEvent.click(await body.findByRole('menuitemradio', { name: 'Custom' }));
+      await expect(await body.findByText('Recent')).toBeInTheDocument();
+      await expect(body.getByText('Your projects')).toBeInTheDocument();
+    });
   },
 };
 
@@ -657,7 +685,7 @@ export const AllGroupingOptions: Story = {
     docs: {
       description: {
         story:
-          'Default `availableGroupings` = `["openTabs", "lastUsed", "language", "versification", "type"]`. Open the funnel icon (top-right of the popover) to switch between "None" and each grouping. **"Last used"** sorts recently-used items newest-first inside the "Recently used" section; items without a timestamp fall into "Other". **"Type"** bins by whatever taxonomy the caller supplied in the `type` field — this fixture mixes PT9 ProjectType keys (Standard, BackTranslation, StudyBible) and DBL ResourceType keys (ScriptureResource, CommentaryResource) using `typeName` for the section labels. The selector treats `type` as a free-form string and does not enforce a taxonomy — see the JSDoc on `ProjectSelectorProject.type` for the full rationale. Empty buckets are hidden.',
+          'Default `availableGroupings` = `["openTabs", "lastUsed", "language", "versification", "type"]`. Open the view-options menu (top-right of the popover) to switch between "None" and each grouping. **"Last used"** sorts recently-used items newest-first inside the "Recently used" section; items without a timestamp fall into "Other". **"Type"** bins by whatever taxonomy the caller supplied in the `type` field — this fixture mixes PT9 ProjectType keys (Standard, BackTranslation, StudyBible) and DBL ResourceType keys (ScriptureResource, CommentaryResource) using `typeName` for the section labels. The selector treats `type` as a free-form string and does not enforce a taxonomy — see the JSDoc on `ProjectSelectorProject.type` for the full rationale. Empty buckets are hidden.',
       },
     },
   },
@@ -683,7 +711,7 @@ export const NoGroupingOptions: Story = {
     docs: {
       description: {
         story:
-          '`availableGroupings={[]}` hides the entire "Group by" section (and the filter funnel button, if there are also no filter toggles applicable to the mode). The initial grouping resolves to `"none"` because `"openTabs"` is not in the array, so the popover opens as a flat list. Useful for a stripped-down picker where the caller already ordered/segmented the input.',
+          '`availableGroupings={[]}` hides the entire "Group by" section (and the view-options button itself, if there are also no filter toggles applicable to the mode). The initial grouping resolves to `"none"` because `"openTabs"` is not in the array, so the popover opens as a flat list. Useful for a stripped-down picker where the caller already ordered/segmented the input.',
       },
     },
   },
@@ -711,7 +739,7 @@ export const RestrictedGroupingOptions: Story = {
     docs: {
       description: {
         story:
-          '`availableGroupings={["language", "type"]}` narrows the filter menu to just those two. `defaultGrouping="type"` opens with type-grouping active. Pass this when the calling surface doesn\'t have data for "By open tabs" or "By last used", or when you want the picker constrained to a specific mental model.',
+          '`availableGroupings={["language", "type"]}` narrows the view-options menu to just those two. `defaultGrouping="type"` opens with type-grouping active. Pass this when the calling surface doesn\'t have data for "Open tabs" or "Last used", or when you want the picker constrained to a specific mental model.',
       },
     },
   },
@@ -734,13 +762,20 @@ export const ProjectAndResourceIndicators: Story = {
         onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
         buttonPlaceholder="Select a project or resource"
         ariaLabel="Project or resource"
-        renderProjectIndicator={(project) =>
-          project.type === 'ScriptureResource' ? (
-            <BookOpen className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
-          ) : (
-            <FileText className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
-          )
-        }
+        renderProjectIndicator={(project) => {
+          const Icon = project.type === 'ScriptureResource' ? BookOpen : FileText;
+          // A row whose project carries no type still needs a name for its glyph — the fixture's
+          // uncategorized entry exercises that path.
+          const typeLabel = project.typeName ?? project.type ?? 'Uncategorized';
+          // The glyph is the only visual carrier of "project or resource", so give it an
+          // accessible name of its own instead of hiding it from assistive tech. `title` also
+          // gives the icon a native hover label for sighted users who don't recognize it.
+          return (
+            <span role="img" aria-label={typeLabel} title={typeLabel}>
+              <Icon className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+            </span>
+          );
+        }}
       />
     );
   },
@@ -748,7 +783,7 @@ export const ProjectAndResourceIndicators: Story = {
     docs: {
       description: {
         story:
-          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and treats it as decorative — the icons here are `aria-hidden` because the row text already names the project.",
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and cannot know what a glyph means, so naming it is the caller's job: each icon here sits in a `role=\"img\"` wrapper labelled with the project's `typeName`, which is what a screen reader announces, plus a `title` for hover. The selector also lists `typeName` in the row tooltip, so the distinction never rests on the glyph alone.",
       },
     },
   },

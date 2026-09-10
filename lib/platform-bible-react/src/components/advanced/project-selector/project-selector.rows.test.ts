@@ -711,20 +711,40 @@ describe('partitionByCustomSections', () => {
     expect(sections[0].id).not.toBe(sections[1].id);
   });
 
-  it('warns once when two supplied sections share an id', () => {
+  it('warns once per duplicate id no matter how many times it partitions', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+      const sections = [
+        { id: 'dup', label: 'One', match: () => false },
+        { id: 'dup', label: 'Two', match: () => true },
+      ];
+      // The selector re-partitions on every search keystroke, so a per-call warning would bury
+      // the console under the same message the caller can only act on once.
+      partitionByCustomSections(rowsFor(list), sections, byId(list));
+      partitionByCustomSections(rowsFor(list), sections, byId(list));
+      partitionByCustomSections(rowsFor(list), sections, byId(list));
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain('dup');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('warns about a second, distinct duplicate id', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
       partitionByCustomSections(
         rowsFor(list),
         [
-          { id: 'dup', label: 'One', match: () => false },
-          { id: 'dup', label: 'Two', match: () => true },
+          { id: 'other-dup', label: 'One', match: () => false },
+          { id: 'other-dup', label: 'Two', match: () => true },
         ],
         byId(list),
       );
       expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy.mock.calls[0][0]).toContain('dup');
+      expect(warnSpy.mock.calls[0][0]).toContain('other-dup');
     } finally {
       warnSpy.mockRestore();
     }
@@ -759,6 +779,21 @@ describe('partitionByCustomSections', () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+
+  it('heads the unmatched bucket with the supplied label', () => {
+    const list: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'Apple' },
+      { id: 'b', shortName: 'B', fullName: 'Banana' },
+    ];
+    const sections = partitionByCustomSections(
+      rowsFor(list),
+      [{ id: 'just-a', label: 'Mine', match: (p) => p.id === 'a' }],
+      byId(list),
+      'Other',
+    );
+    expect(sections.map((section) => section.label)).toEqual(['Mine', 'Other']);
+    expect(sections[1].rows.map((r) => r.shortName)).toEqual(['B']);
   });
 
   it('keeps rows whose project is missing from the map in the unmatched section', () => {

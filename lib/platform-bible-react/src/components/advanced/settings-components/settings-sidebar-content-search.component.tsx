@@ -31,6 +31,7 @@ export function SettingsSidebarContentSearch({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
+  projectSelectorLocalizedStrings,
 }: SettingsSidebarContentSearchProps) {
   return (
     <div className="tw:box-border tw:flex tw:h-full tw:flex-col">
@@ -55,6 +56,7 @@ export function SettingsSidebarContentSearch({
           extensionsSidebarGroupLabel={extensionsSidebarGroupLabel}
           projectsSidebarGroupLabel={projectsSidebarGroupLabel}
           buttonPlaceholderText={buttonPlaceholderText}
+          projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
         />
         <SidebarInset className="tw:min-w-[215px]">{children}</SidebarInset>
       </SidebarProvider>

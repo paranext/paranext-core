@@ -2094,12 +2094,12 @@ step, no automation. Just a record.
   `project-multi` fans one project into several rows.
 - **Alternatives considered:**
   - **A `groupRows` callback.** Rejected: it would put `RowSection` on the public barrel and hand
-    every caller responsibility for sort order, heading text and empty-section elision. The
-    argument holds at barrel level only — `ProjectRow` is already re-exported from
-    `project-selector.component.tsx`.
-  - **Widening `RowSection` itself**, as originally proposed. Rejected: `RowSection` is not
-    barrel-exported, so naming it as the deliverable leaves an implementer unable to tell what
-    public API to add.
+    every caller responsibility for sort order, heading text and empty-section elision. (`ProjectRow`
+    is already re-exported from `project-selector.component.tsx`, so only `RowSection` would be
+    newly public.)
+  - **Widening `RowSection` itself.** Rejected: `RowSection` is an internal shape, so widening it
+    describes no public API — a caller cannot construct or name it. `customSections` is the
+    caller-facing surface the capability actually needs.
 - **Consequences:** A section whose meaning implies an order the component cannot know needs its
   own `compare` — the canonical sort is alphabetical by `shortName`, which would render a "Recent"
   section alphabetically. `RowSection` needed an `id` for React keys, since two custom sections can
@@ -2118,11 +2118,11 @@ step, no automation. Just a record.
 - **Alternatives considered:**
   - **A closed union.** Rejected: a single picker's rows can come from two established
     vocabularies, neither owned by `platform-bible-react` — Paratext project types (Paratext.Data's
-    `ProjectType` enum, used in this repo as `Enum<ProjectType>`, e.g.
-    `c-sharp/ManageBooks/CopyBooksOrchestrator.cs:602`, and owned upstream, not here) and DBL
+    `ProjectType` enum, used in this repo as `Enum<ProjectType>`, e.g. in
+    `c-sharp/ManageBooks/CopyBooksOrchestrator.cs`, and owned upstream, not here) and DBL
     resource types (the `ResourceType` union in `lib/platform-bible-utils/src/resources.model.ts`).
     The Paratext side reaches the wire already flattened to a plain string —
-    `ProjectSummary.ProjectType` (`c-sharp/ManageBooks/ProjectSummary.cs:44`), sourced from
+    `ProjectSummary.ProjectType` (`c-sharp/ManageBooks/ProjectSummary.cs`), sourced from
     `scrText.Settings.TranslationInfo.Type.InternalValue` (e.g. `"Standard"`, `"BackTranslation"`,
     `"Daughter"`). A union would duplicate one of these taxonomies and drift from its source, or
     invent a third. Grouping needs only equality.
