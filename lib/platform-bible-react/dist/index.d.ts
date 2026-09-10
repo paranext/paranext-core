@@ -1400,6 +1400,35 @@ export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRe
 export interface SelectMenuItemHandler {
 	(selectedMenuItem: MenuItemContainingCommand): void;
 }
+declare const PROJECT_SELECTOR_STRING_KEYS: readonly [
+	"%webView_project_selector_search_placeholder%",
+	"%webView_project_selector_view_options_aria_label%",
+	"%webView_project_selector_group_section_label%",
+	"%webView_project_selector_filter_section_label%",
+	"%webView_project_selector_filter_group_none%",
+	"%webView_project_selector_filter_group_by_open_tabs%",
+	"%webView_project_selector_filter_group_by_last_used%",
+	"%webView_project_selector_filter_group_by_language%",
+	"%webView_project_selector_filter_group_by_versification%",
+	"%webView_project_selector_filter_group_by_type%",
+	"%webView_project_selector_filter_group_by_custom%",
+	"%webView_project_selector_filter_show_selected_only%",
+	"%webView_project_selector_open_tabs_section_heading%",
+	"%webView_project_selector_other_projects_section_heading%",
+	"%webView_project_selector_versification_unknown_section_heading%",
+	"%webView_project_selector_language_unknown_section_heading%",
+	"%webView_project_selector_type_unknown_section_heading%",
+	"%webView_project_selector_last_used_recent_section_heading%",
+	"%webView_project_selector_last_used_other_section_heading%",
+	"%webView_project_selector_custom_unmatched_section_heading%",
+	"%webView_project_selector_bound_but_closed_tooltip%",
+	"%webView_project_selector_open_button_label%",
+	"%webView_project_selector_select_all%",
+	"%webView_project_selector_clear_all%"
+];
+type ProjectSelectorLocalizedStrings = {
+	[projectSelectorKey in (typeof PROJECT_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -1425,6 +1454,12 @@ export type SettingsSidebarProps = {
 	projectsSidebarGroupLabel: string;
 	/** Placeholder text for the button */
 	buttonPlaceholderText: string;
+	/**
+	 * Localized strings for the project picker's popover (search placeholder, filter menu, section
+	 * headings). Resolve them from `PROJECT_SELECTOR_STRING_KEYS`. Any key left out falls back to the
+	 * picker's English default.
+	 */
+	projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
 };
@@ -1435,7 +1470,7 @@ export type SettingsSidebarProps = {
  *
  * @param props - {@link SettingsSidebarProps} The props for the component.
  */
-export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, projectSelectorLocalizedStrings, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** The search query in the search bar */
 	searchValue: string;
@@ -1449,7 +1484,7 @@ type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWit
  * @param {SettingsSidebarContentSearchProps} props - The props for the component.
  * @param {string} props.id - The id of the sidebar.
  */
-export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, projectSelectorLocalizedStrings, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.

@@ -1,5 +1,6 @@
 import {
   ProjectSelector,
+  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';
@@ -49,6 +50,13 @@ export type SettingsSidebarProps = {
   /** Placeholder text for the button */
   buttonPlaceholderText: string;
 
+  /**
+   * Localized strings for the project picker's popover (search placeholder, filter menu, section
+   * headings). Resolve them from `PROJECT_SELECTOR_STRING_KEYS`. Any key left out falls back to the
+   * picker's English default.
+   */
+  projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
+
   /** Additional css classes to help with unique styling of the sidebar */
   className?: string;
 };
@@ -69,6 +77,7 @@ export function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
+  projectSelectorLocalizedStrings,
   className,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
@@ -173,6 +182,7 @@ export function SettingsSidebar({
                 buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
                 buttonPlaceholder={buttonPlaceholderText}
                 ariaLabel={projectsSidebarGroupLabel}
+                localizedStrings={projectSelectorLocalizedStrings}
                 // TODO: Check if this z-index override is necessary — the PopoverContent default
                 // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
                 popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
