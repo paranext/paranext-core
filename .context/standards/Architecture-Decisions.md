@@ -562,6 +562,36 @@ step, no automation. Just a record.
   `paranext-core`, which is the point at which publishing earns its cost.
 - **Source:** PT-4500, forking `scripture-editors` into the paranext organization.
 
+## adr-dev-packages-staging-shape-deferred: The staging mechanism keeps its branch pin, `.ts` install scripts, sibling fallback and self-heal re-run
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** Review of the staged-`file:`-dependency change (#2745) raised four alternatives to
+  the shape it landed in, each defensible on its own: pin an immutable `v<version>` tag instead of
+  the force-pushed `platform-yalc` branch, so an editor bump becomes one core commit and the
+  branch-sync machinery retires; write the two install-path scripts as `.mjs` with JSDoc types
+  instead of `.ts`, so consuming repos need no Node floor (native type stripping is unflagged only
+  from 22.18, and one consumer's Volta pin predates it); make the sibling-checkout fallback opt-in
+  rather than automatic, so an npm lifecycle hook never writes to a checkout it merely found next
+  door; and replace `postinstall`'s nested `npm install` with a message telling the developer to run
+  it again.
+- **Decision:** Keep all four as they are for now. Consumers call core's `stage-dev-packages` npm
+  script rather than a path inside core, which was the fifth suggestion and is taken — it removes
+  eight repos' dependency on an internal file location, and lets the script carry
+  `--experimental-strip-types` so a consumer below Node 22.18 can still run it.
+- **Alternatives:** Each of the four is a real improvement to some property, and none was rejected
+  on merit. The tag pin buys reproducibility, `.mjs` removes a floor that has already bitten a
+  consumer repo, opt-in sibling use removes a class of surprise entirely, and a non-nested install
+  is easier to reason about when it fails. They are deferred because they change the shape of a
+  mechanism that is about to be exercised across eleven repositories at once, and doing that before
+  it has run in anger trades a known state for an unknown one.
+- **Consequences:** The Node 22.18 floor is real for anything invoking the scripts directly rather
+  than through the npm script. Editor code can change under an unchanged core commit while
+  `platform-yalc` moves, which the consumer-lockfile check and the pre-commit provisional guard
+  exist to contain. A sibling checkout is used and moved by a plain `npm install`; it is protected
+  when dirty, on a branch of its own, or detached, and the README says so. Revisit whichever of
+  these the mechanism actually makes painful.
+
 ## adr-disclosure-outside-package-graphs: What ships outside the npm and NuGet graphs is disclosed in prose, not by silence
 
 - **Date:** 2026-08-21

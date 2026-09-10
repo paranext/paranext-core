@@ -119,18 +119,6 @@ function getDevRepoPath(folder: string): string {
   return path.resolve(REPO_ROOT, '..', folder);
 }
 
-/**
- * Whether this path is the clone this repo created and manages under `dev-packages/`, as opposed to
- * a developer's own checkout picked up from the sibling directory.
- *
- * The managed clone is disposable — this script made it and is free to move it anywhere. A sibling
- * is somebody's working copy that merely happens to sit next to this repo, so what is safe to do to
- * it is a narrower question.
- */
-function isManagedClone(repo: DevRepo, repoPath: string): boolean {
-  return repoPath === path.resolve(REPO_ROOT, 'dev-packages', repo.folder);
-}
-
 /** Environment for commands run inside a dev repo. */
 function devRepoEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
@@ -327,18 +315,22 @@ function checkoutRevision(repo: DevRepo): void {
   // the pinned branch is force-pushed upstream by design, so neither is work worth protecting. Any
   // other branch is somebody's, and this script has no business moving it, wherever it lives.
   //
-  // A detached HEAD depends on whose checkout it is. In the clone this script manages it is just
-  // where a previous run left a tag or commit pin, and moving it is the whole point. In a sibling
-  // it is a developer parked on a commit to look at it — reached only when that commit is not the
-  // pinned one, since an already-at-the-target checkout returned above — and moving that is how a
-  // plain `npm install` silently relocates a checkout somebody was reading.
-  const isDeliberatelyDetached = currentBranch === 'HEAD' && !isManagedClone(repo, repoPath);
+  // A detached HEAD is deliberate wherever it is found: detaching is something a person does to
+  // hold a checkout at one commit, and it is only reached here when that commit is not the pinned
+  // one, since an already-at-the-target checkout returned above. Moving it is how a plain `npm
+  // install` silently relocates a checkout somebody was reading — and rebuilds inside it.
+  //
+  // The consequence to know about: when `revision` names a tag or a commit rather than a branch,
+  // this script leaves its own clone under `dev-packages/` detached at it, so moving that pin to a
+  // new tag warns instead of following it, on every install until someone checks the new one out.
+  // The warning says what to run. A branch pin, which is what `dev-packages.json` uses, checks out
+  // as a branch and never reaches this.
+  const isDetached = currentBranch === 'HEAD';
   const isSomebodysBranch =
-    isDeliberatelyDetached ||
-    (currentBranch !== 'HEAD' && currentBranch !== 'main' && currentBranch !== repo.revision);
+    isDetached || (currentBranch !== 'main' && currentBranch !== repo.revision);
 
   if (isSomebodysBranch) {
-    const where = isDeliberatelyDetached
+    const where = isDetached
       ? `is detached at ${resolve('HEAD').slice(0, 9)}`
       : `is on "${currentBranch}"`;
     console.warn(
