@@ -567,7 +567,9 @@ function pushPreamble(
         ]),
     'Build and test tooling is excluded because it is not distributed.',
     '',
-    'Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,',
+    product
+      ? 'Some of what this application distributes is neither an npm nor a NuGet package - bundled data,'
+      : 'Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,',
     'the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source',
     'tree, and native libraries taken from the machine that built the installer. No scan of either',
     'graph can reach any of them and none appears as a row below, so each is described in a section',
@@ -686,7 +688,8 @@ function pushLexicalDatabaseSection(
     ...(product?.isParatext
       ? [
           'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
-          `source license. UBS permits their distribution in **Paratext**. ${product.name} is a Paratext product, and that permission covers it. It does not extend to Platform.Bible, nor to anyone`,
+          `source license. UBS permits their distribution in **Paratext**. ${product.name} is a Paratext`,
+          'product, and that permission covers it. It does not extend to Platform.Bible, nor to anyone',
           'else redistributing the database, including a third party building from paranext-core \u2014 see',
           'LICENSING.md. The open-licensed content can be obtained separately from',
           '<https://github.com/ubsicap/ubs-open-license>.',
@@ -768,9 +771,9 @@ function pushCopiedPlatformLibrarySection(
 
 /** One bundled component as the delivery bullet names it: `Python 3.9 (PSF-2.0)`. */
 function describeComponent(component: BundledComponent): string {
-  const version = component.version ? ` ${component.version}` : '';
+  const version = component.version ? ` ${inlineText(component.version)}` : '';
   const terms = component.spdx?.length ? component.spdx.join(', ') : component.terms || '';
-  return `${component.name}${version} (${terms})`;
+  return `${inlineText(component.name)}${version} (${inlineText(terms)})`;
 }
 
 /**
@@ -816,7 +819,8 @@ function pushSeparateProgramsSection(
         ? ` It also contains ${delivery.alsoContains.map(describeComponent).join('; ')}.`
         : '';
       out.push(
-        `- **${delivery.platform}**, version ${delivery.version}: ${inlineText(delivery.mechanism)}. ${notices}${also}`,
+        `- **${inlineText(delivery.platform)}**, version ${inlineText(delivery.version)}: ` +
+          `${inlineText(delivery.mechanism)}. ${notices}${also}`,
       );
     });
     out.push('', program.reason, '', `**Corresponding source:** ${program.sourceAvailability}`, '');

@@ -775,6 +775,7 @@ describe('product block', () => {
     const out = render(report);
     expect(out).toContain('Platform.Bible incorporates the third-party components listed below.');
     expect(out).toContain('**This is a reference, not the notices for any shipped product.**');
+    expect(out).toContain('Some of what this repository distributes');
     expect(out).toContain('For the license covering Platform.Bible itself');
   });
 
@@ -785,6 +786,8 @@ describe('product block', () => {
     );
     expect(out).toContain('built from paranext-core by `paranext/paratext-10-studio`');
     expect(out).not.toContain('This is a reference, not the notices for any shipped product');
+    expect(out).toContain('Some of what this application distributes');
+    expect(out).not.toContain('Some of what this repository distributes');
     expect(out).toContain('For the license covering Paratext 10 Studio itself');
   });
 
@@ -793,9 +796,9 @@ describe('product block', () => {
     expect(render(packed)).toContain('That permission is specific to');
     expect(render({ ...packed, product })).toContain('That permission is specific to');
     const paratext = render({ ...packed, product: { ...product, isParatext: true } });
-    expect(paratext).toContain(
-      'Paratext 10 Studio is a Paratext product, and that permission covers it.',
-    );
+    // Matched across a wrap: the paragraph is wrapped in the source and the product name's length
+    // decides where the break lands.
+    expect(paratext).toMatch(/is a Paratext\s+product, and that permission covers it\./);
     expect(paratext).not.toContain('it does not extend to Platform.Bible, nor');
   });
 });

@@ -232,7 +232,7 @@ export type Policy = {
   /** Keyed by the library's name as the document calls it. */
   copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
   separateProgramsNote?: string;
-  /** Keyed by program name - see `separate-programs.ts`. Element type is filled in by that module. */
+  /** Keyed by program name - see `separate-programs.ts`. */
   separatePrograms?: Record<string, SeparateProgram>;
   externalExtensionsNote?: string;
   /** Keyed by extension name - see `external-extensions.ts`. */
@@ -287,6 +287,11 @@ export type BundledComponent = {
 export type ExternalExtension = {
   /** Whether its bundled dependencies have rows in this document. Only `false` is accepted today. */
   itemized: boolean;
+  /**
+   * A Markdown paragraph, reproduced verbatim in the document - it is NOT escaped, so it may carry
+   * a link or other Markdown, and a literal `<`, `*`, `_` or backtick in it renders as Markdown
+   * rather than as that character. Matches the `SeparateProgram.reason` precedent.
+   */
   reason: string;
 };
 

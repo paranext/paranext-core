@@ -1279,7 +1279,9 @@ describe('notices-policy.json', () => {
   // its copyleft ids are ones licensee can actually emit. Nothing else looks at the file that way,
   // and an unreachable copyleft entry (a deprecated spelling licensee never emits) is invisible to
   // every behavioral test in this file.
-  const policy = loadPolicy(POLICY_PATH);
+  // `undefined` explicitly: `loadPolicy` defaults its overlay from the environment at call time, so
+  // a stray NOTICES_POLICY_OVERLAY would otherwise decide what "the shipped policy" means here.
+  const policy = loadPolicy(POLICY_PATH, undefined);
 
   it('parses and has the expected top-level shape', () => {
     expect(Array.isArray(policy.allowed)).toBe(true);

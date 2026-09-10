@@ -72,7 +72,7 @@ function mergeTable<T>(
   names: { base: string; overlay: string },
 ): Record<string, T> {
   const collisions = Object.keys(overlay || {})
-    .filter((key) => base && key in base)
+    .filter((key) => base && Object.hasOwn(base, key))
     .sort(compareStrings);
   if (collisions.length)
     throw new Error(
@@ -151,14 +151,12 @@ export function mergePolicies(
 }
 
 /**
- * Reads the policy, merges the overlay the environment names (if any), and refuses the shapes no
- * consumer can act on.
+ * Reads the policy document from disk - the single source of every repository-specific licensing
+ * decision - merges the overlay the environment names (if any), and refuses the shapes no consumer
+ * can act on.
  *
  * `overlayFile` defaults from the environment AT CALL TIME, so every caller - the generator, both
  * verify modes, the corpus index builder - sees the same merged policy without passing anything.
- *
- * Loads the policy document from disk: the single source of every repository-specific licensing
- * decision.
  *
  * `copyrightNotices` and `overrides` are the two hand-maintained tables in this file. Their
  * rationale is recorded here because it is the part a future reader cannot reconstruct:
