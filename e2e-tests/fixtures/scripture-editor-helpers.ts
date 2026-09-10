@@ -1,6 +1,7 @@
-import { type Frame, type Page } from '@playwright/test';
+import { expect, type Frame, type Page } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
+  ONBOARDING_TOUR_DONE_KEY,
   SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
@@ -224,6 +225,9 @@ function escapeForRegExp(value: string): string {
  * renders through `formatScrRef(..., 'English')`, so a book CODE never matches its own item.
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
+  // Simple-mode specs never reach `waitForHomeTab` (that layout has no Home tab), so this is the
+  // one place every caller passes through before the tour could block the click below.
+  await dismissOnboardingTour(mainPage);
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
@@ -238,6 +242,33 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
 }
 
 /**
+ * Suppress the onboarding tour, which renders a full-viewport modal that swallows pointer events —
+ * any later click (the toolbar's book-chapter control above all) then retries until it times out.
+ * The canonical `waitForAppReady` does this for the same reason; these specs reach the app through
+ * other paths, so they need it too. Setting the done key keeps the tour from opening again.
+ *
+ * Safe to call more than once: the key write is idempotent and the dialog is only dismissed when it
+ * is actually showing.
+ *
+ * @param mainPage The Electron main window page
+ */
+export async function dismissOnboardingTour(mainPage: Page): Promise<void> {
+  await mainPage.evaluate((key) => {
+    localStorage.setItem(key, 'true');
+  }, ONBOARDING_TOUR_DONE_KEY);
+  // The tour-specific test id (not a generic modal-dialog selector) so an unrelated dialog — e.g. a
+  // real startup error — is never silently Escape-dismissed here.
+  const tourDialog = mainPage.getByTestId('tour-dialog');
+  if (!(await tourDialog.isVisible())) return;
+  // The tour does not close on Escape — its own "Skip tour" button is the dismissal, and it is what
+  // persists the done flag. Escape remains a fallback for a step that renders no Skip button.
+  const skipButton = tourDialog.getByRole('button', { name: /skip/i });
+  if (await skipButton.isVisible().catch(() => false)) await skipButton.click();
+  else await mainPage.keyboard.press('Escape');
+  await expect(tourDialog).not.toBeVisible({ timeout: 10_000 });
+}
+
+/**
  * Wait for the Home dock tab so PAPI commands land in a ready app. (Not the canonical
  * `waitForAppReady` from fixtures/helpers.ts — this additionally proves the normal Home layout
  * rendered, which DEV_NOISY=false launches depend on.)
@@ -247,6 +278,8 @@ export async function waitForHomeTab(mainPage: Page): Promise<void> {
     .locator('.dock-tab', { hasText: 'Home' })
     .first()
     .waitFor({ timeout: LAUNCH_PHASE_TIMEOUT_MS });
+
+  await dismissOnboardingTour(mainPage);
 }
 
 /**
