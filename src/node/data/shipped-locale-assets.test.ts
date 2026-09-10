@@ -72,9 +72,9 @@ describe('marker menu strings in shipped locale assets', () => {
  */
 function collectStringKeyArrays(
   entryName: string,
-  entryExports: object,
+  entryExports: Record<string, unknown>,
 ): { arrayName: string; keys: string[] }[] {
-  return Object.entries<unknown>(entryExports).flatMap(([arrayName, exported]) => {
+  return Object.entries(entryExports).flatMap(([arrayName, exported]) => {
     if (!arrayName.endsWith('_STRING_KEYS') || !Array.isArray(exported)) return [];
     if (!exported.every((key): key is string => typeof key === 'string'))
       throw new Error(
@@ -113,10 +113,15 @@ const MINIMUM_STRING_KEY_ARRAYS = 20;
 // only guaranteed backstop: the runtime fallback chain ends at BACKUP_LANGUAGE = 'en' and then
 // returns the raw `%key%`, so a key present only in es.json still renders as garbage for everyone
 // else. Three sources qualify — the shell's own en.json, the `en` block of a bundled extension's
-// localizedStrings contribution (where extension-owned `%webView_*%` keys live), and a
-// `metadata.json` fallbackKey redirect, which the runtime resolves to another key's value. The
-// Storybook pseudo-localization fixture in lib/platform-bible-react/ is NOT a shipping source,
-// which is the whole point.
+// localizedStrings contribution, and a `metadata.json` fallbackKey redirect, which the runtime
+// resolves to another key's value. The Storybook pseudo-localization fixture in
+// lib/platform-bible-react/ is NOT a shipping source, which is the whole point.
+//
+// An extension contribution counts here even for a key a library component declares, and most
+// library keys are routed that way today. The shell assets are the documented *default* home for a
+// shared-library string (see adr-library-string-keys-ship-in-shell-assets), but that preference is
+// a convention for reviewers; this guard enforces only the floor of "defined in some English
+// source", so it will not flag a library key served from one extension's contribution.
 const shippingKeys = new Set([
   ...Object.keys(readShippedLocale('en')),
   ...getExtensionContributedKeys('en'),

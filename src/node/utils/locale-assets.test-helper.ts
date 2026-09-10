@@ -38,8 +38,12 @@ const DEV_ONLY_EXTENSION_NAMES: readonly string[] = [
  * Reads and parses one JSON file, attributing a parse failure to the file that caused it. Without
  * this, a malformed asset surfaces as a bare `SyntaxError` naming no path, at the point a consuming
  * test file is collected.
+ *
+ * Generic in the parsed shape so a caller states the shape it expects once, in the variable's own
+ * annotation, rather than asserting one — nothing here validates the file against `T`, so keep the
+ * callers' shapes as loose as what they actually read.
  */
-function readJsonFile(path: string): unknown {
+function readJsonFile<T>(path: string): T {
   const contents = readFileSync(path, 'utf8');
   try {
     return JSON.parse(contents);
@@ -68,10 +72,7 @@ export function getShippedLocaleTags(): string[] {
  * @returns The locale's localization key/value pairs.
  */
 export function readShippedLocale(locale: string): LanguageStrings {
-  // JSON.parse returns `unknown` here, which assigns to the known flat key/value shape of a locale
-  // asset without a type assertion
-  const strings: LanguageStrings = readJsonFile(resolve(LOCALIZATION_DIR, `${locale}.json`));
-  return strings;
+  return readJsonFile<LanguageStrings>(resolve(LOCALIZATION_DIR, `${locale}.json`));
 }
 
 /**
@@ -83,9 +84,7 @@ export function readShippedLocale(locale: string): LanguageStrings {
  * @returns Every key that carries a `fallbackKey` redirect.
  */
 export function getFallbackRedirectedKeys(): Set<string> {
-  // JSON.parse returns `unknown` here, which assigns to the metadata sidecar's known shape without
-  // a type assertion
-  const metadata: Record<string, { fallbackKey?: string } | undefined> = readJsonFile(
+  const metadata = readJsonFile<Record<string, { fallbackKey?: string } | undefined>>(
     resolve(LOCALIZATION_DIR, 'metadata.json'),
   );
   const keys = new Set<string>();
@@ -115,12 +114,12 @@ export function getExtensionContributedKeys(locale: string): Set<string> {
     .forEach((entry) => {
       const manifestPath = resolve(EXTENSIONS_DIR, entry.name, 'manifest.json');
       if (!existsSync(manifestPath)) return;
-      const manifest: { name?: string; localizedStrings?: string } = readJsonFile(manifestPath);
+      const manifest = readJsonFile<{ name?: string; localizedStrings?: string }>(manifestPath);
       // Not every extension contributes localized strings
       if (!manifest.localizedStrings) return;
       // A key reachable only in noisy dev mode renders as its raw `%key%` for everyone else
       if (manifest.name && DEV_ONLY_EXTENSION_NAMES.includes(manifest.name)) return;
-      const contribution: LocalizedStringDataContribution = readJsonFile(
+      const contribution = readJsonFile<LocalizedStringDataContribution>(
         resolve(EXTENSIONS_DIR, entry.name, manifest.localizedStrings),
       );
       Object.keys(contribution.localizedStrings?.[locale] ?? {}).forEach((key) => keys.add(key));
