@@ -149,6 +149,13 @@
     },
     {
       "category": "networkObject",
+      "expression": "`${ONBOARDING_TOUR_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`",
+      "file": "src/renderer/services/onboarding-tour.service-shard.ts",
+      "language": "typescript",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
       "expression": "`${USERSNAP_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`",
       "file": "src/renderer/services/usersnap.service-shard.ts",
       "language": "typescript",
@@ -791,6 +798,16 @@
       "docsStaticallyResolved": true,
       "documented": true,
       "experimental": false,
+      "file": "src/main/main.ts",
+      "language": "typescript",
+      "name": "platform.openTermsOfService",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
       "file": "src/main/services/web-view.service-router.ts",
       "language": "typescript",
       "name": "platform.openUserSettings",
@@ -835,6 +852,16 @@
       "language": "typescript",
       "name": "platform.restartExtensionHost",
       "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/onboarding-tour.service-router.ts",
+      "language": "typescript",
+      "name": "platform.showOnboardingTour",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
     {
       "category": "command",
