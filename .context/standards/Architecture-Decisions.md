@@ -2717,6 +2717,40 @@ step, no automation. Just a record.
 - **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
   `pt-4275-commands-to-main`.
 
+## adr-renderer-service-composed-at-entry-point: A renderer service both window shards call is composed from the renderer entry point
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** The web-view content zoom service (`src/renderer/services/web-view-content-zoom.service.ts`)
+  is called from both of the renderer's window-scoped shards — the web-view shard bakes a pane's
+  initial levels into its head, binds the in-frame helpers and forwards the three zoom commands,
+  and the window shard supplies the focused tab — and it needs functions from both of them in
+  return: `getSavedWebViewDefinitionSync`, `updateWebViewDefinitionSync`,
+  `getAllOpenWebViewDefinitionsSync` and `onDidUpdateWebView` from the web-view shard, and
+  `getLastFocusedTabId` from the window shard. Importing either shard from the service closes an
+  import cycle, because each shard already imports the service.
+- **Decision:** The service imports neither shard. It declares the functions it needs as a `deps`
+  object and exposes `initializeContentZoomService({ … })`; the renderer's composition root
+  (`src/renderer/index.tsx`) fills that object with each shard's own function before it starts the
+  web-view service shard, which is the first thing that can open a pane needing them. Until then the
+  production defaults are stubs that warn once and answer with nothing, so a call arriving early
+  degrades instead of throwing.
+- **Alternatives:** Suppress `import/no-cycle` on the direct import — rejected: it would be the only
+  such suppression in the repo, and the cycle is real at module-evaluation time, not a false
+  positive. Wire the service from inside one of the shards — rejected: whichever shard did it would
+  still have to import the other one's function, re-creating the cycle one hop further out. Move the
+  shard functions into a lower module both the service and the shards could import — rejected: the
+  functions are the shards' own per-window state (the dock layout, the focused tab), so the "lower"
+  module would be the shard with a different name.
+- **Consequences:** The composition root is the single place that knows both shards and the service,
+  which is where a reader looks for renderer startup order anyway. The same seam is the test seam:
+  `__setContentZoomDepsForTesting` replaces the identical object, so the service's tests need no
+  module mocking of either shard. The cost is that the service's own module can be loaded without
+  ever being composed — hence the warn-once stubs, and hence `initializeContentZoomService` merging
+  `shardDeps` on every call rather than only the first. Any future renderer service that both shards
+  need should take the same shape rather than reaching for a cycle suppression.
+- **Source:** PT-4576 (web-view content zoom, epic PT-4575); design §1 and §2.4.
+
 ## adr-renderer-websocket-suspend-disconnect: Diagnose the renderer's Chromium WebSocket as the PT-1641 suspend failure, instrument before reconnecting
 
 - **Date:** 2026-08-27

@@ -14,6 +14,9 @@ import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 // The mocked logger, so a test can assert on a warning it produced.
 // eslint-disable-next-line import/first
 import { logger } from '@shared/services/logger.service';
+// The percent formatter, so an indicator assertion spells the number exactly as the code does.
+// eslint-disable-next-line import/first
+import { formatZoomPercent } from '@shared/utils/content-zoom.util';
 // The service itself, for the same reason as the type import above.
 // eslint-disable-next-line import/first
 import {
@@ -22,7 +25,6 @@ import {
   adjustContentZoom,
   applyContentZoomForWebView,
   forgetContentZoom,
-  getEffectiveContentZoom,
   getInitialContentZoomForWebView,
   initializeContentZoomService,
   pushContentZoom,
@@ -148,8 +150,6 @@ describe('web-view-content-zoom.service', () => {
     expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1');
     expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
     expect(showIndicator).toHaveBeenCalledWith('main', '110 %');
-    expect(getEffectiveContentZoom('editor-1', 'main')).toBe(1.1);
-    expect(getEffectiveContentZoom('editor-1', 'footnotes')).toBe(1);
   });
 
   it('keeps the areas independent: zooming the footnotes leaves the text alone and never inherits its level', async () => {
@@ -250,6 +250,9 @@ describe('web-view-content-zoom.service', () => {
       'editor:proj-A:footnotes': 0.9,
       'editor:proj-B:main': 2,
     };
+    // Re-initializes so the memory cache the seeding reads holds the record set up just above.
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
     await expect(
       getInitialContentZoomForWebView({
         id: 'x',
@@ -396,6 +399,23 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
+  it("keeps a pane's own level when memory has never held its key (a first subscription push, or a lost flush)", () => {
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4 } };
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.4 } });
+    pushContentZoom('editor-1');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.4');
+  });
+
+  it("drops a pane's own level when memory held its key and no longer does (a reset returns siblings together)", () => {
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4 } };
+    memoryCallbacks.forEach((cb) => cb({ 'editor:proj-A:main': 1.4 }));
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.4 } });
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+  });
+
   it('ignores a stale memory echo for an area that already has a newer pending write', async () => {
     await adjustContentZoom('editor-1', 1, 'main'); // 1.1, flushed below
     await __flushContentZoomMemoryForTesting();
@@ -416,23 +436,60 @@ describe('web-view-content-zoom.service', () => {
     expect(settingsSet).not.toHaveBeenCalled();
   });
 
-  it('scales a pane without areas whole at the default, and switches to per-area variables once areas are reported', async () => {
+  it('scales a pane without areas whole at the default once its grace period passes, and switches to per-area variables once areas are reported', async () => {
     settings['platform.webViewContentZoom'] = 1.3;
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
-    setContentZoomAreas('editor-1', []);
-    pushContentZoom('editor-1');
-    expect(iframe.style.zoom).toBe('1.3');
-    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
-    setContentZoomAreas('editor-1', ['main']);
-    expect(iframe.style.zoom).toBe('');
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    vi.useFakeTimers();
+    try {
+      setContentZoomAreas('editor-1', []);
+      pushContentZoom('editor-1');
+      expect(iframe.style.zoom).toBe('');
+      expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
+      vi.advanceTimersByTime(1000);
+      expect(iframe.style.zoom).toBe('1.3');
+      setContentZoomAreas('editor-1', ['main']);
+      expect(iframe.style.zoom).toBe('');
+      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('applyContentZoomForWebView pushes the whole-view default without areas, and a per-area variable with them', () => {
-    setContentZoomAreas('editor-1', []);
-    applyContentZoomForWebView('editor-1');
+  it('never scales a pane whole when its content reports an area within the grace period', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    vi.useFakeTimers();
+    try {
+      // The bootstrap's first scan runs before the pane's React tree has mounted anything marked.
+      setContentZoomAreas('editor-1', []);
+      applyContentZoomForWebView('editor-1');
+      vi.advanceTimersByTime(500);
+      expect(iframe.style.zoom).toBe('');
+      setContentZoomAreas('editor-1', ['main']);
+      vi.advanceTimersByTime(2000);
+      expect(iframe.style.zoom).toBe('');
+      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('scales a URL web view whole straight away, since it never runs the bootstrap and never reports areas', () => {
+    definitions.set('url-1', {
+      id: 'url-1',
+      webViewType: 'someExtension.urlView',
+      contentType: 'url',
+    });
+    applyContentZoomForWebView('url-1');
     expect(iframe.style.zoom).toBe('1');
+    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
+  });
+
+  it('applyContentZoomForWebView leaves a pane that has not reported yet unscaled, and pushes a per-area variable once it has', () => {
+    applyContentZoomForWebView('editor-7');
+    expect(iframe.style.zoom).toBe('');
     expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
     setContentZoomAreas('editor-1', ['main']);
     applyContentZoomForWebView('editor-1');
@@ -466,5 +523,45 @@ describe('web-view-content-zoom.service', () => {
     settingsSet.mockClear();
     await initializeContentZoomService();
     expect(settingsSet).not.toHaveBeenCalled();
+  });
+
+  it('prunes nothing when the project lookup answers with no projects at all', async () => {
+    settings[MEMORY] = { 'editor:proj-Z:main': 1.2, 'notes:proj-A:footnotes': 1.1 };
+    __setContentZoomDepsForTesting({ listProjects: async () => [] });
+    settingsSet.mockClear();
+    await initializeContentZoomService();
+    expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
+    expect(settings[MEMORY]).toEqual({
+      'editor:proj-Z:main': 1.2,
+      'notes:proj-A:footnotes': 1.1,
+    });
+  });
+
+  it('reports an unknown area once per pane and area, however often it is asked for', () => {
+    vi.mocked(logger.debug).mockClear();
+    expect(resolveContentZoomArea('editor-1', 'sidebar')).toBeUndefined();
+    expect(resolveContentZoomArea('editor-1', 'sidebar')).toBeUndefined();
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledTimes(1);
+    expect(resolveContentZoomArea('editor-1', 'margin')).toBeUndefined();
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledTimes(2);
+    forgetContentZoom('editor-1');
+    setContentZoomAreas('editor-1', ['main']);
+    expect(resolveContentZoomArea('editor-1', 'sidebar')).toBeUndefined();
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledTimes(3);
+  });
+
+  it('still pushes the factor and names the default when the label could not be localized', async () => {
+    settings['platform.webViewContentZoom'] = 1;
+    __setContentZoomDepsForTesting({
+      localize: async () => {
+        throw new Error('localization is down');
+      },
+    });
+    await initializeContentZoomService();
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4 } };
+    await resetContentZoom('editor-1', 'main');
+    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+    expect(showIndicator).toHaveBeenLastCalledWith('main', `Default · ${formatZoomPercent(1)}`);
   });
 });

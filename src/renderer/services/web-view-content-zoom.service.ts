@@ -5,7 +5,11 @@ import {
   getContentZoomCssVariable,
   getContentZoomKind,
 } from '@shared/models/content-zoom.model';
-import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
+import {
+  SavedWebViewDefinition,
+  WEB_VIEW_CONTENT_TYPE,
+  WebViewId,
+} from '@shared/models/web-view.model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
@@ -121,14 +125,34 @@ let deps: ContentZoomDeps = productionDeps;
 let cachedDefault: number | undefined;
 
 /**
- * Best-effort mirror of the memory setting, used only to seed a newly opened pane's own levels on
- * its first area report ({@link setContentZoomAreas}). Filled by a successful `readMemory` read
- * (which runs before a pane's iframe exists, via `getInitialContentZoomForWebView` or a memory
- * transaction), and kept current by the memory subscription and by this window's own successful
- * writes. A momentarily stale or empty value only means a pane seeds later, or not at all — every
- * other read of memory stays authoritative through `readMemory`/`enqueueMemoryTransaction`.
+ * Mirror of the memory setting, used to seed a newly opened pane's own levels — from its head
+ * variables ({@link getInitialContentZoomForWebView}) and on its first area report
+ * ({@link setContentZoomAreas}). Filled by a successful `readMemory` read, and kept current by the
+ * memory subscription and by this window's own successful writes. A momentarily stale value only
+ * means a pane seeds from a level one edit old; every write of memory stays authoritative through
+ * `enqueueMemoryTransaction`, which re-reads the setting inside the transaction.
  */
 let cachedMemory: MemoryRecord = {};
+
+/** Whether {@link cachedMemory} has been filled by at least one successful read of the setting. */
+let memoryLoaded = false;
+
+/**
+ * The memory record the sibling sync last reconciled against, so it can tell an entry that was
+ * deleted from an entry that was never there. Only the memory subscription advances it — a local
+ * write must not, or this window would have no record of the entry the write removed and would
+ * leave its own sibling panes at the level the write just gave up.
+ */
+let lastSyncedMemory: MemoryRecord = {};
+
+/**
+ * The localized word the reset indicator prefixes the default percentage with, read once at
+ * initialization so a reset never waits on a cross-process request before pushing the factor.
+ */
+let cachedDefaultLabel: string | undefined;
+
+/** Shown in the reset indicator when the localized label could not be read. */
+const DEFAULT_LABEL_FALLBACK = 'Default';
 
 /** The one-time initialization promise; cleared by a test reset so each test starts fresh. */
 let initialized: Promise<void> | undefined;
@@ -153,7 +177,11 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   deps = { ...deps, ...partial };
   cachedDefault = undefined;
   cachedMemory = {};
+  memoryLoaded = false;
+  lastSyncedMemory = {};
+  cachedDefaultLabel = undefined;
   initialized = undefined;
+  clearAllFallbackGraces();
   pendingMemoryWrites.clear();
   if (memoryWriteTimer !== undefined) {
     clearTimeout(memoryWriteTimer);
@@ -201,13 +229,6 @@ function getOwnLevels(definition: Pick<SavedWebViewDefinition, 'state'> | undefi
   return out;
 }
 
-/** The factor an area currently shows: its own level if it has one, else the default. */
-export function getEffectiveContentZoom(webViewId: WebViewId, areaId: string): number {
-  return (
-    getOwnLevels(deps.getDefinition(webViewId))[areaId] ?? cachedDefault ?? DEFAULT_ZOOM_FACTOR
-  );
-}
-
 /** Explicit id → the window's last focused tab → nothing. Pure; exported for tests. */
 export function resolveContentZoomTarget(
   explicitWebViewId: string | undefined,
@@ -218,13 +239,20 @@ export function resolveContentZoomTarget(
 
 /**
  * Zoom areas each pane's bootstrap has reported (`setContentZoomAreas`), in document order. A pane
- * that never reported — a URL web view, or one whose React tree has not mounted yet — has no entry,
- * counts as having no areas, and is scaled whole at the default.
+ * that never reported — a URL web view, or one whose React tree has not mounted yet — has no entry
+ * and counts as having no areas; whether that earns it the whole-iframe fallback is
+ * {@link mayScaleWholeIframe}'s question, not this map's.
  */
 const areasByWebViewId = new Map<WebViewId, string[]>();
 
 /** The area the user last clicked or focused in each pane (`setContentZoomActiveArea`). */
 const activeAreaByWebViewId = new Map<WebViewId, string>();
+
+/**
+ * Area ids already reported as unknown for a pane. A menu entry or a held key can ask for the same
+ * missing area many times a second, and one line per pane and area says everything the log can.
+ */
+const unknownAreasLoggedByWebViewId = new Map<WebViewId, Set<string>>();
 
 /**
  * Explicit area (must be one the pane reported) → the pane's active area → its first area →
@@ -238,13 +266,79 @@ export function resolveContentZoomArea(
   if (areas.length === 0) return undefined;
   if (explicitAreaId !== undefined) {
     if (areas.includes(explicitAreaId)) return explicitAreaId;
-    logger.debug(
-      `Content zoom: web view ${webViewId} has no zoom area "${explicitAreaId}"; ignoring`,
-    );
+    let logged = unknownAreasLoggedByWebViewId.get(webViewId);
+    if (!logged) {
+      logged = new Set();
+      unknownAreasLoggedByWebViewId.set(webViewId, logged);
+    }
+    if (!logged.has(explicitAreaId)) {
+      logged.add(explicitAreaId);
+      logger.debug(
+        `Content zoom: web view ${webViewId} has no zoom area "${explicitAreaId}"; ignoring`,
+      );
+    }
     return undefined;
   }
   const active = activeAreaByWebViewId.get(webViewId);
   return active && areas.includes(active) ? active : areas[0];
+}
+
+/**
+ * How long a pane whose bootstrap reported no zoom areas yet may stay unscaled while its content
+ * mounts. Scaling the whole iframe is the fallback for a view that marks no area at all; applying
+ * it during the moments before an adapted view's React tree has mounted would scale its chrome too,
+ * then undo it — a visible jump on every open.
+ */
+const FALLBACK_GRACE_MS = 1000;
+
+/**
+ * Panes whose grace period has passed with no zoom area reported, so the whole-iframe fallback may
+ * be applied to them. A URL web view is not listed here and does not need to be: it never runs the
+ * bootstrap, so it can never report, and {@link mayScaleWholeIframe} lets it through at once.
+ */
+const fallbackAllowedWebViewIds = new Set<WebViewId>();
+
+/** Running grace timers, one per pane, so a report or an unmount can cancel one. */
+const fallbackGraceTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>();
+
+function clearFallbackGrace(webViewId: WebViewId): void {
+  const timer = fallbackGraceTimers.get(webViewId);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  fallbackGraceTimers.delete(webViewId);
+}
+
+/** Test seam only: drops every pending grace timer and everything they have decided. */
+function clearAllFallbackGraces(): void {
+  fallbackGraceTimers.forEach((timer) => clearTimeout(timer));
+  fallbackGraceTimers.clear();
+  fallbackAllowedWebViewIds.clear();
+}
+
+/**
+ * Starts the wait after a pane's first area report came back empty. If the pane still has no area
+ * when it elapses, its content is taken to have no zoom area at all and the whole-iframe fallback
+ * is applied from then on.
+ */
+function startFallbackGrace(webViewId: WebViewId): void {
+  if (fallbackAllowedWebViewIds.has(webViewId) || fallbackGraceTimers.has(webViewId)) return;
+  fallbackGraceTimers.set(
+    webViewId,
+    setTimeout(() => {
+      fallbackGraceTimers.delete(webViewId);
+      if ((areasByWebViewId.get(webViewId) ?? []).length > 0) return;
+      fallbackAllowedWebViewIds.add(webViewId);
+      pushContentZoom(webViewId);
+    }, FALLBACK_GRACE_MS),
+  );
+}
+
+/** Whether a pane with no zoom areas may be scaled as a whole through its iframe element. */
+function mayScaleWholeIframe(webViewId: WebViewId): boolean {
+  return (
+    fallbackAllowedWebViewIds.has(webViewId) ||
+    deps.getDefinition(webViewId)?.contentType === WEB_VIEW_CONTENT_TYPE.URL
+  );
 }
 
 /**
@@ -279,6 +373,8 @@ export function setContentZoomAreas(webViewId: WebViewId, areaIds: string[]): vo
   const previous = areasByWebViewId.get(webViewId);
   if (previous && previous.length === valid.length && previous.every((a, i) => a === valid[i]))
     return;
+  if (valid.length > 0) clearFallbackGrace(webViewId);
+  else startFallbackGrace(webViewId);
   if ((previous === undefined || previous.length === 0) && valid.length > 0)
     seedFromMemoryOnFirstReport(webViewId);
   areasByWebViewId.set(webViewId, valid);
@@ -294,14 +390,25 @@ export function setContentZoomActiveArea(webViewId: WebViewId, areaId: string): 
 export function forgetContentZoom(webViewId: WebViewId): void {
   areasByWebViewId.delete(webViewId);
   activeAreaByWebViewId.delete(webViewId);
+  unknownAreasLoggedByWebViewId.delete(webViewId);
+  clearFallbackGrace(webViewId);
+  fallbackAllowedWebViewIds.delete(webViewId);
 }
 
 /**
  * Writes the pane's effective levels into it. With areas: one CSS variable per area (own level,
- * else the default) plus the default variable, and the iframe's own zoom cleared. Without areas
- * (not reported yet, or a URL view): CSS `zoom` on the iframe element, so the whole view shows at
- * the Settings default. Areas that hold a level but are not currently rendered still get their
- * variable, so the level is in place when the area appears (the footnotes pane being shown).
+ * else the default) plus the default variable, and the iframe's own zoom cleared. Without areas (a
+ * URL view, or a view that marks none): CSS `zoom` on the iframe element, so the whole view shows
+ * at the Settings default — but only once {@link mayScaleWholeIframe} says the pane really has no
+ * areas rather than not having mounted its content yet. Areas that hold a level but are not
+ * currently rendered still get their variable, so the level is in place when the area appears (the
+ * footnotes pane being shown).
+ *
+ * Hidden panes are handled: rc-dock keeps an inactive tab mounted under `display: none`, and both
+ * the variables and the rules that read them are data-driven, so they apply with no layout and are
+ * already correct when the tab is shown. Only the indicator needs geometry, and it is passed only
+ * for a direct user action, which needs a visible pane; the bootstrap's `cornerOf` still falls back
+ * to a fixed corner when every rect it measures is zero.
  */
 export function pushContentZoom(
   webViewId: WebViewId,
@@ -316,7 +423,7 @@ export function pushContentZoom(
   if (areas.length === 0 || !root) {
     // `zoom` predates `setProperty` support for this non-standard property; the named accessor
     // is the form every engine implements for it, including the empty-string clear below.
-    iframe.style.zoom = String(defaultZoom);
+    if (mayScaleWholeIframe(webViewId)) iframe.style.zoom = String(defaultZoom);
     return; // a view without areas has no per-area action to announce
   }
   iframe.style.zoom = '';
@@ -343,6 +450,7 @@ async function readMemory(): Promise<MemoryRecord | undefined> {
   try {
     const memory = asMemory(await deps.settings.get('platform.webViewContentZoomMemory'));
     cachedMemory = memory;
+    memoryLoaded = true;
     return memory;
   } catch (e) {
     logger.warn(`Content zoom: could not read memory. ${getErrorMessage(e)}`);
@@ -504,9 +612,11 @@ export async function adjustContentZoom(
   if (!target) return;
   const area = resolveContentZoomArea(target, areaId);
   if (!area) return;
+  const defaultZoom = await getDefaultZoom();
+  // Read the definition after the await: the pane may have been closed, moved or updated while the
+  // default was being fetched, and the write below must start from what it holds now.
   const definition = deps.getDefinition(target);
   if (!definition) return;
-  const defaultZoom = await getDefaultZoom();
   const current = getOwnLevels(definition)[area] ?? defaultZoom;
   const next = adjustZoomFactor(current, deltaSteps);
   if (next === current) return;
@@ -524,17 +634,19 @@ export async function resetContentZoom(
   if (!target) return;
   const area = resolveContentZoomArea(target, areaId);
   if (!area) return;
+  const defaultZoom = await getDefaultZoom();
+  // Read the definition after the await, for the reason given in `adjustContentZoom`.
   const definition = deps.getDefinition(target);
   if (!definition) return;
-  const defaultZoom = await getDefaultZoom();
   if (getOwnLevels(definition)[area] !== undefined) {
     if (!writeOwnLevel(definition, area, undefined)) return;
   }
   writeMemory(definition, area, undefined);
-  const defaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
+  // The label is read once at initialization, so the factor reaches the pane without waiting on a
+  // cross-process request that could also fail after the state was already written.
   pushContentZoom(target, {
     areaId: area,
-    text: `${defaultLabel} · ${formatZoomPercent(defaultZoom)}`,
+    text: `${cachedDefaultLabel ?? DEFAULT_LABEL_FALLBACK} · ${formatZoomPercent(defaultZoom)}`,
   });
 }
 
@@ -549,7 +661,9 @@ export async function getInitialContentZoomForWebView(
   const levels: Levels = { ...getOwnLevels(webView) };
   const id = memoryIdentityFor(webView);
   if (id) {
-    const memory = (await readMemory()) ?? {};
+    // The memory subscription keeps the cache current once the first read has landed, so opening a
+    // pane does not wait on a settings round trip; only the very first pane of a session does.
+    const memory = memoryLoaded ? cachedMemory : ((await readMemory()) ?? {});
     Object.entries(collectMemoryLevelsFor(memory, id)).forEach(([areaId, level]) => {
       if (levels[areaId] === undefined) levels[areaId] = level;
     });
@@ -565,16 +679,25 @@ function repushAllPanes(): void {
  * Panes of the same kind and identity share one level per area. The memory setting is the shared
  * truth: whenever it changes — from this window or another — every open pane whose entries changed
  * is brought in line, silently (no indicator; the pane the user acted on already showed one).
+ *
+ * Only the areas one of the two records names are touched. An area whose key is in `memory` takes
+ * that level; an area whose key `previousMemory` had and `memory` no longer does gives up its own
+ * level, which is how a reset in one pane returns its siblings with it. An area named by neither is
+ * left exactly as it is: a key that was never there is no evidence that a pane holding its own
+ * level should give it up, and treating it as such would wipe the level of every restored pane the
+ * moment the subscription delivers its first value.
+ *
+ * Hidden panes need no special handling here: writing a level and pushing its variable is
+ * data-driven and applies with no layout, so an inactive tab is already in line when it is shown.
  */
-function syncSiblingsFromMemory(memory: MemoryRecord): void {
+function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryRecord): void {
   deps.getAllOpenDefinitions().forEach((definition) => {
     const id = memoryIdentityFor(definition);
     if (!id) return;
-    const rememberedAreas = Object.keys(memory)
-      .map((key) => parseContentZoomMemoryKey(key))
-      .filter((parsed) => parsed && parsed.kind === id.kind && parsed.identity === id.identity)
-      .map((parsed) => (parsed ? parsed.areaId : ''));
-    const areas = new Set([...Object.keys(getOwnLevels(definition)), ...rememberedAreas]);
+    const areas = new Set([
+      ...Object.keys(collectMemoryLevelsFor(memory, id)),
+      ...Object.keys(collectMemoryLevelsFor(previousMemory, id)),
+    ]);
     let changed = false;
     areas.forEach((areaId) => {
       const current = deps.getDefinition(definition.id) ?? definition;
@@ -596,7 +719,11 @@ function syncSiblingsFromMemory(memory: MemoryRecord): void {
  * `resource:` memory keys on a different, non-project identity and is left alone here.
  */
 async function pruneMemoryOfRemovedProjects(): Promise<void> {
-  const projectIds = new Set((await deps.listProjects()).map((project) => project.id));
+  const projects = await deps.listProjects();
+  // An empty list is never evidence that every project is gone: the project lookup answers with one
+  // while no provider has registered yet, and again once its startup grace period has passed.
+  if (projects.length === 0) return;
+  const projectIds = new Set(projects.map((project) => project.id));
   await enqueueMemoryTransaction((memory) => {
     let changed = false;
     Object.keys(memory).forEach((key) => {
@@ -633,6 +760,14 @@ export function initializeContentZoomService(
   initialized = (async () => {
     await getDefaultZoom();
     try {
+      cachedDefaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
+    } catch (e) {
+      cachedDefaultLabel = DEFAULT_LABEL_FALLBACK;
+      logger.warn(
+        `Content zoom: could not read the reset indicator's label; using "${DEFAULT_LABEL_FALLBACK}". ${getErrorMessage(e)}`,
+      );
+    }
+    try {
       await deps.settings.subscribe('platform.webViewContentZoom', (value) => {
         if (isPlatformError(value)) {
           logger.warn(`Content zoom: error reading the default: ${getErrorMessage(value)}`);
@@ -651,8 +786,11 @@ export function initializeContentZoomService(
           return;
         }
         const memory = asMemory(value);
+        const previousMemory = lastSyncedMemory;
         cachedMemory = memory;
-        syncSiblingsFromMemory(memory);
+        memoryLoaded = true;
+        lastSyncedMemory = memory;
+        syncSiblingsFromMemory(memory, previousMemory);
       });
     } catch (e) {
       logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
@@ -661,8 +799,10 @@ export function initializeContentZoomService(
     deps.onDidUpdateWebView(({ webView }) => {
       if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
     });
-    // Best effort: a debounced edit still in flight when the window closes gets one last chance
-    // to reach the setting rather than being silently dropped. One listener per window; a test
+    // Gives a debounced edit still in flight when the window closes one last chance to reach the
+    // setting rather than being silently dropped. Best effort only: the flush reads the stored
+    // record before writing it back, and neither round trip can finish while the window is
+    // unloading, so the last edits of a session can still be lost. One listener per window; a test
     // reset removes it so a later re-initialization can register its own.
     if (typeof window !== 'undefined' && !beforeUnloadListener) {
       beforeUnloadListener = () => {

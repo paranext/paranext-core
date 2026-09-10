@@ -173,6 +173,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
     // The handler also accepts `=` (the unshifted key sharing the `+` cap) and the numpad `+` key.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
     keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
     locations: [
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -186,6 +188,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
     // The handler also accepts the numpad `-` key.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
     keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
     locations: [
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -199,6 +203,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
     // The handler also accepts the numpad `0` key.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
     keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
     locations: [
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -211,7 +217,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Zoom',
     context:
       'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area)',
-    // The handler accepts Ctrl or ⌘ as the modifier on every platform.
+    // The handler accepts Ctrl or ⌘ as the modifier on every platform, and ignores the gesture when
+    // Shift or Alt is held as well.
     keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
     locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
   },

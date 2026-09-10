@@ -6,16 +6,26 @@ import {
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   getContentZoomCssVariable,
 } from '@shared/models/content-zoom.model';
-import { isValidContentZoomAreaId, MAIN_CONTENT_ZOOM_AREA } from '@shared/utils/content-zoom.util';
+import {
+  DEFAULT_ZOOM_FACTOR,
+  isValidContentZoomAreaId,
+  isValidZoomFactor,
+  MAIN_CONTENT_ZOOM_AREA,
+} from '@shared/utils/content-zoom.util';
 
 const INDICATOR_ID = 'platform-content-zoom-indicator';
 const INDICATOR_VISIBLE_MS = 1100;
 
-/** The rule that scales one zoom area: its own variable, else the default. */
+/**
+ * The rule that scales one zoom area: its own variable, else the default. The `main` area's rule
+ * names both spellings of its marker — the empty value a view writes when it names no area, and the
+ * id itself — so that a marker carrying an id no rule was generated for (an invalid id, or an area
+ * ignored for nesting inside another) is left unscaled instead of quietly following `main`.
+ */
 function areaRule(areaId: string): string {
   const selector =
     areaId === MAIN_CONTENT_ZOOM_AREA
-      ? `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`
+      ? `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}=""],[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${MAIN_CONTENT_ZOOM_AREA}"]`
       : `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${areaId}"]`;
   return `${selector}{zoom:var(${getContentZoomCssVariable(areaId)},var(${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE},1))}`;
 }
@@ -23,16 +33,20 @@ function areaRule(areaId: string): string {
 /**
  * The `<style>` element baked into a web view's head: the default and the pane's known levels (so
  * there is no 100 % → level flash), the base rule for the `main` area and a rule per known named
- * area. The bootstrap adds rules for named areas it discovers later.
+ * area. The bootstrap adds rules for named areas it discovers later. Levels arrive from stored
+ * state and from the memory setting, so an id or a factor that no longer passes validation is
+ * dropped here rather than written into the markup.
  */
 export function getContentZoomStyleElement(
   nonce: string,
   defaultZoom: number,
   levels: { [areaId: string]: number },
 ): string {
-  const areaIds = Object.keys(levels).filter((areaId) => isValidContentZoomAreaId(areaId));
+  const areaIds = Object.keys(levels).filter(
+    (areaId) => isValidContentZoomAreaId(areaId) && isValidZoomFactor(levels[areaId]),
+  );
   const variables = [
-    `${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE}:${defaultZoom}`,
+    `${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE}:${isValidZoomFactor(defaultZoom) ? defaultZoom : DEFAULT_ZOOM_FACTOR}`,
     ...areaIds.map((areaId) => `${getContentZoomCssVariable(areaId)}:${levels[areaId]}`),
   ].join(';');
   const rules = [
@@ -45,10 +59,10 @@ export function getContentZoomStyleElement(
 }
 
 /**
- * Escapes a `</` sequence so a value interpolated into the bootstrap script cannot close the
- * surrounding `<script>` tag it is injected into (or a `<style>` tag, for the same reason in
- * {@link getContentZoomStyleElement}'s markup). The web view id is the only free-form interpolated
- * value here; every other interpolation is a constant, a validated area id, or a number.
+ * Escapes a `</` sequence so a value interpolated into {@link getContentZoomBootstrapScript}'s
+ * source cannot close the `<script>` tag that source is injected into. The web view id is the only
+ * free-form value interpolated there; every other interpolation in that script is a constant, a
+ * validated area id, or a number.
  */
 function escapeClosingTags(jsSourceLiteral: string): string {
   return jsSourceLiteral.replace(/<\//g, '<\\/');
@@ -108,10 +122,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     let areas = [];
     let activeArea;
     const styleElement = () => document.getElementById('${CONTENT_ZOOM_STYLE_ELEMENT_ID}');
-    // The main area's rule is always the style element's base rule (no ="…" value); a named
-    // area's rule may already be baked into the markup too (a pane reopening with a persisted
-    // per-area zoom level) - seed those from the sheet before the first refresh so ensureRule
-    // below never inserts a second, functionally-identical rule for one it did not itself insert.
+    // The main area's rule is always the style element's base rule; a named area's rule may already
+    // be baked into the markup too (a pane reopening with a persisted per-area zoom level) - seed
+    // those from the sheet before the first refresh so ensureRule below never inserts a second,
+    // functionally-identical rule for one it did not itself insert. Only well-formed ids are
+    // seeded, matching the rule that only an accepted area ever gets a rule of its own.
     const ruled = new Set([MAIN]);
     const seedRuled = () => {
       const element = styleElement();
@@ -124,7 +139,8 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         if (start === -1) return;
         const end = text.indexOf('"]', start);
         if (end === -1) return;
-        ruled.add(text.slice(start + prefix.length, end));
+        const areaId = text.slice(start + prefix.length, end);
+        if (AREA_ID.test(areaId)) ruled.add(areaId);
       });
     };
     const ensureRule = (areaId) => {
@@ -214,8 +230,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       act(command, areaId);
     });
 
+    // Same modifier rule as the chords: Ctrl or the meta key, and neither Shift nor Alt. Chromium
+    // and the OS give Ctrl+Shift+wheel and Ctrl+Alt+wheel their own meanings, so those pass through.
     window.addEventListener('wheel', (e) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
+      if (!hasModifier(e)) return;
       const areaId = targetFor(e.target);
       if (!areaId) return;
       e.preventDefault();
