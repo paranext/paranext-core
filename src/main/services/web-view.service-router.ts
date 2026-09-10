@@ -70,6 +70,7 @@ import {
 } from '@main/services/web-view-ownership.util';
 import {
   getTargetWebViewShard,
+  getTargetWebViewWindowShard,
   getWebViewShard,
   webViewShards,
 } from '@main/services/web-view-shard-index';
@@ -220,13 +221,12 @@ async function openWebViewInNewWindow(
     );
   }
   if (interfaceMode !== 'power') {
-    const targetWindowId = getTargetWindowId();
-    const webViewShard = await getTargetWebViewShard();
+    const { windowId: targetWindowId, shard: webViewShard } = await getTargetWebViewWindowShard();
     return webViewShard.openWebView(
       webViewType,
       { type: 'tab' },
       options,
-      targetWindowId !== undefined && shouldContentAvoidDocumentFocus(targetWindowId),
+      shouldContentAvoidDocumentFocus(targetWindowId),
     );
   }
 
@@ -574,13 +574,12 @@ async function openWebView(
   }
 
   // No existingId or not found in any window — route to focused window
-  const routedWindowId = getTargetWindowId();
-  const webViewShard = await getTargetWebViewShard();
+  const { windowId: routedWindowId, shard: webViewShard } = await getTargetWebViewWindowShard();
   return webViewShard.openWebView(
     webViewType,
     effectiveLayout,
     options,
-    routedWindowId !== undefined && shouldContentAvoidDocumentFocus(routedWindowId),
+    shouldContentAvoidDocumentFocus(routedWindowId),
   );
 }
 
