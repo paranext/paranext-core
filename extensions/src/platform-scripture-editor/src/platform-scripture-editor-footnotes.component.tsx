@@ -99,8 +99,8 @@ export function FootnotesLayout({
   // order) and the USJ effect's functional `setSelectedFootnote` update — which reads the
   // just-enqueued result of this effect as its input — has the last word. That ordering matters
   // because `footnotes` here can still be one commit stale relative to the `usj` prop this render
-  // (this effect's own `setFootnotes` call from the previous commit hasn't been applied yet), so a
-  // bounds check against it can wrongly pass against a list that's about to shrink; the
+  // (the USJ effect's own `setFootnotes` call from the previous commit hasn't been applied yet), so
+  // a bounds check against it can wrongly pass against a list that's about to shrink; the
   // reconciliation below is the correction that always resolves against the freshly parsed list.
   const lastAppliedFocusRequestRef = useRef<FootnotesLayoutProps['focusRequest']>(undefined);
   useEffect(() => {
@@ -128,9 +128,23 @@ export function FootnotesLayout({
         if (!currentSelected) return undefined;
         const { index, footnote } = currentSelected;
         if (index < 0 || index >= newFootnotes.length) return undefined;
-        const f = newFootnotes[index];
-        if (f.marker === footnote.marker && deepEqualAcrossIframes(f.content, footnote.content)) {
-          return currentSelected;
+        const fresh = newFootnotes[index];
+        // The row being edited is the selection by definition: its content changes on every
+        // live-apply, so content equality must not decide whether it stays selected.
+        const isEditingRow = editingFootnoteIndex !== undefined && index === editingFootnoteIndex;
+        if (
+          isEditingRow ||
+          (fresh.marker === footnote.marker &&
+            deepEqualAcrossIframes(fresh.content, footnote.content))
+        ) {
+          // Re-point at the new list's object: FootnoteList marks the selected row by identity, so
+          // holding onto the old object would lose the highlight the moment a PDP echo re-parses
+          // `usj` into fresh objects, even when the note's content is unchanged. Because the
+          // returned object is minted fresh here every time, `selectionRequest` identity changes on
+          // every echo too, which re-runs `FootnoteList`'s `scrollIntoView({ block: 'nearest' })` on
+          // an already-visible row (a no-op) and re-fires `onSelectedFootnoteChange(index)` with the
+          // same index (the consumer's `highlightNote` is idempotent).
+          return { footnote: fresh, index };
         }
         return undefined;
       });
@@ -142,7 +156,7 @@ export function FootnotesLayout({
           `USJ (truncated): ${JSON.stringify(usj).slice(0, 200)}`,
       );
     }
-  }, [usj]);
+  }, [usj, editingFootnoteIndex]);
 
   const [containerHeight, setContainerHeight] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);

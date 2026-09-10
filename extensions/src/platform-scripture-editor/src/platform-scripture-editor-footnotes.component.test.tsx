@@ -171,3 +171,82 @@ describe('FootnotesLayout editing seam', () => {
     expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(undefined);
   });
 });
+
+describe('FootnotesLayout selection across USJ changes', () => {
+  it('keeps the selected row highlighted after an echo that re-creates the same notes', () => {
+    const onSelectedFootnoteChange = vi.fn();
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      onSelectedFootnoteChange,
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes} focusRequest={{ index: 1 }}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    // The pane's own focus-request resolution (retrying once `footnotes` first populates from an
+    // empty mount) transiently reports `undefined` before settling — clear that mount noise so the
+    // assertions below observe only what the echo itself does.
+    onSelectedFootnoteChange.mockClear();
+    // A fresh USJ object with identical content (what a PDP echo looks like over IPC).
+    const echo: Usj = JSON.parse(JSON.stringify(usjWithTwoNotes));
+    rerender(
+      <FootnotesLayout {...props} usj={echo} focusRequest={{ index: 1 }}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
+  });
+
+  it('keeps the editing row selected while its content changes under live-apply', () => {
+    const onSelectedFootnoteChange = vi.fn();
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      onSelectedFootnoteChange,
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => <div data-testid="row-editor" />,
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes} focusRequest={{ index: 1 }}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(1);
+    // Same mount noise as above — clear it so the assertions below observe only the live-apply edit.
+    onSelectedFootnoteChange.mockClear();
+    const edited: Usj = {
+      ...usjWithTwoNotes,
+      content: [
+        usjWithTwoNotes.content[0],
+        usjWithTwoNotes.content[1],
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '1' },
+            'a ',
+            note('alpha'),
+            ' b ',
+            note('beta typed more'),
+          ],
+        },
+      ],
+    };
+    rerender(
+      <FootnotesLayout {...props} usj={edited} focusRequest={{ index: 1 }}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(1);
+    expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
+    expect(screen.getByTestId('row-editor')).toBeInTheDocument();
+  });
+});
