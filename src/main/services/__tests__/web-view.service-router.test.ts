@@ -7,6 +7,9 @@ import {
   setWebViewWindowCreator,
   startWebViewServiceRouter,
   testingWebViewServiceRouter,
+  webViewContentZoomIn,
+  webViewContentZoomOut,
+  webViewContentZoomReset,
 } from '@main/services/web-view.service-router';
 import {
   getRegisteredRouter,
@@ -159,6 +162,15 @@ function windowShardWithProjects(projectIdsByWebViewId: Record<string, string | 
     getOpenWebViewDefinition: vi.fn(async (id: string) =>
       id in projectIdsByWebViewId ? { id, projectId: projectIdsByWebViewId[id] } : undefined,
     ),
+  };
+}
+
+/** A per-window shard extended with the content-zoom methods the zoom commands forward to */
+function windowShardWithContentZoom(openWebViews: string[] = []) {
+  return {
+    ...windowShard(openWebViews),
+    adjustContentZoom: vi.fn(async () => undefined),
+    resetContentZoom: vi.fn(async () => undefined),
   };
 }
 
@@ -1827,6 +1839,75 @@ describe('web view service router', () => {
       withWindows({});
 
       await expect(handler('owned-view')).rejects.toThrow('No windows available');
+    });
+  });
+
+  test('marks the three content zoom commands experimental, with no deprecated flag', async () => {
+    await getCommandHandler('platform.webViewContentZoomIn');
+
+    const contentZoomCommandNames = [
+      'command:platform.webViewContentZoomIn',
+      'command:platform.webViewContentZoomOut',
+      'command:platform.webViewContentZoomReset',
+    ];
+    const publishedFlags = [...registrations()]
+      .filter(([name]) => contentZoomCommandNames.includes(name))
+      .map(([name, { docs }]) => {
+        const method = Reflect.get(Object(docs), 'method') ?? {};
+        return [
+          name,
+          {
+            experimental: Reflect.get(method, 'x-experimental'),
+            deprecated: Reflect.get(method, 'deprecated'),
+          },
+        ];
+      });
+
+    expect(Object.fromEntries(publishedFlags)).toEqual({
+      'command:platform.webViewContentZoomIn': { experimental: true, deprecated: undefined },
+      'command:platform.webViewContentZoomOut': { experimental: true, deprecated: undefined },
+      'command:platform.webViewContentZoomReset': { experimental: true, deprecated: undefined },
+    });
+  });
+
+  describe('content zoom commands', () => {
+    test('forwards an explicit web view id and area to its owning window shard', async () => {
+      const owner = windowShardWithContentZoom(['wv-1']);
+      withWindows({ 1: windowShardWithContentZoom([]), 2: owner });
+
+      await webViewContentZoomIn('wv-1', 'footnotes');
+      await webViewContentZoomOut('wv-1', undefined);
+      await webViewContentZoomReset('wv-1', 'main');
+
+      expect(owner.adjustContentZoom).toHaveBeenNthCalledWith(1, 'wv-1', 1, 'footnotes');
+      expect(owner.adjustContentZoom).toHaveBeenNthCalledWith(2, 'wv-1', -1, undefined);
+      expect(owner.resetContentZoom).toHaveBeenCalledWith('wv-1', 'main');
+    });
+
+    test('with no id, forwards to the focused window`s shard with an undefined target and area', async () => {
+      const focused = windowShardWithContentZoom([]);
+      withWindows({ 1: focused, 2: windowShardWithContentZoom([]) });
+      mocks.getFocusedWindowId.mockReturnValue('1');
+
+      await webViewContentZoomIn(undefined, undefined);
+
+      expect(focused.adjustContentZoom).toHaveBeenCalledWith(undefined, 1, undefined);
+    });
+
+    test('does nothing, and does not throw, when no window owns the named web view', async () => {
+      const shards = { 1: windowShardWithContentZoom([]), 2: windowShardWithContentZoom([]) };
+      withWindows(shards);
+
+      await expect(webViewContentZoomIn('gone-view', undefined)).resolves.toBeUndefined();
+      expect(shards[1].adjustContentZoom).not.toHaveBeenCalled();
+      expect(shards[2].adjustContentZoom).not.toHaveBeenCalled();
+    });
+
+    test('rejects a non-string web view id or area id', async () => {
+      withWindows({ 1: windowShardWithContentZoom(['wv-1']) });
+
+      await expect(webViewContentZoomIn(42, undefined)).rejects.toThrow('web view id');
+      await expect(webViewContentZoomIn('wv-1', 7)).rejects.toThrow('area id');
     });
   });
 });

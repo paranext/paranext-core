@@ -174,7 +174,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
     // The handler also accepts `=` (the unshifted key sharing the `+` cap) and the numpad `+` key.
     keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
-    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
   },
   {
     id: 'content-zoom-out',
@@ -184,7 +187,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
     // The handler also accepts the numpad `-` key.
     keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
-    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
   },
   {
     id: 'content-zoom-reset',
@@ -194,7 +200,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
     // The handler also accepts the numpad `0` key.
     keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
-    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
   },
   {
     id: 'content-zoom-wheel',
