@@ -100,10 +100,39 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
-    /** Increase the zoom level of the entire UI */
+    /**
+     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. Has no
+     * default keyboard shortcut; per-pane content zoom uses `platform.webViewContentZoomIn`
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. Has no
+     * default keyboard shortcut; per-pane content zoom uses `platform.webViewContentZoomOut`
+     */
     'platform.zoomOut': () => Promise<void>;
+    /**
+     * Zoom one area of a web view's content in by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area (the one
+     * last clicked or focused). Only web views that mark at least one zoom area respond.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomIn': (webViewId?: WebViewId, areaId?: string) => Promise<void>;
+    /**
+     * Zoom one area of a web view's content out by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomOut': (webViewId?: WebViewId, areaId?: string) => Promise<void>;
+    /**
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
+     * area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomReset': (webViewId?: WebViewId, areaId?: string) => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
