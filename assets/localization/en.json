@@ -378,6 +378,7 @@
   "%project_settings_project_group1_label%": "Project properties",
   "%projectPicker_current_project_label%": "Current project",
   "%projectPicker_no_results%": "No projects found",
+  "%projectPicker_readOnly_label%": "Read-only",
   "%projectPicker_search_placeholder%": "Search projects…",
   "%projectPicker_section_projects%": "Your projects",
   "%projectPicker_section_recent%": "Recent",
