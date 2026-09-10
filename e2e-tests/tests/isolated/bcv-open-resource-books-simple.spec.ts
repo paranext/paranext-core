@@ -10,6 +10,7 @@ import {
   cleanupCommentTestProject,
   createCommentTestProject,
   removeRevelationFromProject,
+  setReferencedProjectsAndResources,
   type CommentTestProject,
 } from '../../fixtures/comment-test-helpers';
 
@@ -152,6 +153,16 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     // The whole point of the pair: the navigation target lacks Revelation, the other project has it,
     // so Revelation is reachable only through the open resource.
     removeRevelationFromProject(targetProject);
+
+    // Pin the target project's own reference list to itself. Without this, the Bible-texts panel's
+    // "no configured reference list" fallback (`resolveResourceSelection`'s `rows[0]` in
+    // `resource-selection.utils.ts`) silently selects the first locally-installed read-only
+    // resource instead — on any machine with one downloaded (e.g. WEB), that resource's full book
+    // list leaks into Phase 1 below and "Show more books" appears before this test ever opens its
+    // own resource. A self-reference makes `rows[0]` resolve to the target project itself, which
+    // `getOpenProjectIds` (`src/renderer/hooks/use-open-project-book-ids.hook.ts`) excludes as the
+    // active project — see `setReferencedProjectsAndResources`'s docblock for the full mechanism.
+    setReferencedProjectsAndResources(targetProject, [targetProject.projectId]);
 
     // Simple mode auto-opens the most recent project into its empty editor slot, asynchronously and
     // late enough to replace an editor this test opened and drag every Column 3 panel along with it.
