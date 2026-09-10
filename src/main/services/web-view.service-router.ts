@@ -1244,7 +1244,10 @@ const CONTENT_ZOOM_COMMAND_DOCS: Record<ContentZoomCommandName, SingleMethodDocu
   [CONTENT_ZOOM_COMMANDS.in]: {
     method: {
       'x-experimental': true,
-      summary: "Zoom one area of a web view's content in by one step (10 %)",
+      summary:
+        "Zoom one area of a web view's content in by one step (10 %). Without an id, the " +
+        "focused window's last focused tab is the target; without an area, the pane's active " +
+        'area',
       params: CONTENT_ZOOM_PARAMS,
       result: { name: 'return value', schema: { type: 'null' } },
     },
@@ -1252,7 +1255,10 @@ const CONTENT_ZOOM_COMMAND_DOCS: Record<ContentZoomCommandName, SingleMethodDocu
   [CONTENT_ZOOM_COMMANDS.out]: {
     method: {
       'x-experimental': true,
-      summary: "Zoom one area of a web view's content out by one step (10 %)",
+      summary:
+        "Zoom one area of a web view's content out by one step (10 %). Without an id, the " +
+        "focused window's last focused tab is the target; without an area, the pane's active " +
+        'area',
       params: CONTENT_ZOOM_PARAMS,
       result: { name: 'return value', schema: { type: 'null' } },
     },
@@ -1260,7 +1266,10 @@ const CONTENT_ZOOM_COMMAND_DOCS: Record<ContentZoomCommandName, SingleMethodDocu
   [CONTENT_ZOOM_COMMANDS.reset]: {
     method: {
       'x-experimental': true,
-      summary: "Return one area of a web view's content to the default zoom set in Settings",
+      summary:
+        "Return one area of a web view's content to the default zoom set in Settings. Without " +
+        "an id, the focused window's last focused tab is the target; without an area, the " +
+        "pane's active area",
       params: CONTENT_ZOOM_PARAMS,
       result: { name: 'return value', schema: { type: 'null' } },
     },
@@ -1328,10 +1337,14 @@ function assertOptionalContentZoomArgument(
  * pass it.
  *
  * Routed by ownership: a caller naming a web view in a background window has to run there, not
- * wherever the user happens to be working. A named id that no window owns answers with nothing
- * rather than falling back to the focused window — that fallback would zoom whatever the user is
- * looking at for an id the caller believes is still open elsewhere. Only the no-id case, which
- * never claimed to act on any particular web view, falls back to the focused window.
+ * wherever the user happens to be working. A window that could not be asked may be the one holding
+ * the named web view, so that case throws rather than guessing — the same weighing
+ * {@link moveWebView}, {@link reloadWebView}, and {@link getOpenWebViewDefinition} apply to their own
+ * `findOwner({ kind: 'id' })` searches. Only once every window has genuinely answered "no" does an
+ * unresolved id become a silent no-op — falling back to the focused window here would zoom whatever
+ * the user is looking at for an id the caller believes is still open elsewhere. The no-id case,
+ * which never claimed to act on any particular web view, always falls back to the focused window
+ * instead, or no-ops if nothing is focused.
  */
 async function resolveContentZoomShard(
   webViewId: unknown,
@@ -1345,8 +1358,17 @@ async function resolveContentZoomShard(
   assertOptionalContentZoomArgument(areaId, 'area id', operation);
 
   if (webViewId !== undefined) {
-    const { owner } = await findOwner({ kind: 'id', webViewId }, operation);
+    const matcher: OwnerMatcher = { kind: 'id', webViewId };
+    const { owner, hadUnreachableWindows } = await findOwner(matcher, operation);
+    // A window that could not be asked may be the one holding this web view, so an unresolved
+    // owner here is not evidence it does not exist.
+    if (!owner && hadUnreachableWindows)
+      throw new Error(
+        `Could not ${operation} ${describeMatcher(matcher)}: some windows were unreachable.`,
+      );
     if (!owner) {
+      // Reached only once every window has answered and none owns it — genuinely not open
+      // anywhere, not merely unproven.
       logger.debug(`${operation}: no window owns web view ${webViewId}; ignoring`);
       return undefined;
     }
