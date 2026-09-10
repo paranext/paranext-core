@@ -26,6 +26,13 @@ export function reconcileCachedResources(
   let isChanged = false;
 
   const resources = cachedResources.map((resource) => {
+    // Deliberately NOT `doesCatalogRowCoverProject` from `platform-bible-utils`, despite the
+    // near-identical shape. That helper answers "does this row already account for this project?"
+    // and refuses a never-synced row (`installed: false, projectId: ''`) so a stale entry for a
+    // reassigned uid cannot hide a local project. This asks the opposite question — "which local
+    // project does this row correspond to?" — and a never-synced row is exactly the case it has
+    // to resolve, because recognising that such a row now has a project on disk is what marks it
+    // installed. Routing this through that helper makes every first-time install undetectable.
     const matchingLocalProjectId = localProjectIds.find((localProjectId) =>
       // If the `projectId` is defined then tries to use that
       resource.projectId
