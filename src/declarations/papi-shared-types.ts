@@ -362,8 +362,27 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Default content zoom applied to every zoom area of a web view pane that has no level of its
+     * own. A factor: 1.0 = 100 %. Allowed range is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area
+     * its own level; Ctrl+`0` returns that area to this default.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoom': number;
+    /**
+     * Per-project memory of content zoom levels, keyed `<kind>:<identity>:<area>` (kind is
+     * `editor`, `resource` or `notes`; identity is the project id, or the resource id for views
+     * without a project; area is the zoom area id, `main` for a view with one area). Written by the
+     * platform when an area's own level changes; read when a pane for that project opens. Local to
+     * this machine.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomMemory': { [key: string]: number };
+    /**
+     * The zoom factor that applies to the entire application, including menus and toolbars. 1.0 is
+     * the default. Allowed range is 0.5 to 3.0. Changed in Settings only; per-pane content zoom is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
