@@ -1,10 +1,10 @@
 import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinates';
-import {
-  getAllOpenWebViewDefinitionsSync,
-  getSavedWebViewDefinitionSync,
-  onDidUpdateWebView,
-  updateWebViewDefinitionSync,
-} from '@renderer/services/web-view.service-shard';
+// getLastFocusedTabId closes the cycle documented on web-view.service-shard.ts's import of this
+// module: window.service-shard already imports from web-view.service-shard, and web-view.service-shard
+// imports from this module, so this edge back to window.service-shard closes the loop. Both ends are
+// `function` declarations, so evaluation order can't leave either side observing the other
+// mid-initialization.
+// eslint-disable-next-line import/no-cycle
 import { getLastFocusedTabId } from '@renderer/services/window.service-shard';
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
@@ -27,7 +27,12 @@ import {
   isValidZoomFactor,
   parseContentZoomMemoryKey,
 } from '@shared/utils/content-zoom.util';
-import { getErrorMessage, isPlatformError, PlatformError } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  PlatformError,
+  Unsubscriber,
+} from 'platform-bible-utils';
 
 /** What the injected bootstrap exposes on a web view's `window` (see the bootstrap script). */
 type ContentZoomWindowApi = { showIndicator: (areaId: string, text: string) => void };
@@ -43,6 +48,10 @@ type ContentZoomDeps = {
   getIframe: (webViewId: string) => HTMLIFrameElement | null;
   getDefinition: (webViewId: string) => SavedWebViewDefinition | undefined;
   updateDefinition: (webViewId: string, update: { state: Record<string, unknown> }) => boolean;
+  getAllOpenDefinitions: () => SavedWebViewDefinition[];
+  onDidUpdateWebView: (
+    callback: (event: { webView: SavedWebViewDefinition }) => void,
+  ) => Unsubscriber;
   getLastFocusedTabId: () => string | undefined;
   settings: {
     get: (key: SettingKey) => Promise<unknown>;
@@ -56,10 +65,45 @@ type ContentZoomDeps = {
   listProjects: () => Promise<{ id: string }[]>;
 };
 
+/**
+ * Whether {@link warnShardDepsNotConfigured} has already logged. The shard's web-view-definition
+ * functions (`getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView`)
+ * only exist once the shard calls {@link initializeContentZoomService} with them; a call routed
+ * through one of the stubs below before that happens is worth one warning, not one per call.
+ */
+let hasWarnedShardDepsNotConfigured = false;
+
+function warnShardDepsNotConfigured(): void {
+  if (hasWarnedShardDepsNotConfigured) return;
+  hasWarnedShardDepsNotConfigured = true;
+  logger.warn(
+    'Content zoom: called before the shard injected its web-view-definition functions (initializeContentZoomService has not run with them yet).',
+  );
+}
+
 const productionDeps: ContentZoomDeps = {
   getIframe: getWebViewIframe,
-  getDefinition: getSavedWebViewDefinitionSync,
-  updateDefinition: (webViewId, update) => updateWebViewDefinitionSync(webViewId, update),
+  // The four functions below come from the window's web-view shard, which itself depends on this
+  // service (see the shard's imports/globalThis bindings for the zoom bootstrap). Rather than
+  // importing them here and closing that cycle, the shard injects its own functions through
+  // `initializeContentZoomService`; these stubs cover the window between module load and that
+  // call.
+  getDefinition: () => {
+    warnShardDepsNotConfigured();
+    return undefined;
+  },
+  updateDefinition: () => {
+    warnShardDepsNotConfigured();
+    return false;
+  },
+  getAllOpenDefinitions: () => {
+    warnShardDepsNotConfigured();
+    return [];
+  },
+  onDidUpdateWebView: () => {
+    warnShardDepsNotConfigured();
+    return () => false;
+  },
   getLastFocusedTabId,
   settings: {
     get: (key) => settingsService.get(key),
@@ -468,7 +512,7 @@ export async function getInitialContentZoomForWebView(
 }
 
 function repushAllPanes(): void {
-  getAllOpenWebViewDefinitionsSync().forEach((definition) => pushContentZoom(definition.id));
+  deps.getAllOpenDefinitions().forEach((definition) => pushContentZoom(definition.id));
 }
 
 /**
@@ -477,7 +521,7 @@ function repushAllPanes(): void {
  * is brought in line, silently (no indicator; the pane the user acted on already showed one).
  */
 function syncSiblingsFromMemory(memory: MemoryRecord): void {
-  getAllOpenWebViewDefinitionsSync().forEach((definition) => {
+  deps.getAllOpenDefinitions().forEach((definition) => {
     const id = memoryIdentityFor(definition);
     if (!id) return;
     const rememberedAreas = Object.keys(memory)
@@ -519,8 +563,22 @@ async function pruneMemoryOfRemovedProjects(): Promise<void> {
   });
 }
 
-/** Idempotent. Subscribes to the default, the memory and web-view updates; prunes stale memory. */
-export function initializeContentZoomService(): Promise<void> {
+/**
+ * Idempotent. Subscribes to the default, the memory and web-view updates; prunes stale memory.
+ *
+ * @param shardDeps The calling window's web-view shard supplies its own `getDefinition`,
+ *   `updateDefinition`, `getAllOpenDefinitions` and `onDidUpdateWebView` here rather than this
+ *   module importing them directly — that import would create a cycle, since the shard itself
+ *   imports from this module to wire each web view's zoom bootstrap. Merged into the deps in use
+ *   whenever provided, even on a later call after the first initialization already ran.
+ */
+export function initializeContentZoomService(
+  shardDeps?: Pick<
+    ContentZoomDeps,
+    'getDefinition' | 'updateDefinition' | 'getAllOpenDefinitions' | 'onDidUpdateWebView'
+  >,
+): Promise<void> {
+  if (shardDeps) deps = { ...deps, ...shardDeps };
   if (initialized) return initialized;
   initialized = (async () => {
     await getDefaultZoom();
@@ -548,7 +606,7 @@ export function initializeContentZoomService(): Promise<void> {
       logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
     }
     // A pane adopted from another window arrives with its state; push its levels once it exists.
-    onDidUpdateWebView(({ webView }) => {
+    deps.onDidUpdateWebView(({ webView }) => {
       if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
     });
     // Best effort: a debounced edit still in flight when the window closes gets one last chance
