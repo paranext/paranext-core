@@ -1221,18 +1221,21 @@ step, no automation. Just a record.
 - **Consequences:** The withholding flag's original stated rationale — that skipping it risks a
   backgrounded window being pulled to the foreground by its own content — does not hold; `focus()`
   never does that, with or without the flag. Its established remaining job is caret ownership at the
-  moment a window IS raised: several tabs' content can each call `focus()` while a window sits
-  backgrounded, and without withholding, whichever call lands last claims the latent active element
-  and wins the caret the instant the window is raised, regardless of which tab the raise is actually
+  moment the window is ACTIVATED, by any means — including the user activating it themselves, which
+  is the common way a background window is next entered: several tabs' content can each call
+  `focus()` while a window sits backgrounded, and without withholding, whichever call lands last
+  claims the latent active element and wins the caret the instant the window is activated,
+  regardless of which tab that activation is actually
   showing. Every comment and TSDoc entry across the withholding code (`activateWithoutDocumentFocus`
   and its call sites, in both main and renderer, and the generated `papi.d.ts` entries that come from
   it) that described what a `focus()` call does was corrected to state the latent-focus fact and this
   narrower rationale in place of the two disproved claims; comments describing a genuine OS-level
   raise (`shouldBringToFront`, `focusWindow`, `raiseMoveTarget`) needed no change; a `focus()` call is
-  not in tension with any of them. Left open: on a path where the window is never
-  raised at all, the latent active element may have no observable consequence, so whether
-  withholding earns its place there too is unresolved — raised with the reviewer separately, not
-  answered by this entry.
+  not in tension with any of them. On a window that is never activated at all, the question does not
+  arise rather than going unanswered: nothing reads the latent active element while the window stays
+  in the background — every reader of `document.activeElement` in this repo lives inside a web
+  view's own document and is driven by interaction with that view — so which tab holds it has no
+  observable consequence until an activation makes it live, which is the case above.
 - **Source:** PT-4465; probe run 2026-09-09 on native Windows.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
@@ -2584,12 +2587,27 @@ step, no automation. Just a record.
   decides tab activation.
 - **Consequences:** A ring shown in a backgrounded window (defect 1) and a tab left DOM-focused with
   no visible indication or later ring after a cross-window raise (defect 2) are both fixed by the
-  same broadcast, without moving keyboard focus or `document.activeElement` anywhere — every change
-  here is either read-only state derivation or CSS class toggling. Single-window behavior is
-  unaffected: `useIsFocusedWindow()` is `true` for the sole window from the seed onward, so the new
-  gate is a no-op there. The hidden-tab case does not apply: unlike scroll or geometry sync, nothing
-  here reads layout — the effect and the catch-up are pure state/CSS operations that behave
-  identically whether a tab happens to be the visible one in its own window's dock.
+  same broadcast. The two halves are not alike, and the difference matters for the hidden-tab
+  question below: the ring is read-only state derivation and a CSS class toggle and moves nothing,
+  while the catch-up deliberately DOES move document focus — `runFocusCatchUpForRaisedWindow` calls
+  `focusTab`, which focuses the tab's web view iframe — because handing the caret to the tab the
+  raise is showing is the entire point of it. Single-window behavior is unaffected:
+  `useIsFocusedWindow()` is `true` for the sole window from the seed onward, so the new gate is a
+  no-op there.
+- **The hidden-tab case (`.claude/rules/cross-view-sync-hidden-views.md`):** the ring effect behaves
+  identically whether a tab is the visible one or not — it toggles a class on the root element and
+  reads no layout. The catch-up is layout-dependent and is **deliberately not guarded**. `focusTab`
+  makes the tab active and focuses its iframe in one synchronous stack, so a tab that was not
+  already its panel's active tab is still inside a `display: none` pane when `focus()` lands, and
+  the focus goes to the document body instead — the same trap `setDocumentFocusToTab` already
+  guards for its `lastFocusedElement` path with an `IntersectionObserver`. Reaching it needs the
+  noted tab to stop being its panel's active tab between the note and the raise, and no door
+  currently does that: every path that changes a withheld window's active tab goes through
+  `revealTabGroupAndSetDocumentFocusToTab`, which writes a fresh note for whichever tab it just
+  activated, and only the latest note is kept — so the note tracks the active tab rather than
+  drifting from it. Guarding it would mean deferring a focus move that must also survive a window
+  which is never raised at all, for a failure no path reaches; the note to whoever adds a door that
+  activates a tab without passing through that chokepoint is that this is the assumption it breaks.
 - **Source:** PT-4465 (`pt-4465-withhold-activation`), PR #2756, fix round addressing the
   cross-window ring and reveal-without-a-ring reports.
 
