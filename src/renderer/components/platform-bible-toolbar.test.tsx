@@ -34,9 +34,9 @@ vi.mock('@renderer/components/user-profile-popover/user-profile-popover.componen
 }));
 
 /**
- * The resolution callbacks `useDialogCallback` has been handed, newest last. The toolbar re-creates
- * its callback whenever the data it closes over changes, so a test that resolves the project-picker
- * dialog has to reach for the most recent one.
+ * The resolution callbacks `useDialogCallback` has been handed, newest last. The toolbar hands it a
+ * fresh callback on every render, so this is a per-render log rather than a count of dialogs
+ * opened; a test that resolves the project-picker dialog reaches for the most recent entry.
  */
 const capturedDialogResolvers: ((response: string | undefined) => void)[] = [];
 
@@ -1752,6 +1752,43 @@ describe('PlatformBibleToolbar — pending project display', () => {
 
     expect(capturedTriggerProjectIds).not.toContain('open');
     expect(selectedProjectId()).toBe('OPEN');
+  });
+
+  it('retires an outstanding pending project when the open one is picked again', async () => {
+    // The bridge for `new` can outlive its usefulness — its editor may open in another window, so
+    // neither the match check nor a rejection ever retires it. Picking the open project is the
+    // user stating what is open, and must correct the trigger at once rather than in 15 seconds.
+    await renderSimpleToolbarWith({
+      currentSimpleProject: OLD_PROJECT,
+      allProjects: [OLD_PROJECT, NEW_PROJECT],
+    });
+
+    selectProjectFromPopover('new');
+    expect(selectedProjectId()).toBe('new');
+    selectProjectFromPopover('old');
+
+    expect(selectedProjectId()).toBe('old');
+  });
+
+  it('cancels the pending fallback when the toolbar unmounts', async () => {
+    const { unmount } = await renderSimpleToolbarWith({
+      currentSimpleProject: OLD_PROJECT,
+      allProjects: [OLD_PROJECT, NEW_PROJECT],
+    });
+
+    vi.useFakeTimers();
+    try {
+      selectProjectFromPopover('new');
+      const armedTimerCount = vi.getTimerCount();
+
+      unmount();
+
+      // Left running, the bound would fire against a component that is gone.
+      expect(vi.getTimerCount()).toBeLessThan(armedTimerCount);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('names a pending project chosen from the dialog, without adding a row for it', async () => {

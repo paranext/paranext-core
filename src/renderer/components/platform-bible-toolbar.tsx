@@ -532,6 +532,10 @@ export function PlatformBibleToolbar() {
         pendingProjectTimeoutRef.current = setTimeout(() => {
           setPendingProject(undefined);
         }, PENDING_PROJECT_TIMEOUT_MS);
+      } else {
+        // Picking the open project is also the user correcting the trigger: an earlier pick whose
+        // editor never reported here would otherwise keep its name up until the bound expired.
+        setPendingProject(undefined);
       }
       openProject(item.id).catch((e: unknown) => {
         logger.warn(
@@ -562,6 +566,8 @@ export function PlatformBibleToolbar() {
       );
       // A project reachable only through the dialog has no list row to take display fields from,
       // so its id stands in for them until the editor reports the project itself.
+      // TODO(PT-4552): Carry the chosen project's name in the dialog response, which WI-26's
+      // server-reachable projects make the common case rather than the exception.
       beginOpenProject(item ?? { id: projectId, shortName: projectId, fullName: projectId });
     },
     [pickerProjects, beginOpenProject],
