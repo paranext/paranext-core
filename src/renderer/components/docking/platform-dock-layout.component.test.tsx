@@ -44,10 +44,22 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   updateTabPartialSync: vi.fn(),
 }));
 
+// Naming the window reads the dock's layout and localizes the resulting label, which is a whole
+// separate concern from the handler wiring under test here.
+vi.mock('./window-label.util', () => ({
+  updateWindowTitle: vi.fn(),
+}));
+
 /** Stand-in for the DOM node `DockLayout.getRootElement()` would return. */
 const mockRootElement = document.createElement('div');
 
-type MockDockLayoutHandle = { getRootElement: () => HTMLElement };
+/** An empty dock, which is all the layout the window-title read needs from this mock. */
+const mockLayout = { dockbox: { children: [] } };
+
+type MockDockLayoutHandle = {
+  getRootElement: () => HTMLElement;
+  getLayout: () => typeof mockLayout;
+};
 
 // `DockLayoutWrapper` forwards its ref straight through to rc-dock's own `DockLayout`, whose real
 // behavior in jsdom isn't worth exercising here — this test is only about whether
@@ -55,7 +67,10 @@ type MockDockLayoutHandle = { getRootElement: () => HTMLElement };
 // exposes, not about rc-dock's own rendering.
 vi.mock('./dock-layout-wrapper.component', () => ({
   DockLayoutWrapper: forwardRef((_props: object, ref: ForwardedRef<MockDockLayoutHandle>) => {
-    useImperativeHandle(ref, () => ({ getRootElement: () => mockRootElement }));
+    useImperativeHandle(ref, () => ({
+      getRootElement: () => mockRootElement,
+      getLayout: () => mockLayout,
+    }));
     return <div data-testid="mock-dock-layout-wrapper" />;
   }),
 }));
