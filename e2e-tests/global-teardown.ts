@@ -6,19 +6,17 @@ import { killProcessesUnderRoot, machineOwnershipFlag, runCleanup } from './scop
 import { killProcessTree, restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
 
 /**
- * Stops the renderer dev server process global-setup spawned, addressed the way that platform's
- * spawn actually produced it.
+ * Stops the renderer dev server process global-setup spawned. Delegates the cross-platform kill
+ * mechanics to {@link killProcessTree} — see its own docblock for why POSIX and Windows need
+ * different approaches to reach the whole tree, including npm/webpack under Windows' `shell: true`
+ * cmd.exe wrapper.
  *
- * On POSIX, `detached: true` put it in its own process group, so a negative PID reaches the group;
- * `pid` alone is the fallback for whatever that missed.
- *
- * On Windows, neither POSIX path applies: `detached` does not create a process group `-pid` could
- * address there, and `shell: true` means `pid` names cmd.exe, not the npm/webpack tree underneath
- * it — a plain kill of `pid` would stop the shell and orphan everything it spawned, still holding
- * the port. `taskkill /t` asks Windows to walk that tree instead, bounded by a timeout so a hung
- * taskkill cannot hang teardown itself. NOT YET VERIFIED ON WINDOWS: that `taskkill /t` actually
- * reaches the grandchild webpack-dev-server process npm spawns underneath cmd.exe, and frees the
- * port — only a Windows run can confirm that.
+ * Passes SIGTERM here, not the SIGKILL the app teardown uses for Electron: the dev server has none
+ * of Electron's stubborn descendants (no `dotnet watch` child surviving its parent), so a graceful
+ * stop is preferred where one is available — the signal only matters on POSIX, since
+ * `killProcessTree`'s win32 branch always forces via `taskkill /f` regardless of what is passed.
+ * Verified on native Windows: the run leaves no `node.exe` behind, and every following run starts
+ * its own dev server cleanly.
  */
 export function killDevServerProcess(pid: number, platform: NodeJS.Platform): void {
   killProcessTree(pid, 'SIGTERM', platform);

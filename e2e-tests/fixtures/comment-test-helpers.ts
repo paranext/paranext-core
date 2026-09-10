@@ -35,6 +35,7 @@ import os from 'os';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
 import {
   addUsersToProject,
+  escapeXml,
   PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
@@ -302,20 +303,28 @@ export function removeRevelationFromProject(project: CommentTestProject): void {
     );
 
   const withoutRevelation = `${booksPresent.slice(0, REVELATION_BOOKS_PRESENT_INDEX)}0${booksPresent.slice(REVELATION_BOOKS_PRESENT_INDEX + 1)}`;
+  // A replacer FUNCTION, not a replacement string — see setReferencedProjectsAndResources's own
+  // comment on the same idiom for why a plain string is unsafe here in general, even though this
+  // particular replacement text is a fixed-width bit string that cannot itself contain one of the
+  // special `$`-patterns.
   fs.writeFileSync(
     settingsPath,
-    settingsXml.replace(booksPresentMatch[0], `<BooksPresent>${withoutRevelation}</BooksPresent>`),
+    settingsXml.replace(
+      booksPresentMatch[0],
+      () => `<BooksPresent>${withoutRevelation}</BooksPresent>`,
+    ),
     'utf8',
   );
 }
 
-/** Data-schema version written into a seeded `ReferencedProjectsAndResources` JSON body. */
+/**
+ * Data-schema version written into a seeded `ReferencedProjectsAndResources` JSON body. Mirrors
+ * `CURRENT_DATA_VERSION` in
+ * `extensions/src/platform-scripture-editor/src/resource-reference-list.const.ts` and
+ * `ResourceReferenceList.CurrentFormatVersion` in `c-sharp/Projects/ResourceReferenceList.cs` —
+ * keep in sync (neither source can be imported into the Playwright Node context).
+ */
 const REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION = '1.1.0';
-
-/** Escapes the three XML-significant characters for use in element text content. */
-function escapeXmlText(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 /**
  * Seeds a project's own `platformScripture.referencedProjectsAndResources` admin setting by writing
@@ -365,16 +374,18 @@ export function setReferencedProjectsAndResources(
   // Escape the whole text node (not just `name` before stringifying) so a literal `&`/`<`/`>`
   // inside the JSON — e.g. from a name — round-trips through the XML text node correctly instead
   // of corrupting the embedded JSON with a premature XML entity.
-  const elementText = escapeXmlText(
-    `${REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION} ${jsonBody}`,
-  );
+  const elementText = escapeXml(`${REFERENCED_PROJECTS_AND_RESOURCES_DATA_VERSION} ${jsonBody}`);
   const element = `<ReferencedProjectsAndResources>${elementText}</ReferencedProjectsAndResources>`;
 
   if (!settingsXml.includes('</ScriptureText>'))
     throw new Error(`Expected </ScriptureText> closing tag in ${settingsPath}`);
+  // A replacer FUNCTION, not a replacement string: `element` embeds free text (e.g. a project
+  // name), and `String.prototype.replace` gives a STRING replacement its own substitution syntax —
+  // `$&`, `` $` ``, `$'`, `$$` — so a name containing one of those would expand instead of landing
+  // verbatim. A function's return value is always used literally.
   fs.writeFileSync(
     settingsPath,
-    settingsXml.replace('</ScriptureText>', `  ${element}\n</ScriptureText>`),
+    settingsXml.replace('</ScriptureText>', () => `  ${element}\n</ScriptureText>`),
     'utf8',
   );
 }

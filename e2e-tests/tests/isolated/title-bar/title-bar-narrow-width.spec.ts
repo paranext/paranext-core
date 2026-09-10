@@ -76,7 +76,9 @@ async function expectControlWithinRow(
   selector: string,
 ): Promise<void> {
   const control = mainPage.locator(selector);
-  await expect(control, `${name} disappeared at the minimum window width`).toBeVisible();
+  await expect(control, `${name} disappeared at the minimum window width`).toBeVisible({
+    timeout: 1_000,
+  });
 
   const box = await control.boundingBox();
   expect(box, `${name} has no layout box`).not.toBeNull();

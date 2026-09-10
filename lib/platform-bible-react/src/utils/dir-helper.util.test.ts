@@ -20,6 +20,18 @@ afterEach(() => {
 });
 
 describe('readDirection', () => {
+  test('returns "ltr" when working storage has no stored value', () => {
+    expect(readDirection()).toBe('ltr');
+  });
+
+  test('returns "ltr" when storage holds a value other than "rtl"', () => {
+    // Written directly (not via persistDirection, which only accepts a Direction) so the stored
+    // value is neither 'rtl' nor 'ltr' — pinning the check as an equality against 'rtl' specifically,
+    // not a truthy check. 'layoutDirection' mirrors dir-helper.util.ts's own private STORAGE_KEY.
+    originalLocalStorage.setItem('layoutDirection', 'sideways');
+    expect(readDirection()).toBe('ltr');
+  });
+
   test('returns "ltr" when localStorage is null (detached iframe)', () => {
     // A detached iframe's `window.localStorage` is `null`, not `undefined` - null IS the value
     // this test must reproduce.
