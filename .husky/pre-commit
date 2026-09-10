@@ -59,7 +59,9 @@ if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.jso
       const marker = `dev-packages/staging/${folder}/.staged-from`;
       if (!fs.existsSync(marker)) return false;
       const stamp = fs.readFileSync(marker, "utf8");
-      return stamp.includes("-local") || stamp.includes("-dirty");
+      return (
+        stamp.includes("-local") || stamp.includes("-dirty") || stamp.includes("-unpushed")
+      );
     });
     process.stdout.write(provisional.map((f) => `dev-packages/staging/${f}`).join("\n"));
   ' 2>/dev/null || true)
@@ -73,14 +75,17 @@ if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.jso
     echo ""
     echo "$PROVISIONAL" | sed 's|^|  |'
     echo ""
-    echo "Its dependency closure is whatever your working tree had, so the lockfile would record"
-    echo "something nobody else can reproduce. To fix:"
+    echo "Its dependency closure came from a local or dirty build, or from a commit that is not on"
+    echo "the remote, so the lockfile would record something nobody else can reproduce. To fix:"
     echo ""
     echo "  npm install    # restages the pinned revision and rewrites package-lock.json"
     echo ""
     echo "If that install stops with \"has working changes\", the scripture-editors checkout it"
     echo "stages from is dirty: commit or stash there first, then run it again. It refuses to touch"
     echo "a dirty checkout, so the marker cannot clear until it is clean."
+    echo ""
+    echo "If the marker says -unpushed, the editor commit it was staged from exists only on your"
+    echo "machine: push that branch, then run npm install again."
     echo ""
     echo "Then stage package-lock.json again."
     echo "=========================================="

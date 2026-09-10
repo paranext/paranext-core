@@ -376,7 +376,17 @@ function checkoutRevision(repo: DevRepo): void {
 function getSourceStamp(repoPath: string): string {
   const head = execSync('git rev-parse HEAD', { cwd: repoPath, encoding: 'utf8' }).trim();
   const status = execSync('git status --porcelain', { cwd: repoPath, encoding: 'utf8' });
-  return status.trim().length > 0 ? `${head}-dirty` : head;
+  if (status.trim().length > 0) return `${head}-dirty`;
+
+  // A committed-but-unpushed source commit is still work that exists on one machine, and a lockfile
+  // recording its dependency closure is one nobody else can reproduce — the same problem `-dirty`
+  // marks, one step later. Asked of the local remote-tracking refs, so it needs no network; a
+  // commit reachable from any `origin/*` is on the remote.
+  const remoteBranches = execSync('git branch -r --contains HEAD', {
+    cwd: repoPath,
+    encoding: 'utf8',
+  }).trim();
+  return remoteBranches.length > 0 ? head : `${head}-unpushed`;
 }
 
 /** What a marker written by this version of the script, for this source state, would say. */
