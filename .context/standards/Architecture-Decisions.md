@@ -818,6 +818,25 @@ step, no automation. Just a record.
   answer would have wiped that selection permanently — `useProjectSetting` reports an error as
   loaded, so the error branch has to be recognized on its own.
 - **Source:** PT-3299, review of #2708.
+- **Update (2026-09-08, PT-3299 reopened):** The deferred `book`/`chapter` gate landed. Those scopes
+  are now rejected by `isFindQueryValid` while the current reference sits in extra material, and
+  `ScopeSelector` disables them with an explanation via a new `disabledScopeExplanations` prop. The
+  gate is a separate predicate (`isExtraMaterialBookId`) rather than a second filter over
+  `findScope`, which keeps the "one gate per path" shape the alternatives above rejected two filters
+  for: the book lists narrow what is offered, the predicate rejects what the current reference
+  resolves to. The query gate — not the disabled option — is the enforcement point, because `scope`
+  is persisted per web view and the reference moves independently, so this state is reachable
+  without touching the scope selector at all. PT-4414 still covers removing both halves together.
+- **Update (2026-09-09, review of #2792):** Two refinements to that gate. The rule names the
+  `book`/`chapter` scopes explicitly (`isScopeBlockedByExtraMaterial`) rather than treating
+  "anything but `selectedBooks`" as reference-derived, so adding a scope to Find's
+  `availableScopes` cannot silently inherit a rule that was never meant for it. And a disabled
+  explanation in `ScopeSelector` is surfaced in whatever form the variant can actually reach every
+  user with: the `radio` variant uses a tooltip on a focusable wrapper, while the `dropdown`
+  variant renders the text inline under the option, because Radix drops a disabled menu item out of
+  the menu's roving focus — so a tooltip or a native `title` there reaches nobody navigating by
+  keyboard. Any shared component that disables a control and owes the user a reason faces the same
+  constraint.
 
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 

@@ -1100,7 +1100,8 @@ export declare function FootnoteItem({ footnote, layout, formatCaller, showMarke
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, selectionRequest, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
-type ScopeWithRange = Scope | "range";
+/** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
+export type ScopeWithRange = Scope | "range";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -1619,6 +1620,20 @@ interface ScopeSelectorProps {
 	 * {@link SelectBooks} and shown as a tooltip on that section's disabled quick-select button.
 	 */
 	disabledSectionExplanations?: Partial<Record<Section, string>>;
+	/**
+	 * Optional explanations, by scope, for why that scope cannot be chosen right now. A scope with an
+	 * entry renders disabled, with its explanation surfaced in the way that variant can reach every
+	 * user: the `'radio'` variant shows a tooltip on a focusable wrapper, and the `'dropdown'`
+	 * variant renders the text inline under the option's label, because a disabled Radix menu item is
+	 * not focusable and so cannot carry a tooltip. Keep explanations short enough to read in either
+	 * place.
+	 *
+	 * Only for a scope that is genuinely unavailable in the CURRENT state — a scope the consumer
+	 * never offers at all belongs out of {@link ScopeSelectorProps.availableScopes} instead. Disabling
+	 * is only an affordance: the consumer still has to reject the query itself, since a scope already
+	 * selected when the state changed never passes through a disabled control.
+	 */
+	disabledScopeExplanations?: Partial<Record<ScopeWithRange, string>>;
 	/** Optional ID that is applied to the root element of this component */
 	id?: string;
 	/**
@@ -1685,7 +1700,7 @@ interface ScopeSelectorProps {
  * chosen, two BookChapterControl pickers are displayed for selecting the start and end verse of the
  * range.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, disabledScopeExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the SelectBooks component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily

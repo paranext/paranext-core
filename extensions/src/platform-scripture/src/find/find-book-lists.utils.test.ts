@@ -4,6 +4,7 @@ import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 import {
   deriveFindBookLists,
   excludeExtraMaterialBooks,
+  isExtraMaterialBookId,
   UNKNOWN_FIND_BOOK_LISTS,
 } from './find-book-lists.utils';
 
@@ -57,6 +58,29 @@ const ALL_EXTRA_MATERIAL_BOOK_IDS = [
   'TDX',
   'NDX',
 ];
+
+describe('isExtraMaterialBookId', () => {
+  it.each(ALL_EXTRA_MATERIAL_BOOK_IDS)('recognizes %s as extra material', (bookId) => {
+    expect(isExtraMaterialBookId(bookId)).toBe(true);
+  });
+
+  it.each(['GEN', 'PSA', 'MAT', 'REV', 'TOB'])('does not flag the scripture book %s', (bookId) => {
+    expect(isExtraMaterialBookId(bookId)).toBe(false);
+  });
+
+  // Agrees with the flag-clearing exclusion by construction, so the scope gate and the book list
+  // can never disagree about which books Find withholds.
+  it('covers exactly the books the flag exclusion clears', () => {
+    const clearedIds = Canon.allBookIds.filter(
+      (bookId) => !presentBookIds(excludeExtraMaterialBooks(booksPresentFor([bookId]))).length,
+    );
+    expect(clearedIds).toEqual(Canon.allBookIds.filter(isExtraMaterialBookId));
+  });
+
+  it('does not flag a book id the canon does not recognize', () => {
+    expect(isExtraMaterialBookId('ZZZ')).toBe(false);
+  });
+});
 
 describe('excludeExtraMaterialBooks', () => {
   it('clears extra material while keeping OT, NT, and DC books', () => {

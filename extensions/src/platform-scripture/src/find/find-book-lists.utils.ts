@@ -3,11 +3,32 @@ import { getAvailableBookIds } from 'platform-bible-react/experimental';
 import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 
 /**
- * Book numbers the canon classifies as extra material (GLO, FRT, INT, XXA, etc.). Precomputed
- * because the set is fixed for a given canon.
+ * Whether a book id names extra material (GLO, FRT, INT, XXA, etc.) rather than a book of
+ * scripture.
+ *
+ * The `book` and `chapter` scopes resolve from the current scripture reference rather than from the
+ * book lists below, so excluding extra material from those lists does not reach them. This is what
+ * gates those two scopes on the current reference; see {@link excludeExtraMaterialBooks} for why
+ * Find withholds extra material at all.
+ *
+ * TODO(PT-4414): Drop this gate along with the rest of the exclusion once extra material can be
+ * opened and addressed.
+ *
+ * @param bookId The book id to test, e.g. from the current scripture reference.
+ * @returns `true` when the book is extra material.
+ */
+export function isExtraMaterialBookId(bookId: string): boolean {
+  return Canon.isExtraMaterial(bookId);
+}
+
+/**
+ * Book numbers {@link isExtraMaterialBookId} rejects. Precomputed because the set is fixed for a
+ * given canon, and derived from that predicate rather than from a second canon API so the flag
+ * string {@link excludeExtraMaterialBooks} clears and the scope gate cannot disagree about what
+ * counts as extra material.
  */
 const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
-  Canon.nonCanonicalIds.map((bookId) => Canon.bookIdToNumber(bookId)),
+  Canon.allBookIds.filter(isExtraMaterialBookId).map((bookId) => Canon.bookIdToNumber(bookId)),
 );
 
 /**
@@ -24,7 +45,7 @@ const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
  *
  * This narrows what Find _searches_ and what its book picker _offers_. It does not reach the
  * `book`/`chapter` scopes, which resolve from the current scripture reference rather than from this
- * flag string; PT-4415 covers gating those.
+ * flag string; {@link isExtraMaterialBookId} gates those.
  *
  * TODO(PT-4414): Drop this exclusion once extra material can be opened and addressed.
  *
