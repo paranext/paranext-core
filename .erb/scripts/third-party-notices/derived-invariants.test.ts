@@ -478,6 +478,21 @@ describe('the Terms of Service document is spelled the same in all three places'
     expect(builder).toContain(`'./${declared}'`);
   });
 
+  it("records that name in release/app's lockfile", () => {
+    // npm copies the root package's `license` into `packages[""]` of the lockfile and rewrites it
+    // on install, so a rename that misses the lockfile passes every test here and fails CI's
+    // changed-files check after the build instead.
+    const lockfile: unknown = JSON.parse(
+      fs.readFileSync(path.join(REPO, 'release', 'app', 'package-lock.json'), 'utf8'),
+    );
+    /** A property of an unknown value, narrowed rather than asserted */
+    const field = (value: unknown, key: string): unknown =>
+      value && typeof value === 'object' && key in value ? value[key] : undefined;
+    expect(field(field(field(lockfile, 'packages'), ''), 'license')).toBe(
+      `SEE LICENSE IN ${declared}`,
+    );
+  });
+
   it('opens that name from the main process', () => {
     const opener = fs.readFileSync(
       path.join(REPO, 'src', 'main', 'terms-of-service-window.ts'),
