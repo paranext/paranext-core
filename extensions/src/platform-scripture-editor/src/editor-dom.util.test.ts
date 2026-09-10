@@ -21,6 +21,7 @@ import {
   isEchoOfPublishedScrRef,
   measureBaselineOffset,
   scrollToAnnotation,
+  scrollToNoteCaller,
   scrollToVerse,
 } from './editor-dom.util';
 
@@ -156,6 +157,18 @@ function buildAnnotationDom(options: EditorDomOptions = {}): EditorDom & {
   stubRect(annotation, 1500, 20);
   dom.editorContainer.append(annotation);
   return { ...dom, annotation };
+}
+
+function buildNotesDom(options: EditorDomOptions = {}): EditorDom & { notes: HTMLElement[] } {
+  const dom = buildEditorDom({ ...options, verseNumbers: [] });
+  const notes = [1500, 1800].map((top) => {
+    const note = document.createElement('span');
+    note.className = 'note collapsed usfm_f';
+    stubRect(note, top, 20);
+    dom.editorContainer.append(note);
+    return note;
+  });
+  return { ...dom, notes };
 }
 
 afterEach(() => {
@@ -381,6 +394,37 @@ describe('scrollToAnnotation', () => {
 
     expect(annotationElement).toBeUndefined();
     expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('scrollToNoteCaller', () => {
+  it('returns undefined and does not scroll when no note exists at the index', () => {
+    const { wrapperScrollTo } = buildNotesDom();
+    expect(scrollToNoteCaller(2)).toBeUndefined();
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('does not scroll when the caller is already fully visible', () => {
+    const { notes, wrapperScrollTo } = buildNotesDom();
+    stubRect(notes[0], 400, 20); // within [0, 900), scrollTop 0
+    expect(scrollToNoteCaller(0)).toBe(notes[0]);
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('aligns the caller to the closer edge when it is out of view', () => {
+    const { notes, wrapperScrollTo } = buildNotesDom(); // note 1 rect top 1800, height 20
+    expect(scrollToNoteCaller(1)).toBe(notes[1]);
+    // noteTop = 1800, bottom = 1820; distanceToTop = 1800, distanceToBottom = |900 - 1820| = 920
+    // -> bottom edge; targetTop = 1820 - 900 + 80 = 1000
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 1000 });
+  });
+
+  it('addresses notes by document order', () => {
+    const { notes, wrapperScrollTo } = buildNotesDom();
+    scrollToNoteCaller(0);
+    // note 0 rect top 1500: bottom edge, target = 1520 - 900 + 80 = 700
+    expect(wrapperScrollTo).toHaveBeenLastCalledWith({ behavior: 'smooth', top: 700 });
+    expect(scrollToNoteCaller(0)).toBe(notes[0]);
   });
 });
 

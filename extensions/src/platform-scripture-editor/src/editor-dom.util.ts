@@ -255,6 +255,52 @@ export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undef
 }
 
 /**
+ * Scrolls `element`'s scroll container so the element is fully visible, aligning to whichever edge
+ * is closer and keeping `VERSE_NUMBER_SCROLL_OFFSET` of context. Does nothing when the element is
+ * already fully visible or has no scrollable ancestor.
+ */
+function scrollElementIntoScrollContainer(element: HTMLElement): void {
+  const scrollContainerElement = findScrollContainer(element);
+  if (!scrollContainerElement) return;
+
+  const containerScrollTop = scrollContainerElement.scrollTop;
+  const containerHeight = scrollContainerElement.clientHeight;
+
+  // Read the element's rect once; both its top-within-container and its height derive from it.
+  const elementRect = element.getBoundingClientRect();
+  const elementTop = getTopWithinScrollContainer(elementRect, scrollContainerElement);
+  const elementBottom = elementTop + elementRect.height;
+
+  // If the element is fully visible, don't scroll
+  if (elementTop >= containerScrollTop && elementBottom <= containerScrollTop + containerHeight) {
+    return;
+  }
+
+  // Decide whether to align to top or bottom based on which edge is closer
+  const distanceToTop = Math.abs(elementTop - containerScrollTop);
+  const distanceToBottom = Math.abs(containerScrollTop + containerHeight - elementBottom);
+
+  let targetTop: number;
+  if (distanceToTop <= distanceToBottom) {
+    // Align the element at the top with the specified offset
+    targetTop = elementTop - VERSE_NUMBER_SCROLL_OFFSET;
+  } else {
+    // Align the element at the bottom with the specified offset
+    targetTop = elementBottom - containerHeight + VERSE_NUMBER_SCROLL_OFFSET;
+  }
+
+  // Clamp to valid scroll range
+  const maxScrollTop = Math.max(0, scrollContainerElement.scrollHeight - containerHeight);
+  if (targetTop < 0) targetTop = 0;
+  if (targetTop > maxScrollTop) targetTop = maxScrollTop;
+
+  scrollContainerElement.scrollTo({
+    behavior: 'smooth',
+    top: targetTop,
+  });
+}
+
+/**
  * Scrolls to the annotation with the given ID within the editor content.
  *
  * @param id The ID of the annotation to scroll to
@@ -269,53 +315,25 @@ export function scrollToAnnotation(id: string): HTMLElement | undefined {
     document.querySelector<HTMLElement>(`.editor-container .${escapedAnnotationClass}`) ??
     undefined;
 
-  const scrollContainerElement = annotationElement
-    ? findScrollContainer(annotationElement)
-    : undefined;
-
-  // Scroll if we find the annotation
-  if (scrollContainerElement && annotationElement) {
-    const containerScrollTop = scrollContainerElement.scrollTop;
-    const containerHeight = scrollContainerElement.clientHeight;
-
-    // Read the annotation's rect once; both its top-within-container and its height derive from it.
-    const annotationRect = annotationElement.getBoundingClientRect();
-    const annotationTop = getTopWithinScrollContainer(annotationRect, scrollContainerElement);
-    const annotationBottom = annotationTop + annotationRect.height;
-
-    // If the annotation is fully visible, don't scroll
-    if (
-      annotationTop >= containerScrollTop &&
-      annotationBottom <= containerScrollTop + containerHeight
-    ) {
-      return annotationElement;
-    }
-
-    // Decide whether to align to top or bottom based on which edge is closer
-    const distanceToTop = Math.abs(annotationTop - containerScrollTop);
-    const distanceToBottom = Math.abs(containerScrollTop + containerHeight - annotationBottom);
-
-    let targetTop: number;
-    if (distanceToTop <= distanceToBottom) {
-      // Align the annotation at the top with the specified offset
-      targetTop = annotationTop - VERSE_NUMBER_SCROLL_OFFSET;
-    } else {
-      // Align the annotation at the bottom with the specified offset
-      targetTop = annotationBottom - containerHeight + VERSE_NUMBER_SCROLL_OFFSET;
-    }
-
-    // Clamp to valid scroll range
-    const maxScrollTop = Math.max(0, scrollContainerElement.scrollHeight - containerHeight);
-    if (targetTop < 0) targetTop = 0;
-    if (targetTop > maxScrollTop) targetTop = maxScrollTop;
-
-    scrollContainerElement.scrollTo({
-      behavior: 'smooth',
-      top: targetTop,
-    });
-  }
+  if (annotationElement) scrollElementIntoScrollContainer(annotationElement);
 
   return annotationElement;
+}
+
+/**
+ * Scrolls the text so the caller of the note at `noteIndex` (document order — the same index the
+ * footnotes pane and `EditorRef.getNoteIndex` use) is visible.
+ *
+ * @param noteIndex The document-order index of the note whose caller to scroll to
+ * @returns The note element, or `undefined` when no note exists at that index
+ */
+export function scrollToNoteCaller(noteIndex: number): HTMLElement | undefined {
+  const noteElement = document.querySelectorAll<HTMLElement>('.editor-container .note')[noteIndex];
+  if (!noteElement) return undefined;
+
+  scrollElementIntoScrollContainer(noteElement);
+
+  return noteElement;
 }
 
 /**
