@@ -25,6 +25,7 @@ import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-com
 import { clearWindowPendingContent } from '@main/services/window-layout-persistence.service';
 import {
   createTargetShardResolver,
+  createTargetWindowShardResolver,
   resolveShardForWindow,
 } from '@main/services/target-shard-resolver.util';
 import {
@@ -93,6 +94,17 @@ export async function getWebViewShard(windowId: string): Promise<WebViewServiceS
 
 /** Get the WebView service shard for the currently focused window, throwing if none is available. */
 const getTargetWebViewShard = createTargetShardResolver(
+  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  webViewShards,
+);
+
+/**
+ * The currently focused window's WebView service shard together with that window's id, throwing if
+ * none is available. For the routed opens, which have to ask the window they are about to open in
+ * whether content may take document focus there — the id and the shard have to name the same
+ * window, and this is what the shard was resolved from.
+ */
+const getTargetWebViewShardAndId = createTargetWindowShardResolver(
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   webViewShards,
 );
@@ -786,13 +798,12 @@ async function openWebViewInNewWindow(
     );
   }
   if (interfaceMode !== 'power') {
-    const targetWindowId = getTargetWindowId();
-    const webViewShard = await getTargetWebViewShard();
+    const { windowId: targetWindowId, shard: webViewShard } = await getTargetWebViewShardAndId();
     return webViewShard.openWebView(
       webViewType,
       { type: 'tab' },
       options,
-      targetWindowId !== undefined && shouldContentAvoidDocumentFocus(targetWindowId),
+      shouldContentAvoidDocumentFocus(targetWindowId),
     );
   }
 
@@ -900,6 +911,10 @@ function raiseMoveTarget(target: MoveWebViewTarget, isUserRequested: boolean): v
     // The user's declared intent overrides whatever withholding decision the platform made for
     // this window, so that decision must be revoked before the raise, not left for the focus
     // handler to (fail to) sort out — see the docblock above.
+    // Unlike the two sites in `main.ts`, which clear on a confirmed activation, this clear is
+    // speculative: it happens before the OS is asked. A raise the OS refuses leaves the window
+    // backgrounded but no longer withheld, so a later open that predicts no raise of its own can
+    // take latent document focus there with no catch-up note. See PT-4573.
     if (isUserRequested) forgetWindowWithholding(target.windowId);
     focusWindow(target.windowId);
   }
@@ -1605,13 +1620,12 @@ async function openWebView(
   }
 
   // No existingId or not found in any window — route to focused window
-  const routedWindowId = getTargetWindowId();
-  const webViewShard = await getTargetWebViewShard();
+  const { windowId: routedWindowId, shard: webViewShard } = await getTargetWebViewShardAndId();
   return webViewShard.openWebView(
     webViewType,
     effectiveLayout,
     options,
-    routedWindowId !== undefined && shouldContentAvoidDocumentFocus(routedWindowId),
+    shouldContentAvoidDocumentFocus(routedWindowId),
   );
 }
 
