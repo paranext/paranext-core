@@ -280,35 +280,6 @@ describe('useTextCollectionSources', () => {
     await controller.deliver(list('user-v'), { 'res-1': true });
 
     expect(result.current.sources).toBeUndefined();
-    // The consumer needs this to tell a failure from a wait; without it the grid spins forever.
-    expect(result.current.hasSourcesError).toBe(true);
-  });
-
-  it('reports no failure while the admin setting is still being read', async () => {
-    // Guards the `!isReferencedLoading` term: dropping it would report a wait in progress as a
-    // terminal failure, which is the opposite of the bug the flag exists to prevent.
-    mockSettings(settingTuple(makePlatformError(), true));
-    const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
-
-    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
-
-    await controller.resolveSubscriptions();
-
-    expect(result.current.hasSourcesError).toBe(false);
-  });
-
-  it('reports no failure once the setting reads cleanly', async () => {
-    mockSettings(settingTuple(list('admin-v'), false));
-    const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
-
-    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
-
-    await controller.resolveSubscriptions();
-    await controller.deliver(list('user-v'), { 'res-1': true });
-
-    expect(result.current.hasSourcesError).toBe(false);
   });
 
   it('keeps sources undefined when the admin referenced setting fails after the loading window', async () => {
@@ -331,7 +302,6 @@ describe('useTextCollectionSources', () => {
     // Assembling sources here would show the Text Collection grid an empty admin list, i.e. the
     // same "unreadable setting rendered as nothing configured" bug this branch fixes elsewhere.
     expect(result.current.sources).toBeUndefined();
-    expect(result.current.hasSourcesError).toBe(true);
   });
 
   it('reflects updated subscription values in a later memo pass', async () => {

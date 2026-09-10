@@ -6,7 +6,6 @@ import { useProjectDataProvider } from '@papi/frontend/react';
 import type { TextCollectionSources } from './scripture-text-grid-contents.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST } from './resource-reference-list.const';
 import { useBufferedLayoutSetting } from './use-buffered-layout-setting.hook';
-import { resolveHasSourcesError } from './scripture-text-grid-project.utils';
 
 /** A user with no recorded checkbox interactions has an empty overlay. */
 const DEFAULT_OVERLAY: TextCollectionOverlay = {};
@@ -110,16 +109,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
     return { adminReferenced, userReferenced, overlay, order };
   }, [isReferencedLoading, adminReferencedError, adminReferenced, userReferenced, overlay, order]);
 
-  // Distinguishes "still resolving" from "resolved to a failure". Both leave `sources` undefined,
-  // but only the first is a loading state — an unreadable admin setting is terminal, and callers
-  // must not hide it behind a spinner that cannot end.
-  const hasSourcesError = resolveHasSourcesError({
-    isReferencedLoading,
-    adminReferencedError,
-    adminReferenced,
-  });
-
-  return { sources, textConnectionPdp, hasSourcesError };
+  return { sources, textConnectionPdp };
 }
 
 export default useTextCollectionSources;
