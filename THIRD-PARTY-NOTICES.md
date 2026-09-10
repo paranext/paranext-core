@@ -2624,14 +2624,14 @@ below, paired with no copyright notice — there was no package to read one from
 | MIT (elected from (MIT OR GPL-3.0-or-later); reviewed exception) | 1 |
 | OFL-1.1 | 1 |
 
-Replaced on this machine by a `yalc` dev link (see `dev-packages.json`), which points at a
-branch of another repository rather than at a published release. The version and license
-below are the ones `package-lock.json` pins, and nothing was read from the link, so this file
-describes what this repository depends on rather than what a developer happens to have built
-locally: `@eten-tech-foundation/platform-editor@0.8.15`, `@eten-tech-foundation/scripture-utilities@0.1.6`.
+Installed from a folder this repository stages out of another repository (see
+`dev-packages.json`), which tracks a branch there rather than a published release. The version
+and license below are the ones `package-lock.json` records for that folder, and nothing was
+read from the folder itself, so this file describes what this repository has committed to
+depending on rather than what a developer happens to have built locally: `@eten-tech-foundation/platform-editor@0.8.16`, `@eten-tech-foundation/scripture-utilities@0.1.6`.
 
 The following ship no license file of their own, so the identifier in the table below comes
-from their `package.json` (or, where a dev link is involved, from `package-lock.json`)
+from their `package.json` (or, where a staged dev package is involved, from `package-lock.json`)
 and nothing of
 theirs appears under "License texts". The canonical text of the license each one declares is
 reproduced under "Canonical license texts for declared identifiers" instead: `@radix-ui/number@1.1.1`, `@radix-ui/react-compose-refs@1.1.2`, `@radix-ui/react-context@1.1.2`, `@radix-ui/react-direction@1.1.1`, `@radix-ui/react-id@1.1.1`, `@radix-ui/react-use-callback-ref@1.1.1`, `@radix-ui/react-use-escape-keydown@1.1.1`, `@radix-ui/react-use-layout-effect@1.1.1`, `@radix-ui/react-use-previous@1.1.1`, `@radix-ui/react-use-size@1.1.1`, `imurmurhash@0.1.4`, `isarray@1.0.0`, `rc-new-window@0.1.13`, `react-remove-scroll-bar@2.3.8`.
@@ -2639,7 +2639,7 @@ reproduced under "Canonical license texts for declared identifiers" instead: `@r
 For the packages named above whose folder was not read, whether they ship a license file of
 their own is not established here. The canonical text of the identifier `package-lock.json`
 records for each is reproduced under "Canonical license texts for declared identifiers"
-instead: `@eten-tech-foundation/platform-editor@0.8.15`, `@eten-tech-foundation/scripture-utilities@0.1.6`.
+instead: `@eten-tech-foundation/platform-editor@0.8.16`, `@eten-tech-foundation/scripture-utilities@0.1.6`.
 
 Installed by npm only where a package’s `os`/`cpu` constraints match, so the machine this
 file was generated on does not have them — but the installer for the platform that does is
@@ -2651,7 +2651,7 @@ identifiers": `fsevents@2.3.3`.
 | Package | Version | License |
 | --- | --- | --- |
 | `@babel/runtime` | 7.26.10 | MIT |
-| `@eten-tech-foundation/platform-editor` | 0.8.15 | MIT |
+| `@eten-tech-foundation/platform-editor` | 0.8.16 | MIT |
 | `@eten-tech-foundation/scripture-utilities` | 0.1.6 | MIT |
 | `@floating-ui/core` | 1.7.5 | MIT |
 | `@floating-ui/dom` | 1.7.6 | MIT |
@@ -7971,7 +7971,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO
 
 ### MIT — canonical text, 37 packages
 
-- `@eten-tech-foundation/platform-editor@0.8.15` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
+- `@eten-tech-foundation/platform-editor@0.8.16` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
 - `@eten-tech-foundation/scripture-utilities@0.1.6` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
 - `@radix-ui/number@1.1.1` (npm) — Copyright (c) 2022 WorkOS
 - `@radix-ui/react-compose-refs@1.1.2` (npm) — Copyright (c) 2022 WorkOS

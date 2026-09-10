@@ -579,33 +579,57 @@ export function assertNpmNotShrunk(
 }
 
 /**
- * Marks a resolved package directory that npm filled from a `yalc` dev link rather than from the
- * registry.
+ * The staging root, as path segments: where `stage-dev-packages` materializes each package
+ * `dev-packages.json` declares, and what npm installs the `file:` link from.
  *
- * `postinstall` runs `link-dev-packages`, which clones an external repository at the revision named
- * in `dev-packages.json` and yalc-links the packages it publishes over the installed ones. That
- * revision is a BRANCH, so what is on disk is whatever that branch last published - and CI runs
- * `postinstall` too, so describing the link would make this repository's committed legal artifact a
- * function of another repository's moving branch: a push over there would turn `main` red here with
- * no commit here at all. The two are routinely out of step - `.yalc` can hold
- * `@eten-tech-foundation/platform-editor` 0.8.15 while `package-lock.json` pins 0.8.14.
- *
- * A dev-linked package is therefore described from `package-lock.json` - the version this
- * repository pins and the license recorded against it - and NOTHING is read from its directory,
- * which is also why no license text is reproduced for it: the published tarball is not unpacked
- * anywhere to read one from. Its copyright notice comes instead from `notices-policy.json`'s
- * `copyrightNotices`, a table that exists for exactly these packages.
- *
- * Without this, a developer with a link generates a different artifact than CI does and meets a
- * diff failure with nothing in the commit to explain it.
+ * Spelled once for three readers - the container list `packageBoundaryOf` walks, the `DEV_LINK`
+ * test, and the lockfile key prefix - because a staged package that one of them recognizes and
+ * another does not is described from a source the rest disagree with, which is a wrong claim in a
+ * legal document rather than a crash.
  */
-const DEV_LINK = /(^|[\\/])\.yalc([\\/]|$)/;
+const STAGING_CONTAINER = ['dev-packages', 'staging'];
+
+/** The staging root as a lockfile key prefix. Lockfile keys always use `/`, whatever the platform. */
+const STAGING_LOCK_PREFIX = `${STAGING_CONTAINER.join('/')}/`;
 
 /**
- * Whether a resolved package directory reaches its contents through `.yalc` - see `DEV_LINK`.
+ * Marks a resolved package directory that npm filled from a staged dev package rather than from the
+ * registry.
  *
- * Tests the REAL path: yalc installs itself as a symlink from `node_modules/<name>` into `.yalc`,
- * so the path webpack reports names `node_modules` and says nothing about the link.
+ * `preinstall` runs `stage-dev-packages`, which clones an external repository at the revision named
+ * in `dev-packages.json`, copies the files each declared package would publish into
+ * `dev-packages/staging/<folder>`, and lets npm install that folder as a `file:` link. That
+ * revision is a BRANCH, so what is on disk is whatever that branch last published - and CI stages
+ * too, so describing the staged directory would make this repository's committed legal artifact a
+ * function of another repository's moving branch: a push over there would turn `main` red here with
+ * no commit here at all. The two go out of step whenever the branch moves ahead of the lockfile,
+ * and `diffStagedAgainstLock` (which is what fails an install on drift) compares dependency ranges
+ * only
+ *
+ * - A version that moved on its own reaches this pipeline unremarked.
+ *
+ * A staged package is therefore described from `package-lock.json` - where npm records the staged
+ * manifest under the `dev-packages/staging/<folder>` key, which is the version and license this
+ * repository has committed - and NOTHING is read from its directory. That is also why no license
+ * text is reproduced for it even though staging copies one onto disk: reading it would put a moving
+ * branch's file into the artifact, which is the thing this guard exists to keep out. Its copyright
+ * notice comes instead from `notices-policy.json`'s `copyrightNotices`, a table that exists for
+ * exactly these packages.
+ *
+ * Without this, a developer whose staged tree is a commit ahead of the lockfile generates a
+ * different artifact than CI does and meets a diff failure with nothing in the commit to explain
+ * it.
+ */
+// Either separator at every join, so a Windows-spelled path matches the same way. `[\\/]` is the
+// character class "backslash or slash"; the doubling is the template literal's, not the regex's.
+const DEV_LINK = new RegExp(`(^|[\\\\/])${STAGING_CONTAINER.join('[\\\\/]')}[\\\\/]`);
+
+/**
+ * Whether a resolved package directory reaches its contents through `dev-packages/staging` - see
+ * `DEV_LINK`.
+ *
+ * Tests the REAL path: npm installs the staged folder as a symlink from `node_modules/<name>`, so
+ * the path a caller starts from names `node_modules` and says nothing about the staging.
  */
 function isDevLinked(dir: string): boolean {
   try {
@@ -623,6 +647,13 @@ function isDevLinked(dir: string): boolean {
  * package directory looks up exactly. The by-name index is the fallback for a link installed
  * somewhere the key does not spell out; first entry wins, which is the top-level one.
  *
+ * A staged package is indexed under its staging key rather than its `node_modules` one, because npm
+ * splits a `file:` dependency across two entries: `node_modules/<name>` carries `link: true` and
+ * `resolved` but NO version, and `dev-packages/staging/<folder>` carries the staged manifest's
+ * version, license and dependency ranges. The staging key is also the one to resolve that package's
+ * own dependencies FROM - `resolveFromLock` walks it outward and reaches the same hoisted copies
+ * npm installed - so it is the key the rest of this module wants in both roles.
+ *
  * The raw document comes back alongside them because `resolveFromLock` walks KEYS rather than
  * reading an index - it mirrors node's resolution, which is a property of the key structure.
  */
@@ -632,9 +663,14 @@ function readLockIndex(repo: string): LockIndex {
   const byName = new Map<string, LockfileEntry>();
   const keyByName = new Map<string, string>();
   Object.entries(lock.packages || {}).forEach(([key, entry]) => {
-    if (!key || !entry || !entry.version || !/(^|\/)node_modules\//.test(key)) return;
+    if (!key || !entry || !entry.version) return;
+    // A staged package's own name is in the entry; its key names the staging FOLDER, which
+    // `dev-packages.json` is free to spell differently.
+    const staged = key.startsWith(STAGING_LOCK_PREFIX) && !key.includes('node_modules/');
+    if (!staged && !/(^|\/)node_modules\//.test(key)) return;
     byPath.set(key, entry);
-    const name = key.replace(/^.*node_modules\//, '');
+    const name = staged ? entry.name : key.replace(/^.*node_modules\//, '');
+    if (!name) return;
     // The TOP-LEVEL copy wins, not the first key seen. Lock keys sort lexicographically, so
     // `extensions/src/<ext>/node_modules/<name>` precedes `node_modules/<name>` - and taking the
     // first made this index answer with a workspace-nested copy for 166 names in this repository's
@@ -767,15 +803,24 @@ function lockDependsOn(lock: Lockfile, key: string, name: string): boolean {
 }
 
 /**
- * Re-describes packages whose ON-DISK resolution a `yalc` dev link distorted.
+ * Re-describes packages whose ON-DISK resolution a dev link distorted.
  *
- * This is the other half of the dev-link guard, and the version pin in `describePackage` is not
- * sufficient without it. `yalc` replaces `node_modules/<linked>` with a symlink, which takes the
- * package's own nested `node_modules` with it - so a dependency that `package-lock.json` NESTS
- * under the linked package is simply not on disk any more, and webpack resolves the hoisted copy
- * instead. The live case: the lockfile nests `@xmldom/xmldom` 0.9.10 under
- * `@eten-tech-foundation/scripture-utilities`, but a linked tree bundles the hoisted 0.8.13. Two
- * developers, one linked and one not, would commit different artifacts from the same commit.
+ * This is the other half of the dev-package guard, and the version pin in `describePackage` is not
+ * sufficient without it - for a linking mechanism that puts the tree and the lockfile out of step.
+ * `yalc`, which this repository used before `dev-packages/staging`, was one: it replaced
+ * `node_modules/<linked>` with a symlink, which took the package's own nested `node_modules` with
+ * it, so a dependency `package-lock.json` NESTED under the linked package was simply not on disk
+ * any more and webpack resolved the hoisted copy instead. Two developers, one linked and one not,
+ * would commit different artifacts from the same commit.
+ *
+ * Staging does not distort that way, and this is expected to be inert under it: npm installs a
+ * staged `file:` package's dependencies as part of the ordinary tree, nesting under
+ * `dev-packages/staging/<folder>/node_modules/` exactly where the lockfile records them, so the
+ * copy on disk IS the copy the lockfile names and no correction is reachable (`resolveFromLock`
+ * returns the hoisted key it was asked about, which the `resolved !== key` filter drops). It is
+ * kept because the three conditions below are the ones that make a correction safe, not because a
+ * mechanism needing it is in use - and if one ever nests a copy that is absent from disk, this is
+ * where that is handled. Anything relying on it firing should verify that it does.
  *
  * Nothing is ADDED and nothing is DROPPED here - only re-described. Walking the linked package's
  * whole lockfile closure and adding it would re-introduce exactly what deriving the shipping set
@@ -817,9 +862,10 @@ function correctLinkDistortedResolutions(
 
   const { lock } = readLock();
   const keyOf = (pkg: ShippedPackage) => lockKeyOf(pkg.dir, repo);
-  // A link's LOCKFILE key, not its directory's: a link reported by its `.yalc` real path has no
-  // lockfile key, and resolving its dependencies from `.yalc/...` would walk a tree npm never
-  // wrote and find only the hoisted copy - silently skipping the correction this exists for.
+  // A link's LOCKFILE key, not its directory's. For a staged package the two agree; for a linking
+  // mechanism that puts the package somewhere npm never wrote a key, resolving its dependencies
+  // from that directory would walk a tree npm never wrote and find only the hoisted copy - silently
+  // skipping the correction this exists for.
   const linkedKeys = linked.flatMap((pkg) => {
     const linkedKey = pkg.lockKey || keyOf(pkg);
     return linkedKey ? [linkedKey] : [];
@@ -843,9 +889,9 @@ function correctLinkDistortedResolutions(
       // Two links needing two different nested copies of one name has no single answer, and
       // guessing one would put a version nobody can reproduce into a legal document.
       throw new Error(
-        `${pkg.name} resolves to more than one nested copy through the yalc dev links ` +
+        `${pkg.name} resolves to more than one nested copy through the staged dev packages ` +
           `(${nested.join(', ')}), so which one the bundle would have used is ambiguous. ` +
-          'Run: npm run unlink-dev-packages, then regenerate.',
+          'Resolve the conflict in dev-packages.json or the staged manifests, then regenerate.',
       );
 
     // Third-party packages AND this repository's own, which is not a widening for tidiness: the
@@ -902,12 +948,12 @@ function lockIndexReader(repo: string): () => LockIndex {
 }
 
 /**
- * How one resolved package directory is described: from `package-lock.json` when it is a `yalc` dev
- * link (see `DEV_LINK`), from its own manifest otherwise.
+ * How one resolved package directory is described: from `package-lock.json` when it is a staged dev
+ * package (see `DEV_LINK`), from its own manifest otherwise.
  *
- * `declaredField` is carried here only for a dev link, because that is the only case where the
- * declaration must NOT be read from the manifest on disk. Every other package's declaration is read
- * where every other reader expects it, from its own `package.json`.
+ * `declaredField` is carried here only for a staged package, because that is the only case where
+ * the declaration must NOT be read from the manifest on disk. Every other package's declaration is
+ * read where every other reader expects it, from its own `package.json`.
  */
 function describePackage(
   dir: string,
@@ -931,17 +977,20 @@ function describePackage(
   // `lockKeyOf` rather than an inlined `path.relative`: the two differ only by `containedPath`,
   // and that is the whole check. A directory resolving OUTSIDE the repository
   // yields a `../..`-shaped string that matches no lockfile key, misses `byPath` silently, and
-  // falls through to the bare-name lookup - describing this link from whatever unrelated entry
+  // falls through to the bare-name lookup - describing this package from whatever unrelated entry
   // happens to share its name, at that entry's version.
+  //
+  // For a staged package the directory IS the lockfile key (`dev-packages/staging/<folder>`), so
+  // this hits `byPath` directly rather than relying on the name fallback.
   const key = lockKeyOf(dir, repo);
   const { byPath, byName, keyByName } = readLock();
   const lockKeyOfName = (name: string) => keyByName.get(name);
   const entry = (key === undefined ? undefined : byPath.get(key)) || byName.get(manifest.name);
   if (!entry)
     throw new Error(
-      `${manifest.name} resolves through a yalc dev link (${key ?? dir}), but package-lock.json ` +
-        'pins no version for it - and a dev link is never described from the link itself, because ' +
-        'that points at a moving branch of another repository. Run: npm install',
+      `${manifest.name} is staged from dev-packages.json (${key ?? dir}), but package-lock.json ` +
+        'pins no version for it - and a staged package is never described from its staged files, ' +
+        'because those come from a moving branch of another repository. Run: npm install',
     );
   return {
     ecosystem: 'npm',
@@ -950,9 +999,9 @@ function describePackage(
     dir,
     reachedVia,
     devLinked: true,
-    // Where this package's OWN dependencies resolve from in the lockfile, which is not derivable
-    // from its directory: a link reported by its `.yalc` real path has no lockfile key at all, and
-    // `.yalc/<name>/node_modules/...` is not a path npm ever writes.
+    // Where this package's OWN dependencies resolve from in the lockfile. This is the staging key,
+    // which `resolveFromLock` walks outward from to reach the hoisted copies npm actually installed
+    // for it - the same walk npm's own resolution does.
     lockKey: key !== undefined && byPath.has(key) ? key : lockKeyOfName(manifest.name),
     // `fromLock` is the broader fact - described from package-lock.json, nothing read from the
     // directory - and `correctLinkDistortedResolutions` sets it on packages a link DISPLACED as
@@ -999,28 +1048,53 @@ function isPackageRoot(packageJsonPath: string): boolean {
 
 /**
  * Directories that hold installed packages, laid out identically: `<container>/<name>` or
- * `<container>/@scope/<name>`.
+ * `<container>/@scope/<name>`. Each is spelled as its path segments, because one of them is two
+ * segments deep and `staging` alone is far too common a directory name to match on.
  *
- * `.yalc` belongs here, and leaving it out is a silent under-report rather than a failure. webpack
- * resolves symlinks to their real path, so a package installed as a `node_modules` symlink into
- * `.yalc` is reported by its `.yalc` path - and a path with no `node_modules` segment reads as
- * FIRST-PARTY source, which is ignored without comment. That drops both dev-linked packages from
- * the document entirely: `@eten-tech-foundation/platform-editor` and
- * `@eten-tech-foundation/scripture-utilities`, which genuinely ship.
+ * `dev-packages/staging` belongs here, and leaving it out is a silent under-report rather than a
+ * failure. Webpack resolves symlinks to their real path, so a package npm installed as a
+ * `node_modules` symlink to a staged folder is reported by its `dev-packages/staging` path - and a
+ * path with no container segment at all reads as FIRST-PARTY source, which is ignored without
+ * comment. That drops both staged packages from the document entirely:
+ * `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities`, which
+ * genuinely ship.
  */
-const PACKAGE_CONTAINERS = ['node_modules', '.yalc'];
+const PACKAGE_CONTAINERS = [['node_modules'], STAGING_CONTAINER];
+
+/**
+ * Where the innermost package container in a path ENDS - the index of its last segment - or -1.
+ *
+ * The LAST container in the path is the right one - for
+ * `node_modules/outer/node_modules/inner/lib/x.js` the owner is `inner`, whose license applies to
+ * that code, not `outer` - and a staged package nests dependencies under its own `node_modules`
+ * exactly as any other installed package does, so the two container kinds are ranked together
+ * rather than one being preferred.
+ */
+function containerEndIndex(segments: string[]): number {
+  let end = -1;
+  PACKAGE_CONTAINERS.forEach((container) => {
+    for (let start = segments.length - container.length; start >= 0; start -= 1) {
+      if (container.every((segment, offset) => segments[start + offset] === segment)) {
+        end = Math.max(end, start + container.length - 1);
+        break;
+      }
+    }
+  });
+  return end;
+}
 
 /**
  * The package directory a module path NAMES, from the path alone: the `<container>/<name>` (or
  * `<container>/@scope/<name>`) segment closest to the file.
  *
- * The LAST container in the path is the right one - for
- * `node_modules/outer/node_modules/inner/lib/x.js` the owner is `inner`, whose license applies to
- * that code, not `outer`.
+ * A staged folder is named by `dev-packages.json`'s `stagingFolder`, which is a plain directory
+ * name rather than the package's own scoped name - so `dev-packages/staging/platform-editor` is the
+ * boundary for `@eten-tech-foundation/platform-editor`. The name is read from the manifest there,
+ * never from the path, so the two need not agree.
  */
 function packageBoundaryOf(resource: string): string | undefined {
   const segments = resource.split(path.sep);
-  const marker = Math.max(...PACKAGE_CONTAINERS.map((name) => segments.lastIndexOf(name)));
+  const marker = containerEndIndex(segments);
   if (marker < 0) return undefined;
   const scoped = (segments[marker + 1] || '').startsWith('@');
   const depth = marker + (scoped ? 3 : 2);
@@ -1030,7 +1104,9 @@ function packageBoundaryOf(resource: string): string | undefined {
 
 /** Whether a path runs through a directory that holds installed packages. */
 function isInstalledPath(resource: string): boolean {
-  return PACKAGE_CONTAINERS.some((name) => resource.includes(`${path.sep}${name}${path.sep}`));
+  return PACKAGE_CONTAINERS.some((container) =>
+    resource.includes(`${path.sep}${container.join(path.sep)}${path.sep}`),
+  );
 }
 
 /**
@@ -1043,7 +1119,7 @@ function isInstalledPath(resource: string): boolean {
  *
  * Nothing outside that directory may answer in its place, and that is the difference between
  * failing closed and failing open. A module under a package directory that does not exist - a
- * nested copy a `yalc` link took off disk, a pruned tree, a lockfile-vs-tree mismatch in CI - must
+ * nested copy a dev link took off disk, a pruned tree, a lockfile-vs-tree mismatch in CI - must
  * never be attributed to the ENCLOSING package, which reports a real directory, resolves, and exits
  * 0 with that package's modules miscredited and the missing one absent from the document entirely.
  * The shape to picture: sixteen modules under
@@ -1599,11 +1675,12 @@ function collectPrebuiltLibLeaves(
         // `extensions/src/`, and this repository stamps its extensions `AGPL-3.0-or-later`, so a
         // `lib/`-only test would hard-block the generator on its own code the first time a shipped
         // package imported a sibling extension.
-        // A dev-linked package is deliberately described from `package-lock.json` and never from
+        // A staged dev package is deliberately described from `package-lock.json` and never from
         // its on-disk directory, and it already reaches the set through the module graph. Adding it
-        // here would key it by a SECOND directory - webpack reports the resolved `.yalc/...` real
-        // path while this resolves the `node_modules` symlink - putting two entries in the lock for
-        // one package, the second described from the very directory that policy exists to avoid.
+        // here would key it by a SECOND directory - webpack reports the resolved
+        // `dev-packages/staging/...` real path while this resolves the `node_modules` symlink -
+        // putting two entries in the lock for one package, the second described from the very
+        // directory that policy exists to avoid.
         // Both sides of the test have to be REAL paths, which is why the repository root is
         // followed too: where the repository itself is reached through a symlink - macOS `/var` ->
         // `/private/var`, a symlinked worktree - a repo-spelled root contains no real path at all,
@@ -1825,7 +1902,7 @@ function assertOneBuildGraph({
   // or misses ones that are now there, and either way the document comes out shorter or wrong while
   // the build exits 0. This repository shipped exactly that state - two extension manifests hours
   // older than the three core ones, still naming sixteen modules under a `node_modules` directory a
-  // `yalc` refresh had removed. `prebuild` mints one id per `npm run build` and every manifest
+  // dev-package refresh had removed. `prebuild` mints one id per `npm run build` and every manifest
   // carries it (see `.erb/scripts/notices-build-id.ts`), so disagreement means a partial build.
   if (stamps.size > 1) {
     const vintages = [...stamps.entries()]
@@ -2192,15 +2269,15 @@ export function collectUnbundledPackages(
           `release/app/${key}/package.json does not exist or has no name. ` +
           'The release/app install is incomplete. Run: cd release/app && npm install',
       );
-    // `release/app` keeps its own lockfile, so a dev link here could not be described from the
-    // root one the way `describePackage` describes the bundled closure's links. Nothing links here
-    // today - `link-dev-packages` links into the repo root - so this refuses rather than inventing
-    // a resolution for a case no tooling produces.
+    // `release/app` keeps its own lockfile, so a staged package here could not be described from
+    // the root one the way `describePackage` describes the bundled closure's. Nothing stages here
+    // today - `stage-dev-packages` stages into the repo root - so this refuses rather than
+    // inventing a resolution for a case no tooling produces.
     if (isDevLinked(dir))
       throw new Error(
-        `release/app's ${key} resolves through a yalc dev link. A dev link points at a moving ` +
-          'branch of another repository, so it cannot be described in a committed legal artifact. ' +
-          'Run: npm run editor:unlink (or the matching unlink script) and reinstall release/app.',
+        `release/app's ${key} resolves through dev-packages/staging. A staged package comes from a ` +
+          'moving branch of another repository, so it cannot be described in a committed legal ' +
+          'artifact. Depend on a published version here, and reinstall release/app.',
       );
     const pkg = readJsonFile<PackageManifest>(
       path.join(dir, 'package.json'),

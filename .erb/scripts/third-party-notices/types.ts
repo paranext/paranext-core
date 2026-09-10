@@ -224,7 +224,7 @@ export type ShippedPackage = {
   reachedVia: string[];
   /** Described from `package-lock.json` rather than from its directory. */
   fromLock?: boolean;
-  /** Replaced on this machine by a `yalc` dev link. */
+  /** Installed from a folder staged out of another repository - see `DEV_LINK`. */
   devLinked?: true;
   /** Npm never installed it here; it ships on another platform. */
   platformOnly?: boolean;
@@ -237,6 +237,13 @@ export type ShippedPackage = {
 
 /** A `package-lock.json` entry. */
 export type LockfileEntry = {
+  /**
+   * Present on entries npm keys by DIRECTORY rather than by install path - this repository's own
+   * workspaces, and the staged dev packages under `dev-packages/staging/`. Those keys name a
+   * folder, which is free to differ from the package's name, so the name has to be read rather than
+   * parsed out of the key.
+   */
+  name?: string;
   version: string;
   license?: unknown;
   os?: string[];

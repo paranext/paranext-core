@@ -117,11 +117,11 @@ function committedNpmCount(): number | undefined {
 }
 
 /**
- * The note to print beside a drift report when this tree has no `yalc` dev links but the repository
- * declares some.
+ * The note to print beside a drift report when this tree has no staged dev packages but the
+ * repository declares some.
  *
- * `postinstall` links the packages `dev-packages.json` names, so the committed artifact is
- * generated from a LINKED tree - CI included. An unlinked tree resolves a different copy of any
+ * `preinstall` stages the packages `dev-packages.json` names, so the committed artifact is
+ * generated from a STAGED tree - CI included. An unstaged tree resolves a different copy of any
  * package a link nests (see `correctLinkDistortedResolutions`), so its shipping set legitimately
  * differs, and the remedy every drift message prints - regenerate - would commit a set CI then
  * reports in reverse. Nothing here can tell those two causes apart, so this names the one a reader
@@ -152,12 +152,12 @@ function unlinkedTreeNote(npmPackages: { devLinked?: boolean }[]): string[] {
   if (!declared || npmPackages.some((pkg) => pkg.devLinked)) return [];
   return [
     '',
-    `Note: nothing in this set resolves through a yalc dev link, but dev-packages.json declares ${declared}.`,
-    'The committed artifact is generated from a linked tree (postinstall links them, on CI too), and',
-    'an unlinked tree resolves a different copy of any package a link nests - so some of the drift',
-    'above may be the missing links rather than a dependency change. Run npm ci (or npm run',
-    'link-dev-packages) and check again before regenerating: regenerating from an unlinked tree',
-    'commits a set CI reports in reverse.',
+    `Note: nothing in this set resolves through dev-packages/staging, but dev-packages.json declares ${declared}.`,
+    'The committed artifact is generated from a staged tree (preinstall stages them, on CI too), and',
+    'an unstaged tree resolves a different copy of any package a staged one nests - so some of the',
+    'drift above may be the missing staging rather than a dependency change. Run npm ci (or npm run',
+    'stage-dev-packages && npm install) and check again before regenerating: regenerating from an',
+    'unstaged tree commits a set CI reports in reverse.',
   ];
 }
 
@@ -282,9 +282,9 @@ function licenseeVersion(): string {
  *
  * A package marked `fromLock` (see `shipping-set.ts`) is the one case where nothing here reads the
  * package directory: its version and declaration come from `package-lock.json`, and no text,
- * `NOTICE` or copyright is read from it. Two things carry that mark - a `yalc` dev link, which
- * points at a moving branch of another repository rather than at the release this repository pins,
- * and a package a link DISPLACED, whose directory holds a different copy than the one the lockfile
+ * `NOTICE` or copyright is read from it. Two things carry that mark - a staged dev package, whose
+ * folder comes from a moving branch of another repository rather than from a published release, and
+ * a package a link DISPLACED, whose directory holds a different copy than the one the lockfile
  * resolves. Either way the directory is not evidence about what ships, so it lands on `classify`'s
  * no-license-file path and has the canonical text of its declared identifier reproduced on its
  * behalf, paired with whatever copyright notice `notices-policy.json` records for it. `inspected:
@@ -625,7 +625,7 @@ function buildNpmShippingSet(policy: Policy): {
 /** One verdict per shipped npm package, from what licensee read out of each directory. */
 function classifyNpmPackages(npmPackages: ShippedPackage[], policy: Policy): ReportRow[] {
   // Lockfile-described packages are excluded from detection entirely rather than having their
-  // result discarded afterwards: licensee must never read a `.yalc` tree, because anything found
+  // result discarded afterwards: licensee must never read a staged tree, because anything found
   // there would be another repository's branch content reaching a decision about this repository's
   // artifact - and it must not read a displaced package's directory either, because that holds a
   // different copy than the one the lockfile resolves and so a different license text.
