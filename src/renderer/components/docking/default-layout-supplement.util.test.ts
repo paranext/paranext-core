@@ -403,6 +403,24 @@ describe('mergeDefaultLayoutSupplement records the identity its check looks up',
       'platformScriptureEditor.scriptureTextGrid',
     ]);
   });
+
+  it('does not let a mislabeled tab already in the layout suppress a genuine web view', () => {
+    // The other half of the same rule: the initial scan classifies the layout's existing tabs, and
+    // it has to ask the same question the merge loop asks of an entry. A mislabeled tab persisted
+    // into a Power-mode layout would otherwise poison the type set on every subsequent load.
+    const layout = baseLayout();
+    tabsInFirstPanel(layout).push({
+      id: 'mislabeled-tab',
+      tabType: 'settings',
+      data: { id: 'mislabeled-tab', webViewType: 'platformScriptureEditor.scriptureTextGrid' },
+    });
+    const merged = mergeDefaultLayoutSupplement(layout, [gridEntry], 'simple');
+    expect(tabsInFirstPanel(merged).map((t) => t.tabType)).toEqual([
+      'webView',
+      'settings',
+      'webView',
+    ]);
+  });
 });
 
 /** Reads the `isClosable` a merged tab carries, which lives inside the tab's web view data. */

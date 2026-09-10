@@ -52,6 +52,13 @@ function findPanelByWebViewType(box: BoxData, anchor: string): PanelData | undef
 function collectWebViewTypes(box: BoxData, types: Set<string>): void {
   findPanel(box, (panel) => {
     (panel.tabs ?? []).forEach((t) => {
+      // Classified by `tabType`, the same question the merge loop asks of an entry and the same one
+      // `mintFreshWebViewIdInTab` asks of a tab. A tab that merely declares a `webViewType` without
+      // being one contributes no web view of that type, so counting it here would make a genuine
+      // web view of that type look already-present and silently drop it.
+      // `tabType` is `string | undefined` on the rc-dock tab shape; only `SavedTabInfo` names it.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      if ((t as unknown as SavedTabInfo).tabType !== TAB_TYPE_WEBVIEW) return;
       const type = webViewTypeOf(t);
       if (type) types.add(type);
     });
