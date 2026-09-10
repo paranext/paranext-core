@@ -1684,6 +1684,10 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | '
  *   `'loading'`, never to enter it: the flag is re-armed from an effect, so for one render after a
  *   selector change it still reads settled — harmless here, because the value in hand at that
  *   moment is the previous reference's USJ rather than `undefined`.
+ * @param options.isAnswerCurrent Whether the value in hand answers for the resource on screen NOW.
+ *   A data hook preserves its value across a source change, so on a resource switch the previous
+ *   resource's chapter is still in hand with nothing about the value itself to reveal that. The
+ *   caller tracks which resource its held value arrived for and says so here.
  * @returns Which of the four content states to render.
  */
 export function resolveResourceContentState({
@@ -1691,16 +1695,33 @@ export function resolveResourceContentState({
   usjPossiblyError,
   currentBookNum,
   isUsjSettled,
+  isAnswerCurrent,
 }: {
   resourceProjectId: string | undefined;
   usjPossiblyError: unknown;
   currentBookNum: number;
   isUsjSettled: boolean;
+  isAnswerCurrent: boolean;
 }): ResourceContentState {
   if (!resourceProjectId) return 'loading';
+
   // Nothing in hand. Still on its way until the subscription says otherwise; once it has settled,
   // `undefined` is the delivered answer and there is no text to show.
+  //
+  // Ahead of the currency check below, and that order is load-bearing. `isAnswerCurrent` is
+  // derived from a change of value IDENTITY, which a delivered `undefined` does not produce when
+  // the held value is already `undefined` — so it reads stale here and would pin this case on
+  // `'loading'` forever, which is the symptom this branch exists to remove. Safe to decide first
+  // because a stale held value is a previous chapter's USJ, never `undefined`: a resource switch
+  // changes the data provider, which re-arms loading.
   if (usjPossiblyError === undefined) return isUsjSettled ? 'failed' : 'loading';
+
+  // Whose answer this is outranks what it says. A resource switch leaves the PREVIOUS resource's
+  // chapter in hand — the data hook preserves its value across a source change, and a chapter
+  // selector does not change when only the resource does, so no timing signal marks it — and a valid
+  // USJ carries no book or project of its own to compare, the way a missing-book error does. Without
+  // this the reader is shown one resource's scripture under another resource's name.
+  if (!isAnswerCurrent) return 'loading';
   if (!isPlatformError(usjPossiblyError)) return 'ready';
 
   // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then

@@ -449,3 +449,52 @@ describe('ResourceTextPanel — retrying a failed chapter read', () => {
     expect(selectorsBefore).not.toContain(selectorAfter);
   });
 });
+
+/** One installed Bible text row, whose `projectId` is what the panel reads chapters from. */
+function rowFor(projectId: string) {
+  return {
+    reference: { type: 'project', name: projectId, id: projectId },
+    source: 'user',
+    isAdminLocked: false,
+    type: 'ScriptureResource',
+    installed: true,
+    projectId,
+  };
+}
+
+// Switching the resource shown in the tab. `useData` preserves its value across a source change and
+// the `ChapterUSJ` selector does not change on a switch, so the panel is handed the PREVIOUS
+// resource's chapter, with the loading flag never rising. A valid USJ carries no provenance, so
+// nothing downstream can tell it belongs to the resource the reader just left — unlike a missing-book
+// ERROR, which names its project and is already compared against what is on screen.
+describe('ResourceTextPanel — switching the resource shown', () => {
+  const CHAPTER = {
+    type: 'USJ',
+    version: '3.1',
+    content: [{ type: 'chapter', marker: 'c', number: '1' }],
+  };
+
+  it("does not present the previous resource's chapter as the newly selected one", () => {
+    // The same USJ object throughout, settled: this is what the real hook hands back for the whole
+    // window between the switch and the new resource's first delivery.
+    mockChapterUsj.mockImplementation(() => [CHAPTER, undefined, false]);
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: {
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', name: 'A', id: 'A', source: 'user' }],
+      },
+    });
+    mockUseResourcePickerResources.mockReturnValue([[rowFor('resource-a')], false]);
+
+    const ResourceTextPanel = getResourceTextPanel();
+    const { rerender } = render(<ResourceTextPanel {...makeProps()} />);
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+
+    // The tab now shows a different resource, while the chapter in hand still answers for the old one.
+    mockUseResourcePickerResources.mockReturnValue([[rowFor('resource-b')], false]);
+    rerender(<ResourceTextPanel {...makeProps()} />);
+
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+});
