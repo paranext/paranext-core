@@ -120,6 +120,16 @@ let deps: ContentZoomDeps = productionDeps;
  */
 let cachedDefault: number | undefined;
 
+/**
+ * Best-effort mirror of the memory setting, used only to seed a newly opened pane's own levels on
+ * its first area report ({@link setContentZoomAreas}). Filled by a successful `readMemory` read
+ * (which runs before a pane's iframe exists, via `getInitialContentZoomForWebView` or a memory
+ * transaction), and kept current by the memory subscription and by this window's own successful
+ * writes. A momentarily stale or empty value only means a pane seeds later, or not at all — every
+ * other read of memory stays authoritative through `readMemory`/`enqueueMemoryTransaction`.
+ */
+let cachedMemory: MemoryRecord = {};
+
 /** The one-time initialization promise; cleared by a test reset so each test starts fresh. */
 let initialized: Promise<void> | undefined;
 
@@ -142,6 +152,7 @@ let beforeUnloadListener: (() => void) | undefined;
 export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>): void {
   deps = { ...deps, ...partial };
   cachedDefault = undefined;
+  cachedMemory = {};
   initialized = undefined;
   pendingMemoryWrites.clear();
   if (memoryWriteTimer !== undefined) {
@@ -236,12 +247,38 @@ export function resolveContentZoomArea(
   return active && areas.includes(active) ? active : areas[0];
 }
 
+/**
+ * Seeds a newly opened pane's own levels from every area {@link cachedMemory} remembers for its kind
+ * and identity, so the areas its bootstrap is about to report start at the level the user chose
+ * last time instead of the Settings default. A pane whose state already holds
+ * {@link CONTENT_ZOOM_LEVELS_STATE_KEY} — even for a single area — is left alone: the key is never
+ * written empty, so holding it at all means the pane already has a level to keep.
+ */
+function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
+  const definition = deps.getDefinition(webViewId);
+  if (!definition) return;
+  if (definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state) return;
+  const id = memoryIdentityFor(definition);
+  if (!id) return;
+  const levels: Levels = {};
+  Object.entries(cachedMemory).forEach(([key, level]) => {
+    const parsed = parseContentZoomMemoryKey(key);
+    if (parsed && parsed.kind === id.kind && parsed.identity === id.identity)
+      levels[parsed.areaId] = level;
+  });
+  if (Object.keys(levels).length === 0) return;
+  deps.updateDefinition(definition.id, {
+    state: { ...(definition.state ?? {}), [CONTENT_ZOOM_LEVELS_STATE_KEY]: levels },
+  });
+}
+
 /** Called by the bootstrap (through the parent-bound helper) whenever the set of areas changes. */
 export function setContentZoomAreas(webViewId: WebViewId, areaIds: string[]): void {
   const valid = areaIds.filter((areaId) => isValidContentZoomAreaId(areaId));
   const previous = areasByWebViewId.get(webViewId);
   if (previous && previous.length === valid.length && previous.every((a, i) => a === valid[i]))
     return;
+  if (!previous) seedFromMemoryOnFirstReport(webViewId);
   areasByWebViewId.set(webViewId, valid);
   pushContentZoom(webViewId);
 }
@@ -302,7 +339,9 @@ export function applyContentZoomForWebView(webViewId: WebViewId): void {
 /** `undefined` marks a failed read, distinct from a genuinely empty record. */
 async function readMemory(): Promise<MemoryRecord | undefined> {
   try {
-    return asMemory(await deps.settings.get('platform.webViewContentZoomMemory'));
+    const memory = asMemory(await deps.settings.get('platform.webViewContentZoomMemory'));
+    cachedMemory = memory;
+    return memory;
   } catch (e) {
     logger.warn(`Content zoom: could not read memory. ${getErrorMessage(e)}`);
     return undefined;
@@ -358,6 +397,7 @@ function enqueueMemoryTransaction(
       const next = mutate({ ...memory });
       if (!next) return;
       await deps.settings.set('platform.webViewContentZoomMemory', next);
+      cachedMemory = next;
     } catch (e) {
       logger.warn(`Content zoom: could not write memory. ${getErrorMessage(e)}`);
     }
@@ -599,7 +639,9 @@ export function initializeContentZoomService(
           logger.warn(`Content zoom: error reading memory: ${getErrorMessage(value)}`);
           return;
         }
-        syncSiblingsFromMemory(asMemory(value));
+        const memory = asMemory(value);
+        cachedMemory = memory;
+        syncSiblingsFromMemory(memory);
       });
     } catch (e) {
       logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
