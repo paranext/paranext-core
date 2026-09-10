@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getContentZoomBootstrapScript,
   getContentZoomStyleElement,
@@ -94,8 +94,14 @@ function stubMatchMedia(reducedMotion: boolean): void {
 }
 
 describe('content-zoom bootstrap script', () => {
+  const originalMatchMedia = window.matchMedia;
+
   beforeEach(() => {
     document.body.innerHTML = '';
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
   });
 
   it('acts through the bound helpers on the area that has focus, with its own web view id, and consumes the key', () => {
