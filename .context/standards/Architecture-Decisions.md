@@ -1752,15 +1752,15 @@ step, no automation. Just a record.
 - **Context:** `destinationWindowId` tells a closing window's own enumeration
   (`getOpenWebViewDefinitionsForWindow` in `web-view.service-router.ts`) whether an in-flight move
   belongs to it, which feeds the close-time Send/Receive writable-project selection in
-  `shutdown-tasks.ts`. Three commits in a row tried to keep it correct by patching where it is
+  `shutdown-tasks.ts`. Three successive attempts tried to keep it correct by patching where it is
   *set*: once at record creation and never updated (so recovery into a different window was
   invisible); then at each recovery rung (still stale during the focused-window resolution when the
   source rung was skipped); then cleared at `recoverAfterFailedMove`'s entry (still stale in a third
   gap — when the source rung runs and its readopt genuinely fails, the field kept naming the source
-  window all through the following `await getTargetWebViewWindowShard()`). Each fix closed the gap
-  a reviewer had just found and opened the next one, because each treated the field as "the window
-  this rung is assigned to," updated wherever the rung's own bookkeeping happened to touch it,
-  rather than as a value with its own lifetime.
+  window all through the following `await getTargetWebViewWindowShard()`). Each attempt closed the
+  gap that had just been found and opened the next one, because each treated the field as "the
+  window this rung is assigned to," updated wherever the rung's own bookkeeping happened to touch
+  it, rather than as a value with its own lifetime.
 - **Decision:** Give the field an invariant instead of a set of assignment sites: it names a window
   if and only if a readopt into that window is genuinely in flight right now. Every recovery readopt
   runs through `readoptWithDestination` (`web-view-move.util.ts`), a `try`/`finally` wrapper that
@@ -1777,7 +1777,7 @@ step, no automation. Just a record.
 - **Alternatives:**
   - *Keep patching the gap the next review finds.* Rejected: this was already the third iteration of
     exactly that, and a fourth patch would only relocate the same bug rather than remove its cause.
-  - *Clear the field at the top of every function that might change it, as the third commit did.*
+  - *Clear the field at the top of every function that might change it, as the third attempt did.*
     Rejected: correct only for the gap between two known call sites; the same shape of bug reappears
     the moment a rung sets the field and then awaits something else — resolving where to try next —
     before its own readopt starts or after it ends.
@@ -1789,6 +1789,11 @@ step, no automation. Just a record.
   and the field's TSDoc on `WebViewMoveInFlight.destinationWindowId` states the invariant directly
   rather than listing assignment sites, so a new rung's correct behavior can be derived from the doc
   alone.
+- **Source:** PR #2758 (PT-4463). The field and the per-window fold-in that reads it exist because
+  the per-commit review gate found a silently skipped close-time Send/Receive sync on the
+  destination-close change (`adr-web-view-ids-are-unique-from-birth`'s PR), which Rolf ruled to fix
+  in that PR rather than defer; the lifetime this entry settles came out of the successive review
+  rounds on that fix.
 
 ## adr-narrow-toolbar-yields-padding-then-decoration: A toolbar out of room gives up its own padding, then a control's decoration — never a code
 
