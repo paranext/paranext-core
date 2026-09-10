@@ -3,6 +3,7 @@ import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
 import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
 import {
@@ -45,23 +46,6 @@ let backgroundRecheckStarted = false;
 // Retry button re-enters resolveInternal), and the transient 'invalid' the flag exists to absorb
 // can just as easily land on the retry as on the first probe. See consumeJustRegisteredFlag.
 let justRegisteredThisStartup = false;
-
-function readBooleanFlag(key: string): boolean {
-  try {
-    return localStorage.getItem(key) === 'true';
-  } catch {
-    // localStorage may be unavailable (sandboxed/test envs); treat as false.
-    return false;
-  }
-}
-
-function writeBooleanFlag(key: string, value: boolean): void {
-  try {
-    localStorage.setItem(key, value ? 'true' : 'false');
-  } catch {
-    // Best-effort cache; a failed write just means the next startup re-resolves from scratch.
-  }
-}
 
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
 export function isDemoMode(): boolean {

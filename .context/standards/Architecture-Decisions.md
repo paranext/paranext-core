@@ -362,6 +362,32 @@ step, no automation. Just a record.
   `SectionButton`'s `isDisabled`.
 - **Source:** PT-4092, review of #2699.
 
+## adr-build-stays-mixed-mode: `npm run build` keeps building extensions in development mode
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `build:main`, `build:extension-host` and `build:renderer` each set
+  `NODE_ENV=production`; `build:extensions` does not, so `npm run build` produces a mixed-mode tree.
+  A large part of the notices pipeline exists to cope with that: the `mode` field on every emitted
+  manifest and `assertOneBuildGraph`'s mixed-mode refusal, the per-bundle AND per-mode
+  `extensionCacheDirectory` split, an extra `build:extensions:production` step in three workflow
+  jobs and in the `package` script, and the source-text tests that pin those steps. Pointing `build`
+  at `build:extensions:production` would collapse the mode dimension out of all of it.
+- **Decision:** Leave `npm run build`'s semantics alone. Changing what the documented build command
+  produces is a change to every consumer of a development extension build, including
+  `paratext-10-studio`, whose `package-core` step runs `npm run build` inside a patched clone — so
+  it is a cross-repository behaviour change rather than a notices one, and it does not belong in a
+  relicensing change.
+- **Alternatives:** Set `NODE_ENV=production` in `build:extensions` and add a separate dev script —
+  the simplification is real and remains the likely eventual answer; rejected here on scope. Leave
+  it undocumented — rejected: the compensating apparatus reads as an oversight rather than as
+  support for a decision, which is what prompted the question.
+- **Consequences:** the mode dimension stays in the manifests, the cache split, the workflows and
+  the tests that pin them, and a plain `npm run build` still leaves a tree where
+  `npm run verify:third-party-notices` hard-fails until the production extension build runs.
+  **Revisit** as its own change, with `paratext-10-studio` in scope.
+- **Source:** the multi-agent review of #2654, finding 25.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
@@ -400,6 +426,58 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `THIRD-PARTY-NOTICES.md` states that UBS permits distribution of the lexical database
+  "in Paratext" and that the permission "does not extend to Platform.Bible", while the Publish
+  workflow uploaded a `.snap` to the public snap store unconditionally and attached Windows, macOS
+  and Linux installers to a GitHub release — every one of them built as `productName:
+  'Platform.Bible'` and every one carrying the database, which `download-db.ts` puts in strict mode
+  so a missing copy hard-fails the install. Both statements are about the same artifact. Separately,
+  `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.md` for a product built under
+  the Platform.Bible name, while the Terms of Service name only Paratext.
+
+  There is no practical path to releasing a separate Platform.Bible build, and only Paratext 10 is
+  released from this source — from `paranext/paratext-10-studio`, which clones this repository,
+  patches it, adds private extensions, and packages the result.
+- **Decision:** This repository does not distribute a built application. The snap-store upload is
+  removed and the GitHub release carries no binaries; it creates the version tag, the draft and the
+  generated notes, which are the fixed points a downstream build constructs its own release from.
+  Installers are still built on every leg — that is how the packaging path is exercised — and the
+  optional S3 upload of the Windows and macOS artifacts stays, for internal sharing. That upload is
+  `publish.yml`'s "Upload release assets to S3" step, gated on the `uploadReleaseAssets` input and
+  writing to the bucket named by `vars.AWS_S3_RELEASE_BUCKET_NAME`; it is named here because it is
+  the one remaining channel a built installer leaves this repository by, and the bucket is not
+  public — which is what makes LICENSING.md's "nothing is published to an app store or attached to a
+  public release" true as written. Nothing is
+  identified as Platform.Bible to a public audience, so the Platform.Bible/Paratext 10
+  identification the notices and the Terms would otherwise need is not needed at all.
+- **Alternatives:** Identify Platform.Bible builds as Paratext 10 builds in both documents —
+  rejected: the two are not the same release, and writing that they are would make a legal
+  document assert something the project does not do. Keep distributing and ask UBS to extend the
+  permission — rejected as unnecessary once nothing is distributed. Exclude the database from
+  public artifacts — rejected: it is not optional in this build, and the identification problem
+  would remain for the Terms of Service.
+- **Consequences:** `publish.yml` no longer sets `SNAPCRAFT_STORE_CREDENTIALS`, so the repository
+  secret it read from - `LINUX_SNAP_STORE_CREDENTIALS`, the two names are not the same and only the
+  second is deletable - is unused and wants revoking separately, and the Linux `release/staged` staging is gone since the S3
+  step excludes Linux. `README.md`'s Users section points at Paratext 10 rather than at GitHub
+  releases and the snap store. Nothing consumes the release assets programmatically: every
+  `autoUpdater` use in `main.ts` is commented out, so there is no update feed to break. What was
+  already published has since been retired rather than left to contradict this: the snap is gone
+  from the store, and on 2026-09-09 all 113 assets across the fourteen GitHub releases going back to
+  2023 were deleted, keeping every tag, note and prerelease flag. The invariant this states is *no
+  binaries attached to public releases* rather than *no binaries leave this repository* — CI build
+  artifacts and the S3 upload are in scope of the Paratext permission, which `LICENSING.md`'s "The
+  distributed application" section now says outright rather than leaving each reader to re-derive.
+  `paratext-10-studio` becomes the sole distributor, which makes the notices document it packs
+  (this repository's, describing this repository's shipping set rather than the patched clone's)
+  the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
+  public audience.
+- **Source:** the multi-agent review of #2654, finding 1.
+
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
 - **Date:** 2026-09-03
@@ -436,6 +514,58 @@ step, no automation. Just a record.
   hand-added entry can silently break it — no such check existed as of 2026-09-03, and adding one is
   open follow-up work.
 - **Source:** PR #2770.
+
+## adr-disclosure-outside-package-graphs: What ships outside the npm and NuGet graphs is disclosed in prose, not by silence
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Context:** `adr-notices-derived-from-what-ships`'s pipeline derives what ships from webpack's
+  module manifests and the NuGet restore closure. Two things this repository distributes are in
+  neither, so no scan it performs can reach them: the UBS lexical database `platform-lexical-tools`
+  downloads at install time (~35 MiB, copied into every installer with that extension's assets), and
+  the Ubuntu shared libraries snapcraft stages inside the Linux `.snap`. A document that simply
+  omits them is not neutral — an omission and an oversight are indistinguishable to a reader.
+- **Decision:** Disclose both in prose sections written by `render.ts`, rather than teaching the
+  shipping set to carry them. Three constraints shape how:
+  1. **The lists are read, not restated.** `main.ts` parses `electron-builder.json5` for the staged
+     package list, so editing the packaging config changes the generated document and
+     `adr-notices-derived-from-what-ships`'s drift gate fails an un-regenerated one. The list has a
+     floor, like every other collector: an empty read would otherwise render as "the snap stages
+     nothing".
+  2. **The classification is data, not prose.** Every staged library must carry a
+     `classification` in `notices-policy.json` (`copyleft`, `permissive` or `not-established`) or the
+     build refuses. Hand-written prose named ten of twelve staged libraries and silently omitted
+     `libgtk-3-0` and `libsecret-1-0`; generating the sentence from a required table is what makes
+     that impossible to repeat.
+  3. **Not-established is a recorded state, not a gap.** A library whose terms nobody has settled is
+     named as such in the document. Guessing an identifier would put a specific, possibly wrong
+     license into a legal artifact, which is worse than the admitted gap. The way OUT of such a gap
+     is to read the terms and record what they say: `Icu4c.Win.Min` was free text until its ICU 59
+     LICENSE was read at the tag it builds from, and it is now `Unicode-DFS-2016` with that file
+     checked in and hash-pinned so the third-party notices it carries travel too.
+
+  The lexical database gets the same treatment from the other direction: the notice files that must
+  travel with it are FETCHED into the extension's assets at install time, so they are inside the
+  packaged application rather than described from outside it.
+- **Alternatives:** Extend the shipping set to cover them — rejected:
+  `adr-notices-derived-from-what-ships`'s verdicts come from reconciling a declared expression
+  against an identified license text, and neither a `.deb` staged by snapcraft nor a database
+  downloaded at install time has either. Say nothing, on the grounds that neither is an npm or NuGet
+  package — rejected: both are redistributed inside the artifact, which is the only test that
+  matters. Hand-maintain the prose — rejected on `adr-notices-derived-from-what-ships`'s lesson that
+  a legal artifact must not depend on a hand-maintained table that nothing checks.
+- **Consequences:** the "Linux snap" and lexical-database sections are generated, so they cannot
+  drift from the packaging config. Every staged library is now classified from its own Ubuntu
+  `copyright` file, so `not-established` is currently unused — it stays in the schema because the
+  next library added starts there. Their license texts DO travel inside the `.snap`, by a different
+  route than the one electron-builder would have taken: its snapcraft template excludes `usr/share`
+  from the `app` part's stage list (`parts.app.stage`), which is where
+  `usr/share/doc/<package>/copyright` lives, and that list is only overridable wholesale via the
+  `appPartStage` option — so each library's own copyright file is checked into this repository,
+  hash-pinned, and reproduced verbatim in `THIRD-PARTY-NOTICES.md`, which `electron-builder.json5`
+  packs through `extraResources`. **Revisit** when the staged set changes, or if a future
+  electron-builder makes staging the upstream files directly practical.
+- **Source:** the AGPL relicense branch; the multi-agent review of #2654.
 
 ## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
 
@@ -1009,6 +1139,38 @@ step, no automation. Just a record.
   deliberately not checked in — the numbers above are the durable part, and the parity suite in
   `grapheme-string.test.ts` is what guards the behavior.
 
+## adr-hand-written-tour-spotlight: Hand-write the guided-tour spotlight rather than adopt a tour dependency
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** PT-4262 names "the Tour component evaluated in PT-4257 (allshadcn)" as the thing to
+  build the Simple-mode orientation tour on, and repeats it in the Definition of Done. Following that
+  up: allshadcn is a community gallery documenting a spotlight *pattern*, not an entry in the official
+  shadcn registry and not an installable package — there is nothing to `add` or depend on. The other
+  candidates in the space (`onborda`, `driver.js`, `react-joyride`, `shepherd.js`) are real packages,
+  but each ships its own overlay, positioning engine and theming, none of which compose with this
+  repo's `pr-twp` scoped preflight, `Z_INDEX_*` scale, `readDirection()` RTL convention, or the
+  rc-dock geometry the stops actually anchor to.
+- **Decision:** Write the spotlight component by hand (`src/renderer/components/onboarding-tour/
+  tour.component.tsx`), following the allshadcn spotlight pattern — full-viewport SVG mask with a
+  cutout over the measured target, plus a positioned step card. Take no new runtime dependency.
+- **Alternatives:** **Vendor a shadcn-registry Tour** — rejected: no such registry component exists,
+  so there is no upstream to diff against and `// CUSTOM:` markers would be meaningless.
+  **Depend on `onborda`/`driver.js`/`react-joyride`/`shepherd.js`** — rejected: each brings a second
+  overlay and theming system into an app that already has both, and the integration surface (mask
+  geometry, z-index, RTL, focus handling) is most of the component anyway. **Defer the tour until a
+  dependency is chosen** — rejected: the tour is the deliverable, and the pattern is well understood.
+- **Consequences:** The repo owns the spotlight code, including the parts a library would have
+  supplied: rect re-measurement (resize, scroll, and `ResizeObserver` for in-place target reflow),
+  side flipping and viewport clamping, the focus trap, and the skip-a-missing-target degradation.
+  That is the cost, and it is why the component carries a full unit-test file rather than a smoke
+  test. The upside is that it speaks the repo's own conventions natively and has no upgrade
+  treadmill. If a second consumer appears, promote it to `lib/platform-bible-react/` under that
+  library's localization contract; until then it stays beside its only consumer per
+  `.claude/rules/architecture/react-patterns.md`.
+- **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
+  was not used.
+
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
 - **Formerly:** ADR-0018
@@ -1114,6 +1276,92 @@ step, no automation. Just a record.
   now-redundant test in one deliberate commit.
 - **Source:** PR #2425
 
+## adr-licensing-boundary: Platform.Bible is AGPL-3.0-or-later, with an MIT carve-out drawn by runtime linking
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** The repository relicensed from MIT to AGPL-3.0-or-later. A blanket relicense was not
+  viable: Platform.Bible's extension model expects third parties to build and distribute their own
+  extensions, and those extensions import Platform.Bible's developer libraries. Relicensing those
+  libraries to AGPL would put AGPL-licensed code into the output of every third-party extension
+  simply by their being built against it. So some packages under `lib/` had to stay MIT. The initial split was justified package by package, with no single stated
+  principle, and it did not survive scrutiny: `eslint-plugin-paranext` and
+  `browserslist-config-detect-electron` were kept MIT despite contributing nothing to any extension,
+  so the carve-out was protecting packages that needed no protection.
+- **Decision:** Draw the boundary with one rule, recorded in
+  [`LICENSING.md`](../../LICENSING.md#the-rule-that-draws-the-line):
+
+  > **MIT if a third-party extension links against the package at runtime — whether webpack bundles
+  > it in or Platform.Bible supplies it as an external. AGPL-3.0-or-later if the package exists only
+  > while the extension is being built and the extension never links against it.**
+
+  Applied to the five packages under `lib/`:
+
+  | Package                               | License           | Why                                                             |
+  | ------------------------------------- | ----------------- | --------------------------------------------------------------- |
+  | `platform-bible-react`                | MIT               | Linked at runtime; webpack bundles it into extension output      |
+  | `platform-bible-utils`                | MIT               | Linked at runtime; not bundled — supplied as a webpack external  |
+  | `papi-dts`                            | AGPL-3.0-or-later | Types only; declarations erased at compile time                  |
+  | `browserslist-config-detect-electron` | AGPL-3.0-or-later | Build-time browserslist config; emits nothing                    |
+  | `eslint-plugin-paranext`              | AGPL-3.0-or-later | Lint-time only; emits nothing                                    |
+
+  The rule keys on **runtime linking**, deliberately and explicitly not on which `package.json`
+  section declares the package, and not on bundling either — `platform-bible-utils` is an external
+  and reaches a third-party extension without being bundled into it, yet the extension is combined
+  with it just the same.
+
+  The distributed BINARY is a separate question from the source. It is licensed to the user under
+  the Paratext Terms of Service, whose section 3.B.1 states that the built application is licensed
+  solely under those Terms and not under the AGPL, and whose 3.B.2 adds that network interaction with
+  it triggers no AGPL obligation. `release/app/package.json` therefore declares
+  `SEE LICENSE IN TERMS-OF-SERVICE.md` rather than an SPDX identifier. That split is lawful because
+  SIL Global and United Bible Societies control the copyright in the source, and it retracts nothing:
+  the AGPL grant on this repository is irrevocable and anyone may build and redistribute their own
+  binary under it. The installer carries `LICENSE` (the AGPL text), `TERMS-OF-SERVICE.md`,
+  `THIRD-PARTY-NOTICES.md`, and `LICENSING.md` — the last because the others otherwise state
+  several things about the user's rights with nothing reconciling them, and because LICENSING.md is
+  what 3.B.1 means by "the AGPL Components identified by Paratext".
+- **Alternatives:** relicense everything, including the `lib/` packages — rejected: it makes the AGPL
+  viral for third-party extensions and defeats the extension model. Key the rule on the
+  `dependencies`/`devDependencies` section — rejected because that field was already wrong:
+  `platform-bible-react` was declared a `devDependency` by every extension in this repository while
+  extension source across all of them imported it at runtime, so a mechanical "devDependency means
+  AGPL" reading would have relicensed exactly the package the carve-out exists to protect. Keep all
+  four originally-MIT `lib/` packages MIT — rejected: two of them contribute nothing to extension
+  output, so the carve-out bought no protection there and the boundary no longer tracked a single
+  principle. Ship an installer EULA (`nsis.license` / `dmg` license) — rejected: the Terms of
+  Service are accepted at account creation rather than through a click-through during install.
+  Leave the PAPI boundary unaddressed and let each extension author reason about it — rejected once
+  the intent was settled as being flexible with extension authors: leaving it open puts the burden
+  of an unanswerable question on every author, while an additional permission removes it without
+  anyone having to answer it.
+- **Consequences:** a directory's own `LICENSE` file governs that directory, and the MIT side is now
+  exactly `lib/platform-bible-react/` and `lib/platform-bible-utils/` — not `lib/` as a whole.
+  Moving code across that boundary in either direction is a relicensing act requiring the copyright
+  holders' agreement, not a refactor. `papi-dts` is AGPL yet imposes nothing on extension authors,
+  because TypeScript erases its declarations at compile time. The sharpest ongoing constraint:
+  **adding a runtime import of a currently-AGPL build-time package from extension source is a
+  licensing change, not just a build change.** Check `extensions/webpack/webpack.config.base.ts`
+  `externals` to determine what a given import actually bundles.
+- **The PAPI runtime is covered by a license exception, not by the `lib/` table.** That `externals`
+  list also names `@papi/backend`, `@papi/core`, `@papi/frontend` and `@papi/frontend/react`, which
+  `src/extension-host/` supplies at runtime by shimming `Module.prototype.require` so an extension is
+  loaded INTO the host's process and calls the host's own objects directly. `src/extension-host/` is
+  AGPL. So the largest runtime linkage a third-party extension makes is against AGPL code, by a
+  closer coupling than the `lib/` carve-out was drawn to address — and the `lib/` MIT carve-out
+  cannot reach it, because these are not `lib/` packages and relicensing `src/extension-host/` was
+  never on the table. The instrument for that boundary is an **additional permission** under AGPL
+  section 7, the same shape as the GCC Runtime Library Exception and OpenJDK's Classpath Exception:
+  [`LICENSE-EXCEPTION.md`](../../LICENSE-EXCEPTION.md) frees a work that talks to Platform.Bible only
+  through the published Extension Interface from sections 4, 5, 6 and 13, and says in as many words
+  that being loaded into the host's process does not disqualify it. It is scoped by INTERFACE rather
+  than by file, so a work reaching past that interface into Platform.Bible's internals is outside
+  it. It deliberately **recommends nothing**: it removes an obligation an extension author would
+  otherwise have to reason about, and takes no position on what license they then choose. See
+  LICENSING.md, "What a third-party extension links against".
+- **Source:** the AGPL relicense (`LICENSING.md`, per-directory `LICENSE` files); rule settled during
+  the relicense code review; PAPI question raised in the review of #2654.
+
 ## adr-lightweight-decision-log: Keep a lightweight, gate-free architecture-decisions log
 
 - **Formerly:** ADR-0001
@@ -1218,6 +1466,70 @@ step, no automation. Just a record.
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
 
+## adr-narrow-toolbar-yields-padding-then-decoration: A toolbar out of room gives up its own padding, then a control's decoration — never a code
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** Dragging the Simple-mode editor column to its `SIMPLE_COLUMN_MIN_WIDTH_PX` (297) floor
+  inside a full-screen window leaves the tab toolbar's start zone with 117px for controls that want
+  129px. The paragraph-style trigger is the only item there that shrinks, so it absorbed the entire
+  deficit — and, because `adr-toolbar-shrink-measurement`'s ladder has already dropped the style name
+  by that width, what absorbed it was the USFM marker itself. Measured live, a `q2` rendered 5px of
+  the 27px it needs; a one-character `p` loses only a pixel, which is why the window-resize sweep in
+  `paragraph-style-trigger-narrow.spec.ts` never saw it — a splitter drag reaches widths no window
+  resize can, since the window bottoms out at `WINDOW_MIN_WIDTH_PX`.
+- **Decision:** Establish an order of sacrifice for a toolbar that is out of room, and give the
+  ladder two more rungs below "drop the secondary field". First, the **container yields its own
+  chrome**: at `SHRINK_STEP.MINIMUM` `TabToolbarContainer` halves its padding and inter-zone gaps
+  (`px-4`→`px-2`, `gap-2`→`gap-1`), returning ~24px to the start zone, which is the only item in
+  that row that grows and shrinks. Then a **control yields its decoration**: the paragraph-style
+  trigger drops its chevron at the same step. Only after both does anything touch the content —
+  and the trigger now floors at `min-w-min` at that step, so it stops narrowing rather than cut
+  into the marker.
+- **Alternatives:** **Raise the editor column's `panelLock.minWidth`** — rejected: it fixes the whole
+  class rather than one control, but 297 is a UX number bound by
+  `adr-window-min-width-shared-constant`'s arithmetic (`3 × 297 + 2 × 4 = 899` inside a 900px
+  window), and `simple-layout.data.test.ts` asserts every column ≥ 290, so raising the editor to
+  ~330 pushes the side columns to 281 and needs UX plus a window-minimum change. **Tighten the
+  padding at every width** — rejected: it pays for a 297px edge case by retuning the look of every
+  web-view toolbar at every width, and risks misaligning with the titlebar's own padding.
+  **Padding only, keeping the chevron** — rejected: it fits every 1–2 character marker with 11–19px
+  to spare, but a 4-character `toc1` still pushes ~5px past the zone edge, and shipping a known 5px
+  slice is the same defect class this exists to prevent — it would also force the sibling spec's
+  `overrun ≤ 1px` assertion to be weakened, which is how the bug returned the first time. **Hide
+  undo/redo at the narrowest step** — rejected for now: it frees 68px, the only option with real
+  margin to spare, but it costs two discoverable controls, and it is not needed once the two rungs
+  above are in place.
+- **Amended 2026-09-04:** The "every marker length fits" claim below was measured against `toc1`
+  (4 characters), on the assumption that `blockMarkerToBlockNames`
+  (`platform-scripture-editor.utils.ts`) bounds the marker. It does not — `blockMarker` is read
+  verbatim off the USJ para node at the caret, and that list is commented "This list is incomplete".
+  The real ceiling is **7 characters**: `c-sharp/assets/usfm.sty` defines 120 `StyleType Paragraph`
+  markers, the longest being `pubinfo` and `restore` (7), then `periph` (6). Each is ~20–25px wider
+  than `toc1` in the trigger's monospace field, against the ≥16px spare recorded below, so at the
+  column floor those three still overrun the zone and have their trailing border clipped. Reachable
+  only with the caret in peripheral or front-matter material. Left open rather than fixed: the next
+  rung is the "hide undo/redo" alternative rejected below, which needs UX sign-off, and that has not
+  changed. Measure `restore` at the 297px floor before choosing between adding that rung and
+  accepting the residual overrun.
+- **Consequences:** Every marker length now fits at the column floor with ≥16px spare, and the
+  `min-content` floor is deliberately applied *only* at `SHRINK_STEP.MINIMUM`: while the style name
+  is still rendered it contributes its longest word to `min-content`, and a floor there makes the
+  trigger refuse to shrink and be clipped by the zone instead of ellipsising the name — measured at
+  63px of overrun before the floor was made step-dependent. Because the floor has to be
+  step-dependent, it cannot live in the web view (which renders the `TabToolbar` and so always reads
+  the widest step per `adr-shrink-step-override-context`), so the whole control moved into
+  `paragraph-style-trigger.component.tsx` alongside the label — which also makes both rungs
+  unit-testable. The padding change is safe to key off the step because `useShrinkStep` measures the
+  container's **border** box, which its own padding does not change, so it cannot feed back into
+  which step is chosen; the 520/420/340 thresholds stay as written, and what changes is how much of
+  each band reaches the controls. Below the floor — reachable in Power mode, where dock panels carry
+  no `panelLock.minWidth` at all — the trigger still overruns and is clipped; a general answer
+  (toolbar controls overflowing into the floating menu) is left open. The dropped chevron is a
+  UX-visible trade flagged for UX in the PR: the popover semantics, `aria-haspopup` and the
+  `aria-label` are untouched, so nothing changes for keyboard or screen-reader users.
+- **Source:** PT-4466 follow-up, reported against the Simple-mode three-column layout.
+
 ## adr-native-string-when-ascii-by-construction: `string-util`'s grapheme-aware helpers are a deliberate choice, not the default
 
 - **Date:** 2026-08-31
@@ -1306,6 +1618,39 @@ step, no automation. Just a record.
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
 
+## adr-no-agpl-notice-in-the-application-ui: the application UI names the Terms of Service and no license
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `LICENSE` (the full AGPL text), `LICENSING.md`, `LICENSE-EXCEPTION.md` and
+  `THIRD-PARTY-NOTICES.md` all ship in the installed `resources/` directory, but only
+  `TERMS-OF-SERVICE.md` has a code path that opens it. The About dialog reads "License: Paratext
+  Terms of Service" and names no license, disclaims no warranty, and offers no way to view the
+  AGPL. AGPL section 5(d) expects an interactive program that normally displays "appropriate legal
+  notices" to keep displaying a copyright notice, a warranty disclaimer, and a statement of how to
+  view the License.
+- **Decision:** The application UI deliberately displays no AGPL notice. Section 5(d) attaches to
+  conveyance "under the terms of section 4"; SIL Global and the United Bible Societies hold the
+  copyright in this code and convey the binary under the Terms of Service instead (section 3.B.1),
+  which they may do with their own work. Contributors are covered by the Paratext Contributor
+  License Agreement, and the third-party code in the binary is permissive apart from the
+  snap-staged LGPL/MPL libraries, which are unmodified, dynamically linked, and whose notices
+  already ship. No section 5(d) obligation attaches to this conveyance, and it is imperative that
+  nothing in the product declares the released package to be AGPL.
+- **Alternatives:** Add a second line to the About dialog naming `AGPL-3.0-or-later` with a link
+  that opens `resources/LICENSE` — rejected: the released binary is not conveyed under the AGPL, and
+  a UI line saying otherwise is exactly the confusion to avoid. Stop shipping `resources/LICENSE` —
+  rejected: the AGPL text has to travel with the source it governs, and `LICENSE-EXCEPTION.md`
+  refers to it.
+- **Consequences:** the residual risk runs the other way — `resources/LICENSE` ships beside the
+  binary with no code path to open it and nothing in the UI explaining it, so a user who finds it
+  is likelier to conclude the binary is AGPL than a user who finds nothing. `LICENSING.md` ships
+  alongside and reconciles the two, which is why `electron-builder.json5` packs it. A **third
+  party** who builds and conveys a binary from this source IS conveying under the AGPL, and 5(d)
+  does attach to them — they, not this project, would need a notice surface; `LICENSING.md` says
+  so. **Revisit** if the conveyance terms change.
+- **Source:** the multi-agent review of #2654, finding 30a.
+
 ## adr-no-production-create-project: PT10 has no production create-project primitive
 
 - **Formerly:** ADR-0005
@@ -1393,6 +1738,106 @@ step, no automation. Just a record.
   fallback.
 - **Source:** PT-4412, review of #2714.
 
+## adr-notices-derived-from-what-ships: Third-party notices are derived from what ships, and every admission path fails closed
+
+- **Date:** 2026-08-20 (consolidated 2026-08-25)
+- **Status:** Accepted
+- **Context:** A notices document is a legal claim about what a distributed artifact contains, so the
+  two questions it rests on are *what actually ships* and *what each of those things is licensed
+  under*. The generator this replaces answered both by inference. It carried its own license
+  classifier, its own regex import scan, its own SPDX text store and five hand-maintained tables in
+  about 960 lines. Three of its mechanisms were unsound rather than merely large: its npm set
+  unioned a repo-root `npm ls --omit=dev` closure with **no packaging basis** (electron-builder packs
+  from `release/app`, never the root closure), over-reporting by 46 packages; its license
+  identification was a regex signature matcher over license text; and an unrecognized license warned
+  and exited 0, so the artifact could ship with a package nobody had ruled on.
+- **Decision:** Replace it with small modules under `.erb/scripts/third-party-notices/`, wired by
+  `main.ts`. Five rules, which are the whole of the approach:
+
+  1. **What ships is derived from the build, not from manifests.** The npm set comes from webpack's
+     own module manifests (`.notices/modules/*.json`, emitted by a compiler plugin), unioned with
+     `release/app`'s unbundled closure and two compensating scans for what a module graph cannot see
+     through: stylesheets, because Tailwind's own bundler inlines `@import` targets before webpack
+     starts; and the MIT `lib/` packages, because they are consumed as their own prebuilt bundles so
+     anything vite inlined is one opaque module by the time webpack sees it. A `package.json`
+     section is never evidence — the bundled dependencies live in `devDependencies` by convention.
+     The NuGet set is the union of the restore closure for all four published runtime identifiers,
+     not one platform's.
+  2. **What a package is licensed under comes from two independent signals**, reconciled by
+     `policy.ts`: the manifest's declared expression, parsed with `spdx-expression-parse`, and the
+     license text on disk, identified by `licensee`. Because neither derives from the other, a
+     disagreement is real information — `quill-delta@5.1.0` declares MIT and ships a BSD-3-Clause
+     LICENSE. The reconciliation is ecosystem-independent and turns on three cases, not two: text
+     that identifies must agree with the declaration; text that does NOT identify blocks for review
+     (`jszip` concatenates the full MIT and GPLv3 texts); and **no license file at all is normal**,
+     resolving on the declaration with the canonical SPDX text reproduced on the package's behalf,
+     because monorepo families like `@radix-ui/*` publish dozens of packages against one root
+     license and every NuGet package is metadata-only.
+  3. **Every admission path is an allowlist, and an unparseable determination must say so.** A
+     license is admitted because it is on `allowed` and absent from `copyleft`, never because it
+     failed to appear on a denylist — an id nobody enumerated must not default to permitted. This
+     governs the declared path, the text-derived path, bundled extra files, and files identified
+     BELOW the confidence threshold, which may raise an objection even though they may not resolve a
+     verdict. Where a value cannot be checked at all — a curated override's free text — the entry
+     must record that (`nonSpdx`), so the bypass is a visible line in the policy rather than a silent
+     short-circuit.
+  4. **The two escape instruments are bounded and pinned.** A reviewed `exception` clears one blocked
+     package: it must name a reviewer and a date, record an SPDX expression whose every identifier is
+     on `allowed` and absent from `copyleft`, carry no `WITH` operand (whose text the corpus cannot
+     reproduce), and be pinned to one version AND one text hash. It records which license an
+     *unidentifiable* text actually is, so it may not override a positive copyleft identification. A
+     curated `override` answers a package whose own metadata establishes nothing, so it applies only
+     where nothing parseable is declared and no text identified; it may record the version it was
+     made against, and an `openQuestion` it does NOT settle, which is reported on every run without
+     blocking. Both bounds live in the mechanism rather than in a test over the committed policy,
+     because such a test cannot cover an entry added in the same pull request as the change it
+     accompanies.
+  5. **The gate fails closed, and drift is a gate of its own.** A package that cannot be cleared
+     stops the run and nothing is written; the message carries both signals and the exact JSON to
+     paste — checked against the policy first, so it never proposes a route the gate would reject. A
+     committed lock sidecar (`THIRD-PARTY-NOTICES.lock.json`) records each package's SPDX id, matched
+     file and text hash plus the licensee and corpus versions, so a license text changing under an
+     unchanged version is detectable. CI only ever runs `--verify`; regeneration is a deliberate
+     local step. Within that local step the ordering is load-bearing - verify **before** regenerate,
+     since regeneration overwrites the lock and a check after it compares a file against itself.
+
+  Two mechanical consequences of "derived from the build" round this out. The artifact is generated
+  on **Linux**, because the NuGet closure is RID-dependent and one platform has to be canonical;
+  Windows and macOS verify their own npm closure against the lock instead, which needs no Ruby and no
+  dotnet. And a package the local tree cannot describe truthfully is described **from
+  `package-lock.json`** rather than from disk — a `yalc` dev link points at a moving branch of
+  another repository, and a platform-only optional dependency was never installed here at all; both
+  are marked so the document says what was read and what was not.
+
+- **Alternatives:** Keep extending the single script — rejected: its own tables were the failure
+  mode. Keep the regex import scan — rejected: for JS/TS it inferred from source text what the
+  compiler reports exactly. Keep warning on unknown licenses — rejected: a legal artifact that ships
+  with an unruled package is the failure this exists to prevent, and a warning in CI output is not a
+  decision. Check the canonical SPDX texts into the repository — rejected once they could be read
+  from a pinned `spdx-license-list` and verified against a committed checksum index. Recognize
+  copyleft by denylist — rejected as the same class of error as the manifest inference: it sees only
+  the licenses someone thought of. Require identified text for every npm verdict — rejected: 14
+  shipped packages declare plain MIT and ship no file, and no instrument could clear them. Bound the
+  exception instrument by a data-level test over the committed policy alone — rejected for the
+  same-pull-request hole above. Run the drift check after regeneration — rejected: it can only
+  compare a file against itself.
+- **Consequences:** the generator requires a completed `npm run build` and four `dotnet restore`
+  runs, so it is no longer a fast standalone script — that cost buys a shipping set derived from the
+  build rather than inferred from it. **A NuGet package's LICENSE is CLASSIFIED from nuspec metadata
+  but REPRODUCED from the file it bundles** — two questions that look like one. Reproducing canonical
+  text in place of a bundled file would substitute SPDX's `<copyright holders>` placeholder for a
+  real notice: 58 packages here bundle the shared Microsoft `LICENSE.TXT` naming ".NET Foundation and
+  Contributors" while their nuspecs name "© Microsoft Corporation" — a different entity. Where a
+  package ships no readable license file at all, its copyright notice is recorded in the policy's
+  `copyrightNotices`, read from that package's own license file by whatever route it publishes one.
+  **Revisit** if the build cost becomes a problem for pull-request CI.
+- **Source:** the third-party-notices tooling replacement; `LICENSING.md`; the multi-agent review
+  of #2654. (The design note for that work lives under a gitignored path, so it is not a citable
+  reference — the reasoning is reproduced here precisely because that path is not readable from the
+  repo.) Supersedes and absorbs the intermediate designs recorded during that work
+  (checked-in canonical texts; a regex import scan; a copyleft denylist), none of which reached
+  `main`.
+
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
 - **Formerly:** ADR-0017
@@ -1455,6 +1900,33 @@ step, no automation. Just a record.
   on persisted slots.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
+
+## adr-package-verifies-the-document-not-the-shipping-set: `npm run package` runs the check a patched clone can answer
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `npm run package` runs `npm run verify:third-party-notices:document` rather than the
+  stronger `--verify-shipping-set`. The reason recorded in `packaging.test.ts` was that the
+  shipping-set half cannot run over warm webpack caches — which stopped being true once `clean.ts`
+  became the first step of `package` and its glob started removing every
+  `node_modules/.cache/webpack-*` directory, including each extension bundle's per-mode one. Since
+  `package` is the route that produces the installers, the stronger check looked available.
+- **Decision:** Keep `--verify-document`, for a different reason: `package` is not run only from
+  this repository. `paratext-10-studio` clones this repo, patches it, copies private extensions in,
+  yalc-links a local `scripture-editors`, and runs `npm run package` inside the patched clone.
+  `verifyNpmShippingSet` ends in `diffShippingSet`, which refuses any drift in either direction, so
+  it would fail there on every build. `--verify-document` compares the committed document against
+  the sha256 in the committed lock — two committed files, no build inputs — so it answers the same
+  way in a patched clone as it does here.
+- **Alternatives:** Switch `package` to `--verify-shipping-set` — rejected: it breaks the downstream
+  packaging build. Make the shipping-set check tolerate a superset — rejected: "any drift in either
+  direction" is the property that makes it worth running at all.
+- **Consequences:** the artifact users receive is verified as a DOCUMENT (the committed notices match
+  the committed lock) rather than as a derivation from that build's own graph; the derivation is
+  checked on the Linux leg of `test.yml` and at release time in `publish.yml` and
+  `package-main.yml`. **Revisit** if notices generation ever moves into `paratext-10-studio`, which
+  would give the patched build a shipping set of its own to verify against.
+- **Source:** the multi-agent review of #2654, finding 22.
 
 ## adr-packaged-extensions-are-discovered: `InstalledExtensions.packaged` reports discovered extensions, not activated ones
 
@@ -1575,6 +2047,65 @@ step, no automation. Just a record.
 - **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
   the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
   than the defect.
+
+## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
+
+- **Date:** 2026-08-29
+- **Status:** Accepted
+- **Context:** `adr`-worthy because the two halves pull against each other and the losing half is
+  invisible. #2624 (2026-08-03) scoped the PAPI websocket to loopback, changing
+  `new WebSocketServer({ port })` to `new WebSocketServer({ host: 'localhost', port })` in
+  `rpc-websocket-listener.ts` `connect()` — connections are unauthenticated and every registered
+  method is callable over them, so the server must never accept off-machine traffic. But
+  `net.Server.listen(port, host)` performs an **async DNS lookup** when `host` is not an IP literal,
+  deferring the bind, where the previous hostless `listen(port)` bound the wildcard address on the
+  next tick. Meanwhile `connect()` set `ConnectionStatus.Connected` and returned `true`
+  synchronously, never awaiting the server's `listening` event — so `await
+  networkService.initialize()` in main resolved while the socket could still be unbound, and main
+  went on to spawn the extension host and open windows into that gap. The apparent ordering
+  guarantee in `main.ts` (network service, then extension host) did not hold. First launch of the
+  0.4.0-alpha.0 snap after installing: the extension host's single connect was refused at +549 ms
+  and it died 9.98 s later, so **no** settings, localization, or theme provider was ever registered;
+  the renderer rendered raw `%localizeKey%` text and the .NET provider crashed on a missing settings
+  method. Warm restarts bind long before the extension host boots (~500 ms) and were unaffected,
+  which is why it presented as intermittent while being the norm on a cold install. Not
+  load-dependent: with the port free on an idle machine, a client still cannot connect at the
+  instant the pre-fix `connect()` resolves (`rpc-websocket-listener.real-socket.test.ts`).
+- **Decision:** Keep the hostname bind, and make readiness explicit instead of assumed: `connect()`
+  awaits `listening` before reporting success, and reports failure when the server emits `error`
+  (e.g. `EADDRINUSE`) instead of binding.
+- **Alternatives:** **Bind the `127.0.0.1` literal and point clients at it.** This does satisfy the
+  actual requirement — Matt Lyons confirmed the goal is "unreachable off-machine", which the literal
+  meets — and it would remove the resolver from the startup path entirely, restoring a synchronous
+  bind. Rejected because the hostname is there for an *independent* reason: it avoids IPv4-vs-IPv6
+  mismatches between the server's bind and a client's connect, which Matt has actually observed over
+  the years. Three call sites connect by name across two resolver stacks (`rpc-client.ts` for the
+  renderer and extension host, `PapiClient.cs` for .NET, plus the OpenRPC playground URL in
+  `main.ts`), external debugging tools such as `websocat` resolve on their own, and the hostname
+  leaves room for IPv6-centric network configurations. Note the security requirement and the
+  address-family robustness are separate concerns; only the first is about loopback scoping.
+  **Client-side retry with backoff** (implemented first, then dropped) — absorbs the window instead
+  of removing it, and retrying safely needs its own wall-clock budget: an attempt whose socket is
+  accepted but never upgraded can only end by timing out, so an attempt count bounded against
+  `AsyncVariable`'s 10 s default permitted a ~73 s stall of the extension host's connect, worse
+  than the single 10 s failure it replaced — and it is that stall which left the app unusable. **Gate the extension-host spawn on readiness** in
+  `extension-host.service.ts` — unnecessary once `connect()` is honest, since main already awaits
+  `networkService.initialize()` before spawning.
+- **Consequences:** The race is closed at its source, so a client's connect no longer depends on
+  winning a timing window and `RpcClient` carries no retry. The catch: `main.ts`'s ordering is only
+  real *because* `connect()` awaits binding — any future change that makes the listener report ready
+  optimistically silently reopens this, with the symptom appearing three processes away as missing
+  providers. A bind failure is now reported rather than being indistinguishable from success.
+  `RpcWebSocketListener` gained an optional `port` constructor argument so a test can bind a real
+  socket without colliding with a dev app on 8876. The real-socket tests deliberately do not mock
+  `ws` and run on all three CI OSes, because whether "`connect()` resolved" implies "a client can
+  connect now" depends on platform bind/listen semantics and on how `localhost` resolves. Revisit if
+  the app ever needs to be reachable from another machine — that is a different security decision —
+  or if resolver latency on some platform proves material. The loopback rationale now lives here and
+  in the code comment; `Security-Guide.md` has no entry for it.
+- **Source:** Diagnosed from a packaged 0.4.0-alpha.0 snap first-run failure on WSL2 Ubuntu,
+  2026-08-27. Hostname-vs-literal and the `listening` await confirmed with Matt Lyons (#2624's
+  author) on Discord, 2026-08-28.
 
 ## adr-paratext-data-alerts-via-alert-capture: Surface ParatextData alerts via `AlertCapture` instead of swallowing them
 
@@ -2390,6 +2921,70 @@ step, no automation. Just a record.
 - **Source:** punctuation-checklist port (markers-consumption verdict); see `08_Checklists.md` in the
   PT9 feature inventory for the per-tool behavior and the verse-range divergence.
 
+## adr-root-package-json-no-name: The root `package.json` carries no `name` or `version`; app identity lives in `release/app/package.json`
+
+- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Context:** The root `package.json` has no `name` and no `version` field. That absence is
+  load-bearing rather than an oversight, but nothing in the repo said so, and it is repeatedly
+  re-proposed — PR #2199, a revision of PR #2257, and again during unrelated dependency work in
+  August 2026 (PR #2714, whose own merge landed in September) — each time rediscovering the
+  reasoning from scratch. Naming the root has twice broken CI, for a precise and fully diagnosed
+  reason: it makes eslint-plugin-import treat the root as a package, so `import/no-relative-packages`
+  rejects every pre-existing relative import that crosses out of the root into `release/app`,
+  `.storybook` or the `lib` packages — 12 errors across 9 files, none of them files such a change
+  would touch. That is what failed the Ubuntu build on #2257 revision r3 (2026-05-11) and all three
+  platforms on #2714 (2026-08-28). Separately, electron-builder resolves app identity from **both**
+  the root manifest and `release/app/package.json` in ways neither file makes obvious:
+  `electron-builder.json5` sets `productName` and `appId` and points `directories.app` at
+  `release/app`, while `release/app/package.json` carries the real identity
+  (`name: "platform-bible"`). Adding `name`/`version` to the root is separately *recollected* to have
+  broken the macOS build — raised by tjcouch-sil in review of #2257, who asked jolierabideau to
+  confirm it. That recollection specifically remains unverified: jolierabideau never replied on
+  either PR, and #2257's macOS job was cancelled rather than run, so it neither confirms nor refutes
+  it. The visible cost of the absence is that npm falls back to the containing directory name, so
+  `npm install` from a clone or git worktree not named `paranext-core` rewrites the lockfile's root
+  `name`.
+- **Decision:** Leave the root `package.json` without `name` or `version`. Guard the *symptom*
+  instead: `.husky/pre-commit` blocks a commit that stages a `package-lock.json` whose root `name`
+  is not `paranext-core`, alongside the existing yalc-entries check. It reads the staged blob, and
+  only when the lockfile is staged, so an unrelated commit is never blocked and a drifted staged
+  copy is never missed because the working tree was fixed without re-staging.
+- **Alternatives:**
+  - *Add `name` to the root manifest* — deferred, not rejected on merit. PR #2199 proposed
+    `paranext-core` and a revision of PR #2257 proposed `platform-bible`; the two attempts did not
+    agree on the value, which is itself a sign the question is unsettled. The payoff is removing a
+    one-line lockfile annoyance. The cost has two parts, and the cheap one is the one that has
+    actually stopped every attempt so far: the `import/no-relative-packages` failure above must be
+    resolved first, by either moving the root into a workspace layout that makes those imports legal
+    or rewriting the 12 offending imports, plus whatever prettier and stylelint fallout follows.
+    Only past that does the second part apply — app identity across two products and three
+    operating systems, which is unverified rather than disproven.
+  - *Add it here and in `paratext-10-studio` together* — that coordination would be mandatory, not
+    optional: `lib/build.ts` there rewrites `release/app/package.json` (setting
+    `releaseAppPackage.name` and `.version`) and never touches the root manifest, so a root `name`
+    would survive the Paratext 10 Studio rename unchanged.
+  - *Leave it undocumented* — rejected: the undocumented status quo is what produced the repeated
+    rediscoveries.
+- **Consequences:** Dev runs store data under `%appdata%/Electron` rather than a product-named
+  directory (prod is unaffected); the team treats the resulting dev/prod log separation as a minor
+  benefit. Anyone revisiting this must first clear the bar set in review of #2257 — test dev **and**
+  prod (portable and installed), on Platform.Bible **and** Paratext 10 Studio, on all three
+  operating systems, checking app data paths (`%appdata%/<name>`, `~/<name>`, install dir), deep
+  links and the displayed app name, the output executable name, executable metadata, and signing.
+  Before any of that, though, the `import/no-relative-packages` prerequisite has to be cleared —
+  it is cheap, precise and reproducible, and it is what has actually failed CI both times, so an
+  attempt that works the matrix first will be stopped long before reaching it. Revisit if the
+  import layout changes so that naming the root no longer trips that rule, if electron-builder's
+  field resolution becomes documented well enough to retire the matrix, or if someone confirms or
+  refutes the macOS recollection.
+- **Source:** PR #2199 (`fix: add explicit name to package.json`, opened 2026-04-14 by merchako, who
+  later asked to hand it off after the review below), and
+  tjcouch-sil's CHANGES_REQUESTED review of PR #2257 (2026-05-11), which carries the full rationale
+  and the test matrix. #2257 itself is unrelated work ("Update some vestigial Paranext references to
+  Platform.Bible", merged 2026-05-13) that briefly proposed the same root-`name` addition and
+  dropped it.
+
 ## adr-runaway-data-hook-guard: `useData`'s runaway guard counts subscribes and deliveries, degrades rather than throws, and expires
 
 - **Date:** 2026-08-28
@@ -2643,6 +3238,38 @@ step, no automation. Just a record.
   it is hiding rather than rendering a short list silently.
 - **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13).
 
+## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** `adr-toolbar-shrink-measurement` established that toolbars measure their own width
+  with a `ResizeObserver`, which jsdom cannot do. To let stories and tests drive the ladder anyway,
+  each toolbar took a `shrinkStep?: number` prop that overrode its measurement. The prop spread to
+  five components — `Toolbar`, `TabToolbar`, `TabToolbarContainer`, `BookChapterControlProps`, and
+  `EnhancedResourceTabBarProps` — putting a test-only affordance in the public surface of
+  `platform-bible-react` that extension authors read, and it was still spreading.
+- **Decision:** Remove the prop. Add a second context, `ShrinkStepOverrideContext`, defaulting to
+  `undefined`, set by an exported `<ShrinkStepOverride value={n}>` wrapper that provides both it and
+  `ShrinkStepContext`. Toolbars that measure resolve `useShrinkStepOverride() ?? measured`;
+  components that only read a step keep reading `ShrinkStepContext` and lose their prop outright.
+- **Alternatives:** **Reuse `ShrinkStepContext` alone**, as originally sketched — rejected: it works
+  for pure consumers like `BookChapterControl`, but not for the components that publish. A publisher
+  cannot read back what it publishes, and that context deliberately defaults to `SHRINK_STEP.WIDE`
+  rather than being unset, so a publisher reading it could never distinguish "nobody is overriding
+  me" from "someone is overriding me with the widest step". **Make `ShrinkStepContext` itself
+  `number | undefined`** — rejected: it changes the semantics every existing consumer depends on to
+  fix a test-only problem. **Leave the prop** — rejected: it is test scaffolding shipped as API.
+- **Consequences:** One wrapper covers both cases, so a test does not need to know whether a toolbar
+  sits between the wrapper and the component under test. The public surface of `platform-bible-react`
+  loses a prop it should not have carried, and the removal is effectively free: `shrinkStep` was
+  introduced by PT-4344 (#2701) and removed the same day, so it appears in no tagged release — the
+  newest tag, `v0.5.0`, predates it — and no out-of-repo consumer could have adopted it. That is why
+  this was worth doing immediately rather than living with the prop; the same change a release later
+  would have been a breaking one. The cost is a second context to understand alongside the first; the
+  two are documented in terms of each other, and the override is the only one a test should ever
+  reach for.
+- **Source:** PT-4466, deferred from PT-4344 (PR #2701).
+
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
 - **Date:** 2026-08-19
@@ -2678,7 +3305,9 @@ step, no automation. Just a record.
   its neighbours above the floor. Columns are proportional with no JS: rc-dock renders each as
   `flex: (size) (size × 1e6) (size)px`, so removing the floor is all that "proportional resize"
   required. The window minimum and the column floor are two constants in different files that must
-  move together; the test cannot import the Electron-side value, so its comment says to change both.
+  move together. That coupling was originally unenforced — the test mirrored the window minimum
+  as a local literal — and is now bound to a shared constant; see
+  `adr-window-min-width-shared-constant`.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
 
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
@@ -2831,6 +3460,62 @@ step, no automation. Just a record.
   keeps the text.
 - **What covers this ground instead:** `adr-scroll-group-hosted-in-main` and
   `adr-theme-hosted-in-main`.
+
+## adr-snap-gnome-plug-renamed-by-patch: The snap's GNOME platform plug is renamed by patching electron-builder's template, not overridden in config
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** electron-builder's snapcraft template hardcodes a `gnome-3-28-1804` content plug
+  (Ubuntu 18.04) at `$SNAP/gnome-platform` and rewrites only `snap.base` when `base` is set, so a
+  `core22` snap mounted a bionic GNOME platform: mismatched Mesa/DRI, libdbus and GTK/Wayland, and
+  no window on launch. The template is wrong at its own default too (`base: core20` paired with the
+  bionic plug), so this is not an artefact of overriding `base`. The first fix overrode the plug's
+  `content`/`default-provider` under the template's original *name*, which config can do. It worked
+  on cold installs and failed on upgrades: snapd matches stored connections by plug **name**, so
+  `reloadConnections` found the old connection, failed the policy re-check against the new
+  `content`, logged `cannot refresh static attributes of the connection`, revived it with the old
+  attributes anyway, and auto-connected the new one alongside. Two content plugs then compete for
+  one mount point and snapd renames one aside to break the tie — arbitrarily. Measured on Ubuntu
+  22.04: 16 in-place upgrades launched 9 times and segfaulted 7, from an identical build.
+- **Decision:** Rename the plug so the old name no longer exists for snapd to match, which lets the
+  stale connection be dropped rather than revived. electron-builder's config **cannot** express
+  this — it merges config plugs into the template's map by key (`snap.plugs[plugName] =
+  plugOptions`), so it can replace a template entry but never rename or remove one, and introducing
+  a second key leaves both plugs declared. The rename therefore lives in a `patch-package` patch on
+  `app-builder-lib`'s template. `base` is the single source of truth for the pairing, enforced
+  against the patched template and the workflow runners by
+  `.erb/scripts/electron-builder-snap-config.test.ts`.
+- **Alternatives:** Override the attributes under the template's name — rejected, empirically: it
+  makes every existing install a coin flip. Declare a second, correctly-named plug in config —
+  rejected: config cannot remove the template's plug, so both ship and collide. Neutralise the
+  template's plug by retargeting it to an unused mount point and adding a correct one — rejected:
+  ships a permanent vestigial plug and relies on snapd tolerating a stale connection to a bogus
+  target. A `post-refresh` hook that disconnects the stale plug — rejected: strict confinement has
+  no `snapd-control`.
+- **Consequences:** paratext-10-studio *creates* `patches/app-builder-lib+26.7.0.patch` in this repo
+  from its own `repo-patches/paranext-core.patch`, to add mercurial snap parts to the same template.
+  A second core-owned patch at that same path would collide — the studio applies repo patches with
+  `git apply --3way`, which turns an add/add case into conflict markers written *into the patch
+  file*, leaving patch-package unable to parse it. **patch-package supports sequenced patches**
+  (`<pkg>+<version>+<NNN>+<description>.patch`), so this patch is named
+  `app-builder-lib+26.7.0+002+rename-gnome-platform-plug.patch` and occupies a different path
+  entirely. Both patches then apply in sequence to the same template — verified with the studio's
+  real patch body: the result carries the mercurial parts *and* `gnome-42-2204`. There is therefore
+  **no collision, no forced merge order and no companion studio change**. The two hunks touch
+  disjoint regions (~line 21 vs ~line 130), so apply order does not matter.
+  Two hazards come with that. Regenerating this patch later with plain
+  `npx patch-package app-builder-lib`, without `--append`, collapses the sequence back into a single
+  unsequenced `app-builder-lib+26.7.0.patch` — reintroducing exactly the collision the sequenced
+  name avoids; regenerate with `--append`, or rename the output back. And a renamed plug is a new
+  content tag from the snap store's perspective, so store-granted auto-connection for it should be
+  confirmed on a published build rather than inferred from sideload testing, which bypasses store
+  assertions.
+- **Source:** PT-4496. PR #2747 review raised the upgrade path, which the original cold-install
+  diagnosis had not considered; its re-review then established the sequenced-patch mechanism above,
+  correcting an earlier belief that patch-package allows only one patch per package+version and that
+  a coordinated studio merge was therefore unavoidable. Verification report, including the 12 renamed
+  cycles against live controls and the `snap disconnect` repair for an already-broken install:
+  https://claude.ai/code/artifact/cc4c4c08-2e75-4dd5-855a-312fc4a6a57e
 
 ## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
@@ -3352,6 +4037,92 @@ step, no automation. Just a record.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
+## adr-tour-offered-in-both-modes: Offer the orientation tour in both interface modes, letting the anchor filter decide what each mode sees
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** The tour was built for Simple mode and shipped Simple-only — hidden from the Help
+  menu in Power (`hiddenInterfaceModes`) and refused in the component (`!isPowerMode`). Review
+  established that this was a different answer than the one the stakeholder asked for ("we should
+  offer this tour under Help… for Power and Simple"), and that Power was not cleanly declined but
+  half-wired: `requestTourReplay()` increments a count nothing consumes, so a replay requested in
+  Power was accepted, rendered nothing, and then opened the tour unprompted if that window later
+  switched to Simple. Three of the five stops anchor to `[data-dockid="simple-panel-*"]` and a
+  fourth to the Sync button, which the toolbar renders only in Simple; the copy for two of them
+  asserts Simple invariants ("There is only ever one project here", "these can't be closed or
+  moved") that are false in Power. The fifth stop, the toolbar's Profile button, is rendered in
+  both modes and is where internet settings and registration live in both.
+- **Decision:** Offer the tour in both modes and let `Tour`'s existing open-time filter decide what
+  each mode gets — Simple sees its columns and toolbar stops, Power sees the one shared Profile
+  stop. Keep the *unrequested* showing Simple-only: `mightShow` allows Power only for an explicit
+  replay, so no Power user is interrupted by a one-stop tour they did not ask for. Make the
+  readiness gate mode-aware, waiting on the anchor that mode actually has. Refuse a replay at the
+  shard boundary while the first-run wizard gates the app, since that is the one non-transient
+  "cannot show" state and the request would otherwise be banked rather than dropped.
+- **Alternatives:**
+  - *Keep it Simple-only, declared deliberately* — rejected once the shared stop was identified.
+    Declining would have been defensible on the grounds that the tour teaches the three-column
+    model, but it discards a stop that is correct in Power and that answers the same question a
+    Power user has. It also leaves the stakeholder's request answered with "no" where a partial yes
+    costs a mode-aware selector.
+  - *Author a Power-specific tour* — rejected as premature: Power's orientation needs are not
+    established, and inventing stops for it inside a review pass is the kind of UX-by-developer the
+    review already pushed back on. If Power ever warrants its own tour, this decision does not
+    block it.
+  - *Let the tour auto-show in Power too* — rejected: a single stop pointing at the Profile button,
+    appearing unprompted on next launch for every existing Power user, is interruption without
+    orientation. The Help menu is the right door for it.
+  - *Fix only the banked-replay bug and leave Power refused* — rejected: it fixes the symptom the
+    review found while leaving the mode question unanswered, and the boundary refusal is needed
+    either way for the wizard case.
+- **Consequences:** The tour's step list is now a superset that each mode filters, so what a user
+  sees depends on what their layout renders — a stop added later without a Power-safe anchor simply
+  will not appear there, silently. That is the same degradation the component already relies on for
+  the Sync button (absent wherever Send/Receive is not installed, which is every build but
+  Paratext 10 Studio), so the behavior is not new, but it does mean stop count is not a fixed
+  number and tests assert on the filtered list rather than a constant. Copy for any future stop
+  must be true in every mode the stop can appear in, since the filter selects on anchor presence
+  and cannot know whether prose applies.
+- **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
+  an explicit request for both modes.
+
+## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Three declared shapes reach `resolveDeclaredPrefix` in `policy.ts` and block before
+  any policy list is consulted: a `WITH` exception (`Apache-2.0 WITH LLVM-exception`), an
+  unrepresentable `+` (`Apache-2.0+`, for which SPDX publishes no "or later" identifier), and a
+  disjunct that is not a grant we can verify (`LicenseRef-Commercial`). The first two are usually
+  AGPL-COMPATIBLE — they block on an expressibility problem, not an incompatibility. SPDX names no
+  identifier for "Apache-2.0 or later", and the corpus this pipeline reproduces texts from holds no
+  exception texts, so resolving on the base identifier would put a text into the artifact that
+  describes a license the package is not under, or state terms narrower than it grants.
+
+  No instrument in `notices-policy.json` can clear any of the three, and this was not obvious from
+  the code: `applyException` refuses a `WITH` and an unrepresentable `+` by name, and
+  `applyOverride` is reachable only where `declared.ok` is false — which is false for all three,
+  because each parses. Both block messages nonetheless told the reader "a reviewed exception or a
+  curated override records what applies."
+- **Decision:** Accept dropping the dependency. These are not routed to a new instrument; the block
+  message and `report.ts`'s `policyRemedy` now say plainly which instruments cannot clear the shape
+  and why, and end at "the dependency has to change." A package whose declaration this pipeline
+  cannot resolve into an identifier it can reproduce a text for does not ship.
+- **Alternatives:** Add an instrument that records a human's determination for `+` and `WITH` —
+  rejected for now: it would admit a package on a reviewer's word where the artifact still cannot
+  reproduce a text matching the grant, which is the half-answer
+  `adr-notices-derived-from-what-ships` rules out. Resolve on the base identifier — rejected: it
+  states terms narrower than the package grants, and for `WITH` it names a license the package is
+  not under. Leave the messages naming instruments that cannot clear the block — rejected: advice
+  the gate then refuses is the failure `policyRemedy` exists to prevent.
+- **Consequences:** nothing in the current closure declares any of the three, so this costs nothing
+  today; the decision is recorded because it would otherwise be re-litigated the first time a real
+  dependency hits it. **Revisit** if a dependency this project genuinely needs declares
+  `<id>+` or `<id> WITH <exception>` — the answer then is an instrument that records the
+  determination AND the text to reproduce, not a relaxation of the gate.
+- **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
+  `policyRemedy`.
+
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
 - **Date:** 2026-08-27
@@ -3467,6 +4238,34 @@ step, no automation. Just a record.
   worse than a badly-timed foreground.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.
+
+## adr-window-min-width-shared-constant: The window minimum is one shared constant, not a value mirrored per process
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** `adr-simple-mode-column-minimums` derives Simple mode's column floor from the window
+  minimum, but the 900 lived in two places by hand: `minWidth` on the `BrowserWindow` in `main.ts`,
+  and a local `const WINDOW_MIN_WIDTH_PX = 900` inside `simple-layout.data.test.ts`. Both sites
+  carried a comment saying the other had to change with it, and the test comment stated outright
+  that lowering the window minimum would NOT fail the test — so the one assertion guarding against a
+  horizontal scrollbar was pinned to a number that no longer had to match reality. The extraction
+  was deferred from PR #2701 over a concern that a constant in `src/shared/` would be picked up by
+  the generated `papi.d.ts` and become extension-visible API.
+- **Decision:** Put the constant in `src/shared/models/window-constraints.model.ts` and import it in
+  both places. `papi.d.ts` is generated by `tsc --outFile` from a seven-entry include list following
+  the transitive import graph — not from everything under `src/shared/` — and `simple-layout.data.ts`
+  is not reachable from those entry points. Regenerating confirmed `papi.d.ts` is byte-identical and
+  contains no reference to the new module.
+- **Alternatives:** **`src/node/`** — rejected on a factual error in the original suggestion: the
+  renderer is not a Node process, so `simple-layout.data.ts` cannot import from there. **Leave the
+  mirror and keep the "change both" comments** — rejected: a comment cannot fail a build, and the
+  test that exists to catch a scrollbar regression was blind to the change most likely to cause one.
+- **Consequences:** Lowering the window minimum now fails `simple-layout.data.test.ts` instead of
+  silently overflowing the dock, which is what that test was written to prevent. The
+  `papi.d.ts`-pollution question is settled empirically rather than by assumption, and the same check
+  (`npm run build:types`, then diff) applies to any future constant placed in `src/shared/` for
+  cross-process use — reachability from the papi-dts entry points is what matters, not the directory.
+- **Source:** PT-4466, deferred from PT-4344 (PR #2701).
 
 ## adr-window-readiness-in-main: Window readiness is tracked in main via window-service registration, used to pick routing targets
 

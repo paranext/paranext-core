@@ -2070,9 +2070,21 @@ declare module 'shared/models/rpc.interface' {
      * - On clients: connecting to the server
      * - On servers: opening an endpoint for clients to connect
      *
+     * An implementation that opens an endpoint MUST NOT resolve `true` until that endpoint is
+     * actually accepting connections. Callers treat this resolving as permission to start processes
+     * that immediately connect, and those clients may get a single attempt with no retry — so
+     * reporting ready optimistically surfaces as a client that was refused, whose symptoms appear in
+     * a different process entirely. See `adr-papi-websocket-hostname-bind`.
+     *
      * @param localEventHandler Function that handles events from the server by accepting an eventType
      *   and an event and emitting the event locally. Used when receiving an event over the network.
-     * @returns Promise that resolves when finished connecting
+     * @returns `true` once the connection is established and usable — for a server, once its endpoint
+     *   is accepting connections. `false` if the connection could not be established.
+     *
+     *   TODO(PT-4495): implementations disagree on what they return when this handler was already
+     *   connected or connecting, so a caller can neither rely on that case nor tell a benign
+     *   double-connect from a real failure. PT-4495 replaces the boolean with a result type that
+     *   distinguishes the three outcomes; until then, only the two states above are contractual.
      */
     connect: (localEventHandler: EventHandler) => Promise<boolean>;
     /**
@@ -2356,6 +2368,14 @@ declare module 'client/services/rpc-client' {
      * An instance method (bound by `bindClassMethods`) rather than a static one for that reason.
      */
     private onError;
+    /**
+     * Reports a failure to whichever connection attempt is still waiting, if any.
+     *
+     * An `AsyncVariable` is single-use and freezes once settled, so this is a no-op after the attempt
+     * has already succeeded or failed. That is what makes it safe to call from both the `error` and
+     * the `close` handler, since a refused socket fires both.
+     */
+    private failConnectionAttempt;
     private onWebSocketOpen;
     private onWebSocketClose;
     private onMessageReceivedByWebSocket;
@@ -2575,6 +2595,7 @@ declare module 'main/services/rpc-websocket-listener' {
    * Created by the main process on start up when the network service initializes
    */
   export class RpcWebSocketListener implements IRpcMethodRegistrar {
+    private readonly port;
     connectionStatus: ConnectionStatus;
     /**
      * Event that fires when a connected process goes away, carrying the method names its departure
@@ -2605,7 +2626,12 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private readonly warnedForeignAnnouncements;
     private readonly clientDisconnectEmitter;
-    constructor();
+    /**
+     * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
+     *   overridden only by tests that need to bind a real socket without colliding with a running
+     *   app.
+     */
+    constructor(port?: number);
     get nextSocketId(): string;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -5316,6 +5342,20 @@ declare module 'papi-shared-types' {
      * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+    /**
+     * Open the Terms of Service document that ships beside the application - the terms the
+     * distributed application is licensed to the user under, rather than this repository's AGPL
+     * source (see LICENSING.md).
+     *
+     * The document is handed to whatever the operating system opens Markdown with; if nothing does,
+     * it is revealed in the file manager instead.
+     *
+     * @throws If the document could not be opened - which includes the case where it was revealed
+     *   in the file manager instead, because that fallback cannot report whether it succeeded
+     *   either. A caller that offers this as a link needs to be able to tell the user the document
+     *   did not open, so the failure is reported rather than only logged.
+     */
+    'platform.openTermsOfService': () => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -5381,6 +5421,14 @@ declare module 'papi-shared-types' {
     'platform.isUsersnapFormCurrentlyOpen': () => Promise<boolean>;
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
+    /**
+     * Show the orientation tour again from its first stop, in the window the user is working in.
+     * Available in both interface modes: in Power mode the tour reduces to the stops whose anchors
+     * exist there, which today is the toolbar's profile button.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.showOnboardingTour': () => Promise<void>;
     /**
      * Navigate the active scroll group to the next chapter (rolls into the next book)
      *
@@ -6265,6 +6313,7 @@ declare module 'shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
   import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
+  import type { WebViewId } from 'shared/models/web-view.model';
   export type Severity = 'info' | 'warning' | 'error';
   /**
    * The placements a notification can appear in, as a frozen array so it can be the single source of
@@ -6399,6 +6448,14 @@ declare module 'shared/models/notification.service-model' {
      * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
      * the value it had on the previous `send` for that id - omitting a field never clears it. Pass
      * the field explicitly to change it.
+     *
+     * The one exception is {@link webViewId}: which window a `send` runs in is decided in the main
+     * process before the renderer ever sees the notification to merge it, so omitting `webViewId` on
+     * an update does NOT keep routing to the window the original send resolved to - it always routes
+     * by the rules {@link webViewId} documents, using only what this call passed. An update that lands
+     * in a different window updates nothing: that window has never seen the id, so it opens a second
+     * notification with no merge applied, and the original stays up in the window it was routed to.
+     * Pass the same `webViewId` on every `send` that shares an id.
      */
     notificationId?: string | number;
     /**
@@ -6409,6 +6466,23 @@ declare module 'shared/models/notification.service-model' {
      * seconds).
      */
     duration?: number;
+    /**
+     * Optional id of a web view this notification is about. When provided, the notification is routed
+     * to the window that owns that web view instead of the focused window — for a notification or
+     * prompt raised about a specific project or editor that may not be the one the user is currently
+     * looking at. Falls back to the focused window whenever the web view's window cannot be
+     * determined — it is open nowhere, a window that might have it could not be asked, or it is
+     * moving between windows.
+     *
+     * Omit for a generic notice, which should keep routing to the focused window — where the user is
+     * looking is the right place for something that is not about anything in particular.
+     *
+     * The narrowest key available: a notification about a project with no web view currently open has
+     * no `webViewId` to name, and routes to the focused window like a generic notice would.
+     *
+     * @experimental
+     */
+    webViewId?: WebViewId;
   }
   /**
    * Type signature for a command handler that is called when a user clicks on a notification.

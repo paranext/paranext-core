@@ -346,13 +346,24 @@ export {
 export { useShrinkStep } from './hooks/use-shrink-step.hook';
 
 // Contexts
-export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/shrink-step.context';
+export {
+  ShrinkStepContext,
+  ShrinkStepOverrideContext,
+  useShrinkStepValue,
+  useShrinkStepOverride,
+  SHRINK_STEP,
+} from './context/shrink-step.context';
+export {
+  ShrinkStepOverride,
+  type ShrinkStepOverrideProps,
+} from './context/shrink-step-override.component';
 
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_FIRST_RUN,
   Z_INDEX_ABOVE_POPOVER,
+  Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,

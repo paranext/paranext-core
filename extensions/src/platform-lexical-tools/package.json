@@ -1,11 +1,11 @@
 {
   "name": "platform-lexical-tools",
   "private": true,
-  "version": "0.6.0-alpha.0",
+  "version": "0.6.0-alpha.1",
   "main": "src/main.js",
   "types": "src/types/platform-lexical-tools.d.ts",
   "author": "Paranext",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
@@ -37,7 +37,7 @@
     "react-dom": ">=19.0.0"
   },
   "dependencies": {
-    "@sillsdev/scripture": "^2.0.5",
+    "@sillsdev/scripture": "^2.1.0",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {

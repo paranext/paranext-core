@@ -34,7 +34,11 @@ import {
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
-import { PanelRetryableErrorView, LoadingView } from './panel-state-views.component';
+import {
+  ExpandableInfo,
+  PanelRetryableErrorView,
+  LoadingView,
+} from './panel-state-views.component';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
@@ -188,14 +192,16 @@ export function ModelTextPanel({
     ? getRefLabel(effectiveModelText, dblResources)
     : undefined;
 
-  // Only show the tooltip when the header's tw:truncate actually clips modelTextLabel — an
-  // unconditional Tooltip would fire on every hover, even when the full label already fits.
+  // Only show the tooltip when the label is actually clipped — an unconditional Tooltip would fire
+  // on every hover, even when the full label already fits. The ref goes on the inner span that
+  // carries the ellipsis, not the header box around it: the box is sized by the column and never
+  // overflows, so measuring it would leave the tooltip permanently shut.
   const {
     ref: modelTextLabelRef,
     open: isModelTextLabelTruncatedHovered,
     onPointerEnter: onModelTextLabelPointerEnter,
     onPointerLeave: onModelTextLabelPointerLeave,
-  } = useTruncationTooltip<HTMLDivElement>();
+  } = useTruncationTooltip<HTMLSpanElement>();
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -514,6 +520,13 @@ export function ModelTextPanel({
         )}
         loadingLabel={localize(localizedStrings, '%webView_modelTextPanel_loading%')}
         emptyPrompt={localize(localizedStrings, '%webView_modelTextPanel_emptyState_prompt%')}
+        moreInfo={
+          <ExpandableInfo
+            moreLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo%')}
+            lessLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_lessInfo%')}
+            body={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo_body%')}
+          />
+        }
         pickLabel={localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onPick={() => handlePickModelText()}
@@ -672,7 +685,6 @@ export function ModelTextPanel({
           <Tooltip open={isModelTextLabelTruncatedHovered}>
             <TooltipTrigger asChild>
               <div
-                ref={modelTextLabelRef}
                 onPointerEnter={onModelTextLabelPointerEnter}
                 onPointerLeave={onModelTextLabelPointerLeave}
                 // Keyboard/screen-reader users can't hover to trigger the tooltip, so make this
@@ -696,14 +708,18 @@ export function ModelTextPanel({
                 // _simple-mode.scss's .scripture-editor-tab-nav-simple comment for why that was
                 // tried and reverted).
                 //
-                // tw:truncate + Tooltip: the column has a 300px minWidth (simple-layout.data.ts), and
-                // "{fullName} ({displayName})" can exceed that at 300px — truncate to keep the fixed
-                // 42px row height intact, with the full label available on hover/focus per the
-                // Responsiveness guideline. useTruncationTooltip keeps the tooltip from firing when
-                // the label already fits and tw:truncate has nothing to clip.
-                className="tw:flex tw:h-[42px] tw:shrink-0 tw:items-center tw:truncate tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
+                // Truncation + Tooltip: the column has a ~300px minWidth (simple-layout.data.ts) and
+                // "{fullName} ({displayName})" can exceed it, so the label ellipsises to keep the
+                // fixed 42px row height intact, with the full text on hover/focus per the
+                // Responsiveness guideline. The ellipsis has to live on the inner span rather than
+                // this box: `text-overflow` is inert on a flex container, because the text becomes
+                // an anonymous flex item and hard-clips mid-glyph instead of ellipsising.
+                // `tw:min-w-0` unlocks the shrink that `tw:overflow-hidden` then bounds.
+                className="tw:flex tw:h-[42px] tw:min-w-0 tw:shrink-0 tw:items-center tw:overflow-hidden tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
               >
-                {modelTextLabel}
+                <span ref={modelTextLabelRef} className="tw:min-w-0 tw:truncate">
+                  {modelTextLabel}
+                </span>
               </div>
             </TooltipTrigger>
             <TooltipContent>{modelTextLabel}</TooltipContent>

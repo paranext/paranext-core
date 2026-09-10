@@ -48,7 +48,10 @@ jobs:
 
       - name: Install packages
         run: |
-          npm ci
+          # Bumping versions only needs core's dev tooling (ts-node, prettier), so skip the
+          # postinstall chain. It links scripture-editors via yalc, which needs Volta-managed pnpm
+          # on PATH, and builds the Electron DLL — none of which a version bump reads or writes.
+          npm ci --ignore-scripts
 
       - name: Bump repo versions
         if: ${{ inputs.newVersion != '' }}

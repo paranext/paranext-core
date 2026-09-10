@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
+import { ExpandableInfo } from './panel-state-views.component';
 
 /**
  * Resolved from the extension's real `localizedStrings.json` rather than hardcoded, so this story
@@ -22,6 +23,13 @@ const RESOURCE_PANEL_KEYS = [
 ];
 
 const localizedStrings = getLocalizedStrings(RESOURCE_PANEL_KEYS);
+
+/** Strings for the optional "More info" disclosure, used only by the EmptyWithMoreInfo story. */
+const moreInfoStrings = getLocalizedStrings([
+  '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%',
+  '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%',
+  '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%',
+]);
 
 /**
  * The front of a resource panel's state machine — everything shown before the panel has content to
@@ -65,3 +73,21 @@ export const CatalogError: Story = { args: { readiness: 'catalogError' } };
 
 /** Nothing is configured — now known rather than assumed, so the pick prompt is correct. */
 export const Empty: Story = { args: { readiness: 'empty' } };
+
+/**
+ * The empty state with the optional `moreInfo` disclosure, as the Model Text and Bible Texts panels
+ * pass it. The disclosure sits between the prompt and the pick button — the placement is the point
+ * of this story, and it is not visible from the `Empty` story above.
+ */
+export const EmptyWithMoreInfo: Story = {
+  args: {
+    readiness: 'empty',
+    moreInfo: (
+      <ExpandableInfo
+        moreLabel={moreInfoStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo%']}
+        lessLabel={moreInfoStrings['%webView_resourcePanel_bibleTexts_emptyState_lessInfo%']}
+        body={moreInfoStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
+      />
+    ),
+  },
+};

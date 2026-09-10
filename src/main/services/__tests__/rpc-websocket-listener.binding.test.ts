@@ -7,9 +7,12 @@ import { WebSocketServer } from 'ws';
 // WebSocketServer mock returns a listener-shaped stub because connect() wires handlers onto the
 // instance it constructs.
 vi.mock('electron', () => ({ app: { getVersion: () => '0.0.0' } }));
-vi.mock('ws', () => ({
-  WebSocketServer: vi.fn(() => ({ addListener: vi.fn(), removeListener: vi.fn(), close: vi.fn() })),
-}));
+// connect() waits for the server's `listening` event before reporting success, so the fake has to
+// finish the handshake or connect() would never resolve.
+vi.mock('ws', async () => {
+  const { createFakeWebSocketServer } = await import('./fake-web-socket-test.util');
+  return { WebSocketServer: vi.fn(() => createFakeWebSocketServer()) };
+});
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));

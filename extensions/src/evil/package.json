@@ -1,11 +1,11 @@
 {
   "name": "evil",
-  "version": "0.6.0-alpha.0",
+  "version": "0.6.0-alpha.1",
   "description": "Paranext extension that tries to break things!!1!!",
   "main": "evil.js",
   "types": "evil.d.ts",
   "author": "Paranext",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "volta": {
     "extends": "../../package.json"
   },
