@@ -8,10 +8,22 @@ function isBoxData(node: BoxData | PanelData): node is BoxData {
   return 'children' in node && Array.isArray(node.children);
 }
 
+/**
+ * The web view type a tab contributes, or `undefined` for a tab that contributes none.
+ *
+ * Gated on `tabType`, matching `mintFreshWebViewIdInTab`, so that every question this file asks
+ * about web view types is the same question the id mint asks. A tab that merely carries a
+ * `data.webViewType` without being typed as a web view — which a hand-edited supplement file can
+ * produce — contributes no web view of that type, and counting it would let it stand in for one: as
+ * an already-present entry, as an anchor panel, or as an ordering target.
+ */
 function webViewTypeOf(tab: TabData): string | undefined {
-  // Layout data files store SavedTabInfo under each tab; read its data.webViewType.
+  // Layout data files store SavedTabInfo under each tab; read its tabType and data.webViewType.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const data = (tab as unknown as SavedTabInfo).data as { webViewType?: string } | undefined;
+  const savedTab = tab as unknown as SavedTabInfo;
+  if (savedTab.tabType !== TAB_TYPE_WEBVIEW) return undefined;
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const data = savedTab.data as { webViewType?: string } | undefined;
   return data?.webViewType;
 }
 
@@ -45,20 +57,15 @@ function findPanelByWebViewType(box: BoxData, anchor: string): PanelData | undef
  * materialized from a baked layout gets a freshly minted id (see `mintFreshWebViewIds`), so a tab's
  * id is not a stable way to recognize "this supplement entry is already in the layout" across
  * reloads — its `webViewType` is: the supplement entries are singletons by design (one Scripture
- * Text Grid tab, not several), so type identity is exactly what "already present" means here. An
- * entry whose tab has no `webViewType` at all is not a web view tab and needs a different identity
- * — see `collectTabIds`.
+ * Text Grid tab, not several), so type identity is exactly what "already present" means here. A tab
+ * `webViewTypeOf` answers `undefined` for contributes no type and needs a different identity — see
+ * `collectTabIds`.
  */
 function collectWebViewTypes(box: BoxData, types: Set<string>): void {
   findPanel(box, (panel) => {
     (panel.tabs ?? []).forEach((t) => {
-      // Classified by `tabType`, the same question the merge loop asks of an entry and the same one
-      // `mintFreshWebViewIdInTab` asks of a tab. A tab that merely declares a `webViewType` without
-      // being one contributes no web view of that type, so counting it here would make a genuine
-      // web view of that type look already-present and silently drop it.
-      // `tabType` is `string | undefined` on the rc-dock tab shape; only `SavedTabInfo` names it.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      if ((t as unknown as SavedTabInfo).tabType !== TAB_TYPE_WEBVIEW) return;
+      // `webViewTypeOf` answers `undefined` for a tab that is not typed as a web view, so a
+      // mislabeled tab contributes nothing here — see its doc for why that matters.
       const type = webViewTypeOf(t);
       if (type) types.add(type);
     });

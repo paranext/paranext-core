@@ -243,6 +243,10 @@ const {
                   tabs: [
                     {
                       id: 'bible-texts-tab',
+                      // `tabType` because the real builder deep-clones `simpleLayout`, whose every
+                      // tab carries it — and the supplement merge reads it to tell a web view tab
+                      // from one that merely names a type
+                      tabType: TAB_TYPE_WEBVIEW,
                       data: { webViewType: 'platformScriptureEditor.bibleTexts' },
                     },
                   ],

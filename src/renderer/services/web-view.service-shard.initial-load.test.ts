@@ -1074,6 +1074,36 @@ describe('content admitted to the dock after the entry point had its say', () =>
     expect(deleteFullWebViewStateById).toHaveBeenCalledWith(refusedId);
   });
 
+  test('a reload the load took keeps the state that brings the view back', async () => {
+    // The other arm of the same bail-out, and the one that must NOT clean up. A reload names a web
+    // view this window already had, so the state is that view's — the refusal further down says why
+    // it stays: it is keyed by the web view rather than the tab, and is what brings the view back
+    // where it lands next. The load that took the tab has already emitted its own close event, so
+    // emitting a second one here would both double-report the close and wipe the state the user
+    // gets back when they switch the mode back.
+    const { module, provider, startReloadWithSavedLayoutHanging, releaseLayoutGet } =
+      await windowHoldingOneWebViewWithNothingLoading();
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+    vi.mocked(deleteFullWebViewStateById).mockClear();
+
+    provider.makeTheProviderThink();
+    const reloading = module.reloadWebView('test.type', 'settled-view');
+    reloading.catch(() => {});
+    await provider.waitForTheProviderToBeAsked();
+
+    // A whole load begins and ends inside the provider await, and this one takes what is docked
+    const { reloading: load } = await startReloadWithSavedLayoutHanging();
+    releaseLayoutGet({ kind: 'empty' });
+    await load;
+
+    provider.releaseTheProvider();
+    await reloading.catch(() => {});
+
+    expect(deleteFullWebViewStateById).not.toHaveBeenCalledWith('settled-view');
+  });
+
   test('a tab waits for a load in flight', async () => {
     // Driven straight at the dock write, because that is the whole of what the check there is for:
     // every caller's own wait speaks for the moment its request arrived, and this one speaks for
