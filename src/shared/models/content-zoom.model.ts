@@ -1,31 +1,24 @@
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import {
+  CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
+  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_LEVELS_STATE_KEY,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+} from '@shared/models/web-view.model';
 import { ContentZoomKind } from '@shared/utils/content-zoom.util';
 
 /**
- * Web-view definition `state` key holding the pane's own content zoom levels: a map from zoom area
- * id to factor. An area with no entry follows the default from Settings. Written only by the
- * platform; web views may read it.
- *
- * @experimental This constant is unstable and may change or disappear without notice
+ * The extension-facing half of the content zoom contract is declared in `web-view.model.ts`, which
+ * is published to extensions through `papi.d.ts`; it is re-exported here so core code can reach the
+ * whole contract from one module.
  */
-export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
-
-/**
- * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
- * zoom area, with that area's effective factor (own level, else the Settings default):
- * `--platform-content-zoom-main`, `--platform-content-zoom-footnotes`, …
- *
- * @experimental This constant is unstable and may change or disappear without notice
- */
-export const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = '--platform-content-zoom-';
-
-/**
- * CSS custom property holding the Settings default, the fallback for any area without its own
- * variable.
- *
- * @experimental This constant is unstable and may change or disappear without notice
- */
-export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-default';
+export {
+  CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
+  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_LEVELS_STATE_KEY,
+  CONTENT_ZOOM_ROOT_ATTRIBUTE,
+};
+export type { ContentZoomAreaId } from '@shared/models/web-view.model';
 
 /**
  * The CSS custom property carrying one zoom area's effective factor.
@@ -35,17 +28,6 @@ export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-defaul
 export function getContentZoomCssVariable(areaId: string): string {
   return `${CONTENT_ZOOM_CSS_VARIABLE_PREFIX}${areaId}`;
 }
-
-/**
- * Attribute a web view puts on each element that wraps one zoom area's content (below its own
- * toolbar, outside dividers and headers). The attribute value is the area id; an empty value is the
- * `main` area. The platform's injected stylesheet applies `zoom:
- * var(--platform-content-zoom-<area>)` to it. Areas must not nest. Views without this attribute
- * ignore per-area zoom input and are scaled whole at the Settings default.
- *
- * @experimental This constant is unstable and may change or disappear without notice
- */
-export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
 
 /**
  * `id` of the `<style>` element the platform injects into each web view head for content zoom.
