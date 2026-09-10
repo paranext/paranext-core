@@ -749,7 +749,6 @@ async function main() {
     return path.join(globalThis.resourcesPath, 'assets', ...paths);
   }
 
-  /** Sets up the electron BrowserWindow renderer process */
   /**
    * Whether focus can be handed back to this window right now.
    *
@@ -768,6 +767,7 @@ async function main() {
     return !!target && !target.isDestroyed() && !target.isMinimized();
   };
 
+  /** Sets up the electron BrowserWindow renderer process */
   const createWindow = async (
     restoreInfo: WindowRestoreInfo | undefined,
     creationOptions: { isUserRequested: boolean; pendingContent?: boolean },
@@ -909,13 +909,6 @@ async function main() {
     // who owns the caret once the window is finally raised. Recorded here so the open that follows
     // can withhold document focus and leave that decision open until raise time.
     if (activation.revealWhenReady === 'inactive') noteWindowWithheldFromActivation(windowId);
-    // Where focus goes back to if this window takes it on its own: the window that actually HELD
-    // focus, not the routing target. They diverge — routing walks past a window that is not ready,
-    // is closing, or is pending content — and handing focus to a window the user was not in is a
-    // worse outcome than the foreground steal being undone. Captured before this window can become
-    // the answer itself; the `!== windowId` guard at the bounce covers the case where it already is.
-    const windowIdToReturnFocusTo =
-      activation.revealWhenReady === 'inactive' ? getFocusedWindowId() : undefined;
     // Read at the reveal itself (`showInactive()` below), not here: `isApplicationFocused`
     // answers a live question, and this window is created with `show: false`, so nothing between
     // here and that reveal can raise its own `focus` event to consume a stale answer. The window
@@ -925,26 +918,42 @@ async function main() {
     // windows over whatever the user is in by the time the window actually appears.
     let wasApplicationFocusedBeforeReveal = false;
     /**
-     * When the page may still take focus for itself. Set at the reveal, because that is the paint
-     * the self-focus rides in on. Outside it, a focus event is a person, and a person's click must
-     * not be undone.
+     * When the page may still take focus for itself, on the monotonic clock. Set at the reveal,
+     * because that is the paint the self-focus rides in on. Outside it, a focus event is a person,
+     * and a person's click must not be undone.
+     *
+     * Monotonic rather than wall-clock: this is a short deadline armed during window startup, which
+     * is exactly when the wall clock gets stepped, and a backwards step would leave the hand-back
+     * armed long past the paint it exists for.
      */
     let selfFocusWindowClosesAt: number | undefined;
 
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
+      // Where focus goes back to if this window takes it on its own: the window that actually HELD
+      // focus, not the routing target. They diverge — routing walks past a window that is not ready,
+      // is closing, or is pending content — and handing focus to a window the user was not in is a
+      // worse outcome than the foreground steal being undone.
+      //
+      // Asked HERE, at the hand-back, for the same reason the other two inputs to this decision are:
+      // a window can sit unrevealed for as long as its page takes to load, and the user is free to
+      // move to a different window of this app in that time. An answer taken at construction would
+      // hand focus to the window they have since left. Nothing has recorded THIS window as the
+      // focused one yet — that happens below, past the bounce — so this still names the window they
+      // came from, and `canWindowTakeFocusBack` rejects this window in any case.
+      const windowIdToReturnFocusTo = getFocusedWindowId();
       // A window held back from the foreground takes focus anyway when its page first paints —
       // nothing in either process calls for it, so it cannot be prevented here, only handed back.
       if (
         shouldBounceFocusBack({
           isAwaitingFirstActivation: isWindowAwaitingFirstActivation(windowId),
           hasAlreadyBouncedFocusBack: hasWindowBouncedFocusBack(windowId),
-          // Re-checked HERE, not at creation: the window focus would go back to can have closed or
-          // been minimized in the meantime, and restoring a window the user put away is the same
-          // harm as stealing the foreground, in the other direction.
+          // Its state is asked for here too: the window focus would go back to can have closed or
+          // been minimized by now, and restoring a window the user put away is the same harm as
+          // stealing the foreground, in the other direction.
           canReturnFocusElsewhere: canWindowTakeFocusBack(windowIdToReturnFocusTo, windowId),
           isWithinSelfFocusWindow:
-            selfFocusWindowClosesAt !== undefined && Date.now() <= selfFocusWindowClosesAt,
+            selfFocusWindowClosesAt !== undefined && performance.now() <= selfFocusWindowClosesAt,
           wasApplicationFocusedBeforeReveal,
         })
       ) {
@@ -1211,9 +1220,18 @@ async function main() {
         if (activation.revealWhenReady === 'activate') newWindow.show();
         else {
           wasApplicationFocusedBeforeReveal = isApplicationFocused();
+          // Armed before the window is revealed, so the ordering carries no assumption about when
+          // Electron dispatches this window's `focus`: a handler running during `showInactive()`
+          // would find the hand-back unarmed and let a window nobody asked for keep the foreground.
+          // Arming microseconds early costs nothing against a bound measured in seconds.
+          selfFocusWindowClosesAt = performance.now() + SELF_FOCUS_WINDOW_MS;
           newWindow.showInactive();
-          if (shouldFlashOnReveal(activation)) newWindow.flashFrame(true);
-          selfFocusWindowClosesAt = Date.now() + SELF_FOCUS_WINDOW_MS;
+          // Not flashed when this window already holds focus: `ready-to-show` fires again for a
+          // window that is re-created or reloaded, and a flash raised then has no `focus` event
+          // coming to pair with the `flashFrame(false)` that cancels it, so it would go on asking
+          // for attention the user has already given. `focusWindow` guards its own flash the same
+          // way.
+          if (shouldFlashOnReveal(activation) && !newWindow.isFocused()) newWindow.flashFrame(true);
         }
         // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
         markStartupOnce('window-shown');
