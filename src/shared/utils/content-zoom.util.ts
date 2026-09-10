@@ -51,12 +51,10 @@ export function isValidZoomFactor(value: unknown): value is number {
 }
 
 /**
- * Id of the zoom area a view marks without naming one (an empty attribute value). Every adapted
- * view has at least this area.
- *
- * @experimental This constant is unstable and may change or disappear without notice
+ * Re-exported from `web-view.model.ts`, which publishes the extension-facing half of the content
+ * zoom contract through `papi.d.ts`; core code can reach it from either module.
  */
-export const MAIN_CONTENT_ZOOM_AREA = 'main';
+export { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
 
 const CONTENT_ZOOM_AREA_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
