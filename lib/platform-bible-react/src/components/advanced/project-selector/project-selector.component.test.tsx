@@ -645,3 +645,97 @@ describe('renderProjectIndicator', () => {
     expect(screen.queryByTestId(/^indicator-/)).not.toBeInTheDocument();
   });
 });
+
+describe('renderTriggerLabel', () => {
+  it('renders the caller node as the trigger label instead of the derived string', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        renderTriggerLabel={(selected) => (
+          <span data-testid="custom-trigger-label">custom:{selected?.shortName ?? 'none'}</span>
+        )}
+      />,
+    );
+
+    expect(screen.getByTestId('custom-trigger-label')).toHaveTextContent('custom:WEB');
+  });
+
+  it('passes undefined to the callback when nothing is selected', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: undefined }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        renderTriggerLabel={(selected) => (
+          <span data-testid="custom-trigger-label">custom:{selected?.shortName ?? 'none'}</span>
+        )}
+      />,
+    );
+
+    expect(screen.getByTestId('custom-trigger-label')).toHaveTextContent('custom:none');
+  });
+
+  it('renders no tooltip of its own, so a caller label carrying one cannot double up', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        renderTriggerLabel={() => <span data-testid="custom-trigger-label">WEB</span>}
+      />,
+    );
+
+    await user.hover(screen.getByTestId('custom-trigger-label'));
+
+    // The selector's own tooltip renders the selected project's full name. With a caller-supplied
+    // label it must stay absent — `ToolbarCompoundLabel` brings its own truncation tooltip.
+    await expect(
+      waitFor(() => screen.getByText('World English Bible'), { timeout: 700 }),
+    ).rejects.toThrow();
+  });
+
+  it('still uses the derived string when the prop is absent', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveTextContent('WEB');
+  });
+
+  it('lets buttonClassName override the trigger button width', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'web' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        buttonClassName="tw:w-auto tw:max-w-64"
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveClass('tw:w-auto');
+    expect(trigger).not.toHaveClass('tw:w-[180px]');
+  });
+});

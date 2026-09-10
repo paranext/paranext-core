@@ -438,6 +438,18 @@ export type ProjectSelectorProps =
        * native hover.
        */
       triggerLabelFormat?: 'shortName' | 'shortNameAndFullName';
+      /**
+       * Render the trigger's label yourself, in place of the derived `shortName` /
+       * `shortName - fullName` string. Receives the selected project, or `undefined` when nothing
+       * is selected.
+       *
+       * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
+       * deliberate rather than an omission: a caller reaching for this prop is rendering a label
+       * with its own hover affordance (`ToolbarCompoundLabel` carries a truncation tooltip), and
+       * two tooltips over one control is worse than none. Surface the full text from inside your
+       * own node.
+       */
+      renderTriggerLabel?: (selected: ProjectSelectorProject | undefined) => ReactNode;
     })
   | (CommonProps & {
       mode: 'project-multi';
@@ -1179,6 +1191,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     switch (props.mode) {
       case 'project': {
         const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        // An empty title suppresses the tooltip wrapper below — see `renderTriggerLabel`'s TSDoc.
+        if (props.renderTriggerLabel)
+          return { node: props.renderTriggerLabel(selected), title: '' };
         let text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
         if (
           selected &&
