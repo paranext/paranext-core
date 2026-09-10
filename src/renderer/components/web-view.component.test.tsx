@@ -27,6 +27,14 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   WEBVIEW_IFRAME_SRCDOC_SANDBOX: '',
 }));
 
+// Stubbed whole for the same reason as the shard above: these tests never render an iframe (they
+// call the tab loader directly), so the load/unmount hooks that reach this service never run here,
+// and the real module pulls the shard, settings, and project lookup in behind it.
+vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
+  applyContentZoomForWebView: vi.fn(),
+  forgetContentZoom: vi.fn(),
+}));
+
 // Factory rather than the repo's automock (whose methods are plain functions): which level a
 // missing reload is reported at is the whole of what these tests assert, which needs spies
 vi.mock('@shared/services/logger.service', () => ({
