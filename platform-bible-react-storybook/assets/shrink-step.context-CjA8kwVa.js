@@ -1,0 +1,1 @@
+import{r as e}from"./iframe-Bqm5z7L0.js";const t=Object.freeze({WIDE:0,TIGHT:1,TIGHTER:2,MINIMUM:3}),n=e.createContext(t.WIDE);function c(){return e.useContext(n)}const r=e.createContext(void 0);function i(){return e.useContext(r)}export{t as S,n as a,c as b,i as u};
