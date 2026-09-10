@@ -69,7 +69,17 @@ import {
   LocalizeKey,
   normalizeProjectId,
 } from 'platform-bible-utils';
-import { CSSProperties, useCallback, useMemo } from 'react';
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+/**
+ * How long the toolbar keeps naming a just-selected project before falling back to whatever the
+ * open editor reports. The bound exists because a successful open has no guaranteed completion
+ * signal here: `useProjectPickerData` resolves the current project from THIS window's editor web
+ * views, so an editor that opens in another window (or resolves without producing one here) neither
+ * throws nor ever matches. Without the bound the trigger would name a project that is not open,
+ * indefinitely.
+ */
+export const PENDING_PROJECT_TIMEOUT_MS = 15_000;
 
 const TOOLTIP_DELAY = 300;
 
@@ -499,17 +509,43 @@ export function PlatformBibleToolbar() {
     await svc?.recordProjectOpened(projectId);
   }, []);
 
-  const showProjectPicker = useDialogCallback(
-    PROJECT_PICKER_DIALOG_TYPE,
-    { isModal: true },
-    async (projectId) => {
-      if (!projectId) return;
-      try {
-        await openProject(projectId);
-      } catch (e) {
-        logger.warn(`ProjectPicker: error opening project ${projectId}: ${getErrorMessage(e)}`);
+  // The project the user has just picked, held until the editor reports it. Display fields, not
+  // just an id: a project picked from the "More projects…" dialog need not be in `pickerProjects`
+  // at all, so there is not always a list row to name it from.
+  const [pendingProject, setPendingProject] = useState<ProjectItem | undefined>(undefined);
+  const pendingProjectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // The one entry point both selection paths take, so the trigger names the picked project the
+  // moment it is picked whether it came from the popover or from the dialog.
+  const beginOpenProject = useCallback(
+    (item: ProjectItem) => {
+      // Already the current project: there is nothing to bridge. Arming anyway would swap the
+      // trigger onto this item's spelling of an id the editor already reports, and leave a timer
+      // to unwind.
+      const isAlreadyCurrent =
+        !!currentSimpleProject &&
+        normalizeProjectId(currentSimpleProject.id) === normalizeProjectId(item.id);
+      if (!isAlreadyCurrent) {
+        setPendingProject(item);
+        // Supersede whatever an earlier pick armed, so the bound always belongs to the newest one.
+        clearTimeout(pendingProjectTimeoutRef.current);
+        pendingProjectTimeoutRef.current = setTimeout(() => {
+          setPendingProject(undefined);
+        }, PENDING_PROJECT_TIMEOUT_MS);
       }
+      openProject(item.id).catch((e: unknown) => {
+        logger.warn(
+          `Toolbar caught an error while trying to open project ${item.id}: ${getErrorMessage(e)}`,
+        );
+        // Latest-wins: a slow failure for an earlier pick must not clear a newer one.
+        setPendingProject((current) =>
+          current && normalizeProjectId(current.id) === normalizeProjectId(item.id)
+            ? undefined
+            : current,
+        );
+      });
     },
+    [currentSimpleProject, openProject],
   );
 
   // The union of both sections. The hook returns them disjoint (`allProjects` already excludes
@@ -521,14 +557,52 @@ export function PlatformBibleToolbar() {
   const recentIds = useMemo(() => recentProjects.map((project) => project.id), [recentProjects]);
   const handleSelectProject = useCallback(
     (projectId: string) => {
-      openProject(projectId).catch((e: unknown) => {
-        logger.warn(
-          `Toolbar caught an error while trying to open project ${projectId}: ${getErrorMessage(e)}`,
-        );
-      });
+      const item = pickerProjects.find(
+        (project) => normalizeProjectId(project.id) === normalizeProjectId(projectId),
+      );
+      // A project reachable only through the dialog has no list row to take display fields from,
+      // so its id stands in for them until the editor reports the project itself.
+      beginOpenProject(item ?? { id: projectId, shortName: projectId, fullName: projectId });
     },
-    [openProject],
+    [pickerProjects, beginOpenProject],
   );
+
+  const showProjectPicker = useDialogCallback(
+    PROJECT_PICKER_DIALOG_TYPE,
+    { isModal: true },
+    (projectId) => {
+      if (!projectId) return;
+      handleSelectProject(projectId);
+    },
+  );
+
+  // The editor caught up: the pending bridge has done its job.
+  useEffect(() => {
+    if (
+      pendingProject &&
+      currentSimpleProject &&
+      normalizeProjectId(currentSimpleProject.id) === normalizeProjectId(pendingProject.id)
+    )
+      setPendingProject(undefined);
+  }, [pendingProject, currentSimpleProject]);
+
+  // Nothing pending means nothing left for the bound to unwind, whichever path retired it — the
+  // editor catching up, or a failed open. One place to cancel, so no path can forget to.
+  useEffect(() => {
+    if (!pendingProject) {
+      clearTimeout(pendingProjectTimeoutRef.current);
+      pendingProjectTimeoutRef.current = undefined;
+    }
+  }, [pendingProject]);
+
+  useEffect(
+    () => () => {
+      clearTimeout(pendingProjectTimeoutRef.current);
+    },
+    [],
+  );
+
+  const displayedProject = pendingProject ?? currentSimpleProject;
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -780,7 +854,7 @@ export function PlatformBibleToolbar() {
           <ToolbarProjectSelector
             projects={pickerProjects}
             recentIds={recentIds}
-            currentProject={currentSimpleProject}
+            currentProject={displayedProject}
             currentProjectError={currentSimpleProjectError}
             isLoading={isProjectPickerLoading}
             localizedStrings={localizedStrings}

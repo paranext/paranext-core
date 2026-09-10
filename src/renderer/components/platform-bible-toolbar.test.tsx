@@ -24,7 +24,7 @@ import {
 import { SHRINK_STEP, ShrinkStepContext } from 'platform-bible-react';
 import type { ProjectSelectorProps } from 'platform-bible-react/experimental';
 import type { ProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
-import { PlatformBibleToolbar } from './platform-bible-toolbar';
+import { PENDING_PROJECT_TIMEOUT_MS, PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -32,6 +32,13 @@ vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
 vi.mock('@renderer/components/user-profile-popover/user-profile-popover.component', () => ({
   UserProfilePopover: () => <div data-testid="user-profile-popover-stub" />,
 }));
+
+/**
+ * The resolution callbacks `useDialogCallback` has been handed, newest last. The toolbar re-creates
+ * its callback whenever the data it closes over changes, so a test that resolves the project-picker
+ * dialog has to reach for the most recent one.
+ */
+const capturedDialogResolvers: ((response: string | undefined) => void)[] = [];
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
@@ -72,7 +79,16 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     MainMenu: vi.fn(() => [{ columns: {}, groups: {}, items: [] }, vi.fn(), false]),
   })),
   useDataProvider: vi.fn(() => undefined),
-  useDialogCallback: vi.fn(() => vi.fn()),
+  useDialogCallback: vi.fn(
+    (
+      _dialogType: unknown,
+      _options: unknown,
+      resolveCallback: (response: string | undefined) => void,
+    ) => {
+      capturedDialogResolvers.push(resolveCallback);
+      return vi.fn();
+    },
+  ),
   useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
   useProjectSetting: vi.fn(() => ['', vi.fn(), vi.fn(), false]),
 }));
@@ -241,6 +257,12 @@ const capturedProjectSelectorProps: { current: ProjectSelectorProps | undefined 
   current: undefined,
 };
 
+/**
+ * Every project id the selector's trigger has been asked to name, in render order. A test that
+ * states the trigger never flickers onto some id needs the whole sequence, not just the last one.
+ */
+const capturedTriggerProjectIds: (string | undefined)[] = [];
+
 /** The captured props, or a stated failure when the selector never rendered. */
 function requireCapturedProjectSelectorProps(): ProjectSelectorProps {
   const props = capturedProjectSelectorProps.current;
@@ -254,6 +276,15 @@ function requireCapturedProjectSelectorProps(): ProjectSelectorProps {
  */
 function getRenderTriggerLabel(props: ProjectSelectorProps) {
   return props.mode === 'project' ? props.renderTriggerLabel : undefined;
+}
+
+/** `selection` and `onChangeSelection` likewise live only on the `project` mode of the props union. */
+function getSelection(props: ProjectSelectorProps) {
+  return props.mode === 'project' ? props.selection : undefined;
+}
+
+function getOnChangeSelection(props: ProjectSelectorProps) {
+  return props.mode === 'project' ? props.onChangeSelection : undefined;
 }
 
 /** The project the stub considers selected, matched the way the real trigger matches it. */
@@ -271,6 +302,7 @@ vi.mock('platform-bible-react/experimental', async (importOriginal) => {
     ...actual,
     ProjectSelector: (props: ProjectSelectorProps) => {
       capturedProjectSelectorProps.current = props;
+      capturedTriggerProjectIds.push(getSelection(props)?.projectId);
       const { buttonClassName, buttonPlaceholder, isDisabled } = props;
       const selected = getSelectedProject(props);
       const renderTriggerLabel = getRenderTriggerLabel(props);
@@ -312,6 +344,8 @@ beforeAll(() => {
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
   capturedProjectSelectorProps.current = undefined;
+  capturedDialogResolvers.length = 0;
+  capturedTriggerProjectIds.length = 0;
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
   // vitest has no URL search params for the renderer to read this from, so without a file-wide
   // default it is `undefined` (a secondary window) in every describe that doesn't say otherwise —
@@ -366,6 +400,26 @@ const mockSendCommand = (
   syncState?: unknown,
 ) => {
   mockSendCommandWithSyncStates(isSendReceiveAvailable, [syncState]);
+};
+
+/**
+ * Overrides what the scripture-editor open command answers, leaving every other command on the
+ * behavior already installed — the sync-state and OS-platform reads the rest of the toolbar makes
+ * during mount. Call it after whichever `mockSendCommand` variant the block uses.
+ */
+const mockOpenProject = (openScriptureEditor: (projectId: string) => Promise<unknown>) => {
+  // sendCommand has a complex generic signature; casts are required to both read back the
+  // implementation being wrapped and to install the wrapper.
+  /* eslint-disable no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any */
+  const wrappedImplementation = vi.mocked(sendCommand).getMockImplementation() as
+    | ((commandName: string, ...args: unknown[]) => unknown)
+    | undefined;
+  vi.mocked(sendCommand).mockImplementation(((commandName: string, ...args: unknown[]) => {
+    if (commandName === 'platformScriptureEditor.openScriptureEditor')
+      return openScriptureEditor(String(args[0]));
+    return wrappedImplementation?.(commandName, ...args);
+  }) as any);
+  /* eslint-enable no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any */
 };
 
 describe('PlatformBibleToolbar — Sync button', () => {
@@ -1423,6 +1477,25 @@ describe('PlatformBibleToolbar project selector label', () => {
   });
 });
 
+// The simple-mode setup the project-selector describe blocks use (see 'project selector
+// visibility by interface mode'), plus the picker data each block varies.
+async function renderSimpleToolbarWith(data: Partial<ProjectPickerData>) {
+  const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+  vi.mocked(useProjectPickerData).mockReturnValue({
+    currentSimpleProject: undefined,
+    recentProjects: [],
+    allProjects: [],
+    currentSimpleProjectError: undefined,
+    isLoading: false,
+    ...data,
+  });
+  const renderResult = render(<PlatformBibleToolbar />);
+  await waitFor(() => {
+    expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+  });
+  return renderResult;
+}
+
 describe('PlatformBibleToolbar — project selector wiring', () => {
   const NINE_PROJECTS = Array.from({ length: 9 }, (_, i) => ({
     id: `p${(i + 1).toString()}`,
@@ -1436,24 +1509,6 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     mockSendCommand(true);
   });
-
-  // The simple-mode setup the sibling describe blocks use (see 'project selector visibility by
-  // interface mode'), plus the picker data this block varies.
-  async function renderSimpleToolbarWith(data: Partial<ProjectPickerData>) {
-    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
-    vi.mocked(useProjectPickerData).mockReturnValue({
-      currentSimpleProject: undefined,
-      recentProjects: [],
-      allProjects: [],
-      currentSimpleProjectError: undefined,
-      isLoading: false,
-      ...data,
-    });
-    render(<PlatformBibleToolbar />);
-    await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
-    });
-  }
 
   it('accounts for every project across the two sections, recent first', async () => {
     await renderSimpleToolbarWith({
@@ -1530,5 +1585,192 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
 
     const { localizedStrings } = requireCapturedProjectSelectorProps();
     expect(localizedStrings?.searchPlaceholder).toBe('Test search projects');
+  });
+});
+
+describe('PlatformBibleToolbar — pending project display', () => {
+  const OLD_PROJECT = { id: 'old', shortName: 'OLD', fullName: 'Old Project', isEditable: true };
+  const NEW_PROJECT = { id: 'new', shortName: 'NEW', fullName: 'New Project', isEditable: true };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  /** Picks a project from the popover, the way the real selector reports a selection. */
+  function selectProjectFromPopover(projectId: string) {
+    const onChangeSelection = getOnChangeSelection(requireCapturedProjectSelectorProps());
+    act(() => {
+      onChangeSelection?.({ projectId });
+    });
+  }
+
+  /** Resolves the "More projects…" dialog with the id a real dialog response carries. */
+  function resolveProjectPickerDialogWith(projectId: string | undefined) {
+    const resolveDialog = capturedDialogResolvers.at(-1);
+    act(() => {
+      resolveDialog?.(projectId);
+    });
+  }
+
+  /** The id the trigger currently names. */
+  function selectedProjectId() {
+    return getSelection(requireCapturedProjectSelectorProps())?.projectId;
+  }
+
+  it('names the newly selected project before the editor reports it', async () => {
+    await renderSimpleToolbarWith({
+      currentSimpleProject: OLD_PROJECT,
+      allProjects: [OLD_PROJECT, NEW_PROJECT],
+    });
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('OLD');
+
+    selectProjectFromPopover('new');
+
+    // The hook still reports `old`; the trigger must already name `new`.
+    expect(selectedProjectId()).toBe('new');
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('NEW');
+    expect(trigger).not.toHaveTextContent('OLD');
+  });
+
+  it('stops naming the pending project once the editor reports it', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    // The hook reports the id in its own casing, so a `===` comparison would never see the match
+    // and the bridge would stay up until it timed out.
+    const openedProject = { id: 'NEW', shortName: 'NEW', fullName: 'New Project' };
+    const { rerender } = await renderSimpleToolbarWith({
+      currentSimpleProject: OLD_PROJECT,
+      allProjects: [OLD_PROJECT, NEW_PROJECT],
+    });
+
+    selectProjectFromPopover('new');
+    expect(selectedProjectId()).toBe('new');
+
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: openedProject,
+      recentProjects: [],
+      allProjects: [OLD_PROJECT, NEW_PROJECT],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+    rerender(<PlatformBibleToolbar />);
+
+    // Back on what the editor reports, rather than still on the pending copy.
+    expect(selectedProjectId()).toBe('NEW');
+  });
+
+  it('does not revert to an earlier project when its open fails after a newer selection', async () => {
+    let rejectOpeningA: (error: Error) => void = doNothing;
+    mockOpenProject(async (projectId) => {
+      if (projectId === 'a')
+        await new Promise((_resolve, reject) => {
+          rejectOpeningA = reject;
+        });
+    });
+    await renderSimpleToolbarWith({
+      allProjects: [
+        { id: 'a', shortName: 'A', fullName: 'A Project', isEditable: true },
+        { id: 'b', shortName: 'B', fullName: 'B Project', isEditable: true },
+      ],
+    });
+
+    selectProjectFromPopover('a');
+    selectProjectFromPopover('b');
+    await act(async () => {
+      rejectOpeningA(new Error('boom'));
+    });
+
+    expect(selectedProjectId()).toBe('b');
+  });
+
+  it('falls back to the current project when the editor never reports the selection', async () => {
+    await renderSimpleToolbarWith({
+      currentSimpleProject: OLD_PROJECT,
+      allProjects: [
+        OLD_PROJECT,
+        { id: 'ghost', shortName: 'GHOST', fullName: 'Ghost Project', isEditable: true },
+      ],
+    });
+
+    // Fake timers only from here, so mounting settles against real ones as every other block's does.
+    vi.useFakeTimers();
+    try {
+      selectProjectFromPopover('ghost');
+      expect(selectedProjectId()).toBe('ghost');
+
+      act(() => {
+        vi.advanceTimersByTime(PENDING_PROJECT_TIMEOUT_MS + 1);
+      });
+
+      expect(selectedProjectId()).toBe('old');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-arms the fallback for the newest selection rather than letting the earlier one expire', async () => {
+    await renderSimpleToolbarWith({
+      currentSimpleProject: OLD_PROJECT,
+      allProjects: [
+        OLD_PROJECT,
+        NEW_PROJECT,
+        { id: 'later', shortName: 'LTR', fullName: 'Later Project', isEditable: true },
+      ],
+    });
+
+    vi.useFakeTimers();
+    try {
+      selectProjectFromPopover('new');
+      act(() => {
+        vi.advanceTimersByTime(PENDING_PROJECT_TIMEOUT_MS - 1);
+      });
+      selectProjectFromPopover('later');
+      // Past the first pick's deadline, nowhere near the second's.
+      act(() => {
+        vi.advanceTimersByTime(2);
+      });
+
+      expect(selectedProjectId()).toBe('later');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never arms the pending fallback for the project that is already open', async () => {
+    // The list and the hook can spell the same id differently, so a bridge armed for a project
+    // that never changed is visible as the trigger flickering onto the list's spelling for a
+    // frame before the match check retires it again.
+    await renderSimpleToolbarWith({
+      currentSimpleProject: { id: 'OPEN', shortName: 'OP', fullName: 'Open Project' },
+      allProjects: [{ id: 'open', shortName: 'OP', fullName: 'Open Project', isEditable: true }],
+    });
+    capturedTriggerProjectIds.length = 0;
+
+    selectProjectFromPopover('open');
+
+    expect(capturedTriggerProjectIds).not.toContain('open');
+    expect(selectedProjectId()).toBe('OPEN');
+  });
+
+  it('names a pending project chosen from the dialog, without adding a row for it', async () => {
+    await renderSimpleToolbarWith({ allProjects: [] });
+
+    const { footerAction } = requireCapturedProjectSelectorProps();
+    act(() => {
+      footerAction?.onSelect();
+    });
+    // The dialog is the slower of the two paths, and it can return a project the short list never
+    // contained.
+    resolveProjectPickerDialogWith('far');
+
+    const props = requireCapturedProjectSelectorProps();
+    expect(getSelection(props)?.projectId).toBe('far');
+    // Named by the trigger's own fallback, so no phantom row is injected into the visible list.
+    expect(props.projects.some((project) => project.id === 'far')).toBe(false);
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('far');
+    expect(trigger).not.toHaveTextContent('Test no projects');
   });
 });
