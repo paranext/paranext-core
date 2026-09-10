@@ -19,6 +19,14 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
     /// cross-language contract: renaming either half without the other breaks the refresh silently
     /// at runtime rather than at compile time. The name also deliberately avoids the
     /// `get`/`set`/`subscribe` prefixes reserved for data-type accessors.
+    ///
+    /// NOT covered, deliberately: the body of <c>RecomputeDblResourcesUpdateStatus</c> past its
+    /// <c>_hasFetchedResources</c> guard — the gate and the one line joining the two halves,
+    /// <c>ProjectUpdateStatus(_resources, InstalledDblIds())</c>. Reaching it needs
+    /// <c>_resources</c> populated, and its only writer is a live DBL download, so every test here
+    /// returns at that guard. Replacing that call's arguments therefore passes the suite. Read the
+    /// count below as covering the two halves, not the seam between them; the seam is verified by
+    /// hand against a resource with a real pending update.
     /// </summary>
     [ExcludeFromCodeCoverage]
     internal class DblResourcesDataProviderTests : PapiTestBase
@@ -50,6 +58,44 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
         private static InstallableResource ResourceWithUid(string dblEntryUid) =>
             new ThrowingLookupResource { DBLEntryUid = HexId.FromStr(dblEntryUid) };
+
+        /// <summary>
+        /// A local project that presents itself as an installed DBL resource. <see cref="ScrText"/>
+        /// declares <c>IsResourceProject</c> as <c>virtual =&gt; false</c>, so a plain
+        /// <see cref="DummyScrText"/> is filtered out of the scan before its DBL id is read.
+        /// </summary>
+        private sealed class FakeResourceScrText : DummyScrText
+        {
+            public override bool IsResourceProject => true;
+        }
+
+        /// <summary>
+        /// A local project whose resource-project check throws, standing in for the corrupt
+        /// <c>Settings.xml</c> that makes <c>IsResourceProject</c> and <c>Settings</c> fault.
+        /// </summary>
+        /// <remarks>
+        /// The fault is armed after construction rather than from the start. Building and
+        /// registering a <see cref="DummyScrText"/> reads its settings — the constructor reaches
+        /// <c>Settings</c>, which resolves <c>Guid</c>, which consults <c>IsResourceProject</c> —
+        /// so a double that throws immediately cannot be constructed at all.
+        /// </remarks>
+        private sealed class UnreadableScrText : DummyScrText
+        {
+            public bool IsUnreadable { get; set; }
+
+            public override bool IsResourceProject =>
+                IsUnreadable
+                    ? throw new InvalidOperationException("This project's settings cannot be read")
+                    : base.IsResourceProject;
+        }
+
+        private FakeResourceScrText AddInstalledResourceProject(string dblEntryUid)
+        {
+            FakeResourceScrText scrText = new();
+            scrText.Settings.DBLId = HexId.FromStr(dblEntryUid);
+            ScrTextCollection.Add(scrText, true);
+            return scrText;
+        }
 
         /// <summary>
         /// An installed entry that reports up to date. A <see cref="DummyScrText"/> is not a
@@ -230,6 +276,41 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
                 Assert.That(updateStatus, Has.Count.EqualTo(1));
                 Assert.That(updateStatus["97196133a859179b"], Is.False);
             });
+        }
+
+        /// <summary>
+        /// The scan is what tells `ProjectUpdateStatus` which entries are worth asking ParatextData
+        /// about. Reporting an installed resource as absent is the stuck-badge bug this fixture
+        /// exists for, so the uid has to come back, and a project that is not a resource must not.
+        /// </summary>
+        [Test]
+        public void InstalledDblIds_ReturnsResourceProjectDblIdsAndSkipsOtherProjects()
+        {
+            AddInstalledResourceProject("97196133a859179b");
+            ScrTextCollection.Add(new DummyScrText(), true);
+
+            var installedDblIds = DblResourcesDataProvider.InstalledDblIds();
+
+            Assert.That(installedDblIds, Is.EquivalentTo(new[] { "97196133a859179b" }));
+        }
+
+        /// <summary>
+        /// One unreadable project must cost only itself. Without the per-item guard the exception
+        /// escapes the scan and faults the whole recheck, which leaves every row's flag stale for
+        /// the rest of the session — the outcome the guard inside `ProjectUpdateStatus` also exists
+        /// to prevent.
+        /// </summary>
+        [Test]
+        public void InstalledDblIds_SkipsAnUnreadableProjectAndKeepsTheRest()
+        {
+            UnreadableScrText unreadable = new();
+            ScrTextCollection.Add(unreadable, true);
+            unreadable.IsUnreadable = true;
+            AddInstalledResourceProject("6c21e835eb8ca3b2");
+
+            var installedDblIds = DblResourcesDataProvider.InstalledDblIds();
+
+            Assert.That(installedDblIds, Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" }));
         }
     }
 }

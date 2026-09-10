@@ -322,7 +322,7 @@ internal class DblResourcesDataProvider(
     /// reaching here without a uid would be reported as not installed, which is what
     /// ParatextData already returns for anything uninstalled.
     /// </remarks>
-    private static HashSet<string> InstalledDblIds()
+    internal static HashSet<string> InstalledDblIds()
     {
         HashSet<string> installedDblIds = [];
         foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
