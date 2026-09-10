@@ -3419,15 +3419,24 @@ step, no automation. Just a record.
     nothing and is the right shape if a future editor makes slices addressable; do not read it as
     evidence that a write-back currently occurs.
 
-    Verified 2026-08-16 against `@eten-tech-foundation/platform-editor` **0.8.15**, in both places it
-    can be read: the published npm package, and `dev-packages/scripture-editors` `packages/platform`,
-    which `preinstall` builds and stages into `dev-packages/staging/platform-editor`, where npm
-    installs it from. They agree on this mechanism (the staged copy trails published 0.8.15 by one
-    caret-placement line in `$moveCaretToVerseStart`). **Verify against the staged build, not
-    `package-lock.json`** — the lock still named 0.8.14 when this was written, and reading that stale
-    tarball is exactly how an earlier draft of this ADR came to describe `$findAndSetChapterAndVerse`
-    and its chapter-1 fallback as the live mechanism. That was wrong; that plugin does not exist in
-    0.8.15. Corrected in review of #2663.
+    Re-verified 2026-09-10 against the staged `@eten-tech-foundation/platform-editor` **0.8.16**
+    (`dev-packages/scripture-editors` `packages/platform`, which `preinstall` stages into
+    `dev-packages/staging/platform-editor`): `Editor.tsx` still mounts `ScriptureReferencePlugin`
+    gated on `scrRef && onScrRefChange` alone, and `$resolvePosition` still returns `undefined` when
+    the document has neither a `BookNode` nor a `ChapterNode`. Both statements above therefore still
+    hold. **There is now only one copy to read.** This repo no longer installs the editor from the
+    registry, so the earlier "check the published package and the local build agree" framing has no
+    second copy to compare against — the staged build is the only thing that runs. Do not read
+    `package-lock.json` for a version either: it records a `file:` link, and reading a stale tarball
+    is exactly how an earlier draft came to describe `$findAndSetChapterAndVerse` and its chapter-1
+    fallback as the live mechanism. That was wrong; that plugin does not exist. Corrected in review
+    of #2663.
+
+    **Not re-verified:** the behavior end to end. `$moveCaretToVerseStart` is no longer the
+    one-line-from-published function this paragraph used to describe — it is 57 lines against
+    0.8.15's 30, having gained chapter resolution in its "already here" guard — so if this ADR's
+    conclusions are ever load-bearing for a change, exercise the surfaces rather than trusting this
+    note.
 
     **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
     `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
