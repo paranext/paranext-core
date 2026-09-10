@@ -25,11 +25,23 @@ beforeAll(() => {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     globalThis.ResizeObserver = stubResizeObserver as unknown as typeof ResizeObserver;
   }
+
+  // jsdom does not implement scrollIntoView; FootnoteList calls it to reveal the selected row
+  // whenever a footnote is selected. A no-op stub keeps selection-driven tests from throwing.
+  if (typeof Element.prototype.scrollIntoView === 'undefined') {
+    Element.prototype.scrollIntoView = vi.fn();
+  }
 });
 
-// Real web-view state hook stand-in: plain React state keyed by name.
-function useWebViewStateMock<T>(_key: string, defaultValue: T) {
-  return useState<T>(defaultValue);
+// Real web-view state hook stand-in: plain React state keyed by name. Matches
+// `UseWebViewStateHook`'s 3-tuple return shape (value, setValue, resetValue) so it satisfies
+// `FootnotesLayoutProps['useWebViewState']` structurally.
+function useWebViewStateMock<T>(
+  _key: string,
+  defaultValue: T,
+): [T, (stateValue: T) => void, () => void] {
+  const [value, setValue] = useState<T>(defaultValue);
+  return [value, setValue, () => setValue(defaultValue)];
 }
 
 const note = (text: string) => ({
@@ -83,5 +95,79 @@ describe('FootnotesLayout close button', () => {
     renderPane({ onClose });
     fireEvent.click(screen.getByRole('button', { name: 'Close footnotes pane' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('FootnotesLayout editing seam', () => {
+  it('renders the supplied editor in the editing row', () => {
+    renderPane({
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => <div data-testid="row-editor" />,
+    });
+    expect(screen.getByTestId('row-editor')).toBeInTheDocument();
+  });
+
+  it('forwards a row click as an edit request with the caret position and selects the row', () => {
+    const onFootnoteEditRequested = vi.fn();
+    const onSelectedFootnoteChange = vi.fn();
+    renderPane({ onFootnoteEditRequested, onSelectedFootnoteChange });
+    fireEvent.click(screen.getAllByRole('option')[1]);
+    expect(onFootnoteEditRequested).toHaveBeenCalledWith(1, expect.anything());
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(1);
+  });
+
+  it('reports selection driven by a focus request', () => {
+    const onSelectedFootnoteChange = vi.fn();
+    const { rerender } = renderPane({ onSelectedFootnoteChange });
+    rerender(
+      <FootnotesLayout
+        usj={usjWithTwoNotes}
+        showMarkers
+        useWebViewState={useWebViewStateMock}
+        localizedStrings={localizedStrings}
+        onClose={() => {}}
+        onSelectedFootnoteChange={onSelectedFootnoteChange}
+        focusRequest={{ index: 0 }}
+      >
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(0);
+  });
+
+  it('reports undefined when the selected note disappears from the USJ', () => {
+    const onSelectedFootnoteChange = vi.fn();
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      onSelectedFootnoteChange,
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes} focusRequest={{ index: 1 }}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(1);
+
+    const usjWithOneNote: Usj = {
+      ...usjWithTwoNotes,
+      content: [
+        usjWithTwoNotes.content[0],
+        usjWithTwoNotes.content[1],
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '1' }, 'a ', note('alpha')],
+        },
+      ],
+    };
+    rerender(
+      <FootnotesLayout {...props} usj={usjWithOneNote} focusRequest={{ index: 1 }}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(undefined);
   });
 });
