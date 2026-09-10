@@ -2817,8 +2817,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('still opens the popover when the pane is rendered — the pane highlight rides alongside', () => {
-    // The popover is the only surface that can EDIT a note today, so a routed click always opens
-    // it; the rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
+    // On the popover surface (every view but Standard), a routed click opens the popover; the
+    // rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
     expect(decideNoteCallerClickAction({ ...base, paneVisible: true, paneRendered: true })).toEqual(
       {
         clearStaleEditingSession: false,
@@ -2928,6 +2928,19 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     expect(
       decideNoteCallerClickAction({ ...base, popoverShown: true, editingNoteKey: 'k' }).action,
     ).toBe('ignore-popover-open');
+  });
+
+  it('popover shown without a tracked key still blocks the click (never open a second popover)', () => {
+    // popoverShown alone is enough to block a routed click, even without editingNoteKey: opening a
+    // second popover while one is already on screen would be the bug, not the safe outcome.
+    const d = decideNoteCallerClickAction({
+      ...base,
+      surface: 'popover',
+      popoverShown: true,
+      editingNoteKey: undefined,
+    });
+    expect(d.action).toBe('ignore-popover-open');
+    expect(d.clearStaleEditingSession).toBe(false);
   });
 });
 
