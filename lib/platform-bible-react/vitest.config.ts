@@ -27,6 +27,9 @@ const workspace = defineConfig({
           // Timing-sensitive component tests here wait on React state settling, and on a contended
           // windows-latest runner that wait crosses the 5 s default while the assertion itself is
           // sound. 15 s absorbs the contention and still bounds a genuine hang.
+          // The shared vitest.setup.ts also raises testing-library's asyncUtilTimeout to 5 s; this
+          // budget must stay comfortably above that one for testing-library's richer failure to
+          // ever be reachable.
           testTimeout: 15000,
         },
       },
