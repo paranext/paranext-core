@@ -26,9 +26,19 @@ import {
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
+import { initializeContentZoomService } from '@renderer/services/web-view-content-zoom.service';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
-import { initialize as initializeWindowService } from '@renderer/services/window.service-shard';
+import {
+  getAllOpenWebViewDefinitionsSync,
+  getSavedWebViewDefinitionSync,
+  onDidUpdateWebView,
+  startWebViewServiceShard,
+  updateWebViewDefinitionSync,
+} from '@renderer/services/web-view.service-shard';
+import {
+  getLastFocusedTabId,
+  initialize as initializeWindowService,
+} from '@renderer/services/window.service-shard';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { logger } from '@shared/services/logger.service';
@@ -121,6 +131,21 @@ initConnectionLostService();
     // This needs to run before the web view service shard starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms
     await initializeUsersnapApi();
+
+    // Composes the content-zoom service with the web-view and window shards' functions before the
+    // web-view service shard (below) can open a web view that needs them. Importing either shard
+    // directly from the zoom service would create a cycle, since both shards import from it; this
+    // is the one place that can wire them together without one. Not awaited: its startup prune does
+    // a project lookup, and no web view should wait on that to open.
+    initializeContentZoomService({
+      getDefinition: getSavedWebViewDefinitionSync,
+      updateDefinition: (webViewId, update) => updateWebViewDefinitionSync(webViewId, update),
+      getAllOpenDefinitions: getAllOpenWebViewDefinitionsSync,
+      onDidUpdateWebView,
+      getLastFocusedTabId,
+    }).catch((e) =>
+      logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
+    );
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
