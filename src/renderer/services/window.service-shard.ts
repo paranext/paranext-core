@@ -440,16 +440,25 @@ window.addEventListener('keydown', () => {
 /**
  * End the withholding on the user's first gesture, and give the waiting tab its focus.
  *
- * Deliberately not gated on this being the window's FIRST activation. The latch can already have
+ * Runs on every gesture rather than only the window's first, because the latch can already have
  * been cleared by an OS focus transition (see {@link setIsThisWindowFocused}) while a note is still
- * waiting: a raise the OS refuses never produces that transition, and the focus-driven catch-up
- * declines a note older than its freshness bound. In both cases the user's own gesture is the only
- * thing left that can hand the waiting tab its caret, so it must still be able to consume the
- * note.
+ * waiting — a raise the OS has not honoured yet leaves one — and the user's own gesture is then the
+ * only thing left that can hand that tab its caret.
+ *
+ * Which read is right depends on which of those two it is, so {@link noteWindowActivated}'s answer
+ * is kept rather than discarded. On the window's FIRST activation the gesture IS the arrival the
+ * note was left for, however long ago it was written, and waiting indefinitely for someone to come
+ * to a background window is the whole point of it — so the unbounded read is correct. After that, a
+ * note can only have been left by a cross-window raise, and the same staleness argument applies
+ * here as on the focus-driven path: a gesture minutes later is not the arrival that raise was
+ * completing, and consuming the note then would take the caret into a tab the user never asked to
+ * see, in the middle of whatever they were typing. So it honours the same bound that path does.
  */
 function endWithholdingAndCatchUp(): void {
-  noteWindowActivated();
-  const tabId = takeTabAwaitingDocumentFocus();
+  const isFirstActivation = noteWindowActivated();
+  const tabId = isFirstActivation
+    ? takeTabAwaitingDocumentFocus()
+    : takeTabAwaitingDocumentFocusIfFresh(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS);
   if (tabId === undefined) return;
   // Reached synchronously, within the triggering gesture's own event handling, rather than through
   // the async `getDockLayout()`: a keystroke's own default action is dispatched as part of that same
