@@ -3028,13 +3028,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (editingNoteKey.current) closeFootnoteEditor(false);
   }, [scrRef.book, scrRef.chapterNum, closeFootnoteEditor]);
 
-  // The row editor exists only where the pane IS the editing surface, so leaving Standard view or
-  // losing editability ends the session. The caller highlight goes with it: no other view marks
-  // callers, and nothing there would ever clear one left behind.
+  // A caller highlight means something only in Standard view, and no other view would ever clear
+  // one left behind, so leaving Standard drops it — whether or not a session is open, since a
+  // selected pane row holds a highlight on its own (a read-only Standard view only ever has that).
   useEffect(() => {
-    if (noteEditingSurface === 'pane' || paneEditingIndex === undefined) return;
-    closeFootnoteEditor(false);
-    editorRef.current?.highlightNote(undefined);
+    if (viewType !== 'standard') editorRef.current?.highlightNote(undefined);
+  }, [viewType]);
+
+  // The row editor exists only where the pane IS the editing surface, so leaving Standard view or
+  // losing editability ends the session.
+  useEffect(() => {
+    if (noteEditingSurface !== 'pane' && paneEditingIndex !== undefined) closeFootnoteEditor(false);
   }, [noteEditingSurface, paneEditingIndex, closeFootnoteEditor]);
 
   /**
@@ -3336,41 +3340,47 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // so they refresh the same clock through FootnoteEditor's onNoteEdit
         // (onFootnoteEditorNoteEdit above).
         editingNoteSessionRefreshedAt.current = Date.now();
-        // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
-        // onUsjChange with an insertedNodeKey.
-        // Detect this case (has insertedNodeKey but is not an insert op) and mark the note
-        // as no longer "new", so that closing the editor as part of the save does not
-        // delete the note the user just saved.
-        if (insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1])) {
-          editingNoteIsNew.current = false;
-          // That apply RE-KEYS the note in this editor, so the session has to follow the new key:
-          // every later lookup by key (index, ops, delete-on-close) would otherwise address a node
-          // that no longer exists. `editingNoteOps` deliberately keeps its identity — the note
-          // editor holds the content this change came from, and a fresh identity would reload it
-          // mid-typing and throw away the caret.
-          editingNoteKey.current = insertedNodeKey;
-        }
-        // A change the open pane row editor did NOT originate (typing in the text, undo, a PDP
-        // echo, a note inserted or deleted elsewhere): keep the editing row on the note it is
-        // editing — its index moves as notes before it come and go — and reload the row to the
-        // content the document now holds (a fresh `noteOps` identity is what reloads the row).
-        else if (paneEditingIndexRef.current !== undefined) {
-          const index = editorRef.current?.getNoteIndex(editingNoteKey.current);
-          // The note is gone from the document, so the row that was editing it is gone too.
-          if (index === undefined) closeFootnoteEditor(false);
-          else {
-            const noteOp = editorRef.current?.getNoteOps(editingNoteKey.current)?.at(0);
+        // Which change this is cannot be told from the ops: an apply from a note editor goes
+        // through `replaceEmbedUpdate`, which builds `[{ retain }, noteOp, { delete: 1 }]`, so
+        // `ops[1]` is a note insert-embed op exactly as a real note insertion's is. The DOCUMENT
+        // tells them apart, which is what the pane surface asks it.
+        if (paneEditingIndexRef.current !== undefined) {
+          const sessionKey = editingNoteKey.current;
+          const sessionIndex = editorRef.current?.getNoteIndex(sessionKey);
+          if (sessionIndex === undefined) {
+            // The session's node is gone. If the change inserted a note, that is our note replaced
+            // in place (the row editor's own live-apply, which re-keys it): follow the new key and
+            // leave `editingNoteOps` alone, since a fresh identity would reload the row editor
+            // mid-typing and throw away the caret. Otherwise the note was deleted and the session
+            // has nothing left to edit.
+            const replacementIndex = insertedNodeKey
+              ? editorRef.current?.getNoteIndex(insertedNodeKey)
+              : undefined;
+            if (insertedNodeKey && replacementIndex !== undefined) {
+              editingNoteIsNew.current = false;
+              editingNoteKey.current = insertedNodeKey;
+              if (replacementIndex !== paneEditingIndexRef.current)
+                setPaneEditingIndex(replacementIndex);
+            } else closeFootnoteEditor(false);
+          } else {
+            // The note is still at its key, so the change came from elsewhere (typing in the text,
+            // undo, a PDP echo, another note added or removed): reload the row editor to the note's
+            // current content (a fresh `noteOps` identity is what reloads it) and keep the editing
+            // row on the note, whose index moves as notes before it come and go.
+            const noteOp = editorRef.current?.getNoteOps(sessionKey)?.at(0);
+            // The guard narrows `DeltaOp` to the note embed the row editor loads; a note the index
+            // above resolved always satisfies it.
             if (noteOp && isInsertEmbedOpOfType('note', noteOp)) editingNoteOps.current = [noteOp];
-            else
-              logger.warn(
-                `footnotes pane: no valid note op for note ${editingNoteKey.current}; ` +
-                  `keeping the content the row editor has`,
-              );
-            if (index !== paneEditingIndexRef.current) setPaneEditingIndex(index);
+            if (sessionIndex !== paneEditingIndexRef.current) setPaneEditingIndex(sessionIndex);
           }
         }
-        // Close the footnote editor and discard the note being edited if its caller was deleted in
-        // the main editor.
+        // Popover surface. An apply from its note editor replaces the note node, so the session's
+        // key stops resolving and the `getNoteOps` check below ends the session without deleting
+        // the note — that is how the popover's save-then-close lands. The first branch is therefore
+        // about an insert that is NOT a note arriving while the popover is open (a chapter
+        // scaffold, a verse, a milestone): it only clears the "new" flag, leaving the session open.
+        else if (insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1]))
+          editingNoteIsNew.current = false;
         else if (!editorRef.current?.getNoteOps(editingNoteKey.current)) closeFootnoteEditor(false); // false => the note caller is already gone.
       } else openNoteEditorOnNewNote(ops, insertedNodeKey);
     },
