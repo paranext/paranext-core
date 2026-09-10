@@ -18,13 +18,12 @@ function isBoxData(node: BoxData | PanelData): node is BoxData {
  * an already-present entry, as an anchor panel, or as an ordering target.
  */
 function webViewTypeOf(tab: TabData): string | undefined {
-  // Layout data files store SavedTabInfo under each tab; read its tabType and data.webViewType.
+  // Layout data files store SavedTabInfo under each tab, whose `data` the shared model types as
+  // `unknown`. One assertion to the shape actually stored, rather than one per property read.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const savedTab = tab as unknown as SavedTabInfo;
+  const savedTab = tab as unknown as { tabType?: string; data?: { webViewType?: string } };
   if (savedTab.tabType !== TAB_TYPE_WEBVIEW) return undefined;
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const data = savedTab.data as { webViewType?: string } | undefined;
-  return data?.webViewType;
+  return savedTab.data?.webViewType;
 }
 
 /**
