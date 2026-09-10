@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { ONBOARDING_TOUR_DONE_KEY } from '../../fixtures/helpers';
 
 /**
@@ -85,13 +86,23 @@ export async function goBackTour(page: Page): Promise<void> {
 export async function advanceToLastStep(page: Page): Promise<void> {
   const dialog = getTourDialog(page);
   const nextButton = dialog.getByRole('button', { name: /^Next$/i });
+  const stepCounter = dialog.getByTestId('tour-step-counter');
   for (let i = 0; i < 10; i += 1) {
     // Steps are inherently sequential — must observe the current step before advancing.
     // eslint-disable-next-line no-await-in-loop
     if (!(await nextButton.isVisible())) return;
+    // Must be read before the click below fires, so there is nothing to parallelize.
+    // eslint-disable-next-line no-await-in-loop
+    const stepBeforeClick = await stepCounter.textContent();
     // Sequential: the click must complete (revealing the next step) before the next iteration.
     // eslint-disable-next-line no-await-in-loop
     await nextButton.click();
+    // Wait for the step-transition re-render to actually land before deciding whether to keep
+    // going: a bare isVisible() right after the click can still observe the outgoing step's Next
+    // button mid-transition and return early, silently skipping a step. The step counter changing
+    // is proof the new step has mounted.
+    // eslint-disable-next-line no-await-in-loop
+    await expect(stepCounter).not.toHaveText(stepBeforeClick ?? '', { timeout: 5_000 });
   }
 }
 

@@ -22,6 +22,7 @@
  * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { waitForAppReady } from '../../../fixtures/helpers';
 import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
@@ -57,6 +58,9 @@ test.describe('paragraph-style trigger at the editor column floor', () => {
     // Heavy isolated test (own Electron instance + backend-readiness gates). 3x "slow" budget.
     test.slow();
 
+    // This is a Simple-mode spec, so the onboarding tour opens on its own; suppress it before its
+    // full-screen overlay can intercept the BCV trigger click below.
+    await waitForAppReady(mainPage);
     // No `waitForHomeTab`: simple mode loads the static simpleLayout, which has no Home tab.
     await makeSampleProjectEditable();
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
