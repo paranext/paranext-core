@@ -15,6 +15,10 @@ import {
   updateTabPartialSync,
   getSavedWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-shard';
+import {
+  applyContentZoomForWebView,
+  forgetContentZoom,
+} from '@renderer/services/web-view-content-zoom.service';
 import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,
@@ -313,7 +317,11 @@ export function WebView({
     iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
     setIframeHasLoadedTimes((prev) => prev + 1);
-  }, []);
+    // Applies whatever this pane should already show: the whole-view fallback for a URL web view
+    // (which never runs the bootstrap) or a React/HTML view whose bootstrap has not reported its
+    // areas yet.
+    applyContentZoomForWebView(id);
+  }, [id]);
 
   // Keep track of focus in the iframe
   useEffect(() => {
@@ -424,6 +432,8 @@ export function WebView({
     const currentIframe = iframeRef.current;
 
     return () => {
+      forgetContentZoom(id);
+
       if (!currentIframe) {
         logger.warn(`WebView ${id} iframe reference was not available during cleanup`);
         return;
