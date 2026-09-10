@@ -1064,11 +1064,14 @@ describe('content admitted to the dock after the entry point had its say', () =>
     const openedId = await opening.catch(() => undefined);
 
     expect(dockedWebViews.map((webView) => webView.webViewType)).not.toContain('test.opened');
-    // The close event is what disposes the controller and the nonce; the state is evicted directly
-    const closedIds = getClosedWebViewIds();
-    expect(closedIds.some((id) => id !== 'settled-view')).toBe(true);
-    expect(deleteFullWebViewStateById).toHaveBeenCalled();
     expect(openedId).toBeUndefined();
+    // The open answers `undefined`, so the id it was refused under is only recoverable from the
+    // close event — which is also the thing under test. Naming it is what keeps the state assertion
+    // from passing on a stray call for some other view.
+    const refusedId = getClosedWebViewIds().find((id) => id !== 'settled-view');
+    expect(refusedId).toBeDefined();
+    // The close event is what disposes the controller and the nonce; the state is evicted directly
+    expect(deleteFullWebViewStateById).toHaveBeenCalledWith(refusedId);
   });
 
   test('a tab waits for a load in flight', async () => {
