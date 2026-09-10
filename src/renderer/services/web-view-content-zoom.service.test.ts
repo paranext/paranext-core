@@ -257,6 +257,72 @@ describe('web-view-content-zoom.service', () => {
     ).resolves.toEqual({ defaultZoom: 1, levels: { main: 2, footnotes: 0.9 } });
   });
 
+  it("seeds a newly opened pane's state from memory on its first area report", async () => {
+    settings[MEMORY] = {
+      'editor:proj-A:main': 1.3,
+      'editor:proj-A:footnotes': 0.9,
+      'editor:proj-B:main': 2,
+    };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    settingsSet.mockClear();
+    definitions.set('editor-3', {
+      id: 'editor-3',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    setContentZoomAreas('editor-3', ['main', 'footnotes']);
+    await __flushContentZoomMemoryForTesting();
+    expect(definitions.get('editor-3')?.state).toEqual({
+      [LEVELS]: { main: 1.3, footnotes: 0.9 },
+    });
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('0.9');
+    expect(showIndicator).not.toHaveBeenCalled();
+    expect(settingsSet).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite a pane that already holds levels', async () => {
+    settings[MEMORY] = {
+      'editor:proj-A:main': 1.3,
+      'editor:proj-A:footnotes': 0.9,
+    };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('editor-4', {
+      id: 'editor-4',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { main: 2 } },
+    });
+    setContentZoomAreas('editor-4', ['main', 'footnotes']);
+    expect(definitions.get('editor-4')?.state).toEqual({ [LEVELS]: { main: 2 } });
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('2');
+  });
+
+  it('does not seed on a later report', async () => {
+    settings[MEMORY] = { 'editor:proj-A:main': 1.3 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('editor-5', {
+      id: 'editor-5',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    setContentZoomAreas('editor-5', ['main']);
+    expect(definitions.get('editor-5')?.state).toEqual({ [LEVELS]: { main: 1.3 } });
+    // A memory push (live sharing) adds `footnotes` through the existing sibling-sync path, which
+    // is independent of first-report seeding.
+    memoryCallbacks.forEach((cb) =>
+      cb({ 'editor:proj-A:main': 1.3, 'editor:proj-A:footnotes': 1.6 }),
+    );
+    const stateAfterLiveSharing = definitions.get('editor-5')?.state;
+    setContentZoomAreas('editor-5', ['main', 'footnotes']);
+    expect(definitions.get('editor-5')?.state).toEqual(stateAfterLiveSharing);
+  });
+
   it('does nothing for an unknown web view', async () => {
     await adjustContentZoom('nope', 1);
     expect(updateDefinition).not.toHaveBeenCalled();
