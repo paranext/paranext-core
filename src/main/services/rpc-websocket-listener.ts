@@ -150,6 +150,12 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       // between the two ends have been hit in practice, and external tools (websocat and the like)
       // resolve on their own, so the hostname stays even though it defers the bind behind a DNS
       // lookup and forces the `listening` wait below. See `adr-papi-websocket-hostname-bind`.
+      //
+      // This binding is also load-bearing for AGPL-3.0's network clause (section 13): loopback
+      // traffic never leaves the host, so it does not put a remote user "interacting with it ...
+      // through a computer network" in play. Making this address configurable would change what
+      // downstream licensees are exposed to, so treat that as a licensing decision, not just a
+      // networking one.
       const webSocketServer = new WebSocketServer({ host: 'localhost', port: this.port });
       this.webSocketServer = webSocketServer;
       webSocketServer.addListener('connection', this.onClientConnect);
