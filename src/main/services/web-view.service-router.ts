@@ -592,6 +592,11 @@ export async function findWindowIdOwningWebView(
  * and says plainly that the coverage is partial. Everyone else should use the router's
  * {@link getAllOpenWebViewDefinitions}, which refuses to answer at all rather than pass a partial
  * list off as the whole picture.
+ *
+ * The result is what the windows report plus every web view a move has taken out of one window and
+ * not yet docked in another: such a view is open in no window at all until its adopt lands, so the
+ * windows' own answers are each truthful and still miss it between them. Folding it back in is what
+ * makes this the whole-application picture its callers read it as.
  */
 export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<OpenWebViewDefinitionsByReachability> {
   const unreachableWindowIds: string[] = [];
@@ -689,8 +694,13 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
  * anything notices a window has gone it is no longer one of them.
  *
  * @param windowId Window to ask. It must still be alive; its scoped service goes with it.
- * @returns Everything that window has open, or an empty list if its renderer never got as far as
- *   registering its services — a window that was never ready never had anything open
+ * @returns Everything that window reports having open — nothing from the window itself if its
+ *   renderer never got as far as registering its services, since a window that was never ready
+ *   never had anything open — plus every web view a move is landing in this window whose adopt has
+ *   not docked yet. A view between windows is open in no window at all, so the window's own answer
+ *   is truthful and still misses it, and the close-time caller reads this as everything the window
+ *   is about to take down with it. So this is not only what the window holds, and an in-flight move
+ *   into this window makes the result non-empty even when the window reported nothing.
  * @throws If the window was serving requests but could not be asked, since "could not ask" is not
  *   "answered none"
  */
