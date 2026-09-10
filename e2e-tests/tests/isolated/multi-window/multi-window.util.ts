@@ -209,18 +209,31 @@ export async function getFocusedWindowId(): Promise<string | undefined> {
 }
 
 /**
- * How long {@link focusWindowAndWaitForRouting} and {@link waitForWindowToBeRaised} keep asking the
- * display server to activate the window before falling back to delivering the focus notification at
- * the Electron boundary itself. Activation requests that a compositor honors at all are honored
- * within a second or two, so this budget being exceeded means it will not cooperate.
+ * How long {@link focusWindowAndWaitForRouting} keeps asking the display server to activate the
+ * window before falling back to delivering the focus notification at the Electron boundary itself.
+ * Activation requests that a compositor honors at all are honored within a second or two, so ten
+ * seconds of retries means it will not cooperate.
  *
- * Kept well under the renderer's `CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS` (5000ms,
- * `window-activation.util.ts`) — the length of time the renderer still honors a note that a raise
- * is awaiting document focus. A synthetic focus event delivered once that bound has already passed
- * finds the note stale, so the renderer ignores the catch-up and the wait below times out instead
- * of passing.
+ * Deliberately NOT shared with {@link RAISE_FOCUS_SYNTHESIS_BUDGET_MS} below, though the two do the
+ * same thing. The synthetic event satisfies `getFocusedWindowId()` but leaves `win.isFocused()`
+ * false, so every second spent synthesizing is a second in which a caller that goes on to assert
+ * REAL OS focus cannot be satisfied — and callers do assert exactly that, e.g. the
+ * foreground-withholding test in `web-view-move-between-windows.spec.ts`. This budget stays long
+ * enough to give a slow-but-cooperating compositor its chance.
  */
-const OS_FOCUS_COOPERATION_BUDGET_MS = 3000;
+const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
+
+/**
+ * The same fallback for {@link waitForWindowToBeRaised}, which cannot use the budget above.
+ *
+ * That helper waits on a raise the APP asked for, and the renderer only honors the note such a
+ * raise leaves behind for `CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS` (5000ms,
+ * `src/renderer/services/window-activation.util.ts`). A synthetic focus event delivered after that
+ * bound finds the note already stale, the catch-up declines it, and the assertion the caller is
+ * waiting on can never be satisfied. So this has to stay clearly under that bound — nothing
+ * enforces the relationship, which is why it is written down here.
+ */
+const RAISE_FOCUS_SYNTHESIS_BUDGET_MS = 3000;
 
 /**
  * Give a window focus and wait until the main process routes to it.
@@ -288,7 +301,7 @@ export async function waitForWindowToBeRaised(
   const startTime = Date.now();
   await pollUntil(
     async () => {
-      if (Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS) {
+      if (Date.now() - startTime >= RAISE_FOCUS_SYNTHESIS_BUDGET_MS) {
         await withPlatformWindow(electronApp, windowId, (win) => win.emit('focus'));
       }
       return getFocusedWindowId();

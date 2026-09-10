@@ -817,19 +817,48 @@ describe('this window becoming the OS-focused window', () => {
     expect(focusTabMock).toHaveBeenCalledWith('tab-1', undefined);
   });
 
-  test('leaves a note the transition declined for the user’s own gesture to collect', () => {
-    // Two ways a note outlives the transition that was meant to collect it: the note is older than
-    // the bound this catch-up honours, or the OS refused the raise so no transition ever arrives.
-    // In both the user's gesture is the only thing left that can hand the tab its caret, so ending
-    // the withholding must not also cost them the note.
+  test('lets a gesture collect a fresh note in a window that has already been activated', () => {
+    // A raise the OS has not honoured yet leaves a note behind in a window the user has already
+    // been in, so no further focus transition is coming to collect it. Their own gesture has to be
+    // able to, which it cannot if the gesture path gives up on finding the window already activated.
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    testingWindowService.resetActivationLatchForTesting();
+    window.dispatchEvent(new Event('pointerdown'));
+    focusTabMock.mockClear();
+
+    noteTabAwaitingDocumentFocus('tab-1');
+    window.dispatchEvent(new Event('pointerdown'));
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', undefined);
+  });
+
+  test('leaves a note too old for the raise that left it, rather than taking the caret mid-keystroke', () => {
+    // The bound is not only the focus path's. Once this window has been activated, a note can only
+    // have come from a cross-window raise, and a gesture long afterwards is not the arrival that
+    // raise was completing — consuming it then would move the caret into a tab the user never asked
+    // for, in the middle of whatever they were typing in the one they did.
+    vi.useFakeTimers();
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    testingWindowService.resetActivationLatchForTesting();
+    window.dispatchEvent(new Event('pointerdown'));
+    focusTabMock.mockClear();
+
+    noteTabAwaitingDocumentFocus('tab-1');
+    vi.advanceTimersByTime(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS + 1);
+    window.dispatchEvent(new Event('keydown'));
+
+    expect(focusTabMock).not.toHaveBeenCalled();
+  });
+
+  test('still waits indefinitely for the first arrival in a window that has never been activated', () => {
+    // The other side of that bound: a window nobody has been in yet may sit untouched for as long as
+    // the user likes, and the note left when its content docked is still theirs to collect whenever
+    // they first come to it. Bounding this one would bring back the defect the catch-up exists for.
     vi.useFakeTimers();
     globalThis.wasWindowCreatedWithoutActivation = true;
     testingWindowService.resetActivationLatchForTesting();
     noteTabAwaitingDocumentFocus('tab-1');
-    vi.advanceTimersByTime(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS + 1);
-
-    testingWindowService.setIsThisWindowFocusedForTesting(true);
-    expect(focusTabMock).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS * 10);
 
     window.dispatchEvent(new Event('pointerdown'));
 
