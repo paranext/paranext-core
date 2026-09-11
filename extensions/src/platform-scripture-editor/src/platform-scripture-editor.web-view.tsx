@@ -135,6 +135,7 @@ import {
   removeDecorations,
 } from './decorations.util';
 import {
+  focusPaneNoteEditor,
   runOnFirstLoad,
   scrollToAnnotation,
   scrollToNoteCaller,
@@ -971,6 +972,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       caret: FootnoteCaretPosition,
       isNew = false,
     ) => {
+      // The session this would open is already running on this note. Re-minting it would hand the
+      // row editor a fresh `noteOps` identity, reloading its document and discarding whatever the
+      // user has typed since the last apply, so the request only means "put me back in that
+      // editor" — which is what a caller click on an already-open note asks for.
+      if (editingNoteKey.current === noteKey && paneEditingIndexRef.current === index) {
+        editingNoteSessionRefreshedAt.current = Date.now();
+        focusPaneNoteEditor();
+        return;
+      }
       editingNoteKey.current = noteKey;
       editingNoteOps.current = [noteOp];
       editingNoteIsNew.current = isNew;

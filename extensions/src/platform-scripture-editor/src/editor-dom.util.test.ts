@@ -20,6 +20,7 @@ import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
   measureBaselineOffset,
+  focusPaneNoteEditor,
   scrollToAnnotation,
   scrollToNoteCaller,
   scrollToVerse,
@@ -425,6 +426,32 @@ describe('scrollToNoteCaller', () => {
     // note 0 rect top 1500: bottom edge, target = 1520 - 900 + 80 = 700
     expect(wrapperScrollTo).toHaveBeenLastCalledWith({ behavior: 'smooth', top: 700 });
     expect(scrollToNoteCaller(0)).toBe(notes[0]);
+  });
+});
+
+describe('focusPaneNoteEditor', () => {
+  /**
+   * Both surfaces render the same `FootnoteEditor` markup; only the pane's copy lives inside the
+   * footnotes list, which is what the helper has to key on.
+   */
+  function buildBothNoteEditors() {
+    document.body.innerHTML = `
+      <div class="footnote-editor"><div class="editor-input" id="popover" tabindex="-1"></div></div>
+      <ul role="listbox">
+        <li><div class="footnote-editor"><div class="editor-input" id="row" tabindex="-1"></div></div></li>
+      </ul>`;
+  }
+
+  it('focuses the row editor inside the footnotes list, not the popover editor', () => {
+    buildBothNoteEditors();
+    const focused = focusPaneNoteEditor();
+    expect(focused?.id).toBe('row');
+    expect(document.activeElement?.id).toBe('row');
+  });
+
+  it('returns undefined when no row is being edited', () => {
+    document.body.innerHTML = '<ul role="listbox"><li>plain row</li></ul>';
+    expect(focusPaneNoteEditor()).toBeUndefined();
   });
 });
 

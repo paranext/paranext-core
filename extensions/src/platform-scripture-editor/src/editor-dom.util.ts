@@ -337,6 +337,22 @@ export function scrollToNoteCaller(noteIndex: number): HTMLElement | undefined {
 }
 
 /**
+ * Puts DOM focus back into the footnotes pane's row editor, which restores the caret its own editor
+ * last held. Scoped to the pane's list so it can never reach the note popover's editor, the other
+ * surface that renders a `FootnoteEditor`.
+ *
+ * @returns The row editor's editable element, or `undefined` when no row is being edited
+ */
+export function focusPaneNoteEditor(): HTMLElement | undefined {
+  const editorInput =
+    document.querySelector<HTMLElement>('[role="listbox"] .footnote-editor .editor-input') ??
+    undefined;
+  editorInput?.focus();
+
+  return editorInput;
+}
+
+/**
  * Whether an incoming reference is this view's own echo — the reference it just published coming
  * back through its scroll group.
  *
