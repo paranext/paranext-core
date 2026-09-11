@@ -77,7 +77,12 @@ describe('assertSeparateProgramsRecorded', () => {
     );
   });
 
+  // Every program-level field `requireText` guards, not a sample of them: this table is ALL that
+  // holds them, because the committed policy ships `"separatePrograms": {}` and so exercises none.
+  // `copyright` in particular is reproduced as a credit line under a canonical SPDX text, where a
+  // placeholder would read as a reviewed attribution.
   it.each([
+    ['copyright', '<the program’s own notice>'],
     ['reviewer', ''],
     ['reason', '<why this is aggregation - one paragraph>'],
     ['sourceAvailability', ' '],
@@ -88,10 +93,80 @@ describe('assertSeparateProgramsRecorded', () => {
     ).toThrow(new RegExp(`Mercurial.*"${field}"`, 's'));
   });
 
+  it.each([
+    ['platform', ''],
+    ['version', '<version>'],
+    ['mechanism', ' '],
+    // A JSON number is the natural slip for a version-like field, and coercion would carry it to
+    // `inlineText`, which calls `.replace` on it.
+    ['version', 6.3],
+  ])('refuses a delivery whose %s is missing, a placeholder, or not a string', (field, value) => {
+    const delivery = { ...mercurial.deliveries[0], [field]: value };
+    expect(() =>
+      assertSeparateProgramsRecorded(repo, { Mercurial: { ...mercurial, deliveries: [delivery] } }),
+    ).toThrow(new RegExp(`Mercurial.*deliveries\\[\\].${field}`, 's'));
+  });
+
+  it('refuses evidence that names no substring to look for', () => {
+    // An empty `contains` makes `readFileSync(...).includes('')` vacuously true, so the delivery
+    // would pass its evidence check without the file establishing anything at all.
+    const evidence = { ...mercurial.deliveries[0].evidence, contains: '' };
+    const delivery = { ...mercurial.deliveries[0], evidence };
+    expect(() =>
+      assertSeparateProgramsRecorded(repo, { Mercurial: { ...mercurial, deliveries: [delivery] } }),
+    ).toThrow(/Mercurial.*evidence\.contains/s);
+  });
+
+  it('refuses carriesNotices: true, which the document cannot quote', () => {
+    // `false` records "this bundle carries none"; anything else is the path the document quotes, so
+    // `true` is the natural typo for the first. Without the guard it reaches `inlineText` and dies
+    // with `value.replace is not a function`, naming no field.
+    const delivery = { ...mercurial.deliveries[0], carriesNotices: true };
+    expect(() =>
+      assertSeparateProgramsRecorded(repo, { Mercurial: { ...mercurial, deliveries: [delivery] } }),
+    ).toThrow(/Mercurial.*carriesNotices/s);
+  });
+
+  it('refuses evidence that names a directory rather than a file', () => {
+    // `existsSync` is true for a directory, so without the `isFile` test this reaches `readFileSync`
+    // and throws a bare EISDIR naming no entry, platform or field.
+    fs.mkdirSync(path.join(repo, 'some-directory'), { recursive: true });
+    const evidence = { ...mercurial.deliveries[0].evidence, file: 'some-directory' };
+    const delivery = { ...mercurial.deliveries[0], evidence };
+    expect(() =>
+      assertSeparateProgramsRecorded(repo, { Mercurial: { ...mercurial, deliveries: [delivery] } }),
+    ).toThrow(/Mercurial.*some-directory.*does not exist/s);
+  });
+
   it('refuses a delivery without evidence or with no deliveries at all', () => {
     expect(() =>
       assertSeparateProgramsRecorded(repo, { Mercurial: { ...mercurial, deliveries: [] } }),
     ).toThrow(/at least one delivery/);
+  });
+
+  it.each([
+    ['copyright', '<the component’s own notice>'],
+    ['version', 3.9],
+    ['name', ''],
+  ])('refuses a bundled component whose %s is a placeholder or not a string', (field, value) => {
+    // `copyright` is reproduced as a credit line directly beneath the canonical SPDX text, so a
+    // placeholder there reads as a reviewed attribution; `version` prints beside the name, where a
+    // JSON number reaches `.replace`.
+    const alsoContains = [{ ...mercurial.deliveries[0].alsoContains?.[0], [field]: value }];
+    const delivery = { ...mercurial.deliveries[0], alsoContains };
+    expect(() =>
+      assertSeparateProgramsRecorded(repo, { Mercurial: { ...mercurial, deliveries: [delivery] } }),
+    ).toThrow(new RegExp(`Mercurial.*alsoContains\\[\\].${field}`, 's'));
+  });
+
+  it('refuses free-text terms that are not a string', () => {
+    // Only checked when `terms` is the recorded alternative to `spdx` - which is when the document
+    // reproduces it as the component's whole grant.
+    const alsoContains = [{ name: 'mystery', terms: 42, nonSpdx: true }];
+    const delivery = { ...mercurial.deliveries[0], alsoContains };
+    expect(() =>
+      assertSeparateProgramsRecorded(repo, { Mercurial: { ...mercurial, deliveries: [delivery] } }),
+    ).toThrow(/Mercurial.*alsoContains\[\].terms/s);
   });
 
   it('refuses a bundled component that names neither an identifier nor free text', () => {
@@ -141,7 +216,11 @@ describe("a program's own identifiers have to be ones the policy classifies", ()
   // `applyOverride` admits a linked package on the terms recorded for the PROGRAM, returning before
   // the allowed/copyleft test - so if nothing constrains the entry's own `spdx`, that argument is
   // circular. This is the check that closes it.
-  const admissible = new Set(['GPL-2.0-or-later', 'MIT']);
+  //
+  // `PSF-2.0` is in the set because the fixture's Windows delivery bundles Python: the bound covers
+  // every identifier the entry names, components included, since those are reproduced in the
+  // document too.
+  const admissible = new Set(['GPL-2.0-or-later', 'MIT', 'PSF-2.0']);
 
   beforeEach(() => {
     write('c-sharp/ParanextDataProvider.csproj', '<PackageReference Include="hgWindows-6.3.1" />');
@@ -161,6 +240,24 @@ describe("a program's own identifiers have to be ones the policy classifies", ()
 
     expect(() =>
       assertSeparateProgramsRecorded(repo, { Mercurial: unclassified }, admissible),
+    ).toThrow(/CC-BY-NC-4\.0, which the notices policy classifies on neither/);
+  });
+
+  it('refuses one a BUNDLED COMPONENT names, whose text the document reproduces too', () => {
+    // The program's own identifiers are all classified here, so only the component's can fail the
+    // bound. `separateProgramIds` collects it and `addSeparateProgramTexts` prints its canonical
+    // text, so leaving it unchecked would reproduce a licence nothing classified.
+    const delivery = {
+      ...mercurial.deliveries[0],
+      alsoContains: [{ name: 'Python', version: '3.9', spdx: ['CC-BY-NC-4.0'] }],
+    };
+
+    expect(() =>
+      assertSeparateProgramsRecorded(
+        repo,
+        { Mercurial: { ...mercurial, deliveries: [delivery] } },
+        admissible,
+      ),
     ).toThrow(/CC-BY-NC-4\.0, which the notices policy classifies on neither/);
   });
 
@@ -224,5 +321,18 @@ describe('assertSeparateProgramLinksRecorded', () => {
         programs,
       ),
     ).not.toThrow();
+  });
+
+  it('refuses a link on a package whose section renders no pointer to it', () => {
+    // The sentence the link produces is rendered into the NuGet section's Notes column, and that
+    // column exists nowhere else. An `npm:` key would take the link's copyleft admission in
+    // `applyOverride` and then appear as an ordinary dependency with nothing pointing at the entry
+    // it was admitted on the strength of - the promise `nugetNote` makes, broken silently.
+    expect(() =>
+      assertSeparateProgramLinksRecorded(
+        { 'npm:some-package': { separateProgram: 'Mercurial' } },
+        programs,
+      ),
+    ).toThrow(/only a "nuget:" package renders that link/);
   });
 });

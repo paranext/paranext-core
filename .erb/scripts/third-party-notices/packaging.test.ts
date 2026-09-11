@@ -4,14 +4,23 @@ import { describe, expect, it } from 'vitest';
 import { extensionCacheDirectory } from '../../../extensions/webpack/webpack.util';
 import { ELECTRON_BUILDER } from './main';
 import { readPackagingConfig } from './product';
+import type { ExtraResource } from './product';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 // Read through the pipeline's own reader, so the packaging config has one parser and one shape.
 const config = readPackagingConfig(ELECTRON_BUILDER);
 
-/** Where an `extraResources` entry copies from, whichever of its two shapes it takes. */
-const resourcePath = (entry: string | { from: string; to: string }): string =>
-  typeof entry === 'string' ? entry : entry.from;
+/**
+ * Where an `extraResources` entry copies from, whichever of its two shapes it takes.
+ *
+ * Narrowed rather than trusted: `from` is optional on the object shape, because electron-builder
+ * declares it that way, so an entry without one would otherwise put `undefined` into the list and
+ * make every assertion below throw instead of failing on the file it is about.
+ */
+const resourcePath = (entry: ExtraResource): string => {
+  if (typeof entry === 'string') return entry;
+  return typeof entry.from === 'string' ? entry.from : '';
+};
 
 const asStrings = (config.extraResources || []).map(resourcePath);
 

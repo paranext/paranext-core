@@ -1,4 +1,7 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { describe, expect, it } from 'vitest';
+import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
 import { describeBlock, stalePolicyEntries } from './report';
 
 const block = {
@@ -484,5 +487,35 @@ describe('a remedy the gate would reject is not offered', () => {
     );
     const json = message.slice(message.indexOf('{'), message.lastIndexOf('}') + 1);
     expect(JSON.parse(json).spdx).toBe('<SPDX identifier this package is actually under>');
+  });
+});
+
+describe('every placeholder this file emits is one PLACEHOLDER_TEMPLATE_VALUE refuses', () => {
+  // What the constant is FOR. `policy.ts` uses it to refuse a policy entry left as a pasted
+  // template, and the templates it has to catch are the ones this file prints - so that obligation
+  // is checkable here rather than argued from the shape of the regex. It is the half of the
+  // contract a loosened pattern breaks: the carve-out for a Markdown autolink (`<https://…>`)
+  // already means the constant does not catch every `<…>` string, and nothing else says which ones
+  // it still must.
+  //
+  // Read from the SOURCE, so a template added later is covered without anyone remembering to list
+  // it here. The pattern matches a whole string literal whose content opens `<` and closes `>` -
+  // the shape of a value pasted into the policy file - rather than any expected wording, so it
+  // cannot skip a template by failing to predict how it is phrased. What it does NOT see: a
+  // template assembled by concatenation or interpolation, and one written as a backtick literal
+  // (`"${identified} OR <permissive>"` at report.ts:109 is deliberately outside the set - it
+  // illustrates a DECLARATION a package might carry, not a value anybody pastes into the policy).
+  const source = fs.readFileSync(path.join(__dirname, 'report.ts'), 'utf8');
+  const templates = [...source.matchAll(/'(<[^']*>)'|"(<[^"]*>)"/g)].map(
+    (match) => match[1] ?? match[2],
+  );
+
+  it('finds the templates at all, so the cases below are not passing on an empty set', () => {
+    // Without this, a pattern that stopped matching would report perfect compliance.
+    expect(templates.length).toBeGreaterThanOrEqual(9);
+  });
+
+  it.each(templates)('refuses %s', (template) => {
+    expect(PLACEHOLDER_TEMPLATE_VALUE.test(template)).toBe(true);
   });
 });

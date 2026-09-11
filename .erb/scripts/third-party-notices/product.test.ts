@@ -49,13 +49,28 @@ describe('assertProductMatchesPackaging', () => {
     ).toThrow(/names "Paratext 10", but electron-builder.json5 builds "Paratext 10 Studio"/);
   });
 
-  it('refuses a block missing its name or repository', () => {
+  it('refuses a block missing its name or repository, naming the one that is missing', () => {
     expect(() =>
       assertProductMatchesPackaging({ name: ' ', repository: 'o/r' }, config, 'c'),
-    ).toThrow(/"name" and "repository"/);
+    ).toThrow(/"product" block records no usable "name"/);
     expect(() =>
       assertProductMatchesPackaging({ name: 'Paratext 10 Studio', repository: '' }, config, 'c'),
-    ).toThrow(/"name" and "repository"/);
+    ).toThrow(/"product" block records no usable "repository"/);
+  });
+
+  it.each([
+    ['an object', { type: 'git', url: 'https://example.org/o/r.git' }],
+    ['a number', 42],
+    ['a boolean', true],
+  ])('refuses a repository recorded as %s rather than a string', (_label, repository) => {
+    // `repository` is cross-checked against nothing - unlike `name`, which has to equal
+    // `productName` - and `render.ts` prints it into the document's opening paragraph inside a code
+    // span, so a coerced non-string ships there as the literal `[object Object]`. The object form
+    // is the natural slip: it is how `package.json` spells the same field.
+    const product = JSON.parse(JSON.stringify({ name: 'Paratext 10 Studio', repository }));
+    expect(() => assertProductMatchesPackaging(product, config, 'c')).toThrow(
+      /"product" block records "repository" as a/,
+    );
   });
 
   it('refuses a product named Paratext that does not record the UBS permission as covering it', () => {

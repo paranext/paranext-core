@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { compareStrings } from './compare';
 import { canonicalText } from './corpus';
-import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
+import { requireText } from './policy';
 import type { BundledComponent, Override, ProgramDelivery, SeparateProgram } from './types';
 
 /**
@@ -38,34 +38,30 @@ export function separateProgramIds(programs: Record<string, SeparateProgram>): s
   return [...ids].sort(compareStrings);
 }
 
-/**
- * Refuses a field that is not a filled-in string.
- *
- * The type is checked rather than coerced, because these values arrive as untyped JSON: a policy
- * that records a number, a boolean or an object reaches the document either as the literal
- * `"[object Object]"` or as a `TypeError` from inside the renderer, both of which say less than
- * naming the field here does.
- */
-function requireText(name: string, field: string, value: unknown): void {
-  if (typeof value !== 'string')
-    throw new Error(
-      `the "separatePrograms" entry for "${name}" records "${field}" as ` +
-        `${value === undefined ? 'nothing' : `a ${typeof value}`}, and every field of the entry is ` +
-        'reproduced in the document as written. Record it as a string.',
-    );
-  const text = value.trim();
-  if (!text || PLACEHOLDER_TEMPLATE_VALUE.test(text))
-    throw new Error(
-      `the "separatePrograms" entry for "${name}" records no usable "${field}". Every field of ` +
-        'the entry is reproduced in the document as the reviewed determination, so an empty or ' +
-        'template value would ship as one - fill it in.',
-    );
+/** This table's binding of the shared refusal - see `requireText` in `policy.ts`. */
+function requireProgramText(name: string, field: string, value: unknown): void {
+  requireText(`the "separatePrograms" entry for "${name}"`, field, value);
 }
 
 function assertComponent(name: string, delivery: ProgramDelivery, component: BundledComponent) {
-  requireText(name, `deliveries[${delivery.platform}].alsoContains[].name`, component.name);
+  const field = (leaf: string) => `deliveries[${delivery.platform}].alsoContains[].${leaf}`;
+  requireProgramText(name, field('name'), component.name);
+  // `copyright` is the one component field the document reproduces as a CREDIT LINE beneath a
+  // canonical SPDX text, so a placeholder left in it reads as a reviewed attribution rather than as
+  // an unfinished entry. Optional, because a component whose bundle carries no notice records none
+  // - but recorded as anything at all, it has to be usable.
+  if (component.copyright !== undefined)
+    requireProgramText(name, field('copyright'), component.copyright);
+  // Optional for the same reason, and checked for the same one: `describeComponent` prints it beside
+  // the name, where a JSON number - the natural slip for a version - reaches `.replace`.
+  if (component.version !== undefined)
+    requireProgramText(name, field('version'), component.version);
   const hasIds = Array.isArray(component.spdx) && component.spdx.length > 0;
   const hasTerms = Boolean(String(component.terms || '').trim()) && component.nonSpdx === true;
+  // Only when `terms` is the recorded alternative to `spdx`: that is when the document reproduces
+  // it as the component's whole grant, and `hasTerms` above coerces rather than refuses, so without
+  // this a non-string would pass as "has terms" and then fail inside the renderer.
+  if (hasTerms) requireProgramText(name, field('terms'), component.terms);
   if (!hasIds && !hasTerms)
     throw new Error(
       `the "separatePrograms" entry for "${name}" bundles "${component.name}" on ` +
@@ -88,14 +84,17 @@ function assertComponent(name: string, delivery: ProgramDelivery, component: Bun
 }
 
 function assertDelivery(repo: string, name: string, delivery: ProgramDelivery): void {
-  requireText(name, 'deliveries[].platform', delivery.platform);
-  requireText(name, 'deliveries[].version', delivery.version);
-  requireText(name, 'deliveries[].mechanism', delivery.mechanism);
+  requireProgramText(name, 'deliveries[].platform', delivery.platform);
+  requireProgramText(name, 'deliveries[].version', delivery.version);
+  requireProgramText(name, 'deliveries[].mechanism', delivery.mechanism);
   const evidence = delivery.evidence || { file: '', contains: '' };
-  requireText(name, `deliveries[${delivery.platform}].evidence.file`, evidence.file);
-  requireText(name, `deliveries[${delivery.platform}].evidence.contains`, evidence.contains);
+  requireProgramText(name, `deliveries[${delivery.platform}].evidence.file`, evidence.file);
+  requireProgramText(name, `deliveries[${delivery.platform}].evidence.contains`, evidence.contains);
   const file = path.join(repo, evidence.file);
-  if (!fs.existsSync(file))
+  // `isFile`, not `existsSync`: a directory exists, so a path naming one would pass and then fail
+  // inside `readFileSync` with a bare EISDIR naming no entry, platform or field - the shape this
+  // module's message-only convention exists to avoid.
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile())
     throw new Error(
       `the "separatePrograms" entry for "${name}" (${delivery.platform}) names ` +
         `${evidence.file} as its evidence, and that file does not exist. The entry describes a ` +
@@ -112,7 +111,11 @@ function assertDelivery(repo: string, name: string, delivery: ProgramDelivery): 
   // document quotes. `true` is the natural typo for the first of those, and it is refused here
   // rather than reaching `inlineText`, which would fail on a non-string with no field named.
   if (delivery.carriesNotices !== false)
-    requireText(name, `deliveries[${delivery.platform}].carriesNotices`, delivery.carriesNotices);
+    requireProgramText(
+      name,
+      `deliveries[${delivery.platform}].carriesNotices`,
+      delivery.carriesNotices,
+    );
   (delivery.alsoContains || []).forEach((component) => assertComponent(name, delivery, component));
 }
 
@@ -123,10 +126,10 @@ function assertDelivery(repo: string, name: string, delivery: ProgramDelivery): 
  * program's own identifiers must be drawn from it. `applyOverride` returns `overridden` for a
  * linked package BEFORE the allowed/copyleft test, on the ground that "an override may only name an
  * identifier the reviewed entry itself names" - which is circular unless something constrains the
- * ENTRY. That something was incidental: the committed SPDX corpus holds exactly these identifiers,
- * so `assertSeparateProgramTextsAvailable` rejected anything else a step later. Checking it here
- * states the constraint the linked-override path actually rests on, rather than leaving it to be
- * re-derived from which texts happen to be in the corpus.
+ * ENTRY, and this is that constraint. Without it the only thing standing in the way is
+ * `assertSeparateProgramTextsAvailable` a step later, which refuses an identifier the committed
+ * SPDX corpus holds no text for - a coincidence of which texts happen to be in the corpus rather
+ * than a statement about what this pipeline classifies.
  */
 export function assertSeparateProgramsRecorded(
   repo: string,
@@ -134,10 +137,10 @@ export function assertSeparateProgramsRecorded(
   admissible?: Set<string>,
 ): void {
   Object.entries(programs).forEach(([name, program]) => {
-    requireText(name, 'copyright', program.copyright);
-    requireText(name, 'reviewer', program.reviewer);
-    requireText(name, 'reason', program.reason);
-    requireText(name, 'sourceAvailability', program.sourceAvailability);
+    requireProgramText(name, 'copyright', program.copyright);
+    requireProgramText(name, 'reviewer', program.reviewer);
+    requireProgramText(name, 'reason', program.reason);
+    requireProgramText(name, 'sourceAvailability', program.sourceAvailability);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(program.date || '')))
       throw new Error(
         `the "separatePrograms" entry for "${name}" records "date" as ` +
@@ -156,7 +159,13 @@ export function assertSeparateProgramsRecorded(
           'evidence that the mechanism is still in the tree.',
       );
     if (admissible) {
-      const unclassified = program.spdx
+      // EVERY identifier the entry names, components included - the same span `separateProgramIds`
+      // returns, because that is the span whose canonical texts the document reproduces. Bounding
+      // the program's own identifiers alone would leave a bundled component's text printed with no
+      // classification step having looked at it, held up only by the corpus happening to hold
+      // exactly `allowed` union `copyleft` - which `build-corpus-index.ts` does not promise, since
+      // an `exceptions`, `elections` or `overrides` entry can reach an identifier on neither list.
+      const unclassified = separateProgramIds({ [name]: program })
         .filter((id) => !admissible.has(id))
         .sort(compareStrings)
         .join(', ');
@@ -186,9 +195,9 @@ export function assertSeparateProgramTextsAvailable(
   if (missing.length)
     throw new Error(
       `the "separatePrograms" table names ${missing.join(', ')}, and the SPDX corpus holds no ` +
-        'text for it. Add the identifier to "allowed" (or "copyleft") in the committed policy and ' +
-        'run `npm run build:third-party-notices:corpus`; the corpus index is committed in this ' +
-        'repository, so an overlay cannot extend it on its own.',
+        'text for it. Add the identifier to "allowed" (or "copyleft") in the COMMITTED policy and ' +
+        'run `npm run build:third-party-notices:corpus` there; the index is a committed file, and ' +
+        'an overlay adding the identifier downstream rewrites it only in that clone.',
     );
 }
 
@@ -209,6 +218,19 @@ export function assertSeparateProgramLinksRecorded(
 ): void {
   Object.entries(overrides).forEach(([key, override]) => {
     if (override.separateProgram === undefined) return;
+    // `nuget:` only, because the sentence the link produces is rendered from `nugetNote` into the
+    // Notes column, and that column exists in the NuGet section alone - `pushNpmSection` renders an
+    // aggregated license distribution with no per-package notes. An `npm:` key would take
+    // `applyOverride`'s copyleft bypass and then appear as an ordinary dependency with no pointer to
+    // the section it was admitted on the strength of. Same guard, same reason, as
+    // `assertLicenseTextsAreNuget`.
+    if (!key.startsWith('nuget:'))
+      throw new Error(
+        `the override for "${key}" links to the separate program "${override.separateProgram}", ` +
+          'and only a "nuget:" package renders that link. The row would take the link\'s admission ' +
+          'and show the reader no way to reach the entry it rests on - record the determination ' +
+          'another way, or add the Notes column to that section first.',
+      );
     const programName = String(override.separateProgram).trim();
     // `Object.hasOwn` rather than a bare index, as `applyOverride` and `mergeTable` do: a link
     // spelled `toString` would otherwise resolve against `Object.prototype` and pass.

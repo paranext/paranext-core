@@ -1280,9 +1280,10 @@ describe('notices-policy.json', () => {
   // its copyleft ids are ones licensee can actually emit. Nothing else looks at the file that way,
   // and an unreachable copyleft entry (a deprecated spelling licensee never emits) is invisible to
   // every behavioral test in this file.
-  // `undefined` explicitly: `loadPolicy` defaults its overlay from the environment at call time, so
-  // a stray NOTICES_POLICY_OVERLAY would otherwise decide what "the shipped policy" means here.
-  const policy = loadPolicy(POLICY_PATH, undefined);
+  // What protects this from a stray NOTICES_POLICY_OVERLAY is `vitest.setup.ts`, which deletes the
+  // variable for the whole process. Passing `undefined` here would not: a default parameter fires on
+  // an explicitly passed `undefined` exactly as it does on an omitted argument.
+  const policy = loadPolicy(POLICY_PATH);
 
   it('parses and has the expected top-level shape', () => {
     expect(Array.isArray(policy.allowed)).toBe(true);
@@ -1908,6 +1909,31 @@ describe('what a curated override may carry across', () => {
       expect(v.reason).toContain('separate program "Mercurial"');
     });
 
+    // Each case names operands the program DOES record, so the flattened-identifier test below
+    // cannot be what blocks it - only the expression's shape can. `recorded.ids` is FLATTENED, and
+    // `declared.ts` says why it is kept that way: the verdict, the lock and the reproduced text all
+    // describe the UNMODIFIED license. Tested against a program's plain identifiers, the base
+    // operand alone would satisfy the check and the row and lock would record terms - base plus
+    // exception - that nobody reviewed. The exception and declared paths already refuse this shape.
+    it.each([
+      ['a WITH exception', 'GPL-2.0-or-later WITH Classpath-exception-2.0'],
+      ['a conjunction', 'GPL-2.0-or-later AND MIT'],
+    ])('refuses a linked override whose license carries %s', (_label, license) => {
+      const recordingBothIds = (policy: Policy): Policy => {
+        const programs = withPrograms(policy).separatePrograms || {};
+        return {
+          ...policy,
+          separatePrograms: {
+            Mercurial: { ...programs.Mercurial, spdx: ['GPL-2.0-or-later', 'MIT'] },
+          },
+        };
+      };
+      const v = classify(withOverride({ ...linked, license }, recordingBothIds));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain(license);
+      expect(v.reason).toContain('separate program');
+    });
+
     it('admits a linked override naming any identifier the program does record', () => {
       const withTwoIds = (policy: Policy): Policy => {
         const programs = withPrograms(policy).separatePrograms || {};
@@ -2207,20 +2233,86 @@ describe('policy overlay', () => {
       version: '1.0.0',
     };
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-'));
-    const baseFile = path.join(dir, 'base.json');
-    const overlayFile = path.join(dir, 'overlay.json');
-    fs.writeFileSync(baseFile, JSON.stringify({ ...basePolicy, exceptions: [exception] }));
-    fs.writeFileSync(overlayFile, JSON.stringify({ exceptions: [exception] }));
-    expect(() => loadPolicy(baseFile, overlayFile)).toThrow(/more than one "exceptions" entry/);
-    fs.writeFileSync(
-      overlayFile,
-      JSON.stringify({ exceptions: [{ ...exception, package: 'npm:y' }] }),
-    );
-    expect(loadPolicy(baseFile, overlayFile).exceptions.map((e) => e.package)).toEqual([
-      'npm:x',
-      'npm:y',
-    ]);
-    fs.rmSync(dir, { recursive: true, force: true });
+    // `finally`, for the reason the `loadPolicy` describe above states: a failing expectation aborts
+    // the body, so cleanup written as its last statement is skipped on exactly the runs that leave a
+    // directory behind.
+    try {
+      const baseFile = path.join(dir, 'base.json');
+      const overlayFile = path.join(dir, 'overlay.json');
+      fs.writeFileSync(baseFile, JSON.stringify({ ...basePolicy, exceptions: [exception] }));
+      fs.writeFileSync(overlayFile, JSON.stringify({ exceptions: [exception] }));
+      expect(() => loadPolicy(baseFile, overlayFile)).toThrow(/more than one "exceptions" entry/);
+      fs.writeFileSync(
+        overlayFile,
+        JSON.stringify({ exceptions: [{ ...exception, package: 'npm:y' }] }),
+      );
+      expect(loadPolicy(baseFile, overlayFile).exceptions.map((e) => e.package)).toEqual([
+        'npm:x',
+        'npm:y',
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The JSON text each overlay file holds, rather than a value to stringify: what the refusal is
+  // about is the shape on disk, and a null literal has no TypeScript spelling this repo permits.
+  it.each([
+    ['null', 'null'],
+    ['a list', '[{ "allowed": ["MIT"] }]'],
+    ['a number', '5'],
+    ['a string', '"allowed"'],
+  ])('refuses an overlay that is %s rather than a JSON object', (_label, contents) => {
+    // Without this refusal a non-object overlay reaches `Object.keys`: `null` throws naming neither
+    // the file nor a remedy, and every other shape yields no keys at all, so the unknown-key and
+    // reserved-key refusals pass over it and the merge returns the committed policy unchanged. That
+    // is the silent drop those refusals exist to prevent, reached from the document rather than a
+    // field.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-shape-'));
+    try {
+      const baseFile = path.join(dir, 'base.json');
+      const overlayFile = path.join(dir, 'overlay.json');
+      fs.writeFileSync(baseFile, JSON.stringify(basePolicy));
+      fs.writeFileSync(overlayFile, contents);
+      expect(() => loadPolicy(baseFile, overlayFile)).toThrow(/does not hold a JSON object/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['allowed', 'copyleft', 'platformOnlyPackages'] as const)(
+    'refuses a single %s value written as a bare string rather than a one-item list',
+    (field) => {
+      // Why the shape is worth refusing: spreading a string unions it character by character, so
+      // the list gains "A", "p", "a"... and the identifier the author meant to admit is not in it -
+      // a silent wrong answer rather than a failure.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-list-'));
+      try {
+        const baseFile = path.join(dir, 'base.json');
+        const overlayFile = path.join(dir, 'overlay.json');
+        fs.writeFileSync(baseFile, JSON.stringify(basePolicy));
+        fs.writeFileSync(overlayFile, JSON.stringify({ [field]: 'Apache-2.0' }));
+        expect(() => loadPolicy(baseFile, overlayFile)).toThrow(
+          new RegExp(`"${field}" as a string`),
+        );
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('refuses an "exceptions" value that is not a list', () => {
+    // `[...(overlay.exceptions || [])]` threw a bare "is not iterable" naming neither file nor field.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-exceptions-'));
+    try {
+      const baseFile = path.join(dir, 'base.json');
+      const overlayFile = path.join(dir, 'overlay.json');
+      fs.writeFileSync(baseFile, JSON.stringify(basePolicy));
+      fs.writeFileSync(overlayFile, JSON.stringify({ exceptions: { package: 'npm:x' } }));
+      expect(() => loadPolicy(baseFile, overlayFile)).toThrow(/"exceptions" as a object/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('refuses an overlay path that names no readable file', () => {
@@ -2239,12 +2331,26 @@ describe('every field MERGE_KINDS declares is wired into the merge that reads it
   // declaration going undisclosed with the run exiting 0, which is what the overlay design exists
   // to prevent. Walking the table is what turns "declared" into "carried".
 
+  // EVERY contributable field, not the handful the merge happens to read. A field left undefined
+  // here is a base side the merge can be handed by mistake - `mergeTable('licenseTexts',
+  // base.copyrightNotices, …)` - without the walk noticing, because merging `undefined` still lets
+  // the overlay's sentinel through. Most such swaps are caught by the compiler; the ones between
+  // two identically-typed tables are not, and this is what covers them.
   const committed: Policy = {
     allowed: ['MIT'],
     copyleft: ['GPL-2.0-only'],
-    elections: {},
+    platformOnlyPackages: ['npm:base-platform-only'],
     exceptions: [],
-    overrides: {},
+    elections: { 'npm:base-election': { spdx: 'MIT', reason: 'r' } },
+    overrides: { 'nuget:Base.Override': { license: 'MIT', version: '1.0.0' } },
+    copyrightNotices: { 'npm:base-copyright': 'Copyright (c) base' },
+    licenseTexts: { 'nuget:Base.Texts': { file: 'base.txt', sha256: 'abc' } },
+    unbundledDependencies: { 'npm:base-unbundled': { reason: 'r' } },
+    snapStagePackages: { 'base-stage': { spdx: 'MIT', copyright: 'c' } },
+    staticAssetNotices: { 'base-asset': { spdx: 'MIT', copyright: 'c' } },
+    copiedPlatformLibraries: { 'base-library': { spdx: 'MIT', copyright: 'c' } },
+    separatePrograms: { BaseProgram: { spdx: ['MIT'] } },
+    externalExtensions: { 'base-extension': { itemized: false, reason: 'r' } },
   };
   const NAMES = { base: 'base.json', overlay: 'overlay.json' };
 
@@ -2308,5 +2414,25 @@ describe('every field MERGE_KINDS declares is wired into the merge that reads it
       .map(([key]) => key);
 
     expect(dropped).toEqual([]);
+  });
+
+  it('keeps the committed value for every field, merging an overlay that contributes nothing', () => {
+    // The OTHER half, and the one the overlay walk above cannot see. A merge expression handed the
+    // wrong BASE field - `mergeTable('unbundledDependencies', base.externalExtensions, …)` - still
+    // lets the overlay's sentinel through, so the walk passes while the committed determinations
+    // for that field are replaced by another field's. Between identically-typed tables the compiler
+    // cannot catch it either, which leaves this as the only thing that can.
+    //
+    // `product` is excluded because it is `overlay-only`: the committed file may not carry one, and
+    // `mergePolicies` refuses a base that does.
+    const contributableBase = contributable.filter(([key]) => key !== 'product');
+    const merged = mergePolicies(committed, {}, NAMES);
+    const changed = contributableBase
+      .filter(
+        ([key]) => JSON.stringify(field(merged, key)) !== JSON.stringify(field(committed, key)),
+      )
+      .map(([key]) => key);
+
+    expect(changed).toEqual([]);
   });
 });

@@ -1,17 +1,33 @@
 import * as fs from 'fs';
 import JSON5 from 'json5';
-import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
+import { requireText } from './policy';
 import type { ProductBlock } from './types';
+
+/**
+ * An `extraResources` entry.
+ *
+ * `from` and `to` are OPTIONAL because electron-builder declares them that way on a `FileSet`; this
+ * type is a claim about JSON nobody validated, so every reader narrows before using either.
+ */
+export type ExtraResource = string | { from?: string; to?: string };
 
 /** The parts of `electron-builder.json5` this pipeline reads. */
 export type PackagingConfig = {
   productName?: string;
-  extraResources?: (string | { from: string; to: string })[];
+  extraResources?: ExtraResource[];
   snap?: { stagePackages?: string[] };
   /** Unset in this repository, and `packaging.test.ts` is what holds them that way. */
   nsis?: { license?: string };
   dmg?: { license?: string };
   directories?: { buildResources?: string };
+  /**
+   * Per-platform overrides. electron-builder UNIONS the `extraResources` here with the top-level
+   * list rather than replacing it, so a reader that looks only at the top level misses anything a
+   * build declares for one platform - see `extraResourceEntries` in `external-extensions.ts`.
+   */
+  mac?: { extraResources?: ExtraResource[] };
+  win?: { extraResources?: ExtraResource[] };
+  linux?: { extraResources?: ExtraResource[] };
 };
 
 /** Parses the packaging config once, for every reader in this pipeline. */
@@ -61,24 +77,15 @@ export function assertProductMatchesPackaging(
       );
     return;
   }
-  if (!String(product.name || '').trim() || !String(product.repository || '').trim())
-    throw new Error(
-      'the notices policy "product" block must record both "name" and "repository": the name is ' +
-        'what the document calls the product and the repository is where it says the product is ' +
-        'built. Fill both in, or remove the block.',
-    );
-  // `repository` is cross-checked against nothing - unlike `name`, which has to equal
-  // `productName` - so a template value would otherwise print into the document's opening
-  // paragraph. The same refusal the separate-program and external-extension tables apply.
-  const placeholder = (['name', 'repository'] as const).find((field) =>
-    PLACEHOLDER_TEMPLATE_VALUE.test(String(product[field] ?? '')),
-  );
-  if (placeholder)
-    throw new Error(
-      `the notices policy "product" block records "${placeholder}" as ` +
-        `"${product[placeholder]}", which is still the template placeholder. Replace it with the ` +
-        'value it asks for.',
-    );
+  // The shared refusal, which is a TYPE test as well as an emptiness and placeholder one.
+  // `repository` is cross-checked against nothing - unlike `name`, which has to equal `productName`
+  // - and `render.ts` prints it into the document's opening paragraph inside a code span, so a
+  // number or the npm-conventional `{ "type": "git", "url": … }` object would ship there as the
+  // literal `[object Object]`. The same refusal the separate-program and external-extension tables
+  // apply, so one table cannot accept a shape another refuses.
+  const block = 'the notices policy "product" block';
+  requireText(block, 'name', product.name);
+  requireText(block, 'repository', product.repository);
   // Read for truthiness by `render.ts`, where it decides whether the document states that UBS's
   // permission covers this product - so "false", "no" or any other non-empty string would assert
   // a third party's licence grant. The same rule `nonBooleanOverrideFlag` applies to its flags.

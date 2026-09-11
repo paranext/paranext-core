@@ -514,7 +514,12 @@ describe('the Terms of Service document keeps the properties its window relies o
   // checking a document the application no longer ships.
   const NAME_FROM_MANIFEST = /"license"\s*:\s*"SEE LICENSE IN ([^"]+)"/;
   const manifest = fs.readFileSync(path.join(REPO, 'release', 'app', 'package.json'), 'utf8');
-  const declared = NAME_FROM_MANIFEST.exec(manifest)?.[1] ?? '';
+  const declared = NAME_FROM_MANIFEST.exec(manifest)?.[1];
+  // Thrown rather than defaulted to `''`: this runs at describe scope, so `path.join(REPO, '')` is
+  // the repository directory and `readFileSync` on it fails the whole FILE with an EISDIR at
+  // collection - one assertion's worth of drift taking out every test here, with a message about
+  // the wrong thing. If the manifest stops declaring a license the block above is what says so.
+  if (!declared) throw new Error('release/app/package.json declares no "SEE LICENSE IN <file>"');
   const document = fs.readFileSync(path.join(REPO, declared), 'utf8');
 
   /**
@@ -534,6 +539,11 @@ describe('the Terms of Service document keeps the properties its window relies o
   it('declares a Content-Security-Policy that denies every default source', () => {
     expect(document).toMatch(/<meta[^>]+http-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>/i);
     expect(document).toContain("default-src 'none'");
+    // Both halves of the policy the document's own header asks a regenerator to keep. `default-src
+    // 'none'` blocks the inline <style> too, so a regeneration that emitted the first directive
+    // alone would pass every other assertion here and ship this document as unstyled black-on-white
+    // text in a 900px window - with no console the reader can see.
+    expect(document).toContain("style-src 'unsafe-inline'");
   });
 
   it('leaves the application only through a scheme openExternal admits', () => {
