@@ -15,6 +15,17 @@ export type TextCollectionProjectCandidate = {
 /**
  * Resolves which project's text collection the grid shows, latching the last valid one.
  *
+ * **Precedence invariant: an explicit pin always wins, and the followed project is consulted only
+ * when no pin exists.** Two mechanisms can move this panel — an explicit push, which re-points it
+ * on a project switch, and a reactive follow of the active editor. They are not a race to be
+ * resolved by ordering: the push is authoritative because it expresses a deliberate user action, so
+ * a pin is honored even when the followed candidate disagrees. Removing the `explicitProjectId`
+ * branch would silently hand priority to whichever mechanism happened to run last.
+ *
+ * Whether the follow should keep moving the panel after it has a project, or only seed one that has
+ * none, is an open design question owned by PT-4238 — this function deliberately takes no position
+ * on it beyond the precedence above.
+ *
  * Opened from the default layout the grid has no explicit `projectId`, so it follows the active
  * Scripture editor. But each resource cell is itself a Scripture editor: focusing one (clicking a
  * verse in Chapter view) makes that resource the active editor. Following it would switch the grid

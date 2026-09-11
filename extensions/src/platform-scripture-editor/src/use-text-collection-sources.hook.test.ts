@@ -7,12 +7,12 @@ import type {
   TextCollectionOverlay,
   ITextConnectionSettingsProjectDataProvider,
 } from 'platform-scripture';
-import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
+import { useProjectSetting, useProjectDataProviderState } from '@papi/frontend/react';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
 
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),
-  useProjectDataProvider: vi.fn(),
+  useProjectDataProviderState: vi.fn(),
 }));
 
 vi.mock('@papi/frontend', () => ({
@@ -30,7 +30,20 @@ vi.mock('platform-bible-react', () => ({
 }));
 
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
-const mockUseProjectDataProvider = vi.mocked(useProjectDataProvider);
+const mockUseProjectDataProviderState = vi.mocked(useProjectDataProviderState);
+
+/**
+ * Serves a provider as the `ready` state, or `undefined` as `loading` — the two statuses these
+ * hooks branch on. Keeps each test saying "this provider is available now" rather than restating
+ * the state shape.
+ */
+function serveProvider(pdp: unknown) {
+  mockUseProjectDataProviderState.mockReturnValue(
+    // The mock only needs the discriminant and payload the hook reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (pdp ? { status: 'ready', networkObject: pdp } : { status: 'loading' }) as never,
+  );
+}
 
 // #region fixtures
 
@@ -165,7 +178,7 @@ describe('useTextCollectionSources', () => {
 
   it('returns sources undefined while the admin setting is still loading', () => {
     mockSettings(settingTuple(list(), true));
-    mockUseProjectDataProvider.mockReturnValue(makeControllablePdp().pdp);
+    serveProvider(makeControllablePdp().pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -175,7 +188,7 @@ describe('useTextCollectionSources', () => {
   it('returns sources undefined when settings are loaded but subscriptions have not delivered', async () => {
     mockSettings(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -189,7 +202,7 @@ describe('useTextCollectionSources', () => {
     const adminReferenced = list('ref-v');
     mockSettings(settingTuple(adminReferenced, false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -210,7 +223,7 @@ describe('useTextCollectionSources', () => {
     const adminV1 = list('admin-v1');
     mockSettings(settingTuple(adminV1, false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result, rerender } = renderHook(() => useTextCollectionSources('proj-1'));
     await controller.resolveSubscriptions();
@@ -231,7 +244,7 @@ describe('useTextCollectionSources', () => {
   it('reflects a delivered cell order in sources.order', async () => {
     mockSettings(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
     await controller.resolveSubscriptions();
     await controller.deliver(list('user-v'), {});
@@ -242,7 +255,7 @@ describe('useTextCollectionSources', () => {
   it('falls back to an empty order when the cell-order subscription delivers a PlatformError', async () => {
     mockSettings(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
     await controller.resolveSubscriptions();
     await controller.deliver(list('user-v'), {});
@@ -255,7 +268,7 @@ describe('useTextCollectionSources', () => {
   it('keeps sources undefined until BOTH subscriptions have delivered', async () => {
     mockSettings(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -272,7 +285,7 @@ describe('useTextCollectionSources', () => {
   it('keeps sources undefined when the admin referenced setting is a PlatformError', async () => {
     mockSettings(settingTuple(makePlatformError(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -289,7 +302,7 @@ describe('useTextCollectionSources', () => {
     // longer distinguish "unreadable" from "configured with nothing".
     mockSettings(settingTuple(list(), true));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result, rerender } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -307,7 +320,7 @@ describe('useTextCollectionSources', () => {
   it('reflects updated subscription values in a later memo pass', async () => {
     mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -328,7 +341,7 @@ describe('useTextCollectionSources', () => {
   it('substitutes the default list when a subscription delivers a PlatformError value', async () => {
     mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -344,7 +357,7 @@ describe('useTextCollectionSources', () => {
   it('unsubscribes both subscriptions on unmount', async () => {
     mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { unmount } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -364,7 +377,7 @@ describe('useTextCollectionSources', () => {
   it('immediately unsubscribes a subscription whose promise resolves after unmount (no leak)', async () => {
     mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { unmount } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -388,7 +401,7 @@ describe('useTextCollectionSources', () => {
   it('returns the same textConnectionPdp object that useProjectDataProvider yields', () => {
     mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
     const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    serveProvider(controller.pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
@@ -397,11 +410,135 @@ describe('useTextCollectionSources', () => {
 
   it('returns sources undefined and no subscriptions when there is no PDP yet', () => {
     mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
-    mockUseProjectDataProvider.mockReturnValue(undefined);
+    serveProvider(undefined);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
 
     expect(result.current.sources).toBeUndefined();
     expect(result.current.textConnectionPdp).toBeUndefined();
   });
+
+  // #region project-switch isolation
+
+  it('clears every source when the project switches, before anything for the new one arrives', async () => {
+    const projectOne = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(projectOne.pdp);
+
+    const { result, rerender } = renderHook(
+      ({ pid }: { pid: string }) => useTextCollectionSources(pid),
+      { initialProps: { pid: 'proj-1' } },
+    );
+    await projectOne.resolveSubscriptions();
+    projectOne.deliver(list('user-v1'), { 'resource-from-project-one': true });
+    expect(result.current.sources).toBeDefined();
+
+    // The switch: the provider for the incoming project has not resolved, so the state hook reports
+    // `loading`. Nothing from project one may still be readable — or writable — under project two.
+    serveProvider(undefined);
+    rerender({ pid: 'proj-2' });
+
+    expect(result.current.sources).toBeUndefined();
+    expect(result.current.textConnectionPdp).toBeUndefined();
+  });
+
+  it('assembles sources for the new project only from the new project’s deliveries', async () => {
+    const projectOne = makeControllablePdp();
+    const projectTwo = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(projectOne.pdp);
+
+    const { result, rerender } = renderHook(
+      ({ pid }: { pid: string }) => useTextCollectionSources(pid),
+      { initialProps: { pid: 'proj-1' } },
+    );
+    await projectOne.resolveSubscriptions();
+    projectOne.deliver(list('user-v1'), { 'resource-from-project-one': true });
+    projectOne.deliverCellOrderOnly(['order-from-project-one']);
+
+    serveProvider(undefined);
+    rerender({ pid: 'proj-2' });
+    serveProvider(projectTwo.pdp);
+    mockSettings(settingTuple(list('admin-v2'), false));
+    rerender({ pid: 'proj-2' });
+    await projectTwo.resolveSubscriptions();
+    expect(result.current.sources).toBeUndefined();
+
+    projectTwo.deliver(list('user-v2'), { 'resource-from-project-two': true });
+
+    expect(result.current.sources).toEqual({
+      adminReferenced: list('admin-v2'),
+      userReferenced: list('user-v2'),
+      overlay: { 'resource-from-project-two': true },
+      // Project one's saved order must not carry over; project two has delivered none yet.
+      order: [],
+    });
+  });
+
+  it('ignores a late delivery from the project that was switched away from', async () => {
+    const projectOne = makeControllablePdp();
+    const projectTwo = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(projectOne.pdp);
+
+    const { result, rerender } = renderHook(
+      ({ pid }: { pid: string }) => useTextCollectionSources(pid),
+      { initialProps: { pid: 'proj-1' } },
+    );
+    await projectOne.resolveSubscriptions();
+    projectOne.deliver(list('user-v1'), {});
+
+    serveProvider(undefined);
+    rerender({ pid: 'proj-2' });
+    serveProvider(projectTwo.pdp);
+    mockSettings(settingTuple(list('admin-v2'), false));
+    rerender({ pid: 'proj-2' });
+    await projectTwo.resolveSubscriptions();
+
+    // Unsubscribing is async, so project one's subscription can still fire after cleanup. It must
+    // not repopulate state the switch cleared.
+    projectOne.deliverUserReferencedOnly(list('stale-from-project-one'));
+    projectOne.deliverCellOrderOnly(['stale-order']);
+    expect(result.current.sources).toBeUndefined();
+
+    projectTwo.deliver(list('user-v2'), {});
+    expect(result.current.sources?.userReferenced).toEqual(list('user-v2'));
+    expect(result.current.sources?.order).toEqual([]);
+  });
+
+  it('reports the cell order as pending until it is delivered', async () => {
+    const pdp = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(pdp.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await pdp.resolveSubscriptions();
+    pdp.deliver(list('user-v1'), {});
+
+    // The grid may paint against the empty stand-in, but must not persist an order derived from it.
+    expect(result.current.isOrderPending).toBe(true);
+    expect(result.current.sources?.order).toEqual([]);
+
+    pdp.deliverCellOrderOnly(['a', 'b']);
+    expect(result.current.isOrderPending).toBe(false);
+    expect(result.current.sources?.order).toEqual(['a', 'b']);
+  });
+
+  it('keeps the cell order pending when it cannot be read', async () => {
+    const pdp = makeControllablePdp();
+    mockSettings(settingTuple(list('admin-v1'), false));
+    serveProvider(pdp.pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await pdp.resolveSubscriptions();
+    pdp.deliver(list('user-v1'), {});
+    pdp.deliverCellOrderOnly(makePlatformError());
+
+    // "Could not read" must not collapse to "empty": the saved slots are unknown, and treating
+    // them as absent is what would let a reorder erase them.
+    expect(result.current.isOrderPending).toBe(true);
+    expect(result.current.sources?.order).toEqual([]);
+  });
+
+  // #endregion
 });

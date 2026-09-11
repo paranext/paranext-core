@@ -1,4 +1,8 @@
-import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import {
+  createUseNetworkObjectHook,
+  createUseNetworkObjectStateHook,
+  type NetworkObjectState,
+} from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
 import { PDP_FACTORY_OBJECT_TYPE } from '@shared/models/project-data-provider-factory.interface';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
@@ -59,5 +63,40 @@ export const useProjectDataProvider = createUseNetworkObjectHook(
   projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
   pdpFactoryId?: string,
 ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
+
+/**
+ * Gets the state of the project data provider for a project: which of "no project given", "the
+ * lookup is in flight", "here it is", and "not available" it is in.
+ *
+ * Prefer this over {@link useProjectDataProvider} whenever the project can change WITHOUT the
+ * consumer remounting — a web view that re-points itself with `updateWebViewDefinition({ projectId
+ * })`, or one that follows the active editor. `useProjectDataProvider` answers such a change with
+ * the PREVIOUS project's provider and no way to tell, so a consumer reads one project's data under
+ * another's id and writes data derived from one into the other's storage. This union makes that
+ * window visible, and separates it from a lookup that failed and will not recover on its own.
+ *
+ * Act only on `ready`. While `loading`, a consumer may keep displaying what it last rendered, but
+ * must not write through it — that distinction between what may be shown and what may be written is
+ * the point.
+ *
+ * @param projectInterface `projectInterface` that the project must support. The `networkObject` in
+ *   the `ready` state has the project data provider interface type associated with this
+ *   `projectInterface`.
+ * @param projectDataProviderSource String id of the project to get, or a project data provider to
+ *   pass straight through, or `undefined` for `noSource`
+ * @param pdpFactoryId Optional ID of the PDP factory to get the project data provider from
+ * @returns The {@link NetworkObjectState} of the project data provider
+ */
+// Assert to specific data type for this hook, as with `useProjectDataProvider` above.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+export const useProjectDataProviderState = createUseNetworkObjectStateHook(
+  papiFrontendProjectDataProviderService.get,
+  mapParametersToProjectDataProviderSource,
+  (networkObjectDetails) => networkObjectDetails.objectType === PDP_FACTORY_OBJECT_TYPE,
+) as <ProjectInterface extends ProjectInterfaces>(
+  projectInterface: ProjectInterface,
+  projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+  pdpFactoryId?: string,
+) => NetworkObjectState<ProjectDataProviderInterfaces[ProjectInterface]>;
 
 export default useProjectDataProvider;
