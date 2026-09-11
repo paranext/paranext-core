@@ -887,36 +887,3 @@ describe('BookChapterControl additional books', () => {
     );
   });
 });
-
-// These exist because the picker renders its own recent searches list inside its popover. That list
-// is portalled elsewhere in the DOM but stays a React descendant of the picker, so its keystrokes
-// pass through the picker's capture-phase key handler first. Once the search has a top match, that
-// handler claims the arrow keys for the chapter grid, which would leave the recent searches list
-// unable to move its highlight.
-describe('BookChapterControl — recent searches list keyboard operation', () => {
-  const RECENT_REFS = [
-    { book: 'GEN', chapterNum: 1, verseNum: 1 },
-    { book: 'EXO', chapterNum: 2, verseNum: 1 },
-    { book: 'LEV', chapterNum: 3, verseNum: 1 },
-  ];
-
-  test('moves the recent searches highlight with the arrow keys while the search has a top match', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const handleSubmit = vi.fn();
-    render(
-      <BookChapterControl
-        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
-        handleSubmit={handleSubmit}
-        recentSearches={RECENT_REFS}
-        onAddRecentSearch={() => {}}
-      />,
-    );
-
-    await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
-    await user.type(screen.getByRole('combobox', { name: '' }), 'gen');
-    await user.click(screen.getByRole('button', { name: 'Show recent searches' }));
-    await user.keyboard('{ArrowDown}{Enter}');
-
-    expect(handleSubmit).toHaveBeenLastCalledWith({ book: 'EXO', chapterNum: 2, verseNum: 1 });
-  });
-});

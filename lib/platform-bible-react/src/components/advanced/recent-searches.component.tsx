@@ -83,23 +83,7 @@ export default function RecentSearches<T>({
           <Clock className="tw:h-4 tw:w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        id={id}
-        className="tw:w-[300px] tw:p-0"
-        align="start"
-        // cmdk listens for the arrow keys and Enter on its own root, and nothing in this list is
-        // tabbable, so by default the popover focuses itself — an ancestor of that root, which key
-        // events never travel down to. Focusing the root instead makes the list keyboard-operable.
-        onOpenAutoFocus={(event) => {
-          const commandRoot =
-            event.currentTarget instanceof HTMLElement
-              ? event.currentTarget.querySelector('[cmdk-root]')
-              : undefined;
-          if (!(commandRoot instanceof HTMLElement)) return;
-          event.preventDefault();
-          commandRoot.focus();
-        }}
-      >
+      <PopoverContent id={id} className="tw:w-[300px] tw:p-0" align="start">
         <Command>
           <CommandList>
             <CommandGroup heading={groupHeading}>
