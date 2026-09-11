@@ -15,9 +15,9 @@ import type { ExternalExtension } from './types';
  * this module does is make the OMISSION a recorded state rather than silence: every packed zip must
  * have an entry saying whether it is itemized and why not, and the document names it either way.
  *
- * `itemized: true` is refused until the generator can read a manifest set rooted in another
- * repository's `node_modules`; the field exists so that follow-up flips a value rather than
- * inventing a table.
+ * TODO(PT-4604): `itemized: true` is refused until the generator can read a manifest set rooted in
+ * another repository's `node_modules`; the field exists so that follow-up flips a value rather than
+ * inventing a table. https://paratextstudio.atlassian.net/browse/PT-4604
  */
 
 /**
@@ -36,6 +36,17 @@ function normalizeFolder(value: unknown): string {
   return path.posix.normalize(value.replace(/\\/g, '/')).replace(/^\.\//, '').replace(/\/+$/, '');
 }
 
+/** The `electron-builder.json5` platform block a Node `process.platform` value packages from. */
+function platformExtraResources(
+  config: PackagingConfig,
+  platform: typeof process.platform,
+): unknown[] | undefined {
+  if (platform === 'darwin') return config.mac?.extraResources;
+  if (platform === 'win32') return config.win?.extraResources;
+  if (platform === 'linux') return config.linux?.extraResources;
+  return undefined;
+}
+
 /**
  * Every `extraResources` list electron-builder reads, top-level and per-platform.
  *
@@ -43,14 +54,25 @@ function normalizeFolder(value: unknown): string {
  * so a folder declared under `win` alone still ships. Reading only the top level would answer "no
  * external extensions" for such a build - and because that answer is empty rather than wrong, every
  * refusal below stays silent and the section drops out of the document.
+ *
+ * `platform` narrows that union to one platform's blocks. The document is generated on Linux and
+ * describes EVERY platform, so writing it reads all four; a check running beside a build reads only
+ * what that build packages, because the folders another platform maps are not copied in on this one
+ * and refusing their absence would blame a copy step that was never meant to run here.
  */
-function extraResourceEntries(config: PackagingConfig): unknown[] {
-  return [
-    config.extraResources,
-    config.mac?.extraResources,
-    config.win?.extraResources,
-    config.linux?.extraResources,
-  ].flatMap((list) => (Array.isArray(list) ? list : []));
+function extraResourceEntries(
+  config: PackagingConfig,
+  platform?: typeof process.platform,
+): unknown[] {
+  const lists = platform
+    ? [config.extraResources, platformExtraResources(config, platform)]
+    : [
+        config.extraResources,
+        config.mac?.extraResources,
+        config.win?.extraResources,
+        config.linux?.extraResources,
+      ];
+  return lists.flatMap((list) => (Array.isArray(list) ? list : []));
 }
 
 /**
@@ -65,9 +87,16 @@ function isFileSetEntry(entry: unknown): entry is { from?: unknown; to?: unknown
   return Boolean(entry) && typeof entry === 'object';
 }
 
-/** Folders the packaging config maps to `./extensions`, other than this repository's own dist. */
-export function externalExtensionFolders(config: PackagingConfig): string[] {
-  return extraResourceEntries(config)
+/**
+ * Folders the packaging config maps to `./extensions`, other than this repository's own dist.
+ *
+ * `platform` narrows to what one platform's build packages - see `extraResourceEntries`.
+ */
+export function externalExtensionFolders(
+  config: PackagingConfig,
+  platform?: typeof process.platform,
+): string[] {
+  return extraResourceEntries(config, platform)
     .filter(isFileSetEntry)
     .filter((entry) => normalizeFolder(entry.to) === 'extensions')
     .map((entry) => normalizeFolder(entry.from))
@@ -76,16 +105,20 @@ export function externalExtensionFolders(config: PackagingConfig): string[] {
 }
 
 /**
- * The names of the extension zips packed from outside this repository.
+ * The names of the extension zips packed from other repositories.
  *
  * A mapped folder that does not exist REFUSES rather than answering "none": an empty answer drops
  * the section from the document and the lock written beside it agrees, so the byte-compare that
  * catches a stale artifact could not catch a short one - the same reasoning `packedExtensionNames`
  * applies to `extensions/dist`.
  */
-export function externalExtensionNames(repo: string, config: PackagingConfig): string[] {
+export function externalExtensionNames(
+  repo: string,
+  config: PackagingConfig,
+  platform?: typeof process.platform,
+): string[] {
   const names: string[] = [];
-  externalExtensionFolders(config).forEach((folder) => {
+  externalExtensionFolders(config, platform).forEach((folder) => {
     // `resolve` rather than `join`: `join` does not reset on an absolute segment, so an absolute
     // `from` would be silently reinterpreted as a path under the repository.
     const dir = path.resolve(repo, folder);

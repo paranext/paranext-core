@@ -22,6 +22,8 @@ const { FakeBrowserWindow, instances } = vi.hoisted(() => {
 
     menuRemoved = false;
 
+    shown = false;
+
     loadedPaths: string[] = [];
 
     windowOpenHandler: ((details: { url: string }) => { action: string }) | undefined;
@@ -50,6 +52,10 @@ const { FakeBrowserWindow, instances } = vi.hoisted(() => {
 
     removeMenu() {
       this.menuRemoved = true;
+    }
+
+    show() {
+      this.shown = true;
     }
 
     focus() {
@@ -233,5 +239,35 @@ describe('openTermsOfServiceWindow', () => {
 
     await expect(open()).rejects.toThrow(TERMS_PATH);
     expect(instances[0].destroyed).toBe(true);
+  });
+
+  // A window is mapped at construction unless `show: false` says otherwise, so without this an
+  // empty rectangle sits on screen for the whole load - and on the failure path appears and then
+  // vanishes, since that path destroys it.
+  it('shows the window only once the document has loaded', async () => {
+    const win = await open();
+
+    expect(win.options.show).toBe(false);
+    expect(win.options.backgroundColor).toBe('#f5f5f3');
+    expect(win.shown).toBe(true);
+  });
+
+  it('never shows the window whose document failed to load', async () => {
+    FakeBrowserWindow.loadFailure = new Error('ENOENT');
+
+    await expect(open()).rejects.toThrow(TERMS_PATH);
+    expect(instances[0].shown).toBe(false);
+  });
+
+  // What the caller shows the user is a localized sentence with no path in it, so the path that was
+  // tried is recorded here or nowhere - including for a failure invoked over PAPI, where there is
+  // no dialog at all.
+  it('records the path it tried when the load fails', async () => {
+    FakeBrowserWindow.loadFailure = new Error('ENOENT');
+
+    const { logger } = await import('@shared/services/logger.service');
+
+    await expect(open()).rejects.toThrow(TERMS_PATH);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(TERMS_PATH));
   });
 });

@@ -817,6 +817,35 @@ export function assertCopiedPlatformLibraryIdsAllowed(policy: Policy): void {
 }
 
 /**
+ * The policy gates whose inputs are committed files and nothing else.
+ *
+ * The packaging config, the policy tables, and the evidence paths those tables name - no module
+ * manifest, no build output, no directory whose contents differ per platform. So every path that
+ * reads the policy at all can afford to run them, and they are spelled ONCE so that the two that do
+ * cannot diverge. `buildReport` is the natural place to add a gate and the one a developer runs
+ * locally; `verifyNpmShippingSet` is the only notices check the release workflows run. A gate that
+ * reaches the first and not the second does not run on the path that cuts a release.
+ *
+ * Deliberately NOT here: `assertExternalExtensionsRecorded`, whose input is a directory listing;
+ * `assertStaticAssetNoticesRecorded` and the copied-platform-library pair, which read build output.
+ * Each of those is called where it can actually answer, with the scope that path can establish.
+ */
+function assertCommittedPolicyGates(policy: Policy, packagingConfig: PackagingConfig): void {
+  assertProductMatchesPackaging(
+    policy.product,
+    packagingConfig,
+    path.relative(REPO, ELECTRON_BUILDER),
+  );
+  assertSeparateProgramsRecorded(
+    REPO,
+    policy.separatePrograms || {},
+    new Set([...policy.allowed, ...policy.copyleft]),
+  );
+  assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
+  assertSeparateProgramLinksRecorded(policy.overrides || {}, policy.separatePrograms || {});
+}
+
+/**
  * Everything the document and its lock are written from, derived from this tree in one pass.
  *
  * Derives; never writes. `main` decides what becomes of the result - write the pair, diff it
@@ -846,12 +875,9 @@ export function buildReport(): BuiltReport {
   // and `snapStagePackages` further down all read the same packaging config.
   const packagingConfig = readPackagingConfig(ELECTRON_BUILDER);
 
-  // Refused before anything is derived: the name goes into the first sentence of the document.
-  assertProductMatchesPackaging(
-    policy.product,
-    packagingConfig,
-    path.relative(REPO, ELECTRON_BUILDER),
-  );
+  // Refused before anything is derived: the product name goes into the first sentence of the
+  // document, and the rest read committed files this run has already paid to open.
+  assertCommittedPolicyGates(policy, packagingConfig);
 
   const { npmPackages, unresolvedStylesheetSpecifiers } = buildNpmShippingSet(policy);
   const npmVerdicts = classifyNpmPackages(npmPackages, policy);
@@ -862,13 +888,8 @@ export function buildReport(): BuiltReport {
   assertStaticAssetNoticesRecorded(REPO, policy);
   assertCopiedPlatformLibraryIdsAllowed(policy);
   assertCopiedPlatformLibrariesRecorded(policy, copiedPlatformLibraryStems());
-  assertSeparateProgramsRecorded(
-    REPO,
-    policy.separatePrograms || {},
-    new Set([...policy.allowed, ...policy.copyleft]),
-  );
-  assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
-  assertSeparateProgramLinksRecorded(policy.overrides || {}, policy.separatePrograms || {});
+  // Every platform's mapped folders, because this is the run that WRITES the document and the
+  // document covers every platform. `verifyNpmShippingSet` narrows to the platform in hand.
   assertExternalExtensionsRecorded(
     externalExtensionNames(REPO, packagingConfig),
     policy.externalExtensions || {},
@@ -916,7 +937,7 @@ export function buildReport(): BuiltReport {
     // The sixth: third-party programs redistributed as separate executables and invoked as
     // subprocesses - see `SeparateProgram`.
     separatePrograms: policy.separatePrograms || {},
-    // The seventh: extensions packed from outside this repository, whose bundled dependencies no
+    // The seventh: extensions packed from other repositories, whose bundled dependencies no
     // manifest here describes - see `ExternalExtension`.
     externalExtensions: policy.externalExtensions || {},
     // What the two prose sections are gated on, so neither can survive the thing it describes. The
@@ -1009,13 +1030,9 @@ function verifyNpmShippingSet() {
   const committed = verifyCommittedDocument();
   if (!committed) return;
 
-  // The four policy gates whose inputs are committed files and nothing else: the packaging config,
-  // the policy tables, the evidence paths they name, and the committed SPDX corpus. They live in
-  // `buildReport`, which this path deliberately does not reach - but they cost a policy read this
-  // function already pays for below, and running them here is what covers a release cut from a ref
-  // whose Linux `--verify` leg never ran. `assertExternalExtensionsRecorded` is NOT among them: its
-  // input is a directory listing that differs per platform, so it can only answer where the
-  // installer's extensions actually are.
+  // The committed-file gates live in `buildReport`, which this path deliberately does not reach -
+  // but they cost a policy read this function already pays for below, and running them here is what
+  // covers a release cut from a ref whose Linux `--verify` leg never ran.
   let policy;
   try {
     // Inside the try, like every other failure this path can produce: `--verify-shipping-set` is
@@ -1023,18 +1040,21 @@ function verifyNpmShippingSet() {
     // evidence path escaping as a raw Node stack trace is exactly the shape this script's
     // message-only convention exists to avoid.
     policy = loadPolicy(POLICY);
-    assertProductMatchesPackaging(
-      policy.product,
-      readPackagingConfig(ELECTRON_BUILDER),
-      path.relative(REPO, ELECTRON_BUILDER),
+    const packagingConfig = readPackagingConfig(ELECTRON_BUILDER);
+    assertCommittedPolicyGates(policy, packagingConfig);
+    // Not a committed-file gate - it lists a directory - but this is the one path that runs beside
+    // a build that packages an installer, which is the only place it can answer at all. Without it
+    // the sequence is: a downstream drops a new extension zip into its mapped folder, does not
+    // regenerate notices (nothing about adding an extension looks like a notices change), and cuts
+    // a release. `--verify-document` is a hash compare of two unchanged committed files, so every
+    // release gate passes and the installer ships an extension whose bundled dependencies are
+    // itemized nowhere and whose omission the document does not record - the state this module
+    // exists to prevent. Scoped to `process.platform`, because the folders another platform's block
+    // maps are not copied in on this one.
+    assertExternalExtensionsRecorded(
+      externalExtensionNames(REPO, packagingConfig, process.platform),
+      policy.externalExtensions || {},
     );
-    assertSeparateProgramsRecorded(
-      REPO,
-      policy.separatePrograms || {},
-      new Set([...policy.allowed, ...policy.copyleft]),
-    );
-    assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
-    assertSeparateProgramLinksRecorded(policy.overrides || {}, policy.separatePrograms || {});
 
     ({
       packages: npmPackages,

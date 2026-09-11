@@ -10,7 +10,11 @@ import {
 } from './main';
 import { RIDS, copiedPlatformLibraryStems, readDirectPackageReferences } from './nuget-set';
 import { STATIC_TREES, WHOLESALE_COPIED_EXTENSIONS } from './static-assets';
-import { assertExternalExtensionsRecorded, externalExtensionFolders } from './external-extensions';
+import {
+  assertExternalExtensionsRecorded,
+  externalExtensionFolders,
+  externalExtensionNames,
+} from './external-extensions';
 import { assertProductMatchesPackaging, readPackagingConfig } from './product';
 import { assertSeparateProgramsRecorded } from './separate-programs';
 
@@ -400,11 +404,27 @@ describe('this repository ships none of the downstream-product instruments', () 
     expect(externalExtensionFolders(config)).toEqual([]);
   });
 
+  // Every argument DERIVED from the real pair, never spelled as the literal this repository
+  // happens to produce. A literal `[]` for the packed names would read as the same assertion and
+  // not be one: over an empty list and an empty table, `assertExternalExtensionsRecorded` runs
+  // `[].filter` and `Object.entries({}).forEach`, so its entire body could be deleted and this
+  // would still pass. The same holds for `assertSeparateProgramsRecorded` over an empty table -
+  // which is why the guards' own falsifiability lives in their unit tests, and what this case is
+  // for is the pair on disk actually satisfying them.
   it('accepts the shipped policy against the shipped packaging config', () => {
     expect(() =>
-      assertExternalExtensionsRecorded([], policy.externalExtensions || {}),
+      assertExternalExtensionsRecorded(
+        externalExtensionNames(REPO, config),
+        policy.externalExtensions || {},
+      ),
     ).not.toThrow();
-    expect(() => assertSeparateProgramsRecorded(REPO, policy.separatePrograms || {})).not.toThrow();
+    expect(() =>
+      assertSeparateProgramsRecorded(
+        REPO,
+        policy.separatePrograms || {},
+        new Set([...policy.allowed, ...policy.copyleft]),
+      ),
+    ).not.toThrow();
     expect(() =>
       assertProductMatchesPackaging(policy.product, config, 'electron-builder.json5'),
     ).not.toThrow();
