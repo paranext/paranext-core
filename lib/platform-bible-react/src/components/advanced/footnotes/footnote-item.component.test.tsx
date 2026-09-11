@@ -113,6 +113,16 @@ test('shows the category value with markers suppressed, but not its markers', ()
   expect(screen.queryByText('\\cat*')).not.toBeInTheDocument();
 });
 
+test('separates the category value from the note text when its markers are hidden', () => {
+  const { container } = render(<FootnoteItem footnote={footnoteWithCategory} showMarkers={false} />);
+
+  // With the `\cat*` glyph hidden nothing else stands between the value and the reference that
+  // follows it, so the row must supply the space itself: "People 1.1", never "People1.1".
+  const body = container.querySelector('.textual-note-body');
+  expect(body?.textContent).toContain('People 1.1');
+  expect(body?.textContent).not.toContain('People1.1');
+});
+
 test('renders nothing extra for a footnote with no category', () => {
   const { container } = render(<FootnoteItem footnote={footnoteWithTwinSpans} />);
 

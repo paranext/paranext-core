@@ -195,6 +195,9 @@ export function FootnoteItem({
       {showMarkers && <span className="marker">{`\\cat${MARKER_SEPARATOR}`}</span>}
       {footnote.category}
       {showMarkers && <span className="marker">\cat*</span>}
+      {/* With the closing glyph hidden nothing separates the value from the run that follows it
+          (the file has no space after `\cat*`), so the row supplies the space itself. */}
+      {!showMarkers && ' '}
     </span>
   ) : undefined;
 
