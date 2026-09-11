@@ -3,6 +3,7 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import {
+  closeTab,
   floatTab,
   getOpenTabCountSync,
   updateTabPartialSync,
@@ -90,6 +91,16 @@ type PlatformTabTitleProps = {
    * for tabs hosting no WebView, which are answered with the platform's own tab menu.
    */
   webViewType?: string;
+  /**
+   * Whether this tab can be closed by the user. Gates middle-click-to-close (mouse button 1)
+   * anywhere on the tab header (see `platform-dock-layout-middle-click-handlers.util.ts`). Callers
+   * should pass the same value given to rc-dock's own `closable` field (see
+   * `createRCDockTabFromTabInfo`) so its close (X) button and this middle-click gate agree on
+   * whether the tab can be closed.
+   *
+   * @default true
+   */
+  isClosable?: boolean;
 };
 
 // CSS classes for highlighting the active tab header and content
@@ -193,6 +204,19 @@ const handleFloatTab = async (tabId: string) => {
 };
 
 /**
+ * Closes a tab, logging rather than throwing into React on failure — whether `closeTab` rejects, or
+ * resolves `false` because it found no such tab in the dock layout.
+ */
+export const handleCloseTab = async (tabId: string) => {
+  try {
+    const didClose = await closeTab(tabId);
+    if (!didClose) logger.warn(`Failed to close tab ${tabId}: tab not found in the dock layout`);
+  } catch (error) {
+    logger.error(`Failed to close tab ${tabId}: ${getErrorMessage(error)}`);
+  }
+};
+
+/**
  * What the user is told for each way a failed move can have left the tab. A move that did not do
  * what was asked leaves the tab in very different places, and "could not move it" is only true of
  * one of them: the tab that ended up in a window nobody chose DID move, and the tab that nothing
@@ -273,6 +297,7 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
  *   value, it will trigger a new flash animation.
  * @param id ID of the tab
  * @param webViewId ID of the WebView this tab hosts, if it is a WebView tab; `undefined` otherwise
+ * @param isClosable Whether this tab can be closed by the user. Defaults to `true`.
  */
 export function PlatformTabTitle({
   iconUrl,
@@ -282,6 +307,7 @@ export function PlatformTabTitle({
   id,
   webViewId,
   webViewType,
+  isClosable = true,
 }: PlatformTabTitleProps) {
   const isPowerMode = useIsPowerMode();
 
@@ -829,6 +855,12 @@ export function PlatformTabTitle({
             // a screen reader announces every icon-only tab in this column identically.
             aria-label={isIconOnly ? title : tabLabel}
             data-web-view-id={webViewId}
+            // Read by `platform-dock-layout-middle-click-handlers.util.ts` to resolve a middle
+            // click anywhere on this tab's header (including rc-tabs' "more" overflow dropdown,
+            // which re-renders this same element) back to a tab id, and to gate that close on
+            // whether this tab allows it.
+            data-tab-id={id}
+            data-tab-closable={isClosable}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>
             <span className={`platform-tab-title-text ${dragIgnoreClass.trim()}`.trim()}>
