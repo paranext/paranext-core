@@ -8,11 +8,11 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import {
-  type ScopeWithRange,
   ProjectSelector,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
+  type ScopeWithRange,
 } from 'platform-bible-react/experimental';
 import {
   defaultScrRef,

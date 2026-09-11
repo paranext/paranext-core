@@ -56,6 +56,23 @@ describe('computeRows — case-insensitive open-tab join (I12 regression)', () =
     expect(rowA!.isMuted).toBe(false);
   });
 
+  it('keeps a bound-but-closed row when the selection pair id differs in casing', () => {
+    // A pair bound to a scroll group with no open tab produces a synthetic "bound but closed" row.
+    // Resolving that pair back to its project has to normalize too: a lowercased pair id against an
+    // uppercase canonical id used to fall through the lookup and drop the row, so the user's own
+    // selected project vanished from the list.
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { pairs: [{ projectId: 'abc123', scrollGroupId: A }] },
+    });
+    const bound = rows.filter((r) => r.isBoundButClosed);
+    expect(bound).toHaveLength(1);
+    expect(normalizeProjectId(bound[0].projectId)).toBe('ABC123');
+    expect(bound[0].isSelected).toBe(true);
+  });
+
   it('matches open tabs to projects regardless of id casing (project-multi mode)', () => {
     const rows = computeRows({
       mode: 'project-multi',

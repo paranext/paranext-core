@@ -16,7 +16,7 @@ export type ProjectSelectorProject = {
   shortName: string;
   /**
    * Full name shown as the row's muted second line and as the tooltip title. Pass the short name
-   * (or omit the distinction upstream) when there is no longer name — the selector suppresses the
+   * (or omit the distinction upstream) when there is no fuller name — the selector suppresses the
    * second line rather than repeat it.
    */
   fullName: string;
@@ -90,7 +90,12 @@ export type ProjectSelectorProject = {
 export type ProjectSelectorSection = {
   /** Stable unique key. Becomes the rendered section's React key. */
   id: string;
-  /** Localized section heading. Omit for a section with no header row. */
+  /**
+   * Localized section heading. Omit for a section with no header row — but note the rows still
+   * render as a group under a separator, so omitting this leaves a visually delimited block with no
+   * accessible name, which is the same problem `unmatchedLabel` exists to solve for the trailing
+   * bucket. Omit it only when the section's membership is self-evident from the rows themselves.
+   */
   label?: string;
   /** Whether a project belongs in this section. Called once per project, never per row. */
   match: (project: ProjectSelectorProject) => boolean;
@@ -254,7 +259,10 @@ function pairIsSelected(
   projectId: string,
   scrollGroupId: ScrollGroupId | undefined,
 ): boolean {
-  return pairs.some((p) => p.projectId === projectId && p.scrollGroupId === scrollGroupId);
+  const normalized = normalizeProjectId(projectId);
+  return pairs.some(
+    (p) => normalizeProjectId(p.projectId) === normalized && p.scrollGroupId === scrollGroupId,
+  );
 }
 
 // #endregion
@@ -370,11 +378,17 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   selectedPairs.forEach((pair) => {
     if (pair.scrollGroupId === undefined) return;
     if (
-      rows.some((r) => r.projectId === pair.projectId && r.scrollGroupId === pair.scrollGroupId)
+      rows.some(
+        (r) =>
+          normalizeProjectId(r.projectId) === normalizeProjectId(pair.projectId) &&
+          r.scrollGroupId === pair.scrollGroupId,
+      )
     ) {
       return;
     }
-    const project = args.projects.find((p) => p.id === pair.projectId);
+    const project = args.projects.find(
+      (p) => normalizeProjectId(p.id) === normalizeProjectId(pair.projectId),
+    );
     if (!project) return;
     rows.push({
       rowKey: `closed:${project.id}:${pair.scrollGroupId}`,
@@ -686,11 +700,19 @@ function findDuplicateSectionId(sections: readonly ProjectSelectorSection[]): st
  * offending id rather than one per call. Partitioning runs on every keystroke in the selector's
  * search box, and the caller cannot act on the same message repeated hundreds of times.
  */
-const warnedDuplicateSectionIds = new Set<string>();
+const warnedDuplicateSectionIds = new WeakMap<object, Set<string>>();
 
-function warnOnceAboutDuplicateSectionId(duplicateId: string): void {
-  if (warnedDuplicateSectionIds.has(duplicateId)) return;
-  warnedDuplicateSectionIds.add(duplicateId);
+function warnOnceAboutDuplicateSectionId(
+  sections: readonly ProjectSelectorSection[],
+  duplicateId: string,
+): void {
+  let warned = warnedDuplicateSectionIds.get(sections);
+  if (!warned) {
+    warned = new Set<string>();
+    warnedDuplicateSectionIds.set(sections, warned);
+  }
+  if (warned.has(duplicateId)) return;
+  warned.add(duplicateId);
   console.warn(
     `ProjectSelector: duplicate custom section id "${duplicateId}" — matching is unaffected because ` +
       `each section buckets by its own \`match\`, but sections sharing an id collide as React keys, which can cause stale or misapplied rendering.`,
@@ -714,6 +736,26 @@ function warnOnceAboutDuplicateSectionId(duplicateId: string): void {
  * `projectsById` must be keyed by `normalizeProjectId(project.id)`: canonical project ids are
  * uppercase while open-tab ids can arrive lowercased, so an un-normalized lookup silently drops
  * every row into the unmatched bucket.
+ *
+ * @example
+ *
+ * ```ts
+ * const sections = [
+ *   { id: 'recent', label: 'Recent', match: (p) => recentIds.has(p.id) },
+ *   { id: 'yours', label: 'Your projects', match: () => true },
+ * ];
+ * const partitioned = partitionByCustomSections(rows, sections, projectsById, 'Other');
+ * ```
+ *
+ * @param rows Rows to bucket, in the selector's canonical order.
+ * @param sections Caller-defined sections, evaluated in order. An empty array yields one flat
+ *   section.
+ * @param projectsById Projects keyed by `normalizeProjectId(project.id)`, used to resolve each
+ *   row's project before calling `match`.
+ * @param unmatchedLabel Heading for the trailing bucket of rows that matched no section. Omit for
+ *   an unheaded bucket.
+ * @returns Sections in the supplied order, empty ones omitted, followed by the unmatched bucket
+ *   when it has rows.
  */
 export function partitionByCustomSections(
   rows: readonly ProjectRow[],
@@ -726,7 +768,7 @@ export function partitionByCustomSections(
   }
 
   const duplicateId = findDuplicateSectionId(sections);
-  if (duplicateId !== undefined) warnOnceAboutDuplicateSectionId(duplicateId);
+  if (duplicateId !== undefined) warnOnceAboutDuplicateSectionId(sections, duplicateId);
 
   // Resolve each project once, then reuse the verdict for all of its rows.
   const sectionIndexByProjectKey = new Map<string, number>();

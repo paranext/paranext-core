@@ -625,6 +625,42 @@ describe('renderProjectIndicator', () => {
     expect(screen.getByTestId('indicator-ScriptureResource')).toBeInTheDocument();
   });
 
+  it("names the row's type for a screen reader even when the glyph is aria-hidden", async () => {
+    const user = setupUser();
+    const mixed: ProjectSelectorProject[] = [
+      { id: 'p1', shortName: 'P1', fullName: 'A project', type: 'Standard', typeName: 'Standard' },
+      {
+        id: 'r1',
+        shortName: 'R1',
+        fullName: 'A resource',
+        type: 'ScriptureResource',
+        typeName: 'Scripture resource',
+      },
+    ];
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        renderProjectIndicator={(project) => (
+          <span data-testid={`indicator-${project.type}`} aria-hidden />
+        )}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    // The row tooltip is hover-only, so it never opens for a keyboard user arrowing the list. The
+    // type has to reach them through the row's own accessible name instead. Asserting on the role
+    // name (rather than the sr-only node) is what pins the behavior: it fails if the text stops
+    // being part of the name, however it is rendered.
+    expect(screen.getByRole('option', { name: /Scripture resource/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /A project/ })).toHaveAccessibleName(
+      expect.stringContaining('Standard'),
+    );
+  });
+
   it('renders no indicator element when the prop is absent', async () => {
     const user = setupUser();
     const projects: ProjectSelectorProject[] = [
@@ -643,5 +679,112 @@ describe('renderProjectIndicator', () => {
     );
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
     expect(screen.queryByTestId(/^indicator-/)).not.toBeInTheDocument();
+  });
+});
+
+describe('localizedStrings', () => {
+  const projects: ProjectSelectorProject[] = [{ id: 'p1', shortName: 'P1', fullName: 'A project' }];
+
+  it('still honors the deprecated filterAriaLabel so a caller keeps the accessible name', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        localizedStrings={{ filterAriaLabel: 'Vue' }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByRole('button', { name: 'Vue' })).toBeInTheDocument();
+  });
+
+  it('prefers viewOptionsAriaLabel when a caller supplies both spellings', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        localizedStrings={{ filterAriaLabel: 'Old', viewOptionsAriaLabel: 'New' }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByRole('button', { name: 'New' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Old' })).not.toBeInTheDocument();
+  });
+});
+
+describe('view-options trigger state', () => {
+  const projects: ProjectSelectorProject[] = [
+    { id: 'p1', shortName: 'P1', fullName: 'A project' },
+    { id: 'p2', shortName: 'P2', fullName: 'Another project' },
+  ];
+
+  it('does not mark the view modified while the picker is on its default grouping', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        availableGroupings={['openTabs', 'language']}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByRole('button', { name: 'View options' })).not.toHaveAttribute(
+      'data-view-modified',
+    );
+  });
+
+  it('marks the view modified once the user groups off the default', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        availableGroupings={['openTabs', 'language']}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.click(screen.getByRole('button', { name: 'View options' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Language' }));
+    expect(screen.getByRole('button', { name: 'View options' })).toHaveAttribute(
+      'data-view-modified',
+    );
+  });
+
+  // A menu trigger is not a toggle; `aria-pressed` would announce a pressed state the user cannot
+  // release by activating the control.
+  it('does not announce the modified state as a pressed toggle', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        availableGroupings={['openTabs', 'language']}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByRole('button', { name: 'View options' })).not.toHaveAttribute(
+      'aria-pressed',
+    );
   });
 });

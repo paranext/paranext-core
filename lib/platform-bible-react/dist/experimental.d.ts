@@ -49,7 +49,7 @@ export type ProjectSelectorProject = {
 	shortName: string;
 	/**
 	 * Full name shown as the row's muted second line and as the tooltip title. Pass the short name
-	 * (or omit the distinction upstream) when there is no longer name — the selector suppresses the
+	 * (or omit the distinction upstream) when there is no fuller name — the selector suppresses the
 	 * second line rather than repeat it.
 	 */
 	fullName: string;
@@ -122,7 +122,12 @@ export type ProjectSelectorProject = {
 export type ProjectSelectorSection = {
 	/** Stable unique key. Becomes the rendered section's React key. */
 	id: string;
-	/** Localized section heading. Omit for a section with no header row. */
+	/**
+	 * Localized section heading. Omit for a section with no header row — but note the rows still
+	 * render as a group under a separator, so omitting this leaves a visually delimited block with no
+	 * accessible name, which is the same problem `unmatchedLabel` exists to solve for the trailing
+	 * bucket. Omit it only when the section's membership is self-evident from the rows themselves.
+	 */
 	label?: string;
 	/** Whether a project belongs in this section. Called once per project, never per row. */
 	match: (project: ProjectSelectorProject) => boolean;
@@ -180,6 +185,12 @@ export type ProjectSelectorLocalizedStrings = {
 	searchPlaceholder?: string;
 	/** Accessible label for the view-options icon button. Defaults to `"View options"`. */
 	viewOptionsAriaLabel?: string;
+	/**
+	 * @deprecated Renamed to `viewOptionsAriaLabel` when the control stopped being a filter menu. Set
+	 *   that instead; this is still honored as a fallback so an existing caller does not silently
+	 *   lose the button's accessible name, and it will be removed once callers have moved.
+	 */
+	filterAriaLabel?: string;
 	/** View options: section heading for the grouping choices. Defaults to `"Group by"`. */
 	groupSectionLabel?: string;
 	/** View options: section heading for the filter toggles. Defaults to `"Filter"`. */
@@ -389,9 +400,8 @@ type CommonProps = {
 	/**
 	 * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
 	 * order — a project lands in the first section whose `match` accepts it, and anything unmatched
-	 * collects into a trailing section headed by
-	 * `%webView_project_selector_custom_unmatched_section_heading%` ("Other"), which you can retitle
-	 * through `localizedStrings`. Empty sections are not rendered.
+	 * collects into a trailing section headed by `localizedStrings.customUnmatchedSectionHeading`
+	 * ("Other" by default). Empty sections are not rendered.
 	 *
 	 * Must be referentially stable across renders — hoist it to a module constant or memoize it. The
 	 * selector re-partitions whenever this array's identity changes, so an inline literal
@@ -400,9 +410,8 @@ type CommonProps = {
 	 * the hoisted-constant shape.
 	 *
 	 * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-	 * override `%webView_project_selector_filter_group_by_custom%` through `localizedStrings` — its
-	 * "Custom" default names the mechanism, and the user needs the name of the axis your sections
-	 * actually express. To pin the list to these sections and nothing else, pass
+	 * set `localizedStrings.filterGroupByCustom` — its "Custom" default names the mechanism, and the
+	 * user needs the name of the axis your sections actually express. To pin the list to these sections and nothing else, pass
 	 * `availableGroupings={['custom']}` with `defaultGrouping="custom"` and `hideFilterMenu`, since a
 	 * one-item grouping menu is an inert control.
 	 *
@@ -419,8 +428,10 @@ type CommonProps = {
 	 * two different vocabularies, neither owned by this library), so the caller decides what a value
 	 * looks like. Output is treated as decorative — give it an accessible name yourself, or mark it
 	 * `aria-hidden`, since the selector cannot know what the glyph means. Marking it `aria-hidden`
-	 * does not strand the distinction: the row tooltip names the project's `typeName` whenever one is
-	 * supplied, so the type stays reachable by hover and by screen reader.
+	 * does not strand the distinction: whenever a project supplies `typeName`, the row includes it in
+	 * its own accessible name and names it again in the hover tooltip, so the type reaches both
+	 * pointer and screen-reader users without the glyph. A project with no `typeName` has neither, so
+	 * name the glyph yourself in that case.
 	 */
 	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
 };

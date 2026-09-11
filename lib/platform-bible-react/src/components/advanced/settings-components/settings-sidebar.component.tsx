@@ -158,11 +158,15 @@ export function SettingsSidebar({
               )}
             >
               <ScrollText className="tw:h-4 tw:w-4 tw:shrink-0" />
+              {/* The sidebar has no open-tab data to group by, so every grouping the view-options
+                  menu could offer produces the same flat list. Hide the menu rather than ship a
+                  live control that cannot change what the user sees. */}
               <ProjectSelector
                 mode="project"
                 projects={projectSelectorProjects}
                 openTabs={[]}
                 availableGroupings={['openTabs']}
+                hideFilterMenu
                 selection={{ projectId: selectedSidebarItem?.projectId ?? '' }}
                 onChangeSelection={({ projectId: nextId }) => {
                   if (!nextId) return;

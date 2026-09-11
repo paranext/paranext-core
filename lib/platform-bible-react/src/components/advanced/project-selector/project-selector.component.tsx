@@ -15,14 +15,7 @@ import {
   type MouseEvent,
   type RefObject,
 } from 'react';
-import {
-  ArrowRight,
-  Check,
-  ChevronDown,
-  ChevronsUpDown,
-  Loader2,
-  SlidersHorizontal,
-} from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Loader2, Settings2 } from 'lucide-react';
 import {
   getLocalizeKeyForScrollGroupId,
   normalizeProjectId,
@@ -100,6 +93,12 @@ export type ProjectSelectorLocalizedStrings = {
   searchPlaceholder?: string;
   /** Accessible label for the view-options icon button. Defaults to `"View options"`. */
   viewOptionsAriaLabel?: string;
+  /**
+   * @deprecated Renamed to `viewOptionsAriaLabel` when the control stopped being a filter menu. Set
+   *   that instead; this is still honored as a fallback so an existing caller does not silently
+   *   lose the button's accessible name, and it will be removed once callers have moved.
+   */
+  filterAriaLabel?: string;
   /** View options: section heading for the grouping choices. Defaults to `"Group by"`. */
   groupSectionLabel?: string;
   /** View options: section heading for the filter toggles. Defaults to `"Filter"`. */
@@ -177,7 +176,16 @@ export type ProjectSelectorLocalizedStrings = {
  * English text rendered for each key when the caller supplies no localized value for it, so the
  * selector reads correctly in a consumer that has not wired up localization yet.
  */
-const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
+/**
+ * Every string the selector renders, with the defaults filled in. Excludes the deprecated
+ * `filterAriaLabel`, which {@link resolveStrings} folds into `viewOptionsAriaLabel`, so render code
+ * never has to know the retired spelling exists.
+ */
+type ResolvedProjectSelectorStrings = Required<
+  Omit<ProjectSelectorLocalizedStrings, 'filterAriaLabel'>
+>;
+
+const DEFAULT_STRINGS: ResolvedProjectSelectorStrings = {
   searchPlaceholder: 'Search projects & resources',
   viewOptionsAriaLabel: 'View options',
   groupSectionLabel: 'Group by',
@@ -206,8 +214,13 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
 
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
-): Required<ProjectSelectorLocalizedStrings> {
-  return { ...DEFAULT_STRINGS, ...partial };
+): ResolvedProjectSelectorStrings {
+  // `filterAriaLabel` is the retired spelling of `viewOptionsAriaLabel`. Honor it only when the
+  // caller supplied no new-name value, so a caller passing both gets the new one.
+  const { filterAriaLabel, ...rest } = partial ?? {};
+  const merged = { ...DEFAULT_STRINGS, ...rest };
+  if (filterAriaLabel && !rest.viewOptionsAriaLabel) merged.viewOptionsAriaLabel = filterAriaLabel;
+  return merged;
 }
 
 // #endregion
@@ -380,9 +393,8 @@ type CommonProps = {
   /**
    * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
    * order — a project lands in the first section whose `match` accepts it, and anything unmatched
-   * collects into a trailing section headed by
-   * `%webView_project_selector_custom_unmatched_section_heading%` ("Other"), which you can retitle
-   * through `localizedStrings`. Empty sections are not rendered.
+   * collects into a trailing section headed by `localizedStrings.customUnmatchedSectionHeading`
+   * ("Other" by default). Empty sections are not rendered.
    *
    * Must be referentially stable across renders — hoist it to a module constant or memoize it. The
    * selector re-partitions whenever this array's identity changes, so an inline literal
@@ -391,11 +403,11 @@ type CommonProps = {
    * the hoisted-constant shape.
    *
    * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-   * override `%webView_project_selector_filter_group_by_custom%` through `localizedStrings` — its
-   * "Custom" default names the mechanism, and the user needs the name of the axis your sections
-   * actually express. To pin the list to these sections and nothing else, pass
-   * `availableGroupings={['custom']}` with `defaultGrouping="custom"` and `hideFilterMenu`, since a
-   * one-item grouping menu is an inert control.
+   * set `localizedStrings.filterGroupByCustom` — its "Custom" default names the mechanism, and the
+   * user needs the name of the axis your sections actually express. To pin the list to these
+   * sections and nothing else, pass `availableGroupings={['custom']}` with
+   * `defaultGrouping="custom"` and `hideFilterMenu`, since a one-item grouping menu is an inert
+   * control.
    *
    * If `'custom'` is the active grouping and this is absent or empty, the list renders flat
    * (unsectioned) rather than showing an empty view.
@@ -410,8 +422,10 @@ type CommonProps = {
    * two different vocabularies, neither owned by this library), so the caller decides what a value
    * looks like. Output is treated as decorative — give it an accessible name yourself, or mark it
    * `aria-hidden`, since the selector cannot know what the glyph means. Marking it `aria-hidden`
-   * does not strand the distinction: the row tooltip names the project's `typeName` whenever one is
-   * supplied, so the type stays reachable by hover and by screen reader.
+   * does not strand the distinction: whenever a project supplies `typeName`, the row includes it in
+   * its own accessible name and names it again in the hover tooltip, so the type reaches both
+   * pointer and screen-reader users without the glyph. A project with no `typeName` has neither, so
+   * name the glyph yourself in that case.
    */
   renderProjectIndicator?: (project: ProjectSelectorProject) => ReactNode;
 };
@@ -511,7 +525,7 @@ function ScrollGroupChip({ scrollGroupId, isBoundButClosed }: ScrollGroupChipPro
 type RowRenderProps = {
   row: ProjectRow;
   mode: ProjectSelectorMode;
-  strings: Required<ProjectSelectorLocalizedStrings>;
+  strings: ResolvedProjectSelectorStrings;
   onClick: (row: ProjectRow) => void;
   onOpen: ((row: ProjectRow) => void) | undefined;
   /** Forwarded by the parent so it can scroll the selected row into view when the popover opens. */
@@ -562,7 +576,7 @@ function ProjectRowView({
   // always show a tooltip on hover, regardless of whether the visible text is truncated.
   const hasExtraTooltipContent =
     tooltipHasLanguage ||
-    Boolean(row.typeName) ||
+    Boolean(row.typeName ?? row.type) ||
     Boolean(row.scrollGroupScrRefLabel) ||
     row.isBoundButClosed ||
     (row.isDisabled && Boolean(row.disabledReason));
@@ -677,6 +691,11 @@ function ProjectRowView({
           </span>
         )}
       </span>
+      {/* The indicator glyph belongs to the caller, so the selector cannot name it. The row itself
+          carries `typeName` instead, which keeps "project or resource?" available to a screen
+          reader arrowing the list — the row tooltip is hover-only (see the manually controlled
+          `open` below) and never opens for keyboard navigation. */}
+      {(row.typeName ?? row.type) && <span className="tw:sr-only">{row.typeName ?? row.type}</span>}
       {rightContent}
     </CommandItem>
   );
@@ -709,10 +728,11 @@ function ProjectRowView({
             )}
           </div>
         )}
-        {/* The row's type is otherwise carried only by the caller's optional
+        {/* The row's type is otherwise shown only by the caller's optional
             `renderProjectIndicator` glyph, which the selector treats as decorative. Surfacing
-            `typeName` here keeps "project or resource?" reachable by hover and by screen reader. */}
-        {row.typeName && <div className="tw:text-sm">{row.typeName}</div>}
+            `typeName` here makes it readable on hover; the row's accessible name covers the
+            screen-reader path separately. */}
+        {(row.typeName ?? row.type) && <div className="tw:text-sm">{row.typeName ?? row.type}</div>}
         {!row.isBoundButClosed && row.scrollGroupScrRefLabel && letter && (
           <div className="tw:text-sm">
             {row.scrollGroupScrRefLabel}
@@ -767,12 +787,12 @@ type ViewOptionsMenuProps = {
   onChangeGrouping: (value: GroupingChoice) => void;
   showSelectedOnly: boolean | undefined;
   onChangeShowSelectedOnly: ((value: boolean) => void) | undefined;
-  strings: Required<ProjectSelectorLocalizedStrings>;
+  strings: ResolvedProjectSelectorStrings;
 };
 
 function groupingLabel(
   option: ProjectSelectorGroupingOption,
-  strings: Required<ProjectSelectorLocalizedStrings>,
+  strings: ResolvedProjectSelectorStrings,
 ): string {
   switch (option) {
     case 'openTabs':
@@ -821,11 +841,15 @@ function ViewOptionsMenu({
               'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
           )}
           aria-label={strings.viewOptionsAriaLabel}
-          aria-pressed={isViewModified}
+          // Deliberately not `aria-pressed`: this opens a menu rather than toggling anything, so a
+          // pressed state would announce a toggle the user cannot release by activating it. The
+          // accent above carries the "view is off its defaults" hint visually, and the menu's own
+          // radio items announce which grouping is active once it is open.
+          data-view-modified={isViewModified || undefined}
           title={strings.viewOptionsAriaLabel}
           onMouseDown={(event: MouseEvent) => event.preventDefault()}
         >
-          <SlidersHorizontal className="tw:h-4 tw:w-4" />
+          <Settings2 className="tw:h-4 tw:w-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -918,6 +942,11 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // Mount-time initializer only — we do NOT re-derive when props change, since that would fight a
   // user who has since picked a different grouping. Callers control the initial value; the
   // component owns the interactive one.
+  //
+  // `defaultGrouping` itself is recomputed every render, and the view-options menu uses the live
+  // value as its "is the view modified?" baseline. So a caller who changes `availableGroupings` or
+  // `defaultGrouping` after mount moves the baseline while the active grouping stays put. That is
+  // deliberate: the baseline should describe how the picker would open *now*.
   const [activeGrouping, setActiveGrouping] = useState<GroupingChoice>(defaultGrouping);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
@@ -1016,12 +1045,14 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   //
   // The section headings are read into locals so the memo below can list them as plain
   // dependencies.
-  const { lastUsedRecentSectionHeading } = strings;
-  const { lastUsedOtherSectionHeading } = strings;
-  const { languageUnknownSectionHeading } = strings;
-  const { versificationUnknownSectionHeading } = strings;
-  const { typeUnknownSectionHeading } = strings;
-  const { customUnmatchedSectionHeading } = strings;
+  const {
+    lastUsedRecentSectionHeading,
+    lastUsedOtherSectionHeading,
+    languageUnknownSectionHeading,
+    versificationUnknownSectionHeading,
+    typeUnknownSectionHeading,
+    customUnmatchedSectionHeading,
+  } = strings;
 
   const sections = useMemo(() => {
     switch (activeGrouping) {
@@ -1394,7 +1425,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
 
 function sectionHeading(
   section: RowSection,
-  strings: Required<ProjectSelectorLocalizedStrings>,
+  strings: ResolvedProjectSelectorStrings,
 ): string | undefined {
   switch (section.kind) {
     case 'openTabs':
