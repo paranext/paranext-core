@@ -56,11 +56,14 @@ Optional single argument `$ARGUMENTS`:
    - If it fails (no PR found), default `BASE=main`.
    - **If `BASE` is not `main`, stop and ask the user to confirm** before continuing. Show them the detected base and let them accept or override.
 
-5. **Fetch the base branch.**
+5. **Fetch the base branch and record the pre-rebase merge-base.**
 
    ```bash
    git fetch origin "$BASE"
+   PRE_REBASE_MERGE_BASE=$(git merge-base HEAD "origin/$BASE")
    ```
+
+   Recording the merge-base now (before the rebase) lets step 9 detect whether the incoming base commits bumped dependencies.
 
 6. **Rebase onto `origin/$BASE`.**
 
@@ -73,15 +76,23 @@ Optional single argument `$ARGUMENTS`:
    While `git status` reports a rebase in progress:
 
    - Identify conflicted paths: `git diff --name-only --diff-filter=U`
-   - For every conflicted path **inside a `dist/` directory** (any depth — e.g. `lib/platform-bible-react/dist/...`, `lib/platform-bible-utils/dist/...`, `extensions/**/dist/...`):
-     - Take the base version and stage it: `git checkout --ours -- <path> && git add <path>`
-       - (During rebase, `--ours` refers to the branch being rebased onto, i.e. `origin/$BASE`. We are discarding the feature branch's dist changes because the build will regenerate them.)
-   - If, after handling all `dist/` conflicts, **non-dist conflicts remain**, stop and surface them to the user with a short summary of each file. Do not guess resolutions.
-   - Once all conflicts for the current step are resolved and staged, continue:
+   - For every conflicted path inside **`lib/platform-bible-react/dist/` or `lib/platform-bible-utils/dist/`** (the only two tracked dist trees this command rebuilds — `extensions/**/dist/` is gitignored and cannot produce conflicts):
+     - Take the base version and stage it: `git checkout --ours -- <path> && git add <path>`.
+     - If `git checkout --ours` fails because the file was deleted on the base side (delete/modify conflict), stage the deletion instead: `git rm -- <path>`.
+     - (During rebase, `--ours` refers to the branch being rebased onto, i.e. `origin/$BASE`. We are discarding the feature branch's dist changes because the build will regenerate them.)
+   - Do **not** extend this auto-discard to any other path — not other `dist/` directories, not other generated files. If a future tracked dist tree ever needs the same treatment, add it explicitly here. Anything outside the two known paths must surface as a conflict for the user.
+   - If, after handling those two paths, **any conflicts remain**, stop and surface them to the user with a short summary of each file. Do not guess resolutions.
+   - Once all conflicts for the current step are resolved and staged, check whether the resulting commit would be empty (this happens when a prior `chore: rebuild dist` commit's changes were all resolved to the base side):
 
      ```bash
-     git rebase --continue
+     if git diff --cached --quiet; then
+       git rebase --skip
+     else
+       git rebase --continue
+     fi
      ```
+
+     Only skip on a confirmed-empty index. Never blanket-use `git rebase --continue || git rebase --skip` — that would silently drop real commits whenever a commit hook happens to fail.
 
    Repeat until the rebase reports success (no rebase in progress).
 
@@ -100,16 +111,24 @@ Optional single argument `$ARGUMENTS`:
    - `NEEDS_UTILS_BUILD=1` if any changed path starts with `lib/platform-bible-utils/` and is **not** inside `lib/platform-bible-utils/dist/`.
    - `NEEDS_REACT_BUILD=1` if any changed path starts with `lib/platform-bible-react/` and is **not** inside `lib/platform-bible-react/dist/`.
 
-9. **Build changed packages — utils first, then react.**
+9. **Reinstall dependencies if the base bumped them, then build changed packages — utils first, then react.**
 
-   Build **only** the packages flagged above, in this order:
+   If `package-lock.json` changed between the pre-rebase merge-base and `origin/$BASE`, `node_modules` is stale and the build could fail or emit dist output that differs from CI. Reinstall before building:
+
+   ```bash
+   if ! git diff --quiet "$PRE_REBASE_MERGE_BASE" "origin/$BASE" -- package-lock.json; then
+     npm install
+   fi
+   ```
+
+   Then build **only** the packages flagged in step 8, in this order. Use `build:basic` (dist-only) — `npm run build` in these packages additionally runs `lint-fix` (which mutates source files) and, in utils, the full test suite. Neither is in scope for a rebase, and `lint-fix` risks smuggling unrelated edits into the dist commit:
 
    ```bash
    # If NEEDS_UTILS_BUILD
-   cd lib/platform-bible-utils && npm run build && cd ../..
+   cd lib/platform-bible-utils && npm run build:basic && cd ../..
 
    # If NEEDS_REACT_BUILD
-   cd lib/platform-bible-react && npm run build && cd ../..
+   cd lib/platform-bible-react && npm run build:basic && cd ../..
    ```
 
    If a build fails, stop and surface the error. Do not commit a broken build.
