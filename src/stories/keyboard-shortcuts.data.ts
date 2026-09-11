@@ -671,24 +671,21 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'tour-dismiss',
     purpose: 'Dismiss the onboarding tour',
     category: 'View',
-    context:
-      'Onboarding tour overlay (the overlay stands down when the connection-lost state is shown, so this key belongs to that state instead)',
+    context: 'Onboarding tour overlay (not while the connection-lost state is shown)',
+    // The overlay unmounts entirely once the connection is lost, so this key is not merely muted —
+    // it is withdrawn, and Escape falls to `connection-lost-swallow-escape` above. Standing the
+    // tour down is what keeps it from spending the permanent done flag on the way to a reload.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
-    locations: [
-      'src/renderer/components/onboarding-tour/tour.component.tsx',
-      'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
-    ],
+    locations: ['src/renderer/components/onboarding-tour/tour.component.tsx'],
   },
   {
     id: 'tour-focus-cycle',
     purpose: 'Cycle keyboard focus through the onboarding tour card buttons',
     category: 'Navigation',
-    context:
-      'Onboarding tour overlay (the overlay stands down when the connection-lost state is shown, so this key belongs to that state instead)',
+    context: 'Onboarding tour overlay (not while the connection-lost state is shown)',
+    // The overlay unmounts entirely once the connection is lost, so the card's focus trap goes with
+    // it and Tab falls to `connection-lost-contain-focus` above, which holds focus on Reload.
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
-    locations: [
-      'src/renderer/components/onboarding-tour/tour.component.tsx',
-      'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
-    ],
+    locations: ['src/renderer/components/onboarding-tour/tour.component.tsx'],
   },
 ];

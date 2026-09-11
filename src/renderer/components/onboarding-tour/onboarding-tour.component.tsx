@@ -1,10 +1,7 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first-run-store';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import {
-  getIsConnectionLost,
-  subscribeToConnectionLost,
-} from '@renderer/services/connection-lost-store';
+import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
@@ -218,7 +215,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
  * `readDirection()`); this component never reads layout direction.
  */
 export function OnboardingTour() {
-  const isConnectionLost = useSyncExternalStore(subscribeToConnectionLost, getIsConnectionLost);
+  const isConnectionLost = useIsConnectionLost();
   // Replay requests arrive from the Help menu by way of the onboarding tour service shard. The
   // count is also the remount key, so asking again while the tour is open restarts it from stop 1
   // rather than leaving it wherever it was.
@@ -237,9 +234,7 @@ export function OnboardingTour() {
   // interrupted this way resumes from stop 1 after the reload, which is the same thing quitting
   // mid-tour already does: an interrupted user has not been oriented.
   if (isConnectionLost) return undefined;
-  // React components render nothing via null.
-  // eslint-disable-next-line no-null/no-null
-  if (doneAtMount && replayCount === 0) return null;
+  if (doneAtMount && replayCount === 0) return undefined;
   return <OnboardingTourNotYetDone key={replayCount} isReplay={replayCount > 0} />;
 }
 
