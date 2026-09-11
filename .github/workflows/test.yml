@@ -28,6 +28,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # A unit-test flake on one runner must not cancel the others: the blocking E2E suite runs only
+      # on Linux, so cancelling it because Windows was slow leaves the PR with no signal at all.
+      fail-fast: false
       matrix:
         # Make sure these match with the env values above
         os: [windows-latest, macos-15, ubuntu-22.04]
@@ -92,17 +95,37 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y snapd
+          # The snap store CDN intermittently answers a download with a 502 and snapd
+          # gives up on the first try, failing the job before the build even starts.
+          retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$@"; then return 0; fi
+              echo "WARNING: '$*' failed (attempt $attempt of 3); retrying in 30s"
+              sleep 30
+            done
+            echo "ERROR: '$*' failed after 3 attempts"
+            return 1
+          }
+          # Hold snapd's automatic refreshes for the job. snapd refreshes installed snaps
+          # on its own schedule; refreshing `lxd` (or `core*`/`snapd` under it) while
+          # snapcraft is packing inside an LXD instance restarts the daemon out from under
+          # the running build. Explicit `snap install`/`refresh` below still work while
+          # held. Best-effort: a snapd that rejects the option must not fail the build.
+          sudo snap set system refresh.hold="$(date -u -d '+1 day' +%Y-%m-%dT%H:%M:%SZ)" ||
+            echo "WARNING: could not hold snapd auto-refresh; a refresh may disrupt the snap build"
           # Pin snapcraft to the 8.x track. snapcraft 9 (now latest/stable) removed the
           # deprecated `snap` command alias, which electron-builder 26.x still invokes,
           # breaking the snap build. Remove this pin once we move to electron-builder >= 27
           # (which calls `snapcraft pack`). See electron-builder issue #8880 / PR #9517.
-          sudo snap install snapcraft --classic --channel=8.x/stable
-          sudo snap install lxd
-          sudo snap refresh lxd
+          retry sudo snap install snapcraft --classic --channel=8.x/stable
+          retry sudo snap install lxd
+          retry sudo snap refresh lxd
           sudo lxd init --auto
-          # Add the current user to the lxd group
+          # Add the current user to the lxd group. (No `newgrp lxd` here: in a script it
+          # execs a *child* shell that reads EOF from stdin and exits immediately, so it
+          # never changes this shell's groups -- the `chmod` below is what does the work.)
           getent group lxd | grep -qwF "$USER" || sudo usermod -aG lxd "$USER"
-          newgrp lxd
           # Force the socket to be usable by the current user
           sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
           # https://github.com/canonical/action-build/blob/master/src/tools.ts#L54
@@ -115,6 +138,24 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ matrix.dotnet_version }}
+
+      # The notices generator restores the .NET closure once per runtime identifier - four passes -
+      # on top of the build's own restore. `~/.npm` is cached by setup-node and the bundler gems by
+      # setup-ruby; without this, the NuGet store is the one dependency store fetched cold on every
+      # run.
+      #
+      # The key names the files that actually decide what gets restored. `packages.lock.json` is not
+      # one of them - this repository uses no NuGet lock files, so that pattern hashed nothing and
+      # contributed nothing to the key. `Directory.Build.props` carries shared package versions, and
+      # `.config/dotnet-tools.json` pins `nuget-license`, which `dotnet tool restore` fetches into
+      # the same store: without it a tool-version bump reuses a cache that predates it.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props',
+            '.config/dotnet-tools.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
 
       - name: Read package.json
         id: package_json
@@ -131,6 +172,19 @@ jobs:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
+      # licensee (Ruby) identifies license texts for the third-party notices generator. Linux only:
+      # the generator writes the artifact only on Linux, and the other legs verify against the
+      # committed lock, which needs no Ruby.
+      - name: Install Ruby
+        if: ${{ matrix.os == env.OS_LINUX }}
+        uses: ruby/setup-ruby@v1
+        with:
+          # Pinned to match the developer prerequisite. licensee 10.x requires >= 3.2, and letting
+          # CI float to a newer Ruby than developers run invites a version of the matcher resolving
+          # differently in the two places - which would show up as unexplained verdict churn.
+          ruby-version: '3.4'
+          bundler-cache: true
+
       - name: Install packages
         run: npm ci
 
@@ -144,12 +198,64 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `npm run build` compiles main, renderer and extension-host with NODE_ENV=production but
+      # leaves its extensions leg in DEVELOPMENT mode, and every job that packages an installer
+      # (publish.yml, package-main.yml, `npm run package`) follows it with this step. The notices
+      # document has to be verified against the graph the installers carry, not the one that is
+      # thrown away - so this leg builds them the same way before checking anything.
+      #
+      # `collectShippedPackages` refuses a manifest set that mixes modes, so a job that forgets this
+      # step fails naming the mismatch rather than describing the wrong graph.
+      - name: Build extensions for production
+        run: npm run build:extensions:production
+
+      # The whole notices gate for this repository, in ONE pass. It derives the shipping set, runs
+      # `classify` over it (so the strong-copyleft gate runs on every pull request), diffs the
+      # derived set against THIRD-PARTY-NOTICES.lock.json - which records each package's licensee
+      # version, matched file, SPDX id and TEXT HASH, and is the only thing that reports a license
+      # text CHANGING under an unchanged name@version - and compares the rendered document byte for
+      # byte against the committed one, which IS the staleness check. A legitimate dependency bump
+      # fails here with a diff naming the package and the file, which a human reads and
+      # acknowledges by regenerating.
+      #
+      # This is the only notices step on this leg. Regenerating afterwards would repeat the entire
+      # pipeline - `dotnet tool restore`, four `dotnet restore` passes, four `nuget-license` runs and
+      # a full licensee batch - to produce bytes this step has already established are identical,
+      # and it could only ever run when this step passed, so it would assert nothing new.
+      #
+      # Linux only: the NuGet section is read from the restore closure, which is RID-dependent, so
+      # exactly one platform has to be canonical or the three legs would each produce a different
+      # file. It needs Ruby and the dotnet restore that `npm run build` above performs.
+      - name: verify third-party notices against the committed lock
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run verify:third-party-notices
+
+      # The notices file is packaged into every platform's installer, so a Linux-generated
+      # artifact is a claim carried by Windows and macOS binaries too. The full check (`--verify`,
+      # available via `npm run verify:third-party-notices`) cannot run on these legs: license
+      # identification needs Ruby, installed on the Linux leg only, and the NuGet closure needs four
+      # `dotnet restore` passes. Neither of those varies by platform, so re-running them here would
+      # only repeat the Linux leg's answer at a cost this leg cannot pay.
+      # License identification is platform-invariant (same files, same pinned licensee version) and
+      # the NuGet closure is already made platform-complete FROM Linux by the four-RID union.
+      # The one thing that genuinely varies is the npm closure - npm installs an optional dependency
+      # only where its os/cpu constraints match - so that is the one thing this leg checks: its own
+      # resolved npm packages, by name@version, against the committed lock's npm entries. No Ruby, no
+      # dotnet, no network. See `adr-notices-derived-from-what-ships`.
+      - name: verify npm shipping set matches this platform
+        if: ${{ matrix.os != env.OS_LINUX }}
+        run: npm run verify:third-party-notices:shipping-set
+
       - name: Verify no files changed after build
         id: verify-changed-files
         uses: tj-actions/verify-changed-files@v20
 
       - name: Report file changes
         if: steps.verify-changed-files.outputs.files_changed == 'true'
+        # Naming the changed files is the only thing this step does, and `$CHANGED_FILES` is POSIX
+        # shell: the windows leg defaults to pwsh, where it reads as an undefined PowerShell
+        # variable and the message comes out empty. The leg still fails, but with nothing to act on.
+        shell: bash
         env:
           CHANGED_FILES: ${{ steps.verify-changed-files.outputs.changed_files }}
         run: |
@@ -302,6 +408,30 @@ jobs:
           retention-days: 14
           path: |
             ./release/build/*.snap
+
+      # Any Linux failure here -- the snap pack, or an E2E run the kernel kills for memory --
+      # leaves its real evidence outside the step's own output: snapcraft's log holds the
+      # mksquashfs error behind the bare "mksquashfs call failed:" that reaches the console,
+      # and an OOM kill names the process the kernel chose only in dmesg. Last in the job so a
+      # failure anywhere above reaches it.
+      - name: Capture Linux failure diagnostics
+        if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        run: |
+          echo "=== kernel OOM activity ==="
+          sudo dmesg --ctime 2>/dev/null | grep -iE "out of memory|oom-kill|killed process" || echo "(no OOM entries in dmesg)"
+          echo "=== kernel log tail ==="
+          sudo dmesg --ctime 2>/dev/null | tail -40 || true
+          echo "=== memory ==="; free -h; swapon --show || true
+          echo "=== disk ==="; df -h /
+
+      - name: Upload snapcraft logs (Linux)
+        if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapcraft-logs
+          path: |
+            ~/.local/state/snapcraft/log/
+          if-no-files-found: warn
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

@@ -34,8 +34,11 @@ function fakeRpcHandler() {
     registerEvent: vi.fn(),
     unregisterEvent: vi.fn(),
     onDidDisconnectClient: vi.fn().mockReturnValue(() => true),
+    onDidLoseConnection: vi.fn().mockReturnValue(() => true),
   } as unknown as Awaited<ReturnType<typeof createRpcHandler>>;
 }
+
+let mockRpcHandler: ReturnType<typeof fakeRpcHandler>;
 
 /**
  * `hasShutDown` and `jsonRpc` are module-level state, so re-import a fresh copy of the service for
@@ -48,7 +51,8 @@ async function importNetworkService() {
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
-  mockCreateRpcHandler.mockResolvedValue(fakeRpcHandler());
+  mockRpcHandler = fakeRpcHandler();
+  mockCreateRpcHandler.mockResolvedValue(mockRpcHandler);
 });
 
 // The shutdown latch is the backstop that stops a late boot-race request (e.g. the Power-mode
@@ -86,5 +90,66 @@ describe('network service shutdown latch', () => {
 
     await expect(networkService.initialize()).rejects.toThrow(/shut down/);
     expect(mockCreateRpcHandler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('onDidLoseConnection', () => {
+  it('relays the handler event to its own subscribers', async () => {
+    const networkService = await importNetworkService();
+
+    let fireFromHandler: ((event: void) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: void) => void) => {
+      fireFromHandler = callback;
+      return () => true;
+    });
+    await networkService.initialize();
+
+    const listener = vi.fn();
+    networkService.onDidLoseConnection(listener);
+    fireFromHandler?.(undefined);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  // Nothing in `src/renderer` calls `shutdown()`, so this guard is the Node processes' protection:
+  // every socket closes at quit, and relaying that as a lost connection would tell subscribers the
+  // app broke on its way out.
+  it('does not relay after shutdown() has begun', async () => {
+    const networkService = await importNetworkService();
+
+    let fireFromHandler: ((event: void) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: void) => void) => {
+      fireFromHandler = callback;
+      return () => true;
+    });
+    await networkService.initialize();
+
+    const listener = vi.fn();
+    networkService.onDidLoseConnection(listener);
+    await networkService.shutdown();
+    fireFromHandler?.(undefined);
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('still tells the other subscribers when one of them throws', async () => {
+    const networkService = await importNetworkService();
+
+    let fireFromHandler: ((event: void) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: void) => void) => {
+      fireFromHandler = callback;
+      return () => true;
+    });
+    await networkService.initialize();
+
+    const throwingListener = vi.fn(() => {
+      throw new Error('subscriber blew up');
+    });
+    const goodListener = vi.fn();
+    networkService.onDidLoseConnection(throwingListener);
+    networkService.onDidLoseConnection(goodListener);
+    fireFromHandler?.(undefined);
+
+    expect(goodListener).toHaveBeenCalledTimes(1);
   });
 });
