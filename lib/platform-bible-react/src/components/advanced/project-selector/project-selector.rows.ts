@@ -36,6 +36,52 @@ export type ProjectSelectorProject = {
    * `versificationId` but no `versificationName`. Pair with `versificationId`.
    */
   versificationName?: string;
+  /**
+   * Locale-stable type key for the "Group by type" option.
+   *
+   * **This field is a free-form `string` on purpose — the selector does NOT enforce a taxonomy.**
+   * It groups rows by exact key equality (case-sensitive) and displays them under whatever
+   * {@link typeName} the caller supplies. No enum, no union, no wire contract, and no localization
+   * key set for the values is defined by this component.
+   *
+   * ### Why free-form?
+   *
+   * Rows in a single picker can come from more than one already-established taxonomy, and none of
+   * them are owned by `platform-bible-react`:
+   *
+   * - **Paratext project types** — the PT9 `ProjectType` enum, surfaced by the C# ParatextData
+   *   library via `ScrText.Settings.TranslationInfo.Type.InternalValue` and forwarded on the wire
+   *   as `ProjectListResult.projectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values
+   *   include `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
+   *   `"StudyBibleAdditions"`, `"ConsultantNotes"`, `"Transliteration"`,
+   *   `"TransliterationWithEncoder"`.
+   * - **DBL resource types** — the `ResourceType` union in `platform-bible-utils`
+   *   (`lib/platform-bible-utils/src/resources.model.ts`): `"ScriptureResource"`,
+   *   `"CommentaryResource"`, `"EnhancedResource"`, `"XmlResource"`, `"SourceLanguageResource"`.
+   *
+   * Constraining `type` to a hard-coded union would either duplicate one of those taxonomies (and
+   * quickly drift from its source of truth) or invent a new one, and neither buys the selector
+   * anything — grouping only needs equality.
+   *
+   * If a future consumer wants type-safety on the caller side, the recommended shape is a typed
+   * literal at the call site (e.g. `type: 'Standard' satisfies string`), not a widening of this
+   * type. Escalating this to a union is a deliberate, future decision — not something to add
+   * ad-hoc.
+   */
+  type?: string;
+  /**
+   * Human-readable label for {@link type} used as the section header in type-grouping mode. Falls
+   * back to the raw `type` key when absent. Callers own the mapping from `type` to `typeName` and
+   * should provide a localized string (e.g. `"Back translation"`, `"Study Bible"`, `"Scripture
+   * resource"`). The selector does not resolve labels itself — see {@link type} for the rationale.
+   */
+  typeName?: string;
+  /**
+   * Millisecond-epoch timestamp of when the caller last used this project/resource. Optional;
+   * consumed by the "Group by last used" option, which places rows with a timestamp under a
+   * "Recently used" section (sorted newest-first) and rows without under "Other".
+   */
+  lastUsedAt?: number;
 };
 
 /** A project that is currently open in a specific scroll group. */
@@ -122,6 +168,12 @@ export type ProjectRow = {
   versificationId?: string;
   /** Mirrors {@link ProjectSelectorProject.versificationName}. */
   versificationName?: string;
+  /** Mirrors {@link ProjectSelectorProject.type}. */
+  type?: string;
+  /** Mirrors {@link ProjectSelectorProject.typeName}. */
+  typeName?: string;
+  /** Mirrors {@link ProjectSelectorProject.lastUsedAt}. */
+  lastUsedAt?: number;
 };
 
 export type ComputeRowsArgs =
@@ -215,6 +267,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         disabledReason: project.disabledReason,
         versificationId: project.versificationId,
         versificationName: project.versificationName,
+        type: project.type,
+        typeName: project.typeName,
+        lastUsedAt: project.lastUsedAt,
       };
     });
   }
@@ -255,6 +310,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         disabledReason: project.disabledReason,
         versificationId: project.versificationId,
         versificationName: project.versificationName,
+        type: project.type,
+        typeName: project.typeName,
+        lastUsedAt: project.lastUsedAt,
       });
       return;
     }
@@ -276,6 +334,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         disabledReason: project.disabledReason,
         versificationId: project.versificationId,
         versificationName: project.versificationName,
+        type: project.type,
+        typeName: project.typeName,
+        lastUsedAt: project.lastUsedAt,
       });
     });
   });
@@ -309,6 +370,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
       disabledReason: project.disabledReason,
       versificationId: project.versificationId,
       versificationName: project.versificationName,
+      type: project.type,
+      typeName: project.typeName,
+      lastUsedAt: project.lastUsedAt,
     });
   });
 
@@ -321,15 +385,17 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 
 export type RowSection = {
   /**
-   * 'flat' means no section header (grouping toggle off). 'versification' is a custom-labeled
-   * section that surfaces the versification name; the priority versification group (typically the
-   * active project's versification) is pinned to the top by `partitionByVersification`.
+   * 'flat' means no section header (grouping toggle off). 'versification', 'language', 'type', and
+   * 'lastUsed' are custom-labeled sections whose header comes from `label`; the priority
+   * versification group (typically the active project's versification) is pinned to the top by
+   * `partitionByVersification`.
    */
-  kind: 'openTabs' | 'other' | 'flat' | 'versification';
+  kind: 'openTabs' | 'other' | 'flat' | 'versification' | 'language' | 'type' | 'lastUsed';
   rows: ProjectRow[];
   /**
-   * Set on `versification` sections — the localized versification name to render as the section
-   * header. `undefined` for other section kinds.
+   * Set on `versification`, `language`, `type`, and `lastUsed` sections — the localized label to
+   * render as the section header. `undefined` for `flat`, `openTabs`, and `other` (whose labels
+   * come from ProjectSelector's strings map instead).
    */
   label?: string;
   /** Set on `versification` sections — true for the consumer-supplied priority bucket. */
@@ -448,6 +514,117 @@ export function partitionByVersification(
       isPriority: false,
     });
   }
+  return sections;
+}
+
+/**
+ * Bucket rows by `language`, sort each bucket by `compareRows`, and emit sections alphabetically by
+ * language name. Rows without a `language` are collected into a single trailing "Unknown language"
+ * section using `unknownLabel`. Empty sections are elided (no bucket is created for a language with
+ * zero rows, and the unknown bucket is omitted when empty).
+ */
+export function partitionByLanguage(
+  rows: readonly ProjectRow[],
+  unknownLabel: string,
+): RowSection[] {
+  const buckets = new Map<string, ProjectRow[]>();
+  const unknownRows: ProjectRow[] = [];
+  rows.forEach((row) => {
+    const key = row.language;
+    if (!key) {
+      unknownRows.push(row);
+      return;
+    }
+    const existing = buckets.get(key);
+    if (existing) existing.push(row);
+    else buckets.set(key, [row]);
+  });
+  const entries = [...buckets.entries()].map(([label, groupRows]) => ({
+    label,
+    rows: [...groupRows].sort(compareRows),
+  }));
+  entries.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  const sections: RowSection[] = entries.map(({ label, rows: groupRows }) => ({
+    kind: 'language' as const,
+    rows: groupRows,
+    label,
+  }));
+  if (unknownRows.length > 0) {
+    sections.push({
+      kind: 'language',
+      rows: [...unknownRows].sort(compareRows),
+      label: unknownLabel,
+    });
+  }
+  return sections;
+}
+
+/**
+ * Bucket rows by `type` key, using `typeName` for the section label (falling back to `type` when
+ * `typeName` is absent). Emits sections alphabetically by label. Rows without a `type` go into a
+ * single trailing "Unknown type" section using `unknownLabel`. Empty sections are elided.
+ */
+export function partitionByType(rows: readonly ProjectRow[], unknownLabel: string): RowSection[] {
+  const buckets = new Map<string, { label: string; rows: ProjectRow[] }>();
+  const unknownRows: ProjectRow[] = [];
+  rows.forEach((row) => {
+    const key = row.type;
+    if (!key) {
+      unknownRows.push(row);
+      return;
+    }
+    const label = row.typeName ?? key;
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.rows.push(row);
+      // Adopt the first non-empty typeName observed — protects against a row missing
+      // typeName while siblings within the same type key have it.
+      if (existing.label === key && row.typeName) existing.label = row.typeName;
+    } else {
+      buckets.set(key, { label, rows: [row] });
+    }
+  });
+  const entries = [...buckets.values()].map(({ label, rows: groupRows }) => ({
+    label,
+    rows: [...groupRows].sort(compareRows),
+  }));
+  entries.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  const sections: RowSection[] = entries.map(({ label, rows: groupRows }) => ({
+    kind: 'type' as const,
+    rows: groupRows,
+    label,
+  }));
+  if (unknownRows.length > 0) {
+    sections.push({
+      kind: 'type',
+      rows: [...unknownRows].sort(compareRows),
+      label: unknownLabel,
+    });
+  }
+  return sections;
+}
+
+/**
+ * Split rows into "Recently used" (rows with a `lastUsedAt`, sorted newest-first) and "Other" (rows
+ * without a timestamp, sorted by `compareRows`). Both section labels are caller-provided; empty
+ * sections are elided.
+ */
+export function partitionByLastUsed(
+  rows: readonly ProjectRow[],
+  recentLabel: string,
+  otherLabel: string,
+): RowSection[] {
+  const recent: ProjectRow[] = [];
+  const other: ProjectRow[] = [];
+  rows.forEach((row) => {
+    if (typeof row.lastUsedAt === 'number') recent.push(row);
+    else other.push(row);
+  });
+  recent.sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
+  other.sort(compareRows);
+  const sections: RowSection[] = [];
+  if (recent.length > 0) sections.push({ kind: 'lastUsed', rows: recent, label: recentLabel });
+  if (other.length > 0) sections.push({ kind: 'lastUsed', rows: other, label: otherLabel });
   return sections;
 }
 
