@@ -52,13 +52,26 @@ const setRaw = (value: unknown, isLoading = false) =>
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   mockUseProjectSetting.mockReturnValue([value, undefined, undefined, isLoading] as never);
 
-/** Renders the hook bound to `initialProjectId`; `rerender({ projectId })` changes it in place. */
-const renderBuffered = (initialProjectId: string | undefined) =>
-  renderHook(
+/**
+ * Renders the hook bound to `initialProjectId`. `rerender` keeps the current project;
+ * `switchProject` changes `projectId` in place.
+ */
+const renderBuffered = (initialProjectId: string | undefined) => {
+  let currentProjectId = initialProjectId;
+  const rendered = renderHook(
     ({ projectId }: { projectId: string | undefined }) =>
       useBufferedLayoutSetting(projectId, 'platformScripture.modelTexts', emptyList),
     { initialProps: { projectId: initialProjectId } },
   );
+  return {
+    result: rendered.result,
+    rerender: () => rendered.rerender({ projectId: currentProjectId }),
+    switchProject: (projectId: string | undefined) => {
+      currentProjectId = projectId;
+      rendered.rerender({ projectId });
+    },
+  };
+};
 
 /** Fires the shared-layout apply event for `projectId`. */
 const fireSharedLayoutApply = (projectId: string) => {
@@ -76,7 +89,7 @@ describe('useBufferedLayoutSetting', () => {
     capturedHandler = undefined;
   });
 
-  it('seeds the held value from the settled raw value at mount', () => {
+  it('applies a value that is already settled at mount', () => {
     const first = oneProjectList('A', '1');
     setRaw(first);
     const { result } = renderBuffered('proj-1');
@@ -90,7 +103,7 @@ describe('useBufferedLayoutSetting', () => {
     const { result, rerender } = renderBuffered('proj-1');
     // The subscription resolves: the real value arrives and loading finishes.
     setRaw(real, false);
-    rerender({ projectId: 'proj-1' });
+    rerender();
     expect(result.current[0]).toEqual(real);
   });
 
@@ -101,11 +114,11 @@ describe('useBufferedLayoutSetting', () => {
     expect(result.current[1]).toBe(true);
 
     setRaw(real, false);
-    rerender({ projectId: 'proj-1' });
+    rerender();
     expect(result.current[1]).toBe(false);
 
     setRaw(emptyList, true);
-    rerender({ projectId: 'proj-1' });
+    rerender();
     const [held, isLoading] = result.current;
     expect(isLoading).toBe(true);
     expect(held).toEqual(real);
@@ -117,7 +130,7 @@ describe('useBufferedLayoutSetting', () => {
     setRaw(first);
     const { result, rerender } = renderBuffered('proj-1');
     setRaw(second);
-    rerender({ projectId: 'proj-1' });
+    rerender();
     expect(result.current[0]).toEqual(first);
   });
 
@@ -131,7 +144,7 @@ describe('useBufferedLayoutSetting', () => {
       expect.any(Function),
     );
     setRaw(second);
-    rerender({ projectId: 'proj-1' });
+    rerender();
     fireSharedLayoutApply('proj-1');
     expect(result.current[0]).toEqual(second);
   });
@@ -142,19 +155,9 @@ describe('useBufferedLayoutSetting', () => {
     setRaw(first);
     const { result, rerender } = renderBuffered('proj-1');
     setRaw(second);
-    rerender({ projectId: 'proj-1' });
+    rerender();
     fireSharedLayoutApply('other-proj');
     expect(result.current[0]).toEqual(first);
-  });
-
-  it('handles an undefined projectId without applying or throwing', () => {
-    setRaw(emptyList);
-    const { result } = renderBuffered(undefined);
-    expect(result.current[0]).toEqual(emptyList);
-    // A re-arm event for some real project must not affect an undefined-projectId hold.
-    setRaw(oneProjectList('X', '9'));
-    fireSharedLayoutApply('proj-1');
-    expect(result.current[0]).toEqual(emptyList);
   });
 
   it('passes a held PlatformError value through unchanged', () => {
@@ -175,11 +178,11 @@ describe('useBufferedLayoutSetting', () => {
     // The setting resolves to a read error. Applying it and disarming here is what made the
     // failure permanent: only an unrelated `onSharedLayoutApply` could ever re-arm the hook.
     setRaw(error);
-    rerender({ projectId: 'proj-1' });
+    rerender();
 
     // The setting becomes readable. The real value must land on its own — no re-arm event.
     setRaw(real);
-    rerender({ projectId: 'proj-1' });
+    rerender();
 
     expect(result.current[0]).toEqual(real);
   });
@@ -191,7 +194,7 @@ describe('useBufferedLayoutSetting', () => {
     const { result, rerender } = renderBuffered('proj-1');
 
     setRaw(error);
-    rerender({ projectId: 'proj-1' });
+    rerender();
 
     // The held copy is still the placeholder here, so this channel is the ONLY way a consumer can
     // tell "unreadable" from "configured with nothing" — `useTextCollectionSources` and
@@ -207,87 +210,18 @@ describe('useBufferedLayoutSetting', () => {
     const { result, rerender } = renderBuffered('proj-1');
 
     setRaw(real);
-    rerender({ projectId: 'proj-1' });
+    rerender();
     expect(result.current[0]).toEqual(real);
 
     // A read fails AFTER a real value was applied. Holding a good value across a failed re-read is
     // the whole point of the buffer, so the panel must keep showing it rather than swap working
     // content for an error message.
     setRaw(error);
-    rerender({ projectId: 'proj-1' });
+    rerender();
 
     const [held, , settingError] = result.current;
     expect(held).toEqual(real);
     expect(settingError).toBeUndefined();
-  });
-
-  it('warns when projectId changes in place (the unsupported no-remount case)', () => {
-    setRaw(emptyList);
-    const { rerender } = renderBuffered('proj-1');
-    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
-    rerender({ projectId: 'proj-2' });
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not warn on a stable projectId across rerenders', () => {
-    setRaw(emptyList);
-    const { rerender } = renderBuffered('proj-1');
-    rerender({ projectId: 'proj-1' });
-    rerender({ projectId: 'proj-1' });
-    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
-  });
-
-  // TODO(PT-4316): if this hook takes over in-place project switches, invert this case rather than
-  // deleting it.
-  it('holds the outgoing project value across an in-place change until the incoming project re-arms', () => {
-    const first = oneProjectList('A', '1');
-    const second = oneProjectList('B', '2');
-    setRaw(first);
-    const { result, rerender } = renderBuffered('proj-1');
-
-    // The incoming project's provider subscribes: briefly loading, then its own value arrives.
-    setRaw(emptyList, true);
-    rerender({ projectId: 'proj-2' });
-    setRaw(second, false);
-    rerender({ projectId: 'proj-2' });
-    expect(result.current[0]).toEqual(first);
-
-    fireSharedLayoutApply('proj-2');
-    expect(result.current[0]).toEqual(second);
-  });
-
-  // TODO(PT-4316): if this hook takes over in-place project switches, invert this case rather than
-  // deleting it.
-  it('reports no error for the incoming project when projectId changes in place', () => {
-    const first = oneProjectList('A', '1');
-    setRaw(first);
-    const { result, rerender } = renderBuffered('proj-1');
-
-    setRaw(newPlatformError('boom'));
-    rerender({ projectId: 'proj-2' });
-
-    // The hook did read the incoming project's setting; it just does not report the error.
-    expect(mockUseProjectSetting).toHaveBeenLastCalledWith(
-      'proj-2',
-      'platformScripture.modelTexts',
-      emptyList,
-    );
-    const [held, , settingError] = result.current;
-    expect(held).toEqual(first);
-    expect(settingError).toBeUndefined();
-  });
-
-  it('warns but still applies the incoming value when the change lands while armed', () => {
-    const second = oneProjectList('B', '2');
-    setRaw(emptyList, true);
-    const { result, rerender } = renderBuffered('proj-1');
-
-    // Nothing has applied yet, so the hook is still armed at the switch.
-    setRaw(second, false);
-    rerender({ projectId: 'proj-2' });
-
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
-    expect(result.current[0]).toEqual(second);
   });
 
   // An unbound consumer has no data provider, so `isLoading` stays true until a project arrives
@@ -296,14 +230,99 @@ describe('useBufferedLayoutSetting', () => {
   it('stays armed while unbound so a projectId arriving later still applies', () => {
     const arrived = oneProjectList('A', '1');
     setRaw(emptyList, true);
-    const { result, rerender } = renderBuffered(undefined);
+    const { result, switchProject } = renderBuffered(undefined);
     expect(result.current[0]).toEqual(emptyList);
 
     setRaw(arrived, false);
-    rerender({ projectId: 'proj-1' });
+    switchProject('proj-1');
 
     expect(result.current[0]).toEqual(arrived);
-    // Binding an unbound consumer is supported, so the tripwire must stay quiet for it.
-    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+  });
+
+  // TODO(PT-4316): if the hook stops warning on an in-place project change, delete this block.
+  describe('in-place projectId tripwire', () => {
+    it('warns when projectId moves in place between two projects', () => {
+      setRaw(emptyList);
+      const { switchProject } = renderBuffered('proj-1');
+      expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+      switchProject('proj-2');
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not warn on a stable projectId across rerenders', () => {
+      setRaw(emptyList);
+      const { rerender } = renderBuffered('proj-1');
+      rerender();
+      rerender();
+      expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+    });
+
+    it('stays silent when an unbound consumer binds, then warns when it moves on', () => {
+      setRaw(emptyList, true);
+      const { switchProject } = renderBuffered(undefined);
+      switchProject('proj-1');
+      expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+      switchProject('proj-2');
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // TODO(PT-4316): if this hook resets on an in-place project change, invert these cases rather
+  // than deleting them. Each drives the switch the way the real stack delivers it — the outgoing
+  // project's settled value is still served on the switching commit — which a reset keyed on
+  // `projectId` alone does not survive.
+  describe('in-place project change without a remount', () => {
+    it('holds the outgoing project value until the incoming project re-arms', () => {
+      const first = oneProjectList('A', '1');
+      const second = oneProjectList('B', '2');
+      setRaw(first);
+      const { result, rerender, switchProject } = renderBuffered('proj-1');
+
+      switchProject('proj-2');
+      setRaw(emptyList, true);
+      rerender();
+      setRaw(second, false);
+      rerender();
+      expect(result.current[0]).toEqual(first);
+
+      fireSharedLayoutApply('proj-2');
+      expect(result.current[0]).toEqual(second);
+    });
+
+    it('reports no error for the incoming project', () => {
+      const first = oneProjectList('A', '1');
+      setRaw(first);
+      const { result, rerender, switchProject } = renderBuffered('proj-1');
+
+      switchProject('proj-2');
+      setRaw(newPlatformError('boom'));
+      rerender();
+
+      // The hook did read the incoming project's setting; it just does not report the error.
+      expect(mockUseProjectSetting).toHaveBeenLastCalledWith(
+        'proj-2',
+        'platformScripture.modelTexts',
+        emptyList,
+      );
+      const [held, , settingError] = result.current;
+      expect(held).toEqual(first);
+      expect(settingError).toBeUndefined();
+    });
+
+    it('latches the outgoing project value when the switch lands while still armed', () => {
+      const first = oneProjectList('A', '1');
+      const second = oneProjectList('B', '2');
+      setRaw(emptyList, true);
+      const { result, rerender, switchProject } = renderBuffered('proj-1');
+
+      // The outgoing project's read settles after the switch, then the incoming project's does.
+      switchProject('proj-2');
+      setRaw(first, false);
+      rerender();
+      setRaw(second, false);
+      rerender();
+
+      expect(result.current[0]).toEqual(first);
+    });
   });
 });
