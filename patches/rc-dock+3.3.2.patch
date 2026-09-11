@@ -44,3 +44,33 @@ index bac288d..6e25d88 100644
                          return { dropRect: null };
                      }
                      return {};
+diff --git a/node_modules/rc-dock/es/DockTabs.js b/node_modules/rc-dock/es/DockTabs.js
+index bce7122..cd6ce97 100644
+--- a/node_modules/rc-dock/es/DockTabs.js
++++ b/node_modules/rc-dock/es/DockTabs.js
+@@ -24,8 +24,23 @@ function findParentPanel(element) {
+     return null;
+ }
+ function isPopupDiv(r) {
+-    var _a, _b, _c;
+-    return (r == null || ((_a = r.parentElement) === null || _a === void 0 ? void 0 : _a.tagName) === 'LI' || ((_c = (_b = r.parentElement) === null || _b === void 0 ? void 0 : _b.parentElement) === null || _c === void 0 ? void 0 : _c.tagName) === 'LI');
++    /**
++     * patch-package notes:
++     *
++     * `TabCache` uses this check to tell the real tab strip's nodes apart from the hidden copy
++     * that rc-tabs renders inside the overflow "more" dropdown, so only refs from the real strip
++     * get stored. A fixed two-level ancestor check is correct for `getRef`, whose node sits two
++     * levels below the dropdown's `<li>`, but wrong for `getHitAreaRef`, whose `.dock-tab-hit-area`
++     * node sits one level deeper (hit area -> drag initiator div -> span -> li). With a fixed
++     * two-level check, the dropdown's hidden, zero-sized hit area never gets rejected, so it
++     * permanently overwrites the real hit area's ref, and every drop-position calculation for
++     * that tab then reads a zero-sized rectangle. Walking up to the nearest `<li>` instead of
++     * counting fixed levels works for both refs no matter how deep each one sits.
++     *
++     * See https://github.com/ticlo/rc-dock/issues/161, which reports the same ancestor mismatch;
++     * only its crash symptom was ever fixed there.
++     */
++    return r == null || r.closest('li') != null;
+ }
+ export class TabCache {
+     constructor(context) {

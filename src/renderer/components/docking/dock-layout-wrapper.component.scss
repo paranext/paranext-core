@@ -219,9 +219,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     flex-grow: 0;
   }
 
-  // Contains New Tab (+) button
+  // Contains the New Tab (+) button and the invisible whole-bar tab-drop zone
+  // (`tab-bar-drop-zone.component.tsx`) that fills whatever space is left after it.
   > .dock-extra-content {
     order: 2;
+    // Claim the bar's leftover space so the drop zone inside has something to grow into; without
+    // this, the space between the "+" button and the tab bar's end belongs to no flex item and a
+    // dropped tab there is silently ignored. Growing this container (rather than growing
+    // `.platform-tab-bar-drop-zone` against `.dock-nav`) keeps every tab-bar flex rule here in one
+    // place instead of split across two stylesheets.
+    flex-grow: 1;
   }
 
   // Contains Overflow Dropdown and other operations
@@ -229,6 +236,19 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     order: 3;
     flex-grow: 1;
   }
+}
+
+// While a tab or tab group of this group is being dragged, move the "+" button to the far end of
+// the bar so the drop zone grows into ONE continuous area between the last tab and "+", the way
+// Chrome's tab strip behaves — otherwise the "+" sits between rc-dock's own after-last-tab strip
+// and the zone as a dead spot that quietly ignores a drop. rc-dock appends a `.dragging-layer`
+// carrying the dragged group's `dock-style-*` classes to `<body>` for tab and tab-group drags
+// only (a divider drag carries no group), so the button never moves while a panel is resized.
+body:has(> .dragging-layer.dock-style-platform-bible)
+  .dock-nav
+  > .dock-extra-content
+  > .new-tab-button {
+  order: 1;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
@@ -246,7 +266,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   height: var(--dock-tab-height);
 }
 
-.dock-panel.dock-style-platform-bible .dock-nav-operations,
+.dock-panel.dock-style-platform-bible .dock-nav-operations:not(.dock-nav-operations-hidden),
 .dock-panel.dock-style-platform-bible .dock-extra-content {
   gap: vars.$space--sm;
   padding-block: var(--tab-header-to-content-gap);
@@ -257,10 +277,18 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 .dock-nav-operations {
   height: 100%;
+}
 
-  &.dock-nav-operations-hidden {
-    display: none;
-  }
+// rc-tabs keeps the operations box in the DOM (with `.dock-nav-operations-hidden`) even when no tab
+// overflows into the dropdown. Take it out of the flex layout entirely in that state: because it has
+// `flex-grow: 1` (see `.dock-nav` above), an in-flow hidden box would silently split the bar's
+// leftover space with `.dock-extra-content` and halve the tab-drop zone. The `:not()` above already
+// excludes this state from the `display: flex` rule by selector, but specificity (0,5,0) is kept
+// here too, as a second line of defense that doesn't depend on class order or a scoped `:not()`
+// staying in sync with this selector. rc-tabs never measures this box (its overflow math only reads
+// `.dock-nav-wrap`/`.dock-nav-list`), so hiding it is safe.
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-operations.dock-nav-operations-hidden {
+  display: none;
 }
 
 .dock-nav-more {
