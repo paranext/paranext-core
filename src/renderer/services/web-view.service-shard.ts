@@ -2658,6 +2658,8 @@ export async function openOrReloadWebView(
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) allowScripts = webView.allowScripts ?? true;
   /** Default allowSameOrigin to true */
   const allowSameOrigin = webView.allowSameOrigin ?? true;
+  /** Default allowPopups to false */
+  const allowPopups = webView.allowPopups ?? false;
   /**
    * Only allow connecting to `papi-extension:` and `https:` urls. For HTML and React WebViews, this
    * controls the `frame-src` directive and therefore which urls can be iframe `src`es in the
@@ -3029,6 +3031,7 @@ export async function openOrReloadWebView(
     allowScripts,
     allowSameOrigin,
     allowedFrameSources,
+    allowPopups,
   };
 
   let finalLayout: Layout | undefined;
