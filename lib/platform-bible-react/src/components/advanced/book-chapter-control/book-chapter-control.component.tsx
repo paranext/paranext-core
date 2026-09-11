@@ -612,6 +612,11 @@ export function BookChapterControl({
   // Grid-aware keyboard navigation using Command's controlled value
   const handleCommandKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement | HTMLButtonElement>) => {
+      // Anything this popover portals elsewhere, such as the recent searches list, is still a React
+      // descendant of it, so its keystrokes reach this capture-phase handler too. Those keys belong
+      // to that content, which runs its own keyboard navigation.
+      if (event.target instanceof Node && !event.currentTarget.contains(event.target)) return;
+
       if (event.ctrlKey) return;
 
       const { isLetter, isDigit } = getKeyCharacterType(event.key);
