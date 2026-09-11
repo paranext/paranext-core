@@ -114,7 +114,9 @@ test('shows the category value with markers suppressed, but not its markers', ()
 });
 
 test('separates the category value from the note text when its markers are hidden', () => {
-  const { container } = render(<FootnoteItem footnote={footnoteWithCategory} showMarkers={false} />);
+  const { container } = render(
+    <FootnoteItem footnote={footnoteWithCategory} showMarkers={false} />,
+  );
 
   // With the `\cat*` glyph hidden nothing else stands between the value and the reference that
   // follows it, so the row must supply the space itself: "People 1.1", never "People1.1".
