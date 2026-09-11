@@ -1635,11 +1635,16 @@ global.webViewComponent = function FindWebView({
     }
     requestAutoSearchWhenVisible();
   }, [
+    // Every option the search depends on belongs here even though this body reads almost none of
+    // them: these are the triggers that re-run the search, and react-hooks/exhaustive-deps cannot
+    // flag a missing one because nothing in the body references it.
     searchTerm,
     shouldMatchCase,
     wordRestriction,
     isRegexAllowed,
     searchTextType,
+    ignoreWhitespaceDifferences,
+    ignoreDiacritics,
     relevantScopeKey,
     requestAutoSearchWhenVisible,
   ]);

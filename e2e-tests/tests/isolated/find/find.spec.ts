@@ -922,6 +922,51 @@ test.describe('Search Filters', () => {
     await matchCaseCheckbox.press('Escape');
     await expect(wholeWordRadio).not.toBeVisible({ timeout: 5_000 });
   });
+
+  test('should keep the filters button still while a filter change re-runs the search', async ({
+    mainPage,
+  }) => {
+    // The filters button ends a right-aligned toolbar, so anything that narrows the Find panel — a
+    // scrollbar appearing, for one — slides it sideways, and the open panel anchored to it jumps.
+    // Changing a filter re-runs the search and resizes the results, which is exactly when that
+    // would happen. The shift can settle back once the search finishes, so a single before/after
+    // reading would miss it: the position is sampled on every frame from the click until a second
+    // after the new count appears.
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, FILTER_SENSITIVE_TERM);
+    const counterBefore = await frame.locator('.tw\\:tabular-nums').textContent();
+
+    await openFiltersPanel(frame);
+    const filtersButton = frame.getByRole('button', { name: /toggle filters/i });
+    const positionsDuringReRun = filtersButton.evaluate(
+      (button, { previousCount, settleMs, timeoutMs }) =>
+        new Promise<number[]>((resolve) => {
+          const positions: number[] = [];
+          const startedAt = performance.now();
+          let countChangedAt: number | undefined;
+          const sample = () => {
+            positions.push(button.getBoundingClientRect().x);
+            const now = performance.now();
+            const count = button.ownerDocument.querySelector('.tw\\:tabular-nums')?.textContent;
+            if (countChangedAt === undefined && count !== previousCount) countChangedAt = now;
+            const isDone =
+              countChangedAt === undefined
+                ? now - startedAt >= timeoutMs
+                : now - countChangedAt >= settleMs;
+            if (isDone) resolve(positions);
+            else requestAnimationFrame(sample);
+          };
+          requestAnimationFrame(sample);
+        }),
+      { previousCount: counterBefore, settleMs: 1_000, timeoutMs: SEARCH_TIMEOUT_MS },
+    );
+
+    // Whole word moves this term's count (52 -> 51), so the counter proves the search re-ran.
+    await frame.locator('#wordRestriction-wholeWord').click();
+    await waitForCounterToChangeFrom(frame, counterBefore);
+
+    expect(new Set(await positionsDuringReRun).size).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

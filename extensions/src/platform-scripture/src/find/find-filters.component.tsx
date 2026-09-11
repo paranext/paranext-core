@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  Z_INDEX_ABOVE_POPOVER,
 } from 'platform-bible-react';
 import { WordRestriction } from 'platform-scripture';
 import { SearchTextType } from './find-types';
@@ -55,6 +56,20 @@ type FindFiltersProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 };
+
+/**
+ * The explanation icons beside some filters open tooltips holding text that appears nowhere else,
+ * so each icon sits inside a real button: a bare icon never receives focus, which would leave that
+ * text out of reach for anyone using the keyboard.
+ */
+const EXPLANATION_BUTTON_CLASS_NAME =
+  'tw:inline-flex tw:cursor-help tw:rounded-sm tw:border-0 tw:bg-transparent tw:p-0 tw:outline-none tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50';
+
+/**
+ * The panel is portalled with a z-index above the tooltip layer, and each tooltip is portalled
+ * separately beside it, so a tooltip at its default layer renders behind the panel it sits inside.
+ */
+const EXPLANATION_TOOLTIP_STYLE = { zIndex: Z_INDEX_ABOVE_POPOVER };
 
 export function FindFilters({
   areFiltersActive,
@@ -103,21 +118,28 @@ export function FindFilters({
           view, so moving focus down it scrolls the document instead, and the popper repositions on
           every keypress. Scrolling inside the panel keeps it anchored.
 
-          `overflow-y-scroll` rather than `auto` because the popper recomputes the available height
-          on each re-render, and a filter change re-renders; under `auto` those small differences
-          take the content across the threshold where a scrollbar is needed and the bar flickers in
-          and out. This content is taller than the space it gets, so the scrollbar is always
-          warranted — showing it unconditionally just stops it blinking. */}
+          The rest keeps this panel looking like the app's overlay menus rather than a plain popover:
+          `gap-0` stops PopoverContent's flex gap stacking on each fieldset's own bottom margin, the
+          translucent background and blurred `before:` layer are the menus' glass treatment, and
+          `animate-none!` matches their lack of an open animation.
+
+          A popover, unlike a menu, is not named by the button that opens it, so the name is given
+          explicitly. */}
       <PopoverContent
         align="end"
-        className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
+        collisionPadding={8}
+        aria-label={localizedStrings.toggleFilters}
+        className="tw:relative tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:gap-0 tw:overflow-x-hidden tw:overflow-y-auto tw:bg-popover/70 tw:p-3 tw:animate-none! tw:data-[state=closed]:overflow-hidden tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:-z-1 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150"
       >
         {/* 1. Match content in */}
         <fieldset className="tw:mb-3">
           <legend className="tw:px-2 tw:py-1.5 tw:text-sm tw:font-semibold">
             {localizedStrings.matchContentIn}
           </legend>
+          {/* A legend names its fieldset, not the radio group nested inside it, so each group is
+              named explicitly. */}
           <RadioGroup
+            aria-label={localizedStrings.matchContentIn}
             value={searchTextType}
             // RadioGroup onValueChange provides a plain string, but we know it will always be one
             // of the SearchTextType values since only the RadioGroupItem children use those values
@@ -143,9 +165,15 @@ export function FindFilters({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
+                        <button
+                          type="button"
+                          aria-label={localizedStrings.allTextTooltip}
+                          className={EXPLANATION_BUTTON_CLASS_NAME}
+                        >
+                          <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
+                        </button>
                       </TooltipTrigger>
-                      <TooltipContent>
+                      <TooltipContent style={EXPLANATION_TOOLTIP_STYLE}>
                         <p className="tw:max-w-xs">{localizedStrings.allTextTooltip}</p>
                       </TooltipContent>
                     </Tooltip>
@@ -162,6 +190,7 @@ export function FindFilters({
             {localizedStrings.restrictions}
           </legend>
           <RadioGroup
+            aria-label={localizedStrings.restrictions}
             value={wordRestriction}
             // RadioGroup onValueChange provides a plain string, but we know it will always be one
             // of the SearchTextType values since only the RadioGroupItem children use those values
@@ -229,9 +258,15 @@ export function FindFilters({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
+                  <button
+                    type="button"
+                    aria-label={localizedStrings.ignoreWhitespaceDifferencesTooltip}
+                    className={EXPLANATION_BUTTON_CLASS_NAME}
+                  >
+                    <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
+                  </button>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent style={EXPLANATION_TOOLTIP_STYLE}>
                   <p className="tw:max-w-xs">
                     {localizedStrings.ignoreWhitespaceDifferencesTooltip}
                   </p>

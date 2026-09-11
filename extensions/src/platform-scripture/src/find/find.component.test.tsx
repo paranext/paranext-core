@@ -285,6 +285,11 @@ function openProjectSelector(user: ReturnType<typeof setupUser>) {
   return user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY }));
 }
 
+/** Opens the Find filters panel, which is where every filter control lives */
+function openFilters(user: ReturnType<typeof setupUser>) {
+  return user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+}
+
 describe('Find project selector — simple interface mode', () => {
   it('appends the scroll group letter to the trigger in power mode', () => {
     render(<Find {...buildProps()} />);
@@ -842,11 +847,6 @@ describe('Find — an unrunnable query with results still on screen', () => {
 // default to off. A regression that dropped the wiring — or shipped either one enabled — would
 // silently change every search, and nothing else in this suite would notice.
 describe('Find — whitespace and diacritic tolerance toggles', () => {
-  /** Opens the filters dropdown, which is where both toggles live */
-  async function openFilters(user: ReturnType<typeof setupUser>) {
-    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
-  }
-
   it.each([
     ['Ignore whitespace differences', 'setIgnoreWhitespaceDifferences'] as const,
     ['Ignore diacritics', 'setIgnoreDiacritics'] as const,
@@ -889,11 +889,6 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
 // collection — which plain form controls never join. A regression back to a menu container would
 // leave the panel mouse-only, and nothing else in this suite would notice.
 describe('Find — filters panel keyboard accessibility', () => {
-  /** Opens the filters panel, which is where all the filter controls live */
-  async function openFilters(user: ReturnType<typeof setupUser>) {
-    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
-  }
-
   it('puts focus on the first filter control as soon as the panel opens', async () => {
     const user = setupUser();
     render(<Find {...buildLifecycleProps({})} />);
@@ -903,13 +898,29 @@ describe('Find — filters panel keyboard accessibility', () => {
     expect(screen.getByRole('radio', { name: 'Any text' })).toHaveFocus();
   });
 
+  // The explanation beside "Any text" appears nowhere else, so it needs a tab stop of its own; a
+  // bare icon never receives focus.
+  it('reaches the explanation beside "Any text" with Tab', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+
+    expect(
+      screen.getByRole('button', { name: 'Including introductions, titles, headings, etc.' }),
+    ).toHaveFocus();
+  });
+
   // Each radio group is a single tab stop (roving tabindex), so Tab crosses between groups rather
-  // than visiting every radio — which is why the second stop is the next group, not the next radio.
+  // than visiting every radio — which is why, after the explanation beside the first group, the next
+  // stop is the second group and not the next radio.
   it('moves focus to the next group of controls when the user presses Tab', async () => {
     const user = setupUser();
     render(<Find {...buildLifecycleProps({})} />);
 
     await openFilters(user);
+    await user.tab();
     await user.tab();
 
     expect(screen.getByRole('radio', { name: 'Anywhere' })).toHaveFocus();
@@ -918,8 +929,7 @@ describe('Find — filters panel keyboard accessibility', () => {
   // Asserts focus movement rather than selection. Radix selects a radio on arrow-navigation from a
   // `focus` handler gated on a flag set by a non-capturing `document` keydown listener, which React
   // sets only after its own delegated handler has already moved focus — so the selection half of
-  // that behavior cannot be reproduced under jsdom. Navigation is the part this component controls,
-  // and the part that was broken.
+  // that behavior cannot be reproduced under jsdom. Navigation is the part this component controls.
   it('moves focus between radio options when the user presses the down arrow', async () => {
     const user = setupUser();
     render(<Find {...buildLifecycleProps({})} />);
@@ -928,5 +938,42 @@ describe('Find — filters panel keyboard accessibility', () => {
     await user.keyboard('{ArrowDown}');
 
     expect(screen.getByRole('radio', { name: 'Verse text only' })).toHaveFocus();
+  });
+
+  it('names the open panel after the button that opens it', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('dialog', { name: 'Toggle filters' })).toBeInTheDocument();
+  });
+
+  it.each([['Match content in'], ['Match boundaries']])(
+    'names the "%s" radio group after its legend',
+    async (name) => {
+      const user = setupUser();
+      render(<Find {...buildLifecycleProps({})} />);
+
+      await openFilters(user);
+
+      expect(screen.getByRole('radiogroup', { name })).toBeInTheDocument();
+    },
+  );
+
+  // The panel and each tooltip are portalled to the body separately, so they stack as siblings and
+  // the higher z-index paints on top. An explanation that stacks lower renders behind the panel it
+  // sits inside, where it cannot be read.
+  it('stacks a filter explanation above the panel rather than behind it', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    const tooltip = await screen.findByRole('tooltip');
+
+    const zIndexOf = (element: Element) =>
+      Number(element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex);
+    expect(zIndexOf(tooltip)).toBeGreaterThan(zIndexOf(screen.getByRole('dialog')));
   });
 });

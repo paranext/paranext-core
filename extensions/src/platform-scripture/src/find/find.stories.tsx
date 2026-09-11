@@ -750,9 +750,13 @@ export const NarrowPanelClipsScopeSummary: Story = {
     const canvas = within(canvasElement);
 
     await step('The panel does not scroll horizontally', async () => {
-      const panel = canvas.getByTestId('find-panel');
+      // Measured on the Find root, not on this wrapper. The root is a scroll container, and a scroll
+      // container's overflow never reaches its ancestors' scrollWidth, so on the wrapper this could
+      // never fail.
+      const root = canvas.getByTestId('find-panel').firstElementChild;
+      if (!(root instanceof HTMLElement)) throw new Error('The Find root did not render');
       // The regression: scrollWidth exceeding clientWidth IS the horizontal scrollbar.
-      await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth);
+      await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
     });
 
     await step('The scope summary is the element that gives, by clipping', async () => {
@@ -767,7 +771,7 @@ export const NarrowPanelClipsScopeSummary: Story = {
       description: {
         story:
           'The scope trigger must clip its summary rather than widen the row. Asserted by ' +
-          "comparing the panel's scrollWidth against its clientWidth in a 260px column. Runs " +
+          "comparing the Find root's scrollWidth against its clientWidth in a 260px column. Runs " +
           'in the Interactions panel, not in CI — bundled-extension stories have no vitest ' +
           'browser project.',
       },
