@@ -1351,6 +1351,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [viewType, isPowerMode]);
 
   /**
+   * Always-current {@link closeFootnoteEditor}, which is declared far below this point: the ref
+   * functions up here are created once and call it at click/load time, long after it exists.
+   */
+  const closeFootnoteEditorRef = useRef<(deleteIfNew: boolean) => void>(() => {});
+
+  /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
    * the editor's USJ silently removes all annotations, and republishes the editor's live document
    * (see `liveEditorUsj`) so the footnotes pane lists the content that just loaded.
@@ -1358,6 +1364,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * @param usj The USJ to set in the editor
    */
   const setEditorUsj = useRef((usj: Usj) => {
+    // A reload replaces every Lexical key, the note a row editor is bound to included, so no pane
+    // session can survive it — one left open would keep applying into a note that is gone. The
+    // incoming document is authoritative: it overwrites anything the row editor had not applied
+    // yet, exactly as it overwrites the rest of the chapter.
+    if (paneEditingIndexRef.current !== undefined) closeFootnoteEditorRef.current(false);
     editorRef.current?.setUsj(usj);
     setLiveEditorUsj(usj);
     clearAnnotationInfo.current();
@@ -3014,6 +3025,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setShowFootnoteEditor(false);
     setPaneEditingIndex(undefined);
   }, []);
+
+  useEffect(() => {
+    closeFootnoteEditorRef.current = closeFootnoteEditor;
+  }, [closeFootnoteEditor]);
 
   /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
   const onFootnoteEditorClose = useCallback(() => {

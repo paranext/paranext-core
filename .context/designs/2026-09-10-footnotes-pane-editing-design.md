@@ -99,7 +99,9 @@ Reuse the existing session refs (`editingNoteKey`, `editingNoteOps`, `editingNot
 
 Every existing site that clears `editingNoteKey` (close, chapter change, note deleted, stale-session
 reaper) also clears `paneEditingIndex`. Additional pane-only ends: pane hidden, view leaves
-Standard, editability lost.
+Standard, editability lost, the document is reloaded in place (an external PDP update applied
+through `setEditorUsj`, which regenerates every Lexical key including the note the row editor is
+bound to).
 
 The inline editor has no Save/Cancel; edits apply live (debounced) and flush on unmount. A newly
 inserted note is never discarded on session end (PT9 keeps the inserted `\f + \fr … \ft ` note).
