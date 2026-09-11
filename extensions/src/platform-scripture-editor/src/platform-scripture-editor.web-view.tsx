@@ -157,6 +157,7 @@ import {
   canAddChapterNumber,
   correctEditorUsjVersion,
   decideNoteCallerClickAction,
+  decideNoteSessionUpdate,
   deepEqualAcrossIframes,
   formatEditorTitle,
   generateParagraphMenuListItems,
@@ -421,6 +422,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const editingNoteKey = useRef<string | undefined>(undefined);
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
+  /**
+   * What the note editor's loaded document currently holds, for the "did this note change
+   * elsewhere?" comparison in {@link handleEditorialUsjChange} (see `decideNoteSessionUpdate`).
+   *
+   * Kept separate from {@link editingNoteOps} because that ref's ARRAY IDENTITY is the mounted note
+   * editor's reload signal: refreshing the comparison baseline must never mint a new identity, or a
+   * pane row editor reloads mid-typing — discarding its caret and replacing its document with
+   * content missing whatever is still inside its apply debounce. So the baseline tracks
+   * `editingNoteOps` at every session start and reload, AND additionally follows the row editor's
+   * OWN live-applies, which replace the note in place without reloading it.
+   */
+  const editingNoteOpsBaseline = useRef<DeltaOpInsertNoteEmbed | undefined>(undefined);
   /** True when the footnote editor was opened for a newly inserted note (not an existing one) */
   const editingNoteIsNew = useRef(false);
   /**
@@ -983,6 +996,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
       editingNoteKey.current = noteKey;
       editingNoteOps.current = [noteOp];
+      editingNoteOpsBaseline.current = noteOp;
       editingNoteIsNew.current = isNew;
       editingNoteSessionRefreshedAt.current = Date.now();
       setShowFootnoteEditor(false);
@@ -1189,6 +1203,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editingNoteIsNew.current = false;
           editingNoteKey.current = undefined;
           editingNoteOps.current = undefined;
+          editingNoteOpsBaseline.current = undefined;
           editingNoteSessionRefreshedAt.current = undefined;
           setPaneEditingIndex(undefined);
         }
@@ -1240,6 +1255,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         setNotePopoverAnchorHeight(targetRect.height);
         editingNoteKey.current = noteNodeKey;
         editingNoteOps.current = [noteOp];
+        editingNoteOpsBaseline.current = noteOp;
         editingNoteSessionRefreshedAt.current = Date.now();
         // The two surfaces are exclusive: a row editor left open in the pane must go before the
         // popover takes the session over.
@@ -3026,6 +3042,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editingNoteIsNew.current = false;
     editingNoteKey.current = undefined;
     editingNoteOps.current = undefined;
+    editingNoteOpsBaseline.current = undefined;
     editingNoteSessionRefreshedAt.current = undefined;
     setShowFootnoteEditor(false);
     setPaneEditingIndex(undefined);
@@ -3187,6 +3204,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         setNotePopoverAnchorHeight(targetRect.height);
         editingNoteKey.current = insertedNodeKey;
         editingNoteOps.current = [noteOp];
+        editingNoteOpsBaseline.current = noteOp;
         editingNoteSessionRefreshedAt.current = Date.now();
         editingNoteIsNew.current = true;
         setShowFootnoteEditor(true);
@@ -3386,39 +3404,41 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         if (paneEditingIndexRef.current !== undefined) {
           const sessionKey = editingNoteKey.current;
           const sessionIndex = editorRef.current?.getNoteIndex(sessionKey);
-          if (sessionIndex === undefined) {
-            // The session's node is gone. If the change inserted a note, that is our note replaced
-            // in place (the row editor's own live-apply, which re-keys it): follow the new key and
-            // leave `editingNoteOps` alone, since a fresh identity would reload the row editor
-            // mid-typing and throw away the caret. Otherwise the note was deleted and the session
-            // has nothing left to edit.
-            const replacementIndex = insertedNodeKey
+          // The key that carries the note's current content: the session's own while it still
+          // resolves, otherwise the replacement the row editor's live-apply just minted.
+          const replacementIndex =
+            sessionIndex === undefined && insertedNodeKey
               ? editorRef.current?.getNoteIndex(insertedNodeKey)
               : undefined;
-            if (insertedNodeKey && replacementIndex !== undefined) {
+          const liveKey = sessionIndex === undefined ? insertedNodeKey : sessionKey;
+          const liveNoteOp = liveKey ? editorRef.current?.getNoteOps(liveKey)?.at(0) : undefined;
+          // The guard narrows `DeltaOp` to the note embed a note editor loads; a note whose index
+          // resolved always satisfies it.
+          const noteOp =
+            liveNoteOp && isInsertEmbedOpOfType('note', liveNoteOp) ? liveNoteOp : undefined;
+          const decision = decideNoteSessionUpdate({
+            sessionKeyResolves: sessionIndex !== undefined,
+            insertedKeyIsNote: replacementIndex !== undefined,
+            noteChanged:
+              !!noteOp && !deepEqualAcrossIframes(noteOp, editingNoteOpsBaseline.current),
+          });
+          if (decision.action === 'end-session') closeFootnoteEditor(false);
+          else {
+            // A fresh array identity is what reloads the row editor, discarding its caret, so mint
+            // one only for a change from elsewhere (typing in the text, undo, a PDP echo, another
+            // note added or removed) that actually moved this note's content. The baseline follows
+            // the row editor's own applies too, so the next such comparison is against what the row
+            // is showing rather than against the ops it was first loaded with.
+            if (decision.reloadRowEditor && noteOp) editingNoteOps.current = [noteOp];
+            if (decision.refreshBaseline) editingNoteOpsBaseline.current = noteOp;
+            if (decision.action === 'rekey') {
               editingNoteIsNew.current = false;
               editingNoteKey.current = insertedNodeKey;
-              if (replacementIndex !== paneEditingIndexRef.current)
-                setPaneEditingIndex(replacementIndex);
-            } else closeFootnoteEditor(false);
-          } else {
-            // The note is still at its key, so the change came from elsewhere (typing in the text,
-            // undo, a PDP echo, another note added or removed): reload the row editor to the note's
-            // current content (a fresh `noteOps` identity is what reloads it).
-            const noteOp = editorRef.current?.getNoteOps(sessionKey)?.at(0);
-            // The guard narrows `DeltaOp` to the note embed the row editor loads; a note the index
-            // above resolved always satisfies it. A fresh array identity is what reloads the row
-            // editor, discarding its caret, so mint one only when this note's own content actually
-            // moved: most changes here are somewhere else in the chapter (typing in the text, a
-            // PDP echo, another note added or removed), and the note being edited is unchanged.
-            if (
-              noteOp &&
-              isInsertEmbedOpOfType('note', noteOp) &&
-              !deepEqualAcrossIframes(noteOp, editingNoteOps.current?.[0])
-            )
-              editingNoteOps.current = [noteOp];
+            }
             // The editing row follows the note, whose index moves as notes before it come and go.
-            if (sessionIndex !== paneEditingIndexRef.current) setPaneEditingIndex(sessionIndex);
+            const index = sessionIndex ?? replacementIndex;
+            if (index !== undefined && index !== paneEditingIndexRef.current)
+              setPaneEditingIndex(index);
           }
         }
         // Popover surface. An apply from its note editor replaces the note node, so the session's

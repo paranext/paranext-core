@@ -9,6 +9,7 @@ import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture
 import {
   convertScriptureRangeToEditorRange,
   decideNoteCallerClickAction,
+  decideNoteSessionUpdate,
   finalizeProjectSwitch,
   formatEditorTitle,
   generateParagraphMenuListItems,
@@ -2977,6 +2978,86 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     });
     expect(d.action).toBe('ignore-popover-open');
     expect(d.clearStaleEditingSession).toBe(false);
+  });
+});
+
+describe('decideNoteSessionUpdate (a row edit must not reload the row editor)', () => {
+  it('re-keys without reloading when the row editor replaced its own note', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: false,
+        insertedKeyIsNote: true,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'rekey', reloadRowEditor: false, refreshBaseline: true });
+  });
+
+  it('refreshes the comparison baseline on that re-key, so the next external change compares against what the row applied', () => {
+    // The defect this pins: leaving the baseline at the ops the row was LOADED with makes every
+    // later external change look like a change to this note, reloading the row editor once per
+    // edit cycle and dropping whatever is still inside the row editor's apply debounce.
+    const decision = decideNoteSessionUpdate({
+      sessionKeyResolves: false,
+      insertedKeyIsNote: true,
+      noteChanged: false,
+    });
+    expect(decision.refreshBaseline).toBe(true);
+    expect(decision.reloadRowEditor).toBe(false);
+  });
+
+  it('ends the session when the note is gone and nothing replaced it', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: false,
+        insertedKeyIsNote: false,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'end-session', reloadRowEditor: false, refreshBaseline: false });
+  });
+
+  it('leaves the row editor alone when the change was somewhere else in the chapter', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: false,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'follow-note', reloadRowEditor: false, refreshBaseline: false });
+  });
+
+  it('reloads the row editor when this note itself changed elsewhere', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: false,
+        noteChanged: true,
+      }),
+    ).toEqual({ action: 'follow-note', reloadRowEditor: true, refreshBaseline: true });
+  });
+
+  it('keeps following the still-resolving note even when an insert came with the change', () => {
+    // A note inserted elsewhere in the chapter does not re-key the session's own note, so the
+    // insert must not divert the session into the re-key branch.
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: true,
+        noteChanged: false,
+      }).action,
+    ).toBe('follow-note');
+  });
+
+  it('never reloads without refreshing the baseline (a reload is what the baseline tracks)', () => {
+    const cases = [true, false].flatMap((sessionKeyResolves) =>
+      [true, false].flatMap((insertedKeyIsNote) =>
+        [true, false].map((noteChanged) =>
+          decideNoteSessionUpdate({ sessionKeyResolves, insertedKeyIsNote, noteChanged }),
+        ),
+      ),
+    );
+    expect(
+      cases.filter((decision) => decision.reloadRowEditor && !decision.refreshBaseline),
+    ).toEqual([]);
   });
 });
 

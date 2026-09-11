@@ -293,6 +293,80 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
   return { clearStaleEditingSession, action, sendPaneFocusRequest, showPane };
 }
 
+/** Snapshot of what an editor change did to an open pane note-editing session. */
+export type NoteSessionUpdateState = {
+  /** Whether the session's note key still resolves to a note in the editor's document. */
+  sessionKeyResolves: boolean;
+  /**
+   * Whether the change's inserted node key resolves to a note. When the session's key stopped
+   * resolving, that inserted note IS the session's note, replaced in place by the row editor's own
+   * live-apply (`replaceEmbedUpdate` swaps the node and re-mints its key).
+   */
+  insertedKeyIsNote: boolean;
+  /**
+   * Whether the session note's current content differs from the comparison baseline — what the row
+   * editor is known to be showing. Only meaningful while {@link sessionKeyResolves}.
+   */
+  noteChanged: boolean;
+};
+
+/** What an editor change does to an open pane note-editing session. */
+export type NoteSessionUpdateAction = 'rekey' | 'end-session' | 'follow-note';
+
+/** What an editor change should do to an open pane session — see {@link decideNoteSessionUpdate}. */
+export type NoteSessionUpdateDecision = {
+  /**
+   * What the change resolves to:
+   *
+   * - `rekey` — the session's note was replaced in place, so the session follows the new key.
+   * - `end-session` — the note is gone and nothing replaced it, so there is nothing left to edit.
+   * - `follow-note` — the note is still there; the editing row follows its (possibly moved) index.
+   */
+  action: NoteSessionUpdateAction;
+  /**
+   * Hand the row editor a fresh `noteOps` ARRAY IDENTITY, which is what reloads its document. Only
+   * ever true for a change that came from somewhere other than the row editor itself: reloading a
+   * row editor mid-typing throws away its caret and replaces its document with content that is
+   * missing anything still inside its apply debounce.
+   */
+  reloadRowEditor: boolean;
+  /**
+   * Refresh the comparison baseline ({@link NoteSessionUpdateState.noteChanged}) to the note's
+   * current content. True on a re-key — where the row editor's own live-apply is the new content —
+   * as well as on a reload, so the next external change is compared against what the row editor is
+   * actually showing rather than against the ops it was first loaded with.
+   */
+  refreshBaseline: boolean;
+};
+
+/**
+ * Decides what an editor change does to an open footnotes-pane note-editing session. Pure decision
+ * logic extracted from `handleEditorialUsjChange` in the web view, where the reload/baseline
+ * invariant below has no component-level test harness of its own.
+ *
+ * The ops cannot tell the row editor's own live-apply from a note inserted in the text: both carry
+ * a note insert-embed op. The DOCUMENT tells them apart — the row editor's apply replaces the
+ * session's note node, so the session's key stops resolving while an inserted key resolves to the
+ * replacement.
+ *
+ * The invariant that makes the row editor usable: a reload is for changes from ELSEWHERE only, and
+ * the baseline the "changed?" comparison runs against must track the row editor's own applies too.
+ * A baseline left at the ops the row was loaded with makes every later external change compare
+ * unequal, reloading the row editor once per edit cycle.
+ */
+export function decideNoteSessionUpdate(state: NoteSessionUpdateState): NoteSessionUpdateDecision {
+  if (!state.sessionKeyResolves) {
+    if (state.insertedKeyIsNote)
+      return { action: 'rekey', reloadRowEditor: false, refreshBaseline: true };
+    return { action: 'end-session', reloadRowEditor: false, refreshBaseline: false };
+  }
+  return {
+    action: 'follow-note',
+    reloadRowEditor: state.noteChanged,
+    refreshBaseline: state.noteChanged,
+  };
+}
+
 // #region Editor Title Formatting
 
 const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
