@@ -3038,6 +3038,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
   const onFootnoteEditorClose = useCallback(() => {
     closeFootnoteEditor(true);
+    // The popover held DOM focus, and its anchor is a positioning div nothing can focus, so
+    // closing it would otherwise drop focus onto the document body and the next keystroke would
+    // go nowhere. Hand focus back to the text, as closing the footnotes pane does.
+    editorRef.current?.focus();
   }, [closeFootnoteEditor]);
 
   /**
