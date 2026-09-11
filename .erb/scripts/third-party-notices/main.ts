@@ -78,6 +78,7 @@ import { messageOf, readJsonFile } from './read-json';
 import { assertProductMatchesPackaging, readPackagingConfig } from './product';
 import type { PackagingConfig } from './product';
 import {
+  assertSeparateProgramLinksRecorded,
   assertSeparateProgramsRecorded,
   assertSeparateProgramTextsAvailable,
 } from './separate-programs';
@@ -373,12 +374,11 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
  * The name is trimmed the way `applyOverride` trims it before looking the program up, so a value
  * carrying stray whitespace resolves and renders as the same string.
  *
- * `applyOverride` refuses a link the `separatePrograms` table does not record, but only for a row
- * the override actually settles: `readInstruments` sets `overridable` only where nothing else
- * resolved the package, so a row cleared by its own declared license carries this sentence with the
- * link unvalidated, and could point at a section the document does not contain. Validating every
- * recorded link against the table - rather than only the ones classification routes through
- * `applyOverride` - belongs with the other whole-set assertions in `buildReport`, and is not done.
+ * The link is not validated here, and does not need to be. `applyOverride` checks it for a row the
+ * override actually settles, and `assertSeparateProgramLinksRecorded` checks every recorded link
+ * against the table among the whole-set assertions in `buildReport` - which is what covers a row
+ * cleared by its own declared license, the case classification never routes through
+ * `applyOverride`. By the time this renders, the name resolves.
  */
 export function nugetNote(pkg: MergedNugetPackage, override: Override): string {
   const ships = pkg.assemblies?.length ? `Ships ${pkg.assemblies.join(', ')}.` : '';
@@ -868,6 +868,7 @@ export function buildReport(): BuiltReport {
     new Set([...policy.allowed, ...policy.copyleft]),
   );
   assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
+  assertSeparateProgramLinksRecorded(policy.overrides || {}, policy.separatePrograms || {});
   assertExternalExtensionsRecorded(
     externalExtensionNames(REPO, packagingConfig),
     policy.externalExtensions || {},
@@ -1008,7 +1009,7 @@ function verifyNpmShippingSet() {
   const committed = verifyCommittedDocument();
   if (!committed) return;
 
-  // The three policy gates whose inputs are committed files and nothing else: the packaging config,
+  // The four policy gates whose inputs are committed files and nothing else: the packaging config,
   // the policy tables, the evidence paths they name, and the committed SPDX corpus. They live in
   // `buildReport`, which this path deliberately does not reach - but they cost a policy read this
   // function already pays for below, and running them here is what covers a release cut from a ref
@@ -1027,6 +1028,7 @@ function verifyNpmShippingSet() {
     new Set([...policy.allowed, ...policy.copyleft]),
   );
   assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
+  assertSeparateProgramLinksRecorded(policy.overrides || {}, policy.separatePrograms || {});
 
   try {
     ({

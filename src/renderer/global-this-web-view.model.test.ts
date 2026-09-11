@@ -34,8 +34,8 @@ describe('webViewRequire', () => {
   );
 
   it('names the specifier that was asked for, not the module it failed to find', () => {
-    // `getModuleSimilarApiMessage` was handed the (always undefined) module rather than the name,
-    // so every one of these errors read `Rejected require('undefined')`.
+    // The rejected name is the only thing in the message a web view author can act on: the lookup
+    // that failed has no value to name.
     expect(() => webViewRequire('node:fs')).toThrow(/node:fs/);
   });
 });

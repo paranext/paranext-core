@@ -4,6 +4,7 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { nugetNote } from './main';
 import {
+  assertSeparateProgramLinksRecorded,
   assertSeparateProgramTextsAvailable,
   assertSeparateProgramsRecorded,
   separateProgramIds,
@@ -167,5 +168,61 @@ describe("a program's own identifiers have to be ones the policy classifies", ()
     const unclassified: SeparateProgram = { ...mercurial, spdx: ['CC-BY-NC-4.0'] };
 
     expect(() => assertSeparateProgramsRecorded(repo, { Mercurial: unclassified })).not.toThrow();
+  });
+});
+
+describe('assertSeparateProgramLinksRecorded', () => {
+  // `nugetNote` derives the "see the separate-programs section" sentence from the link alone, and
+  // `applyOverride` only sees the links classification routes through it - never a package cleared
+  // by its own declared license. Without this gate that row points at a section that is not there.
+  const programs = { Mercurial: mercurial };
+
+  it('accepts a link the table records', () => {
+    expect(() =>
+      assertSeparateProgramLinksRecorded(
+        { 'nuget:hgWindows': { license: 'GPL-2.0-or-later', separateProgram: 'Mercurial' } },
+        programs,
+      ),
+    ).not.toThrow();
+  });
+
+  it('refuses a link the table does not record', () => {
+    expect(() =>
+      assertSeparateProgramLinksRecorded(
+        { 'nuget:hgWindows': { separateProgram: 'Mercurail' } },
+        programs,
+      ),
+    ).toThrow(/"nuget:hgWindows".*"Mercurail".*records no entry by that name/s);
+  });
+
+  it('refuses a link on a package its own declared license clears, which applyOverride never sees', () => {
+    expect(() =>
+      assertSeparateProgramLinksRecorded(
+        { 'nuget:hgWindows': { license: 'MIT', separateProgram: 'Mercurail' } },
+        programs,
+      ),
+    ).toThrow(/records no entry by that name/);
+  });
+
+  it('ignores an override that records no link, and an empty table', () => {
+    expect(() =>
+      assertSeparateProgramLinksRecorded({ 'nuget:hgWindows': { note: 'Windows only.' } }, {}),
+    ).not.toThrow();
+    expect(() => assertSeparateProgramLinksRecorded({}, {})).not.toThrow();
+  });
+
+  it('refuses a link that would resolve only against Object.prototype', () => {
+    expect(() =>
+      assertSeparateProgramLinksRecorded({ 'nuget:x': { separateProgram: 'toString' } }, programs),
+    ).toThrow(/records no entry by that name/);
+  });
+
+  it('trims the link the way applyOverride and nugetNote do', () => {
+    expect(() =>
+      assertSeparateProgramLinksRecorded(
+        { 'nuget:x': { separateProgram: '  Mercurial ' } },
+        programs,
+      ),
+    ).not.toThrow();
   });
 });

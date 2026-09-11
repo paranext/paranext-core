@@ -3,7 +3,7 @@ import * as path from 'path';
 import { compareStrings } from './compare';
 import { canonicalText } from './corpus';
 import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
-import type { BundledComponent, ProgramDelivery, SeparateProgram } from './types';
+import type { BundledComponent, Override, ProgramDelivery, SeparateProgram } from './types';
 
 /**
  * A third-party program a downstream product redistributes as a separate executable and invokes as
@@ -23,9 +23,6 @@ import type { BundledComponent, ProgramDelivery, SeparateProgram } from './types
  * from; the NuGet route is covered because a copyleft override without a `separateProgram` link
  * still blocks, and the rest is the same gap the static-asset gate records as PT-4560.
  */
-
-/** A value still spelled as one of the `<...>` placeholders a template would print. */
-const PLACEHOLDER = PLACEHOLDER_TEMPLATE_VALUE;
 
 /** Every identifier an entry names, at the program level and inside each delivery, once each. */
 export function separateProgramIds(programs: Record<string, SeparateProgram>): string[] {
@@ -57,7 +54,7 @@ function requireText(name: string, field: string, value: unknown): void {
         'reproduced in the document as written. Record it as a string.',
     );
   const text = value.trim();
-  if (!text || PLACEHOLDER.test(text))
+  if (!text || PLACEHOLDER_TEMPLATE_VALUE.test(text))
     throw new Error(
       `the "separatePrograms" entry for "${name}" records no usable "${field}". Every field of ` +
         'the entry is reproduced in the document as the reviewed determination, so an empty or ' +
@@ -193,4 +190,34 @@ export function assertSeparateProgramTextsAvailable(
         'run `npm run build:third-party-notices:corpus`; the corpus index is committed in this ' +
         'repository, so an overlay cannot extend it on its own.',
     );
+}
+
+/**
+ * Refuses a `separateProgram` link the table does not record, for every override that carries one.
+ *
+ * `applyOverride` checks the link too, but only for a row the override actually settles:
+ * `readInstruments` offers an override for classification only where nothing else resolved the
+ * package, so a package cleared by its own declared license never reaches that check. Its row still
+ * gets the sentence, because `nugetNote` derives that from the link alone. Checking the whole set
+ * here is what makes the sentence's promise true - the row tells the reader to go read an entry in
+ * the separate-programs section, and an unrecorded link would send them to a section the document
+ * does not contain.
+ */
+export function assertSeparateProgramLinksRecorded(
+  overrides: Record<string, Override>,
+  programs: Record<string, SeparateProgram>,
+): void {
+  Object.entries(overrides).forEach(([key, override]) => {
+    if (override.separateProgram === undefined) return;
+    const programName = String(override.separateProgram).trim();
+    // `Object.hasOwn` rather than a bare index, as `applyOverride` and `mergeTable` do: a link
+    // spelled `toString` would otherwise resolve against `Object.prototype` and pass.
+    if (!Object.hasOwn(programs, programName))
+      throw new Error(
+        `the override for "${key}" links to the separate program "${programName}", and ` +
+          '"separatePrograms" records no entry by that name. The row this override produces tells ' +
+          'the reader to go read that entry, so the entry has to be there - record the program, ' +
+          'or correct the link.',
+      );
+  });
 }

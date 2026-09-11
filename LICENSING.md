@@ -236,10 +236,10 @@ box when creating your Paratext account or installing the Paratext client" — a
 is the Paratext account flow's, not an installer license page. This repository's installers present
 no such page: `nsis.license` and the `dmg` license are unset, and a test pins them that way.
 
-This document is what section 3.B.1 means by "the AGPL Components identified by Paratext": the tables
-above are the identification. Section 3.B.2 adds that, except for those components, the rest of the
-application is proprietary, and that using or interacting with it over a network does not itself
-trigger AGPL obligations.
+This document is what section 3.B.2 means by "the AGPL Components identified by SIL and UBSA in the
+license notices accompanying the Paratext 10 application": the tables above are the identification.
+The same section adds that, except for those components, the rest of the application is proprietary,
+and that using or interacting with it over a network does not itself trigger AGPL obligations.
 
 **The application UI names the Terms of Service and no license, deliberately.** The About dialog
 shows "License: Paratext Terms of Service" and nothing else — no AGPL identifier, no warranty

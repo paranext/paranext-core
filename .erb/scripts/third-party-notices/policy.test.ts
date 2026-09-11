@@ -10,6 +10,7 @@ import {
   mergePolicies,
   overlayFromEnv,
   CONFIDENCE_THRESHOLD,
+  MERGE_KINDS,
 } from './policy';
 import type { Detection, Exception, Policy } from './types';
 
@@ -2135,6 +2136,19 @@ describe('policy overlay', () => {
     );
   });
 
+  it('tells a reserved key apart from a misspelled one', () => {
+    // Both are refused, but only one is a typo. A `*Note` field is spelled correctly and simply
+    // belongs to the committed file, so pointing its author at the spelling sends them hunting
+    // something that is not there.
+    const reserved: Partial<Policy> = {};
+    Object.assign(reserved, { separateProgramsNote: 'x' });
+
+    expect(() => mergePolicies(basePolicy, reserved, NAMES)).toThrow(
+      /"separateProgramsNote".*reserves to itself.*spelled correctly/s,
+    );
+    expect(() => mergePolicies(basePolicy, reserved, NAMES)).not.toThrow(/check the spelling/);
+  });
+
   it('refuses a "product" block in the committed policy, which describes a downstream build', () => {
     expect(() =>
       mergePolicies({ ...basePolicy, product: { name: 'P', repository: 'o/r' } }, {}, NAMES),
@@ -2213,5 +2227,86 @@ describe('policy overlay', () => {
     expect(() => loadPolicy(POLICY_PATH, '/nonexistent/overlay.json')).toThrow(
       /the notices policy overlay/,
     );
+  });
+});
+
+describe('every field MERGE_KINDS declares is wired into the merge that reads it', () => {
+  // `satisfies Record<keyof Policy, MergeKind>` forces a new `Policy` field to DECLARE how it
+  // merges. It cannot force `mergePolicies` to implement it: the merged object spreads the base, so
+  // a field declared here and never wired into the literal type-checks while the overlay's value is
+  // silently dropped. `OVERLAY_KEYS` is derived from this same table, so such a key would be
+  // ACCEPTED by the unknown-key refusal on the way in and lost on the way out - a downstream
+  // declaration going undisclosed with the run exiting 0, which is what the overlay design exists
+  // to prevent. Walking the table is what turns "declared" into "carried".
+
+  const committed: Policy = {
+    allowed: ['MIT'],
+    copyleft: ['GPL-2.0-only'],
+    elections: {},
+    exceptions: [],
+    overrides: {},
+  };
+  const NAMES = { base: 'base.json', overlay: 'overlay.json' };
+
+  const SENTINEL_ID = 'SENTINEL-1.0';
+  const SENTINEL_KEY = 'npm:sentinel';
+  const SENTINEL_EXCEPTION: Exception = {
+    package: SENTINEL_KEY,
+    spdx: 'MIT',
+    reviewer: 'a@b.c',
+    date: '2026-01-01',
+    reason: 'r',
+    textSha256: 'abc',
+    version: '1.0.0',
+  };
+  const SENTINEL_PRODUCT = { name: 'Sentinel', repository: 'o/r' };
+
+  /** A property of an unknown value, narrowed rather than asserted. */
+  const field = (value: unknown, key: string): unknown =>
+    value && typeof value === 'object' && key in value ? value[key] : undefined;
+
+  /** The sentinel an overlay contributes for a field that merges this way. */
+  function sentinelFor(kind: string): unknown {
+    if (kind === 'union') return [SENTINEL_ID];
+    if (kind === 'concat') return [SENTINEL_EXCEPTION];
+    if (kind === 'table') return { [SENTINEL_KEY]: {} };
+    return SENTINEL_PRODUCT;
+  }
+
+  /** Whether the overlay's contribution survived into the merged policy. */
+  function carried(kind: string, merged: unknown): boolean {
+    if (kind === 'union') return Array.isArray(merged) && merged.includes(SENTINEL_ID);
+    if (kind === 'concat')
+      return (
+        Array.isArray(merged) &&
+        merged.some((entry: unknown) => field(entry, 'package') === SENTINEL_KEY)
+      );
+    if (kind === 'table')
+      return !!merged && typeof merged === 'object' && Object.hasOwn(merged, SENTINEL_KEY);
+    return JSON.stringify(merged) === JSON.stringify(SENTINEL_PRODUCT);
+  }
+
+  const contributable = Object.entries(MERGE_KINDS).filter(([, kind]) => kind !== 'base-only');
+
+  it('offers something to contribute for each way a field can merge', () => {
+    // Otherwise a kind could lose its last field and this would stop covering that branch in
+    // silence, or the walk below could run over an empty list and pass on absence.
+    expect(contributable.length).toBeGreaterThan(0);
+    expect(new Set(contributable.map(([, kind]) => kind))).toEqual(
+      new Set(['union', 'concat', 'table', 'overlay-only']),
+    );
+  });
+
+  it('carries the overlay value through for every field an overlay may contribute', () => {
+    const dropped = contributable
+      .filter(([key, kind]) => {
+        // One key at a time, so a failure names the field that is not wired rather than the run.
+        const overlay: Partial<Policy> = {};
+        Object.assign(overlay, { [key]: sentinelFor(kind) });
+        return !carried(kind, field(mergePolicies(committed, overlay, NAMES), key));
+      })
+      .map(([key]) => key);
+
+    expect(dropped).toEqual([]);
   });
 });

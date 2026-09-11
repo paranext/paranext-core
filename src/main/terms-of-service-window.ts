@@ -25,9 +25,11 @@ let termsOfServiceWindow: BrowserWindow | undefined;
  * (`target="_blank"`, `window.open`) or navigate this one, so the window only ever shows the
  * document. One window at a time: a second request focuses the one already open.
  *
- * @param openExternal How a link leaves the window - main's `openExternal`, which lets only
- *   `https:` and `mailto:` links through. Its refusal is logged, not thrown: a link the user
- *   clicked in a legal document failing to open is not the caller's error.
+ * @param openExternal How a link leaves the window - main's `openExternal`, which admits `https:`,
+ *   `mailto:` and the application's own `APP_URI_SCHEME`, and refuses everything else. This window
+ *   inherits whatever that policy admits rather than stating its own, so the document's links are
+ *   held to the same rule as every other link the application opens. Its refusal is logged, not
+ *   thrown: a link the user clicked in a legal document failing to open is not the caller's error.
  * @param parent The application window this was opened from. Electron closes a child window with
  *   its parent and, crucially, counts an unparented window in `window-all-closed` - so without this
  *   the application would not quit while a Terms of Service window was still open, leaving a

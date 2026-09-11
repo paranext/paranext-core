@@ -4,7 +4,6 @@ import { appService } from '@shared/services/app.service';
 import { AppInfo } from '@shared/services/app.service-model';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import { ExternalLink } from 'lucide-react';
 import { Button, usePromise } from 'platform-bible-react';
 import {
   formatReplacementString,
@@ -110,13 +109,13 @@ function AboutDialog() {
   // loads the installed file into a sandboxed window rather than handing it to a browser or to
   // whatever the operating system opens the file type with.
   //
-  // A button is named from its contents, which folds in every descendant's accessible name - so a
-  // label on the icon becomes part of the button's name rather than staying beside it. It is
-  // carried as a DESCRIPTION instead, on a
-  // visually-hidden sibling outside the button so name-from-contents cannot reach it, leaving the
-  // visible text as the whole accessible name (WCAG 2.5.3). The icon is decorative and hidden:
-  // lucide adds `aria-hidden` only when no accessibility prop is passed, so passing one is exactly
-  // what exposes the icon.
+  // The trigger reads as an ordinary link: the document opens inside the application, so an
+  // external-link glyph would promise a departure that does not happen.
+  //
+  // A button is named from its contents, which folds in every descendant's accessible name - so the
+  // supplementary wording is carried as a DESCRIPTION instead, on a visually-hidden sibling outside
+  // the button where name-from-contents cannot reach it, leaving the visible text as the whole
+  // accessible name (WCAG 2.5.3).
   const licenseContent: ReactNode = licenseDisplay.isTermsOfService ? (
     <>
       <Button
@@ -126,7 +125,6 @@ function AboutDialog() {
         aria-describedby={opensTermsOfServiceId}
       >
         {licenseDisplay.name}
-        <ExternalLink aria-hidden="true" />
       </Button>
       <span id={opensTermsOfServiceId} className="tw:sr-only">
         {opensTermsOfServiceLabel}
