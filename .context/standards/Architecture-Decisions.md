@@ -3760,8 +3760,11 @@ step, no automation. Just a record.
   ships a permanent vestigial plug and relies on snapd tolerating a stale connection to a bogus
   target. A `post-refresh` hook that disconnects the stale plug — rejected: strict confinement has
   no `snapd-control`.
-- **Consequences:** paratext-10-studio *creates* `patches/app-builder-lib+26.7.0.patch` in this repo
-  from its own `repo-patches/paranext-core.patch`, to add mercurial snap parts to the same template.
+- **Consequences:** paratext-10-studio *creates*
+  `patches/app-builder-lib+26.7.0+001+mercurial-snap-parts.patch` in this repo from its own
+  `repo-patches/paranext-core.patch`, to add mercurial snap parts to the same template. (It created
+  the unsequenced `patches/app-builder-lib+26.7.0.patch` when this entry was written; see
+  **Amendment** below.)
   A second core-owned patch at that same path would collide — the studio applies repo patches with
   `git apply --3way`, which turns an add/add case into conflict markers written *into the patch
   file*, leaving patch-package unable to parse it. **patch-package supports sequenced patches**
@@ -3769,8 +3772,8 @@ step, no automation. Just a record.
   `app-builder-lib+26.7.0+002+rename-gnome-platform-plug.patch` and occupies a different path
   entirely. Both patches then apply in sequence to the same template — verified with the studio's
   real patch body: the result carries the mercurial parts *and* `gnome-42-2204`. There is therefore
-  **no collision, no forced merge order and no companion studio change**. The two hunks touch
-  disjoint regions (~line 21 vs ~line 130), so apply order does not matter.
+  **no collision and no forced merge order**. The two hunks touch disjoint regions (~line 21 vs
+  ~line 130), so apply order does not matter.
   Two hazards come with that. Regenerating this patch later with plain
   `npx patch-package app-builder-lib`, without `--append`, collapses the sequence back into a single
   unsequenced `app-builder-lib+26.7.0.patch` — reintroducing exactly the collision the sequenced
@@ -3778,6 +3781,22 @@ step, no automation. Just a record.
   content tag from the snap store's perspective, so store-granted auto-connection for it should be
   confirmed on a published build rather than inferred from sideload testing, which bypasses store
   assertions.
+- **Amendment (paratext-10-studio#189, 2026-09-11):** this entry originally also concluded "no
+  companion studio change". None was *required*: the studio's unsequenced filename already took
+  patch-package's implicit sequence 0 (`(a.sequenceNumber ?? 0)` in `dist/patchFs.js`), so it already
+  applied before `+002`. The studio renamed its patch to
+  `app-builder-lib+26.7.0+001+mercurial-snap-parts.patch` anyway, to make that ordering explicit
+  rather than implicit; the apply order is identical either way.
+
+  A third hazard belongs beside the two above, and it is what makes that rename worth knowing about.
+  "Apply order does not matter" holds, but the two hunks are not independent of each other's line
+  numbers: the studio's patch inserts 14 lines at `@@ -21,6 +21,20 @@`, so this patch's hunk at
+  `@@ -130,10 +130,10 @@` is found 14 lines below where its header places it. patch-package stops
+  searching at +/-20 lines (`dist/patch/apply.js`), leaving **6 lines of headroom**. If the studio's
+  mercurial block grows past that - an arm64 part would do it - this patch stops applying and fails
+  the `patch-package` step of `postinstall`, loudly, rather than silently shipping the bionic plug.
+  Renumbering the studio's patch to sort after this one (`+003`, or higher to stay clear of
+  `--append`, which assigns `max + 1`) removes the offset.
 - **Source:** PT-4496. PR #2747 review raised the upgrade path, which the original cold-install
   diagnosis had not considered; its re-review then established the sequenced-patch mechanism above,
   correcting an earlier belief that patch-package allows only one patch per package+version and that
