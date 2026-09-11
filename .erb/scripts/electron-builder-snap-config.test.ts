@@ -43,6 +43,15 @@ const UBUNTU_RUNNER_BY_BASE: Readonly<Record<string, string>> = {
 /** Workflows that pin the Linux runner the snap is built on, via an `OS_LINUX` env value. */
 const LINUX_RUNNER_WORKFLOWS = ['test.yml', 'package-main.yml', 'publish.yml'];
 
+/**
+ * The step each of those workflows installs snapcraft and LXD under.
+ *
+ * The three copies exist because the step runs BEFORE `actions/checkout`, so it cannot be a local
+ * composite action — nothing is on disk to `uses:` yet. Duplication is therefore the only option;
+ * silent divergence is not, which is what the test below is for.
+ */
+const SNAP_TOOLS_STEP_NAME = 'Install snap tools on Linux';
+
 /** Mount point the snap's launch scripts read the GNOME platform from. */
 const GNOME_PLATFORM_TARGET = '$SNAP/gnome-platform';
 
@@ -63,6 +72,9 @@ type PlugAttributes = {
 
 /** A found plug, keyed by the name it is declared under. */
 type NamedPlug = { key: string; descriptor: PlugAttributes };
+
+/** A workflow step, as far as the comparison below needs to see one. */
+type WorkflowStep = Record<string, unknown>;
 
 /** A plain object, for walking into parsed config and YAML without asserting a shape. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -178,6 +190,30 @@ function readWorkflowLinuxRunners(): { workflow: string; runner: string | undefi
   });
 }
 
+/**
+ * The snap-toolchain step from each snap-building workflow.
+ *
+ * Parsed rather than text-sliced so that indentation and the YAML comments around the step cannot
+ * register as a difference. The shell script is a single scalar, so the comments _inside_ it are
+ * compared along with the commands — which is wanted: a comment that still describes the old
+ * behavior is its own kind of drift.
+ */
+function readSnapToolsSteps(): { workflow: string; step: WorkflowStep | undefined }[] {
+  return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
+    const parsed: unknown = parseYaml(
+      readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
+    );
+    const jobs: unknown[] =
+      isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : [];
+    const step = jobs
+      .filter(isRecord)
+      .flatMap((job) => (Array.isArray(job.steps) ? job.steps : []))
+      .filter(isRecord)
+      .find((candidate) => candidate.name === SNAP_TOOLS_STEP_NAME);
+    return { workflow, step };
+  });
+}
+
 describe('electron-builder snap configuration', () => {
   it('declares a snap base whose matching GNOME platform snap and runner are known', () => {
     // Bumping `base` without teaching these maps the new pairings should fail loudly rather than
@@ -207,6 +243,24 @@ describe('electron-builder snap configuration', () => {
     expect(readWorkflowLinuxRunners()).toEqual(
       LINUX_RUNNER_WORKFLOWS.map((workflow) => ({ workflow, runner: expected })),
     );
+  });
+
+  it('installs the snap toolchain identically in every snap-building workflow', () => {
+    // All three legs build the snap through snapcraft and LXD, so all three meet the same snap
+    // store outages, the same auto-refresh mid-pack, and the same failures whose evidence is only
+    // in snapcraft's log. Hardening one copy and not another is invisible in review -- the diff
+    // looks complete -- and leaves the flake live on whichever leg was missed, including the one
+    // behind branch protection.
+    const steps = readSnapToolsSteps();
+
+    // Checked first and separately: if the step were renamed everywhere, every entry below would
+    // be `undefined` and the equality would pass while comparing nothing.
+    expect(steps.filter(({ step }) => !step).map(({ workflow }) => workflow)).toEqual([]);
+
+    // Compared against the first workflow rather than pairwise so a failure's diff names the file
+    // that drifted.
+    const [reference, ...others] = steps;
+    expect(others).toEqual(others.map(({ workflow }) => ({ workflow, step: reference.step })));
   });
 
   it('mounts exactly one GNOME platform plug, named for snap.base', () => {

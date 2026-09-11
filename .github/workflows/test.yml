@@ -95,17 +95,37 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y snapd
+          # The snap store CDN intermittently answers a download with a 502 and snapd
+          # gives up on the first try, failing the job before the build even starts.
+          retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$@"; then return 0; fi
+              echo "WARNING: '$*' failed (attempt $attempt of 3); retrying in 30s"
+              sleep 30
+            done
+            echo "ERROR: '$*' failed after 3 attempts"
+            return 1
+          }
+          # Hold snapd's automatic refreshes for the job. snapd refreshes installed snaps
+          # on its own schedule; refreshing `lxd` (or `core*`/`snapd` under it) while
+          # snapcraft is packing inside an LXD instance restarts the daemon out from under
+          # the running build. Explicit `snap install`/`refresh` below still work while
+          # held. Best-effort: a snapd that rejects the option must not fail the build.
+          sudo snap set system refresh.hold="$(date -u -d '+1 day' +%Y-%m-%dT%H:%M:%SZ)" ||
+            echo "WARNING: could not hold snapd auto-refresh; a refresh may disrupt the snap build"
           # Pin snapcraft to the 8.x track. snapcraft 9 (now latest/stable) removed the
           # deprecated `snap` command alias, which electron-builder 26.x still invokes,
           # breaking the snap build. Remove this pin once we move to electron-builder >= 27
           # (which calls `snapcraft pack`). See electron-builder issue #8880 / PR #9517.
-          sudo snap install snapcraft --classic --channel=8.x/stable
-          sudo snap install lxd
-          sudo snap refresh lxd
+          retry sudo snap install snapcraft --classic --channel=8.x/stable
+          retry sudo snap install lxd
+          retry sudo snap refresh lxd
           sudo lxd init --auto
-          # Add the current user to the lxd group
+          # Add the current user to the lxd group. (No `newgrp lxd` here: in a script it
+          # execs a *child* shell that reads EOF from stdin and exits immediately, so it
+          # never changes this shell's groups -- the `chmod` below is what does the work.)
           getent group lxd | grep -qwF "$USER" || sudo usermod -aG lxd "$USER"
-          newgrp lxd
           # Force the socket to be usable by the current user
           sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
           # https://github.com/canonical/action-build/blob/master/src/tools.ts#L54
@@ -388,6 +408,30 @@ jobs:
           retention-days: 14
           path: |
             ./release/build/*.snap
+
+      # Any Linux failure here -- the snap pack, or an E2E run the kernel kills for memory --
+      # leaves its real evidence outside the step's own output: snapcraft's log holds the
+      # mksquashfs error behind the bare "mksquashfs call failed:" that reaches the console,
+      # and an OOM kill names the process the kernel chose only in dmesg. Last in the job so a
+      # failure anywhere above reaches it.
+      - name: Capture Linux failure diagnostics
+        if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        run: |
+          echo "=== kernel OOM activity ==="
+          sudo dmesg --ctime 2>/dev/null | grep -iE "out of memory|oom-kill|killed process" || echo "(no OOM entries in dmesg)"
+          echo "=== kernel log tail ==="
+          sudo dmesg --ctime 2>/dev/null | tail -40 || true
+          echo "=== memory ==="; free -h; swapon --show || true
+          echo "=== disk ==="; df -h /
+
+      - name: Upload snapcraft logs (Linux)
+        if: ${{ failure() && matrix.os == env.OS_LINUX }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapcraft-logs
+          path: |
+            ~/.local/state/snapcraft/log/
+          if-no-files-found: warn
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session
