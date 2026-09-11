@@ -118,6 +118,26 @@ const RARE_SEARCH_TERM = 'Bartholomew';
 /** A word unlikely to exist in any scripture project, used to test the "no results" state. */
 const NO_MATCH_TERM = 'ZZZQQQXXX_NORESULT_12345';
 
+/**
+ * MAT 1:1 and 1:2 are separate paragraphs in the bundled WEB text, so the searched text runs
+ * "...the son of Abraham.Abraham became..." with no space between them. The editor renders a line
+ * break there, so copy-pasting this phrase out of the editor carries a space Find must tolerate at
+ * that boundary.
+ */
+const BOUNDARY_SPANNING_TERM = 'of Abraham. Abraham became';
+
+/**
+ * A negative control for the boundary-whitespace tolerance. "Bartholomew" occurs in the bundled WEB
+ * text (Matt 10:3); the two-word form "Bartholom ew" does not occur anywhere in the corpus. So this
+ * query's interior space, to match at all, would have to match zero characters mid-word — a
+ * position that is never a block boundary. With the gate engaged that zero-width gap is rejected,
+ * so this returns no results. This is a real control, unlike a query whose space is simply missing
+ * from the text everywhere (e.g. "of David,the son"): the tolerance only ever lets query whitespace
+ * shrink to zero, never grow, so a query already missing that space matches nothing regardless of
+ * whether the gate exists, and would still pass with the gate deleted.
+ */
+const NON_BOUNDARY_GAP_TERM = 'Bartholom ew';
+
 /** History debounce delay (ms). Must match HISTORY_DEBOUNCE_DELAY_MS in find.web-view.tsx. */
 const HISTORY_DEBOUNCE_MS = 5_000;
 
@@ -424,7 +444,13 @@ function firstResultCard(frame: FrameLocator): Locator {
  * pre-fill assertion in "Editor selection to Find" pass without the selection ever reaching Find,
  * because the panel restores the project's last search term into an empty box on mount.
  */
-const SEARCHED_TERMS = [COMMON_SEARCH_TERM, RARE_SEARCH_TERM, NO_MATCH_TERM];
+const SEARCHED_TERMS = [
+  COMMON_SEARCH_TERM,
+  RARE_SEARCH_TERM,
+  NO_MATCH_TERM,
+  BOUNDARY_SPANNING_TERM,
+  NON_BOUNDARY_GAP_TERM,
+];
 
 /**
  * Select the first word in the editor's text that is long enough to be distinctive and is not one
@@ -745,6 +771,24 @@ test.describe('Search Results', () => {
     const frame = await openFindPanel(mainPage);
 
     await frame.locator('#search-term').fill(NO_MATCH_TERM);
+
+    await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('finds a phrase copied across a paragraph boundary', async ({ mainPage }) => {
+    const frame = await openFindPanel(mainPage);
+
+    await fillSearchAndWaitForResults(frame, BOUNDARY_SPANNING_TERM);
+
+    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('does not tolerate a whitespace gap away from a paragraph boundary', async ({
+    mainPage,
+  }) => {
+    const frame = await openFindPanel(mainPage);
+
+    await frame.locator('#search-term').fill(NON_BOUNDARY_GAP_TERM);
 
     await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: 20_000 });
   });

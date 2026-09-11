@@ -953,6 +953,9 @@ export class ScriptureFinderProjectDataProviderEngine
     const matches = usj.search(buildSearchRegex(job.options, characterCategorizer), {
       markerStylesToInclude: job.options.verseTextOnly ? USFM_VERSE_TEXT_MARKERS_SET : undefined,
       normalizationForm: job.options.ignoreDiacritics && !job.options.useRegex ? 'NFD' : undefined,
+      // A regex-mode pattern means exactly what the user wrote: no whitespace groups are emitted
+      // for it, and its regex must not be rebuilt to add the `d` flag.
+      flexibleWhitespaceAtBlockBoundaries: !job.options.useRegex,
     });
 
     return matches.map((match) => {

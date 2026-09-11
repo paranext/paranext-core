@@ -52,7 +52,11 @@ export {
   aggregateUnsubscribers,
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
-export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
+export {
+  CHAPTER_TYPE,
+  SEARCH_WHITESPACE_GROUP_PREFIX,
+  VERSE_TYPE,
+} from './scripture/usj-reader-writer.model';
 export { usfmMarkers, isBlockMarker, isCharacterMarker } from './markers/usfm-markers';
 
 // Enums
