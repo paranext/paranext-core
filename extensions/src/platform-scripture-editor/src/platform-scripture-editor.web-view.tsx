@@ -3379,8 +3379,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // row on the note, whose index moves as notes before it come and go.
             const noteOp = editorRef.current?.getNoteOps(sessionKey)?.at(0);
             // The guard narrows `DeltaOp` to the note embed the row editor loads; a note the index
-            // above resolved always satisfies it.
-            if (noteOp && isInsertEmbedOpOfType('note', noteOp)) editingNoteOps.current = [noteOp];
+            // above resolved always satisfies it. A fresh array identity is what reloads the row
+            // editor, discarding its caret, so mint one only when this note's own content actually
+            // moved: most changes here are somewhere else in the chapter (typing in the text, a
+            // PDP echo, another note added or removed), and the note being edited is unchanged.
+            if (
+              noteOp &&
+              isInsertEmbedOpOfType('note', noteOp) &&
+              !deepEqualAcrossIframes(noteOp, editingNoteOps.current?.[0])
+            )
+              editingNoteOps.current = [noteOp];
+            // The editing row follows the note, whose index moves as notes before it come and go.
             if (sessionIndex !== paneEditingIndexRef.current) setPaneEditingIndex(sessionIndex);
           }
         }
