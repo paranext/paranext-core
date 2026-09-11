@@ -11,47 +11,37 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  * `platformScriptureEditor.onSharedLayoutApply` event fires for this `projectId`. Between arms, a
  * change to the underlying (synced) setting is held back — this is the team-member layout buffer.
  *
- * This hook is built for consumers that REMOUNT on a project switch (e.g. the resource/model-text
- * panels, which switch projects via `reloadWebView`; that regenerates the web view content with a
- * new nonce and so reloads the panel iframe — a fresh React mount with the new `projectId` baked
- * in). For such consumers `projectId` never changes in place for a live instance, so the switch is
- * covered by the mount arm and same-project re-applies are covered by `onSharedLayoutApply`; no
- * `projectId`-change re-arm effect is needed.
- *
- * It is NOT safe for consumers that change `projectId` IN PLACE via `updateWebViewDefinition({
- * projectId })` (as e.g. `checklist.web-view.tsx` / `checks-side-panel.web-view.tsx` do). Without a
- * remount the held copy would show the previous project's value — and the error channel would stay
- * silent about the new one, since `hasAppliedRealValue` never resets; such a consumer would need a
- * PDP-subscription reset pattern instead (reset the held value to a not-yet-loaded sentinel when
- * the PDP identity changes, like `use-structure-protection-state.hook.ts`). A runtime tripwire
- * below `logger.warn`s if it ever detects an in-place `projectId` change so this assumption fails
- * loudly rather than silently returning stale data.
- *
- * TODO(PT-4238): the Scripture Text Grid is such a consumer today — it reaches this hook through
- * `useTextCollectionSources`, and `resolveTextCollectionProjectId` can move its project without a
- * remount. Once this hook has disarmed, the grid's admin-shared list then strands on the outgoing
- * project while its unbuffered per-user list follows the incoming one. The fix is to stop inferring
- * that project rather than to add a reset here.
- *
- * The mount arm intentionally waits for `isLoading` to be `false` before applying/disarming.
- * `useProjectSetting` returns the `defaultValue` placeholder with `isLoading === true` until the
- * subscription resolves; applying during that window would lock the held copy onto the placeholder
- * and drop the real value when it arrives. Because `projectId` is fixed for a mount (see above),
- * `isLoading` is a reliable "the value is ready for this project" signal here.
- *
  * Only the admin/project layer should be buffered; callers that need the live value (e.g. an
  * admin's own edit control) should use `useProjectSetting` directly.
  *
- * A read error is never latched. The mount arm skips a {@link PlatformError} and stays armed, so a
- * setting that becomes readable later still lands without waiting for an `onSharedLayoutApply`. The
- * error itself is reported separately rather than as the held value, because the held value at that
- * point is the placeholder — indistinguishable from a genuinely empty setting.
+ * Consumers must REMOUNT on a project switch (e.g. the resource/model-text panels, which switch via
+ * `reloadWebView`; that reloads the panel iframe — a fresh React mount with the new `projectId`
+ * baked in). The hook disarms after its first apply and nothing re-arms it on a `projectId` change,
+ * so a consumer that changes `projectId` IN PLACE keeps receiving the previous project's value, and
+ * a read error for the new project goes unreported. Such a consumer needs a PDP-subscription reset
+ * pattern instead, like `use-structure-protection-state.hook.ts`. A runtime tripwire `logger.warn`s
+ * on any in-place change. It also fires for a change that lands before the first apply, which is
+ * harmless, so a warning alone does not mean a stale value was served.
  *
- * `settingError` is reported only while no real value has ever been applied. Once one has, holding
- * it across a failed re-read is exactly the job this buffer exists to do, so a later failure is
- * swallowed rather than replacing working content with an error message.
+ * TODO(PT-4316): the Scripture Text Grid still reaches this hook in place, through
+ * `useTextCollectionSources`. While the grid is unbound — opened by the default layout with no
+ * `projectId` and not yet re-pointed by a reload — `resolveTextCollectionProjectId` can move it to
+ * another project without a remount. The grid's admin-shared list then stays on the outgoing
+ * project while its unbuffered per-user list follows the incoming one. The candidate fixes are for
+ * the grid to stop changing project in place, or for this hook to reset on an in-place change.
  *
- * @returns `[heldSetting, isLoading, settingError]`. `settingError` is set while the setting cannot
+ * The mount arm waits for `isLoading` to be `false`: until the subscription resolves,
+ * `useProjectSetting` returns the `defaultValue` placeholder, and applying it would lock the held
+ * copy onto the placeholder and drop the real value when it arrives.
+ *
+ * A read error is never latched: the mount arm skips a {@link PlatformError} and stays armed, so a
+ * setting that becomes readable later still lands on its own. The error is reported on
+ * `settingError` rather than as the held value, because the held value at that point is the
+ * placeholder — indistinguishable from a genuinely empty setting. Once a real value has been
+ * applied, a later failed read is swallowed so working content is not replaced by an error.
+ *
+ * @returns `[heldSetting, isLoading, settingError]`. `isLoading` is the provider's loading state
+ *   for the current read, independent of the buffer. `settingError` is set while the setting cannot
  *   be read AND nothing readable has arrived yet. `heldSetting` may itself be a
  *   {@link PlatformError} if a first-render raw value were ever one; check with `isPlatformError`.
  */
