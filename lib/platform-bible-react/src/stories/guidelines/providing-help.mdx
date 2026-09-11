@@ -1,5 +1,11 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 import LinkTo from '@storybook/addon-links/react';
+import { Info } from 'lucide-react';
+import { Button } from '@/components/shadcn-ui/button';
+import { Label } from '@/components/shadcn-ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/shadcn-ui/tooltip';
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
 
 <Meta title="Guidelines/Providing Help" />
 
@@ -9,20 +15,23 @@ How to explain what a control does, when to show more context, and where deeper 
 Reach for the lightest option that still answers the user's question — extra text competes with
 the UI for attention.
 
-We do **not** ship PT9-style embedded "guides" (numbered explanations anchored to the UI). For
-anything past a sentence or two, link out to application help (see below).
+We do **not** ship Paratext 9-style embedded "guides" (numbered explanations anchored to the UI).
+For anything past a sentence or two, link out to application help (see below).
 
 ## The ladder
 
-Pick the first row that fits. Move down only when the row above cannot carry the message.
+Rows are ordered from lightest to heaviest in the space and attention they cost. Pick the first
+row that fits, and move down only when the row above cannot carry the message — either because it
+is too short, or because the message must be visible at a glance and a hover-only surface would
+never show it.
 
-| Surface                    | Use for                                                                | Format               |
-| -------------------------- | ---------------------------------------------------------------------- | -------------------- |
-| **Visible label**          | The primary meaning of a control                                       | 1–3 words            |
-| **Tooltip on the control** | Icon buttons (required); short hints on other action buttons as needed | Short phrase (ideally 1-3 words) |
-| **Label subtext**          | A brief clarification that must be visible at a glance                 | One `muted` line     |
-| **Info icon button**       | An explanation too long for a control tooltip, or optional context     | 1–2 sentences        |
-| **Application help**       | Concepts, workflows, anything more than a paragraph                    | Online (TBD, Nov 2026) |
+| Surface                    | Use for                                                                | Format                              |
+| -------------------------- | ---------------------------------------------------------------------- | ----------------------------------- |
+| **Visible label**          | The primary meaning of a control                                       | 1–3 words                           |
+| **Tooltip on the control** | Icon buttons (required); short hints on other action buttons as needed | Short phrase (ideally 1–3 words)    |
+| **Label subtext**          | A brief clarification that must be visible at a glance                 | One `muted` line                    |
+| **Info icon button**       | An explanation too long for a control tooltip, or optional context     | 1–2 sentences, or a dialog for more |
+| **Application help**       | Concepts, workflows, anything more than a paragraph                    | Online article                      |
 
 ## Tooltips on action buttons
 
@@ -36,9 +45,9 @@ and when a popover is needed instead.
 
 ## Label subtext
 
-A single muted line directly below an option's label or below a headline. Use it when the clarification is essential
-enough that a user should read it without hovering — for example, disambiguating two similarly
-named settings, or naming a non-obvious consequence.
+A single muted line directly below an option's label or below a headline. Use it when the
+clarification is essential enough that a user should read it without hovering — for example,
+disambiguating two similarly named settings, or naming a non-obvious consequence.
 
 Use sparingly. If every option in a form carries subtext, the form gets loud and the important
 ones stop standing out. Prefer a clearer label first; add subtext only when a clearer label isn't
@@ -47,28 +56,93 @@ possible.
 ## Info icon buttons
 
 A ghost-variant icon button (`Info` from `lucide-react`) placed next to the thing it explains.
+The tooltip and the `aria-label` are where the help itself lives — the tooltip is what a sighted
+user reads on hover or keyboard focus, the `aria-label` is what a screen-reader user hears — so
+write both to carry the explanation, not just to satisfy the icon-button rule from
+<LinkTo title="Guidelines/Tooltips">Tooltips</LinkTo>.
+
 Two placements:
 
 - **Next to a specific choice or action** — scoped help for one control.
 - **Top right of a screen, next to view options / settings** — help that applies to the whole
   view.
 
-The info button opens one of:
+The info button reveals its help in one of these ways:
 
 - **A tooltip** — for a slightly longer explanation than the control's own tooltip would
-  reasonably carry. Still a hint, not an essay.
-- **A dialog** — as a stop-gap for the not-yet-available help system, when the explanation needs
-  paragraphs, structure, an example, or links.
+  reasonably carry (up to 1–2 sentences). Still a hint, not an essay. Because our tooltip is
+  Radix-based (`role="tooltip"`), it appears on hover or keyboard focus and dismisses on
+  pointer-leave or blur — it does not open on click. On touch, where there is no hover, prefer a
+  dialog if the tooltip text is the only place the user can read the explanation.
+- **A dialog opened on click** — as a stop-gap for the not-yet-available help system, when the
+  explanation needs paragraphs, structure, an example, or links.
 - **Application help** — when the explanation is long enough to belong in the online help
   system (see below).
 
 Do not put interactive content (links, form fields, copy buttons) inside a tooltip — use a dialog
 or popover. See <LinkTo title="Guidelines/Tooltips">Tooltips</LinkTo>.
 
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="prefer"
+    previewClassName="tw:pb-12"
+    preview={
+<TooltipProvider>
+<div className="tw:flex tw:items-center tw:gap-2">
+<Label htmlFor="api-key-input">API key</Label>
+<Tooltip open>
+<TooltipTrigger asChild>
+<Button variant="ghost" size="icon" aria-label="About the API key">
+<Info />
+</Button>
+</TooltipTrigger>
+<TooltipContent side="bottom">Used to authenticate requests to your organization's server.</TooltipContent>
+</Tooltip>
+</div>
+</TooltipProvider>
+}
+  >
+    An info button whose tooltip carries a one- or two-sentence clarification of the labelled
+    field. The button has an <code>aria-label</code>; the tooltip appears on hover or keyboard
+    focus.
+  </ExampleBlock>
+
+  <ExampleBlock
+    variant="avoid"
+    previewClassName="tw:pb-12"
+    preview={
+<TooltipProvider>
+<div className="tw:flex tw:flex-col tw:gap-1">
+<RadioGroup defaultValue="opt-a">
+<div className="tw:flex tw:items-center tw:gap-2">
+<RadioGroupItem value="opt-a" id="providing-help-opt-a" />
+<Label htmlFor="providing-help-opt-a">Enabled</Label>
+</div>
+<p className="tw:ps-6 tw:text-xs tw:text-muted-foreground">Allows full network access for all sync, resource downloads, and telemetry — with no restrictions on what data is shared or when.</p>
+<div className="tw:flex tw:items-center tw:gap-2">
+<RadioGroupItem value="opt-b" id="providing-help-opt-b" />
+<Label htmlFor="providing-help-opt-b">Disabled</Label>
+</div>
+<p className="tw:ps-6 tw:text-xs tw:text-muted-foreground">Blocks all outgoing network traffic including sync, cloud resources, telemetry, and update checks — you will need to install resources manually.</p>
+</RadioGroup>
+</div>
+</TooltipProvider>
+}
+  >
+    A paragraph of subtext under each option is too heavy for a glance. If every option needs
+    this much explanation, move it into an info-button dialog or into application help.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
 ## Application help
 
 Deeper help — concepts, task walkthroughs, reference material — belongs in the online
-application help. **The help system is TBD and will ship for the November 2026 release.** Until
-it exists, defer the content until when it is available. If needed as a stop-gap, only create a
-single, temporary in-app guide dialog, but do not create more than one.
+application help. **The help system is under development.** Until it ships, defer writing this
+content. If a piece of guidance cannot wait, ship a single, temporary in-app guide dialog for
+that view — not one per feature or per extension — and plan to retire it once the help system is
+available.
 
+See also: <LinkTo title="Guidelines/Tooltips">Tooltips</LinkTo> — length, keyboard shortcuts, and
+when a popover is needed instead; <LinkTo title="Guidelines/Applying Changes">Applying Changes</LinkTo>
+— microcopy for buttons; <LinkTo title="Guidelines/Product Names">Product Names</LinkTo> — how
+to refer to Paratext 9 and Platform.Bible in help text.
