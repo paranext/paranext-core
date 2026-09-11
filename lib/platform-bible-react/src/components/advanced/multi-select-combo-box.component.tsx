@@ -10,8 +10,54 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
-import { ReactNode, useCallback, useMemo, useState } from 'react';
+import { ReactNode, RefObject, useCallback, useMemo, useRef, useState } from 'react';
 import { type VariantProps } from 'class-variance-authority';
+import { useHasContentBelow } from '@/hooks/use-has-content-below.hook';
+
+/**
+ * Wraps the option list and draws a fade at its bottom edge while more options remain below the
+ * fold.
+ *
+ * Its own component (rather than markup inline in {@link MultiSelectComboBox}) so that its effect
+ * runs when the popover's content mounts. The combo box does not re-render when Radix mounts the
+ * portal, so an effect living up there measures a list that has not been attached yet and concludes
+ * there is nothing to scroll.
+ */
+function OptionListScrollCue({
+  children,
+  isEnabled,
+  scrollerRef,
+}: {
+  children: ReactNode;
+  isEnabled: boolean;
+  scrollerRef: RefObject<HTMLElement | null>;
+}) {
+  const hasContentBelow = useHasContentBelow(scrollerRef, isEnabled);
+
+  // Nothing is wrapped when the cue is off, so a consumer that has not opted in gets the same DOM
+  // it had before the cue existed rather than an extra block between `Command` and its list.
+  if (!isEnabled) return children;
+
+  return (
+    // `min-h-0` and the flex column keep the scroller, not this wrapper, as the box that shrinks:
+    // the wrapper stands between `Command`'s flex column and `CommandList`, and a block whose
+    // `min-height` resolves to its content height would push the list out of a capped popover
+    // instead of letting it scroll.
+    <div className="tw:relative tw:flex tw:min-h-0 tw:flex-col">
+      {children}
+      {hasContentBelow && (
+        <div
+          data-slot="command-list-scroll-cue"
+          aria-hidden
+          // Rows are ~32px and the list rarely ends on an empty strip, so the fade always covers
+          // the bottom edge of a real row. Kept to a third of one: enough to read as "more below",
+          // little enough to leave that row's text and its hover highlight legible.
+          className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:bottom-0 tw:h-3 tw:bg-gradient-to-t tw:from-popover tw:to-transparent"
+        />
+      )}
+    </div>
+  );
+}
 
 export type MultiSelectComboBoxEntry = {
   value: string;
@@ -34,6 +80,12 @@ export interface MultiSelectComboBoxProps {
   onChange: (values: string[]) => void;
   /** Placeholder text when no items are selected. */
   placeholder: string;
+  /**
+   * Placeholder for the search box inside the dropdown. Localize it in the caller — this component
+   * cannot build one, because composing a sentence around {@link placeholder} only works in English.
+   * Defaults to {@link placeholder}.
+   */
+  searchPlaceholder?: string;
   /** Whether to show select all/clear all buttons. */
   hasToggleAllFeature?: boolean;
   /** Text for the select all button. */
@@ -50,8 +102,19 @@ export interface MultiSelectComboBoxProps {
   onOpenChange?: (open: boolean) => void;
   /** Flag to disable the component. */
   isDisabled?: boolean;
-  /** Flag to sort selected items. */
+  /**
+   * Flag to sort selected items. The order is snapshotted when the dropdown opens, so selecting an
+   * entry does not move rows out from under the pointer.
+   */
   sortSelected?: boolean;
+  /**
+   * Whether to fade the bottom edge of the option list while more entries remain below the fold.
+   *
+   * Off by default: the cue's gradient is drawn in the popover's own background colour, so a
+   * popover themed differently would show it as a band. Opt in on long lists where the scrollbar
+   * alone is too weak a signal.
+   */
+  showScrollCue?: boolean;
   /** Optional icon to display in the button. */
   icon?: ReactNode;
   /** Additional class names for styling. */
@@ -68,6 +131,7 @@ export function MultiSelectComboBox({
   selected,
   onChange,
   placeholder,
+  searchPlaceholder,
   hasToggleAllFeature = false,
   selectAllText = 'Select All',
   clearAllText = 'Clear All',
@@ -77,12 +141,16 @@ export function MultiSelectComboBox({
   onOpenChange = undefined,
   isDisabled = false,
   sortSelected = false,
+  showScrollCue = false,
   icon = undefined,
   className = undefined,
   variant = 'ghost',
   id,
 }: MultiSelectComboBoxProps) {
   const [isOpenLocal, setIsOpenLocal] = useState(false);
+  // ref.current expects null not undefined for a div ref
+  // eslint-disable-next-line no-null/no-null
+  const listRef = useRef<HTMLDivElement>(null);
 
   const handleSelect = useCallback(
     (label: string) => {
@@ -100,6 +168,23 @@ export function MultiSelectComboBox({
     return placeholder;
   };
 
+  const actualIsOpen = isOpen ?? isOpenLocal;
+  const actualOnOpenChange = onOpenChange ?? setIsOpenLocal;
+
+  // `sortSelected` floats a just-selected entry above the unselected ones. Re-sorting on every
+  // toggle moves rows out from under the pointer mid-interaction, so the selection that drives the
+  // order is snapshotted on the closed-to-open transition and held until the list closes.
+  //
+  // Taken during render rather than in an effect: an effect runs after the commit, so a reopened
+  // list would be laid out with the previous snapshot's order and reordered afterwards, which is
+  // visible as a jump whenever that commit overruns the frame.
+  const [wasOpen, setWasOpen] = useState(actualIsOpen);
+  const [sortSelection, setSortSelection] = useState(selected);
+  if (wasOpen !== actualIsOpen) {
+    setWasOpen(actualIsOpen);
+    if (actualIsOpen) setSortSelection(selected);
+  }
+
   const sortedOptions = useMemo(() => {
     if (!sortSelected) return entries;
 
@@ -109,26 +194,29 @@ export function MultiSelectComboBox({
     const nonStarredItems = entries
       .filter((opt) => !opt.starred)
       .sort((a, b) => {
-        const aSelected = selected.includes(a.value);
-        const bSelected = selected.includes(b.value);
+        const aSelected = sortSelection.includes(a.value);
+        const bSelected = sortSelection.includes(b.value);
         if (aSelected && !bSelected) return -1;
         if (!aSelected && bSelected) return 1;
         return a.label.localeCompare(b.label);
       });
 
     return [...starredItems, ...nonStarredItems];
-  }, [entries, selected, sortSelected]);
+  }, [entries, sortSelection, sortSelected]);
 
+  // The snapshot is refreshed here as well as on open. These buttons are not rows, so re-sorting
+  // moves nothing out from under the pointer — and leaving the snapshot alone would float entries
+  // the user has just cleared above the ones they kept, an order contradicting the check marks.
   const handleSelectAll = () => {
-    onChange(entries.map((entry) => entry.value));
+    const allValues = entries.map((entry) => entry.value);
+    setSortSelection(allValues);
+    onChange(allValues);
   };
 
   const handleClearAll = () => {
+    setSortSelection([]);
     onChange([]);
   };
-
-  const actualIsOpen = isOpen ?? isOpenLocal;
-  const actualOnOpenChange = onOpenChange ?? setIsOpenLocal;
 
   return (
     <div id={id} className={className}>
@@ -163,7 +251,7 @@ export function MultiSelectComboBox({
         <PopoverContent align="start" className="tw:w-full tw:p-0">
           <Command>
             <CommandInput
-              placeholder={`Search ${placeholder.toLowerCase()}...`}
+              placeholder={searchPlaceholder ?? placeholder}
               // Picker semantics: the option list is the whole point of this control and a leading
               // space in the search box is meaningless, so Space picks the highlighted option.
               spaceSelectsHighlightedItem
@@ -178,37 +266,39 @@ export function MultiSelectComboBox({
                 </Button>
               </div>
             )}
-            <CommandList>
-              <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
-              <CommandGroup>
-                {sortedOptions.map((option) => {
-                  return (
-                    <CommandItem
-                      key={option.label}
-                      value={option.label}
-                      onSelect={handleSelect}
-                      className="tw:flex tw:items-center tw:gap-2"
-                    >
-                      <div className="w-4">
-                        <Check
-                          className={cn(
-                            'tw:h-4 tw:w-4',
-                            selected.includes(option.value) ? 'tw:opacity-100' : 'tw:opacity-0',
-                          )}
-                        />
-                      </div>
-                      {option.starred && <Star className="tw:h-4 tw:w-4" />}
-                      <div className="tw:flex-grow">{option.label}</div>
-                      {option.secondaryLabel && (
-                        <div className="tw:text-end tw:text-muted-foreground">
-                          {option.secondaryLabel}
+            <OptionListScrollCue isEnabled={showScrollCue} scrollerRef={listRef}>
+              <CommandList ref={listRef}>
+                <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
+                <CommandGroup>
+                  {sortedOptions.map((option) => {
+                    return (
+                      <CommandItem
+                        key={option.label}
+                        value={option.label}
+                        onSelect={handleSelect}
+                        className="tw:flex tw:items-center tw:gap-2"
+                      >
+                        <div className="w-4">
+                          <Check
+                            className={cn(
+                              'tw:h-4 tw:w-4',
+                              selected.includes(option.value) ? 'tw:opacity-100' : 'tw:opacity-0',
+                            )}
+                          />
                         </div>
-                      )}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
+                        {option.starred && <Star className="tw:h-4 tw:w-4" />}
+                        <div className="tw:flex-grow">{option.label}</div>
+                        {option.secondaryLabel && (
+                          <div className="tw:text-end tw:text-muted-foreground">
+                            {option.secondaryLabel}
+                          </div>
+                        )}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </OptionListScrollCue>
           </Command>
         </PopoverContent>
       </Popover>

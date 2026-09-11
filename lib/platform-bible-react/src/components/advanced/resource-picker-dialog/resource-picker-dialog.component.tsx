@@ -13,7 +13,11 @@ import { DblResourceData, ResourceType, formatReplacementString } from 'platform
 import { Check, CloudOff, SearchX } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
-import { useProgressiveList } from './resource-picker-dialog.utils';
+import {
+  buildLanguageFilterOptions,
+  matchesResourceType,
+  useProgressiveList,
+} from './resource-picker-dialog.utils';
 
 /**
  * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
@@ -28,6 +32,8 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_search_placeholder%',
   '%resourcePicker_language_filter_any%',
   '%resourcePicker_language_filter_multipleSelected%',
+  '%resourcePicker_language_filter_search_placeholder%',
+  '%resourcePicker_language_filter_no_results%',
   '%resourcePicker_showing_count%',
   '%resourcePicker_load_error%',
   '%resourcePicker_retry%',
@@ -75,7 +81,12 @@ export interface ResourcePickerDialogProps {
    * to infer it from "no results".
    */
   areDownloadsUnavailable?: boolean;
-  /** If provided, only resources of this type (or any of the listed types) are shown */
+  /**
+   * If provided, only resources of this type (or any of the listed types) are shown. Omitting it
+   * shows everything, and so does an empty array — that is what a multi-select with nothing chosen
+   * hands over, and {@link matchesResourceType} treats the two the same. There is no value that
+   * means "show nothing".
+   */
   resourceType?: ResourceType | ResourceType[];
   /**
    * Already-localized sentence shown above the resource list explaining why the list is INCOMPLETE
@@ -284,17 +295,39 @@ export default function ResourcePickerDialog({
     searchInputRef.current?.focus();
   }, []);
 
-  // The `resourceType` narrowing is separated from the user's own filters because only the latter
-  // are clearable. Counting or offering to clear against `allResources` would describe a set this
-  // dialog was never allowed to show.
+  /**
+   * The catalogue narrowed to the requested type, and the single source of "in play" for everything
+   * below: the rendered rows, the language options and the total. Deriving all three from one list
+   * is what keeps them from disagreeing about which resources count.
+   *
+   * The narrowing is kept apart from the user’s own filters because only the latter are clearable.
+   * Counting or offering to clear against `allResources` would describe a set this dialog was never
+   * allowed to show.
+   */
   const typeScopedResources = useMemo(
-    () =>
-      allResources.filter(
-        (r) =>
-          !resourceType ||
-          (Array.isArray(resourceType) ? resourceType.includes(r.type) : r.type === resourceType),
-      ),
+    () => allResources.filter((r) => matchesResourceType(r, resourceType)),
     [allResources, resourceType],
+  );
+
+  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
+    () => buildLanguageFilterOptions(typeScopedResources),
+    [typeScopedResources],
+  );
+
+  /**
+   * The selection with any language the filter no longer offers dropped.
+   *
+   * A language picked under one `resourceType` survives in state when the prop changes, but its row
+   * is gone from the options, so there is nothing left to un-toggle — and this dialog does not
+   * enable the combo box's clear-all button. Filtering the rows on the raw selection would strand
+   * the user on an empty list with no way back.
+   *
+   * This is also what the combo box is handed as its selection, so the next toggle rebuilds the
+   * selection from the offered languages and the stranded entry drops out of state for good.
+   */
+  const effectiveLanguages = useMemo(
+    () => selectedLanguages.filter((language) => languageOptions.some((o) => o.value === language)),
+    [selectedLanguages, languageOptions],
   );
 
   const filteredResources = useMemo(
@@ -302,9 +335,9 @@ export default function ResourcePickerDialog({
       typeScopedResources
         .filter((r) => matchesSearch(r, searchText))
         .filter(
-          (r) => selectedLanguages.length === 0 || selectedLanguages.includes(r.bestLanguageName),
+          (r) => effectiveLanguages.length === 0 || effectiveLanguages.includes(r.bestLanguageName),
         ),
-    [typeScopedResources, searchText, selectedLanguages],
+    [typeScopedResources, searchText, effectiveLanguages],
   );
 
   const alreadySelected = useMemo(
@@ -328,21 +361,20 @@ export default function ResourcePickerDialog({
 
   const { visibleItems: visibleToDownload, sentinelRef, hasMore } = useProgressiveList(toDownload);
 
-  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
-    () =>
-      Array.from(new Set(allResources.map((r) => r.bestLanguageName))).map((lang) => ({
-        label: lang,
-        value: lang,
-      })),
-    [allResources],
-  );
-
   const hasNoResults =
     alreadySelected.length === 0 && installed.length === 0 && toDownload.length === 0;
 
   const titleText = localizeString(localizedStrings, '%resourcePicker_title%');
   const searchPlaceholder = localizeString(localizedStrings, '%resourcePicker_search_placeholder%');
   const anyLanguageText = localizeString(localizedStrings, '%resourcePicker_language_filter_any%');
+  const languageSearchPlaceholder = localizeString(
+    localizedStrings,
+    '%resourcePicker_language_filter_search_placeholder%',
+  );
+  const noLanguagesText = localizeString(
+    localizedStrings,
+    '%resourcePicker_language_filter_no_results%',
+  );
   const alreadySelectedLabel = localizeString(
     localizedStrings,
     '%resourcePicker_section_already_selected%',
@@ -375,25 +407,25 @@ export default function ResourcePickerDialog({
   // worse direction, because it withdraws the "Clear filters" escape from a selection that is hiding
   // every row.
   const isLanguageFiltered =
-    selectedLanguages.length > 0 &&
-    typeScopedResources.some((r) => !selectedLanguages.includes(r.bestLanguageName));
+    effectiveLanguages.length > 0 &&
+    typeScopedResources.some((r) => !effectiveLanguages.includes(r.bestLanguageName));
   const isFiltered = searchText.length > 0 || isLanguageFiltered;
 
   const customLanguageSelectText = useMemo(() => {
     // Reads "Any language" whenever the selection is not narrowing anything, so the trigger and the
     // "Clear filters" affordance never disagree about whether a filter is in effect.
     if (!isLanguageFiltered) return anyLanguageText;
-    if (selectedLanguages.length === 1) {
-      const matchingType = languageOptions.find((type) => type.value === selectedLanguages[0]);
+    if (effectiveLanguages.length === 1) {
+      const matchingType = languageOptions.find((type) => type.value === effectiveLanguages[0]);
       if (matchingType) return matchingType.label;
     }
     return formatReplacementString(
       localizeString(localizedStrings, '%resourcePicker_language_filter_multipleSelected%'),
       {
-        selectCount: selectedLanguages.length,
+        selectCount: effectiveLanguages.length,
       },
     );
-  }, [isLanguageFiltered, selectedLanguages, languageOptions, anyLanguageText, localizedStrings]);
+  }, [isLanguageFiltered, effectiveLanguages, languageOptions, anyLanguageText, localizedStrings]);
 
   // Offering "Clear filters" is only honest when clearing would actually reveal something. With a
   // `resourceType` that matches nothing in the catalog the list is empty no matter what the user
@@ -432,12 +464,16 @@ export default function ResourcePickerDialog({
         />
         <MultiSelectComboBox
           entries={languageOptions}
-          selected={selectedLanguages}
+          selected={effectiveLanguages}
           onChange={setSelectedLanguages}
           customSelectedText={customLanguageSelectText}
           placeholder={anyLanguageText}
+          searchPlaceholder={languageSearchPlaceholder}
+          commandEmptyMessage={noLanguagesText}
           variant="outline"
           isDisabled={areFiltersInert}
+          sortSelected
+          showScrollCue
         />
       </div>
       {/* The live region stays mounted and only its content changes: assistive tech announces

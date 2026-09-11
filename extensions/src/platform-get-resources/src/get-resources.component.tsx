@@ -38,8 +38,17 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-import { getResourcePickerBodyState } from 'platform-bible-react/experimental';
-import type { DblResourceData, LocalizedStringValue, PlatformError } from 'platform-bible-utils';
+import {
+  buildLanguageFilterOptions,
+  getResourcePickerBodyState,
+  matchesResourceType,
+} from 'platform-bible-react/experimental';
+import type {
+  DblResourceData,
+  LocalizedStringValue,
+  PlatformError,
+  ResourceType,
+} from 'platform-bible-utils';
 import {
   FAILED_PRECONDITION,
   getErrorMessage,
@@ -47,6 +56,18 @@ import {
   newPlatformError,
 } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
+
+/**
+ * The resource types this build offers: the type filter's options, in the order they are listed
+ * there, and the set a persisted type selection is narrowed against.
+ */
+const RESOURCE_TYPES: ResourceType[] = [
+  'ScriptureResource',
+  'CommentaryResource',
+  'EnhancedResource',
+  'SourceLanguageResource',
+  'XmlResource',
+];
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -69,6 +90,8 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_installed%',
   '%resources_language%',
   '%resources_languages%',
+  '%resources_languages_noResults%',
+  '%resources_languages_searchPlaceholder%',
   '%resources_noResults%',
   '%resources_noResultsError%',
   '%resources_open%',
@@ -80,6 +103,8 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_size%',
   '%resources_type%',
   '%resources_types%',
+  '%resources_types_noResults%',
+  '%resources_types_searchPlaceholder%',
   '%resources_type_Scripture%',
   '%resources_type_Commentary%',
   '%resources_type_ER%',
@@ -102,44 +127,6 @@ type SortConfig = {
 };
 
 const emptyResources: DblResourceData[] = [];
-
-const getLanguageOptions = (
-  resources: DblResourceData[],
-  selectedLanguages: string[],
-): MultiSelectComboBoxEntry[] => {
-  const allLanguages: string[] = Array.from(
-    new Set(resources.map((resource) => resource.bestLanguageName)),
-  );
-
-  const starredLanguages = new Set(
-    resources.filter((resource) => resource.installed).map((resource) => resource.bestLanguageName),
-  );
-
-  const prioritizedLanguages = new Set(selectedLanguages.concat(Array.from(starredLanguages)));
-
-  const sortedLanguages = allLanguages.sort((a, b) => {
-    const aIsPrioritized = prioritizedLanguages.has(a);
-    const bIsPrioritized = prioritizedLanguages.has(b);
-
-    if (aIsPrioritized && bIsPrioritized) {
-      return a.localeCompare(b);
-    }
-    if (aIsPrioritized) return -1;
-    if (bIsPrioritized) return 1;
-
-    return a.localeCompare(b);
-  });
-
-  return sortedLanguages.map((language) => {
-    const count = resources.filter((resource) => resource.bestLanguageName === language).length;
-    return {
-      label: language,
-      value: language,
-      starred: starredLanguages.has(language),
-      secondaryLabel: count.toString(),
-    };
-  });
-};
 
 const getActionButtonContent = (
   resource: DblResourceData,
@@ -337,6 +324,10 @@ export function GetResources({
   const installedText: string = getLocalizedString('%resources_installed%');
   const languageText: string = getLocalizedString('%resources_language%');
   const languagesText: string = getLocalizedString('%resources_languages%');
+  const languagesSearchPlaceholder: string = getLocalizedString(
+    '%resources_languages_searchPlaceholder%',
+  );
+  const languagesNoResultsText: string = getLocalizedString('%resources_languages_noResults%');
   const noResultsText: string = getLocalizedString('%resources_noResults%');
   const noResultsErrorText: string = getLocalizedString('%resources_noResultsError%');
   const retryText: string = getLocalizedString('%resources_retry%');
@@ -349,6 +340,8 @@ export function GetResources({
   const sizeText: string = getLocalizedString('%resources_size%');
   const typeText: string = getLocalizedString('%resources_type%');
   const typesText: string = getLocalizedString('%resources_types%');
+  const typesSearchPlaceholder: string = getLocalizedString('%resources_types_searchPlaceholder%');
+  const typesNoResultsText: string = getLocalizedString('%resources_types_noResults%');
   const typeScriptureText: string = getLocalizedString('%resources_type_Scripture%');
   const typeCommentaryText: string = getLocalizedString('%resources_type_Commentary%');
   const typeErText: string = getLocalizedString('%resources_type_ER%');
@@ -389,8 +382,71 @@ export function GetResources({
 
   const [textFilter, setTextFilter] = useState<string>('');
 
+  /**
+   * The persisted type selection narrowed to the types this build offers.
+   *
+   * The selection is a plain `string[]` in web view state that outlives any one build of this list,
+   * so it can hold a value {@link RESOURCE_TYPES} does not — one that was retired or renamed, or
+   * that a hand-edited layout put there. Filtering on such a value would silently empty the grid.
+   *
+   * This is also what the type filter is handed as its selection, so an unrecognized value cannot
+   * render as a badge with an X and no label, and the next toggle drops it from state for good.
+   */
+  const selectedResourceTypes = useMemo(
+    () => RESOURCE_TYPES.filter((type) => selectedTypes.includes(type)),
+    [selectedTypes],
+  );
+
+  /**
+   * The catalogue narrowed to the chosen types. The language options and the grid are both derived
+   * from this one list, so a language the filter offers always has rows behind it.
+   */
+  const typeScopedResources = useMemo(
+    () => resources.filter((resource) => matchesResourceType(resource, selectedResourceTypes)),
+    [resources, selectedResourceTypes],
+  );
+
+  // `sortSelected` on the language Filter re-sorts these (starred first, then selected, then
+  // alphabetical), so the plain alphabetical order returned here is what reaches the user.
+  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
+    () => buildLanguageFilterOptions(typeScopedResources),
+    [typeScopedResources],
+  );
+
+  /**
+   * The language selection with any language the filter no longer offers dropped.
+   *
+   * This selection is persisted across sessions and seeded from installed resources, so narrowing
+   * the type filter can leave a language selected that no longer has a row. Filtering on the raw
+   * selection would empty the grid, and the badge for a language absent from the options renders
+   * with no label — an X the user has to guess at.
+   */
+  const effectiveLanguages = useMemo(
+    () => selectedLanguages.filter((language) => languageOptions.some((o) => o.value === language)),
+    [selectedLanguages, languageOptions],
+  );
+
+  const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
+    const labelByType: Record<ResourceType, string> = {
+      ScriptureResource: typeScriptureText,
+      CommentaryResource: typeCommentaryText,
+      EnhancedResource: typeErText,
+      SourceLanguageResource: typeSlrText,
+      XmlResource: typeXrText,
+    };
+
+    // Counted over the whole catalogue, not the type-scoped list the language counts use: a type's
+    // own count must not depend on which types are selected, or picking one would zero out the
+    // others and there would be no way to see what selecting them would bring back.
+    return RESOURCE_TYPES.map((type) => ({
+      value: type,
+      label: labelByType[type],
+      secondaryLabel: resources.filter((resource) => resource.type === type).length.toString(),
+    }));
+  }, [typeScriptureText, typeCommentaryText, typeErText, typeSlrText, typeXrText, resources]);
+
   const textFilteredResources = useMemo(() => {
-    return resources.filter((resource) => {
+    return typeScopedResources.filter((resource) => {
       const filter = textFilter.toLowerCase();
       return (
         resource.displayName.toLowerCase().includes(filter) ||
@@ -398,52 +454,14 @@ export function GetResources({
         resource.bestLanguageName.toLowerCase().includes(filter)
       );
     });
-  }, [resources, textFilter]);
-
-  const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
-    const getTypeCount = (type: string): string =>
-      (resources.filter((resource) => resource.type === type).length ?? 0).toString();
-
-    return [
-      {
-        value: 'ScriptureResource',
-        label: typeScriptureText,
-        secondaryLabel: getTypeCount('ScriptureResource'),
-      },
-      {
-        value: 'CommentaryResource',
-        label: typeCommentaryText,
-        secondaryLabel: getTypeCount('CommentaryResource'),
-      },
-      {
-        value: 'EnhancedResource',
-        label: typeErText,
-        secondaryLabel: getTypeCount('EnhancedResource'),
-      },
-      {
-        value: 'SourceLanguageResource',
-        label: typeSlrText,
-        secondaryLabel: getTypeCount('SourceLanguageResource'),
-      },
-      {
-        value: 'XmlResource',
-        label: typeXrText,
-        secondaryLabel: getTypeCount('XmlResource'),
-      },
-    ];
-  }, [typeScriptureText, typeCommentaryText, typeErText, typeSlrText, typeXrText, resources]);
-
-  const textAndTypeFilteredResources = useMemo(() => {
-    if (selectedTypes.length === 0) return textFilteredResources;
-    return textFilteredResources.filter((resource) => selectedTypes.includes(resource.type));
-  }, [textFilteredResources, selectedTypes]);
+  }, [typeScopedResources, textFilter]);
 
   const textAndTypeAndLanguageFilteredResources = useMemo(() => {
-    if (selectedLanguages.length === 0) return textAndTypeFilteredResources;
-    return textAndTypeFilteredResources.filter((resource) =>
-      selectedLanguages.includes(resource.bestLanguageName),
+    if (effectiveLanguages.length === 0) return textFilteredResources;
+    return textFilteredResources.filter((resource) =>
+      effectiveLanguages.includes(resource.bestLanguageName),
     );
-  }, [selectedLanguages, textAndTypeFilteredResources]);
+  }, [effectiveLanguages, textFilteredResources]);
 
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'bestLanguageName',
@@ -527,22 +545,29 @@ export function GetResources({
             </div>
             <div className="tw:flex tw:flex-col tw:gap-1">
               <Label className="tw:mb-2 tw:text-muted-foreground">{filterByText}</Label>
+              {/* The type list is five entries long, so it needs neither the scroll cue nor the
+                  sort that floats a just-picked entry to the top. */}
               <Filter
                 entries={typeOptions}
-                selected={selectedTypes}
+                selected={selectedResourceTypes}
                 onChange={onSelectedTypesChange}
                 placeholder={typesText}
+                searchPlaceholder={typesSearchPlaceholder}
+                commandEmptyMessage={typesNoResultsText}
                 icon={<Shapes />}
                 badgesPlaceholder={anyType}
                 isDisabled={isLoadingResources}
               />
 
               <Filter
-                entries={getLanguageOptions(resources, selectedLanguages)}
-                selected={selectedLanguages}
+                entries={languageOptions}
+                selected={effectiveLanguages}
                 onChange={onSelectedLanguagesChange}
                 placeholder={languagesText}
+                searchPlaceholder={languagesSearchPlaceholder}
+                commandEmptyMessage={languagesNoResultsText}
                 sortSelected
+                showScrollCue
                 icon={<Globe />}
                 badgesPlaceholder={anyLanguage}
                 isDisabled={isLoadingResources}

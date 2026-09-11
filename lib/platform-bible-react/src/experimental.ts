@@ -27,6 +27,10 @@ export {
   getResourcePickerBodyState,
   type ResourcePickerBodyState,
 } from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
+export {
+  buildLanguageFilterOptions,
+  matchesResourceType,
+} from './components/advanced/resource-picker-dialog/resource-picker-dialog.utils';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
 export {
   getAvailableBookIds,

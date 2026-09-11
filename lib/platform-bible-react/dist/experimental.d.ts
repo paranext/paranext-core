@@ -28,6 +28,12 @@ declare const buttonVariants: (props?: ({
 interface ButtonProps extends React$1.ComponentProps<"button">, VariantProps<typeof buttonVariants> {
 	asChild?: boolean;
 }
+type MultiSelectComboBoxEntry = {
+	value: string;
+	label: string;
+	secondaryLabel?: string;
+	starred?: boolean;
+};
 type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 /** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
 export type ScopeWithRange = Scope | "range";
@@ -265,6 +271,8 @@ export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_search_placeholder%",
 	"%resourcePicker_language_filter_any%",
 	"%resourcePicker_language_filter_multipleSelected%",
+	"%resourcePicker_language_filter_search_placeholder%",
+	"%resourcePicker_language_filter_no_results%",
 	"%resourcePicker_showing_count%",
 	"%resourcePicker_load_error%",
 	"%resourcePicker_retry%",
@@ -305,7 +313,12 @@ export interface ResourcePickerDialogProps {
 	 * to infer it from "no results".
 	 */
 	areDownloadsUnavailable?: boolean;
-	/** If provided, only resources of this type (or any of the listed types) are shown */
+	/**
+	 * If provided, only resources of this type (or any of the listed types) are shown. Omitting it
+	 * shows everything, and so does an empty array — that is what a multi-select with nothing chosen
+	 * hands over, and {@link matchesResourceType} treats the two the same. There is no value that
+	 * means "show nothing".
+	 */
 	resourceType?: ResourceType | ResourceType[];
 	/**
 	 * Already-localized sentence shown above the resource list explaining why the list is INCOMPLETE
@@ -381,6 +394,38 @@ export declare function getResourcePickerBodyState(input: {
  * @param props See {@link ResourcePickerDialogProps}
  */
 export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Whether a resource belongs to the section of the catalogue currently on display. An undefined
+ * `resourceType` means "no type filter", so everything matches, as does an empty array — that is
+ * what a multi-select with nothing chosen hands over.
+ *
+ * Shared by the resource rows and the language filter so the two can never disagree about which
+ * resources are in play — a language offered by the filter always has rows behind it.
+ */
+export declare function matchesResourceType(resource: DblResourceData, resourceType?: ResourceType | ResourceType[]): boolean;
+/**
+ * Builds the language filter's options from the resources currently in play.
+ *
+ * Languages are returned alphabetically, never in catalogue order — a DBL catalogue arrives in an
+ * arbitrary order that has nothing to do with what the user is likely to want. Languages that
+ * already have an installed resource are `starred`, which `MultiSelectComboBox` promotes to the top
+ * of the list when its `sortSelected` prop is set. Each entry carries its resource count as
+ * `secondaryLabel`.
+ *
+ * Pass the same list the rows are drawn from — already narrowed with {@link matchesResourceType} on
+ * a surface that scopes by type. Every language offered here has a resource behind it in whatever
+ * it is given, so "selecting a language can never produce an empty result list" is a guarantee the
+ * caller earns by deriving its rows and its options from one list, not one this function can make
+ * on its own.
+ *
+ * Note that a consumer passing `sortSelected` re-sorts these entries itself, so the rendered order
+ * is that component's (starred first, then selected, then alphabetical) rather than the plain
+ * alphabetical order returned here.
+ *
+ * @param resources The resources in play — the same list the rows are drawn from.
+ * @returns Alphabetically ordered entries, ready for `MultiSelectComboBox`.
+ */
+export declare function buildLanguageFilterOptions(resources: DblResourceData[]): MultiSelectComboBoxEntry[];
 /**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *

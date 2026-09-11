@@ -5,11 +5,17 @@ import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
-import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
+import {
+  MANY_LANGUAGE_RESOURCES,
+  SAMPLE_RESOURCES,
+  SAMPLE_SELECTED_IDS,
+} from './resource-picker-dialog.data';
 
-// jsdom implements neither IntersectionObserver (used by the progressive list) nor ResizeObserver
-// (wired by the language filter's popover) — stub both so the dialog can mount and be interacted
-// with.
+// jsdom implements none of what opening the language list needs: IntersectionObserver for the
+// progressive-list hook, ResizeObserver for cmdk's command list, and scrollIntoView for the option
+// cmdk highlights. Stubbed per file rather than globally — components that feature-detect
+// ResizeObserver take a different path when one exists, so defining it for every suite would
+// change what unrelated tests measure.
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 beforeAll(() => {
   vi.stubGlobal(
@@ -40,6 +46,8 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_no_results%': 'No results found',
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
+  '%resourcePicker_language_filter_search_placeholder%': 'Search languages…',
+  '%resourcePicker_language_filter_no_results%': 'No languages found',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
   '%resourcePicker_load_error%': "Couldn't load the list of available resources.",
   '%resourcePicker_retry%': 'Try again',
@@ -90,6 +98,12 @@ function renderDialogForRerender(
       ),
   };
 }
+
+/**
+ * Matches a language option by its language, tolerating the resource count rendered beside it — an
+ * option's accessible name is the language followed by that count.
+ */
+const languageOptionName = (language: string) => (name: string) => name.startsWith(`${language} `);
 
 describe('ResourcePickerDialog', () => {
   it('shows "Already Selected" section heading with selected resource names', () => {
@@ -188,7 +202,7 @@ describe('ResourcePickerDialog', () => {
     fireEvent.click(screen.getByRole('combobox'));
     // Scoped to the option: "Spanish" also appears as the language cell of the RVR60 row behind the
     // popover.
-    fireEvent.click(screen.getByRole('option', { name: 'Spanish' }));
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('Spanish') }));
     // Narrowed to Spanish: the English entries are gone, the Spanish one remains.
     expect(screen.queryByText('NIV')).not.toBeInTheDocument();
     expect(screen.getByText('RVR60')).toBeInTheDocument();
@@ -244,7 +258,7 @@ describe('ResourcePickerDialog', () => {
 
     fireEvent.click(screen.getByRole('combobox'));
     ['English', 'Spanish', 'Greek', 'Hebrew'].forEach((language) => {
-      const option = screen.queryByRole('option', { name: language });
+      const option = screen.queryByRole('option', { name: languageOptionName(language) });
       if (option) fireEvent.click(option);
     });
 
@@ -313,20 +327,22 @@ describe('ResourcePickerDialog', () => {
     renderDialog({ resourceType: 'XmlResource' });
 
     fireEvent.click(screen.getByRole('combobox'));
-    const english = screen.getByRole('option', { name: 'English' });
+    const english = screen.getByRole('option', { name: languageOptionName('English') });
     fireEvent.click(english);
 
     expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
   });
 
-  // The costlier direction: a selection that hides every row while reporting itself as no filter
-  // withdraws the one control that could reveal them again.
-  it('keeps Clear filters when the catalog changes out from under a selected language', () => {
+  // The costlier direction: a language selection that outlives the catalog offering it would hide
+  // every row while reporting itself as no filter, withdrawing the one control that could reveal
+  // them again. Deriving the selection down to the languages still on offer removes the dead end
+  // instead of making it recoverable.
+  it('ignores a selected language the catalog no longer offers, rather than emptying the list', () => {
     const { rerender } = renderDialogForRerender();
 
     fireEvent.click(screen.getByRole('combobox'));
-    fireEvent.click(screen.getByRole('option', { name: 'Spanish' }));
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('Spanish') }));
 
     // A retry, or a host that persists the language filter, can deliver a catalog whose languages
     // no longer include the selected one.
@@ -335,8 +351,9 @@ describe('ResourcePickerDialog', () => {
       selectedResourceIds: [],
     });
 
-    expect(screen.getByText('No resources match the current filters.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
+    expect(screen.queryByText('No resources match the current filters.')).not.toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
   });
 
   // The button lives inside the region it removes, so without a deliberate move focus falls to
@@ -488,5 +505,52 @@ describe('ResourcePickerDialog', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Only resources already on this computer are shown.',
     );
+  });
+
+  describe('language filter', () => {
+    // Once the popover is open the cmdk search input carries the combobox role too, so the
+    // trigger is identified by being the button.
+    const languageTrigger = () => {
+      const trigger = screen
+        .getAllByRole('combobox')
+        .find((element) => element.tagName === 'BUTTON');
+      if (!trigger) throw new Error('Language filter trigger not found');
+      return trigger;
+    };
+
+    const toggleLanguageFilter = () => {
+      fireEvent.click(languageTrigger());
+      return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
+    };
+
+    it('holds the option order steady while the list is open', () => {
+      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+      const optionsBefore = toggleLanguageFilter();
+
+      // A language far enough down that re-sorting would visibly move it, and unstarred so that
+      // selecting it is what would float it up.
+      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+      const targetLabel = target.textContent ?? '';
+      fireEvent.click(target);
+
+      const optionsAfter = screen.getAllByRole('option').map((option) => option.textContent ?? '');
+      expect(optionsAfter).toEqual(optionsBefore);
+      expect(optionsAfter[optionsAfter.length - 1]).toBe(targetLabel);
+    });
+
+    it('re-sorts the selection to the top the next time the list is opened', () => {
+      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+      const optionsBefore = toggleLanguageFilter();
+      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+      const targetLabel = target.textContent ?? '';
+      fireEvent.click(target);
+
+      // Close and reopen: the snapshot refreshes, so the choice is now grouped with the starred
+      // languages instead of sitting at the far end of a 130-row list.
+      fireEvent.click(languageTrigger());
+      const reopened = toggleLanguageFilter();
+
+      expect(reopened.indexOf(targetLabel)).toBeLessThan(optionsBefore.length - 1);
+    });
   });
 });
