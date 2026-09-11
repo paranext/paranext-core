@@ -3,7 +3,7 @@
 // `document` at module-eval time (it re-exports the whole component library). The default `node`
 // environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -11,6 +11,7 @@ import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-e
 import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
   createInsertContextMenuItems,
+  doesEditorContextMenuOwnEnter,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
@@ -614,5 +615,53 @@ describe('createInsertContextMenuItems', () => {
     expect(actions.insertCrossReference).toHaveBeenCalledTimes(1);
     expect(actions.insertEndnote).toHaveBeenCalledTimes(1);
     expect(actions.insertComment).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('doesEditorContextMenuOwnEnter', () => {
+  /**
+   * The markup `ContextMenuPlugin` actually portals into the document: both classes on the outer
+   * element, a second `.typeahead-popover` nested inside it, and `selected` on the highlighted
+   * item.
+   */
+  function renderContextMenu({ highlighted }: { highlighted: boolean }) {
+    const portal = document.createElement('div');
+    portal.className = 'typeahead-popover auto-embed-menu';
+    portal.innerHTML = `<div class="typeahead-popover"><ul>
+      <li class="item" role="option"><span class="text">Cut</span></li>
+      <li class="item${highlighted ? ' selected' : ''}" role="option"><span class="text">Insert end note</span></li>
+    </ul></div>`;
+    document.body.append(portal);
+    return portal;
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('is false with no context menu open', () => {
+    expect(doesEditorContextMenuOwnEnter()).toBe(false);
+  });
+
+  // The menu does not claim Enter with nothing highlighted, so the web view must keep it and open
+  // the Enter palette — standing down here would leave Lexical to plain-split the paragraph.
+  it('is false while the menu is open with nothing highlighted', () => {
+    renderContextMenu({ highlighted: false });
+    expect(doesEditorContextMenuOwnEnter()).toBe(false);
+  });
+
+  it('is true once an item is highlighted', () => {
+    renderContextMenu({ highlighted: true });
+    expect(doesEditorContextMenuOwnEnter()).toBe(true);
+  });
+
+  // Other popovers reuse `.typeahead-popover` and the same `selected` item class; only the
+  // context-menu portal (`auto-embed-menu`) claims Enter on `document`.
+  it('ignores a highlighted item in a popover that is not the context menu', () => {
+    const other = document.createElement('div');
+    other.className = 'typeahead-popover';
+    other.innerHTML = '<ul><li class="item selected"><span class="text">q1</span></li></ul>';
+    document.body.append(other);
+    expect(doesEditorContextMenuOwnEnter()).toBe(false);
   });
 });

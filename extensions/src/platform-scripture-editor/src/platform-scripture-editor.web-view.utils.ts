@@ -402,3 +402,30 @@ export function createInsertContextMenuItems(
     },
   ];
 }
+
+/**
+ * Matches the highlighted item of the editor's own right-click context menu — `ContextMenuPlugin`'s
+ * portal, which carries both classes on its outer element and marks the
+ * keyboard-or-hover-highlighted item `selected`. The same portal selector the context-menu e2e spec
+ * locates the menu by.
+ */
+const EDITOR_CONTEXT_MENU_HIGHLIGHTED_ITEM = '.typeahead-popover.auto-embed-menu li.selected';
+
+/**
+ * Whether the editor's right-click context menu — not this web view — owns the Enter about to be
+ * handled.
+ *
+ * `ContextMenuPlugin` claims Enter from a CAPTURE-phase listener on `document`; this web view
+ * claims it from one on `window`. Capture descends window → document, so this web view's claim
+ * lands FIRST however late it registered, and its `stopPropagation()` would end the press before
+ * the menu's listener ran at all — the menu would never see the Enter that is meant to invoke its
+ * highlighted item. Standing down on this hands the press back down to the menu.
+ *
+ * Keyed on a HIGHLIGHTED item rather than merely an open menu, because that is exactly the state in
+ * which the menu claims Enter. With the menu open and nothing highlighted the plugin ignores Enter,
+ * so standing down would instead let Lexical plain-split the paragraph — the unmarked-split data
+ * problem the Enter palette exists to prevent.
+ */
+export function doesEditorContextMenuOwnEnter(): boolean {
+  return !!document.querySelector(EDITOR_CONTEXT_MENU_HIGHLIGHTED_ITEM);
+}

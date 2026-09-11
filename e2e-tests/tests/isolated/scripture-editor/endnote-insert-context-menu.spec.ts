@@ -8,13 +8,18 @@
  * PAPI menu. The plugin nests a second `.typeahead-popover` inside that portal, so the outer
  * `auto-embed-menu` class is what makes the locator unambiguous.
  *
- * The menu's CONTENTS are asserted here; the insert itself is driven through the registered
- * `insertEndnoteAtSelection` command, which is the same web-view callback the menu item invokes.
- * Selecting the item by mouse is deliberately not asserted: the editor re-renders while the menu is
+ * The menu's CONTENTS are asserted here, and so is selecting an item BY KEYBOARD — arrow keys to
+ * the item, then Enter. That path needs the real app: the menu claims Enter from a capture-phase
+ * listener on the editor iframe's `document`, while this web view claims it from one on `window`,
+ * and only the real two-listener stack shows which of them the press reaches.
+ *
+ * Selecting the item by MOUSE is deliberately not asserted: the editor re-renders while the menu is
  * open, re-creating that portal, so the item detaches mid-click and any such assertion is flaky by
  * construction — a pre-existing trait of this menu that affects the shipped footnote and
- * cross-reference items identically. That the item dispatches to this callback is pinned by
- * `createInsertContextMenuItems`' unit test, and clicking it is on the hand-QA list.
+ * cross-reference items identically. The keyboard path is unaffected by that churn (the highlight
+ * is plugin state, and an auto-retrying locator re-queries the re-created item), so it is asserted
+ * here; clicking the item is on the hand-QA list. The insert is additionally driven through the
+ * registered `insertEndnoteAtSelection` command, the same web-view callback the menu item invokes.
  *
  * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
  * Run: `npm run test:e2e:isolated scripture-editor`.
@@ -82,6 +87,44 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
         'Insert end note',
         'Insert comment',
       ]);
+    });
+
+    await test.step('every item is visible at once — the menu is not clipped', async () => {
+      // Re-opened rather than reused from the step above: the plugin closes the menu on a scroll of
+      // anything but itself, and the chapter is still settling, so an already-open menu is not
+      // something a later step can rely on.
+      await openContextMenu();
+      // The popover markup is shared with the marker typeahead, whose `ul` is capped at 200px and
+      // scrolls. This menu is a short fixed list that must show all of itself: it has no filter to
+      // narrow the list with.
+      const listOverflow = await contextMenu.locator('ul').evaluate((ul) => ({
+        scrollHeight: ul.scrollHeight,
+        clientHeight: ul.clientHeight,
+      }));
+      expect(listOverflow.scrollHeight).toBeLessThanOrEqual(listOverflow.clientHeight + 1);
+    });
+
+    await test.step('arrow keys then Enter invoke the highlighted item, not the Enter palette', async () => {
+      const endNoteIndex = optionTexts.indexOf('Insert end note');
+      expect(endNoteIndex).toBeGreaterThanOrEqual(0);
+      const endnotesBefore = await endnotes.count();
+
+      // A freshly opened menu has nothing highlighted, so the first ArrowDown highlights option 0
+      // and reaching option N takes N + 1 presses.
+      await openContextMenu();
+      for (let i = 0; i <= endNoteIndex; i += 1) {
+        await mainPage.keyboard.press('ArrowDown');
+      }
+      await expect(contextMenu.locator('li.selected')).toHaveText('Insert end note');
+
+      await mainPage.keyboard.press('Enter');
+
+      await expect(endnotes).toHaveCount(endnotesBefore + 1, { timeout: 15_000 });
+      // The Enter-triggered paragraph marker palette must NOT have opened: while the menu holds a
+      // highlighted item, the web view stands down and the menu owns Enter.
+      await expect(mainPage.locator('[data-overlay-command-palette]')).toHaveCount(0);
+      // The footnote editor auto-opens for a newly inserted note; close it.
+      await mainPage.keyboard.press('Escape');
     });
 
     await test.step('inserting an end note creates a \\fe note with the + caller', async () => {
