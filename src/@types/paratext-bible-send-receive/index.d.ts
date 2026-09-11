@@ -538,8 +538,7 @@ declare module 'papi-shared-types' {
      * Syncs projects: sends/receives each project, then reads connected resources and projects (one
      * level deep — connections of connections are not included) for the project(s) this call
      * settles on, and sends/receives connected translation projects or DBL-updates connected
-     * resources for those as needed. Unknown project IDs are skipped. Deduplication is handled
-     * internally.
+     * resources for those as needed. Unknown project IDs are skipped.
      *
      * This signature matches this repository's C# stub (`String[]? projectIds`, no return value),
      * which core itself calls with `undefined` — see the cases below for what that actually syncs.
