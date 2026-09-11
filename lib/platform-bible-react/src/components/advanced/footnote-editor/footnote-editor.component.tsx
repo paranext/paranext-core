@@ -338,6 +338,13 @@ export default function FootnoteEditor({
   const hasInitializedEditor = useRef(false);
   const initialNoteOpsJson = useRef('');
 
+  /**
+   * What the parent editor is known to hold for this note: the ops it was loaded with, then
+   * whatever each inline apply wrote. Compared against before applying so an unchanged note is
+   * never written back (see {@link saveCurrentNoteOp}).
+   */
+  const lastAppliedNoteOpJsonRef = useRef('');
+
   // These control the placement of the inline markers menu by setting the location of the anchor
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
   const [markersMenuAnchorX, setMarkersMenuAnchorX] = useState<number>();
@@ -463,11 +470,20 @@ export default function FootnoteEditor({
       if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
         onChange?.([currentNoteOp]);
         if (applyToParent && parentEditorRef && noteKeyRef.current) {
+          const currentNoteOpJson = JSON.stringify(currentNoteOp);
+          // `replaceEmbedUpdate` always swaps the note node, which re-mints its key, but the
+          // parent only announces the swap (and the new key) when the document actually changed.
+          // In inline mode the host holds that key for every later apply, so re-keying the note
+          // behind its back with content it already has would silently strand the session. The
+          // popover deliberately keeps applying unconditionally: its Save is also what confirms a
+          // newly inserted note, which would otherwise be discarded as abandoned on close.
+          if (inline && currentNoteOpJson === lastAppliedNoteOpJsonRef.current) return;
+          lastAppliedNoteOpJsonRef.current = currentNoteOpJson;
           parentEditorRef.current?.replaceEmbedUpdate(noteKeyRef.current, [currentNoteOp]);
         }
       }
     },
-    [onChange, onNoteEdit, parentEditorRef],
+    [inline, onChange, onNoteEdit, parentEditorRef],
   );
 
   /**
@@ -546,6 +562,8 @@ export default function FootnoteEditor({
     lastFocusOutSelectionRef.current = undefined;
     setIsAtInitialState(true);
     const noteOp = noteOps?.at(0);
+    // The note about to be loaded is, by definition, what the parent already holds.
+    lastAppliedNoteOpJsonRef.current = noteOp ? JSON.stringify(noteOp) : '';
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       const rawCaller = noteOp.insert.note?.caller;
       // Parses the current caller
@@ -567,7 +585,15 @@ export default function FootnoteEditor({
         // paragraph renders NO marker prefix in any marker mode (`showParaMarkerPrefixes: false`
         // in the options above), so there are no prefix bytes to retain past — index 0 IS the
         // start of the paragraph's content.
-        editorRef.current?.applyUpdate([noteOp]);
+        //
+        // A load must leave exactly ONE note in this document. On a fresh mount the wrapper
+        // paragraph is empty, but an inline editor can be handed new `noteOps` while it is still
+        // mounted (the consumer re-opens the same row, or the note's content changed under it),
+        // and a bare insert would then stack the incoming note on top of the one already loaded.
+        // Deleting the unit the insert displaces is the same insert-then-delete replacement
+        // `applyCallerToEditor` performs.
+        const loadedNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
+        editorRef.current?.applyUpdate(loadedNoteOp ? [noteOp, { delete: 1 }] : [noteOp]);
         // Land the caret at the end of the last footnote-text char span (`\ft`/`\xt`) to match
         // PT9 behavior of being ready to type immediately. `0` is this popover's own note index —
         // it always holds exactly one note (see the other `getNoteOps(0)` call sites below).
@@ -660,9 +686,6 @@ export default function FootnoteEditor({
   }, [flushPendingApply]);
 
   const closeAndSave = useCallback(() => {
-    // Cancel (not flush) a pending debounced apply: it would otherwise fire moments later,
-    // redundant with the immediate apply below.
-    cancelPendingApply();
     // Abandonment window: settle pending mid-edit marker text before the final read
     // of the note ops, so a marker rename walked away from mid-edit saves as what's on screen
     // rather than the stale pre-rename marker. Clicking Save blurs this popover's editor, so
@@ -671,9 +694,21 @@ export default function FootnoteEditor({
     // NOT in saveCurrentNoteOp: the auto-save path runs inside a Lexical update listener,
     // where dispatching another (discrete) update mid-commit is unsafe.
     if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
-    saveCurrentNoteOp(true);
+    if (inline) {
+      // The inline surface has no Save: every edit has already been applied to the parent as it
+      // was made, so ending the session only has to land whatever is still inside the debounce
+      // window. Applying unconditionally here would write the note back on every session end,
+      // including ends that touched nothing — and this path runs from a layout effect, where a
+      // parent-editor update forces React to flush a decorator render mid-commit.
+      flushPendingApply();
+    } else {
+      // Cancel (not flush) a pending debounced apply: it would otherwise fire moments later,
+      // redundant with the immediate apply below.
+      cancelPendingApply();
+      saveCurrentNoteOp(true);
+    }
     onClose();
-  }, [cancelPendingApply, onClose, saveCurrentNoteOp]);
+  }, [cancelPendingApply, flushPendingApply, inline, onClose, saveCurrentNoteOp]);
 
   // Keep a stable ref to closeAndSave so the chapter-change effect below only needs to depend on
   // scrRef.book and scrRef.chapterNum (not on caller state that changes during editing).

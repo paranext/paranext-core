@@ -151,6 +151,26 @@ describe('FootnoteEditor note loading', () => {
     await vi.runAllTimersAsync();
     expect(editorRefMock.applyUpdate).toHaveBeenCalledTimes(1);
   });
+
+  // A reload happens on a MOUNTED editor (the consumer re-opens the same row, or hands over the
+  // note's current content), where the document already holds the note the last load put there.
+  // A bare insert would stack the incoming copy on top of it and show the note twice.
+  it('replaces the loaded note instead of stacking a second copy on an in-place reload', async () => {
+    vi.useFakeTimers();
+    const { rerender, props } = renderEditor();
+    await vi.runAllTimersAsync();
+    expect(editorRefMock.applyUpdate).toHaveBeenCalledWith([props.noteOps[0]]);
+    editorRefMock.applyUpdate.mockClear();
+    // The first load left its note in the editor's document.
+    editorRefMock.getNoteOps.mockReturnValue(makeNoteOps('first'));
+
+    const reloaded = makeNoteOps('first');
+    rerender(<FootnoteEditor {...props} noteOps={reloaded} />);
+    await vi.runAllTimersAsync();
+
+    expect(editorRefMock.applyUpdate).toHaveBeenCalledTimes(1);
+    expect(editorRefMock.applyUpdate).toHaveBeenCalledWith([reloaded[0], { delete: 1 }]);
+  });
 });
 
 describe('FootnoteEditor inline mode', () => {
@@ -432,6 +452,83 @@ describe('FootnoteEditor inline live-apply', () => {
 
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
     expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-race', 'latest edit');
+  });
+
+  // `replaceEmbedUpdate` always swaps the note node (re-minting its key), but the parent only
+  // announces the swap when the document actually changed. An apply that writes back content the
+  // parent already holds would therefore re-key the note silently and strand the host's session
+  // on the dead key, dropping every later apply.
+  it('does not apply back a note the parent already holds', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    renderEditor({
+      inline: true,
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+      noteKey: 'key-unchanged',
+      noteOps: makeNoteOps('unchanged'),
+    });
+    await vi.runOnlyPendingTimersAsync(); // initial load
+
+    // Two change notifications carrying exactly the loaded content: the first is the load
+    // snapshot, the second schedules an apply that has nothing new to say.
+    primeCurrentOps('unchanged');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    primeCurrentOps('unchanged');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
+  });
+
+  // The other half of the guard: a real edit still applies, and applies once.
+  it('applies a changed note once, then stops repeating it', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    renderEditor({
+      inline: true,
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+      noteKey: 'key-changed',
+      noteOps: makeNoteOps('before'),
+    });
+    await vi.runOnlyPendingTimersAsync(); // initial load
+
+    primeCurrentOps('before');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    primeCurrentOps('after');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+    expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-changed', 'after');
+
+    // A further change notification carrying the content just applied adds nothing.
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
   });
 
   // The load effect's cleanup (which fires when a consumer swaps in a different
