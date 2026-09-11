@@ -911,6 +911,10 @@ step, no automation. Just a record.
   pre-slot-era `${windowId}_dock-saved-layout` reader, its lowest-id heuristic, and the
   `^\d+_web-view-state$` obsolete-key sweep are all untouched: they read numeric-era data no future
   build can add to, and durability changes nothing about them.
+- **Amended 2026-09-09 (`adr-web-view-ids-are-unique-from-birth`):** `window-scoped-web-view-ids.util.ts`
+  and its `WINDOW_SUFFIX_PATTERN` matcher, cited above, are deleted outright — a web view id is no
+  longer derived from a window-scoped suffix at all. See `adr-web-view-ids-are-unique-from-birth` for
+  the id scheme that replaced it.
 - **Source:** PT-4464.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
@@ -1510,8 +1514,15 @@ step, no automation. Just a record.
 
 ## adr-layout-persistence-guard-retirement: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
 
-- **Date:** 2026-08-20
-- **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
+- **Date:** 2026-08-20 (content-based guard retired 2026-09-03, PR #2758)
+- **Status:** Retirement completed. `saveLayout` (now in `web-view.service-shard.ts`, the renamed
+  and relocated `web-view.service-host.ts`) carries only the structural guard
+  (`layoutLoadGenerationInDock !== layoutLoadGeneration`) plus the simple-mode skip; the
+  content-based `SIMPLE_LAYOUT_TAB_IDS`-keyed early return this entry's "Consequences" marked for
+  deletion is gone from `saveLayout`, per the deliberate follow-up this entry called for rather than
+  a silent drop. `collectWebViewIdsFromLayoutInfo` itself outlived the guard it was written for — it
+  now backs `emitCloseEventsForWebViewsRemovedByLayoutLoad` instead, an unrelated use of the same
+  "which web view ids does this layout info contain" primitive.
 - **Context:** Two PRs independently added a guard to `saveLayout` in
   `src/renderer/services/web-view.service-host.ts` to stop a stale/wrong layout from being persisted
   during a Power↔Simple interface-mode switch. PR #2425 ("Improve performance when switching to
@@ -1733,6 +1744,56 @@ step, no automation. Just a record.
 - **Source:** manage-books port (menu-availability deferred); keyboard-switching port (OS-keyboard
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
+
+## adr-move-destination-lifetime: `WebViewMoveInFlight.destinationWindowId` is scoped to the readopt actually running, not to a recovery rung
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** `destinationWindowId` tells a closing window's own enumeration
+  (`getOpenWebViewDefinitionsForWindow` in `web-view.service-router.ts`) whether an in-flight move
+  belongs to it, which feeds the close-time Send/Receive writable-project selection in
+  `shutdown-tasks.ts`. Three successive attempts tried to keep it correct by patching where it is
+  *set*: once at record creation and never updated (so recovery into a different window was
+  invisible); then at each recovery rung (still stale during the focused-window resolution when the
+  source rung was skipped); then cleared at `recoverAfterFailedMove`'s entry (still stale in a third
+  gap — when the source rung runs and its readopt genuinely fails, the field kept naming the source
+  window all through the following `await getTargetWebViewWindowShard()`). Each attempt closed the
+  gap that had just been found and opened the next one, because each treated the field as "the
+  window this rung is assigned to," updated wherever the rung's own bookkeeping happened to touch
+  it, rather than as a value with its own lifetime.
+- **Decision:** Give the field an invariant instead of a set of assignment sites: it names a window
+  if and only if a readopt into that window is genuinely in flight right now. Every recovery readopt
+  runs through `readoptWithDestination` (`web-view-move.util.ts`), a `try`/`finally` wrapper that
+  sets the field immediately before the readopt starts and clears it to `undefined` immediately
+  after the readopt settles — success, a handled failure, or a throw — so a rung added later cannot
+  omit the clear; there is no path through the wrapper that skips it. The primary adopt in
+  `moveCapturedWebView` does not use the same wrapper: its destination is baked into the record at
+  construction, the record is not added to the in-flight register until it already carries that
+  value, and nothing but a synchronous `isWindowClosing` check separates registration from the adopt
+  starting, so the record is never visible with a destination whose adopt is not about to run or
+  already running. Every path that gives up on the primary destination hands off to
+  `recoverAfterFailedMove` synchronously too, which clears the field as its own first statement
+  before its own first `await`.
+- **Alternatives:**
+  - *Keep patching the gap the next review finds.* Rejected: this was already the third iteration of
+    exactly that, and a fourth patch would only relocate the same bug rather than remove its cause.
+  - *Clear the field at the top of every function that might change it, as the third attempt did.*
+    Rejected: correct only for the gap between two known call sites; the same shape of bug reappears
+    the moment a rung sets the field and then awaits something else — resolving where to try next —
+    before its own readopt starts or after it ends.
+  - *Wrap the whole recovery ladder in one outer `try`/`finally` that clears once at the end.*
+    Rejected: it would leave the field naming the wrong rung for the whole stretch between when one
+    rung's readopt ends and the next one's begins, which is the exact gap this decision closes.
+- **Consequences:** Adding a future recovery rung is safe by construction as long as it goes through
+  `readoptWithDestination` — a reviewer no longer has to re-derive where every assignment must go,
+  and the field's TSDoc on `WebViewMoveInFlight.destinationWindowId` states the invariant directly
+  rather than listing assignment sites, so a new rung's correct behavior can be derived from the doc
+  alone.
+- **Source:** PR #2758 (PT-4463). The field and the per-window fold-in that reads it exist because
+  the per-commit review gate found a silently skipped close-time Send/Receive sync on the
+  destination-close change (`adr-web-view-ids-are-unique-from-birth`'s PR), which Rolf ruled to fix
+  in that PR rather than defer; the lifetime this entry settles came out of the successive review
+  rounds on that fix.
 
 ## adr-narrow-toolbar-yields-padding-then-decoration: A toolbar out of room gives up its own padding, then a control's decoration — never a code
 
@@ -4462,6 +4523,93 @@ step, no automation. Just a record.
   chain so the change is caught at upgrade time.
 - **Source:** PT-4422 (NN1b), Sprint 89 Simple Quality. Mount-point placement proposed in the PT-4421
   investigation; the Lexical re-throw chain verified by running it, not by reading it.
+
+## adr-web-view-id-is-not-an-identity-across-a-move: RETIRED — see adr-web-view-ids-are-unique-from-birth
+
+- **Date:** 2026-09-02 (retired 2026-09-03)
+- **Status:** Superseded by `adr-web-view-ids-are-unique-from-birth`.
+- **Note:** This slug named a "tolerate duplicate reads, never deduplicate" design built around a
+  captured id that changed spelling across a move. That design is gone, not merely amended — a web
+  view now keeps one globally-unique id, minted once, for its whole life across any number of moves
+  — so the entry is deleted outright rather than kept as a superseded record: its "deduplicating by
+  id is unsound" reasoning and its "mint an identity at the adopt" deferred alternative would read as
+  live prior art for the design that replaced it. See `adr-web-view-ids-are-unique-from-birth` for
+  the current decision, whose Context restates what the retired design was and why it went. Slug
+  retired, not reused. The verbatim original text is not recoverable from `main`'s history: the
+  entry was added and retired within one squash-merged change, so `main` never carried it — the
+  usual carve-out wording assumes a retirement one release after the entry landed.
+
+## adr-web-view-ids-are-unique-from-birth: A web view id is minted once, globally unique, and never rewritten again
+
+- **Date:** 2026-09-03
+- **Status:** Accepted.
+- **Context:** `adr-web-view-id-is-not-an-identity-across-a-move` (retired above) accepted that a
+  captured id changed spelling twice across a move — stripped on capture, re-scoped on the next
+  layout load — and built a "tolerate duplicate reads" contract around that instability rather than
+  fix it, deferring "mint an identity at the adopt" as the real fix. That instability traced back one
+  step further than the move path itself: a window-scoped id (`<constant-id>-w<windowId>`) was never
+  minted once and kept; it was *derived* from a baked layout constant's id every time that constant
+  was materialized into a window (`simple-layout.data.ts`, the test layout, the default-layout
+  supplement), so the same constant produced a different id per window, and a move (which relocates a
+  view without knowing which window it started in) had no scope left to preserve and stripped it
+  instead. Runtime `openWebView` never had this problem — it already minted a fresh id per call — so
+  the defect was specifically in how a **baked** constant became a **live** tab's id.
+- **Decision:** Mint a fresh, globally-unique id (`newGuid()`) exactly once, at the moment a baked
+  layout constant is materialized into an actual window's layout — the constant itself keeps its own
+  id in the data file, unchanged, as the slot's identity, not the runtime tab's. `openWebView` is
+  unaffected; it already did this. `mint-web-view-ids.util.ts` (replacing
+  `window-scoped-web-view-ids.util.ts`) does the minting for the renderer's three materialization
+  sites: `simple-layout.builder.ts` building a Simple-mode layout, the default-layout supplement's
+  merge (re-keyed by `webViewType`, since a minted id cannot serve as "is this entry already
+  present"), and the baked test
+  layout's own materialization in `web-view.service-shard.ts`. A **persisted** id — anything loaded from a saved layout — is left exactly as saved, and there
+  is no migration. What that costs is worth stating plainly rather than waving away: a layout
+  written by a build between #2730 (2026-09-04) and this change, **in Power mode only** (`saveLayout`
+  returns early in Simple), carries `<id>-w<N>` window-scoped ids. Nothing rewrites them, so the
+  per-web-view state stored under the unscoped spelling is not found and `cleanupOldWebViewState`
+  sweeps it at the next launch. Tabs, panels and window bounds all survive — ids are preserved
+  verbatim — so what is lost is per-web-view UI state for those profiles. The affected set is small
+  because the last GA release predates the scoping scheme entirely, and a pre-multi-window legacy
+  layout is unaffected (its ids were never scoped). A migration was judged not worth writing for a
+  pre-release window of a few days; the outcome is accepted, not overlooked. Once minted, a view's id is never
+  rewritten again for any reason, including a move: capture returns the id it already had, and adopt
+  answers with the same id it was handed. The main-process move/fold-in logic
+  (`web-view-ownership.util.ts`, `web-view-move.util.ts`, `web-view.service-router.ts`) is simplified
+  to match — `WebViewMoveInFlight` drops the caller's-spelling and recovery-flag fields it needed only
+  to compensate for id instability, and the fold-in's "already reporting it?" check becomes an exact
+  id match.
+- **Alternatives:**
+  - *Keep window-scoped ids, and fix the fold-in/move-identity problem entirely on the read side*
+    (the retired ADR's approach). Rejected: it treated the read as the site of the defect, when the
+    defect was upstream, in how baked constants got their ids in the first place; every read-side fix
+    inherited an id that could not tell two views apart.
+  - *Re-scope a moved view's id to its new window after the move, instead of stripping.* Rejected: it
+    keeps ids window-derived, so a persisted layout captured mid-move, or a search racing a move,
+    still has to reason about which of several spellings names the same view.
+  - *Migrate pre-release persisted layouts to some canonical id shape.* Rejected as unnecessary and
+    out of scope: no released version of the app has shipped a persisted layout yet, and a persisted
+    id was never scoped under the old scheme either — it is already an ordinary string with nothing to
+    migrate. Loading an old saved layout does not crash under the new scheme; it just works, because
+    the mint step only ever touches tabs seeded from a baked constant, never one carrying a saved id.
+- **Consequences:** A web view has a real identity for its whole life, so the "tolerate duplicate
+  reads" contract on `getAllOpenWebViewDefinitions` is gone: a caller may deduplicate by id, or trust
+  that the same id read twice really is the same view. `getAllOpenWebViewDefinitions` is still not
+  deduplicated by `webViewType` plus `projectId` — two open web views can genuinely share both — but
+  that was never an id-instability problem to begin with. Two purely timing-based races in the move
+  path — a move record added after the view leaves the dock, and a target's adopt landing before the
+  move's reply reaches main — are unaffected by this change and remain open (ledgered as A17
+  mechanisms 3 and 4 in the multi-window small-items ledger, item below); they are about *when*
+  state updates land, not about what a view's id is. `web-view-state.service.ts`'s per-webview
+  state store, keyed on the same ids, drops its former window-scope-stripping lookup for the same
+  reason and with the same no-migration consequence: state saved under an older build's
+  window-scoped id spelling is not carried forward to the new unscoped one.
+- **Source:** PR #2758 (PT-4463), TJ's review direction on #2758 (comment 5516318337) accepted by
+  Rolf. The retired ADR and the move-lifecycle cases sharing this root cause are ledgered as A16 and
+  A17 in the multi-window small-items ledger — a dated tracking document maintained outside this
+  repo (per the project's convention for items too transient for a Jira ticket, promoted to one only
+  once concrete), at `PRDs/donna-multi-monitor/2026-08-07-small-items-ledger.md` under the shared
+  PRD folder. Not a repo path; named here so a later reader knows the entry is real and where to
+  ask for it, not so they can open it from a clone.
 
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 

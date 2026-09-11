@@ -262,9 +262,9 @@ Two **experimental** commands expose moving a WebView between windows:
 `platform.moveWebViewToWindow(webViewId, targetWindowId)`. A move closes the WebView in its
 current window and reopens it — same `useWebViewState` state — in the target, so consumers see a
 close event then an open event, and a WebView controller reference held across a move must be
-re-acquired. The commands return the WebView's authoritative post-move id, which can differ from
-the id passed in: a WebView restored from a persisted layout carries a window-scoped id that a
-move does not keep, so use the returned id for anything after the move.
+re-acquired. The commands return the WebView's authoritative post-move id, which is always the
+same id that was passed in: a WebView keeps the id it was minted with for its whole life, across
+any number of moves.
 
 `existingId: '?'` reuse is **cross-window** (experimental): the search covers every window,
 prefers the window the user is working in when more than one matches, and raises the window

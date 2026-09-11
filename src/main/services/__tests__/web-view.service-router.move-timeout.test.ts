@@ -57,13 +57,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-/**
- * Wire windows whose WebView service shards are the given objects, telling each stand-in which
- * window serves it — the ids a shard answers with are scoped to its own window (see
- * {@link windowShard}), so a shard that does not know which window it is cannot answer as one.
- */
+/** Wire windows whose WebView service shards are the given objects. */
 function withWindows(shardsByWindowId: Record<string, WindowShard>) {
-  Object.entries(shardsByWindowId).forEach(([windowId, shard]) => shard.setWindowId(windowId));
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId);
 }
 
@@ -103,16 +98,12 @@ const { moveWebView } = testingWebViewServiceRouter;
 
 /**
  * A per-window WebView service shard whose web views are the given ids, extended with the move
- * primitives `moveWebView` drives — same stand-in shape as the pre-existing
- * `web-view.service-router.move.test.ts`.
+ * primitives `moveWebView` drives. `adoptWebView` accepts every move and answers with the same id
+ * it was handed — a web view keeps the id it was minted with for its whole life, across any number
+ * of moves — same stand-in shape as the pre-existing `web-view.service-router.move.test.ts`.
  */
 function windowShard(openWebViewIds: string[]) {
-  /** Set by `withWindows` from the id the shard is wired under */
-  let windowId = '';
   return {
-    setWindowId: (id: string) => {
-      windowId = id;
-    },
     getOpenWebViewDefinition: vi.fn(async (id: string) =>
       openWebViewIds.includes(id) ? { id } : undefined,
     ),
@@ -123,12 +114,9 @@ function windowShard(openWebViewIds: string[]) {
     captureAndCloseWebView: vi.fn<
       (webViewId: WebViewId) => Promise<SavedWebViewDefinition | undefined>
     >(async (id) => (openWebViewIds.includes(id) ? { id, webViewType: 'test.type' } : undefined)),
-    // A window holds a web view under its own scoping of the id, so the answer to an adopt is not
-    // the id it was handed — echoing it back would make a move's answer indistinguishable from its
-    // caller's own id, and every assertion about which one the move reports unfalsifiable
     adoptWebView: vi.fn<
       (savedWebViewDefinition: SavedWebViewDefinition) => Promise<WebViewId | undefined>
-    >(async (savedWebViewDefinition) => `${savedWebViewDefinition.id}-window-${windowId}`),
+    >(async (savedWebViewDefinition) => savedWebViewDefinition.id),
     // A window with nothing docked in it since its last emptiness report, which is what a window
     // created to receive a moved web view is until the adopt lands
     hasContentArrivedSinceEmptyReport: vi.fn(async () => false),
@@ -163,17 +151,17 @@ describe('moveWebView when the target adopt does not come back a success', () =>
     const target = windowShard([]);
     target.adoptWebView.mockRejectedValue(requestTimedOutError());
     // First asked during the ownership search (target does not hold it yet); asked again by the
-    // probe after the timed-out adopt, by which time the adopt has landed in the target — under the
-    // target's own scoping of the id, which is what the probe finds it as
+    // probe after the timed-out adopt, by which time the adopt has landed in the target — under
+    // the same id the whole move started with, which is what the probe finds it as
     target.getOpenWebViewDefinition.mockResolvedValueOnce(undefined);
-    target.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1-window-3' });
+    target.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1' });
     withWindows({ 2: owner, 3: target });
 
     const movedId = await moveWebView('view-1', { kind: 'window', windowId: '3' });
 
-    // What the target says it holds the view under, not the id the move was given: a late-landed
-    // adopt is still an adopt, and the caller has to use the target's id for anything after it
-    expect(movedId).toBe('view-1-window-3');
+    // What the probe found the target holding it as: a late-landed adopt is still an adopt, and
+    // the caller has to use what the probe confirmed for anything after it
+    expect(movedId).toBe('view-1');
     // The move succeeded late, so nothing may reopen the captured definition anywhere — that
     // would put the same web view id live in two windows
     expect(owner.adoptWebView).not.toHaveBeenCalled();
@@ -275,17 +263,18 @@ describe('moveWebView when the target adopt does not come back a success', () =>
       // like from outside — so the window created for the move keeps standing
       created.hasContentArrivedSinceEmptyReport.mockResolvedValue(true);
       // Asked during the ownership search, before the window was created for this move; asked
-      // again by the probe, by which time the adopt has landed under the window's own scoping
+      // again by the probe, by which time the adopt has landed under the same id the move started
+      // with
       created.getOpenWebViewDefinition.mockResolvedValueOnce(undefined);
-      created.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1-window-7' });
+      created.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1' });
       withWindows({ 2: owner, 7: created });
       const creator = withWindowCreator();
 
       const movedId = await moveWebView('view-1', { kind: 'new' });
 
-      // What the created window says it holds the view under, exactly as a move into an existing
-      // window answers with the target's id
-      expect(movedId).toBe('view-1-window-7');
+      // What the probe found the created window holding it as, exactly as a move into an existing
+      // window answers with what its own probe confirmed
+      expect(movedId).toBe('view-1');
       // The move succeeded late, so nothing may reopen the captured definition anywhere — that
       // would put the same web view id live in two windows
       expect(owner.adoptWebView).not.toHaveBeenCalled();
@@ -322,9 +311,10 @@ describe('moveWebView when the target adopt does not come back a success', () =>
         expect(focused.adoptWebView).not.toHaveBeenCalled();
         // The window holds content the user can see, whoever put it there
         expect(creator.closeWindow).not.toHaveBeenCalled();
-        // The caller has to be able to tell the user their tab could not be reopened, without
-        // reading a sentence written for the log
-        expect(getWebViewMoveFailureDisposition(failure)).toBe('not-reopened');
+        // The window is holding the tab, so the caller must not be handed a disposition that says it
+        // is closed — the user is most likely looking at it. What is unknown is whether the move
+        // finished, not where the web view went
+        expect(getWebViewMoveFailureDisposition(failure)).toBe('reached-new-window-unconfirmed');
       } finally {
         vi.useRealTimers();
       }
@@ -354,7 +344,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
       expect(focused.adoptWebView).not.toHaveBeenCalled();
       // The window holds content the user can see, whoever put it there
       expect(creator.closeWindow).not.toHaveBeenCalled();
-      expect(getWebViewMoveFailureDisposition(failure)).toBe('not-reopened');
+      expect(getWebViewMoveFailureDisposition(failure)).toBe('reached-new-window-unconfirmed');
       // Only the ownership search asked: an adopt that came back an answer of its own is not one
       // that could still be running, so no probe may delay the recovery the user is waiting on
       expect(created.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
