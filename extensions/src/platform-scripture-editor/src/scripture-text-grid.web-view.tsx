@@ -54,6 +54,7 @@ import { usePublishNavigableProjectIds } from './use-publish-navigable-project-i
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  isResourceCollectionViewMode,
   type ResourceCollectionViewMode,
 } from './resource-collection-options/resource-collection-options.component';
 import {
@@ -185,9 +186,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
 
-  // View Options `viewMode` toggle; drives the grid body's verse/chapter layout. Persisted per web
-  // view via useWebViewState so the choice survives an app restart (mirrors resource-text-panel).
-  const [viewMode, setViewMode] = useWebViewState<ResourceCollectionViewMode>('viewMode', 'verse');
+  // View Options `viewMode` toggle; drives the grid body's layout. Persisted per web view via
+  // useWebViewState so the choice survives an app restart (mirrors resource-text-panel). A saved
+  // layout outlives the build that wrote it, so a mode this build cannot render — written by a
+  // newer one, or since renamed — falls back to the default rather than reaching the grid.
+  const [persistedViewMode, setViewMode] = useWebViewState<ResourceCollectionViewMode>(
+    'viewMode',
+    'verse',
+  );
+  const viewMode = isResourceCollectionViewMode(persistedViewMode) ? persistedViewMode : 'verse';
   // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
   // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
   const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
@@ -198,8 +205,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
-  // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
-  // returns to verse mode.
+  // a view-mode switch: the other views ignore it, and keeping it restores the open split when the
+  // user returns to verse mode. The Escape handler below is gated on the verse view for that reason
+  // — it is a capture-phase listener, so leaving it live would swallow Escape in the other views for
+  // a split the reader cannot see.
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
@@ -221,14 +230,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || chapterContext === undefined) return;
+      if (event.key !== 'Escape' || chapterContext === undefined || viewMode !== 'verse') return;
       event.preventDefault();
       event.stopPropagation();
       handleCloseChapterContext();
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [chapterContext, handleCloseChapterContext]);
+  }, [chapterContext, handleCloseChapterContext, viewMode]);
 
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup. It

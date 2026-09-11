@@ -1,4 +1,10 @@
-import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
+import {
+  BLOCK_VERSE_VIEW_MODE,
+  Editorial,
+  EditorOptions,
+  EditorRef,
+  getViewOptions,
+} from '@eten-tech-foundation/platform-editor';
 import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
@@ -8,14 +14,23 @@ import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
 import {
+  CHAPTER_EMPTY_KEY,
+  EMPTY_KEY,
+  NO_VERSES_TO_SHOW_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
-import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
+import {
+  hasAlignableVerse,
+  hasAnyRenderableText,
+  resolveDisplayVerseNum,
+  sliceUsjToVerse,
+} from './verse-display.utils';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
+import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
@@ -32,7 +47,13 @@ type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
-  viewMode?: 'chapter' | 'verse';
+  /**
+   * `'chapter'` and `'aligned'` both feed the editor the whole chapter; `'verse'` feeds only the
+   * reference's verse. `'aligned'` additionally asks the editor for its block-verse layout, which
+   * wraps each verse in a positionable element so the grid can put verse N of every resource on one
+   * row, and hands scrolling to the grid root.
+   */
+  viewMode?: ResourceCollectionViewMode;
   /** Per-resource zoom controller; when omitted the cell renders without zoom surfaces. */
   zoom?: ResourceZoomController;
   /** Localized zoom menu copy, passed straight to the view. */
@@ -48,6 +69,8 @@ type ResourceCellProps = {
   reorderHint?: string;
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
+  /** Makes the cell's header band the drag source for a reorder; passed straight to the view. */
+  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
 };
 
 /**
@@ -68,6 +91,7 @@ export function ResourceCell({
   reorderHandleLabel,
   reorderHint,
   onReorderKeyDown,
+  headerDrag,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -165,14 +189,22 @@ export function ResourceCell({
       );
   }, [usjPossiblyError, resourceRef.resourceId]);
   const extraValidMarkers = useExtraValidMarkers(usj);
+  // The block-verse layout is read-only by construction, which costs this grid nothing: every cell
+  // is already read-only and none of them export USJ or address selection by USJ location.
+  // `getViewOptions` returns undefined for an unknown mode, leaving the editor on its default
+  // inline layout. In the grid that column then renders empty rather than aligned — the stylesheet
+  // shows only the verse blocks it can place, and an inline layout produces none. That is a
+  // misconfigured editor, not a supported fallback; `upstream-editor-contract.test.ts` fails by
+  // name when the installed editor lacks the mode.
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      ...(viewMode === 'aligned' ? { view: getViewOptions(BLOCK_VERSE_VIEW_MODE) } : {}),
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, extraValidMarkers],
+    [textDirection, viewMode, extraValidMarkers],
   );
   // Only the USJ fed to the editor is resolved — `scrRef` passes through untouched. Keying the memo
   // on the resolved verse (not scrRef.verseNum) also keeps 1:0 -> 1:1 from re-feeding identical
@@ -227,7 +259,23 @@ export function ResourceCell({
   }, [state, usjPossiblyError, viewMode, verseSlice]);
   // #endregion
 
-  const isVerseEmpty = viewMode === 'verse' && state === 'ready' && (verseSlice?.isEmpty ?? false);
+  // What to show when the resource is fine but this view has nothing to draw from it. The aligned
+  // grid hides everything between verse blocks, so a chapter with no verses would otherwise render
+  // as a blank column with no explanation.
+  let emptyMessage: string | undefined;
+  if (state === 'ready') {
+    // Falling back to the key keeps "should this be empty?" from riding on "did the string
+    // resolve?" — an unresolved key renders as itself, which is visible, rather than as the editor.
+    if (viewMode === 'verse' && (verseSlice?.isEmpty ?? false))
+      emptyMessage = localizedStrings[EMPTY_KEY] ?? EMPTY_KEY;
+    else if (viewMode === 'aligned' && usj && !hasAlignableVerse(usj)) {
+      // Pointing the reader at Verse or Chapter view is only useful advice when there is something
+      // there to read. A book created before any text is entered arrives as a successful, empty
+      // chapter, and the other views have nothing to show for it either.
+      const key = hasAnyRenderableText(usj) ? NO_VERSES_TO_SHOW_KEY : CHAPTER_EMPTY_KEY;
+      emptyMessage = localizedStrings[key] ?? key;
+    }
+  }
 
   return (
     <ResourceCellView
@@ -235,9 +283,14 @@ export function ResourceCell({
       label={resourceRef.label}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
-      isVerseEmpty={isVerseEmpty}
+      emptyMessage={emptyMessage}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
+      // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.
+      contentOverflow={viewMode === 'aligned' ? 'visible' : 'auto'}
       zoomFactor={zoomFactor}
+      // The aligned grid's content wrapper is a subgrid box, so scaling it would scale the shared
+      // row tracks along with the text; the factor rides down to the verse blocks instead.
+      zoomTarget={viewMode === 'aligned' ? 'blocks' : 'box'}
       canZoomIn={canZoomIn}
       canZoomOut={canZoomOut}
       canReset={canReset}
@@ -250,6 +303,7 @@ export function ResourceCell({
       reorderHandleLabel={reorderHandleLabel}
       reorderHint={reorderHint}
       onReorderKeyDown={onReorderKeyDown}
+      headerDrag={headerDrag}
       editor={
         <Editorial
           ref={editorRef}

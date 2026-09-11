@@ -160,3 +160,23 @@ export const RowWithZoomEnabled: Story = {
     </GridBox>
   ),
 };
+
+/**
+ * The verse-aligned Grid view. Storybook's cells run against inert PAPI stubs, so they render their
+ * "Downloading…" state rather than scripture — what this documents is the grid chrome: one column
+ * per resource, a sticky resource-name header on each, and no interior grid lines. `AlignedGrid`'s
+ * own stories show the row alignment with stand-in verse blocks.
+ */
+export const AlignedGridView: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={noop}
+        viewMode="aligned"
+        ariaLabel="Text Collection"
+      />
+    </GridBox>
+  ),
+};

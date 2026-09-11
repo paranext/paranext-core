@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
+
+/** Verse blocks the mocked cell renders in aligned mode; `top` is the stubbed geometry. */
+let alignedVerseBlocks: { start: number; end: number; top: number }[] = [];
 
 const mockResourceCell = vi.fn(
   ({
@@ -16,6 +19,7 @@ const mockResourceCell = vi.fn(
     showDragHandle,
     reorderHandleLabel,
     onReorderKeyDown,
+    headerDrag,
   }: {
     resourceRef: { label: string; projectId: string; resourceId: string };
     scrRef: { verseNum: number };
@@ -24,11 +28,44 @@ const mockResourceCell = vi.fn(
     showDragHandle?: boolean;
     reorderHandleLabel?: string;
     onReorderKeyDown?: (event: React.KeyboardEvent) => void;
+    headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
   }) => (
     <div data-testid={`cell-${resourceRef.projectId}`} data-view-mode={viewMode}>
       {`${resourceRef.label}@${scrRef.verseNum}`}
+      {/* The real cell's header band, which is the reorder drag source — the column itself must not
+          be draggable, or a click-drag over the text starts a reorder instead of selecting. */}
+      {headerDrag ? (
+        <div
+          data-cell-header
+          data-testid={`header-${resourceRef.resourceId}`}
+          draggable
+          onDragStart={headerDrag.onDragStart}
+          onDragEnd={headerDrag.onDragEnd}
+        />
+      ) : undefined}
+      {/* In the aligned grid the real cell renders an editor whose verse blocks carry the range the
+          layout places them on, and which the reference scroll targets. Stand in for those, with
+          the geometry the scroll reads (jsdom measures nothing) declared per element. */}
+      {viewMode === 'aligned' ? (
+        <>
+          <div data-cell-header data-stub-top="0" data-stub-height="20" />
+          {alignedVerseBlocks.map((block) => (
+            <div
+              key={block.start}
+              className="verse-block"
+              data-testid={`block-${resourceRef.projectId}-${block.start}`}
+              data-verse-start={block.start}
+              data-verse-end={block.end}
+              data-stub-top={block.top}
+            />
+          ))}
+        </>
+      ) : undefined}
       {showDragHandle ? (
         // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
+        // NOTE: the real `ResourceCellView` renders this only in its header-band layout, so a verse
+        // -view test that uses it is exercising the handler, not the rendered UI. The grip's own
+        // presence is covered against the real component in `resource-cell-view.component.test.tsx`.
         <button
           type="button"
           data-reorder-handle-id={resourceRef.resourceId}
@@ -54,10 +91,20 @@ vi.mock('./use-resource-zoom-input.hook', () => ({
   useResourceZoomInput: vi.fn(),
 }));
 
+// Mutable so a test can model an inactive dock tab. `useViewVisibility` itself needs an
+// IntersectionObserver, which jsdom has not got, and would report `false` regardless because jsdom
+// reports zero geometry for everything — so the aligned grid's deferred scroll could never be
+// observed without this.
+const mockVisibility = { isVisible: true };
+
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...original,
+    useViewVisibility: () => mockVisibility.isVisible,
+    // The aligned stylesheet is inert in jsdom, which lays nothing out, so injecting ~400 rules per
+    // mount would only cost parse time. `aligned-grid.styles.test.ts` asserts its content instead.
+    useStylesheet: () => {},
     ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="resizable-panel-group">{children}</div>
     ),
@@ -511,8 +558,8 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={onReorder}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.drop(wrappers[0]); // onto WEB (resourceId 'r-a')
     expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
   });
@@ -526,13 +573,13 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={vi.fn()}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.dragOver(wrappers[0]); // hover over WEB (resourceId 'r-a')
     expect(wrappers[0].className).toContain('tw:ring-2');
     expect(wrappers[0].className).toContain('tw:ring-inset');
     expect(wrappers[0].className).toContain('tw:ring-primary');
-    fireEvent.dragEnd(wrappers[1]);
+    fireEvent.dragEnd(screen.getByTestId('header-r-b'));
     expect(wrappers[0].className).not.toContain('tw:ring-2');
   });
   it('does not highlight the dragged cell itself when hovered', () => {
@@ -545,8 +592,8 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={vi.fn()}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.dragOver(wrappers[1]); // hover over itself
     expect(wrappers[1].className).not.toContain('tw:ring-2');
   });
@@ -561,8 +608,8 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={onReorder}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]);
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+    fireEvent.dragStart(screen.getByTestId('header-r-b'));
     fireEvent.dragOver(wrappers[0]);
     expect(wrappers[0].className).toContain('tw:ring-2');
     fireEvent.drop(wrappers[0]);
@@ -687,5 +734,270 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     expect(screen.getByTestId('grip-r-a')).toHaveFocus();
+  });
+});
+
+describe('ScriptureTextGrid — aligned (Grid) view', () => {
+  const alignedRef = { book: 'MAT', chapterNum: 5, verseNum: 1, versificationStr: 'English' };
+  /** Height of the stubbed scroll port; a block below this is off screen. */
+  const PORT_HEIGHT = 300;
+  /** Height of the stubbed sticky header, which covers the top of the port. */
+  const HEADER_HEIGHT = 20;
+
+  /**
+   * Jsdom lays nothing out, so every rect is zero and none of the scroll decisions would be
+   * observable. Give each element the geometry it declares via `data-stub-*` instead.
+   *
+   * Verse blocks move with the port's scroll, as they would in a browser; the port and its
+   * `position: sticky` header do not.
+   */
+  function stubGeometry() {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function stub(
+      this: HTMLElement,
+    ) {
+      const isPort = this.getAttribute('data-testid') === 'scripture-text-grid-aligned';
+      const port = this.closest<HTMLElement>('[data-testid="scripture-text-grid-aligned"]');
+      const scrolledBy = this.classList.contains('verse-block') ? (port?.scrollTop ?? 0) : 0;
+      const top = isPort ? 0 : Number(this.dataset.stubTop ?? 0) - scrolledBy;
+      const height = isPort ? PORT_HEIGHT : Number(this.dataset.stubHeight ?? 0);
+      return new DOMRect(0, top, 0, height);
+    });
+  }
+
+  function renderAligned(
+    reference: typeof alignedRef,
+    gridResources: typeof resources = resources,
+    extraProps: Record<string, unknown> = {},
+  ) {
+    const ui = (currentRef: typeof alignedRef) => (
+      <ScriptureTextGrid
+        resources={gridResources}
+        scrRef={currentRef}
+        setScrRef={setScrRef}
+        viewMode="aligned"
+        ariaLabel="Text Collection"
+        {...extraProps}
+      />
+    );
+    const result = render(ui(reference));
+    const port = screen.getByTestId('scripture-text-grid-aligned');
+    return { ...result, port, rerenderAt: (next: typeof alignedRef) => result.rerender(ui(next)) };
+  }
+
+  beforeEach(() => {
+    mockVisibility.isVisible = true;
+    // Verse 1 starts on screen; the 4-5 bridge is far below it.
+    alignedVerseBlocks = [
+      { start: 1, end: 1, top: 100 },
+      { start: 4, end: 5, top: 900 },
+    ];
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders every resource as a column of one grid, with no verse listitems', () => {
+    renderAligned(alignedRef);
+
+    expect(screen.getByTestId('scripture-text-grid-aligned')).toBeInTheDocument();
+    expect(screen.getAllByRole('region')).toHaveLength(3);
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  });
+
+  it('puts every cell in aligned mode, so each asks the editor for block verses', () => {
+    renderAligned(alignedRef);
+
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'aligned');
+    expect(screen.getByTestId('cell-b')).toHaveAttribute('data-view-mode', 'aligned');
+  });
+
+  it('gives the scroll port a tab stop, since nothing that scrolls it can be focused', () => {
+    // The columns do have tab stops — the reorder grip and the zoom kebab — but both sit in the
+    // sticky header, which never moves. Without this the content below the fold is reachable only
+    // by pointer, because Arrow and PageDown have nothing to scroll.
+    const { port } = renderAligned(alignedRef, resources, {
+      onReorder: vi.fn(),
+      getReorderHandleLabel: (name: string) => `Reorder ${name}`,
+    });
+
+    expect(port).toHaveAttribute('tabindex', '0');
+    expect(port.className).toContain('tw:focus-visible:ring-2');
+  });
+
+  it('lays out one column per resource', () => {
+    const { port } = renderAligned(alignedRef);
+
+    expect(port.style.gridTemplateColumns).toBe('repeat(3, minmax(16rem, 1fr))');
+  });
+
+  it('asks for one column while the resource list is still empty, since repeat() rejects zero', () => {
+    // The web view passes an empty list briefly while its sources load.
+    const { port } = renderAligned(alignedRef, []);
+
+    expect(port.style.gridTemplateColumns).toBe('repeat(1, minmax(16rem, 1fr))');
+  });
+
+  it('renders a single resource as a one-column aligned grid, not a chapter view', () => {
+    // Falling through to the chapter branch here would silently drop the aligned layout for anyone
+    // down to one text.
+    renderAligned(alignedRef, [resources[0]]);
+
+    expect(screen.getByTestId('scripture-text-grid-aligned')).toBeInTheDocument();
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'aligned');
+  });
+
+  it('opens no chapter-context split, even when a handler is provided', () => {
+    renderAligned(alignedRef, resources, { onChapterContextChange: vi.fn() });
+
+    fireEvent.click(screen.getAllByRole('region')[0]);
+
+    expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
+  });
+
+  describe('reorder', () => {
+    const reorderProps = {
+      onReorder: vi.fn(),
+      getReorderHandleLabel: (name: string) => `Reorder ${name}`,
+    };
+
+    beforeEach(() => {
+      reorderProps.onReorder.mockClear();
+    });
+
+    it('moves a column with the keyboard', () => {
+      renderAligned(alignedRef, resources, reorderProps);
+
+      fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+
+      expect(reorderProps.onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+    });
+
+    it('moves a column by dragging its header onto another column', () => {
+      // The header is the drag source; the column is the drop target. A column-wide drag source
+      // would start a reorder when the reader tried to select text.
+      renderAligned(alignedRef, resources, reorderProps);
+      const columns = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+
+      fireEvent.dragStart(screen.getByTestId('header-r-b'));
+      fireEvent.drop(columns[0]);
+
+      expect(reorderProps.onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+    });
+
+    it('rings the hovered column as a drop target', () => {
+      renderAligned(alignedRef, resources, reorderProps);
+      const columns = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+
+      fireEvent.dragStart(screen.getByTestId('header-r-b'));
+      fireEvent.dragOver(columns[0]);
+
+      expect(columns[0].className).toContain('tw:ring-2');
+    });
+  });
+
+  describe('scrolling to the reference', () => {
+    it('scrolls a reference that is off screen to just below the sticky header', () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      // No block starts at verse 5; the 4-5 bridge covers it, and sits at 900.
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+    });
+
+    it('leaves a reference that is already on screen where it is', () => {
+      // Clicking a verse reports it as the new reference. Scrolling it to the top of the port would
+      // move the passage out from under the reader in response to their own click.
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+
+      rerenderAt({ ...alignedRef, verseNum: 1 });
+
+      expect(port.scrollTop).toBe(0);
+    });
+
+    it('scrolls again when a late-arriving column pushes the target back off screen', async () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // A slower resource renders: its verse 2 block appears, adding height above the target and
+      // moving it down the page.
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      await waitFor(() => expect(port.scrollTop).toBe(1500 - HEADER_HEIGHT));
+    });
+
+    it('stops correcting once the reader scrolls, until the reference changes', async () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // The reader scrolls away, then a slower resource renders and moves the target again.
+      port.scrollTop = 200;
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      await waitFor(() => expect(screen.getByTestId('block-a-2')).toBeInTheDocument());
+
+      expect(port.scrollTop).toBe(200);
+
+      // A new reference re-arms it.
+      rerenderAt({ ...alignedRef, verseNum: 1 });
+      await waitFor(() => expect(port.scrollTop).toBe(100 - HEADER_HEIGHT));
+    });
+
+    it('keeps following the reference when the browser clamps scrollTop after content shrinks', async () => {
+      // Removing a resource (or zooming one out) shortens the content, and the browser then clamps
+      // scrollTop to the new bottom. That is not the reader moving the port, and reading it as such
+      // stood the reference scroll down for good — silently killing the late-column correction in
+      // the one case it exists for.
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // The port can now scroll only to 400, so the browser moves scrollTop down to it.
+      Object.defineProperty(port, 'scrollHeight', { value: 400 + PORT_HEIGHT, configurable: true });
+      Object.defineProperty(port, 'clientHeight', { value: PORT_HEIGHT, configurable: true });
+      port.scrollTop = 400;
+
+      // A slower resource then renders and moves the target, which must still be corrected.
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      await waitFor(() => expect(port.scrollTop).toBe(1500 - HEADER_HEIGHT));
+    });
+
+    it('defers the scroll while the tab is hidden and catches up when it is shown', () => {
+      stubGeometry();
+      mockVisibility.isVisible = false;
+      const { port, rerenderAt } = renderAligned(alignedRef);
+
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      // A hidden rc-dock pane has no layout, so scrolling now would silently do nothing.
+      expect(port.scrollTop).toBe(0);
+
+      mockVisibility.isVisible = true;
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+    });
   });
 });

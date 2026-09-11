@@ -445,17 +445,20 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-text-grid-reorder-cell',
-    purpose:
-      'Reorder the focused Scripture Text Grid cell one position (verse view: up/down; chapter view: left/right)',
+    // The reorder grip is rendered only by the header-band layout, which is the chapter and grid
+    // views; the verse view hangs its resource name inline and shows no grip, so there is nothing
+    // to focus there and the arrow keys never reach the handler. Tracked as PT-4184 follow-up.
+    purpose: 'Reorder the focused Scripture Text Grid column one position (chapter and grid views)',
     category: 'View',
     context: 'Scripture Text Grid web view',
     keys: {
-      macOS: '↑ / ↓ / ← / →',
-      windows: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
-      linux: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+      macOS: '← / →',
+      windows: 'Left Arrow / Right Arrow',
+      linux: 'Left Arrow / Right Arrow',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
