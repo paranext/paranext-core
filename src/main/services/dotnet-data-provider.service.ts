@@ -1,4 +1,5 @@
 import { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio, spawn } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { logger } from '@shared/services/logger.service';
 import { waitForDuration } from 'platform-bible-utils';
@@ -98,6 +99,45 @@ function startDotnetDataProvider() {
   let command = 'dotnet';
   let args: string[] = ['watch', '--project', 'c-sharp/ParanextDataProvider.csproj'];
   let options: SpawnOptionsWithoutStdio | undefined;
+
+  // `dotnet watch` restores and builds before the provider's `Main()` runs at all, which is the
+  // single largest block of dev startup. Opting out (`npm run start:no-dotnet-watch`) runs the
+  // already-built assembly instead, so that cost moves out of startup — at the price of hot reload
+  // on C# edits: you must run `npm run build:data` yourself and restart the app (the provider is
+  // started once, from main.ts, and never re-spawned in place), or the app keeps
+  // running the previous build. Logged below, because a stale build is otherwise invisible: the app
+  // starts and behaves normally, just against older C#.
+  // `run --no-build` rather than the built assembly directly: the build output path is
+  // runtime-identifier specific (e.g. `bin/Debug/net8.0/linux-x64/`), so letting MSBuild resolve it
+  // keeps this working on every platform without hardcoding that layout.
+  if (!globalThis.isPackaged && process.env.PT_DOTNET_NO_WATCH === 'true') {
+    // `dotnet watch --project X` runs the app with the project directory as its cwd, while
+    // `dotnet run --project X --no-build` inherits ours. Match the watcher so the two dev modes
+    // agree, which means the project path has to be absolute — a relative one would resolve
+    // against the new cwd.
+    const cSharpDir = path.join(globalThis.resourcesPath, 'c-sharp');
+    args = ['run', '--project', path.join(cSharpDir, 'ParanextDataProvider.csproj'), '--no-build'];
+    options = { cwd: cSharpDir };
+    logger.info(
+      formatLog(
+        'PT_DOTNET_NO_WATCH is set: running the prebuilt assembly with no watcher. C# changes will NOT be picked up until you run `npm run build:data` and restart.',
+        DOTNET_DATA_PROVIDER_NAME,
+      ),
+    );
+    // `npm run build` produces only a Release publish (`build:data-release`), never a Debug build,
+    // so this path commonly runs with nothing to execute. Say so plainly: otherwise the failure
+    // arrives as a raw MSBuild trace after the line above, and because `start` is
+    // fire-and-forget the window just opens and requests hang. Checking the directory rather than
+    // a binary because the output path is runtime-identifier specific.
+    if (!fs.existsSync(path.join(cSharpDir, 'bin', 'Debug'))) {
+      logger.error(
+        formatLog(
+          'PT_DOTNET_NO_WATCH is set but no Debug build was found. Run `npm run build:data` first.',
+          DOTNET_DATA_PROVIDER_NAME,
+        ),
+      );
+    }
+  }
 
   if (globalThis.isPackaged) {
     let dotnetPath: string = path.join(process.resourcesPath, 'dotnet');

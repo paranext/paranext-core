@@ -16,13 +16,33 @@ function isProjectReference(ref: ResourceReference): boolean {
 }
 
 /**
- * Splits a flat `referencedProjectsAndResources` list into per-tab sub-lists, mirroring the
- * filtering `resource-text-panel.web-view.tsx` already applies for display: `dblResource` items are
- * typed via the cached DBL resource catalog, `project` items always belong to the Scripture tab,
- * and any other reference type — including a `dblResource` item whose id isn't (currently) found in
- * the catalog — is routed into `otherResources` instead of being dropped. The dialog doesn't
- * display or let the admin edit `otherResources`, but callers must round-trip it unchanged when
- * writing the setting back out, or those references are permanently lost.
+ * Splits a flat `referencedProjectsAndResources` list into per-tab sub-lists, mirroring the per-tab
+ * classification the resource panel already applies for display. That classification is two steps
+ * in the platform-scripture-editor extension: `buildPickerResources` (in
+ * `downloaded-resources.utils.ts`) stamps a `type` on each row, and
+ * `resource-text-panel.web-view.tsx` then keeps only the rows whose `type` matches the tab it is
+ * showing.
+ *
+ * The two do NOT agree, in two ways. Both are live; neither is a bug to "fix" by making one match
+ * the other without deciding which is right.
+ *
+ * 1. **`project` references are typed differently.** This function routes every one of them to
+ *    `scriptureResources`. The panel refines the type first, by looking the project id up in the
+ *    catalog (`resolveReferenced`: `type: dblByProjectId?.type ?? 'ScriptureResource'`). A
+ *    locally-installed commentary is stored as a `ProjectReference` but has a catalog entry typed
+ *    `CommentaryResource`, so the panel files it under Commentaries while this dialog shows the
+ *    same reference under Bible Texts. That divergence is user-visible, and this function is the
+ *    side that is wrong about it — fixing it here needs the catalog lookup, which the dialog
+ *    already has `dblResources` for.
+ * 2. **A reference the rules cannot place is handled oppositely, deliberately.** A `dblResource` with
+ *    no catalog row has no knowable type, so the panel DROPS it rather than leak a blank row into a
+ *    type-filtered view. This function must PRESERVE it, in `otherResources`, because it
+ *    round-trips the setting rather than rendering it: the dialog neither displays nor lets the
+ *    admin edit `otherResources`, but callers must write it back unchanged or those references are
+ *    permanently lost.
+ *
+ * `src/renderer` cannot import across the extension boundary, so this comment is the only thing
+ * keeping the classification rules in step: edit them together.
  */
 export function splitResourcesByTab(
   items: ResourceReference[],
