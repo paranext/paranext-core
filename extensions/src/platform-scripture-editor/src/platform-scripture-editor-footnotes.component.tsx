@@ -23,7 +23,7 @@ import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scrip
 
 // TODO (PT-3657): calculate these dynamically:
 const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
-const footnoteCloseRowHeightPx = 24;
+const footnoteCloseRowHeightPx = 24; // The close row is one 24px icon button, no vertical padding.
 const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
 const footnoteHeaderWidthPx = 50;
 const minimumEditorWidthPx = 100;

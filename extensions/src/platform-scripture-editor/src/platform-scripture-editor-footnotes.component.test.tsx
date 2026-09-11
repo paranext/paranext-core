@@ -3,8 +3,7 @@ import '@testing-library/jest-dom';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { ComponentProps, useEffect, useState } from 'react';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 
 vi.mock('@papi/frontend', () => ({
@@ -74,7 +73,7 @@ const usjWithTwoNotes: Usj = {
 };
 const localizedStrings = { '%webView_footnoteList_close%': 'Close footnotes pane' };
 
-function renderPane(overrides: Partial<React.ComponentProps<typeof FootnotesLayout>> = {}) {
+function renderPane(overrides: Partial<ComponentProps<typeof FootnotesLayout>> = {}) {
   return render(
     <FootnotesLayout
       usj={usjWithTwoNotes}
