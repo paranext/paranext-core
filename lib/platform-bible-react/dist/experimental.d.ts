@@ -186,34 +186,35 @@ export type ProjectSelectorLocalizedStrings = {
 	/** Accessible label for the view-options icon button. Defaults to `"View options"`. */
 	viewOptionsAriaLabel?: string;
 	/**
-	 * @deprecated Renamed to `viewOptionsAriaLabel` when the control stopped being a filter menu. Set
-	 *   that instead; this is still honored as a fallback so an existing caller does not silently
-	 *   lose the button's accessible name, and it will be removed once callers have moved.
+	 * Accessible label for the view-options icon button while the view is off its defaults — a
+	 * grouping other than the default, or an active filter. Defaults to `"View options (modified)"`.
+	 * Supplied as a whole alternative label rather than a suffix so translators can order it
+	 * naturally.
 	 */
-	filterAriaLabel?: string;
+	viewOptionsModifiedAriaLabel?: string;
 	/** View options: section heading for the grouping choices. Defaults to `"Group by"`. */
 	groupSectionLabel?: string;
 	/** View options: section heading for the filter toggles. Defaults to `"Filter"`. */
 	filterSectionLabel?: string;
 	/** View options: "None" radio item under the Group by section. Defaults to `"None"`. */
-	filterGroupNone?: string;
+	groupByNone?: string;
 	/** View options: "Open tabs" item under the Group by section. Defaults to `"Open tabs"`. */
-	filterGroupByOpenTabs?: string;
+	groupByOpenTabs?: string;
 	/** View options: "Last used" item under the Group by section. Defaults to `"Last used"`. */
-	filterGroupByLastUsed?: string;
+	groupByLastUsed?: string;
 	/** View options: "Language" item under the Group by section. Defaults to `"Language"`. */
-	filterGroupByLanguage?: string;
+	groupByLanguage?: string;
 	/** View options: "Versification" item under the Group by section. Defaults to `"Versification"`. */
-	filterGroupByVersification?: string;
+	groupByVersification?: string;
 	/** View options: "Type" item under the Group by section. Defaults to `"Type"`. */
-	filterGroupByType?: string;
+	groupByType?: string;
 	/**
 	 * View options: "Custom" item under the Group by section, shown when `'custom'` is in
 	 * `availableGroupings`. Defaults to `"Custom"` — a mechanism name, not an axis a user recognizes,
 	 * so a caller offering `'custom'` should override it with the name of the axis their
 	 * `customSections` actually express (e.g. `"Relevance"`, `"Workflow stage"`).
 	 */
-	filterGroupByCustom?: string;
+	groupByCustom?: string;
 	/** View options: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
 	filterShowSelectedOnly?: string;
 	/** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
@@ -396,7 +397,7 @@ type CommonProps = {
 	 * affordance rather than present an inert one. Grouping still applies per `defaultGrouping`; only
 	 * the user-facing control goes away.
 	 */
-	hideFilterMenu?: boolean;
+	hideViewOptionsMenu?: boolean;
 	/**
 	 * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
 	 * order — a project lands in the first section whose `match` accepts it, and anything unmatched
@@ -410,10 +411,10 @@ type CommonProps = {
 	 * the hoisted-constant shape.
 	 *
 	 * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-	 * set `localizedStrings.filterGroupByCustom` — its "Custom" default names the mechanism, and the
-	 * user needs the name of the axis your sections actually express. To pin the list to these sections and nothing else, pass
-	 * `availableGroupings={['custom']}` with `defaultGrouping="custom"` and `hideFilterMenu`, since a
-	 * one-item grouping menu is an inert control.
+	 * set `localizedStrings.groupByCustom` — its "Custom" default names the mechanism, and the user
+	 * needs the name of the axis your sections actually express. To pin the list to these sections
+	 * and nothing else, pass `availableGroupings={['custom']}` with `defaultGrouping="custom"` and
+	 * `hideViewOptionsMenu`, since a one-item grouping menu is an inert control.
 	 *
 	 * If `'custom'` is the active grouping and this is absent or empty, the list renders flat
 	 * (unsectioned) rather than showing an empty view.

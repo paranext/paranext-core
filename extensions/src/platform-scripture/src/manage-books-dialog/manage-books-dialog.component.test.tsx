@@ -12,6 +12,7 @@ import {
   type MutationResult,
 } from './manage-books-dialog.component';
 import { installManageBooksJsdomShims, scrolledElements } from './manage-books-dialog.test-utils';
+import { groupingChoices, setupUser, UNSUPPORTED_GROUPINGS } from '../project-selector.test-utils';
 
 let uninstallShims: () => void;
 
@@ -79,12 +80,6 @@ const isSectionActive = (sectionId: string) =>
 const isBookSelected = (container: HTMLElement, book: string) =>
   container.querySelector(`[data-book="${book}"]`)?.getAttribute('aria-selected') === 'true';
 
-/** Radix popovers and cmdk need pointer-event sequences jsdom does not synthesize on its own. */
-const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
-
-/** Grouping axes this dialog's project data cannot support, so no picker may offer them. */
-const UNSUPPORTED_GROUPINGS = ['Language', 'Last used', 'Versification', 'Type'];
-
 /** The picker popover a trigger has opened, which Radix portals out of the trigger's subtree. */
 const openedPopover = (trigger: HTMLElement) =>
   waitFor(() => {
@@ -94,10 +89,6 @@ const openedPopover = (trigger: HTMLElement) =>
     if (!content) throw new Error('the picker popover has not opened');
     return content;
   });
-
-/** Grouping options the open filter menu offers, in order, by visible label. */
-const groupingChoices = () =>
-  screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
 
 describe('ManageBooksDialog launch parameters', () => {
   it('opens on the launched section with the launched books selected', async () => {

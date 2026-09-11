@@ -4,8 +4,13 @@ import '@testing-library/jest-dom';
 import type { WebViewProps } from '@papi/core';
 import type { ComponentType } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  groupingChoices,
+  installProjectSelectorJsdomShims,
+  setupUser,
+  UNSUPPORTED_GROUPINGS,
+} from './project-selector.test-utils';
 
 // ---------------------------------------------------------------------------
 // Mocks — only the process boundaries the web view reaches through: PAPI, and the two local
@@ -65,19 +70,7 @@ vi.mock('./hooks/use-open-project-tabs', () => ({
   useOpenProjectTabs: () => [],
 }));
 
-// jsdom implements none of ResizeObserver, scrollIntoView or scrollTo, and the picker's render path
-// touches all three: cmdk wires a ResizeObserver, Radix's PopoverContent calls scrollTo when it
-// focuses children, and the picker scrolls the selected row into view when it opens.
-beforeAll(() => {
-  // `vi.stubGlobal` accepts `unknown`, so these no-op stubs need no type assertion to stand in for
-  // the real constructors — only `observe`/`disconnect` are ever reached from this render path.
-  vi.stubGlobal(
-    'ResizeObserver',
-    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
-  );
-  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = vi.fn();
-  if (!Element.prototype.scrollTo) Element.prototype.scrollTo = vi.fn();
-});
+beforeAll(installProjectSelectorJsdomShims);
 
 // The web view file assigns to `global.webViewComponent` as its side effect, so it has to be
 // imported after the mocks above. Vitest hoists `vi.mock` regardless of this import's position.
@@ -113,21 +106,22 @@ function makeProps(): WebViewProps {
   } as unknown as WebViewProps;
 }
 
-/** Radix popovers and cmdk need pointer-event sequences jsdom does not synthesize on its own. */
-const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
-
-/** Grouping axes this web view's project data cannot support, so neither picker may offer them. */
-const UNSUPPORTED_GROUPINGS = ['Language', 'Last used', 'Versification', 'Type'];
-
-/** Grouping options the open view-options menu offers, in order, by visible label. */
-const groupingChoices = () =>
-  screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
+/**
+ * The grouping labels the pickers render, in menu order. The mocked `useLocalizedStrings` resolves
+ * every key to itself, so these are the keys the web view supplies rather than shipped wording.
+ */
+const GROUPING_CHOICE_LABELS = [
+  '%markersChecklist_projectSelector_groupByNone%',
+  '%markersChecklist_projectSelector_groupByOpenTabs%',
+];
 
 /** Opens the picker inside `testId` and then its view-options menu. */
 async function openGroupingMenu(user: ReturnType<typeof setupUser>, testId: string) {
   const picker = await screen.findByTestId(testId);
   await user.click(within(picker).getByRole('combobox'));
-  await user.click(await screen.findByLabelText('View options'));
+  await user.click(
+    await screen.findByLabelText('%markersChecklist_projectSelector_viewOptionsAriaLabel%'),
+  );
 }
 
 // Neither picker's project data carries language, type or last-used fields, so those groupings
@@ -142,7 +136,7 @@ describe('ChecklistWebView project pickers', () => {
 
     await openGroupingMenu(user, 'checklist-primary-project-trigger');
 
-    await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs']));
+    await waitFor(() => expect(groupingChoices()).toEqual(GROUPING_CHOICE_LABELS));
     UNSUPPORTED_GROUPINGS.forEach((label) => {
       expect(screen.queryByRole('menuitemradio', { name: label })).not.toBeInTheDocument();
     });
@@ -155,7 +149,7 @@ describe('ChecklistWebView project pickers', () => {
 
     await openGroupingMenu(user, 'checklist-comparative-texts-trigger');
 
-    await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs']));
+    await waitFor(() => expect(groupingChoices()).toEqual(GROUPING_CHOICE_LABELS));
     UNSUPPORTED_GROUPINGS.forEach((label) => {
       expect(screen.queryByRole('menuitemradio', { name: label })).not.toBeInTheDocument();
     });

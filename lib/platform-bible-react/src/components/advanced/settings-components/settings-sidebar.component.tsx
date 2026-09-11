@@ -165,8 +165,7 @@ export function SettingsSidebar({
                 mode="project"
                 projects={projectSelectorProjects}
                 openTabs={[]}
-                availableGroupings={['openTabs']}
-                hideFilterMenu
+                hideViewOptionsMenu
                 selection={{ projectId: selectedSidebarItem?.projectId ?? '' }}
                 onChangeSelection={({ projectId: nextId }) => {
                   if (!nextId) return;

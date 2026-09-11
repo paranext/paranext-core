@@ -94,34 +94,35 @@ export type ProjectSelectorLocalizedStrings = {
   /** Accessible label for the view-options icon button. Defaults to `"View options"`. */
   viewOptionsAriaLabel?: string;
   /**
-   * @deprecated Renamed to `viewOptionsAriaLabel` when the control stopped being a filter menu. Set
-   *   that instead; this is still honored as a fallback so an existing caller does not silently
-   *   lose the button's accessible name, and it will be removed once callers have moved.
+   * Accessible label for the view-options icon button while the view is off its defaults — a
+   * grouping other than the default, or an active filter. Defaults to `"View options (modified)"`.
+   * Supplied as a whole alternative label rather than a suffix so translators can order it
+   * naturally.
    */
-  filterAriaLabel?: string;
+  viewOptionsModifiedAriaLabel?: string;
   /** View options: section heading for the grouping choices. Defaults to `"Group by"`. */
   groupSectionLabel?: string;
   /** View options: section heading for the filter toggles. Defaults to `"Filter"`. */
   filterSectionLabel?: string;
   /** View options: "None" radio item under the Group by section. Defaults to `"None"`. */
-  filterGroupNone?: string;
+  groupByNone?: string;
   /** View options: "Open tabs" item under the Group by section. Defaults to `"Open tabs"`. */
-  filterGroupByOpenTabs?: string;
+  groupByOpenTabs?: string;
   /** View options: "Last used" item under the Group by section. Defaults to `"Last used"`. */
-  filterGroupByLastUsed?: string;
+  groupByLastUsed?: string;
   /** View options: "Language" item under the Group by section. Defaults to `"Language"`. */
-  filterGroupByLanguage?: string;
+  groupByLanguage?: string;
   /** View options: "Versification" item under the Group by section. Defaults to `"Versification"`. */
-  filterGroupByVersification?: string;
+  groupByVersification?: string;
   /** View options: "Type" item under the Group by section. Defaults to `"Type"`. */
-  filterGroupByType?: string;
+  groupByType?: string;
   /**
    * View options: "Custom" item under the Group by section, shown when `'custom'` is in
    * `availableGroupings`. Defaults to `"Custom"` — a mechanism name, not an axis a user recognizes,
    * so a caller offering `'custom'` should override it with the name of the axis their
    * `customSections` actually express (e.g. `"Relevance"`, `"Workflow stage"`).
    */
-  filterGroupByCustom?: string;
+  groupByCustom?: string;
   /** View options: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
   filterShowSelectedOnly?: string;
   /** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
@@ -172,31 +173,26 @@ export type ProjectSelectorLocalizedStrings = {
   clearAll?: string;
 };
 
+/** Every string the selector renders, with the defaults filled in. */
+type ResolvedProjectSelectorStrings = Required<ProjectSelectorLocalizedStrings>;
+
 /**
  * English text rendered for each key when the caller supplies no localized value for it, so the
  * selector reads correctly in a consumer that has not wired up localization yet.
  */
-/**
- * Every string the selector renders, with the defaults filled in. Excludes the deprecated
- * `filterAriaLabel`, which {@link resolveStrings} folds into `viewOptionsAriaLabel`, so render code
- * never has to know the retired spelling exists.
- */
-type ResolvedProjectSelectorStrings = Required<
-  Omit<ProjectSelectorLocalizedStrings, 'filterAriaLabel'>
->;
-
 const DEFAULT_STRINGS: ResolvedProjectSelectorStrings = {
   searchPlaceholder: 'Search projects & resources',
   viewOptionsAriaLabel: 'View options',
+  viewOptionsModifiedAriaLabel: 'View options (modified)',
   groupSectionLabel: 'Group by',
   filterSectionLabel: 'Filter',
-  filterGroupNone: 'None',
-  filterGroupByOpenTabs: 'Open tabs',
-  filterGroupByLastUsed: 'Last used',
-  filterGroupByLanguage: 'Language',
-  filterGroupByVersification: 'Versification',
-  filterGroupByType: 'Type',
-  filterGroupByCustom: 'Custom',
+  groupByNone: 'None',
+  groupByOpenTabs: 'Open tabs',
+  groupByLastUsed: 'Last used',
+  groupByLanguage: 'Language',
+  groupByVersification: 'Versification',
+  groupByType: 'Type',
+  groupByCustom: 'Custom',
   filterShowSelectedOnly: 'Show selected only',
   openTabsSectionHeading: 'Opened project & resource tabs',
   otherProjectsSectionHeading: 'Your projects & resources',
@@ -215,12 +211,27 @@ const DEFAULT_STRINGS: ResolvedProjectSelectorStrings = {
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): ResolvedProjectSelectorStrings {
-  // `filterAriaLabel` is the retired spelling of `viewOptionsAriaLabel`. Honor it only when the
-  // caller supplied no new-name value, so a caller passing both gets the new one.
-  const { filterAriaLabel, ...rest } = partial ?? {};
-  const merged = { ...DEFAULT_STRINGS, ...rest };
-  if (filterAriaLabel && !rest.viewOptionsAriaLabel) merged.viewOptionsAriaLabel = filterAriaLabel;
-  return merged;
+  return { ...DEFAULT_STRINGS, ...partial };
+}
+
+/** Whether the unnamed-custom-axis warning has already been issued, so it fires once per session. */
+let warnedAboutUnnamedCustomGrouping = false;
+
+/**
+ * The default `groupByCustom` label names the mechanism rather than the axis the caller's sections
+ * express, so it is the one default that is never right in front of a user. Offering `'custom'`
+ * without naming it is a misconfiguration the types cannot express, since the whole string map is
+ * optional.
+ */
+function warnOnceAboutUnnamedCustomGrouping(): void {
+  if (warnedAboutUnnamedCustomGrouping) return;
+  warnedAboutUnnamedCustomGrouping = true;
+  console.warn(
+    'ProjectSelector: `custom` is in `availableGroupings` but `localizedStrings.groupByCustom` ' +
+      `was not supplied, so the menu item reads "${DEFAULT_STRINGS.groupByCustom}" — a mechanism ` +
+      'name rather than the axis your `customSections` express. Supply a localized label naming ' +
+      'that axis (e.g. "Relevance", "Workflow stage").',
+  );
 }
 
 // #endregion
@@ -389,7 +400,7 @@ type CommonProps = {
    * affordance rather than present an inert one. Grouping still applies per `defaultGrouping`; only
    * the user-facing control goes away.
    */
-  hideFilterMenu?: boolean;
+  hideViewOptionsMenu?: boolean;
   /**
    * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
    * order — a project lands in the first section whose `match` accepts it, and anything unmatched
@@ -403,11 +414,10 @@ type CommonProps = {
    * the hoisted-constant shape.
    *
    * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-   * set `localizedStrings.filterGroupByCustom` — its "Custom" default names the mechanism, and the
-   * user needs the name of the axis your sections actually express. To pin the list to these
-   * sections and nothing else, pass `availableGroupings={['custom']}` with
-   * `defaultGrouping="custom"` and `hideFilterMenu`, since a one-item grouping menu is an inert
-   * control.
+   * set `localizedStrings.groupByCustom` — its "Custom" default names the mechanism, and the user
+   * needs the name of the axis your sections actually express. To pin the list to these sections
+   * and nothing else, pass `availableGroupings={['custom']}` with `defaultGrouping="custom"` and
+   * `hideViewOptionsMenu`, since a one-item grouping menu is an inert control.
    *
    * If `'custom'` is the active grouping and this is absent or empty, the list renders flat
    * (unsectioned) rather than showing an empty view.
@@ -576,7 +586,7 @@ function ProjectRowView({
   // always show a tooltip on hover, regardless of whether the visible text is truncated.
   const hasExtraTooltipContent =
     tooltipHasLanguage ||
-    Boolean(row.typeName ?? row.type) ||
+    Boolean(row.typeName) ||
     Boolean(row.scrollGroupScrRefLabel) ||
     row.isBoundButClosed ||
     (row.isDisabled && Boolean(row.disabledReason));
@@ -695,7 +705,7 @@ function ProjectRowView({
           carries `typeName` instead, which keeps "project or resource?" available to a screen
           reader arrowing the list — the row tooltip is hover-only (see the manually controlled
           `open` below) and never opens for keyboard navigation. */}
-      {(row.typeName ?? row.type) && <span className="tw:sr-only">{row.typeName ?? row.type}</span>}
+      {row.typeName && <span className="tw:sr-only">{row.typeName}</span>}
       {rightContent}
     </CommandItem>
   );
@@ -732,7 +742,7 @@ function ProjectRowView({
             `renderProjectIndicator` glyph, which the selector treats as decorative. Surfacing
             `typeName` here makes it readable on hover; the row's accessible name covers the
             screen-reader path separately. */}
-        {(row.typeName ?? row.type) && <div className="tw:text-sm">{row.typeName ?? row.type}</div>}
+        {row.typeName && <div className="tw:text-sm">{row.typeName}</div>}
         {!row.isBoundButClosed && row.scrollGroupScrRefLabel && letter && (
           <div className="tw:text-sm">
             {row.scrollGroupScrRefLabel}
@@ -796,17 +806,17 @@ function groupingLabel(
 ): string {
   switch (option) {
     case 'openTabs':
-      return strings.filterGroupByOpenTabs;
+      return strings.groupByOpenTabs;
     case 'lastUsed':
-      return strings.filterGroupByLastUsed;
+      return strings.groupByLastUsed;
     case 'language':
-      return strings.filterGroupByLanguage;
+      return strings.groupByLanguage;
     case 'versification':
-      return strings.filterGroupByVersification;
+      return strings.groupByVersification;
     case 'type':
-      return strings.filterGroupByType;
+      return strings.groupByType;
     case 'custom':
-      return strings.filterGroupByCustom;
+      return strings.groupByCustom;
     default:
       return option;
   }
@@ -826,32 +836,43 @@ function ViewOptionsMenu({
   // because it is the bulk of this menu — and the whole of it in single-select mode, where
   // `showSelectedOnly` never renders and the trigger could otherwise never appear active.
   const isViewModified = Boolean(showSelectedOnly) || activeGrouping !== defaultGrouping;
+  const viewOptionsLabel = isViewModified
+    ? strings.viewOptionsModifiedAriaLabel
+    : strings.viewOptionsAriaLabel;
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
-            // Match shadcn Toggle's "on" styling so the trigger reads as a toggle-group button
-            // that's currently pressed while the view is off its defaults.
-            isViewModified &&
-              'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
-          )}
-          aria-label={strings.viewOptionsAriaLabel}
-          // Deliberately not `aria-pressed`: this opens a menu rather than toggling anything, so a
-          // pressed state would announce a toggle the user cannot release by activating it. The
-          // accent above carries the "view is off its defaults" hint visually, and the menu's own
-          // radio items announce which grouping is active once it is open.
-          data-view-modified={isViewModified || undefined}
-          title={strings.viewOptionsAriaLabel}
-          onMouseDown={(event: MouseEvent) => event.preventDefault()}
-        >
-          <Settings2 className="tw:h-4 tw:w-4" />
-        </Button>
-      </DropdownMenuTrigger>
+      {/* Icon-only buttons carry a Tooltip rather than a native `title` (Guidelines/Tooltips). Its
+          own TooltipProvider keeps the selector renderable standalone, matching the main trigger. */}
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
+                  // Match shadcn Toggle's "on" styling so the trigger reads as a toggle-group button
+                  // that's currently pressed while the view is off its defaults.
+                  isViewModified &&
+                    'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
+                )}
+                aria-label={viewOptionsLabel}
+                // Deliberately not `aria-pressed`: this opens a menu rather than toggling anything, so a
+                // pressed state would announce a toggle the user cannot release by activating it. The
+                // accessible name carries the "view is off its defaults" state instead, so it is
+                // available to a screen reader and not only through the accent styling above.
+                data-view-modified={isViewModified || undefined}
+                onMouseDown={(event: MouseEvent) => event.preventDefault()}
+              >
+                <Settings2 className="tw:h-4 tw:w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{viewOptionsLabel}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DropdownMenuContent
         align="end"
         className="tw:w-56"
@@ -868,7 +889,7 @@ function ViewOptionsMenu({
             >
               {/* No `onSelect={preventDefault}` here — picking a grouping should close the menu
                   immediately, so the user sees the newly grouped list without a second click. */}
-              <DropdownMenuRadioItem value="none">{strings.filterGroupNone}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="none">{strings.groupByNone}</DropdownMenuRadioItem>
               {availableGroupings.map((option) => (
                 <DropdownMenuRadioItem key={option} value={option}>
                   {groupingLabel(option, strings)}
@@ -978,6 +999,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   }, [open]);
 
   const strings = resolveStrings(props.localizedStrings);
+  if (availableGroupings.includes('custom') && props.localizedStrings?.groupByCustom === undefined)
+    warnOnceAboutUnnamedCustomGrouping();
 
   const rows = useMemo(() => {
     if (props.mode === 'project') {
@@ -1013,7 +1036,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
           r.shortName.toLowerCase().includes(needle) ||
           r.fullName.toLowerCase().includes(needle) ||
           (r.language ?? '').toLowerCase().includes(needle) ||
-          (r.languageCode ?? '').toLowerCase().includes(needle),
+          (r.languageCode ?? '').toLowerCase().includes(needle) ||
+          (r.typeName ?? '').toLowerCase().includes(needle),
       );
     }
     if (props.mode === 'project-multi' && showSelectedOnly) {
@@ -1107,7 +1131,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     const result: ProjectSelectorProjectPair[] = [];
     props.projects.forEach((project) => {
       // Case-insensitive match: open-tab projectIds may be lowercased while project ids are
-      // canonical UPPERCASE. See normalizeProjectId / I12.
+      // canonical UPPERCASE.
       const tabs = props.openTabs.filter(
         (t) => normalizeProjectId(t.projectId) === normalizeProjectId(project.id),
       );
@@ -1145,8 +1169,12 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       }
       case 'project-multi': {
         const current = props.selection.pairs;
+        // Rows carry the canonical project id while caller-supplied pairs may be lowercased, so
+        // this must normalize on both sides to stay consistent with how `computeRows` decides a
+        // row is selected. Comparing raw would append a duplicate pair instead of deselecting.
+        const rowProjectId = normalizeProjectId(row.projectId);
         const match = (p: ProjectSelectorProjectPair) =>
-          p.projectId === row.projectId && p.scrollGroupId === row.scrollGroupId;
+          normalizeProjectId(p.projectId) === rowProjectId && p.scrollGroupId === row.scrollGroupId;
         const next = current.some(match)
           ? current.filter((p) => !match(p))
           : [...current, { projectId: row.projectId, scrollGroupId: row.scrollGroupId }];
@@ -1186,10 +1214,14 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const handleSelectAll = () => {
     if (props.mode !== 'project-multi') return;
     const existing = props.selection.pairs;
-    const existingKey = new Set(existing.map((p) => `${p.projectId}:${p.scrollGroupId ?? ''}`));
+    // Normalized so an already-selected pair that arrived lowercased is recognized rather than
+    // merged in a second time under the canonical casing.
+    const pairKey = (pair: ProjectSelectorProjectPair) =>
+      `${normalizeProjectId(pair.projectId)}:${pair.scrollGroupId ?? ''}`;
+    const existingKey = new Set(existing.map(pairKey));
     const merged = [...existing];
     allPairs.forEach((pair) => {
-      const key = `${pair.projectId}:${pair.scrollGroupId ?? ''}`;
+      const key = pairKey(pair);
       if (!existingKey.has(key)) {
         existingKey.add(key);
         merged.push(pair);
@@ -1209,7 +1241,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
     switch (props.mode) {
       case 'project': {
-        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        const selected = props.selection.projectId
+          ? projectsById.get(normalizeProjectId(props.selection.projectId))
+          : undefined;
         let text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
         if (
           selected &&
@@ -1229,7 +1263,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         type Tuple = { project: ProjectSelectorProject; scrollGroupId?: ScrollGroupId };
         const tuples: Tuple[] = [];
         pairs.forEach((pair) => {
-          const project = props.projects.find((p) => p.id === pair.projectId);
+          const project = projectsById.get(normalizeProjectId(pair.projectId));
           if (project) tuples.push({ project, scrollGroupId: pair.scrollGroupId });
         });
         if (tuples.length === 0) {
@@ -1263,7 +1297,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         };
       }
       case 'projectScrollGroup': {
-        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        const selected = props.selection.projectId
+          ? projectsById.get(normalizeProjectId(props.selection.projectId))
+          : undefined;
         if (!selected) {
           const text = props.buttonPlaceholder ?? '';
           return { node: text, title: text };
@@ -1278,7 +1314,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       default:
         return { node: '', title: '' };
     }
-  }, [props]);
+  }, [props, projectsById]);
 
   let triggerIcon;
   // While the project list is loading, show a spinner in place of the chevron (even in
@@ -1365,7 +1401,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   spaceSelectsHighlightedItem
                 />
               </div>
-              {!props.hideFilterMenu &&
+              {!props.hideViewOptionsMenu &&
                 (availableGroupings.length > 0 || props.mode === 'project-multi') && (
                   <ViewOptionsMenu
                     availableGroupings={availableGroupings}

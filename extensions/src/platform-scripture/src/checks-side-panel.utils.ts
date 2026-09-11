@@ -22,6 +22,16 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_projectFilter_noProjectsFound%',
   '%webView_checksSidePanel_projectFilter_projectsAndResources%',
   '%webView_checksSidePanel_projectFilter_projectName_format%',
+  // Chrome the `<ProjectSelector>` popover renders for itself (search box, view options menu,
+  // section headings), as distinct from the trigger labels above.
+  '%webView_checksSidePanel_projectSelector_searchPlaceholder%',
+  '%webView_checksSidePanel_projectSelector_viewOptionsAriaLabel%',
+  '%webView_checksSidePanel_projectSelector_viewOptionsModifiedAriaLabel%',
+  '%webView_checksSidePanel_projectSelector_groupSectionLabel%',
+  '%webView_checksSidePanel_projectSelector_groupByNone%',
+  '%webView_checksSidePanel_projectSelector_groupByOpenTabs%',
+  '%webView_checksSidePanel_projectSelector_openTabsSectionHeading%',
+  '%webView_checksSidePanel_projectSelector_otherProjectsSectionHeading%',
   // Scope filter strings
   '%webView_checksSidePanel_scopeFilter_label%',
   ...Object.values(CHECK_SCOPE_FILTER_STRINGS),

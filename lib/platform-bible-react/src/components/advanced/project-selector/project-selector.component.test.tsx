@@ -120,7 +120,7 @@ describe('ProjectSelector — trigger chevron', () => {
   });
 });
 
-describe('ProjectSelector — loading state (I1)', () => {
+describe('ProjectSelector — loading state', () => {
   it('disables the trigger and shows a spinner when isLoading', () => {
     render(
       <ProjectSelector
@@ -322,14 +322,14 @@ describe('ProjectSelector — scroll-to-selected on open', () => {
   });
 });
 
-describe('hideFilterMenu', () => {
+describe('hideViewOptionsMenu', () => {
   const projects: ProjectSelectorProject[] = [
     { id: 'a', shortName: 'A', fullName: 'Project A' },
     { id: 'b', shortName: 'B', fullName: 'Project B' },
     { id: 'c', shortName: 'C', fullName: 'Project C' },
   ];
 
-  it('renders no grouping control when hideFilterMenu is set', async () => {
+  it('renders no grouping control when hideViewOptionsMenu is set', async () => {
     const user = setupUser();
     render(
       <ProjectSelector
@@ -339,7 +339,7 @@ describe('hideFilterMenu', () => {
         selection={{ projectId: 'a' }}
         onChangeSelection={() => {}}
         ariaLabel="Project"
-        hideFilterMenu
+        hideViewOptionsMenu
       />,
     );
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
@@ -347,7 +347,7 @@ describe('hideFilterMenu', () => {
     expect(screen.queryByLabelText('View options')).not.toBeInTheDocument();
   });
 
-  it('renders the grouping control when hideFilterMenu is absent', async () => {
+  it('renders the grouping control when hideViewOptionsMenu is absent', async () => {
     const user = setupUser();
     render(
       <ProjectSelector
@@ -393,7 +393,7 @@ describe('locked grouping', () => {
         ariaLabel="Project"
         availableGroupings={['versification']}
         defaultGrouping="versification"
-        hideFilterMenu
+        hideViewOptionsMenu
       />,
     );
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
@@ -427,7 +427,7 @@ describe('customSections', () => {
         ariaLabel="Project"
         availableGroupings={['custom']}
         defaultGrouping="custom"
-        hideFilterMenu
+        hideViewOptionsMenu
         customSections={sections}
       />,
     );
@@ -470,7 +470,7 @@ describe('customSections', () => {
         ariaLabel="Project"
         availableGroupings={['custom']}
         defaultGrouping="custom"
-        hideFilterMenu
+        hideViewOptionsMenu
         customSections={[{ id: 'recent', label: 'Recent', match: (p) => p.id === 'c' }]}
       />,
     );
@@ -494,7 +494,7 @@ describe('customSections', () => {
         ariaLabel="Project"
         availableGroupings={['custom']}
         defaultGrouping="custom"
-        hideFilterMenu
+        hideViewOptionsMenu
         customSections={[{ id: 'recent', label: 'Recent', match: (p) => p.id === 'c' }]}
         localizedStrings={{
           customUnmatchedSectionHeading: 'Everything else',
@@ -682,45 +682,6 @@ describe('renderProjectIndicator', () => {
   });
 });
 
-describe('localizedStrings', () => {
-  const projects: ProjectSelectorProject[] = [{ id: 'p1', shortName: 'P1', fullName: 'A project' }];
-
-  it('still honors the deprecated filterAriaLabel so a caller keeps the accessible name', async () => {
-    const user = setupUser();
-    render(
-      <ProjectSelector
-        mode="project"
-        projects={projects}
-        openTabs={[]}
-        selection={{ projectId: 'p1' }}
-        onChangeSelection={() => {}}
-        ariaLabel="Project"
-        localizedStrings={{ filterAriaLabel: 'Vue' }}
-      />,
-    );
-    await user.click(screen.getByRole('combobox', { name: 'Project' }));
-    expect(screen.getByRole('button', { name: 'Vue' })).toBeInTheDocument();
-  });
-
-  it('prefers viewOptionsAriaLabel when a caller supplies both spellings', async () => {
-    const user = setupUser();
-    render(
-      <ProjectSelector
-        mode="project"
-        projects={projects}
-        openTabs={[]}
-        selection={{ projectId: 'p1' }}
-        onChangeSelection={() => {}}
-        ariaLabel="Project"
-        localizedStrings={{ filterAriaLabel: 'Old', viewOptionsAriaLabel: 'New' }}
-      />,
-    );
-    await user.click(screen.getByRole('combobox', { name: 'Project' }));
-    expect(screen.getByRole('button', { name: 'New' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Old' })).not.toBeInTheDocument();
-  });
-});
-
 describe('view-options trigger state', () => {
   const projects: ProjectSelectorProject[] = [
     { id: 'p1', shortName: 'P1', fullName: 'A project' },
@@ -762,9 +723,32 @@ describe('view-options trigger state', () => {
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
     await user.click(screen.getByRole('button', { name: 'View options' }));
     await user.click(screen.getByRole('menuitemradio', { name: 'Language' }));
-    expect(screen.getByRole('button', { name: 'View options' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'View options (modified)' })).toHaveAttribute(
       'data-view-modified',
     );
+  });
+
+  // The accent styling alone would leave the state invisible to a screen reader.
+  it('names the modified state in the accessible name, not just the styling', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        availableGroupings={['openTabs', 'language']}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(
+      screen.queryByRole('button', { name: 'View options (modified)' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'View options' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Language' }));
+    expect(screen.getByRole('button', { name: 'View options (modified)' })).toBeInTheDocument();
   });
 
   // A menu trigger is not a toggle; `aria-pressed` would announce a pressed state the user cannot
@@ -786,5 +770,120 @@ describe('view-options trigger state', () => {
     expect(screen.getByRole('button', { name: 'View options' })).not.toHaveAttribute(
       'aria-pressed',
     );
+  });
+});
+
+describe('project-id casing in multi-select', () => {
+  // Canonical project ids are uppercase; ids arriving from open-tab state can be lowercased. A row
+  // renders as selected on a normalized comparison, so every write path has to normalize too.
+  const projects: ProjectSelectorProject[] = [
+    { id: 'ABC123', shortName: 'ABC', fullName: 'A project' },
+    { id: 'DEF456', shortName: 'DEF', fullName: 'Another project' },
+  ];
+
+  it('deselects a row whose selected pair arrived with different casing', async () => {
+    const user = setupUser();
+    const onChangeSelection = vi.fn();
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={projects}
+        openTabs={[]}
+        selection={{ pairs: [{ projectId: 'abc123' }] }}
+        onChangeSelection={onChangeSelection}
+        ariaLabel="Projects"
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Projects' }));
+    await user.click(await screen.findByRole('option', { name: /ABC/ }));
+
+    expect(onChangeSelection).toHaveBeenCalledWith({ pairs: [] });
+  });
+
+  it('does not add a second pair for an already-selected project on select all', async () => {
+    const user = setupUser();
+    const onChangeSelection = vi.fn();
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={projects}
+        openTabs={[]}
+        selection={{ pairs: [{ projectId: 'abc123' }] }}
+        onChangeSelection={onChangeSelection}
+        ariaLabel="Projects"
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: /^Select all/ }));
+
+    const { pairs } = onChangeSelection.mock.calls[0][0];
+    expect(pairs).toHaveLength(projects.length);
+    expect(
+      pairs.filter((p: { projectId: string }) => p.projectId.toUpperCase() === 'ABC123'),
+    ).toHaveLength(1);
+  });
+
+  it('labels the trigger from a selection whose casing differs from the canonical id', () => {
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={projects}
+        openTabs={[]}
+        selection={{ pairs: [{ projectId: 'abc123' }] }}
+        onChangeSelection={() => {}}
+        ariaLabel="Projects"
+        buttonPlaceholder="Select projects"
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: 'Projects' })).toHaveTextContent('ABC');
+  });
+});
+
+describe('custom grouping label', () => {
+  const projects: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Project A' }];
+  const sections: ProjectSelectorSection[] = [{ id: 'all', label: 'All', match: () => true }];
+
+  // The warning fires once per module instance, so each case needs a fresh registry.
+  const renderWithFreshModule = async (
+    localizedStrings?: Record<string, string>,
+  ): Promise<ReturnType<typeof vi.spyOn>> => {
+    vi.resetModules();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { ProjectSelector: FreshProjectSelector } = await import(
+      '@/components/advanced/project-selector/project-selector.component'
+    );
+    render(
+      <FreshProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'a' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        availableGroupings={['custom']}
+        customSections={sections}
+        localizedStrings={localizedStrings}
+      />,
+    );
+    return warnSpy;
+  };
+
+  it('warns when custom grouping is offered without a label naming the axis', async () => {
+    const warnSpy = await renderWithFreshModule();
+    try {
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain('groupByCustom');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('stays quiet when the caller names the axis', async () => {
+    const warnSpy = await renderWithFreshModule({ groupByCustom: 'Relevance' });
+    try {
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

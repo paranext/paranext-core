@@ -247,6 +247,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_projectSelector_versificationSectionHeading%',
   '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
   '%manageBooks_projectSelector_viewOptionsAriaLabel%',
+  '%manageBooks_projectSelector_viewOptionsModifiedAriaLabel%',
   '%manageBooks_projectSelector_selectAll%',
   '%manageBooks_filter_count%',
   '%manageBooks_filter_zero%',

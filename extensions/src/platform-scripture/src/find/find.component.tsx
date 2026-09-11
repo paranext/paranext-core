@@ -789,8 +789,8 @@ export function Find({
   // Deliberately only the strings REACHABLE from Find's configuration, since localized keys are
   // immutable once shipped and one that can never render is permanent dead surface. Omitted, with
   // the reason each cannot appear here:
-  // - `viewOptionsAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `filterGroupByOpenTabs`
-  //   — the view-options menu is not mounted at all (`hideFilterMenu` below).
+  // - `viewOptionsAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `groupByOpenTabs`
+  //   — the view-options menu is not mounted at all (`hideViewOptionsMenu` below).
   // - `selectAll` / `clearAll` / `filterShowSelectedOnly` — multi-select only; both of Find's
   //   configurations are single-select (`mode="projectScrollGroup"` / `mode="project"`).
   // - `versificationUnknownSectionHeading` — requires versification grouping.
@@ -823,7 +823,7 @@ export function Find({
   const sharedProjectSelectorProps = {
     localizedStrings: projectSelectorLocalizedStrings,
     isLoading: isLoadingProjects,
-    hideFilterMenu: true,
+    hideViewOptionsMenu: true,
     buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
     commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
     ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],

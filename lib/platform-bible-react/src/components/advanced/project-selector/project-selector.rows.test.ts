@@ -30,7 +30,7 @@ const openTabs: ProjectSelectorOpenTab[] = [
   { projectId: 'b', scrollGroupId: A },
 ];
 
-describe('computeRows — case-insensitive open-tab join (I12 regression)', () => {
+describe('computeRows — case-insensitive project-id matching', () => {
   // Real-world casing mismatch: canonical project ids are UPPERCASE (C# ProjectSummary →
   // Guid.ToUpperInvariant), but the open-tabs hook lowercases projectId. The join must still match
   // so the "Open Tabs" section renders. All-lowercase fixtures above never exercise this path.
@@ -56,11 +56,30 @@ describe('computeRows — case-insensitive open-tab join (I12 regression)', () =
     expect(rowA!.isMuted).toBe(false);
   });
 
+  it('selects the row when a single-select id differs in casing from the canonical id', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { projectId: 'abc123' },
+    });
+    expect(rows.filter((r) => r.isSelected).map((r) => r.projectId)).toEqual(['ABC123']);
+  });
+
+  it('selects nothing in single-select mode when no project is selected', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    expect(rows.some((r) => r.isSelected)).toBe(false);
+  });
+
   it('keeps a bound-but-closed row when the selection pair id differs in casing', () => {
     // A pair bound to a scroll group with no open tab produces a synthetic "bound but closed" row.
-    // Resolving that pair back to its project has to normalize too: a lowercased pair id against an
-    // uppercase canonical id used to fall through the lookup and drop the row, so the user's own
-    // selected project vanished from the list.
+    // Resolving that pair back to its project normalizes casing, so a lowercased pair id still
+    // finds its uppercase canonical project and the user's selected project stays in the list.
     const rows = computeRows({
       mode: 'project-multi',
       projects: upperProjects,
@@ -748,20 +767,49 @@ describe('partitionByCustomSections', () => {
     }
   });
 
-  it('warns about a second, distinct duplicate id', () => {
+  it('warns once even when the sections array is rebuilt on every call', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+      // A caller building `customSections` inline hands over a new array each render. The guard
+      // has to key off the id, not the array, or this is the case that warns hundreds of times.
+      const partitionWithFreshArray = () =>
+        partitionByCustomSections(
+          rowsFor(list),
+          [
+            { id: 'inline-dup', label: 'One', match: () => false },
+            { id: 'inline-dup', label: 'Two', match: () => true },
+          ],
+          byId(list),
+        );
+      partitionWithFreshArray();
+      partitionWithFreshArray();
+      partitionWithFreshArray();
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain('inline-dup');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('warns about every distinct duplicate id in one array, not just the first', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
       partitionByCustomSections(
         rowsFor(list),
         [
-          { id: 'other-dup', label: 'One', match: () => false },
-          { id: 'other-dup', label: 'Two', match: () => true },
+          { id: 'first-dup', label: 'One', match: () => false },
+          { id: 'first-dup', label: 'Two', match: () => false },
+          { id: 'second-dup', label: 'Three', match: () => false },
+          { id: 'second-dup', label: 'Four', match: () => true },
         ],
         byId(list),
       );
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy.mock.calls[0][0]).toContain('other-dup');
+      const warned = warnSpy.mock.calls.map((call) => call[0]);
+      expect(warned).toHaveLength(2);
+      expect(warned.some((message) => message.includes('first-dup'))).toBe(true);
+      expect(warned.some((message) => message.includes('second-dup'))).toBe(true);
     } finally {
       warnSpy.mockRestore();
     }

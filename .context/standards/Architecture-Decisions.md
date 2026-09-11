@@ -2764,8 +2764,9 @@ step, no automation. Just a record.
   next item all arrived or will arrive after the promotion was first proposed.
 - **Alternatives considered:**
   - **Promote now.** Rejected: it fixes the public shape at the point of greatest churn. Names that
-    are free to change today (`hideFilterMenu`, which no longer matches the "view options" concept
-    the control now expresses) become breaking changes the moment the component is supported.
+    are free to change today become breaking changes the moment the component is supported — this
+    work item renamed `hideFilterMenu` to `hideViewOptionsMenu` and the `filterGroupBy*` string keys
+    to `groupBy*`, with no deprecation shims, precisely because `experimental` allows it.
   - **Promote with the experimental barrel kept as a deprecated re-export.** Rejected: that entry
     point's own header declares no stability guarantee and promises no deprecation cycle, so the
     shim would buy nothing while putting the component in two bundles.

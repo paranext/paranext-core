@@ -9,6 +9,7 @@ import {
 } from 'platform-bible-react';
 import {
   ProjectSelector,
+  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
@@ -60,6 +61,28 @@ const DEFAULT_WEBVIEW_MENU = {
 };
 
 const MARKERS_CHECKLIST_WEB_VIEW_TYPE = 'platformScripture.markersChecklist';
+
+/**
+ * Localization keys for the chrome `<ProjectSelector>` renders inside its popover (search box, view
+ * options menu, section headings). Both of this web view's pickers share one resolved map: the
+ * multi-select comparative-texts picker renders the filter row and the select-all/clear-all buttons
+ * that the single-select primary-project picker does not, and a shared map keeps the two pickers'
+ * wording identical wherever they do overlap.
+ */
+const PROJECT_SELECTOR_STRING_KEYS = Object.freeze([
+  '%markersChecklist_projectSelector_searchPlaceholder%',
+  '%markersChecklist_projectSelector_viewOptionsAriaLabel%',
+  '%markersChecklist_projectSelector_viewOptionsModifiedAriaLabel%',
+  '%markersChecklist_projectSelector_groupSectionLabel%',
+  '%markersChecklist_projectSelector_groupByNone%',
+  '%markersChecklist_projectSelector_groupByOpenTabs%',
+  '%markersChecklist_projectSelector_openTabsSectionHeading%',
+  '%markersChecklist_projectSelector_otherProjectsSectionHeading%',
+  '%markersChecklist_projectSelector_filterSectionLabel%',
+  '%markersChecklist_projectSelector_filterShowSelectedOnly%',
+  '%markersChecklist_projectSelector_selectAll%',
+  '%markersChecklist_projectSelector_clearAll%',
+] as const);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -215,6 +238,34 @@ global.webViewComponent = function ChecklistWebView({
 
   const scopeSelectorStringKeys = useMemo(() => Array.from(SCOPE_SELECTOR_STRING_KEYS), []);
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(scopeSelectorStringKeys);
+
+  const projectSelectorStringKeys = useMemo(() => Array.from(PROJECT_SELECTOR_STRING_KEYS), []);
+  const [projectSelectorStrings] = useLocalizedStrings(projectSelectorStringKeys);
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
+    () => ({
+      searchPlaceholder:
+        projectSelectorStrings['%markersChecklist_projectSelector_searchPlaceholder%'],
+      viewOptionsAriaLabel:
+        projectSelectorStrings['%markersChecklist_projectSelector_viewOptionsAriaLabel%'],
+      viewOptionsModifiedAriaLabel:
+        projectSelectorStrings['%markersChecklist_projectSelector_viewOptionsModifiedAriaLabel%'],
+      groupSectionLabel:
+        projectSelectorStrings['%markersChecklist_projectSelector_groupSectionLabel%'],
+      groupByNone: projectSelectorStrings['%markersChecklist_projectSelector_groupByNone%'],
+      groupByOpenTabs: projectSelectorStrings['%markersChecklist_projectSelector_groupByOpenTabs%'],
+      openTabsSectionHeading:
+        projectSelectorStrings['%markersChecklist_projectSelector_openTabsSectionHeading%'],
+      otherProjectsSectionHeading:
+        projectSelectorStrings['%markersChecklist_projectSelector_otherProjectsSectionHeading%'],
+      filterSectionLabel:
+        projectSelectorStrings['%markersChecklist_projectSelector_filterSectionLabel%'],
+      filterShowSelectedOnly:
+        projectSelectorStrings['%markersChecklist_projectSelector_filterShowSelectedOnly%'],
+      selectAll: projectSelectorStrings['%markersChecklist_projectSelector_selectAll%'],
+      clearAll: projectSelectorStrings['%markersChecklist_projectSelector_clearAll%'],
+    }),
+    [projectSelectorStrings],
+  );
 
   // ─── Service + editability ────────────────────────────────────────────────
 
@@ -666,10 +717,17 @@ global.webViewComponent = function ChecklistWebView({
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
           buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
+          localizedStrings={projectSelectorLocalizedStrings}
         />
       </div>
     ),
-    [comparativeProjects, comparativeOpenTabs, comparativeSelection, handleComparativeTextsChange],
+    [
+      comparativeProjects,
+      comparativeOpenTabs,
+      comparativeSelection,
+      handleComparativeTextsChange,
+      projectSelectorLocalizedStrings,
+    ],
   );
 
   // ─── ScopeSelector handlers (R1: snapshot at click-time) ─────────────────
@@ -789,6 +847,7 @@ global.webViewComponent = function ChecklistWebView({
             localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel
           }
           ariaLabel={localizedStrings['%markersChecklist_toolbar_primaryProject%']}
+          localizedStrings={projectSelectorLocalizedStrings}
         />
       </div>
     ),
@@ -799,6 +858,7 @@ global.webViewComponent = function ChecklistWebView({
       updateWebViewDefinition,
       localizedStrings,
       primaryProjectLabel,
+      projectSelectorLocalizedStrings,
     ],
   );
 

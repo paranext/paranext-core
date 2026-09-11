@@ -2,7 +2,6 @@
 
 import '@testing-library/jest-dom';
 import { render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { CheckJobStatusReport } from 'platform-scripture';
@@ -14,20 +13,14 @@ import {
   ChecksSidePanelProject,
   ChecksSidePanelProps,
 } from './checks-side-panel.component';
+import {
+  groupingChoices,
+  installProjectSelectorJsdomShims,
+  setupUser,
+  UNSUPPORTED_GROUPINGS,
+} from '../../project-selector.test-utils';
 
-// jsdom implements none of ResizeObserver, scrollIntoView or scrollTo, and the picker's render path
-// touches all three: cmdk wires a ResizeObserver, Radix's PopoverContent calls scrollTo when it
-// focuses children, and the picker scrolls the selected row into view when it opens.
-beforeAll(() => {
-  // `vi.stubGlobal` accepts `unknown`, so these no-op stubs need no type assertion to stand in for
-  // the real constructors — only `observe`/`disconnect` are ever reached from this render path.
-  vi.stubGlobal(
-    'ResizeObserver',
-    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
-  );
-  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = vi.fn();
-  if (!Element.prototype.scrollTo) Element.prototype.scrollTo = vi.fn();
-});
+beforeAll(installProjectSelectorJsdomShims);
 
 /**
  * Maps every localized key to the key itself, so assertions can target an exact, stable string
@@ -84,15 +77,14 @@ function buildProps(overrides: Partial<ChecksSidePanelProps> = {}): ChecksSidePa
   };
 }
 
-/** Radix popovers and cmdk need pointer-event sequences jsdom does not synthesize on its own. */
-const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
-
-/** Grouping axes this panel's project data cannot support, so the picker may not offer them. */
-const UNSUPPORTED_GROUPINGS = ['Language', 'Last used', 'Versification', 'Type'];
-
-/** Grouping options the open view-options menu offers, in order, by visible label. */
-const groupingChoices = () =>
-  screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
+/**
+ * The grouping labels the picker renders, in menu order. `stubLocalizedStrings` maps every key to
+ * itself, so these are the keys the panel supplies rather than shipped wording.
+ */
+const GROUPING_CHOICE_LABELS = [
+  '%webView_checksSidePanel_projectSelector_groupByNone%',
+  '%webView_checksSidePanel_projectSelector_groupByOpenTabs%',
+];
 
 describe('ChecksSidePanel project picker', () => {
   it('offers only open-tabs grouping', async () => {
@@ -101,13 +93,17 @@ describe('ChecksSidePanel project picker', () => {
 
     const picker = screen.getByTestId('checks-side-panel-project-trigger');
     await user.click(within(picker).getByRole('combobox'));
-    await user.click(await screen.findByLabelText('View options'));
+    await user.click(
+      await screen.findByLabelText(
+        '%webView_checksSidePanel_projectSelector_viewOptionsAriaLabel%',
+      ),
+    );
 
     // The panel's project data carries no language, type or last-used fields, so those groupings
     // would file every row under one "Unknown …" heading — a menu whose every option makes the list
     // worse. Asserting only the two offered options would still pass with the restriction deleted,
     // so the absence of the unsupported axes is the load-bearing half of this test.
-    await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs']));
+    await waitFor(() => expect(groupingChoices()).toEqual(GROUPING_CHOICE_LABELS));
     UNSUPPORTED_GROUPINGS.forEach((label) => {
       expect(screen.queryByRole('menuitemradio', { name: label })).not.toBeInTheDocument();
     });

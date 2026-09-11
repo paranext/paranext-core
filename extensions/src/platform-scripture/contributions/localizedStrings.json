@@ -42,6 +42,66 @@
     "%manageBooks_projectSelector_filterAriaLabel%": {
       "fallbackKey": "%manageBooks_projectSelector_viewOptionsAriaLabel%"
     },
+    "%markersChecklist_projectSelector_searchPlaceholder%": {
+      "fallbackKey": "%manageBooks_projectSelector_searchPlaceholder%"
+    },
+    "%markersChecklist_projectSelector_viewOptionsAriaLabel%": {
+      "fallbackKey": "%manageBooks_projectSelector_viewOptionsAriaLabel%"
+    },
+    "%markersChecklist_projectSelector_viewOptionsModifiedAriaLabel%": {
+      "fallbackKey": "%manageBooks_projectSelector_viewOptionsModifiedAriaLabel%"
+    },
+    "%markersChecklist_projectSelector_groupSectionLabel%": {
+      "fallbackKey": "%manageBooks_projectSelector_groupSectionLabel%"
+    },
+    "%markersChecklist_projectSelector_groupByNone%": {
+      "fallbackKey": "%manageBooks_grid_groupBy_none%"
+    },
+    "%markersChecklist_projectSelector_groupByOpenTabs%": {
+      "fallbackKey": "%manageBooks_projectSelector_filterGroupByOpenTabs%"
+    },
+    "%markersChecklist_projectSelector_openTabsSectionHeading%": {
+      "fallbackKey": "%manageBooks_projectSelector_openTabsSectionHeading%"
+    },
+    "%markersChecklist_projectSelector_otherProjectsSectionHeading%": {
+      "fallbackKey": "%manageBooks_projectSelector_otherProjectsSectionHeading%"
+    },
+    "%markersChecklist_projectSelector_filterSectionLabel%": {
+      "fallbackKey": "%manageBooks_projectSelector_filterSectionLabel%"
+    },
+    "%markersChecklist_projectSelector_filterShowSelectedOnly%": {
+      "fallbackKey": "%manageBooks_projectSelector_filterShowSelectedOnly%"
+    },
+    "%markersChecklist_projectSelector_selectAll%": {
+      "fallbackKey": "%manageBooks_projectSelector_selectAll%"
+    },
+    "%markersChecklist_projectSelector_clearAll%": {
+      "fallbackKey": "%manageBooks_projectSelector_clearAll%"
+    },
+    "%webView_checksSidePanel_projectSelector_searchPlaceholder%": {
+      "fallbackKey": "%manageBooks_projectSelector_searchPlaceholder%"
+    },
+    "%webView_checksSidePanel_projectSelector_viewOptionsAriaLabel%": {
+      "fallbackKey": "%manageBooks_projectSelector_viewOptionsAriaLabel%"
+    },
+    "%webView_checksSidePanel_projectSelector_viewOptionsModifiedAriaLabel%": {
+      "fallbackKey": "%manageBooks_projectSelector_viewOptionsModifiedAriaLabel%"
+    },
+    "%webView_checksSidePanel_projectSelector_groupSectionLabel%": {
+      "fallbackKey": "%manageBooks_projectSelector_groupSectionLabel%"
+    },
+    "%webView_checksSidePanel_projectSelector_groupByNone%": {
+      "fallbackKey": "%manageBooks_grid_groupBy_none%"
+    },
+    "%webView_checksSidePanel_projectSelector_groupByOpenTabs%": {
+      "fallbackKey": "%manageBooks_projectSelector_filterGroupByOpenTabs%"
+    },
+    "%webView_checksSidePanel_projectSelector_openTabsSectionHeading%": {
+      "fallbackKey": "%manageBooks_projectSelector_openTabsSectionHeading%"
+    },
+    "%webView_checksSidePanel_projectSelector_otherProjectsSectionHeading%": {
+      "fallbackKey": "%manageBooks_projectSelector_otherProjectsSectionHeading%"
+    },
     "%inventoryName_Character%": {
       "fallbackKey": "%CheckType_3%"
     },
@@ -257,6 +317,7 @@
       "%manageBooks_projectSelector_versificationSectionHeading%": "{0} versification",
       "%manageBooks_projectSelector_versificationUnknownSectionHeading%": "Unknown versification",
       "%manageBooks_projectSelector_viewOptionsAriaLabel%": "View options",
+      "%manageBooks_projectSelector_viewOptionsModifiedAriaLabel%": "View options (modified)",
       "%manageBooks_filter_buttonAriaLabel%": "Filter",
       "%manageBooks_filter_clearButton%": "Clear filter",
       "%manageBooks_filter_menuLabel%": "Show",

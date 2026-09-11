@@ -278,7 +278,12 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   const tabsByProject = collectOpenTabsByProject(args.openTabs);
 
   if (args.mode === 'project') {
-    const selectedId = args.selection.projectId;
+    // Normalized for the same reason the multi-select modes are: a caller's selected id can arrive
+    // lowercased while project ids are canonical, and single-select must not be the one mode where
+    // that silently selects nothing.
+    const selectedId = args.selection.projectId
+      ? normalizeProjectId(args.selection.projectId)
+      : undefined;
     return args.projects.map((project) => {
       const tabs = tabsByProject.get(normalizeProjectId(project.id)) ?? [];
       return {
@@ -291,7 +296,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         scrollGroupId: undefined,
         scrollGroupScrRefLabel: undefined,
         openGroups: tabs.map((t) => t.scrollGroupId),
-        isSelected: selectedId === project.id,
+        isSelected: selectedId !== undefined && selectedId === normalizeProjectId(project.id),
         isMuted: tabs.length === 0,
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
@@ -681,38 +686,34 @@ export function partitionByLastUsed(
 const UNMATCHED_SECTION_ID = '__unmatched__';
 
 /**
- * Returns the first `section.id` that collides with an earlier one, or with the reserved id used
- * for the trailing unmatched bucket, or `undefined` if none does.
+ * Returns every distinct `section.id` that collides with an earlier one, or with the reserved id
+ * used for the trailing unmatched bucket. Empty if none does. All of them are reported, not just
+ * the first, so fixing one collision does not leave the next one undiscovered.
  */
-function findDuplicateSectionId(sections: readonly ProjectSelectorSection[]): string | undefined {
+function findDuplicateSectionIds(sections: readonly ProjectSelectorSection[]): string[] {
   const seenIds = new Set<string>();
-  return sections
-    .map((section) => section.id)
-    .find((id) => {
-      if (id === UNMATCHED_SECTION_ID || seenIds.has(id)) return true;
-      seenIds.add(id);
-      return false;
-    });
+  const duplicateIds = new Set<string>();
+  sections.forEach(({ id }) => {
+    if (id === UNMATCHED_SECTION_ID || seenIds.has(id)) duplicateIds.add(id);
+    else seenIds.add(id);
+  });
+  return [...duplicateIds];
 }
 
 /**
  * Duplicate ids already reported, so a misconfigured `customSections` array yields one warning per
  * offending id rather than one per call. Partitioning runs on every keystroke in the selector's
  * search box, and the caller cannot act on the same message repeated hundreds of times.
+ *
+ * Keyed by the id itself rather than by the `sections` array, because the array a caller builds
+ * inline is a new object on every render — the shape most likely to carry a misconfiguration is
+ * exactly the one an identity-keyed guard cannot dedupe.
  */
-const warnedDuplicateSectionIds = new WeakMap<object, Set<string>>();
+const warnedDuplicateSectionIds = new Set<string>();
 
-function warnOnceAboutDuplicateSectionId(
-  sections: readonly ProjectSelectorSection[],
-  duplicateId: string,
-): void {
-  let warned = warnedDuplicateSectionIds.get(sections);
-  if (!warned) {
-    warned = new Set<string>();
-    warnedDuplicateSectionIds.set(sections, warned);
-  }
-  if (warned.has(duplicateId)) return;
-  warned.add(duplicateId);
+function warnOnceAboutDuplicateSectionId(duplicateId: string): void {
+  if (warnedDuplicateSectionIds.has(duplicateId)) return;
+  warnedDuplicateSectionIds.add(duplicateId);
   console.warn(
     `ProjectSelector: duplicate custom section id "${duplicateId}" — matching is unaffected because ` +
       `each section buckets by its own \`match\`, but sections sharing an id collide as React keys, which can cause stale or misapplied rendering.`,
@@ -767,8 +768,7 @@ export function partitionByCustomSections(
     return [{ kind: 'flat', rows: [...rows].sort(compareRows) }];
   }
 
-  const duplicateId = findDuplicateSectionId(sections);
-  if (duplicateId !== undefined) warnOnceAboutDuplicateSectionId(sections, duplicateId);
+  findDuplicateSectionIds(sections).forEach(warnOnceAboutDuplicateSectionId);
 
   // Resolve each project once, then reuse the verdict for all of its rows.
   const sectionIndexByProjectKey = new Map<string, number>();

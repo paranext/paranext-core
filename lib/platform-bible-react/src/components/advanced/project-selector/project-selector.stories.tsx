@@ -341,7 +341,7 @@ export const SimpleFlatList: Story = {
     docs: {
       description: {
         story:
-          'The simplest possible display: single-select with `mode="project"` and `openTabs={[]}`. No scroll-group chips render on any row, no "Opened project & resource tabs" section appears, and `partitionAndSort` collapses to a single flat, unheaded list. Sample data mixes projects (HPUX, TP1, SCHL1951) and resources (NA28, BHS, LXX) — note the component itself does not visually distinguish the two; they render identically. The view-options menu still offers the "Open tabs" grouping, which has no visible effect while `openTabs` is empty — pass `hideFilterMenu` (or `availableGroupings={[]}`, as the "No groupings offered" story does) to drop it.',
+          'The simplest possible display: single-select with `mode="project"` and `openTabs={[]}`. No scroll-group chips render on any row, no "Opened project & resource tabs" section appears, and `partitionAndSort` collapses to a single flat, unheaded list. Sample data mixes projects (HPUX, TP1, SCHL1951) and resources (NA28, BHS, LXX) — note the component itself does not visually distinguish the two; they render identically. The view-options menu still offers the "Open tabs" grouping, which has no visible effect while `openTabs` is empty — pass `hideViewOptionsMenu` (or `availableGroupings={[]}`, as the "No groupings offered" story does) to drop it.',
       },
     },
   },
@@ -398,7 +398,7 @@ export const CustomSectionsSimple: Story = {
         ariaLabel="Project"
         availableGroupings={['custom']}
         defaultGrouping="custom"
-        hideFilterMenu
+        hideViewOptionsMenu
         customSections={customSectionsSample}
       />
     );
@@ -407,7 +407,7 @@ export const CustomSectionsSimple: Story = {
     docs: {
       description: {
         story:
-          'A picker pinned to caller-defined sections with no user-facing way to change grouping: `availableGroupings={[\'custom\']}`, `defaultGrouping="custom"`, and `hideFilterMenu` together, since a one-item grouping menu is an inert control.',
+          'A picker pinned to caller-defined sections with no user-facing way to change grouping: `availableGroupings={[\'custom\']}`, `defaultGrouping="custom"`, and `hideViewOptionsMenu` together, since a one-item grouping menu is an inert control.',
       },
     },
   },
@@ -443,8 +443,9 @@ export const CustomSectionsPower: Story = {
     // The popover, and the view-options menu inside it, both portal to the document body.
     const body = within(canvasElement.ownerDocument.body);
 
+    // The button's accessible name gains "(modified)" once the view is off its defaults.
     const openViewOptions = async () => {
-      await userEvent.click(await body.findByLabelText('View options'));
+      await userEvent.click(await body.findByLabelText(/^View options/));
     };
 
     await step('The picker opens on the custom sections', async () => {
@@ -767,12 +768,12 @@ export const ProjectAndResourceIndicators: Story = {
           // A row whose project carries no type still needs a name for its glyph — the fixture's
           // uncategorized entry exercises that path.
           const typeLabel = project.typeName ?? project.type ?? 'Uncategorized';
-          // The glyph is the only visual carrier of "project or resource", so give it an
-          // accessible name of its own instead of hiding it from assistive tech. `title` also
-          // gives the icon a native hover label for sighted users who don't recognize it.
+          // The row already carries `typeName` in its own accessible name, so the glyph is
+          // decorative: naming it too would announce the type twice on every row. `title` still
+          // gives sighted users a hover label for an icon they may not recognize.
           return (
-            <span role="img" aria-label={typeLabel} title={typeLabel}>
-              <Icon className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+            <span aria-hidden title={typeLabel}>
+              <Icon className="tw:h-3 tw:w-3 tw:opacity-60" />
             </span>
           );
         }}
@@ -783,7 +784,7 @@ export const ProjectAndResourceIndicators: Story = {
     docs: {
       description: {
         story:
-          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and cannot know what a glyph means, so naming it is the caller's job: each icon here sits in a `role=\"img\"` wrapper labelled with the project's `typeName`, which is what a screen reader announces, plus a `title` for hover. The selector also lists `typeName` in the row tooltip, so the distinction never rests on the glyph alone.",
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and cannot know what a glyph means, so naming it is the caller's job: each icon here is marked `aria-hidden` with a `title` for hover, because the selector already puts the project's `typeName` into the row's own accessible name — naming the glyph as well would announce the type twice per row. A caller whose rows carry no `typeName` should name the glyph instead. The selector also lists `typeName` in the row tooltip, so the distinction never rests on the glyph alone.",
       },
     },
   },

@@ -466,9 +466,13 @@ global.webViewComponent = function ManageBooksWebView({
         '%manageBooks_projectSelector_viewOptionsAriaLabel%',
         'View options',
       ),
+      viewOptionsModifiedAriaLabel: resolve(
+        '%manageBooks_projectSelector_viewOptionsModifiedAriaLabel%',
+        'View options (modified)',
+      ),
       groupSectionLabel: resolve('%manageBooks_projectSelector_groupSectionLabel%', 'Group'),
       filterSectionLabel: resolve('%manageBooks_projectSelector_filterSectionLabel%', 'Filter'),
-      filterGroupByOpenTabs: resolve(
+      groupByOpenTabs: resolve(
         '%manageBooks_projectSelector_filterGroupByOpenTabs%',
         'By open tabs',
       ),

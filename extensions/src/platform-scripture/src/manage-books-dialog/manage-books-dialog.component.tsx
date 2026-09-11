@@ -450,7 +450,7 @@ function PresenceFilterMenu({
         >
           {(['all', 'new', 'existing'] as const).map((s) => (
             // Default `onSelect` behavior closes the dropdown after a radio pick — that's what
-            // we want here (single-select). PS's `FilterMenu` uses `event.preventDefault()`
+            // we want here (single-select). PS's `ViewOptionsMenu` uses `event.preventDefault()`
             // because its checkboxes allow multi-toggle without re-opening; that doesn't apply
             // to a radio group.
             <DropdownMenuRadioItem key={s} value={s} data-testid={`${testIdPrefix}-${s}`}>
@@ -2403,7 +2403,7 @@ export function ManageBooksDialog({
                   rows were replaced with a single Filter-icon button that opens a popover
                   containing the radio choices. Mirrors the pattern in
                   `lib/platform-bible-react/src/components/advanced/project-selector/
-                  project-selector.component.tsx` (`FilterMenu`). The trigger picks up an
+                  project-selector.component.tsx` (`ViewOptionsMenu`). The trigger picks up an
                   accent background when a filter is active so the affordance still reads as
                   "filter applied" without dragging the user's eye to a chip row. The Copy-
                   mode comparison-state filter (New/Newer/Older/Same/Undetermined) was
@@ -2564,10 +2564,10 @@ export function ManageBooksDialog({
                           // destination project. The destination's own
                           // versification group is pinned to the top. Locked to this one
                           // grouping — there is no other axis worth switching to here — so the
-                          // filter menu itself is hidden rather than exposing an inert toggle.
+                          // view-options menu itself is hidden rather than exposing an inert toggle.
                           availableGroupings={['versification']}
                           defaultGrouping="versification"
-                          hideFilterMenu
+                          hideViewOptionsMenu
                           priorityVersificationId={versification}
                           // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                           // the picker reads as a call-to-action until a reference project is set.

@@ -12,6 +12,7 @@ import {
 } from 'platform-bible-react';
 import {
   ProjectSelector,
+  ProjectSelectorLocalizedStrings,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
@@ -169,6 +170,30 @@ export function ChecksSidePanel({
     [projects],
   );
 
+  // Chrome the picker's popover renders for itself. The panel offers only the open-tabs grouping,
+  // so the view-options menu holds exactly the "None" and "Open tabs" radio items and no filter
+  // row; the other grouping axes' labels are unreachable here and therefore unsupplied.
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
+    () => ({
+      searchPlaceholder:
+        localizedStrings['%webView_checksSidePanel_projectSelector_searchPlaceholder%'],
+      viewOptionsAriaLabel:
+        localizedStrings['%webView_checksSidePanel_projectSelector_viewOptionsAriaLabel%'],
+      viewOptionsModifiedAriaLabel:
+        localizedStrings['%webView_checksSidePanel_projectSelector_viewOptionsModifiedAriaLabel%'],
+      groupSectionLabel:
+        localizedStrings['%webView_checksSidePanel_projectSelector_groupSectionLabel%'],
+      groupByNone: localizedStrings['%webView_checksSidePanel_projectSelector_groupByNone%'],
+      groupByOpenTabs:
+        localizedStrings['%webView_checksSidePanel_projectSelector_groupByOpenTabs%'],
+      openTabsSectionHeading:
+        localizedStrings['%webView_checksSidePanel_projectSelector_openTabsSectionHeading%'],
+      otherProjectsSectionHeading:
+        localizedStrings['%webView_checksSidePanel_projectSelector_otherProjectsSectionHeading%'],
+    }),
+    [localizedStrings],
+  );
+
   const getScopeLabel = useCallback(
     (scopeValue: string) => {
       if (isValidCheckScope(scopeValue)) {
@@ -236,6 +261,7 @@ export function ChecksSidePanel({
             ariaLabel={
               localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
             }
+            localizedStrings={projectSelectorLocalizedStrings}
             buttonVariant="outline"
             buttonClassName="tw:w-full tw:font-normal"
             popoverContentClassName="tw:w-[300px]"
