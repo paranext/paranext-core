@@ -21,6 +21,18 @@
  * here. The insert is additionally driven through the registered `insertEndnoteAtSelection`
  * command, the same web-view callback the menu item invokes.
  *
+ * Two constraints shape the step order below.
+ *
+ * 1. Every insert has to put the caret in a VERSE paragraph, because that is what an end note is for:
+ *    `\fe` anchors at the caret's reference, and the paragraphs above `\c 1` — the `\id` line,
+ *    `\h`, `\toc*`, `\mt*` — are not verses. The chapter's FIRST paragraph is the `\id` line, so
+ *    reaching a verse takes a locator that says so.
+ * 2. Inserting a note auto-opens the footnote editor over that paragraph, and that popover is a
+ *    CONTROLLED Radix `Popover` with no `onOpenChange` (see `showFootnoteEditor` in the web view),
+ *    so neither Escape nor a click outside dismisses it. Its own buttons close it, and so does a
+ *    chapter change — which is why the chapter round trip runs BETWEEN the two inserts rather than
+ *    after both: it is what clears the popover off the second insert's paragraph.
+ *
  * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
  * Run: `npm run test:e2e:isolated scripture-editor`.
  */
@@ -62,11 +74,23 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     // locator counts one inserted note twice.
     const mainEditor = editorInput.first();
     const endnotes = mainEditor.locator('span.note.usfm_fe');
+    /** The endnotes that landed where an end note belongs — inside a body paragraph. */
+    const endnotesInVerseParas = mainEditor.locator('p.usfm_p span.note.usfm_fe');
+
+    /**
+     * A body paragraph that holds a verse and no note yet. Inserting into one takes it out of this
+     * set, so each call lands in a paragraph that is still clear — which is what keeps a click at
+     * the paragraph's centre off a note caller, where it would open that note's editor instead of
+     * moving the caret.
+     */
+    const nextClearVersePara = () =>
+      mainEditor.locator('p.usfm_p:has(span.verse):not(:has(span.note))').first();
 
     // ContextMenuPlugin suppresses the menu when the right-click target IS the content-editable
-    // root, so aim at a paragraph inside it.
-    const openContextMenu = async () => {
-      await editorInput.locator('p').first().click({ button: 'right' });
+    // root, so aim at a paragraph inside it. The right-click also moves the caret there, which is
+    // what puts the keyboard-driven insert below inside a verse.
+    const openContextMenu = async (target = nextClearVersePara()) => {
+      await target.click({ button: 'right' });
       await expect(contextMenu).toBeAttached({ timeout: 15_000 });
     };
     // Every option's text, in menu order — the built-in Cut/Copy/Paste entries first, then the
@@ -77,8 +101,10 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     let endnotesExpected = 0;
 
     await test.step('context menu lists the four Insert-menu inserts in Insert-menu order', async () => {
-      await editorInput.locator('p').first().click();
-      await openContextMenu();
+      const versePara = nextClearVersePara();
+      await expect(versePara).toBeVisible({ timeout: 30_000 });
+      await versePara.click();
+      await openContextMenu(versePara);
       optionTexts = await contextMenu.locator('[role="option"]').allTextContents();
       const insertOptions = optionTexts.filter((text) => text.startsWith('Insert'));
       expect(insertOptions).toEqual([
@@ -89,7 +115,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       ]);
     });
 
-    await test.step('every item is visible at once — the menu is not clipped', async () => {
+    await test.step('the menu shows all of itself, and says so when it cannot', async () => {
       // Re-opened rather than reused from the step above: the plugin closes the menu on a scroll of
       // anything but itself, and the chapter is still settling, so an already-open menu is not
       // something a later step can rely on.
@@ -102,6 +128,20 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
         clientHeight: ul.clientHeight,
       }));
       expect(listOverflow.scrollHeight).toBeLessThanOrEqual(listOverflow.clientHeight + 1);
+
+      // …and when the panel IS too short for the whole list, the fold has to be visible. The rule
+      // this menu inherits hides the scrollbar, which suits the filterable marker typeahead and
+      // leaves this one with nothing on screen saying there is more. Measured by forcing the
+      // overflow with an inline cap — what is under test is how a clipped list looks, not how it
+      // came to be clipped — and reading the gutter the scrollbar takes.
+      const scrollbarGutterPx = await contextMenu.locator('ul').evaluate((ul: HTMLElement) => {
+        const previousMaxHeight = ul.style.maxHeight;
+        ul.style.maxHeight = '40px';
+        const gutter = ul.offsetWidth - ul.clientWidth;
+        ul.style.maxHeight = previousMaxHeight;
+        return gutter;
+      });
+      expect(scrollbarGutterPx).toBeGreaterThan(0);
     });
 
     await test.step('arrow keys then Enter invoke the highlighted item, not the Enter palette', async () => {
@@ -123,16 +163,37 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // The Enter-triggered paragraph marker palette must NOT have opened: while the menu holds a
       // highlighted item, the web view stands down and the menu owns Enter.
       await expect(mainPage.locator('[data-overlay-command-palette]')).toHaveCount(0);
-      // The footnote editor auto-opens for a newly inserted note; close it.
-      await mainPage.keyboard.press('Escape');
+      // The note has to have landed where an end note belongs. One anchored outside a verse still
+      // saves, so a count on its own never notices a caret that never reached the text.
+      await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
+      endnotesExpected = endnotesBefore + 1;
+    });
+
+    await test.step('the endnote survives a save and chapter-navigation round-trip', async () => {
+      // Navigating away flushes the pending save and forces a fresh PDP read of the chapter on the
+      // way back, which is what makes this step falsifiable: waiting in place and re-counting
+      // asserts something already true before the echo lands, so an echo that never happened would
+      // pass it.
+      //
+      // Positive control first — Jonah 2:1's own text, which appears nowhere in chapter 1 — so the
+      // count below runs against a RENDERED chapter rather than the empty mid-navigation editor
+      // (same rationale as type-through-save-echo.spec.ts).
+      await navigateToolbarBcv(mainPage, 'Jonah 2:1');
+      await expect(mainEditor).toContainText('prayed to Yahweh, his God', { timeout: 60_000 });
+      await expect(endnotes).toHaveCount(0);
+
+      await navigateToolbarBcv(mainPage, 'Jonah 1:2');
+      await expect(mainEditor).toContainText('word came to Jonah', { timeout: 60_000 });
+      await expect(endnotes).toHaveCount(endnotesExpected, { timeout: 30_000 });
+      await expect(endnotesInVerseParas).toHaveCount(endnotesExpected);
+      // The chapter change is also what closed the footnote editor the insert opened, which leaves
+      // the chapter clickable again for the step below.
+      await expect(editorInput).toHaveCount(1);
     });
 
     await test.step('inserting an end note creates a \\fe note with the + caller', async () => {
       expect(optionTexts).toContain('Insert end note');
-      // Put the caret back in the text: the right-click above opened the menu, and the insert needs
-      // a selection in the editor to act on.
-      await mainPage.keyboard.press('Escape');
-      await editorInput.locator('p').first().click();
+      await nextClearVersePara().click();
 
       // Counted here, immediately before the insert, NOT at spec start: the chapter's content is
       // still settling when the editor first attaches, and a retry re-opens a project an earlier
@@ -150,17 +211,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await expect(mainEditor.locator('span.note.usfm_fe[data-caller="+"]')).toHaveCount(
         endnotesBefore + 1,
       );
-      // The footnote editor auto-opens for a newly inserted note; close it so the echo settles
-      // with the editor focused.
-      await mainPage.keyboard.press('Escape');
-      endnotesExpected = endnotesBefore + 1;
-    });
-
-    await test.step('the endnote survives the debounced save/USFM echo round-trip', async () => {
-      // The PDP echoes saved USFM back through the editor (~700ms debounce + round-trip). If the
-      // note did not round-trip through USFM, the echo would drop this node.
-      await mainPage.waitForTimeout(5_000);
-      await expect(endnotes).toHaveCount(endnotesExpected);
+      await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
     });
   });
 });
