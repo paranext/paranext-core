@@ -2404,6 +2404,144 @@ step, no automation. Just a record.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-pdp-enumerates-extension-data-qualifiers: A PDP lists its extension-data qualifiers through a `list*` method on its own `projectInterface`, `platform.extensionDataEnumeration`
+
+- **Date:** 2026-09-04
+- **Status:** Proposed — no consumer has merged yet, and one shape question is open: whether the
+  missing third member of the extension-data triple (`deleteExtensionData`, mirroring
+  `resetSetting`) should ship alongside. Promote to Accepted once a real consumer has replaced a
+  hand-maintained index document with it. **Amended 2026-09-09:** the method moved off
+  `platform.base` onto its own `projectInterface` before merge, on review of PR #2786; see shape
+  choice (2) and `adr-pdp-methods-are-never-optional`.
+- **Context:** `platform.base` exposed only `getExtensionData`/`setExtensionData`
+  (`project-data-provider.model.ts`, `WithProjectDataProviderEngineExtensionDataMethods`), so an
+  extension could read only a `dataQualifier` it could already name. Two costs followed. Probing for
+  a qualifier by reading it **created** it: `ParatextProjectDataProvider.GetExtensionData` called
+  `GetExtensionStream(scope, createIfNotExists: true)` and
+  `RawDirectoryProjectStreamManager.GetDataStream` does `Directory.CreateDirectory` +
+  `FileMode.OpenOrCreate`, leaving a zero-byte file under `shared/**` that Send/Receive commits to
+  every clone, with no delete API. And because Send/Receive replaces rather than merges files under
+  `shared/**`, multi-writer data has to be split one file per writer — after which an extension has
+  no way to find the files, so it hand-maintains an index document that Send/Receive can itself
+  overwrite. `IProjectStreamManager.GetExistingDataStreamNames` had existed unused (marked
+  `// TODO: This doesn't seem to be used`) the whole time.
+- **Decision:** add one method, `listExtensionDataQualifiers(scope)`, returning sorted
+  `dataQualifier`s that round-trip verbatim into `getExtensionData` — forward slashes on every
+  platform, recursive, scoped to `{EXTENSION_DATA_SUBDIRECTORY}/{extensionName}`, empty documents
+  included, and **creating nothing**. Four shape choices go with it. (1) `list*`, not `get*`:
+  `get`/`set`/`subscribe` are magic prefixes for the data-provider service, and a `get*` name would
+  demand a paired setter with nothing to set and imply a subscriber with nothing to notify. (2) **Its
+  own `projectInterface`, `platform.extensionDataEnumeration`, with the method required there** —
+  not a member of `platform.base`. Not every PDP can enumerate its extension data (one over a remote
+  store may not be able to), and a PDP method is never optional
+  (`adr-pdp-methods-are-never-optional`), so a PDP that can enumerate advertises the interface and
+  one that cannot leaves it off: the Paratext PDP publishes it for published and unpublished
+  projects alike, `hello-rock3` claims it, `platform-lexical-tools` (which holds no extension data)
+  does not, and the `platform.base` registration guard keeps checking only
+  `getExtensionData`/`getSetting`. Consumers discover it from project metadata `projectInterfaces`
+  and obtain it with `papi.projectDataProviders.get('platform.extensionDataEnumeration', id)`. On
+  the TS side the interface carries no data type — no `get*`/`set*`/`subscribe*` trio — and its one
+  method is declared once, on `WithProjectDataProviderEngineExtensionDataEnumerationMethods`, and
+  shared by the engine and consumer types, as `platform.base` already does for `getExtensionData`.
+  (3) No `subscribeExtensionDataQualifiers`: there is no data type behind the method, and
+  `subscribeExtensionData` on a known qualifier already covers change notification. (4)
+  `GetExtensionData` **stops creating** the document it looks for (`createIfNotExists: false`); an
+  absent document reads as `""`, the same answer callers always got for one, so the wire behavior is
+  unchanged and only the side effect is gone.
+- **Alternatives:** *Optional on the engine, required on the consumer, inside `platform.base`* —
+  the shape the PR first took, superseded before merge: a member optional to implement but required
+  to call cannot be reasoned about from either side, and it is discovered by failure, because the
+  platform's proxies make a missing method undetectable in advance. A remote PDP proxy fabricates a
+  request function for **any** property name (`createRemoteProxy` in `network-object.service.ts`),
+  so `pdp.method?.()` never short-circuits over the wire — it calls and then rejects — while a PDP
+  registered in the *calling* process is reached through `createLocalProxy`/`createDataProviderProxy`,
+  which pass a missing method through as `undefined`, so there the property really is absent and a
+  direct call throws **synchronously**. The two failure shapes needed different catching, the type
+  lied on any platform that predated the method, and a consumer shipped separately from the platform
+  could not tell an old platform from a broken call. Advertising the capability as a
+  `projectInterface` answers all three, and is what `projectInterface`s exist for
+  (`adr-pt9-legacy-data-as-parsed-models` rejected a non-interface shape on the same ground).
+  *A required engine method on `platform.base`* — rejected: it breaks every third-party PDP engine at
+  compile time, forces throwing stubs onto PDPs that cannot enumerate, and would need a repository
+  comb and a `#platform-changes` announcement to land something less capable. *Not adding the method
+  and shipping only the create-on-read fix* — rejected: the fix removes the cost of probing but not
+  the need to guess; a consumer whose file names are minted on other machines
+  (`decisionLedger/<machineId>`) cannot guess them at all. *Enumerate the project root and filter
+  afterwards* — rejected: project directories hold thousands of files, and returning `Settings.xml`
+  and every book file to an extension asking about its own data leaks the project layout. *A
+  `dataQualifierPrefix` narrowing parameter on the scope* — dropped before shipping: it saved a
+  caller one `.filter()` over an array it already held, had no consumer, and the two in-repo
+  implementations had already diverged on what "prefix" meant (ordinal vs grapheme-aware) before
+  either was used. Add it when a consumer needs it, and specify the match once. *Returning
+  `undefined` for an absent document* — deferred: the TS type permits it, but `""` is what every
+  caller was written against; telling absent from empty is a separate contract change.
+- **Consequences:** extensions can drop hand-maintained index documents and their self-healing
+  repair logic (the Checking Assistant carries two such indexes; `platform-scripture` stores
+  `deniedResultsList` as one shared read-modify-write blob) — with one caveat: nothing notifies a
+  consumer that a *new* qualifier has appeared (another machine's file arriving via Send/Receive),
+  since `subscribeExtensionData` needs a name and no subscription covers the set, so a consumer that
+  must stay current re-lists. A consumer checks `projectInterfaces` before asking; on a platform
+  that predates the interface no project advertises it, so the consumer keeps its fallback instead
+  of guessing. `getExtensionData` no longer leaves a file behind, so probing by read is safe.
+  `GetExistingDataStreamNames` gained an optional `underPath` and now normalizes to `/` — the
+  parameterless whole-project call still works, but its result is forward-slashed on Windows where
+  it used to be backslashed; it had no callers. A PDP over a store that cannot enumerate simply does
+  not advertise the interface. The method takes no Send/Receive write scope: it is a read. No
+  `platform.base` type changed in either direction, so nothing breaks for existing engines or
+  consumers.
+- **Source:** PT-4527; execution plan at `.context/plans/pt-4527-pdp-extension-data-enumeration.md`;
+  PR #2786 and its review. The `list*`-vs-`get*` naming rule it applies is already in
+  `Paranext-Core-Patterns.md` ("Naming rule (read first)"); the own-`projectInterface` shape is
+  promoted there as "A capability not every PDP can serve is its own `projectInterface`".
+
+## adr-pdp-methods-are-never-optional: A Project Data Provider method is never optional; a capability not every PDP can serve is its own `projectInterface`
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** The first shape of `listExtensionDataQualifiers` (PR #2786) declared the method
+  optional on the engine type (`method?()` on `WithProjectDataProviderEngineExtensionDataMethods`)
+  and required on the consumer type (`IBaseProjectDataProvider`), so that an engine which cannot
+  enumerate — a PDP over a remote store — could omit it while consumers saw a complete
+  `platform.base`. The platform API owner's review (tjcouch-sil) rejected the shape as too messy for
+  the API: a member that is optional to implement but required to call cannot be reasoned about from
+  either side. An implementer cannot tell what consumers assume, and a consumer cannot tell whether
+  a given PDP has the method, because the platform's own proxies make that undetectable in advance.
+  A PDP reached over the network is a `createRemoteProxy` (`network-object.service.ts`) that
+  fabricates a request function for **any** property name, so `pdp.method?.()` never short-circuits
+  and fails only after the call; a PDP in the calling process is a local proxy where the property is
+  genuinely absent and a direct call throws synchronously. A consumer shipped separately from the
+  platform (any extension) also cannot tell a platform that predates the method from a broken call,
+  because the type says the method is there.
+- **Decision:** A PDP method is never optional, in either direction. Every method a
+  `projectInterface` declares is required of every PDP that advertises the interface and present on
+  every PDP a consumer obtains through it. When a capability cannot be served by every PDP that
+  serves the interface it would naturally belong to, it becomes its **own** `projectInterface` with
+  the method required there — `platform.extensionDataEnumeration` is the first. A PDP that can serve
+  it advertises the interface in its `projectInterfaces`; one that cannot leaves it off. Consumers
+  discover the capability the way they discover every other one: from project metadata
+  `projectInterfaces` (`papi.projectLookup`) and
+  `papi.projectDataProviders.get(<interface>, projectId)`, which throws when the project does not
+  advertise it — never by probing for a property or by catching a failed call.
+- **Alternatives:** *Optional on the engine, required on the consumer* — rejected, above.
+  *Optional on both sides*, so consumers feature-detect with `?.` — rejected: the remote proxy makes
+  `?.` a lie over the wire. *Required on both sides within the existing interface* — the honest
+  version of "add a method", and the right one when every PDP can serve it; for a capability some
+  PDPs cannot serve it breaks every existing engine at compile time and forces throwing stubs that
+  make "required" hollow. *A command instead of a `projectInterface`* — rejected for the reason
+  `adr-pt9-legacy-data-as-parsed-models` gives: per-project capability advertisement is what
+  `projectInterface`s exist for.
+- **Consequences:** A capability not every PDP can serve costs a new `projectInterface` — a TS
+  `ProjectDataProviderInterfaces` entry and interface type, a C# `ProjectInterfaces` constant and an
+  entry in the published and/or unpublished lists, and the engines that serve it claiming it —
+  instead of one optional member. In exchange there is no breaking change to comb repositories for
+  or announce, "cannot serve it" stops masquerading as "no data", and a separately shipped consumer
+  falls back cleanly on a platform that predates the capability. The `platform.base` registration
+  guard (`project-data-provider.service.ts`) keeps checking only what `platform.base` requires.
+  `Paranext-Core-Patterns.md` carries the recipe ("A capability not every PDP can serve is its own
+  `projectInterface`").
+- **Source:** review of PR #2786, 2026-09-09. The shape it replaced is recorded under
+  `adr-pdp-enumerates-extension-data-qualifiers`.
+
 ## adr-per-web-view-ctrl-f-for-find: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 
 - **Formerly:** ADR-0015

@@ -265,5 +265,214 @@ namespace TestParanextDataProvider.Projects
             var retrievedScope = provider.GetExtensionData(scope);
             Assert.That(retrievedScope, Is.EqualTo("Random file contents"));
         }
+
+        [Test]
+        public void GetExtensionData_NeverWritten_ReadsEmptyAndCreatesNothing()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+
+            var data = provider.GetExtensionData(
+                new ProjectDataScope { ExtensionName = "myExtension", DataQualifier = "never.json" }
+            );
+
+            Assert.Multiple(() =>
+            {
+                // "" rather than null: the answer an absent document has always given, so no caller
+                // can tell the difference - only the side effect is gone
+                Assert.That(data, Is.EqualTo(""));
+                // A read that created the document would leave a zero-byte file under shared/**
+                // for Send/Receive to commit to every clone, with no delete API to take it back
+                Assert.That(provider.GetStoredStreamNames(), Is.Empty);
+            });
+        }
+
+        [Test]
+        public void ListExtensionDataQualifiers_NothingWritten_IsEmptyAndCreatesNothing()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+
+            var qualifiers = provider.ListExtensionDataQualifiers(
+                new ProjectDataScope { ExtensionName = "myExtension" }
+            );
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(qualifiers, Is.Empty);
+                // Listing must not write anything: a zero-byte file under shared/** is committed by
+                // Send/Receive to every clone, with no delete API to take it back
+                Assert.That(provider.GetStoredStreamNames(), Is.Empty);
+            });
+        }
+
+        [Test]
+        public void ListExtensionDataQualifiers_ListsOnlyThisExtensionsQualifiersSorted()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            SetExtensionData(provider, "myExtension", "second.json", "two");
+            SetExtensionData(provider, "myExtension", "first.json", "one");
+            SetExtensionData(provider, "myExtension", "byMachine/ledger/abc.json", "nested");
+            SetExtensionData(provider, "myExtension", "empty.json", "");
+            SetExtensionData(provider, "otherExtension", "notMine.json", "theirs");
+
+            var qualifiers = provider.ListExtensionDataQualifiers(
+                new ProjectDataScope { ExtensionName = "myExtension" }
+            );
+
+            Assert.That(
+                qualifiers,
+                Is.EqualTo(
+                    new[]
+                    {
+                        // Nested qualifiers keep their forward slashes so they can be passed back
+                        // to GetExtensionData unchanged
+                        "byMachine/ledger/abc.json",
+                        // An empty document is a document: GetExtensionData returns "" for it, so
+                        // hiding it would make the list disagree with a read
+                        "empty.json",
+                        "first.json",
+                        "second.json",
+                    }
+                )
+            );
+        }
+
+        [Test]
+        public void ListExtensionDataQualifiers_EveryQualifierReadsBackWithoutCreatingFiles()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            Dictionary<string, string> written =
+                new()
+                {
+                    ["top.json"] = "top contents",
+                    ["byMachine/ledger/abc.json"] = "nested contents",
+                    ["empty.json"] = "",
+                };
+            foreach (var (qualifier, data) in written)
+                SetExtensionData(provider, "myExtension", qualifier, data);
+            var storedBeforeListing = provider.GetStoredStreamNames();
+
+            var qualifiers = provider.ListExtensionDataQualifiers(
+                new ProjectDataScope { ExtensionName = "myExtension" }
+            );
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(qualifiers, Is.EquivalentTo(written.Keys));
+                foreach (var qualifier in qualifiers)
+                {
+                    Assert.That(
+                        provider.GetExtensionData(
+                            new ProjectDataScope
+                            {
+                                ExtensionName = "myExtension",
+                                DataQualifier = qualifier,
+                            }
+                        ),
+                        Is.EqualTo(written[qualifier]),
+                        $"Listed qualifier '{qualifier}' must be readable as written"
+                    );
+                }
+                // Neither listing nor reading a listed qualifier may add a file
+                Assert.That(provider.GetStoredStreamNames(), Is.EquivalentTo(storedBeforeListing));
+            });
+        }
+
+        [Test]
+        public void ListExtensionDataQualifiers_IsRegisteredOnTheWireSurface()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+
+            // Every other test here calls the method in-process, so none of them notices if the
+            // registration tuple is missing - and without it the method simply does not exist over
+            // JSON-RPC, which is the only way an extension can reach it
+            Assert.That(
+                provider.GetRegisteredFunctionNames(),
+                Does.Contain("listExtensionDataQualifiers")
+            );
+        }
+
+        [TestCase(null, TestName = "ListExtensionDataQualifiers_NoExtensionName_Throws")]
+        [TestCase("", TestName = "ListExtensionDataQualifiers_EmptyExtensionName_Throws")]
+        [TestCase("   ", TestName = "ListExtensionDataQualifiers_WhitespaceExtensionName_Throws")]
+        [TestCase(".", TestName = "ListExtensionDataQualifiers_DotExtensionName_Throws")]
+        [TestCase("./", TestName = "ListExtensionDataQualifiers_DotSlashExtensionName_Throws")]
+        [TestCase("..", TestName = "ListExtensionDataQualifiers_DotDotExtensionName_Throws")]
+        [TestCase(
+            "myExtension/..",
+            TestName = "ListExtensionDataQualifiers_TraversingExtensionName_Throws"
+        )]
+        public void ListExtensionDataQualifiers_ExtensionNameEscapesItsDirectory_Throws(
+            string? extensionName
+        )
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            SetExtensionData(provider, "someOtherExtension", "theirs.json", "theirs");
+
+            // Every one of these resolves to the shared extensions directory (or above it) once it
+            // reaches the filesystem, so without this guard the listing hands the caller every
+            // extension's qualifiers instead of the one extension it asked about
+            Assert.Throws<InvalidDataException>(
+                () =>
+                    provider.ListExtensionDataQualifiers(
+                        new ProjectDataScope { ExtensionName = extensionName }
+                    )
+            );
+        }
+
+        [Test]
+        public void ExtensionData_NestedExtensionName_WritesListsAndReadsBack()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+
+            // A name with a separator nests inside the extensions directory rather than escaping
+            // it, and the read and write paths have always accepted one. The listing must agree
+            // with them - and its escape check must never migrate into the shared path composition,
+            // where it would reject this name for reads and writes too and strand whatever was
+            // written under it
+            SetExtensionData(provider, "acme/tools", "settings.json", "nested");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    provider.ListExtensionDataQualifiers(
+                        new ProjectDataScope { ExtensionName = "acme/tools" }
+                    ),
+                    Is.EqualTo(new[] { "settings.json" })
+                );
+                Assert.That(
+                    provider.GetExtensionData(
+                        new ProjectDataScope
+                        {
+                            ExtensionName = "acme/tools",
+                            DataQualifier = "settings.json",
+                        }
+                    ),
+                    Is.EqualTo("nested")
+                );
+            });
+        }
+
+        private void SetExtensionData(
+            DummyParatextProjectDataProvider provider,
+            string extensionName,
+            string dataQualifier,
+            string data
+        ) =>
+            provider.SetExtensionData(
+                new ProjectDataScope
+                {
+                    ProjectID = _projectDetails.Metadata.Id,
+                    ExtensionName = extensionName,
+                    DataQualifier = dataQualifier,
+                },
+                data
+            );
     }
 }

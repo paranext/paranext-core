@@ -1,8 +1,10 @@
 import papi, { BaseProjectDataProviderEngine } from '@papi/backend';
 import {
   DataProviderUpdateInstructions,
+  ExtensionDataListScope,
   ExtensionDataScope,
   IBaseProjectDataProviderEngine,
+  WithProjectDataProviderEngineExtensionDataEnumerationMethods,
 } from '@papi/core';
 import type {
   ProjectInterfaceDataTypes,
@@ -13,10 +15,11 @@ import type {
 /** The `projectInterface`s the hello rock3 pdpf serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
 // needs to be used in ProjectMetadata as not readonly :p
-export const HELLO_ROCK3_PROJECT_INTERFACES = ['platform.base', 'helloRock3'] as const satisfies [
+export const HELLO_ROCK3_PROJECT_INTERFACES = [
   'platform.base',
+  'platform.extensionDataEnumeration',
   'helloRock3',
-];
+] as const satisfies ['platform.base', 'platform.extensionDataEnumeration', 'helloRock3'];
 
 export type HelloRock3ProjectData = {
   projectName: string;
@@ -28,13 +31,20 @@ export type HelloRock3ProjectData = {
   extensionData: { [key: string]: string | undefined };
 };
 
+/** What every one of an extension's extension-data keys starts with */
+function getExtensionKeyPrefix(extensionName: string): string {
+  return `${extensionName}/`;
+}
+
 function getExtensionDataKey(scope: ExtensionDataScope): string {
-  return `${scope.extensionName}/${scope.dataQualifier}`;
+  return `${getExtensionKeyPrefix(scope.extensionName)}${scope.dataQualifier}`;
 }
 
 export class HelloRock3ProjectDataProviderEngine
   extends BaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>
-  implements IBaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>
+  implements
+    IBaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES>,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods
 {
   private saveProjectData: () => Promise<void>;
 
@@ -106,6 +116,24 @@ export class HelloRock3ProjectDataProviderEngine
     this.projectData.extensionData[getExtensionDataKey(scope)] = data;
     await this.saveProjectData();
     return true;
+  }
+
+  async listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]> {
+    // Native `String` methods, not the grapheme-aware ones from `platform-bible-utils`, and the
+    // whole expression stays native so the prefix length and the slice index share an index space.
+    // Extension names are author-chosen and need not be ASCII, but nothing here is a search through
+    // text: `getExtensionDataKey` composes these keys with a native template literal and
+    // `getExtensionData` looks one up by exact string equality, so the listing has to split them on
+    // exactly the same terms. Grapheme-aware matching does not agree with exact-string storage: a
+    // `dataQualifier` beginning with a combining mark fuses it onto the `/` into one cluster, so a
+    // grapheme `startsWith` rejects a key `getExtensionData` reads back fine, and the qualifier
+    // vanishes from the listing. The repo's string rule records this carve-out and names this
+    // method as its example: .claude/rules/code-quality/native-string-vs-grapheme-helpers.md
+    const keyPrefix = getExtensionKeyPrefix(scope.extensionName);
+    return Object.keys(this.projectData.extensionData)
+      .filter((key) => key.startsWith(keyPrefix))
+      .map((key) => key.slice(keyPrefix.length))
+      .sort();
   }
 
   async setRandomNumber(max: number, newNum: number) {
