@@ -1,15 +1,15 @@
-import { expect, type Frame, type Page } from '@playwright/test';
+import { type Frame, type Page } from '@playwright/test';
 import {
+  dismissOnboardingTour,
   LAUNCH_PHASE_TIMEOUT_MS,
-  ONBOARDING_TOUR_DONE_KEY,
   SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
 
-// Re-exported so the specs that reach for it through this module keep working: it is defined in
-// helpers.ts, which is the lower-level module and the single home for it.
-export { SAMPLE_WEB_PROJECT_ID };
+// Re-exported so the specs that reach for them through this module keep working: they are defined
+// in helpers.ts, which is the lower-level module and the single home for them.
+export { dismissOnboardingTour, SAMPLE_WEB_PROJECT_ID };
 
 /** Options accepted by {@link openScriptureEditorForProject}. */
 export interface OpenScriptureEditorOptions {
@@ -239,33 +239,6 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
   await input.press('Enter');
   // The popover closing confirms the commit was accepted before callers assert on the outcome.
   await input.waitFor({ state: 'hidden', timeout: 10_000 });
-}
-
-/**
- * Suppress the onboarding tour, which renders a full-viewport modal that swallows pointer events —
- * any later click (the toolbar's book-chapter control above all) then retries until it times out.
- * The canonical `waitForAppReady` does this for the same reason; these specs reach the app through
- * other paths, so they need it too. Setting the done key keeps the tour from opening again.
- *
- * Safe to call more than once: the key write is idempotent and the dialog is only dismissed when it
- * is actually showing.
- *
- * @param mainPage The Electron main window page
- */
-export async function dismissOnboardingTour(mainPage: Page): Promise<void> {
-  await mainPage.evaluate((key) => {
-    localStorage.setItem(key, 'true');
-  }, ONBOARDING_TOUR_DONE_KEY);
-  // The tour-specific test id (not a generic modal-dialog selector) so an unrelated dialog — e.g. a
-  // real startup error — is never silently Escape-dismissed here.
-  const tourDialog = mainPage.getByTestId('tour-dialog');
-  if (!(await tourDialog.isVisible())) return;
-  // The tour does not close on Escape — its own "Skip tour" button is the dismissal, and it is what
-  // persists the done flag. Escape remains a fallback for a step that renders no Skip button.
-  const skipButton = tourDialog.getByRole('button', { name: /skip/i });
-  if (await skipButton.isVisible().catch(() => false)) await skipButton.click();
-  else await mainPage.keyboard.press('Escape');
-  await expect(tourDialog).not.toBeVisible({ timeout: 10_000 });
 }
 
 /**
