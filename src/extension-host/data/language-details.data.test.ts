@@ -1,16 +1,10 @@
-import { readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
+import { getShippedLocaleTags } from '@node/utils/locale-assets.test-helper';
 import { languageDetails } from './language-details.data';
 
 // Real shipped locale files drive this test so a NEW locale added without a curated autonym fails
 // the build instead of silently showing its raw code (e.g. "zh-hans") in the picker.
-// Note: using resolve(__dirname, ...) instead of fileURLToPath(new URL(..., import.meta.url))
-// because this test runs under jsdom where import.meta.url does not have a file: scheme.
-const localizationDir = resolve(__dirname, '../../../assets/localization');
-const localeTags = readdirSync(localizationDir)
-  .filter((f) => f.endsWith('.json') && f !== 'metadata.json')
-  .map((f) => f.replace(/\.json$/, ''));
+const localeTags = getShippedLocaleTags();
 
 describe('languageDetails covers every shipped locale', () => {
   test.each(localeTags)('locale "%s" has a defined, non-code autonym', (tag) => {
