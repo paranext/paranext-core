@@ -111,10 +111,13 @@ inserted note is never discarded on session end (PT9 keeps the inserted `\f + \f
 `noteCallerOnClick` is baked into caller nodes at load time, so the handler is registered
 unconditionally (also in read-only) and reads every gate from refs: `isReadOnlyEffectiveRef`,
 `viewTypeRef`, `isPowerModeRef`, pane visibility/rendered refs. `decideNoteCallerClickAction`
-gains inputs `{ surface: 'pane' | 'popover' | 'none', isPowerMode }` (replacing
+gains inputs `{ surface: 'pane' | 'popover' | 'none', isPowerMode, isStandardView }` (replacing
 `isAutoShowEnabled`) and returns `action: 'ignore-expanded' | 'ignore-popover-open' |
-'open-popover' | 'open-pane-editor' | 'navigate-only'`, with `showPane = isPowerMode &&
-!paneVisible` and `sendPaneFocusRequest = paneRendered || showPane`.
+'ignore-read-only' | 'open-popover' | 'open-pane-editor' | 'navigate-only'`, with `showPane =
+isPowerMode && !paneVisible` and `sendPaneFocusRequest = paneRendered || showPane`.
+`navigate-only` is Standard view's read-only behavior; a read-only text in any other view resolves
+to `ignore-read-only` and its caller stays inert, as it was before the pane became an editing
+surface.
 
 ### 3.6 Footnotes pane header
 

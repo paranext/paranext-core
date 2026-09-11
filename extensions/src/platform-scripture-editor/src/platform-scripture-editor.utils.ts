@@ -188,12 +188,19 @@ export type NoteCallerClickState = {
   isPowerMode: boolean;
   /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
   surface: NoteEditingSurface;
+  /**
+   * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
+   * navigation half of the pane model; every other view keeps a read-only caller inert, as it was
+   * before the pane became an editing surface.
+   */
+  isStandardView: boolean;
 };
 
 /** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
 export type NoteCallerClickAction =
   | 'ignore-expanded'
   | 'ignore-popover-open'
+  | 'ignore-read-only'
   | 'open-popover'
   | 'open-pane-editor'
   | 'navigate-only';
@@ -213,11 +220,13 @@ export type NoteCallerClickDecision = {
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
    * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
+   * - `ignore-read-only` — the text is read-only and not in Standard view, so the caller is inert:
+   *   the pane's navigation model belongs to Standard view alone.
    * - `open-popover` — open the footnote-editor popover for the clicked note (every view but
    *   Standard).
    * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (Standard view).
-   * - `navigate-only` — the text is read-only, so there is no editing surface; the click still
-   *   navigates (reveals/scrolls the pane) without opening an editor.
+   * - `navigate-only` — the text is read-only in Standard view, so there is no editing surface; the
+   *   click still navigates (reveals/scrolls the pane) without opening an editor.
    */
   action: NoteCallerClickAction;
   /**
@@ -240,6 +249,8 @@ export type NoteCallerClickDecision = {
  * an editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
+ * - A read-only text outside Standard view does nothing either: the pane's navigate-to-note model is
+ *   Standard view's, and every other view keeps the inert caller it has always had.
  * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
  *   pane-editor session has no such limit — its row stays open across clicks.
  * - A popover session's key left behind without a shown popover is STALE and must not block the
@@ -258,6 +269,13 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
     return {
       clearStaleEditingSession,
       action: 'ignore-expanded',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
+  if (state.surface === 'none' && !state.isStandardView)
+    return {
+      clearStaleEditingSession,
+      action: 'ignore-read-only',
       sendPaneFocusRequest: false,
       showPane: false,
     };

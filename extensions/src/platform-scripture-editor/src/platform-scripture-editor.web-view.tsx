@@ -1178,6 +1178,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           paneRendered: footnotesPaneRenderedRef.current,
           isPowerMode: isPowerModeRef.current,
           surface,
+          isStandardView: viewTypeRef.current === 'standard',
         });
         if (decision.clearStaleEditingSession) {
           // A prior session's key survived without its popover — orphaned bookkeeping that
@@ -1191,7 +1192,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editingNoteSessionRefreshedAt.current = undefined;
           setPaneEditingIndex(undefined);
         }
-        if (decision.action === 'ignore-expanded' || decision.action === 'ignore-popover-open')
+        if (
+          decision.action === 'ignore-expanded' ||
+          decision.action === 'ignore-popover-open' ||
+          decision.action === 'ignore-read-only'
+        )
           return;
 
         // Alongside whichever editor opens below: show the pane when the click is what reveals it

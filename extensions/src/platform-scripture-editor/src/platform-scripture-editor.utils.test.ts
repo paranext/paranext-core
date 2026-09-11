@@ -2768,6 +2768,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     paneRendered: false,
     isPowerMode: true,
     surface: 'popover' as const,
+    isStandardView: false,
   };
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
@@ -2875,7 +2876,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('Standard view: opens the pane editor and reveals a hidden pane', () => {
-    const d = decideNoteCallerClickAction({ ...base, surface: 'pane' });
+    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', isStandardView: true });
     expect(d).toEqual({
       clearStaleEditingSession: false,
       action: 'open-pane-editor',
@@ -2888,6 +2889,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     const d = decideNoteCallerClickAction({
       ...base,
       surface: 'pane',
+      isStandardView: true,
       editingNoteKey: 'k1',
       paneVisible: true,
       paneRendered: true,
@@ -2896,21 +2898,29 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     expect(d.action).toBe('open-pane-editor');
   });
 
-  it('read-only: navigates only, still revealing the pane in Power mode', () => {
-    const d = decideNoteCallerClickAction({ ...base, surface: 'none' });
+  it('read-only Standard view: navigates only, still revealing the pane in Power mode', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'none', isStandardView: true });
     expect(d.action).toBe('navigate-only');
     expect(d.showPane).toBe(true);
     expect(d.sendPaneFocusRequest).toBe(true);
   });
 
-  it('read-only in Simple mode: navigates within an already-rendered pane only', () => {
+  it('read-only Standard view in Simple mode: navigates within an already-rendered pane only', () => {
+    // Simple mode has no Standard view of its own, but the flag is read independently of the mode,
+    // so pin the pair rather than assume they cannot co-occur.
     expect(
-      decideNoteCallerClickAction({ ...base, surface: 'none', isPowerMode: false }),
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'none',
+        isStandardView: true,
+        isPowerMode: false,
+      }),
     ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: false });
     expect(
       decideNoteCallerClickAction({
         ...base,
         surface: 'none',
+        isStandardView: true,
         isPowerMode: false,
         paneVisible: true,
         paneRendered: true,
@@ -2918,9 +2928,35 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: true });
   });
 
+  it.each([true, false])(
+    'read-only outside Standard view leaves the caller inert (isPowerMode=%s)',
+    (isPowerMode) => {
+      expect(
+        decideNoteCallerClickAction({
+          ...base,
+          surface: 'none',
+          isStandardView: false,
+          isPowerMode,
+          paneVisible: true,
+          paneRendered: true,
+        }),
+      ).toEqual({
+        clearStaleEditingSession: false,
+        action: 'ignore-read-only',
+        sendPaneFocusRequest: false,
+        showPane: false,
+      });
+    },
+  );
+
   it('expanded caller is ignored regardless of surface', () => {
     expect(
-      decideNoteCallerClickAction({ ...base, surface: 'pane', isCollapsed: false }).action,
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'pane',
+        isStandardView: true,
+        isCollapsed: false,
+      }).action,
     ).toBe('ignore-expanded');
   });
 
