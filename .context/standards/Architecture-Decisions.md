@@ -745,6 +745,96 @@ step, no automation. Just a record.
   the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
   public audience.
 - **Source:** the multi-agent review of #2654, finding 1.
+## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
+
+- **Date:** 2026-09-01
+- **Status:** Accepted
+- **Context:** `platformGetResources.getCachedResources` is the only source the Get Resources page,
+  Home, the resource picker, Share Layout, the scripture text grid and
+  `use-dbl-resource-catalog.hook` read — six consumers. Its background sync reconciled `installed`
+  against local project metadata on every call but never recomputed `updateAvailable`, and its one
+  rewrite branch fired only when `installed` flipped — so updating an already-installed resource
+  left the row reading "Update" for the rest of the session. The C# provider does fire
+  `SendDataUpdateEvent(DBL_RESOURCES, …)` after an install, but nothing has subscribed to that data
+  type since the cache replaced the front end's `useData` subscription (zero `.DblResources(` call
+  sites repo-wide), so the event refreshes nothing. `updateAvailable` cannot be derived in
+  TypeScript: it compares the installed resource's DBL revision against the catalog's, and neither
+  number is reachable there. The DBL side is dropped when C# projects `InstallableResource` into
+  `DblResourceData`; the installed side is an entry name under `.dbl/revision/` inside the
+  password-protected `.p8z` bundle, read through ParatextData's zip file manager — no project
+  setting or metadata field exposes it, and `Revision` appears nowhere in `c-sharp/`.
+- **Decision:** Extend the read-path reconciliation rather than adding a write-path invalidation. A
+  new no-network provider function, `recomputeDblResourcesUpdateStatus`, re-evaluates
+  `InstallableResource.IsNewerThanCurrentlyInstalled()` over the already-loaded catalog snapshot,
+  and the front end's flag sync applies it alongside the `installed` check. The sync is
+  single-flighted by `ensureInstalledFlagsSynced`, so the recompute happens at most once at a time
+  however many views refresh together. Reads do not wait for it — `getCachedResources` answers from
+  the array it already has — which makes a read one refresh behind. That is invisible for
+  `installed`, whose caller already knows what it just did, but it is the whole defect for
+  `updateAvailable`: nothing else about an updated row changes, and there is no data-update event,
+  so the row keeps offering "Update" until the catalog is read a second time.
+
+  Two consequences shape the wiring. The backend round trip is **opt-in** rather than part of every
+  sync, because exactly one surface renders `updateAvailable` — the Get Resources list — and the
+  other five consumers of the catalog would otherwise wait on a value they discard; the resource
+  picker's whole list spun on it. And a caller that needs the flag current awaits
+  `refreshResourceFlags`, which asks for the recompute and, rather than joining a sync already in
+  flight, lets that one finish before starting its own: an in-flight sync may have read its project
+  metadata before the caller's change, and a background sync does not recompute the flag at all.
+  The Get Resources view is therefore the only caller — once when its list settles, so a resource
+  updated from another surface loses its stale badge, and again after any install or removal the
+  user performs there. Resources absent from the result keep their cached value, so a
+  not-yet-loaded catalog or a busy provider gate degrades to the previous behavior instead of
+  guessing — including on the awaited path, where a contended gate leaves the stale flag in place
+  rather than blocking the user. Skipping the
+  catalog fetch is sound because the DBL-side revision is the half that should stay fixed;
+  ParatextData re-reads the *installed* revision on each call (`ExistingScrText` is a live
+  `ScrTextCollection` lookup, and `InternalInstall` nulls the ScrText's FileManager before
+  overwriting the `.p8z`, so `DBLResourceSettings` is rebuilt from the new file). Verified against
+  the pinned ParatextData 9.5.0.24 assembly (ILSpy, 2026-09-04); source is not available locally,
+  so re-probe when that pin moves.
+- **Alternatives:**
+  - **Patch the cache entry after a successful install** — rejected, but not because the install is
+    unverified: `InstallDblResourceCore`'s `ScrTextCollection.IsPresent(InstalledScrText)` guard
+    inspects `InstalledScrText`, which `InstallableResource.InternalInstall` assigns only as its last
+    statement, so a failed install leaves it null and the guard throws rather than reporting success.
+    Rejected instead because the patch would have to be applied by every caller that installs — the
+    Get Resources web view, `platform-scripture-editor`'s install util, and the Send/Receive path
+    that PT-4268 describes, which cannot reach the provider at all — and because it only corrects
+    the one resource this client just installed, leaving flags that changed for any other reason
+    stale. Recomputing on read asks the source of truth instead of inferring from an action.
+  - **Re-fetch the catalog on install** — rejected: `FetchResourcesCore` is an unbounded network
+    download and would stall the list refresh. Subscribing to `DBL_RESOURCES` from the extension is
+    the same alternative in disguise, because `subscribe<data_type>` calls `get<data_type>` and
+    `getDblResources` fetches unconditionally.
+  - **Clear the flag optimistically in the web view** — rejected: leaves the cache wrong for Home and
+    the resource picker, and adds a second "caller must remember to notify" seam of exactly the kind
+    PT-4268 documents.
+  - **Send both revisions to TypeScript and compare there** — rejected: the installed half still
+    requires a C# call to read it out of the encrypted bundle, so it removes no round trip while
+    adding ~10 fields to the contract and a TypeScript copy of
+    `IsNewerThanCurrentlyInstalled`'s five-branch precedence chain (name, language,
+    `IsResourceProject`, `RequiresDBLCheck`, then revision / permissions checksum / manifest checksum
+    plus timestamp). That copy would drift silently when the ParatextData pin moves.
+- **Consequences:** Reads are authoritative for both derived flags, which makes the `DBL_RESOURCES`
+  data-update event dead weight rather than a missing link — PT-4268's stated premise ("the provider's
+  install path fires the event so the Get Resources UI refreshes") is already false, and whoever picks
+  it up should re-scope it against this decision. Cost is bounded by gathering the installed DBL uids
+  in ONE pass over the project collection and consulting ParatextData only for entries in that set:
+  `InstallableResource.ExistingScrText` is a computed property with no backing field that enumerates
+  the whole collection on every access, so asking each of the ~1850 catalog entries whether it is
+  installed would cost ~1850 full scans, and an installed entry pays it twice (once for `Installed`,
+  once inside `IsNewerThanCurrentlyInstalled`). Gating on `Installed` does not help, because that
+  property is the same lookup. The provider gate is taken with a non-waiting `Monitor.TryEnter`, so a
+  recheck never queues behind a catalog download or an install: everything holding that gate runs for
+  seconds, far longer than a refresh should block, so waiting could only delay the same empty answer,
+  and two rechecks cannot contend with each other because the only caller is single-flighted.
+  `IsNewerThanCurrentlyInstalled()` returns `true` for every *uninstalled* resource — nothing
+  installed trivially fails its "is the installed copy the newest" test — so the front end clears
+  `updateAvailable` for any row it reconciles as not installed rather than persisting a flag that
+  describes nothing. That keeps the cached flag meaning what the list renders it as: "the copy on
+  disk is out of date".
+- **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
