@@ -2,27 +2,27 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import { ExpandableInfo } from './panel-state-views.component';
+import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 
 /**
  * Resolved from the extension's real `localizedStrings.json` rather than hardcoded, so this story
- * cannot drift from the copy that ships — it already had, showing "Bible text" where the shipping
- * strings say "Bible texts".
+ * cannot drift from the copy that ships.
  *
- * The keys are listed here rather than imported from `RESOURCE_PANEL_STRING_KEYS`, which lives in
- * the web-view module: importing it would pull the whole web view (and `Editorial`) into Storybook
- * to obtain a string array. These are the Resource panel's Bible Texts strings; the Model Text
- * panel renders the same view with its own equivalents.
+ * Requested via the Resource panel's own key list rather than a copy of the handful this view
+ * reads, which is worth it only for not maintaining that copy — the list is a leaf module, so
+ * importing it costs nothing beyond the string array.
+ *
+ * It does NOT make a renamed key visible here. `getLocalizedStrings` falls back to the key for
+ * anything it is asked for and cannot find, so a rename resolves fine in this map while the `args`
+ * below still ask for it by its old literal — and an absent key reads as `undefined`, not as a
+ * `%...%` token, with no `noUncheckedIndexedAccess` to catch it. Renaming a key means editing those
+ * literals too. Reading them through `resolveResourcePanelStringKeys` would fix that for the two
+ * per-resource-type keys, which are the only ones reachable as named values.
+ *
+ * The args below pick the Bible Texts wording; the Commentaries tab and the Model Text panel render
+ * the same view with their own equivalents.
  */
-const RESOURCE_PANEL_KEYS = [
-  '%webView_resourcePanel_settingsUnavailable%',
-  '%webView_resourcePanel_catalogUnavailable%',
-  '%webView_resourcePanel_loading%',
-  '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
-  '%webView_resourcePanel_bibleTexts_pick%',
-  '%webView_resourcePanel_retry%',
-];
-
-const localizedStrings = getLocalizedStrings(RESOURCE_PANEL_KEYS);
+const localizedStrings = getLocalizedStrings([...RESOURCE_PANEL_STRING_KEYS]);
 
 /** Strings for the optional "More info" disclosure, used only by the EmptyWithMoreInfo story. */
 const moreInfoStrings = getLocalizedStrings([
@@ -33,9 +33,9 @@ const moreInfoStrings = getLocalizedStrings([
 
 /**
  * The front of a resource panel's state machine — everything shown before the panel has content to
- * display. The Resource (Bible Texts / Commentaries) panel lives entirely in a web view, so these
- * stories are the only place its loading, error, and empty copy can be reviewed without running the
- * app; the Model Text panel renders the same states through this view too.
+ * display. Nothing renders the Resource (Bible Texts / Commentaries) panel itself in Storybook, so
+ * these stories are the only place its loading, error, and empty copy can be reviewed without
+ * running the app; the Model Text panel renders the same states through this view too.
  *
  * The two failure states deliberately differ in whether they offer a control. A catalog fetch can
  * genuinely be re-driven, so it gets a working retry. An unreadable configured-resource setting

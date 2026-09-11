@@ -83,6 +83,13 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    * @experimental
    */
   readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Never fires here. Only a process holding a client connection can lose one; this end of the seam
+   * exists so shared code can subscribe in any process without asking which one it is running in.
+   *
+   * @experimental
+   */
+  readonly onDidLoseConnection: PlatformEvent<void>;
   private localEventHandler: EventHandler | undefined;
   private webSocketServer: WebSocketServer | undefined;
   private nextSocketNumber = 1;
@@ -103,6 +110,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    */
   private readonly warnedForeignAnnouncements = new Set<string>();
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
+  private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
 
   /**
    * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
@@ -112,6 +120,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   constructor(private readonly port: number = WEBSOCKET_PORT) {
     bindClassMethods.call(this);
     this.onDidDisconnectClient = this.clientDisconnectEmitter.event;
+    this.onDidLoseConnection = this.connectionLostEmitter.event;
   }
 
   get nextSocketId(): string {
@@ -150,6 +159,12 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       // between the two ends have been hit in practice, and external tools (websocat and the like)
       // resolve on their own, so the hostname stays even though it defers the bind behind a DNS
       // lookup and forces the `listening` wait below. See `adr-papi-websocket-hostname-bind`.
+      //
+      // This binding is also load-bearing for AGPL-3.0's network clause (section 13): loopback
+      // traffic never leaves the host, so it does not put a remote user "interacting with it ...
+      // through a computer network" in play. Making this address configurable would change what
+      // downstream licensees are exposed to, so treat that as a licensing decision, not just a
+      // networking one.
       const webSocketServer = new WebSocketServer({ host: 'localhost', port: this.port });
       this.webSocketServer = webSocketServer;
       webSocketServer.addListener('connection', this.onClientConnect);

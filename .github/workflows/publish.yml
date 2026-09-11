@@ -152,6 +152,30 @@ jobs:
           npm ci
           npm run build
 
+      # `npm run build` builds the extensions in DEVELOPMENT mode: its extensions leg sets no
+      # NODE_ENV, and `extensions/webpack/webpack.config.base.ts` reads `mode` from it. electron-
+      # builder copies `extensions/dist/` into the artifact as it finds it, so without this step the
+      # installers this job uploads carry unminified extension bundles with inline source maps,
+      # while `npm run package` produces production ones from the same commit.
+      - name: Build extensions for production
+        run: npm run build:extensions:production
+
+      # THIRD-PARTY-NOTICES.md is packaged into every installer this job produces, so a release cut
+      # from a ref whose Linux test.yml leg never ran green would ship a stale legal document with
+      # nothing to say so. The full check needs Ruby and four dotnet restores and cannot run here;
+      # this is the cheap cross-platform half - this platform's resolved npm shipping set against
+      # the committed lock the document was generated from. No Ruby, no dotnet, no network.
+      #
+      # AFTER the production extension build, so it reads the manifests of the graph this job
+      # actually packages rather than the development one it built first. Those manifests have to
+      # come from a COLD webpack cache - a module restored from cache does not re-run its loaders,
+      # so a manifest written over a warm one can be short (see `isWarmFilesystemCache`). Each
+      # extension bundle caches per bundle AND per mode (`extensionCacheDirectory`), which is what
+      # makes the production build above the first to touch its own directories and therefore
+      # genuinely cold; without that split, running this step here would read two warm manifests.
+      - name: Verify third-party notices describe what this build ships
+        run: npm run verify:third-party-notices:shipping-set
+
       - name: Prepare release - Windows
         if: ${{ matrix.os == env.OS_WINDOWS }}
         env:
@@ -191,29 +215,37 @@ jobs:
           mkdir release/staged
           mv release/build/*.dmg release/staged
 
-      - name: Prepare release and publish to the snap store - Linux
+      # Builds the Linux installer and publishes it nowhere. This repository does not distribute a
+      # built application (see LICENSING.md, "The distributed application"); Paratext 10 is released
+      # from `paranext/paratext-10-studio`. The build still runs on every release so that a broken
+      # Linux packaging path surfaces while the release is being cut rather than afterward.
+      #
+      # No `release/staged` step, unlike Windows and macOS: staging exists to feed the S3 upload
+      # below, and that step excludes Linux. Internal Linux builds come from `package-main.yml`,
+      # which uploads a per-platform artifact on every push.
+      - name: Prepare release - Linux
         if: ${{ matrix.os == env.OS_LINUX }}
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
           # This is used by electron-builder to prepare the release
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # This is required to upload automatically to the snap store
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.LINUX_SNAP_STORE_CREDENTIALS }}
         run: |
           npx electron-builder --publish never --linux
-          snapcraft upload --release=edge ./release/build/*.snap
-          mkdir release/staged
-          mv release/build/*.snap release/staged
 
+      # Creates the tag, the draft and the generated notes, and attaches NO binaries. The release is
+      # a fixed point in Git history for the Paratext 10 Studio build to construct its own releases
+      # from, not a download (see LICENSING.md, "The distributed application"). `artifacts` is an
+      # optional input, so omitting it leaves everything else about the release intact.
+      #
+      # One leg only: with no per-platform asset to contribute, running on all three would race three
+      # jobs to create the same release.
       - name: Publish draft release
+        if: ${{ matrix.os == env.OS_LINUX }}
         uses: ncipollo/release-action@v1
         with:
-          # Need to allow updates in order to upload artifacts from each OS
+          # Need to allow updates in order to re-run this workflow against an existing draft
           allowUpdates: true
-          artifactErrorsFailBuild: true
-          artifacts: |
-            release/staged/*
           bodyFile: .github/assets/release-body.md
           # make the new release a draft instead of automatically publishing
           draft: true

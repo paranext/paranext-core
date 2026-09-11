@@ -30,6 +30,9 @@ vi.mock('./components/overlay-host.component', () => ({ OverlayHost: () => undef
 vi.mock('./components/overlays/overlay-workspace-updating.component', () => ({
   WorkspaceUpdatingOverlay: () => undefined,
 }));
+vi.mock('./components/overlays/overlay-connection-lost.component', () => ({
+  ConnectionLostOverlay: () => <div data-testid="connection-lost-overlay" />,
+}));
 vi.mock('./components/first-run/first-run-overlay.component', () => ({
   FirstRunOverlay: () => <div data-testid="first-run-overlay" />,
 }));
@@ -55,6 +58,14 @@ describe('App first-run wiring', () => {
     // called does not prove <FirstRunOverlay /> is in Main's JSX. Removing the overlay must fail.
     render(<App />);
     expect(screen.getByTestId('first-run-overlay')).toBeInTheDocument();
+  });
+
+  it('mounts the connection-lost overlay so it is listening from startup', () => {
+    // Guards the actual wiring, the same way the first-run overlay assertion above does: the
+    // component decides for itself whether to render anything, so nothing else in this suite would
+    // notice if <ConnectionLostOverlay /> were removed from Main's JSX. Removing the mount must fail.
+    render(<App />);
+    expect(screen.getByTestId('connection-lost-overlay')).toBeInTheDocument();
   });
 
   it('sets data-interface-mode="simple" on document.body when not in power mode', () => {

@@ -4,8 +4,9 @@
  * The multi-window architecture makes formerly app-singleton UI surfaces per-window by
  * construction: each window is a full renderer with its own OverlayHost, Toaster, toolbar, and
  * module state, web view iframes inherit their PARENT window's papi object, and the main process
- * routes generic dialog/notification/web-view requests to the focused window. Nothing pinned any of
- * that behaviour — this spec is the regression guard that does.
+ * routes notification and web-view requests to the window they name, and everything else — dialogs
+ * included, which cannot name one — to the focused window. Nothing pinned any of that behaviour —
+ * this spec is the regression guard that does.
  *
  * One test, one Electron instance (each launch costs 30+ seconds, so the scenarios share two
  * windows), asserting in order:
@@ -254,8 +255,9 @@ function showModalAlertViaWebSocket(prompt: string): Promise<unknown> {
 
 /**
  * Send a notification through the GENERIC notification service — the name the main process serves
- * with a service router that forwards `send` to the focused window. `duration: 0` means the toast
- * never auto-closes, so assertions cannot race an auto-dismiss; tests dismiss explicitly.
+ * with a service router that routes `send` to the window the notification names, or to the focused
+ * window when it names none. `duration: 0` means the toast never auto-closes, so assertions cannot
+ * race an auto-dismiss; tests dismiss explicitly.
  */
 async function sendNotification(message: string): Promise<string | number> {
   return sendPapiRequestOnce<string | number>(

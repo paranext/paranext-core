@@ -175,6 +175,24 @@ describe('SharedLayoutReceiver', () => {
     );
   });
 
+  it('routes the notification to the editor it is about, in case another window is focused', async () => {
+    // getAllOpenWebViewDefinitions returns editor id 'ed-1' — see makeReceiverHarness. Naming it lets
+    // the notification router send the prompt to the window that owns that editor rather than
+    // whichever window the user happens to be looking at.
+    const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
+    await h.receiver.applyForProject('proj-1');
+    h.papi.projectDataProviders.get.mockImplementation(async () => ({
+      getSetting: vi.fn(async (key: string) =>
+        key === 'platformScripture.sharedLayoutDefaultTab'
+          ? 'CommentaryResource'
+          : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] },
+      ),
+    }));
+    h.fireSync();
+    await flush();
+    expect(h.send).toHaveBeenCalledWith(expect.objectContaining({ webViewId: 'ed-1' }));
+  });
+
   it('does not notify when the layout is unchanged', async () => {
     const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
     await h.receiver.applyForProject('proj-1');
