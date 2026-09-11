@@ -4570,3 +4570,56 @@ step, no automation. Just a record.
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
+
+## adr-wire-surface-snapshot: The declared wire surface is a checked-in artifact, verified against the live document
+
+- **Date:** 2026-08-28
+- **Status:** Accepted
+- **Context:** A wire-only marker is invisible to every check the repo has. `'x-experimental': true`
+  in a registration's OpenRPC documentation object does not reach `papi.d.ts`, so omitting one
+  regenerates a **byte-identical** `papi.d.ts` — verified by deleting the marker on
+  `platform.createWindow` and running `build:types`, which produced no diff at all, while the
+  registration's own behaviour on the wire changed. Nothing else covers it either: `npm run lint`,
+  the type checks and the unit suites all see a well-formed object either way, and reviewers cannot
+  reliably spot an absence in a diff. The same hole exists on the C# side, where registrations reach
+  the identical registry — `PapiClient.RegisterRequestHandlerAsync` sends the literal
+  `network:registerMethod` request that `REGISTER_METHOD` names in `src/shared/data/rpc.model.ts`.
+- **Decision:** Generate `lib/papi-dts/wire-surface.json` from a static scan of the registration
+  sites and check it in, so a change to the wire surface appears as a reviewable diff exactly as a
+  change to `papi.d.ts` does. It is produced by `.erb/scripts/generate-wire-surface.ts` inside
+  `npm run build`, which means CI's existing `verify-changed-files` step gates its staleness with no
+  workflow change. The artifact records **what is declared and nothing more**: it never asserts that
+  a registration ought to be experimental, because plenty of wire methods legitimately live off
+  `papi.d.ts` without being experimental, and a rule that policed markers would fail on those.
+- **Granularity, and why it is not the OpenRPC document itself:** an entry is one registration call,
+  not one wire method. Reproducing the document's per-method fan-out statically is fragile, and a
+  real part of the surface has no static name at all — a nonce-minted PDP id, a per-window service
+  shard, a per-provider `onDidUpdate`, a per-project C# data provider. Those shapes are recorded in
+  a `dynamicRegistrations` section with their unresolved expressions, so the artifact states its own
+  blind spots instead of omitting them silently. The fully-resolved view is checked where it
+  actually exists: an end-to-end assertion compares the live `rpc.discover` document against this
+  file, reducing dynamic names by pattern first. Without that assertion the scanner would rebuild
+  the very blind spot it closes — a newly invented registration shape would be as invisible to it as
+  a missing marker is today.
+- **Alternatives:** *Capture the document at runtime and check that in* — rejected as the primary
+  artifact: `npm run build` does not boot the app, so it could not ride the existing gate and would
+  need a new CI job, and its output would carry per-run names that churn every regeneration. It
+  survives as the verification half instead. *Police the markers with a lint rule* — rejected
+  explicitly; it would flag legitimate unmarked methods, which is the failure TJ named when asking
+  for a snapshot rather than a rule.
+- **Consequences:** A liveness annotation is a trapdoor: the generator throws when an annotated name
+  no longer matches any registration, which catches a **dangling** annotation, but nothing can
+  statically disprove a **wrong** one. A registration annotated transient or lazy that is in fact
+  durably live is excluded from the live comparison forever, silently. Treat additions to that map
+  as a deliberate narrowing of what gets verified, not as bookkeeping. Every PR that changes the
+  wire surface now shows it. The C# half reads `ParanextDataProvider.csproj` through Roslyn's
+  semantic model (`c-sharp/Paranext.WireSurface`, spawned by the generator via `dotnet run`), so a
+  registration is recognised by the symbol it invokes or overrides — never by text shape — and a
+  name is resolved by binding, including one level of constructor/call-argument propagation; its
+  limits are the five recognised rules and that propagation depth, both stated in the artifact's
+  header; a compilation that does not build fails the generator rather than producing a partial
+  artifact. A new registration shape that neither scanner recognises is still invisible until the
+  live assertion catches the divergence — which is why the recognised-pattern list is published in
+  the header, so a reader can see what would evade it.
+- **Source:** TJ's review of PR #2670, 2026-08-27: shape it as "a snapshot of the full wire surface
+  that PRs diff the way they diff `papi.d.ts` — not as a marker-policing rule".

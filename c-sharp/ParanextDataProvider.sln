@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Paranext.Analyzers", "Paran
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Paranext.Analyzers.Tests", "Paranext.Analyzers.Tests\Paranext.Analyzers.Tests.csproj", "{EFCBC741-283D-4978-9481-6C1CCC5A8C78}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Paranext.WireSurface", "Paranext.WireSurface\Paranext.WireSurface.csproj", "{0C13B444-45B5-4002-8A30-EE7C9249688C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Paranext.WireSurface.Tests", "Paranext.WireSurface.Tests\Paranext.WireSurface.Tests.csproj", "{95DA0D29-73B2-415C-AF54-7DC6ED479E3C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +37,14 @@ Global
 		{EFCBC741-283D-4978-9481-6C1CCC5A8C78}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EFCBC741-283D-4978-9481-6C1CCC5A8C78}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EFCBC741-283D-4978-9481-6C1CCC5A8C78}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0C13B444-45B5-4002-8A30-EE7C9249688C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0C13B444-45B5-4002-8A30-EE7C9249688C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0C13B444-45B5-4002-8A30-EE7C9249688C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0C13B444-45B5-4002-8A30-EE7C9249688C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{95DA0D29-73B2-415C-AF54-7DC6ED479E3C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{95DA0D29-73B2-415C-AF54-7DC6ED479E3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95DA0D29-73B2-415C-AF54-7DC6ED479E3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{95DA0D29-73B2-415C-AF54-7DC6ED479E3C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

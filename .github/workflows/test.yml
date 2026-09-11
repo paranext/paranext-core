@@ -265,11 +265,20 @@ jobs:
       - name: dotnet unit tests
         run: dotnet test c-sharp-tests/c-sharp-tests.csproj
 
+      - name: dotnet wire-surface scanner tests
+        run: dotnet test c-sharp/Paranext.WireSurface.Tests/Paranext.WireSurface.Tests.csproj
+
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
       - name: npm unit tests
         run: npm test
+
+      - name: Warm the .NET data provider Debug build
+        # The dev app starts the provider with `dotnet watch`; on a cold runner its first launch
+        # builds the Debug configuration inside the smoke suite's readiness budget, so warm the
+        # build here first rather than have the suite wait on it.
+        run: dotnet build c-sharp/ParanextDataProvider.csproj
 
       # No --server-args, so this runs at Xvfb's 1280x1024x8 default. Fine here: the smoke
       # suite launches its own Electron and does not use cdp.fixture. A cdp.fixture-based job
