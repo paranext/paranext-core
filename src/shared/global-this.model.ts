@@ -1,6 +1,7 @@
 import type { LogLevel } from 'electron-log';
 import { FunctionComponent } from 'react';
 import {
+  ContentZoomAreaId,
   GetSavedWebViewDefinition,
   SavedWebViewDefinition,
   UpdateWebViewDefinition,
@@ -67,6 +68,34 @@ declare global {
   var getSavedWebViewDefinition: GetSavedWebViewDefinition;
   /** JSDOC DESTINATION UpdateWebViewDefinition */
   var updateWebViewDefinition: UpdateWebViewDefinition;
+  /**
+   * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out).
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  var adjustContentZoomById: (
+    webViewId: string,
+    deltaSteps: number,
+    areaId: ContentZoomAreaId,
+  ) => void;
+  /**
+   * Return one area of a web view to the Settings default.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  var resetContentZoomById: (webViewId: string, areaId: ContentZoomAreaId) => void;
+  /**
+   * Report the zoom areas a web view's bootstrap discovered, in document order.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  var reportContentZoomAreasById: (webViewId: string, areaIds: ContentZoomAreaId[]) => void;
+  /**
+   * Report the zoom area a web view's bootstrap last saw clicked or focused.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  var reportContentZoomActiveAreaById: (webViewId: string, areaId: ContentZoomAreaId) => void;
   /** Indicates whether test code meant just for developers to see should be run */
   var isNoisyDevModeEnabled: boolean;
   /**

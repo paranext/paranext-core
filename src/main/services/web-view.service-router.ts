@@ -12,6 +12,7 @@
 import {
   focusWindow,
   getAbandonedWindowIds,
+  getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
   getUnreachableWindowIds,
@@ -28,6 +29,7 @@ import {
   resolveShardForWindow,
 } from '@main/services/target-shard-resolver.util';
 import {
+  ContentZoomAreaId,
   GetWebViewOptions,
   OpenWebViewOptions,
   ReloadWebViewOptions,
@@ -39,6 +41,7 @@ import {
   describeWebViewMoveFailure,
   WebViewMoveFailureDisposition,
 } from '@shared/models/web-view-move.model';
+import { CONTENT_ZOOM_COMMANDS } from '@shared/models/content-zoom.model';
 import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
 import { AsyncVariable, getErrorMessage, wait } from 'platform-bible-utils';
@@ -46,7 +49,7 @@ import { networkObjectService } from '@shared/services/network-object.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import { ContentDescriptor, SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { CATEGORY_COMMAND, isRequestTimedOutError } from '@shared/data/rpc.model';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
@@ -1218,6 +1221,62 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
   },
 };
 
+/** The content-zoom command names this router claims */
+type ContentZoomCommandName = (typeof CONTENT_ZOOM_COMMANDS)[keyof typeof CONTENT_ZOOM_COMMANDS];
+
+/** Parameters shared by every content-zoom command: both optional, and read in this order */
+const CONTENT_ZOOM_PARAMS: ContentDescriptor[] = [
+  {
+    name: 'webViewId',
+    required: false,
+    summary: "Web view to act on; the focused window's last focused tab when omitted",
+    schema: { type: 'string' },
+  },
+  {
+    name: 'areaId',
+    required: false,
+    summary: "Zoom area to act on; the pane's active area when omitted",
+    schema: { type: 'string' },
+  },
+];
+
+/** OpenRPC documentation for the content-zoom commands, keyed like {@link MOVE_COMMAND_DOCS} */
+const CONTENT_ZOOM_COMMAND_DOCS: Record<ContentZoomCommandName, SingleMethodDocumentation> = {
+  [CONTENT_ZOOM_COMMANDS.in]: {
+    method: {
+      'x-experimental': true,
+      summary:
+        "Zoom one area of a web view's content in by one step (10 %). Without an id, the " +
+        "focused window's last focused tab is the target; without an area, the pane's active " +
+        'area',
+      params: CONTENT_ZOOM_PARAMS,
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  [CONTENT_ZOOM_COMMANDS.out]: {
+    method: {
+      'x-experimental': true,
+      summary:
+        "Zoom one area of a web view's content out by one step (10 %). Without an id, the " +
+        "focused window's last focused tab is the target; without an area, the pane's active " +
+        'area',
+      params: CONTENT_ZOOM_PARAMS,
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  [CONTENT_ZOOM_COMMANDS.reset]: {
+    method: {
+      'x-experimental': true,
+      summary:
+        "Return one area of a web view's content to the default zoom set in Settings. Without " +
+        "an id, the focused window's last focused tab is the target; without an area, the " +
+        "pane's active area",
+      params: CONTENT_ZOOM_PARAMS,
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+};
+
 /**
  * Assert that a window id supplied by a caller names a window this process actually has.
  *
@@ -1254,6 +1313,102 @@ async function moveWebViewToWindow(
     throw new Error(`platform.moveWebViewToWindow needs a web view id; got ${typeof webViewId}`);
   assertWindowExists(targetWindowId, 'platform.moveWebViewToWindow');
   return moveWebView(webViewId, { kind: 'window', windowId: targetWindowId });
+}
+
+/**
+ * Assert that a content-zoom command's optional argument, as it arrived over the network, is either
+ * absent or the string type the command declares.
+ *
+ * @param value Argument as it arrived, before anything has assumed it is a string
+ * @param paramLabel Name to quote back in the error, so a caller can tell which argument was
+ *   rejected
+ * @param operation Name of the command to quote back
+ */
+function assertOptionalContentZoomArgument(
+  value: unknown,
+  paramLabel: string,
+  operation: string,
+): asserts value is string | undefined {
+  if (value !== undefined && typeof value !== 'string')
+    throw new Error(`${operation} takes an optional ${paramLabel}; got ${typeof value}`);
+}
+
+/**
+ * Resolve which window shard a content-zoom command should run in, and the target id and area to
+ * pass it.
+ *
+ * Routed by ownership: a caller naming a web view in a background window has to run there, not
+ * wherever the user happens to be working. A window that could not be asked may be the one holding
+ * the named web view, so that case throws rather than guessing — the same weighing
+ * {@link moveWebView}, {@link reloadWebView}, and {@link getOpenWebViewDefinition} apply to their own
+ * `findOwner({ kind: 'id' })` searches. Only once every window has genuinely answered "no" does an
+ * unresolved id become a silent no-op — falling back to the focused window here would zoom whatever
+ * the user is looking at for an id the caller believes is still open elsewhere. The no-id case,
+ * which never claimed to act on any particular web view, always falls back to the focused window
+ * instead, or no-ops if nothing is focused.
+ */
+async function resolveContentZoomShard(
+  webViewId: unknown,
+  areaId: unknown,
+  operation: string,
+): Promise<
+  | {
+      shard: WebViewServiceShard;
+      targetId: WebViewId | undefined;
+      areaId: ContentZoomAreaId | undefined;
+    }
+  | undefined
+> {
+  assertOptionalContentZoomArgument(webViewId, 'web view id', operation);
+  assertOptionalContentZoomArgument(areaId, 'area id', operation);
+
+  if (webViewId !== undefined) {
+    const matcher: OwnerMatcher = { kind: 'id', webViewId };
+    const { owner, hadUnreachableWindows } = await findOwner(matcher, operation);
+    // A window that could not be asked may be the one holding this web view, so an unresolved
+    // owner here is not evidence it does not exist.
+    if (!owner && hadUnreachableWindows)
+      throw new Error(
+        `Could not ${operation} ${describeMatcher(matcher)}: some windows were unreachable.`,
+      );
+    if (!owner) {
+      // Reached only once every window has answered and none owns it — genuinely not open
+      // anywhere, not merely unproven.
+      logger.debug(`${operation}: no window owns web view ${webViewId}; ignoring`);
+      return undefined;
+    }
+    return { shard: owner.shard, targetId: webViewId, areaId };
+  }
+
+  const windowId = getFocusedWindowId();
+  if (!windowId) {
+    logger.debug(`${operation}: no window is focused; ignoring`);
+    return undefined;
+  }
+  const shard = await resolveShardForWindow(
+    NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+    webViewShards,
+    windowId,
+  );
+  return { shard, targetId: undefined, areaId };
+}
+
+/** Handle `platform.webViewContentZoomIn`. Arguments arrive untyped over the network */
+export async function webViewContentZoomIn(webViewId: unknown, areaId: unknown): Promise<void> {
+  const resolved = await resolveContentZoomShard(webViewId, areaId, CONTENT_ZOOM_COMMANDS.in);
+  if (resolved) await resolved.shard.adjustContentZoom(resolved.targetId, 1, resolved.areaId);
+}
+
+/** Handle `platform.webViewContentZoomOut`. Arguments arrive untyped over the network */
+export async function webViewContentZoomOut(webViewId: unknown, areaId: unknown): Promise<void> {
+  const resolved = await resolveContentZoomShard(webViewId, areaId, CONTENT_ZOOM_COMMANDS.out);
+  if (resolved) await resolved.shard.adjustContentZoom(resolved.targetId, -1, resolved.areaId);
+}
+
+/** Handle `platform.webViewContentZoomReset`. Arguments arrive untyped over the network */
+export async function webViewContentZoomReset(webViewId: unknown, areaId: unknown): Promise<void> {
+  const resolved = await resolveContentZoomShard(webViewId, areaId, CONTENT_ZOOM_COMMANDS.reset);
+  if (resolved) await resolved.shard.resetContentZoom(resolved.targetId, resolved.areaId);
 }
 
 /**
@@ -1867,6 +2022,21 @@ export async function startWebViewServiceRouter(): Promise<void> {
       docs: MOVE_COMMAND_DOCS['platform.moveWebViewToWindow'],
       routing: 'owner',
     },
+    {
+      commandName: CONTENT_ZOOM_COMMANDS.in,
+      docs: CONTENT_ZOOM_COMMAND_DOCS[CONTENT_ZOOM_COMMANDS.in],
+      routing: 'owner',
+    },
+    {
+      commandName: CONTENT_ZOOM_COMMANDS.out,
+      docs: CONTENT_ZOOM_COMMAND_DOCS[CONTENT_ZOOM_COMMANDS.out],
+      routing: 'owner',
+    },
+    {
+      commandName: CONTENT_ZOOM_COMMANDS.reset,
+      docs: CONTENT_ZOOM_COMMAND_DOCS[CONTENT_ZOOM_COMMANDS.reset],
+      routing: 'owner',
+    },
   ]);
 
   await networkObjectService.set<WebViewServiceType>(
@@ -1906,6 +2076,21 @@ export async function startWebViewServiceRouter(): Promise<void> {
       serializeRequestType(CATEGORY_COMMAND, 'platform.moveWebViewToWindow'),
       moveWebViewToWindow,
       MOVE_COMMAND_DOCS['platform.moveWebViewToWindow'],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, CONTENT_ZOOM_COMMANDS.in),
+      webViewContentZoomIn,
+      CONTENT_ZOOM_COMMAND_DOCS[CONTENT_ZOOM_COMMANDS.in],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, CONTENT_ZOOM_COMMANDS.out),
+      webViewContentZoomOut,
+      CONTENT_ZOOM_COMMAND_DOCS[CONTENT_ZOOM_COMMANDS.out],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, CONTENT_ZOOM_COMMANDS.reset),
+      webViewContentZoomReset,
+      CONTENT_ZOOM_COMMAND_DOCS[CONTENT_ZOOM_COMMANDS.reset],
     ),
   ]);
   logger.info('WebView service router registered');

@@ -124,6 +124,33 @@ vi.mock('@renderer/services/web-view-state.service', () => ({
   setFullWebViewStateById: vi.fn(),
 }));
 
+// Stubbed whole: content-zoom wiring is covered below by the 'content zoom wiring' suite, which
+// asserts on these mocks directly rather than exercising the real service's settings/memory logic
+// (covered separately by that service's own test file).
+const {
+  getInitialContentZoomForWebViewMock,
+  adjustContentZoomMock,
+  resetContentZoomMock,
+  setContentZoomAreasMock,
+  setContentZoomActiveAreaMock,
+} = vi.hoisted(() => ({
+  getInitialContentZoomForWebViewMock: vi.fn(async () => ({
+    defaultZoom: 1.3,
+    levels: { main: 1.2, footnotes: 0.9 },
+  })),
+  adjustContentZoomMock: vi.fn(async () => undefined),
+  resetContentZoomMock: vi.fn(async () => undefined),
+  setContentZoomAreasMock: vi.fn(),
+  setContentZoomActiveAreaMock: vi.fn(),
+}));
+vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
+  getInitialContentZoomForWebView: getInitialContentZoomForWebViewMock,
+  adjustContentZoom: adjustContentZoomMock,
+  resetContentZoom: resetContentZoomMock,
+  setContentZoomAreas: setContentZoomAreasMock,
+  setContentZoomActiveArea: setContentZoomActiveAreaMock,
+}));
+
 // The host only needs the `TAB_TYPE_SETTINGS_TAB` string constant from this component file, but
 // the real file transitively imports the entire `papi-frontend.service` service graph (dozens of
 // unrelated services). Stub it directly rather than mocking that whole graph.
@@ -469,6 +496,12 @@ async function registeredShard() {
     openWebView: (webViewType: string) => Promise<string | undefined>;
     adoptWebView: (savedWebViewDefinition: unknown) => Promise<string | undefined>;
     captureAndCloseWebView: (webViewId: string) => Promise<unknown>;
+    adjustContentZoom: (
+      webViewId: string | undefined,
+      deltaSteps: number,
+      areaId?: string,
+    ) => Promise<void>;
+    resetContentZoom: (webViewId: string | undefined, areaId?: string) => Promise<void>;
   };
 }
 
@@ -2952,5 +2985,110 @@ describe('captureAndCloseWebView', () => {
 
     await expect(capturePromise).resolves.toBeUndefined();
     expect(removeTabFromDockCalls).toEqual([]);
+  });
+});
+
+describe('content zoom wiring', () => {
+  /**
+   * Answer every `windowLayout:*` request so an empty-dock born-empty report never docks Home
+   * (action `stay`) — these tests open one web view directly and assert on exactly that one add.
+   */
+  function respondToLayoutRequestsWithoutOpeningHome() {
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') return { kind: 'empty' };
+      if (requestType === 'windowLayout:emptied') return { action: 'stay' };
+      return undefined;
+    });
+  }
+
+  test('bakes the default, the known levels and the bootstrap script into a React web view head', async () => {
+    respondToLayoutRequestsWithoutOpeningHome();
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, addWebViewToDockCalls } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+
+    await module.openWebView('test.type', { type: 'tab' });
+
+    expect(addWebViewToDockCalls).toHaveLength(1);
+    const content = String(addWebViewToDockCalls[0].content);
+    expect(content).toContain('id="platform-content-zoom-styles"');
+    expect(content).toContain('--platform-content-zoom-default:1.3');
+    expect(content).toContain('--platform-content-zoom-main:1.2');
+    expect(content).toContain('--platform-content-zoom-footnotes:0.9');
+    expect(content).toContain('[data-platform-content-zoom-root="footnotes"]');
+    expect(content).toContain('platform.webViewContentZoomIn');
+    expect(content).toContain('__platformContentZoom');
+    expect(content).toContain('reportContentZoomAreasById');
+    expect(content).toContain('var adjustContentZoomById = window.parent.adjustContentZoomById;');
+    expect(content).toContain('var resetContentZoomById = window.parent.resetContentZoomById;');
+    expect(content).toContain(
+      'var reportContentZoomAreasById = window.parent.reportContentZoomAreasById;',
+    );
+    expect(content).toContain(
+      'var reportContentZoomActiveAreaById = window.parent.reportContentZoomActiveAreaById;',
+    );
+  });
+
+  test('gives a URL web view no injected content-zoom script or style', async () => {
+    respondToLayoutRequestsWithoutOpeningHome();
+    const module = await primeWebViewOpenPath();
+    getWebViewProviderMock.mockImplementation(async () => ({
+      getWebView: async (saved: { id: string; webViewType: string }) => ({
+        id: saved.id,
+        webViewType: saved.webViewType,
+        contentType: 'url',
+        content: 'https://example.com',
+        state: {},
+      }),
+    }));
+    const { dockLayout, addWebViewToDockCalls } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+
+    await module.openWebView('test.type', { type: 'tab' });
+
+    expect(addWebViewToDockCalls).toHaveLength(1);
+    const content = String(addWebViewToDockCalls[0].content);
+    expect(content).not.toContain('platform-content-zoom-styles');
+    expect(content).not.toContain('__platformContentZoom');
+    expect(content).not.toContain('reportContentZoomAreasById');
+  });
+
+  test('exposes adjustContentZoom and resetContentZoom on the shard object, passing the area through', async () => {
+    await primeWebViewOpenPath();
+    const shard = await registeredShard();
+
+    await shard.adjustContentZoom('wv-1', 1, 'footnotes');
+    await shard.resetContentZoom(undefined, undefined);
+
+    expect(adjustContentZoomMock).toHaveBeenCalledWith('wv-1', 1, 'footnotes');
+    expect(resetContentZoomMock).toHaveBeenCalledWith(undefined, undefined);
+  });
+
+  test('binds the four parent-window helpers the bootstrap reads', async () => {
+    await import('@renderer/services/web-view.service-shard');
+
+    window.reportContentZoomAreasById('wv-1', ['main', 'footnotes']);
+    window.reportContentZoomActiveAreaById('wv-1', 'footnotes');
+    window.adjustContentZoomById('wv-1', -1, 'main');
+    window.resetContentZoomById('wv-1', 'footnotes');
+
+    expect(setContentZoomAreasMock).toHaveBeenCalledWith('wv-1', ['main', 'footnotes']);
+    expect(setContentZoomActiveAreaMock).toHaveBeenCalledWith('wv-1', 'footnotes');
+    await vi.waitFor(() => expect(adjustContentZoomMock).toHaveBeenCalledWith('wv-1', -1, 'main'));
+    await vi.waitFor(() => expect(resetContentZoomMock).toHaveBeenCalledWith('wv-1', 'footnotes'));
+  });
+
+  test('drops non-string entries reported for a web view’s zoom areas and active area', async () => {
+    await import('@renderer/services/web-view.service-shard');
+
+    // The bootstrap sends these over an untyped channel, so a malformed payload (a number where
+    // an area id belongs) is a real possibility, not just a type-checker artifact.
+    // @ts-expect-error ts(2345) - passing a number in the area-id array to exercise the runtime guard
+    window.reportContentZoomAreasById('wv-1', ['main', 42, 'footnotes']);
+    // @ts-expect-error ts(2345) - passing a number as the area id to exercise the runtime guard
+    window.reportContentZoomActiveAreaById('wv-1', 42);
+
+    expect(setContentZoomAreasMock).toHaveBeenCalledWith('wv-1', ['main', 'footnotes']);
+    expect(setContentZoomActiveAreaMock).not.toHaveBeenCalled();
   });
 });

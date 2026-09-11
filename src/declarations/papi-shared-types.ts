@@ -37,7 +37,7 @@ declare module 'papi-shared-types' {
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
-  import { WebViewId } from '@shared/models/web-view.model';
+  import { ContentZoomAreaId, WebViewId } from '@shared/models/web-view.model';
 
   // #region Commands
 
@@ -100,10 +100,48 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
-    /** Increase the zoom level of the entire UI */
+    /**
+     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. Has no
+     * default keyboard shortcut; per-pane content zoom uses `platform.webViewContentZoomIn`
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. Has no
+     * default keyboard shortcut; per-pane content zoom uses `platform.webViewContentZoomOut`
+     */
     'platform.zoomOut': () => Promise<void>;
+    /**
+     * Zoom one area of a web view's content in by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area (the one
+     * last clicked or focused). Only web views that mark at least one zoom area respond.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomIn': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Zoom one area of a web view's content out by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomOut': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
+     * area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomReset': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -362,8 +400,34 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Default content zoom applied to every zoom area of a web view pane that has no level of its
+     * own. A factor: 1.0 = 100 %. Allowed range is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area
+     * its own level; Ctrl+`0` returns that area to this default. This factor multiplies with any
+     * font size a view sets for itself (for example a project's font size) and never replaces it;
+     * resetting a pane returns it to this default, not to that font size.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoom': number;
+    /**
+     * Per-project memory of content zoom levels, keyed `<kind>:<identity>:<area>` (kind is
+     * `editor`, `resource` or `notes`; identity is the project id, or the resource id for views
+     * without a project; area is the zoom area id, `main` for a view with one area). Written by the
+     * platform when an area's own level changes; read when a pane for that project opens. Local to
+     * this machine.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.ptxUtilsMementoData`: settings already give cross-window persistence and change
+     * notification for free. Writes are best-effort last-write-wins across windows, and a direct
+     * `papi.settings.set` on this key is tolerated rather than guarded against.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomMemory': { [key: string]: number };
+    /**
+     * The zoom factor that applies to the entire application, including menus and toolbars. 1.0 is
+     * the default. Allowed range is 0.5 to 3.0. Changed in Settings only; per-pane content zoom is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**

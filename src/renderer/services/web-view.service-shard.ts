@@ -20,6 +20,17 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
+import {
+  getContentZoomBootstrapScript,
+  getContentZoomStyleElement,
+} from '@renderer/services/web-view-content-zoom.bootstrap-script';
+import {
+  adjustContentZoom,
+  getInitialContentZoomForWebView,
+  resetContentZoom,
+  setContentZoomActiveArea,
+  setContentZoomAreas,
+} from '@renderer/services/web-view-content-zoom.service';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
 import { localThemeService } from '@renderer/services/theme.service';
 import {
@@ -2463,6 +2474,24 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 globalThis.getWebViewStateById = getWebViewStateSync;
 globalThis.setWebViewStateById = setWebViewStateSync;
 globalThis.resetWebViewStateById = resetWebViewStateSync;
+globalThis.adjustContentZoomById = (webViewId, deltaSteps, areaId) => {
+  adjustContentZoom(webViewId, deltaSteps, areaId).catch((e) =>
+    logger.warn(`Content zoom adjust failed for ${webViewId}: ${getErrorMessage(e)}`),
+  );
+};
+globalThis.resetContentZoomById = (webViewId, areaId) => {
+  resetContentZoom(webViewId, areaId).catch((e) =>
+    logger.warn(`Content zoom reset failed for ${webViewId}: ${getErrorMessage(e)}`),
+  );
+};
+globalThis.reportContentZoomAreasById = (webViewId, areaIds) =>
+  setContentZoomAreas(
+    webViewId,
+    Array.isArray(areaIds) ? areaIds.filter((areaId) => typeof areaId === 'string') : [],
+  );
+globalThis.reportContentZoomActiveAreaById = (webViewId, areaId) => {
+  if (typeof areaId === 'string') setContentZoomActiveArea(webViewId, areaId);
+};
 
 // #endregion Set up global variables to use in `openWebView`'s `imports` below
 
@@ -2727,6 +2756,10 @@ export async function openOrReloadWebView(
   window.getSavedWebViewDefinition = () => { return getSavedWebViewDefinitionById('${webView.id}')};
   var updateWebViewDefinitionById = window.parent.updateWebViewDefinitionById;
   window.updateWebViewDefinition = (webViewDefinitionUpdateInfo, shouldBringToFront = false) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo, shouldBringToFront)};
+  var adjustContentZoomById = window.parent.adjustContentZoomById;
+  var resetContentZoomById = window.parent.resetContentZoomById;
+  var reportContentZoomAreasById = window.parent.reportContentZoomAreasById;
+  var reportContentZoomActiveAreaById = window.parent.reportContentZoomActiveAreaById;
   window.fetch = papi.fetch;
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
@@ -2766,6 +2799,7 @@ export async function openOrReloadWebView(
       document.addEventListener('DOMContentLoaded', setUpThemeStylesheet);
     else setUpThemeStylesheet();
   })();
+  ${getContentZoomBootstrapScript(webView.id)}
   `;
 
   /** Nonce used to allow scripts and styles to run */
@@ -3004,6 +3038,12 @@ export async function openOrReloadWebView(
   // not a URL iframe
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
+    const initialContentZoom = await getInitialContentZoomForWebView(webView);
+    const contentZoomStyles = getContentZoomStyleElement(
+      srcNonce,
+      initialContentZoom.defaultZoom,
+      initialContentZoom.levels,
+    );
 
     webViewContent = spliceIntoWebViewHead(
       webViewContent,
@@ -3018,7 +3058,8 @@ export async function openOrReloadWebView(
     <style nonce="${srcNonce}">
       ${SCROLLBAR_STYLES_RAW}
     </style>
-    ${themeStylesheet}`,
+    ${themeStylesheet}
+    ${contentZoomStyles}`,
     );
   }
 
@@ -3830,6 +3871,8 @@ const webViewServiceShard: WebViewServiceShard = {
   setDetachedScrRef,
   captureAndCloseWebView,
   adoptWebView,
+  adjustContentZoom,
+  resetContentZoom,
 };
 
 /**
