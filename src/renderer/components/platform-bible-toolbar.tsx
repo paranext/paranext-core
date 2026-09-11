@@ -15,6 +15,7 @@ import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
 import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-availability.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
+import { usePendingProject } from '@renderer/hooks/use-pending-project.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
@@ -69,17 +70,7 @@ import {
   LocalizeKey,
   normalizeProjectId,
 } from 'platform-bible-utils';
-import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
-/**
- * How long the toolbar keeps naming a just-selected project before falling back to whatever the
- * open editor reports. The bound exists because a successful open has no guaranteed completion
- * signal here: `useProjectPickerData` resolves the current project from THIS window's editor web
- * views, so an editor that opens in another window (or resolves without producing one here) neither
- * throws nor ever matches. Without the bound the trigger would name a project that is not open,
- * indefinitely.
- */
-export const PENDING_PROJECT_TIMEOUT_MS = 15_000;
+import { CSSProperties, useCallback, useMemo } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
@@ -122,7 +113,6 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_select_project%',
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
-  '%projectPicker_toolbar_aria_label%',
   '%projectPicker_section_recent%',
   '%projectPicker_section_projects_localOnly%',
   '%projectPicker_search_placeholder%',
@@ -206,7 +196,7 @@ function ProjectSelectorLabel({
 function ToolbarProjectSelector({
   projects,
   recentIds,
-  currentProject,
+  displayedProject,
   currentProjectError,
   pendingProject,
   isLoading,
@@ -216,10 +206,15 @@ function ToolbarProjectSelector({
 }: {
   projects: ProjectItem[];
   recentIds: readonly string[];
-  currentProject: ProjectItem | undefined;
+  /**
+   * The project to name and mark as selected — the pending pick if there is one, otherwise the open
+   * project. Already folds in {@link pendingProject}, so the two are not independent.
+   */
+  displayedProject: ProjectItem | undefined;
   currentProjectError: string | undefined;
   /**
-   * The project the user just picked, named ahead of `currentProjectError` — see
+   * Whether {@link displayedProject} is a pick the editor has not caught up with yet. Passed
+   * separately only so a pending pick can outrank a stale `currentProjectError` — see
    * `renderTriggerLabel`.
    */
   pendingProject: ProjectItem | undefined;
@@ -291,10 +286,16 @@ function ToolbarProjectSelector({
   const renderProjectIndicator = useCallback(
     (project: ProjectSelectorProject) =>
       readOnlyIds.has(normalizeProjectId(project.id)) ? (
-        <LockIcon
-          className="tw:h-3 tw:w-3 tw:shrink-0"
+        // The selector treats the indicator as decorative and does not name it in the row
+        // tooltip, so the glyph is the only carrier of "read-only". `role="img"` gives the
+        // accessible name a reliable host, and `title` gives sighted users a hover label.
+        <span
+          role="img"
           aria-label={localizedStrings['%projectPicker_readOnly_label%']}
-        />
+          title={localizedStrings['%projectPicker_readOnly_label%']}
+        >
+          <LockIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
+        </span>
       ) : undefined,
     [readOnlyIds, localizedStrings],
   );
@@ -326,11 +327,11 @@ function ToolbarProjectSelector({
         );
       if (currentProjectError)
         return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
-      const named = selected ?? currentProject;
+      const named = selected ?? displayedProject;
       if (!named) return placeholder;
       return <ProjectSelectorLabel fullName={named.fullName} shortName={named.shortName} />;
     },
-    [pendingProject, currentProject, currentProjectError, placeholder],
+    [pendingProject, displayedProject, currentProjectError, placeholder],
   );
 
   const selectorLocalizedStrings = useMemo(
@@ -360,7 +361,7 @@ function ToolbarProjectSelector({
       // Empty on purpose: `openTabs` drives the scroll-group chips and the "Opened tabs" section,
       // and Simple mode exposes neither.
       openTabs={EMPTY_OPEN_TABS}
-      selection={{ projectId: currentProject?.id }}
+      selection={{ projectId: displayedProject?.id }}
       onChangeSelection={handleChangeSelection}
       customSections={customSections}
       availableGroupings={CUSTOM_ONLY_GROUPINGS}
@@ -371,7 +372,7 @@ function ToolbarProjectSelector({
       footerAction={footerAction}
       isLoading={isLoading}
       localizedStrings={selectorLocalizedStrings}
-      ariaLabel={localizedStrings['%projectPicker_toolbar_aria_label%']}
+      ariaLabel={localizedStrings['%projectPicker_toolbar_select_project%']}
       commandEmptyMessage={localizedStrings['%projectPicker_no_results%']}
       buttonVariant="ghost"
       buttonClassName={cn(
@@ -525,47 +526,9 @@ export function PlatformBibleToolbar() {
     await svc?.recordProjectOpened(projectId);
   }, []);
 
-  // The project the user has just picked, held until the editor reports it. Display fields, not
-  // just an id: a project picked from the "More projects…" dialog need not be in `pickerProjects`
-  // at all, so there is not always a list row to name it from.
-  const [pendingProject, setPendingProject] = useState<ProjectItem | undefined>(undefined);
-  const pendingProjectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  // The one entry point both selection paths take, so the trigger names the picked project the
-  // moment it is picked whether it came from the popover or from the dialog.
-  const beginOpenProject = useCallback(
-    (item: ProjectItem) => {
-      // Already the current project: there is nothing to bridge. Arming anyway would swap the
-      // trigger onto this item's spelling of an id the editor already reports, and leave a timer
-      // to unwind.
-      const isAlreadyCurrent =
-        !!currentSimpleProject &&
-        normalizeProjectId(currentSimpleProject.id) === normalizeProjectId(item.id);
-      if (!isAlreadyCurrent) {
-        setPendingProject(item);
-        // Supersede whatever an earlier pick armed, so the bound always belongs to the newest one.
-        clearTimeout(pendingProjectTimeoutRef.current);
-        pendingProjectTimeoutRef.current = setTimeout(() => {
-          setPendingProject(undefined);
-        }, PENDING_PROJECT_TIMEOUT_MS);
-      } else {
-        // Picking the open project is also the user correcting the trigger: an earlier pick whose
-        // editor never reported here would otherwise keep its name up until the bound expired.
-        setPendingProject(undefined);
-      }
-      openProject(item.id).catch((e: unknown) => {
-        logger.warn(
-          `Toolbar caught an error while trying to open project ${item.id}: ${getErrorMessage(e)}`,
-        );
-        // Latest-wins: a slow failure for an earlier pick must not clear a newer one.
-        setPendingProject((current) =>
-          current && normalizeProjectId(current.id) === normalizeProjectId(item.id)
-            ? undefined
-            : current,
-        );
-      });
-    },
-    [currentSimpleProject, openProject],
+  const { pendingProject, displayedProject, beginOpenProject } = usePendingProject(
+    currentSimpleProject,
+    openProject,
   );
 
   // The union of both sections. The hook returns them disjoint (`allProjects` already excludes
@@ -582,8 +545,8 @@ export function PlatformBibleToolbar() {
       );
       // A project reachable only through the dialog has no list row to take display fields from,
       // so its id stands in for them until the editor reports the project itself.
-      // TODO(PT-4552): Carry the chosen project's name in the dialog response, which WI-26's
-      // server-reachable projects make the common case rather than the exception.
+      // TODO(PT-4552): Carry the chosen project's name in the dialog response. PT-4552 adds
+      // server-reachable projects, which make this the common case rather than the exception.
       beginOpenProject(item ?? { id: projectId, shortName: projectId, fullName: projectId });
     },
     [pickerProjects, beginOpenProject],
@@ -597,34 +560,6 @@ export function PlatformBibleToolbar() {
       handleSelectProject(projectId);
     },
   );
-
-  // The editor caught up: the pending bridge has done its job.
-  useEffect(() => {
-    if (
-      pendingProject &&
-      currentSimpleProject &&
-      normalizeProjectId(currentSimpleProject.id) === normalizeProjectId(pendingProject.id)
-    )
-      setPendingProject(undefined);
-  }, [pendingProject, currentSimpleProject]);
-
-  // Nothing pending means nothing left for the bound to unwind, whichever path retired it — the
-  // editor catching up, or a failed open. One place to cancel, so no path can forget to.
-  useEffect(() => {
-    if (!pendingProject) {
-      clearTimeout(pendingProjectTimeoutRef.current);
-      pendingProjectTimeoutRef.current = undefined;
-    }
-  }, [pendingProject]);
-
-  useEffect(
-    () => () => {
-      clearTimeout(pendingProjectTimeoutRef.current);
-    },
-    [],
-  );
-
-  const displayedProject = pendingProject ?? currentSimpleProject;
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
@@ -876,7 +811,7 @@ export function PlatformBibleToolbar() {
           <ToolbarProjectSelector
             projects={pickerProjects}
             recentIds={recentIds}
-            currentProject={displayedProject}
+            displayedProject={displayedProject}
             currentProjectError={currentSimpleProjectError}
             pendingProject={pendingProject}
             isLoading={isProjectPickerLoading}

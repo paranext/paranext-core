@@ -135,7 +135,11 @@ function ProjectSection({
               <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-label={currentProjectLabel} />
             )}
             {p.isEditable === false && (
-              <LockIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-label={readOnlyLabel} />
+              // The padlock is the only carrier of "read-only" in the row, so `role="img"`
+              // hosts the accessible name and `title` gives sighted users a hover label.
+              <span role="img" aria-label={readOnlyLabel} title={readOnlyLabel}>
+                <LockIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
+              </span>
             )}
             {p.shortName}
           </div>

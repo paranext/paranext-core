@@ -384,7 +384,6 @@
   "%projectPicker_section_projects_localOnly%": "Your projects on this computer",
   "%projectPicker_section_recent%": "Recent",
   "%projectPicker_title%": "Select project",
-  "%projectPicker_toolbar_aria_label%": "Select project",
   "%projectPicker_toolbar_more_projects%": "More projects…",
   "%projectPicker_toolbar_no_projects%": "No projects",
   "%projectPicker_toolbar_select_project%": "Select project",

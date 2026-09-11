@@ -2109,7 +2109,7 @@ step, no automation. Just a record.
 
 - **Date:** 2026-09-10
 - **Status:** Accepted
-- **Context:** The titlebar picker needs an "All projects…" affordance below the list.
+- **Context:** The titlebar picker needs a "More projects…" affordance below the list.
   `customSections` partitions rows and cannot express an action that opens a different surface.
   cmdk 1.1.1 constrains how such a row can be built: navigation runs through `getValidItems()`,
   which queries only inside `CommandList`, so a row rendered outside it is mouse-only — the

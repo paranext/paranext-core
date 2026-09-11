@@ -240,6 +240,15 @@ function scrollGroupLetterFromMap(id: ScrollGroupId): string {
 // #region Common props
 
 /**
+ * The footer action row's cmdk value.
+ *
+ * Cmdk derives an item's value from its rendered text unless one is given. The footer's text is a
+ * caller-supplied localized label, which could collide with a project name, so the row carries this
+ * fixed value instead. It must stay stable and must not look like a project id.
+ */
+const FOOTER_ACTION_VALUE = 'platform.footerAction';
+
+/**
  * Every grouping option the selector knows about, in the canonical order they are offered in.
  * `ProjectSelectorGroupingOption`, the default `availableGroupings`, and the menu's runtime
  * validation all derive from this list, so adding an option here is the only edit needed.
@@ -1426,20 +1435,25 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                       empty message is the only thing above the footer, and a rule under it with
                       nothing to divide reads as a stray line rather than a separator. */}
                   {filteredRows.length > 0 && (
-                    <CommandSeparator alwaysRender data-testid="project-selector-footer-separator" />
+                    <CommandSeparator
+                      alwaysRender
+                      data-testid="project-selector-footer-separator"
+                    />
                   )}
                   {/* `forceMount` keeps this out of cmdk's registered-item set, so `filtered.count`
                       stays 0 on an empty list and CommandEmpty still renders — while the node
                       remains inside CommandList, where `getValidItems()` finds it for arrow-key,
-                      Home/End and Enter navigation. An explicit `value` stops cmdk deriving one
-                      from the localized label, which could collide with a project name. */}
+                      Home/End and Enter navigation. See {@link FOOTER_ACTION_VALUE} for why the
+                      value is explicit. */}
                   <CommandItem
                     forceMount
-                    value="platform.footerAction"
+                    value={FOOTER_ACTION_VALUE}
                     data-testid="project-selector-footer-action"
                     onSelect={() => {
                       props.footerAction?.onSelect();
-                      setOpen(false);
+                      // Close through the handler rather than `setOpen`, so the search query is
+                      // cleared and the next open starts from the full list.
+                      handleOpenChange(false);
                     }}
                   >
                     {props.footerAction.label}

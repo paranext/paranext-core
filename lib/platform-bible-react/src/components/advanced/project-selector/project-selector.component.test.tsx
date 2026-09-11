@@ -791,6 +791,35 @@ describe('footerAction', () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
+  it('is activatable by Space, which clicks the highlighted row directly', async () => {
+    const user = setupUser();
+    const onSelect = vi.fn();
+    renderWithFooter({ onSelect });
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await screen.findByTestId('project-selector-footer-action');
+
+    for (let i = 0; i < SAMPLE_PROJECTS.length + 1; i++) {
+      // Each keypress must land before the next is sent, so the highlight advances one row at a
+      // time; parallelizing would fire every ArrowDown before cmdk processes any of them.
+      // eslint-disable-next-line no-await-in-loop
+      await user.keyboard('{ArrowDown}');
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('project-selector-footer-action')).toHaveAttribute(
+        'data-selected',
+        'true',
+      ),
+    );
+
+    // Space takes a different path from Enter: `spaceSelectsHighlightedItem` finds the
+    // `data-selected` node and calls `.click()` on it. The footer row is `forceMount`ed and so is
+    // absent from cmdk's registered-item set, which is exactly the state that path has to survive.
+    await user.keyboard(' ');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
   it('is present AND the empty message still renders when there are no projects', async () => {
     const user = setupUser();
     renderWithFooter({ projects: [] });
@@ -811,6 +840,8 @@ describe('footerAction', () => {
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
     await screen.findByTestId('project-selector-footer-action');
 
+    // `queryByTestId` returns `null` (Testing Library's own DOM query contract) when nothing
+    // matches, so the assertion must compare against `null` itself.
     // eslint-disable-next-line no-null/no-null
     expect(screen.queryByTestId('project-selector-footer-separator')).toBe(null);
   });
