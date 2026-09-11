@@ -4189,9 +4189,17 @@ export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
 /**
- * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
- * popover layers and tooltips) so the wizard fully gates the app at startup and nothing behind it
- * remains clickable or focusable.
+ * Z-index for the one-shot onboarding tour spotlight. Sits above {@link Z_INDEX_ABOVE_DOCK},
+ * {@link Z_INDEX_ABOVE_POPOVER} and `Z_INDEX_TOOLTIP` so it can spotlight toolbar buttons and
+ * columns without a tooltip on one of them painting over the spotlight, and below
+ * {@link Z_INDEX_FIRST_RUN} so the wizard always wins if both are mounted. Pinned by
+ * `z-index.test.tsx`.
+ */
+export declare const Z_INDEX_ONBOARDING_TOUR = 690;
+/**
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including
+ * {@link Z_INDEX_ABOVE_POPOVER}, `Z_INDEX_TOOLTIP` and {@link Z_INDEX_ONBOARDING_TOUR}) so the wizard
+ * fully gates the app at startup and nothing behind it remains clickable or focusable.
  */
 export declare const Z_INDEX_FIRST_RUN = 700;
 /**
@@ -4201,7 +4209,7 @@ export declare const Z_INDEX_FIRST_RUN = 700;
  * When the websocket to the rest of the app dies, every layer beneath this one is inert — the
  * first-run wizard cannot submit, modals cannot resolve, the toolbar cannot navigate. Anything
  * rendering over this state would be offering the user a control that silently does nothing. Pinned
- * by `z-index.test.ts`.
+ * by `z-index.test.tsx`.
  */
 export declare const Z_INDEX_CONNECTION_LOST = 800;
 /**

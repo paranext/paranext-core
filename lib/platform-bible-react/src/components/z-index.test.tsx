@@ -24,9 +24,11 @@ import {
 import {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_ABOVE_POPOVER,
+  Z_INDEX_CONNECTION_LOST,
   Z_INDEX_FIRST_RUN,
   Z_INDEX_MODAL,
   Z_INDEX_MODAL_BACKDROP,
+  Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_TOOLTIP,
 } from './z-index';
@@ -84,8 +86,24 @@ describe('z-index scale ordering', () => {
     expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_ABOVE_POPOVER);
   });
 
+  test('the onboarding tour spotlight sits above the layers it spotlights', () => {
+    // The tour spotlights toolbar buttons and columns, so it has to clear the tooltip tier as well
+    // as the dock and popover tiers — a tooltip on a spotlighted button would otherwise paint over
+    // the spotlight. Its own value cannot carry that guarantee: it was chosen when the tooltip tier
+    // sat lower, and raising the tooltip tier alone silently put the tour underneath it.
+    expect(Z_INDEX_ONBOARDING_TOUR).toBeGreaterThan(Z_INDEX_TOOLTIP);
+  });
+
   test('the first-run gate sits above everything', () => {
     expect(Z_INDEX_FIRST_RUN).toBeGreaterThan(Z_INDEX_TOOLTIP);
+    expect(Z_INDEX_FIRST_RUN).toBeGreaterThan(Z_INDEX_ONBOARDING_TOUR);
+  });
+
+  test('keeps the connection-lost state above the first-run gate', () => {
+    // The connection-lost state must cover the first-run wizard, not sit under it: the wizard is
+    // entirely PAPI-driven, so a socket death mid-wizard would otherwise strand the user in a form
+    // that cannot submit, behind a layer telling them nothing is wrong.
+    expect(Z_INDEX_CONNECTION_LOST).toBeGreaterThan(Z_INDEX_FIRST_RUN);
   });
 });
 

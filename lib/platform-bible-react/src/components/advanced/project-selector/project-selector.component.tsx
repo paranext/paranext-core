@@ -533,7 +533,11 @@ function FilterMenu({
           outright should use. Verified against the filter menu opened from the selector popover.
           The row tooltip above needs nothing: `TooltipContent`'s own tier already clears the
           popover. */}
-      <DropdownMenuContent align="end" className="tw:w-56" style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}>
+      <DropdownMenuContent
+        align="end"
+        className="tw:w-56"
+        style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
+      >
         <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
         <DropdownMenuCheckboxItem
           checked={groupByOpenTabs}
