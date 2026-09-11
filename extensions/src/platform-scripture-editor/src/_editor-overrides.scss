@@ -227,6 +227,20 @@ button.toolbar-item {
   color: var(--accent-foreground);
 }
 
+// The vendored `max-height: 200px` on `.typeahead-popover ul` is sized for the marker typeahead's
+// long, FILTERABLE list, where scrolling past a fold is the point. The right-click context menu
+// reuses the same popover markup but is a short fixed list — eight items at ~36px — with no filter
+// to narrow it, so under that cap its last items sit behind a fold. Capped to the editor's viewport
+// instead: the portal is `position: fixed` in this web view's own document, so `vh` is this panel's
+// height. Every item shows whenever the panel has room, and the menu still can't outgrow it when it
+// doesn't.
+// Needs the `.typeahead-popover` qualifier to out-specify the vendored rule: the plugin puts both
+// classes on the menu's outer element and nests a second `.typeahead-popover` inside it.
+// The editor package carries the same cap; drop this when `_editor.scss` is next re-vendored.
+.typeahead-popover.auto-embed-menu ul {
+  max-height: calc(100vh - 16px);
+}
+
 .CommentPlugin_CommentInputBox_Editor,
 .CommentPlugin_CommentsPanel_Editor {
   background-color: var(--popover);
