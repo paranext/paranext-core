@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { ZOOM_STEP } from '@shared/models/content-zoom.model';
+import { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
 import {
   adjustZoomFactor,
   buildContentZoomMemoryKey,
@@ -6,10 +8,8 @@ import {
   formatZoomPercent,
   isValidContentZoomAreaId,
   isValidZoomFactor,
-  MAIN_CONTENT_ZOOM_AREA,
   parseContentZoomMemoryKey,
   roundZoom,
-  ZOOM_STEP,
 } from './content-zoom.util';
 
 describe('content-zoom.util', () => {

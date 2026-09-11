@@ -1,15 +1,10 @@
-import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
-
-/** Amount one zoom-in / zoom-out step changes a content zoom factor. */
-export const ZOOM_STEP = 0.1;
-
-/**
- * Kinds of web view whose content zoom is remembered per project. A view's kind decides the memory
- * key it uses; views of a kind that shows no project fall back to remembering per kind.
- *
- * @experimental This type is unstable and may change or disappear without notice
- */
-export type ContentZoomKind = 'editor' | 'resource' | 'notes';
+import {
+  CONTENT_ZOOM_AREA_ID_PATTERN,
+  ContentZoomKind,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+  ZOOM_STEP,
+} from '@shared/models/content-zoom.model';
 
 /** Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`. */
 export function clampZoom(factor: number): number {
@@ -49,14 +44,6 @@ export function isValidZoomFactor(value: unknown): value is number {
     value <= MAX_ZOOM_FACTOR
   );
 }
-
-/**
- * Re-exported from `web-view.model.ts`, which publishes the extension-facing half of the content
- * zoom contract through `papi.d.ts`; core code can reach it from either module.
- */
-export { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
-
-const CONTENT_ZOOM_AREA_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
 /**
  * `true` for a well-formed zoom area id: lower-case letters, digits and hyphens, starting with a
@@ -103,5 +90,3 @@ export function parseContentZoomMemoryKey(
   if (!isContentZoomKind(kind) || !isValidContentZoomAreaId(areaId)) return undefined;
   return { kind, identity, areaId };
 }
-
-export { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR };

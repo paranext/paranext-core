@@ -77,6 +77,16 @@ function byId(id: string): HTMLElement {
 }
 
 /**
+ * Collapses whitespace and drops an insignificant trailing `;` before `}` so a CSSOM
+ * re-serialization difference (jsdom reformats spacing around `:`/`,` and adds a trailing `;` to
+ * the last declaration when it echoes back an inserted rule's `cssText`) cannot fail the pinning
+ * check below — the two sides are compared normalized rather than byte-for-byte.
+ */
+function normalizeCssRuleText(cssText: string): string {
+  return cssText.replace(/\s+/g, '').replace(/;}/g, '}');
+}
+
+/**
  * Jsdom has no real `window.matchMedia`; stub it so `(prefers-reduced-motion: reduce)` resolves as
  * given.
  */
@@ -254,6 +264,36 @@ describe('content-zoom bootstrap script', () => {
     expect(rules.some((text) => text.includes('"inner"'))).toBe(false);
   });
 
+  it('inserts, for an area discovered after the pane loaded, a rule identical to the head-splice helper’s rule for the same area', async () => {
+    // The head-splice helper's own text for area "x", read off the style string it bakes into a
+    // pane's head — the same string `getContentZoomStyleElement` produces for
+    // `web-view.service-shard.ts`'s initial splice.
+    const baked = getContentZoomStyleElement('n', 1, { x: 1 });
+    const bakedRuleMatch = baked.match(/\[data-platform-content-zoom-root="x"\][^}]*\}/);
+    if (!bakedRuleMatch) throw new Error('baked rule for area "x" not found');
+    const [bakedRule] = bakedRuleMatch;
+
+    // "x" is absent from the pane's initial content, so only the bootstrap's own runtime
+    // `ensureRule` — not the initial splice — can be the one that inserts its rule.
+    const { bound } = install('wv-pin', TWO_AREAS);
+    await nextFrame();
+    const late = document.createElement('div');
+    late.setAttribute('data-platform-content-zoom-root', 'x');
+    document.body.appendChild(late);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-pin', [
+      'main',
+      'footnotes',
+      'x',
+    ]);
+    const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
+    const inserted = sheet
+      ? Array.from(sheet.cssRules).find((rule) => rule.cssText.includes('"x"'))
+      : undefined;
+    if (!inserted) throw new Error('runtime rule for area "x" was not inserted');
+    expect(normalizeCssRuleText(inserted.cssText)).toBe(normalizeCssRuleText(bakedRule));
+  });
+
   it('does not duplicate a rule the style element already baked in for a persisted area level', async () => {
     const { bound } = install('wv-9', TWO_AREAS, undefined, { footnotes: 0.9 });
     await nextFrame();
@@ -294,6 +334,30 @@ describe('content-zoom bootstrap script', () => {
     api.showIndicator('footnotes', '120 %');
     const badge = document.getElementById('platform-content-zoom-indicator');
     expect(badge?.dataset.area).toBe('footnotes');
+  });
+
+  it('anchors the indicator at inline-end: right for an LTR area, left for an RTL area', () => {
+    install('wv-14', TWO_AREAS);
+    // jsdom does not map the `dir` attribute to a computed `direction` the way a browser's UA
+    // stylesheet does, so an explicit author rule stands in for that here.
+    const rtlStyle = document.createElement('style');
+    rtlStyle.textContent = '[dir="rtl"]{direction:rtl}';
+    document.head.appendChild(rtlStyle);
+    byId('foot').setAttribute('dir', 'rtl');
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+
+    api.showIndicator('main', '120 %');
+    const badge = byId('platform-content-zoom-indicator');
+    expect(badge.style.right).not.toBe('');
+    expect(badge.style.left).toBe('');
+
+    api.showIndicator('footnotes', '120 %');
+    expect(badge.style.left).not.toBe('');
+    expect(badge.style.right).toBe('');
   });
 
   it('shows a transient indicator on the named area', () => {

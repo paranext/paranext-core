@@ -310,8 +310,9 @@ export type SavedWebViewDefinition = (
 /**
  * Id of one zoom area — a named part of a web view's content that zooms as one and keeps its own
  * content zoom level. Ids are lower-case letters, digits and hyphens, starting with a letter
- * (`[a-z][a-z0-9-]*`), and are stable strings a web view chooses once (the Scripture editor uses
- * `main` for its text and `footnotes` for its footnotes pane).
+ * (`[a-z][a-z0-9-]*`), and are stable strings a web view chooses once (for example `main` for a
+ * view's primary content; a view that has several independently zoomable parts gives each its own
+ * id).
  *
  * @experimental This type is unstable and may change or disappear without notice
  */
@@ -321,6 +322,9 @@ export type ContentZoomAreaId = string;
  * Id of the zoom area a web view marks without naming one (an empty attribute value). Every web
  * view that opts into content zoom has at least this area.
  *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'main'` itself and keeps it equal to this constant.
+ *
  * @experimental This constant is unstable and may change or disappear without notice
  */
 export const MAIN_CONTENT_ZOOM_AREA = 'main';
@@ -329,6 +333,10 @@ export const MAIN_CONTENT_ZOOM_AREA = 'main';
  * Web-view definition `state` key holding the pane's own content zoom levels: a map from zoom area
  * id to factor. An area with no entry follows the default from Settings. Written only by the
  * platform; web views may read it.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
+ * equal to this constant.
  *
  * @experimental This constant is unstable and may change or disappear without notice
  */
@@ -341,6 +349,10 @@ export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
  * var(--platform-content-zoom-<area>)` to it. Areas must not nest. Web views without this attribute
  * ignore per-area zoom input and are scaled whole at the Settings default.
  *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
+ * constant.
+ *
  * @experimental This constant is unstable and may change or disappear without notice
  */
 export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
@@ -348,7 +360,11 @@ export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
 /**
  * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
  * zoom area, with that area's effective factor (own level, else the Settings default):
- * `--platform-content-zoom-main`, `--platform-content-zoom-footnotes`, …
+ * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads its own zoom variable writes the literal `'--platform-content-zoom-'` itself and keeps
+ * it equal to this constant.
  *
  * @experimental This constant is unstable and may change or disappear without notice
  */
@@ -357,6 +373,10 @@ export const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = '--platform-content-zoom-';
 /**
  * CSS custom property holding the Settings default, the fallback for any zoom area without its own
  * variable.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads the default zoom variable writes the literal `'--platform-content-zoom-default'`
+ * itself and keeps it equal to this constant.
  *
  * @experimental This constant is unstable and may change or disappear without notice
  */

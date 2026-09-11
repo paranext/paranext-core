@@ -2,10 +2,13 @@ import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinate
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
+  ContentZoomKind,
+  DEFAULT_ZOOM_FACTOR,
   getContentZoomCssVariable,
   getContentZoomKind,
 } from '@shared/models/content-zoom.model';
 import {
+  ContentZoomAreaId,
   SavedWebViewDefinition,
   WEB_VIEW_CONTENT_TYPE,
   WebViewId,
@@ -17,14 +20,13 @@ import { settingsService } from '@shared/services/settings.service';
 import {
   adjustZoomFactor,
   buildContentZoomMemoryKey,
-  ContentZoomKind,
-  DEFAULT_ZOOM_FACTOR,
   formatZoomPercent,
   isValidContentZoomAreaId,
   isValidZoomFactor,
   parseContentZoomMemoryKey,
 } from '@shared/utils/content-zoom.util';
 import {
+  debounce,
   getErrorMessage,
   isPlatformError,
   PlatformError,
@@ -166,7 +168,13 @@ const MEMORY_WRITE_DEBOUNCE_MS = 250;
 /** Memory edits not yet flushed to the setting, keyed by memory key; `undefined` means delete. */
 const pendingMemoryWrites = new Map<string, number | undefined>();
 
-let memoryWriteTimer: ReturnType<typeof setTimeout> | undefined;
+/**
+ * Debounced entry point for {@link flushMemoryWrites}: a burst of edits within
+ * {@link MEMORY_WRITE_DEBOUNCE_MS} of each other collapses into the one trailing call. `.flush()`
+ * runs the pending call immediately (used on `beforeunload` and by the test seam below);
+ * `.cancel()` abandons it without writing (used on a test reset).
+ */
+const flushMemoryWritesDebounced = debounce(flushMemoryWrites, MEMORY_WRITE_DEBOUNCE_MS);
 
 /** The registered `beforeunload` flush listener, if any; guards against registering a second one. */
 let beforeUnloadListener: (() => void) | undefined;
@@ -183,10 +191,7 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   initialized = undefined;
   clearAllFallbackGraces();
   pendingMemoryWrites.clear();
-  if (memoryWriteTimer !== undefined) {
-    clearTimeout(memoryWriteTimer);
-    memoryWriteTimer = undefined;
-  }
+  flushMemoryWritesDebounced.cancel();
   memoryChain = Promise.resolve();
   if (beforeUnloadListener !== undefined && typeof window !== 'undefined') {
     window.removeEventListener('beforeunload', beforeUnloadListener);
@@ -229,7 +234,7 @@ function getOwnLevels(definition: Pick<SavedWebViewDefinition, 'state'> | undefi
   return out;
 }
 
-/** Explicit id → the window's last focused tab → nothing. Pure; exported for tests. */
+/** Explicit id → the window's last focused tab → nothing. Exported for tests. */
 export function resolveContentZoomTarget(
   explicitWebViewId: string | undefined,
 ): WebViewId | undefined {
@@ -260,8 +265,8 @@ const unknownAreasLoggedByWebViewId = new Map<WebViewId, Set<string>>();
  */
 export function resolveContentZoomArea(
   webViewId: WebViewId,
-  explicitAreaId: string | undefined,
-): string | undefined {
+  explicitAreaId: ContentZoomAreaId | undefined,
+): ContentZoomAreaId | undefined {
   const areas = areasByWebViewId.get(webViewId) ?? [];
   if (areas.length === 0) return undefined;
   if (explicitAreaId !== undefined) {
@@ -385,7 +390,7 @@ function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
  * report, not merely the first call, so the empty scan itself never counts as "the pane has
  * reported" for seeding purposes.
  */
-export function setContentZoomAreas(webViewId: WebViewId, areaIds: string[]): void {
+export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAreaId[]): void {
   const valid = areaIds.filter((areaId) => isValidContentZoomAreaId(areaId));
   const previous = areasByWebViewId.get(webViewId);
   if (previous && previous.length === valid.length && previous.every((a, i) => a === valid[i]))
@@ -399,7 +404,7 @@ export function setContentZoomAreas(webViewId: WebViewId, areaIds: string[]): vo
 }
 
 /** Called by the bootstrap whenever the user clicks or focuses inside another area. */
-export function setContentZoomActiveArea(webViewId: WebViewId, areaId: string): void {
+export function setContentZoomActiveArea(webViewId: WebViewId, areaId: ContentZoomAreaId): void {
   if (isValidContentZoomAreaId(areaId)) activeAreaByWebViewId.set(webViewId, areaId);
 }
 
@@ -417,8 +422,8 @@ export function forgetContentZoom(webViewId: WebViewId): void {
  * URL view, or a view that marks none): CSS `zoom` on the iframe element, so the whole view shows
  * at the Settings default — but only once {@link mayScaleWholeIframe} says the pane really has no
  * areas rather than not having mounted its content yet. Areas that hold a level but are not
- * currently rendered still get their variable, so the level is in place when the area appears (the
- * footnotes pane being shown).
+ * currently rendered still get their variable, so the level is in place when the area appears (a
+ * panel the view renders only on demand).
  *
  * Hidden panes are handled: rc-dock keeps an inactive tab mounted under `display: none`, and both
  * the variables and the rules that read them are data-driven, so they apply with no layout and are
@@ -428,7 +433,7 @@ export function forgetContentZoom(webViewId: WebViewId): void {
  */
 export function pushContentZoom(
   webViewId: WebViewId,
-  indicator?: { areaId: string; text: string },
+  indicator?: { areaId: ContentZoomAreaId; text: string },
 ): void {
   const iframe = deps.getIframe(webViewId);
   if (!iframe) return;
@@ -530,7 +535,7 @@ function collectMemoryLevelsFor(memory: MemoryRecord, id: MemoryIdentity): Level
 
 function memoryKeyFor(
   definition: Pick<SavedWebViewDefinition, 'webViewType' | 'projectId' | 'state'>,
-  areaId: string,
+  areaId: ContentZoomAreaId,
 ): string | undefined {
   const id = memoryIdentityFor(definition);
   return id ? buildContentZoomMemoryKey(id.kind, id.identity, areaId) : undefined;
@@ -570,10 +575,6 @@ function enqueueMemoryTransaction(
  * burst becomes a single write. Safe to call with nothing pending.
  */
 function flushMemoryWrites(): Promise<void> {
-  if (memoryWriteTimer !== undefined) {
-    clearTimeout(memoryWriteTimer);
-    memoryWriteTimer = undefined;
-  }
   if (pendingMemoryWrites.size === 0) return Promise.resolve();
   const pending = new Map(pendingMemoryWrites);
   pendingMemoryWrites.clear();
@@ -595,36 +596,33 @@ function flushMemoryWrites(): Promise<void> {
 }
 
 /**
- * Records one area's level as a pending memory edit and (re)starts the flush timer, so a burst of
- * adjustments — a wheel gesture, keyboard auto-repeat — coalesces into one write per key instead of
- * one round trip per step.
+ * Records one area's level as a pending memory edit and (re)starts the debounce window, so a burst
+ * of adjustments — a wheel gesture, keyboard auto-repeat — coalesces into one write per key instead
+ * of one round trip per step.
  */
 function writeMemory(
   definition: Pick<SavedWebViewDefinition, 'webViewType' | 'projectId' | 'state'>,
-  areaId: string,
+  areaId: ContentZoomAreaId,
   level: number | undefined,
 ): void {
   const key = memoryKeyFor(definition, areaId);
   if (!key) return;
   pendingMemoryWrites.set(key, level);
-  if (memoryWriteTimer !== undefined) clearTimeout(memoryWriteTimer);
-  memoryWriteTimer = setTimeout(() => {
-    memoryWriteTimer = undefined;
-    flushMemoryWrites();
-  }, MEMORY_WRITE_DEBOUNCE_MS);
+  // A rejection here only ever means a test reset canceled this write; nothing else awaits it.
+  flushMemoryWritesDebounced().catch(() => {});
 }
 
 /** Test seam only. Flushes any pending edit now and waits for the transaction chain to settle. */
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
 export async function __flushContentZoomMemoryForTesting(): Promise<void> {
-  await flushMemoryWrites();
+  await flushMemoryWritesDebounced.flush();
   await memoryChain;
 }
 
 /** Sets or deletes one area's level in the definition state; an empty map is removed entirely. */
 function writeOwnLevel(
   definition: SavedWebViewDefinition,
-  areaId: string,
+  areaId: ContentZoomAreaId,
   level: number | undefined,
 ): boolean {
   const state: Record<string, unknown> = { ...(definition.state ?? {}) };
@@ -640,13 +638,17 @@ function writeOwnLevel(
  * Ctrl+`+` / Ctrl+`-` (and wheel): give one area of the target pane its own level, one step from
  * what it shows. The bootstrap already targets an area for keyboard and wheel; without an area id
  * (tab menu, macOS menu, extensions) the pane's active area is used. A pane that reported no areas
- * ignores the request, which is the gate the macOS and tab-menu paths need.
+ * ignores the request, which is the gate the macOS and tab-menu paths need. A non-finite
+ * `deltaSteps` is ignored outright: `adjustZoomFactor` would otherwise clamp it into a spurious
+ * in-range level (`NaN` and `Infinity` both survive `clampZoom`'s comparisons unchanged or clamped
+ * to an edge) and write that level as if the user had actually asked for it.
  */
 export async function adjustContentZoom(
   webViewId: WebViewId | undefined,
   deltaSteps: number,
-  areaId?: string,
+  areaId?: ContentZoomAreaId,
 ): Promise<void> {
+  if (!Number.isFinite(deltaSteps)) return;
   const target = resolveContentZoomTarget(webViewId);
   if (!target) return;
   const area = resolveContentZoomArea(target, areaId);
@@ -667,7 +669,7 @@ export async function adjustContentZoom(
 /** Ctrl+`0`: one area of the target pane forgets its own level and follows the default again. */
 export async function resetContentZoom(
   webViewId: WebViewId | undefined,
-  areaId?: string,
+  areaId?: ContentZoomAreaId,
 ): Promise<void> {
   const target = resolveContentZoomTarget(webViewId);
   if (!target) return;
@@ -845,7 +847,7 @@ export function initializeContentZoomService(
     // reset removes it so a later re-initialization can register its own.
     if (typeof window !== 'undefined' && !beforeUnloadListener) {
       beforeUnloadListener = () => {
-        flushMemoryWrites();
+        flushMemoryWritesDebounced.flush();
       };
       window.addEventListener('beforeunload', beforeUnloadListener);
     }

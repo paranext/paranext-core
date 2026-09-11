@@ -1,17 +1,16 @@
 import {
+  CONTENT_ZOOM_AREA_ID_PATTERN,
+  CONTENT_ZOOM_AREA_ID_PLACEHOLDER,
   CONTENT_ZOOM_COMMANDS,
-  CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
+  DEFAULT_ZOOM_FACTOR,
   getContentZoomCssVariable,
 } from '@shared/models/content-zoom.model';
-import {
-  DEFAULT_ZOOM_FACTOR,
-  isValidContentZoomAreaId,
-  isValidZoomFactor,
-  MAIN_CONTENT_ZOOM_AREA,
-} from '@shared/utils/content-zoom.util';
+import { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
+import { isValidContentZoomAreaId, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 
 const INDICATOR_ID = 'platform-content-zoom-indicator';
 const INDICATOR_VISIBLE_MS = 1100;
@@ -20,14 +19,17 @@ const INDICATOR_VISIBLE_MS = 1100;
  * The rule that scales one zoom area: its own variable, else the default. The `main` area's rule
  * names both spellings of its marker — the empty value a view writes when it names no area, and the
  * id itself — so that a marker carrying an id no rule was generated for (an invalid id, or an area
- * ignored for nesting inside another) is left unscaled instead of quietly following `main`.
+ * ignored for nesting inside another) is left unscaled instead of quietly following `main`. A named
+ * (non-`main`) area's rule comes from {@link CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE}, the same
+ * template the bootstrap's own runtime `ensureRule` substitutes into, so the two never spell a
+ * named area's rule differently.
  */
 function areaRule(areaId: string): string {
-  const selector =
-    areaId === MAIN_CONTENT_ZOOM_AREA
-      ? `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}=""],[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${MAIN_CONTENT_ZOOM_AREA}"]`
-      : `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${areaId}"]`;
-  return `${selector}{zoom:var(${getContentZoomCssVariable(areaId)},var(${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE},1))}`;
+  if (areaId === MAIN_CONTENT_ZOOM_AREA) {
+    const selector = `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}=""],[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${MAIN_CONTENT_ZOOM_AREA}"]`;
+    return `${selector}{zoom:var(${getContentZoomCssVariable(areaId)},var(${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE},1))}`;
+  }
+  return CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE.split(CONTENT_ZOOM_AREA_ID_PLACEHOLDER).join(areaId);
 }
 
 /**
@@ -84,7 +86,9 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const webViewId = ${id};
     const ATTR = '${attr}';
     const MAIN = '${MAIN_CONTENT_ZOOM_AREA}';
-    const AREA_ID = /^[a-z][a-z0-9-]*$/;
+    const AREA_ID = new RegExp(${JSON.stringify(CONTENT_ZOOM_AREA_ID_PATTERN.source)});
+    const NAMED_AREA_RULE_TEMPLATE = ${JSON.stringify(CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE)};
+    const AREA_ID_PLACEHOLDER = ${JSON.stringify(CONTENT_ZOOM_AREA_ID_PLACEHOLDER)};
     const bind = (name) => (typeof window[name] === 'function' ? window[name] : undefined);
     // Hot path: the shard binds in-process functions for this web view (like the state helpers) so a
     // wheel burst does not make a network round trip per tick; the commands remain for the tab menu,
@@ -148,7 +152,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       const element = styleElement();
       const sheet = element && element.sheet;
       if (!sheet) return;
-      sheet.insertRule('[' + ATTR + '="' + areaId + '"]{zoom:var(${CONTENT_ZOOM_CSS_VARIABLE_PREFIX}' + areaId + ',var(${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE},1))}', sheet.cssRules.length);
+      sheet.insertRule(NAMED_AREA_RULE_TEMPLATE.split(AREA_ID_PLACEHOLDER).join(areaId), sheet.cssRules.length);
       ruled.add(areaId);
     };
     const collectAreas = () => {
@@ -241,17 +245,30 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
     }, { passive: false });
 
-    // Top-right corner of the union of one area's elements, in viewport pixels.
+    // An area's own text direction, read off one of its marked elements (falling back to the
+    // document's when the area currently has no elements) so a marker inside an otherwise-LTR
+    // document (or vice versa) still anchors on its own inline-end, not the document's.
+    const directionOf = (element) => {
+      const style = window.getComputedStyle ? window.getComputedStyle(element) : undefined;
+      return style && style.direction === 'rtl' ? 'rtl' : 'ltr';
+    };
+    // Top inline-end corner of the union of one area's elements, in viewport pixels: top-right for
+    // an LTR area, top-left for an RTL one.
     const cornerOf = (areaId) => {
-      let top = Infinity; let right = -Infinity;
+      let top = Infinity; let left = Infinity; let right = -Infinity; let anchor;
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
         if (idOf(element) !== areaId) return;
+        if (!anchor) anchor = element;
         const rect = element.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) return;
-        top = Math.min(top, rect.top); right = Math.max(right, rect.right);
+        top = Math.min(top, rect.top); left = Math.min(left, rect.left); right = Math.max(right, rect.right);
       });
-      if (top === Infinity) return { top: 12, right: 16 };
-      return { top: Math.max(0, top) + 12, right: Math.max(0, window.innerWidth - right) + 16 };
+      const rtl = directionOf(anchor || document.documentElement) === 'rtl';
+      if (top === Infinity) return rtl ? { top: 12, left: 16, rtl } : { top: 12, right: 16, rtl };
+      const topOffset = Math.max(0, top) + 12;
+      return rtl
+        ? { top: topOffset, left: Math.max(0, left) + 16, rtl }
+        : { top: topOffset, right: Math.max(0, window.innerWidth - right) + 16, rtl };
     };
     let hideTimer;
     const showIndicator = (areaId, text) => {
@@ -269,7 +286,13 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       }
       const corner = cornerOf(areaId);
       badge.style.top = corner.top + 'px';
-      badge.style.right = corner.right + 'px';
+      if (corner.rtl) {
+        badge.style.left = corner.left + 'px';
+        badge.style.right = '';
+      } else {
+        badge.style.right = corner.right + 'px';
+        badge.style.left = '';
+      }
       badge.dataset.area = areaId;
       badge.textContent = text;
       // Reduced motion still hides the badge on schedule, as a hard cut instead of a fade (an

@@ -2728,7 +2728,8 @@ step, no automation. Just a record.
   return: `getSavedWebViewDefinitionSync`, `updateWebViewDefinitionSync`,
   `getAllOpenWebViewDefinitionsSync` and `onDidUpdateWebView` from the web-view shard, and
   `getLastFocusedTabId` from the window shard. Importing either shard from the service closes an
-  import cycle, because each shard already imports the service.
+  import cycle: the web-view shard already imports the service directly, and the window shard
+  reaches it only through the web-view shard.
 - **Decision:** The service imports neither shard. It declares the functions it needs as a `deps`
   object and exposes `initializeContentZoomService({ … })`; the renderer's composition root
   (`src/renderer/index.tsx`) fills that object with each shard's own function before it starts the
