@@ -3,11 +3,15 @@
 // `document` at module-eval time (it re-exports the whole component library). The default `node`
 // environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-editor';
 import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
+  createInsertContextMenuItems,
+  doesEditorContextMenuOwnEnter,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
@@ -543,5 +547,131 @@ describe('parseCallerSequenceSetting', () => {
   it('keeps multi-character and non-Latin callers verbatim', () => {
     expect(parseCallerSequenceSetting('๑ ๒ ๓')).toEqual(['๑', '๒', '๓']);
     expect(parseCallerSequenceSetting('aa bb')).toEqual(['aa', 'bb']);
+  });
+});
+
+describe('createInsertContextMenuItems', () => {
+  // Parity contract: the context menu must offer exactly the Insert-menu inserts, in menu order.
+  // Read the Insert menu straight from the contribution so a menus.json change without a
+  // context-menu twin fails this test.
+  const menusJson = JSON.parse(
+    readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'),
+  );
+  const { groups, items: topMenuItems } =
+    menusJson.webViewMenus['platformScriptureEditor.react'].topMenu;
+  // Taken from the Insert COLUMN rather than the one group in it today: keyed on the group name, a
+  // second group added to that column would put an item in the Insert menu with no context-menu
+  // twin and leave this guard green.
+  const insertGroupOrders = new Map<string, number>(
+    Object.entries(groups)
+      .filter(([, group]) => group.column === 'platformScriptureEditor.insert')
+      .map(([name, group]): [string, number] => [name, group.order]),
+  );
+  const insertMenuItems: { label: string; group: string; order: number }[] = topMenuItems
+    .filter((item: { group: string }) => insertGroupOrders.has(item.group))
+    .sort(
+      (a: { group: string; order: number }, b: { group: string; order: number }) =>
+        (insertGroupOrders.get(a.group) ?? 0) - (insertGroupOrders.get(b.group) ?? 0) ||
+        a.order - b.order,
+    );
+
+  const makeActions = () => ({
+    insertFootnote: vi.fn(),
+    insertCrossReference: vi.fn(),
+    insertEndnote: vi.fn(),
+    insertComment: vi.fn(),
+  });
+
+  // Localized-strings stub: key -> `LOC:<key>` so titles are traceable to keys.
+  const strings = Object.fromEntries(
+    insertMenuItems.map((item) => [item.label, `LOC:${item.label}`]),
+  );
+
+  const ENABLED = { isReadOnly: false, canUserCreateComments: true, isSyncBlocked: false };
+
+  it('offers exactly the Insert-menu items, localized, in the same order', () => {
+    const items = createInsertContextMenuItems(strings, makeActions(), ENABLED);
+    expect(items.map((i) => i.title)).toEqual(insertMenuItems.map((i) => `LOC:${i.label}`));
+  });
+
+  it('disables note inserts when read-only and the comment insert per permission', () => {
+    const readOnly = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isReadOnly: true,
+    });
+    expect(readOnly.map((i) => !!i.isDisabled)).toEqual([true, true, true, false]);
+    const noCommentPermission = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      canUserCreateComments: false,
+    });
+    expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
+  });
+
+  // A sync freeze reaches the note inserts through the editor's own read-only state, so only the
+  // comment insert — which does not go through the editor — needs the flag directly.
+  it('disables the comment insert while sync-blocked', () => {
+    const syncBlocked = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isSyncBlocked: true,
+    });
+    expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
+  });
+
+  it('dispatches each item to its matching action', () => {
+    const actions = makeActions();
+    const items = createInsertContextMenuItems(strings, actions, ENABLED);
+    items.forEach((i) => i.onSelect());
+    expect(actions.insertFootnote).toHaveBeenCalledTimes(1);
+    expect(actions.insertCrossReference).toHaveBeenCalledTimes(1);
+    expect(actions.insertEndnote).toHaveBeenCalledTimes(1);
+    expect(actions.insertComment).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('doesEditorContextMenuOwnEnter', () => {
+  /**
+   * The markup `ContextMenuPlugin` actually portals into the document: both classes on the outer
+   * element, a second `.typeahead-popover` nested inside it, and `selected` on the highlighted
+   * item.
+   */
+  function renderContextMenu({ highlighted }: { highlighted: boolean }) {
+    const portal = document.createElement('div');
+    portal.className = 'typeahead-popover auto-embed-menu';
+    portal.innerHTML = `<div class="typeahead-popover"><ul>
+      <li class="item" role="option"><span class="text">Cut</span></li>
+      <li class="item${highlighted ? ' selected' : ''}" role="option"><span class="text">Insert end note</span></li>
+    </ul></div>`;
+    document.body.append(portal);
+    return portal;
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('is false with no context menu open', () => {
+    expect(doesEditorContextMenuOwnEnter()).toBe(false);
+  });
+
+  // The menu does not claim Enter with nothing highlighted, so the web view must keep it and open
+  // the Enter palette — standing down here would leave Lexical to plain-split the paragraph.
+  it('is false while the menu is open with nothing highlighted', () => {
+    renderContextMenu({ highlighted: false });
+    expect(doesEditorContextMenuOwnEnter()).toBe(false);
+  });
+
+  it('is true once an item is highlighted', () => {
+    renderContextMenu({ highlighted: true });
+    expect(doesEditorContextMenuOwnEnter()).toBe(true);
+  });
+
+  // Other popovers reuse `.typeahead-popover` and the same `selected` item class; only the
+  // context-menu portal (`auto-embed-menu`) claims Enter on `document`.
+  it('ignores a highlighted item in a popover that is not the context menu', () => {
+    const other = document.createElement('div');
+    other.className = 'typeahead-popover';
+    other.innerHTML = '<ul><li class="item selected"><span class="text">q1</span></li></ul>';
+    document.body.append(other);
+    expect(doesEditorContextMenuOwnEnter()).toBe(false);
   });
 });

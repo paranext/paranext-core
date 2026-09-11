@@ -1,14 +1,15 @@
 import { type Frame, type Page } from '@playwright/test';
 import {
+  dismissOnboardingTour,
   LAUNCH_PHASE_TIMEOUT_MS,
   SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
 
-// Re-exported so the specs that reach for it through this module keep working: it is defined in
-// helpers.ts, which is the lower-level module and the single home for it.
-export { SAMPLE_WEB_PROJECT_ID };
+// Re-exported so the specs that reach for them through this module keep working: they are defined
+// in helpers.ts, which is the lower-level module and the single home for them.
+export { dismissOnboardingTour, SAMPLE_WEB_PROJECT_ID };
 
 /** Options accepted by {@link openScriptureEditorForProject}. */
 export interface OpenScriptureEditorOptions {
@@ -224,6 +225,9 @@ function escapeForRegExp(value: string): string {
  * renders through `formatScrRef(..., 'English')`, so a book CODE never matches its own item.
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
+  // Simple-mode specs never reach `waitForHomeTab` (that layout has no Home tab), so this is the
+  // one place every caller passes through before the tour could block the click below.
+  await dismissOnboardingTour(mainPage);
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
@@ -247,6 +251,8 @@ export async function waitForHomeTab(mainPage: Page): Promise<void> {
     .locator('.dock-tab', { hasText: 'Home' })
     .first()
     .waitFor({ timeout: LAUNCH_PHASE_TIMEOUT_MS });
+
+  await dismissOnboardingTour(mainPage);
 }
 
 /**
