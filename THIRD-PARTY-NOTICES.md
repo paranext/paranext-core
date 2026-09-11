@@ -12,10 +12,11 @@ Build and test tooling is excluded because it is not distributed.
 
 Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,
 the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source
-tree, and native libraries taken from the machine that built the installer. No scan of either
-graph can reach any of them and none appears as a row below, so each is described in a section
-of its own, present only when that build actually carries it: a component that ships without a
-row is indistinguishable from one nobody considered.
+tree, native libraries taken from the machine that built the installer, third-party programs
+redistributed as separate executables, and extensions packed from other repositories. No scan of
+either graph can reach any of them and none appears as a row below, so each is described in a
+section of its own, present only when that build actually carries it: a component that ships
+without a row is indistinguishable from one nobody considered.
 
 **This is a reference, not the notices for any shipped product.** A distributed application
 built on paranext-core carries its own dependencies on top of these, and must generate its own

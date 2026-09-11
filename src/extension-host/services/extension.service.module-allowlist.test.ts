@@ -61,6 +61,28 @@ function readPermittedModuleSpecifiers(): string[] {
 // The consequence lives in the test name because that is what a failing run prints. Vitest's
 // two-argument `expect(value, message)` would say it closer to the assertion, but `vitest/valid-expect`
 // refuses that form.
+/**
+ * The SHAPE of dispatching on the module name against hard-coded literals, rather than one expected
+ * spelling of it.
+ *
+ * A pattern spelled for one expected form - `/moduleName === /`, with exactly that spacing - is
+ * satisfied by `switch (moduleName)`, `moduleName.startsWith('react')` and a collapsed
+ * `moduleName==='react'` doing the very thing it forbids. Anchoring on the syntax that has to be
+ * present - and letting the noise through - is what `.claude/rules/grep-safety-net.md` asks for.
+ *
+ * A string LITERAL on the other side is what makes it the dangerous shape: comparing the name to a
+ * variable is how a membership test against the allowlist itself is written
+ * (`specifiers.some((specifier) => specifier === moduleName)`), which is the safe pattern rather
+ * than the forbidden one.
+ *
+ * What it still misses, so nobody reads a green run as more than it is: a comparison against a
+ * named constant (`const REACT = 'react'; moduleName === REACT`), and a `switch` over a variable
+ * the name was copied into. The behavioural coverage named below is the actual proof; this is a
+ * cheap tripwire for the obvious regression.
+ */
+const NAME_COMPARISON_DISPATCH =
+  /moduleName\s*===\s*['"`]|['"`]\s*===\s*moduleName|switch\s*\(\s*moduleName|moduleName\s*\.\s*(startsWith|endsWith|includes|match)\s*\(\s*['"`]/;
+
 describe('extension host require shim allowlist', () => {
   it(`permits exactly the modules the Extension Interface publishes — ${WIDENING_THE_GRANT}`, () => {
     expect(readPermittedModuleSpecifiers()).toEqual([...PERMITTED_MODULE_SPECIFIERS].sort());
@@ -72,7 +94,30 @@ describe('extension host require shim allowlist', () => {
     // name, and every assertion in this file would still pass.
     const source = readFileSync(path.join(__dirname, 'extension.service.ts'), 'utf8');
     expect(source).toContain('EXTENSION_INTERFACE_MODULES[moduleName]');
-    expect(source).not.toMatch(/moduleName === /);
+    expect(source).not.toMatch(NAME_COMPARISON_DISPATCH);
+  });
+});
+
+describe('renderer web view require shim allowlist', () => {
+  it(`dispatches from that map rather than comparing names in the shim — ${WIDENING_THE_GRANT}`, () => {
+    // The renderer's value is pinned below, under the license exception. That pin is only a guard
+    // while the shim is what consumes the value, for the reason the extension host's twin above
+    // gives - and web views are the larger of the two surfaces. `global-this-web-view.model.ts`
+    // pulls in React and `platform-bible-react`, which do not load outside a browser environment,
+    // so its source is read here instead of imported.
+    //
+    // This is a BACKSTOP, not the proof: no regex over source text can express "dispatches from the
+    // map". What the shim actually does is exercised in
+    // `src/renderer/global-this-web-view.model.test.ts`, which runs it through
+    // `globalThis.webViewRequire` - the surface a web view reaches - and asserts that every
+    // allowlisted specifier resolves, that an unlisted one throws, and that `Object.prototype`
+    // members throw rather than answering as modules.
+    const source = readFileSync(
+      path.join(REPO, 'src/renderer/global-this-web-view.model.ts'),
+      'utf8',
+    );
+    expect(source).toContain('moduleMap.get(moduleName)');
+    expect(source).not.toMatch(NAME_COMPARISON_DISPATCH);
   });
 });
 

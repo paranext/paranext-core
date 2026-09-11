@@ -1,26 +1,24 @@
 # Third-party notices
 
-Platform.Bible incorporates the third-party components listed below. Where a component ships a
+Paratext 10 incorporates the third-party components listed below. Where a component ships a
 license file of its own, that text is reproduced in full, as those licenses require; where it ships
 none but declares an SPDX identifier, the canonical text of that license is reproduced instead,
 marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are
 accounted for separately in the last section. This file covers the redistributable
-closure of **this repository**: the npm packages webpack actually compiled into `dist/` (plus the
-stylesheet-only packages Tailwind inlines before webpack runs, and anything `release/app` ships
-unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.
+closure of **Paratext 10**, built from paranext-core by `paranext/paratext-10-studio`: the npm
+packages webpack actually compiled into `dist/` (plus the stylesheet-only packages Tailwind
+inlines before webpack runs, and anything `release/app` ships unbundled beside the bundle), the
+NuGet closure of the bundled .NET data provider, Electron, and the components that
+repository adds, each described in a section of its own below.
 Build and test tooling is excluded because it is not distributed.
 
-Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,
+Some of what this application distributes is neither an npm nor a NuGet package - bundled data,
 the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source
 tree, native libraries taken from the machine that built the installer, third-party programs
 redistributed as separate executables, and extensions packed from other repositories. No scan of
 either graph can reach any of them and none appears as a row below, so each is described in a
 section of its own, present only when that build actually carries it: a component that ships
 without a row is indistinguishable from one nobody considered.
-
-**This is a reference, not the notices for any shipped product.** A distributed application
-built on paranext-core carries its own dependencies on top of these, and must generate its own
-notices covering both.
 
 **Generated on Linux, and it covers every platform.** The NuGet half is the union of the restore
 closure for every runtime identifier this application is published for (`linux-x64`, `win-x64`,
@@ -37,7 +35,10 @@ the file will not match what CI verifies.
 > recorded in `THIRD-PARTY-NOTICES.lock.json` so a verdict that moved because the matcher was
 > upgraded stays distinguishable from one that moved because a license changed.
 
-For the license covering Platform.Bible itself, see [LICENSING.md](./LICENSING.md).
+For the license covering Paratext 10 itself, see the Paratext Terms of Service, which ships beside
+this document as `TERMS-OF-SERVICE.html`.
+The current published copy is at <https://registry.paratext.org/terms>; the file shipped
+with this build is the one that applies to it.
 
 ## Electron, Chromium, and Node.js
 
@@ -70,10 +71,11 @@ Albert Nida © United Bible Societies 1988, 1989. Licensed under
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 
 Portions of the database are © United Bible Societies and are **not** available under an open
-source license. UBS permits their distribution in **Paratext**. That permission is specific to
-Paratext: it does not extend to Platform.Bible, nor to anyone else redistributing the database,
-including a third party building from this repository — see LICENSING.md. The open-licensed
-content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.
+source license. UBS permits their distribution in **Paratext**. Paratext 10 is a Paratext
+product, and that permission covers it. It does not extend to Platform.Bible, nor to anyone
+else redistributing the database, including a third party building from paranext-core — see
+LICENSING.md. The open-licensed content can be obtained separately from
+<https://github.com/ubsicap/ubs-open-license>.
 
 ## Linux snap — staged system libraries
 
@@ -100,6 +102,43 @@ snapcraft template excludes `usr/share` from the app part's stage list — so ea
 own copyright file is checked into this repository, hash-pinned, and reproduced verbatim below.
 This file is packed into the snap (`electron-builder.json5` `extraResources`), so the notices
 are inside the artifact that redistributes the libraries.
+
+## Third-party programs redistributed as separate executables
+
+The application redistributes these programs as separate executables, each with its own
+runtime, and invokes them as subprocesses. They belong to neither the npm nor the NuGet graph
+above. The canonical text of every identifier named here is reproduced under "Canonical license
+texts for declared identifiers", because not every bundle below carries a copy of its own terms.
+A component bundled inside one of these programs is credited there under its own name and its
+own copyright notice rather than the program’s: it is under its own terms, held by its own
+copyright holder.
+
+### Example Tool
+
+- **Terms:** Zlib
+- **Copyright:** Copyright (c) 2014 Example Authors
+
+Delivered as:
+
+- **Windows**, version 2.1.0: NuGet package. The bundle carries its own notice files at LICENSE.txt beside the executable. It also contains example-runtime 3.9.6 (ISC).
+- **Linux (snap)**, version 1.8.2: Debian packages staged into the snap. The bundle carries no notice files of its own. It also contains example-runtime 2.7.18 (ISC).
+
+Redistributed unmodified as a separate executable and invoked as a subprocess through its command-line interface. No product code links against it or shares an address space with it.
+
+**Corresponding source:** Corresponding source is published beside the binaries at <https://example.org/src>.
+
+Reviewed by reviewer@example.org on 2026-09-04.
+
+## Extensions packed from other repositories
+
+The installer also carries these extensions, built in other repositories and packed as zips
+beside the ones built here. Each bundles every dependency outside the extension host’s
+externals list, and no module manifest describes that bundle, so the packages inside it have no
+rows above. That is an omission this document records rather than hides.
+
+### example-private-extension
+
+Its bundled dependencies are **not itemized** in this document. Built in another repository, which emits no module manifest yet, so its bundle cannot be itemized here - see PT-4604.
 
 ## .NET data provider (NuGet)
 
@@ -238,9 +277,11 @@ the license file the package itself ships. No copyright holder is inferred, and 
 placeholder is not read as one: where a package records no notice anywhere, that is stated
 rather than left blank.
 
-### ISC — canonical text, 1 package
+### ISC — canonical text, 3 packages
 
 - `epsilon@5.0.0` (npm) — not present in the local package folder, so no copyright notice could be read
+- `example-runtime 3.9.6` (bundled with the separate program `Example Tool` on Windows) — Copyright (c) 2001 Example Runtime Foundation
+- `example-runtime 2.7.18` (bundled with the separate program `Example Tool` on Linux (snap)) — no copyright notice recorded
 
 ```text
 ISC License:
@@ -280,9 +321,10 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### Zlib — canonical text, 1 package
+### Zlib — canonical text, 2 packages
 
 - `delta@4.0.0` (npm) — no copyright notice — an npm manifest has no field for one, and its license files state none
+- `Example Tool` (redistributed as a separate executable) — Copyright (c) 2014 Example Authors
 
 ```text
 zlib License

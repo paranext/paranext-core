@@ -12,11 +12,17 @@ import { compareByNameThenVersion, compareStrings } from './compare';
 import { canonicalText } from './corpus';
 import { parseDeclared } from './declared';
 import { normalizeText } from './package-files';
+import { DEFAULT_PRODUCT_NAME } from './product';
+import { separateProgramIds } from './separate-programs';
 import type {
+  BundledComponent,
   CopiedPlatformLibrary,
+  ExternalExtension,
   NamedText,
+  ProductBlock,
   Report,
   ReportRow,
+  SeparateProgram,
   SnapStagePackage,
 } from './types';
 
@@ -129,6 +135,19 @@ const MISSING_COPYRIGHT_NOTICE: Record<string, string> = {
  */
 function inlineText(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/[<>`*_[\]]/g, (character) => `\\${character}`);
+}
+
+/**
+ * A copyright notice as one line of Markdown prose.
+ *
+ * Notices copied out of a `COPYING` or `NOTICE` file routinely span several lines with blank lines
+ * between holders, and `inlineText` escapes characters but leaves newlines - which would end the
+ * list item or credit line the notice sits in and push the remaining holders out as loose
+ * paragraphs. Collapsing first is what `canonicalTextCredit` does with a package's notice, for the
+ * same reason.
+ */
+function inlineNotice(value: string): string {
+  return inlineText(value.replace(/\s+/g, ' ').trim());
 }
 
 /**
@@ -528,30 +547,74 @@ function accountNpmRows(npmDescribed: DescribedRow[]): NpmAccount {
 }
 
 /** The title, the statement of what the document covers, and the generation provenance. */
-function pushPreamble(out: string[], corpusVersion: string, licenseeVersion: string): void {
+function pushPreamble(
+  out: string[],
+  corpusVersion: string,
+  licenseeVersion: string,
+  product: ProductBlock | undefined,
+  /**
+   * Whether any of the downstream per-component sections will actually render. The sentence below
+   * promises "each described in a section of its own", and both of those sections drop out when
+   * their table is empty - which is the ordinary case for a product whose additions are just more
+   * npm and NuGet dependencies.
+   */
+  hasAddedComponentSections: boolean,
+): void {
+  // Escaped for the reason `inlineText` gives: the name is policy-supplied prose, and a `<` in it
+  // would otherwise be swallowed by the Markdown renderer. `repository` is NOT escaped - it sits in
+  // a code span, where a backslash escape would print as a backslash.
+  const subject = inlineText(product ? product.name : DEFAULT_PRODUCT_NAME);
   out.push('# Third-party notices', '');
+  // `subject` is `DEFAULT_PRODUCT_NAME` when no product is declared, so everything up to "the
+  // redistributable" reads the same either way and is written once below.
+  //
+  // The sentence AFTER it is not: the product and no-product arms each spell the npm-closure clause
+  // out in full, because they differ at both ends (the opening names the product and its source
+  // repository, and the tail names the added sections). It is legal prose, so a correction has to be
+  // applied to every arm - and only the no-product arm is byte-compared by the golden fixture.
   out.push(
-    'Platform.Bible incorporates the third-party components listed below. Where a component ships a',
+    `${subject} incorporates the third-party components listed below. Where a component ships a`,
     'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
     'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
     'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',
     'accounted for separately in the last section. This file covers the redistributable',
-    'closure of **this repository**: the npm packages webpack actually compiled into `dist/` (plus the',
-    'stylesheet-only packages Tailwind inlines before webpack runs, and anything `release/app` ships',
-    'unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.',
+    ...(product
+      ? [
+          `closure of **${subject}**, built from paranext-core by \`${product.repository}\`: the npm`,
+          'packages webpack actually compiled into `dist/` (plus the stylesheet-only packages Tailwind',
+          'inlines before webpack runs, and anything `release/app` ships unbundled beside the bundle), the',
+          ...(hasAddedComponentSections
+            ? [
+                'NuGet closure of the bundled .NET data provider, Electron, and the components that',
+                'repository adds, each described in a section of its own below.',
+              ]
+            : ['NuGet closure of the bundled .NET data provider, and Electron.']),
+        ]
+      : [
+          'closure of **this repository**: the npm packages webpack actually compiled into `dist/` (plus the',
+          'stylesheet-only packages Tailwind inlines before webpack runs, and anything `release/app` ships',
+          'unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.',
+        ]),
     'Build and test tooling is excluded because it is not distributed.',
     '',
-    'Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,',
+    product
+      ? 'Some of what this application distributes is neither an npm nor a NuGet package - bundled data,'
+      : 'Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,',
     'the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source',
-    'tree, and native libraries taken from the machine that built the installer. No scan of either',
-    'graph can reach any of them and none appears as a row below, so each is described in a section',
-    'of its own, present only when that build actually carries it: a component that ships without a',
-    'row is indistinguishable from one nobody considered.',
+    'tree, native libraries taken from the machine that built the installer, third-party programs',
+    'redistributed as separate executables, and extensions packed from other repositories. No scan of',
+    'either graph can reach any of them and none appears as a row below, so each is described in a',
+    'section of its own, present only when that build actually carries it: a component that ships',
+    'without a row is indistinguishable from one nobody considered.',
     '',
-    '**This is a reference, not the notices for any shipped product.** A distributed application',
-    'built on paranext-core carries its own dependencies on top of these, and must generate its own',
-    'notices covering both.',
-    '',
+    ...(product
+      ? []
+      : [
+          '**This is a reference, not the notices for any shipped product.** A distributed application',
+          'built on paranext-core carries its own dependencies on top of these, and must generate its own',
+          'notices covering both.',
+          '',
+        ]),
     '**Generated on Linux, and it covers every platform.** The NuGet half is the union of the restore',
     'closure for every runtime identifier this application is published for (`linux-x64`, `win-x64`,',
     '`osx-x64`, `osx-arm64`), so a package that ships on only one platform is still listed. The npm',
@@ -567,9 +630,40 @@ function pushPreamble(out: string[], corpusVersion: string, licenseeVersion: str
     '> recorded in `THIRD-PARTY-NOTICES.lock.json` so a verdict that moved because the matcher was',
     '> upgraded stays distinguishable from one that moved because a license changed.',
     '',
-    'For the license covering Platform.Bible itself, see [LICENSING.md](./LICENSING.md).',
+    ...licensePointer(product, subject),
     '',
   );
+}
+
+/**
+ * Where the reader is sent for the terms the SUBJECT of this document is licensed under.
+ *
+ * With no product declared the subject is this repository, and `LICENSING.md` is both the right
+ * answer and a link that resolves - it sits beside this document in the repository and beside it
+ * again in the installer.
+ *
+ * A product's answer is neither. Its notices are generated into ITS repository, where a terms file
+ * this repository ships may not exist, and packed into an installer whose `LICENSING.md` is this
+ * repository's - so a relative link is wrong in one place or the other, and the product's terms are
+ * frequently not `LICENSING.md` at all (Paratext 10's are the Terms of Service). So the file is
+ * NAMED rather than linked, which reads correctly from either vantage point, and the published copy
+ * is offered second: a link can move, and the file in the installer is the copy that licenses the
+ * build holding it.
+ */
+function licensePointer(product: ProductBlock | undefined, subject: string): string[] {
+  if (!product)
+    return [`For the license covering ${subject} itself, see [LICENSING.md](./LICENSING.md).`];
+  const { label, file, href } = product.licenseDocument;
+  return [
+    `For the license covering ${subject} itself, see ${inlineText(label)}, which ships beside`,
+    `this document as \`${inlineText(file)}\`.`,
+    ...(href
+      ? [
+          `The current published copy is at <${href}>; the file shipped`,
+          'with this build is the one that applies to it.',
+        ]
+      : []),
+  ];
 }
 
 /**
@@ -617,6 +711,46 @@ function pushElectronSection(out: string[], shipsElectron: boolean): void {
 }
 
 /**
+ * What the document says about the portions of the lexical database UBS has not open-licensed.
+ *
+ * Three cases, because the sentence is a claim about whose distribution UBS permitted:
+ *
+ * - A declared PARATEXT product: the permission names Paratext, so it covers this product.
+ * - A declared NON-Paratext product: it does not, and the document says so naming the product -
+ *   leaving the reader to infer it from "specific to Paratext" would be the one thing this
+ *   paragraph exists to state plainly. "paranext-core" rather than "this repository", because every
+ *   other sentence in a product document is about the product.
+ * - No product at all - this repository's own reference document, which is about this repository.
+ */
+function lexicalDatabasePermission(product: ProductBlock | undefined): string[] {
+  if (product?.isParatext)
+    return [
+      'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
+      `source license. UBS permits their distribution in **Paratext**. ${inlineText(product.name)} is a Paratext`,
+      'product, and that permission covers it. It does not extend to Platform.Bible, nor to anyone',
+      'else redistributing the database, including a third party building from paranext-core \u2014 see',
+      'LICENSING.md. The open-licensed content can be obtained separately from',
+      '<https://github.com/ubsicap/ubs-open-license>.',
+    ];
+  if (product)
+    return [
+      'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
+      'source license. UBS permits their distribution in **Paratext**. That permission is specific to',
+      `Paratext: it does not extend to ${inlineText(product.name)}, nor to Platform.Bible, nor to`,
+      'anyone else redistributing the database, including a third party building from paranext-core',
+      '\u2014 see LICENSING.md. The open-licensed content can be obtained separately from',
+      '<https://github.com/ubsicap/ubs-open-license>.',
+    ];
+  return [
+    'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
+    'source license. UBS permits their distribution in **Paratext**. That permission is specific to',
+    'Paratext: it does not extend to Platform.Bible, nor to anyone else redistributing the database,',
+    'including a third party building from this repository \u2014 see LICENSING.md. The open-licensed',
+    'content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.',
+  ];
+}
+
+/**
  * The UBS lexical database, which is redistributed data and belongs to neither package graph.
  *
  * Gated on `platform-lexical-tools` being among the extensions the installer packs. The database is
@@ -624,7 +758,11 @@ function pushElectronSection(out: string[], shipsElectron: boolean): void {
  * contains no database - and an ungated section would go on making UBS copyright claims and CC
  * BY-SA 4.0 attributions for content no installer carries.
  */
-function pushLexicalDatabaseSection(out: string[], packedExtensions: string[]): void {
+function pushLexicalDatabaseSection(
+  out: string[],
+  packedExtensions: string[],
+  product: ProductBlock | undefined,
+): void {
   if (!packedExtensions.includes(LEXICAL_DATABASE_EXTENSION)) return;
   out.push('## Bundled data \u2014 UBS lexical database', '');
   out.push(
@@ -649,11 +787,7 @@ function pushLexicalDatabaseSection(out: string[], packedExtensions: string[]): 
     'Albert Nida \u00a9 United Bible Societies 1988, 1989. Licensed under',
     '[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).',
     '',
-    'Portions of the database are \u00a9 United Bible Societies and are **not** available under an open',
-    'source license. UBS permits their distribution in **Paratext**. That permission is specific to',
-    'Paratext: it does not extend to Platform.Bible, nor to anyone else redistributing the database,',
-    'including a third party building from this repository \u2014 see LICENSING.md. The open-licensed',
-    'content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.',
+    ...lexicalDatabasePermission(product),
     '',
   );
 }
@@ -717,6 +851,178 @@ function pushCopiedPlatformLibrarySection(
       `- **Terms:** ${entry.spdx.join(', ')}`,
       '',
       entry.reason,
+      '',
+    );
+  });
+}
+
+/** One bundled component as the delivery bullet names it: `Python 3.9 (PSF-2.0)`. */
+function describeComponent(component: BundledComponent): string {
+  const version = component.version ? ` ${inlineText(component.version)}` : '';
+  const terms = component.spdx?.length ? component.spdx.join(', ') : component.terms || '';
+  return `${inlineText(component.name)}${version} (${inlineText(terms)})`;
+}
+
+/**
+ * Third-party programs redistributed as separate executables - see `separate-programs.ts`.
+ *
+ * Every field is the reviewer's own words, reproduced rather than paraphrased, because the entry is
+ * the determination: the document says what was decided, by whom, and when. `reason` and
+ * `sourceAvailability` are written straight through as Markdown paragraphs (they may carry a link),
+ * while `copyright` goes through `inlineText` like every other copyright notice this document
+ * quotes.
+ */
+function pushSeparateProgramsSection(
+  out: string[],
+  separatePrograms: Record<string, SeparateProgram>,
+): void {
+  const entries = Object.entries(separatePrograms).sort(([first], [second]) =>
+    compareStrings(first, second),
+  );
+  if (!entries.length) return;
+  out.push('## Third-party programs redistributed as separate executables', '');
+  out.push(
+    'The application redistributes these programs as separate executables, each with its own',
+    'runtime, and invokes them as subprocesses. They belong to neither the npm nor the NuGet graph',
+    'above. The canonical text of every identifier named here is reproduced under "Canonical license',
+    'texts for declared identifiers", because not every bundle below carries a copy of its own terms.',
+    'A component bundled inside one of these programs is credited there under its own name and its',
+    'own copyright notice rather than the program\u2019s: it is under its own terms, held by its own',
+    'copyright holder.',
+    '',
+  );
+  entries.forEach(([name, program]) => {
+    out.push(`### ${name}`, '');
+    out.push(
+      `- **Terms:** ${(program.spdx || []).join(', ')}`,
+      `- **Copyright:** ${inlineNotice(program.copyright)}`,
+      '',
+      'Delivered as:',
+      '',
+    );
+    (program.deliveries || []).forEach((delivery) => {
+      const notices =
+        delivery.carriesNotices === false
+          ? 'The bundle carries no notice files of its own.'
+          : `The bundle carries its own notice files at ${inlineText(delivery.carriesNotices)}.`;
+      const also = delivery.alsoContains?.length
+        ? ` It also contains ${delivery.alsoContains.map(describeComponent).join('; ')}.`
+        : '';
+      out.push(
+        `- **${inlineText(delivery.platform)}**, version ${inlineText(delivery.version)}: ` +
+          `${inlineText(delivery.mechanism)}. ${notices}${also}`,
+      );
+    });
+    out.push('', program.reason, '', `**Corresponding source:** ${program.sourceAvailability}`, '');
+    out.push(`Reviewed by ${inlineText(program.reviewer)} on ${program.date}.`, '');
+  });
+}
+
+/**
+ * Adds the canonical text of every identifier a separate-program entry names, each credited to the
+ * subject it actually belongs to - the counterpart of `addCopiedPlatformLibraryTexts`, with the
+ * same refusal.
+ *
+ * WHICH texts are reproduced is `separateProgramIds`' question, asked through that same function so
+ * this and the pre-render `assertSeparateProgramTextsAvailable` cannot drift apart. WHO each one is
+ * credited to is decided here, per subject: the program under the identifiers in its own `spdx`,
+ * with its own copyright notice; a component bundled inside a delivery under the identifiers in ITS
+ * `spdx`, by its own name, with its own notice. The two must not be merged. A bundled component is
+ * under its own terms, held by its own copyright holder, and crediting Mercurial's notice to the
+ * OpenSSL, TCL or PSF-2.0 text merely packaged beside it would state a holder nobody established -
+ * in a document that exists to state only what was.
+ *
+ * A component whose entry records no `copyright` says so, for the reason `canonicalTextCredit`
+ * gives: a blank reads as "nobody looked".
+ */
+function addSeparateProgramTexts(
+  canonical: CollectedTexts,
+  separatePrograms: Record<string, SeparateProgram>,
+): void {
+  separateProgramIds(separatePrograms).forEach((id) => {
+    const text = canonicalText(id);
+    // The backstop for a caller that renders without running `assertSeparateProgramTextsAvailable`
+    // first - every production path does, so this never fires there. It is not redundant: `credit`
+    // below optional-chains, so without a seeded entry a required attribution would be dropped in
+    // silence rather than refused.
+    if (!text)
+      throw new Error(
+        `the "separatePrograms" table names ${id}, and the SPDX corpus holds no text for it - run ` +
+          '`npm run build:third-party-notices:corpus` after adding the identifier to the committed ' +
+          'policy.',
+      );
+    // Normalized on the way in, for the reason `useCanonicalText` states.
+    if (!canonical.has(id)) canonical.set(id, { text: normalizeText(text), packages: [] });
+  });
+  // Thrown rather than optional-chained, unlike the two sibling traversals that set and get inside
+  // one iteration. Here the seeding loop above and the crediting walk below are SEPARATE traversals
+  // of the same table, and they agree only because each reproduces `separateProgramIds` clause for
+  // clause. Narrow either one and `get` returns undefined: a credit line the document is obliged to
+  // carry would then be dropped in silence, from an artifact that is byte-compared against a lock
+  // written in the same run, so nothing downstream could notice it either.
+  const credit = (id: string, line: string) => {
+    const collected = canonical.get(id);
+    if (!collected)
+      throw new Error(
+        `the "separatePrograms" table credits ${id}, and no canonical text was collected for it. ` +
+          'Every identifier the table names is seeded above, so the two traversals of it have gone ' +
+          'out of step - make the crediting walk cover the same identifiers `separateProgramIds` ' +
+          'returns.',
+      );
+    collected.packages.push(line);
+  };
+  // Sorted, as `pushSeparateProgramsSection` sorts: these lines are emitted in traversal order, so
+  // taking the table as it comes would make the credit order under a shared identifier a property of
+  // key order in the policy JSON - and the document is byte-compared against its lock, so reordering
+  // two keys would report as drift.
+  Object.entries(separatePrograms)
+    .sort(([a], [b]) => compareStrings(a, b))
+    .forEach(([name, program]) => {
+      new Set(program.spdx || []).forEach((id) =>
+        credit(
+          id,
+          `\`${name}\` (redistributed as a separate executable) — ${inlineNotice(program.copyright)}`,
+        ),
+      );
+      (program.deliveries || []).forEach((delivery) =>
+        (delivery.alsoContains || []).forEach((component) => {
+          const version = component.version ? ` ${component.version}` : '';
+          const notice = inlineNotice(component.copyright || '');
+          // The name sits in a code span, where a backslash escape would print as a backslash, so it
+          // is written through as `canonicalTextCredit` writes a package name; the platform and the
+          // notice are prose and are escaped.
+          const line =
+            `\`${component.name}${version}\` (bundled with the separate program \`${name}\` on ` +
+            `${inlineText(delivery.platform)}) — ` +
+            `${notice || 'no copyright notice recorded'}`;
+          new Set(component.spdx || []).forEach((id) => credit(id, line));
+        }),
+      );
+    });
+}
+
+/** Extensions packed from other repositories - see `external-extensions.ts`. */
+function pushExternalExtensionsSection(
+  out: string[],
+  externalExtensions: Record<string, ExternalExtension>,
+): void {
+  const entries = Object.entries(externalExtensions).sort(([first], [second]) =>
+    compareStrings(first, second),
+  );
+  if (!entries.length) return;
+  out.push('## Extensions packed from other repositories', '');
+  out.push(
+    'The installer also carries these extensions, built in other repositories and packed as zips',
+    'beside the ones built here. Each bundles every dependency outside the extension host’s',
+    'externals list, and no module manifest describes that bundle, so the packages inside it have no',
+    'rows above. That is an omission this document records rather than hides.',
+    '',
+  );
+  entries.forEach(([name, entry]) => {
+    out.push(
+      `### ${name}`,
+      '',
+      `Its bundled dependencies are **not itemized** in this document. ${entry.reason}`,
       '',
     );
   });
@@ -1251,6 +1557,9 @@ export function render({
   packedExtensions = [],
   shipsElectron = false,
   copiedPlatformLibraries = {},
+  separatePrograms = {},
+  externalExtensions = {},
+  product,
 }: Report): string {
   assertKnownEcosystems(verdicts);
 
@@ -1264,18 +1573,27 @@ export function render({
     ...dotnetRows,
   ]);
   addCopiedPlatformLibraryTexts(canonical, copiedPlatformLibraries);
+  addSeparateProgramTexts(canonical, separatePrograms);
   const npmDescribed = described.filter((row) => row.ecosystem === 'npm');
   const dotnetDescribed = described.filter((row) => row.ecosystem === 'nuget');
   const npmAccount = accountNpmRows(npmDescribed);
 
   const out: string[] = [];
-  pushPreamble(out, corpusVersion, licenseeVersion);
+  pushPreamble(
+    out,
+    corpusVersion,
+    licenseeVersion,
+    product,
+    Object.keys(separatePrograms).length > 0 || Object.keys(externalExtensions).length > 0,
+  );
   pushOpenQuestions(out, openPolicyQuestions);
   pushElectronSection(out, shipsElectron);
-  pushLexicalDatabaseSection(out, packedExtensions);
+  pushLexicalDatabaseSection(out, packedExtensions, product);
   pushStaticAssetSection(out, staticAssetNotices);
   pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
   pushCopiedPlatformLibrarySection(out, copiedPlatformLibraries);
+  pushSeparateProgramsSection(out, separatePrograms);
+  pushExternalExtensionsSection(out, externalExtensions);
   pushDotnetSection(out, dotnetDescribed, copiedPlatformLibraries);
   pushNpmSection(out, npmDescribed, npmAccount);
   assertNpmRowsAccountedFor(npmDescribed, npmAccount, canonical);

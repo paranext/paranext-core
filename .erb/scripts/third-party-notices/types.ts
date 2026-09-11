@@ -67,6 +67,11 @@ export type Override = {
   versionIndependent?: boolean;
   /** A question this entry does NOT settle - reported on every run, never blocking. */
   openQuestion?: string;
+  /**
+   * Names a `separatePrograms` entry whose reviewed determination is what admits this package's
+   * copyleft `license`: the package IS that program, redistributed as a separate executable.
+   */
+  separateProgram?: string;
 };
 
 /**
@@ -172,6 +177,61 @@ export type CopiedPlatformLibrary = {
   reason: string;
 };
 
+/** The product a downstream repository builds from this source, declared only in its overlay. */
+export type ProductBlock = {
+  /** Must equal `productName` in `electron-builder.json5`, which the downstream build rewrites. */
+  name: string;
+  /** The repository the product is built from, e.g. `paranext/paratext-10-studio`. */
+  repository: string;
+  /**
+   * Whether UBS's permission to distribute the lexical database covers this product.
+   *
+   * The database is the MARBLE data as `platform-lexical-tools` ships it in `lexicon.db`. Portions
+   * of it are UBS copyright and are NOT open-licensed; UBS's permission to distribute them names
+   * **Paratext**, so this is true only for a Paratext product and false for anything else built
+   * from this source. It changes what the document asserts about a third party's grant, which is
+   * why `assertProductMatchesPackaging` refuses any value that is not a real boolean - a string
+   * `"false"` would otherwise read as "yes".
+   *
+   * Setting it true is a determination about what UBS has permitted, not a fact this pipeline can
+   * derive: nothing here can check it, and the section it drives only renders for a build that
+   * actually packs `platform-lexical-tools`.
+   */
+  isParatext?: boolean;
+  /** Where a reader finds the terms the PRODUCT is licensed under - see `LicenseDocument`. */
+  licenseDocument: LicenseDocument;
+};
+
+/**
+ * The document that licenses a product to its user, named so the notices can point at it.
+ *
+ * This repository's own document links `LICENSING.md`, which sits beside it in the repository AND
+ * in the installer. Neither holds for a downstream product: the notices are generated into the
+ * product's repository, where the terms file may not exist at all, and packed into an installer
+ * whose `LICENSING.md` is this repository's - so a relative link resolves to the wrong file in one
+ * place or the other, and the product's terms are frequently not `LICENSING.md` in the first
+ * place.
+ *
+ * So the file is NAMED rather than linked, and the name is checked against what the installer
+ * actually carries. A reader in the repository gets a filename they can look up; a reader of the
+ * installed product finds the file beside the document they are reading, which is the copy that
+ * applies to the build in their hands - offline, and whatever the published copy has moved on to
+ * saying since.
+ */
+export type LicenseDocument = {
+  /** How the document is referred to in prose, e.g. `the Paratext Terms of Service`. */
+  label: string;
+  /**
+   * Its file name as the installer carries it, e.g. `TERMS-OF-SERVICE.html`.
+   *
+   * Must be a file the packaging config copies into `resources/`; `assertProductMatchesPackaging`
+   * refuses a name no installer ships, because the document tells the reader to look beside it.
+   */
+  file: string;
+  /** An optional published copy. The shipped `file` is authoritative for the build that carries it. */
+  href?: string;
+};
+
 /** A checked-in copy of a staged library's Ubuntu `copyright` file. */
 export type VendoredCopyright = {
   /** Filename under `vendored-texts/snap/`. */
@@ -213,6 +273,81 @@ export type Policy = {
   copiedPlatformLibrariesNote?: string;
   /** Keyed by the library's name as the document calls it. */
   copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
+  separateProgramsNote?: string;
+  /** Keyed by program name - see `separate-programs.ts`. */
+  separatePrograms?: Record<string, SeparateProgram>;
+  externalExtensionsNote?: string;
+  /** Keyed by extension name - see `external-extensions.ts`. */
+  externalExtensions?: Record<string, ExternalExtension>;
+  productNote?: string;
+  /** Overlay only: the downstream product this run describes. */
+  product?: ProductBlock;
+};
+
+/** A third-party program redistributed as a separate executable - see `separate-programs.ts`. */
+export type SeparateProgram = {
+  spdx: string[];
+  /** Inline text: the renderer escapes it (`inlineText`), so Markdown syntax in it prints literally. */
+  copyright: string;
+  reviewer: string;
+  date: string;
+  /**
+   * A Markdown paragraph, reproduced verbatim in the document - unlike `copyright`, this is NOT
+   * escaped, so it may carry a link or other Markdown, and a literal `<`, `*`, `_` or backtick in
+   * it renders as Markdown rather than as that character. Matches the
+   * `CopiedPlatformLibrary.reason` precedent.
+   */
+  reason: string;
+  /** A Markdown paragraph, reproduced verbatim - see `reason`; the same rule applies here. */
+  sourceAvailability: string;
+  deliveries: ProgramDelivery[];
+};
+
+/** How one platform's installer carries a separate program. */
+export type ProgramDelivery = {
+  platform: string;
+  version: string;
+  mechanism: string;
+  /** A file in the tree and a substring it must contain, or the entry is refused. */
+  evidence: { file: string; contains: string };
+  /** Where the bundle carries its own notice files, or `false` when it carries none. */
+  carriesNotices: string | false;
+  alsoContains?: BundledComponent[];
+};
+
+/** A runtime or library bundled inside a separate program's delivery. */
+export type BundledComponent = {
+  name: string;
+  version?: string;
+  spdx?: string[];
+  /**
+   * The component's OWN copyright notice, as read from its license file or its source - not the
+   * program's. It is what pairs the component with the canonical text reproduced on its behalf, so
+   * that text is never credited to the program's copyright holder. Inline text: the renderer
+   * escapes it (`inlineText`), so Markdown syntax in it prints literally. Omit it when no notice
+   * was read; the document states the absence rather than inventing a holder.
+   */
+  copyright?: string;
+  /** Free-text terms where no SPDX identifier applies; requires `nonSpdx: true`. */
+  terms?: string;
+  nonSpdx?: boolean;
+};
+
+/** An extension packed from another repository - see `external-extensions.ts`. */
+export type ExternalExtension = {
+  /**
+   * Whether its bundled dependencies have rows in this document.
+   *
+   * TODO(PT-4604): only `false` is accepted today.
+   * https://paratextstudio.atlassian.net/browse/PT-4604
+   */
+  itemized: boolean;
+  /**
+   * A Markdown paragraph, reproduced verbatim in the document - it is NOT escaped, so it may carry
+   * a link or other Markdown, and a literal `<`, `*`, `_` or backtick in it renders as Markdown
+   * rather than as that character. Matches the `SeparateProgram.reason` precedent.
+   */
+  reason: string;
 };
 
 /** One npm package the build establishes as shipping, and how it was reached. */
@@ -345,8 +480,17 @@ export type Report = {
   staticAssetNotices?: NamedText[];
   /** Native libraries copied from the build machine - see `CopiedPlatformLibrary`. */
   copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
+  /** Third-party programs redistributed as separate executables - see `separate-programs.ts`. */
+  separatePrograms?: Record<string, SeparateProgram>;
+  /** Extensions packed from other repositories - see `external-extensions.ts`. */
+  externalExtensions?: Record<string, ExternalExtension>;
   /** Folder names of the extensions an installer packs - see `packedExtensionNames`. */
   packedExtensions?: string[];
+  /**
+   * The downstream product this run describes, where the overlay declares one - see
+   * `Policy.product`.
+   */
+  product?: ProductBlock;
   /**
    * Whether the packaged application embeds the prebuilt Electron runtime.
    *

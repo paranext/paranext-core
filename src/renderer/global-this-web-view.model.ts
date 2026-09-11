@@ -74,7 +74,9 @@ const webViewModules: Readonly<Record<WebViewModuleSpecifier, any>> = {
 // A `Map` rather than the record itself, because `webViewRequire` is handed an arbitrary string by
 // extension code: indexing a plain object with one answers every `Object.prototype` member -
 // `constructor`, `toString`, `valueOf` - as though it were a module this renderer supplies.
-const moduleMap = new Map(Object.entries(webViewModules));
+// Typed read-only so the lookups `webViewRequire` runs against cannot be widened by a later
+// `moduleMap.set(...)` anywhere below: the record above protects the table, this protects the map.
+const moduleMap: ReadonlyMap<string, unknown> = new Map(Object.entries(webViewModules));
 
 const registeredModuleList = [...WEB_VIEW_MODULE_SPECIFIERS].sort().join(', ');
 
@@ -90,7 +92,7 @@ function webViewRequire(moduleName: string) {
   if (module) return module;
   throw new Error(
     `Only these modules can be required in WebViews: ${registeredModuleList}. ${getModuleSimilarApiMessage(
-      module,
+      moduleName,
     )}`,
   );
 }

@@ -654,6 +654,14 @@ rebuilds from a tree that has already been built, so its webpack caches are warm
 the shipping-set half would refuse to answer on every platform. The document is what
 `electron-builder` packs into each installer, so `package` verifies it before packaging it.
 
+`NOTICES_POLICY_OVERLAY=<path>` merges a second policy file over the committed one wherever a
+policy is read — generation, `verify:third-party-notices`, `verify:third-party-notices:shipping-set`
+and `build:third-party-notices:corpus`, which writes the committed SPDX corpus index and so writes a
+wider one while the variable is set. The `document` check reads no policy at all (it compares two
+committed files), so the overlay does not reach it. It exists for a downstream product built from this source, which keeps its own
+determinations beside its own build; see
+[`.erb/scripts/third-party-notices/README.md`](.erb/scripts/third-party-notices/README.md#downstream-products).
+
 ## Thanks
 
 Some important decisions in this project were inspired by the work done in [Visual Studio Code](https://code.visualstudio.com/api). Thanks VS Code developers for some great ideas!

@@ -705,7 +705,9 @@ step, no automation. Just a record.
   'Platform.Bible'` and every one carrying the database, which `download-db.ts` puts in strict mode
   so a missing copy hard-fails the install. Both statements are about the same artifact. Separately,
   `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.md` for a product built under
-  the Platform.Bible name, while the Terms of Service name only Paratext.
+  the Platform.Bible name, while the Terms of Service name only Paratext. **Amended 2026-09-10:** the
+  document now ships as `TERMS-OF-SERVICE.html`, so that declaration reads
+  `SEE LICENSE IN TERMS-OF-SERVICE.html`; the point it illustrates is unchanged.
 
   There is no practical path to releasing a separate Platform.Bible build, and only Paratext 10 is
   released from this source — from `paranext/paratext-10-studio`, which clones this repository,
@@ -743,7 +745,8 @@ step, no automation. Just a record.
   `paratext-10-studio` becomes the sole distributor, which makes the notices document it packs
   (this repository's, describing this repository's shipping set rather than the patched clone's)
   the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
-  public audience.
+  public audience. **Amended 2026-09-09:** the document `paratext-10-studio` packs is now its own,
+  generated from the patched clone - see adr-notices-overlay-for-downstream-products.
 - **Source:** the multi-agent review of #2654, finding 1.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
@@ -1582,13 +1585,20 @@ step, no automation. Just a record.
   the Paratext Terms of Service, whose section 3.B.1 states that the built application is licensed
   solely under those Terms and not under the AGPL, and whose 3.B.2 adds that network interaction with
   it triggers no AGPL obligation. `release/app/package.json` therefore declares
-  `SEE LICENSE IN TERMS-OF-SERVICE.md` rather than an SPDX identifier. That split is lawful because
+  `SEE LICENSE IN TERMS-OF-SERVICE.html` rather than an SPDX identifier (**amended 2026-09-10:** the
+  document was `TERMS-OF-SERVICE.md` when this was written). That split is lawful because
   SIL Global and United Bible Societies control the copyright in the source, and it retracts nothing:
   the AGPL grant on this repository is irrevocable and anyone may build and redistribute their own
-  binary under it. The installer carries `LICENSE` (the AGPL text), `TERMS-OF-SERVICE.md`,
+  binary under it. The installer carries `LICENSE` (the AGPL text), `TERMS-OF-SERVICE.html`,
   `THIRD-PARTY-NOTICES.md`, and `LICENSING.md` — the last because the others otherwise state
   several things about the user's rights with nothing reconciling them, and because LICENSING.md is
-  what 3.B.1 means by "the AGPL Components identified by Paratext".
+  what 3.B.2 means by "the AGPL Components identified by SIL and UBSA in the license notices
+  accompanying the Paratext 10 application" (**amended 2026-09-10:** the 14 August 2026 Terms read
+  "identified by Paratext", and this entry cited the phrase as 3.B.1; in that revision it was in
+  3.B.2 alone. **Amended 2026-09-11:** the 11 September 2026 Terms carry it in BOTH — 3.B.1 gained
+  "and are identified as such in the license notices accompanying the Paratext 10 application"
+  alongside 3.B.2's "the AGPL Components identified by SIL and UBSA in the license notices
+  accompanying the Paratext 10 application", so citing either section is now correct).
 - **Alternatives:** relicense everything, including the `lib/` packages — rejected: it makes the AGPL
   viral for third-party extensions and defeats the extension model. Key the rule on the
   `dependencies`/`devDependencies` section — rejected because that field was already wrong:
@@ -1892,7 +1902,9 @@ step, no automation. Just a record.
 - **Status:** Accepted
 - **Context:** `LICENSE` (the full AGPL text), `LICENSING.md`, `LICENSE-EXCEPTION.md` and
   `THIRD-PARTY-NOTICES.md` all ship in the installed `resources/` directory, but only
-  `TERMS-OF-SERVICE.md` has a code path that opens it. The About dialog reads "License: Paratext
+  `TERMS-OF-SERVICE.html` has a code path that opens it (**amended 2026-09-10:** the document was
+  `TERMS-OF-SERVICE.md`, opened through the operating system, when this was written; it is now HTML
+  shown in a window the application owns). The About dialog reads "License: Paratext
   Terms of Service" and names no license, disclaims no warranty, and offers no way to view the
   AGPL. AGPL section 5(d) expects an interactive program that normally displays "appropriate legal
   notices" to keep displaying a copyright notice, a warranty disclaimer, and a statement of how to
@@ -2106,6 +2118,72 @@ step, no automation. Just a record.
   (checked-in canonical texts; a regex import scan; a copyleft denylist), none of which reached
   `main`.
 
+## adr-notices-overlay-for-downstream-products: A downstream product runs this generator with its own policy overlay
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** `adr-core-does-not-distribute-a-binary` made `paratext-10-studio` the sole distributor
+  of anything built from this source, and the document its installers packed was this repository's,
+  describing this repository's shipping set rather than the patched clone's: it named
+  Platform.Bible, said of itself that it was "a reference, not the notices for any shipped product",
+  and had no row for the Mercurial builds, the `hgWindows-6.3.1` package or the private extensions
+  that clone adds. `adr-package-verifies-the-document-not-the-shipping-set` had deferred exactly
+  this: revisit if notices generation ever moves downstream. `separatePrograms` and
+  `externalExtensions` are the sixth and seventh instruments under
+  `adr-disclosure-outside-package-graphs`, which is the standing decision that anything the installer
+  redistributes but neither package graph describes is disclosed in generated, data-backed prose
+  rather than by silence; they extend it downstream rather than departing from it.
+- **Decision:** The generator accepts a second policy file from `NOTICES_POLICY_OVERLAY`, merged
+  over the committed one with a key collision refused, so a downstream repository's determinations
+  live beside its build rather than in a patch to this file. The overlay carries a `product` block,
+  checked against `electron-builder.json5`'s `productName`, that switches the product-specific
+  prose; a `separatePrograms` table for third-party programs redistributed as separate executables,
+  whose entries are reviewed determinations pinned to evidence in the tree; and an
+  `externalExtensions` table that records, as a stated omission, extension zips packed from another
+  repository. This repository ships both tables empty, so neither adds a section here; its own
+  document changes only in the preamble sentence that names the two new categories alongside the
+  five existing ones, and `THIRD-PARTY-NOTICES.lock.json`'s `documentSha256` moves with it.
+
+  Two sub-decisions within it:
+
+  - **The product names its own license document.** `product.licenseDocument` records a label, the
+    file name the installer carries, and optionally a published URL; the document NAMES that file
+    rather than linking it. A relative link cannot be right in both places a product's notices are
+    read — in the product's repository, where this repository's terms file does not exist, and in
+    the installer, whose `LICENSING.md` is this repository's — and a product's terms are frequently
+    not `LICENSING.md` at all (Paratext 10's are the Terms of Service). Naming the file also keeps
+    the pointer usable offline, where the shipped copy is the one that licenses the build in hand.
+    `product.ts` refuses a name no `extraResources` entry produces, because the sentence promises
+    the reader it sits beside them.
+  - **A `separateProgram`-linked override is not bound by what the package declares.** An unlinked
+    override applies only where the package declares nothing parseable and no license text was
+    identified, so it can never contradict what a package says about itself. A linked one is
+    exempt: it may only name a program `separatePrograms` records and may only carry an identifier
+    that reviewed entry itself names, which is stronger evidence than package metadata, and binding
+    it the same way would make the whole route depend on a third party's repackaging staying
+    license-silent. The trade-off accepted: where a declaration and the reviewed entry disagree,
+    the entry wins and nothing reports the disagreement.
+- **Alternatives:** A downstream generator - rejected: it would either duplicate this pipeline or
+  depend on its internal module API across a clone boundary. Carrying the downstream entries in
+  the downstream patch to this policy file - rejected: every change to this file would conflict
+  with it. A hand-maintained addendum downstream - rejected on
+  `adr-notices-derived-from-what-ships`.
+- **Consequences:** `paratext-10-studio` generates and commits its own pair, copies it over this
+  repository's in its clone before packaging, and runs `--verify-shipping-set` on every platform
+  and `--verify` on Linux against its own lock. An identifier a downstream entry needs (`PSF-2.0`,
+  `OpenSSL`, `blessing`, `TCL` and `ZPL-2.1` today) is added to `allowed` here, because `allowed`
+  is what `reachableIds` walks to decide which canonical texts the committed corpus index holds.
+  The overlay reaches `build-corpus-index.ts` like every other policy reader, so a downstream that
+  runs the corpus builder with it set rewrites the committed index in its clone; `corpus-texts.ts`
+  asserts the index is exactly what the committed policy reaches, so such an index fails CI here
+  rather than travelling.
+  The omission direction for a separate program has no generic source: a copyleft override with no
+  `separateProgram` link still blocks, and a program added by any other route with no entry is the
+  gap PT-4560 records for static content. **Revisit** under PT-4604 when the extension template
+  emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
+  is the static-asset half of the same shape and does not cover it.
+- **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
 - **Formerly:** ADR-0017
@@ -2193,7 +2271,10 @@ step, no automation. Just a record.
   the committed lock) rather than as a derivation from that build's own graph; the derivation is
   checked on the Linux leg of `test.yml` and at release time in `publish.yml` and
   `package-main.yml`. **Revisit** if notices generation ever moves into `paratext-10-studio`, which
-  would give the patched build a shipping set of its own to verify against.
+  would give the patched build a shipping set of its own to verify against. **Amended 2026-09-09:**
+  revisited by adr-notices-overlay-for-downstream-products - the patched build now has a lock of its
+  own, and its packaging runs `--verify-shipping-set` against it; this repository's `package` script
+  keeps `--verify-document` for the reason above.
 - **Source:** the multi-agent review of #2654, finding 22.
 
 ## adr-packaged-extensions-are-discovered: `InstalledExtensions.packaged` reports discovered extensions, not activated ones

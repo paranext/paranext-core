@@ -7,13 +7,13 @@ const TERMS_OF_SERVICE_NAME = 'Paratext Terms of Service';
 describe('resolveLicenseDisplay', () => {
   it('shows the Terms of Service for npm’s "SEE LICENSE IN <file>" declaration', () => {
     expect(
-      resolveLicenseDisplay('SEE LICENSE IN TERMS-OF-SERVICE.md', TERMS_OF_SERVICE_NAME),
+      resolveLicenseDisplay('SEE LICENSE IN TERMS-OF-SERVICE.html', TERMS_OF_SERVICE_NAME),
     ).toEqual({ name: TERMS_OF_SERVICE_NAME, isTermsOfService: true });
   });
 
   it('tolerates casing and filename drift in the declaration', () => {
     expect(
-      resolveLicenseDisplay('See LICENSE in Terms-of-Service.md', TERMS_OF_SERVICE_NAME).name,
+      resolveLicenseDisplay('See LICENSE in Terms-of-Service.html', TERMS_OF_SERVICE_NAME).name,
     ).toBe(TERMS_OF_SERVICE_NAME);
     expect(resolveLicenseDisplay('SEE LICENSE IN EULA.txt', TERMS_OF_SERVICE_NAME).name).toBe(
       TERMS_OF_SERVICE_NAME,

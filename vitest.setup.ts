@@ -167,3 +167,18 @@ if (typeof window !== 'undefined') {
     }),
   });
 }
+
+// ─── NOTICES_POLICY_OVERLAY ──────────────────────────────────────────────────
+//
+// `loadPolicy` defaults its overlay from this variable at call time, so several notices suites that
+// read "the shipped policy" as DATA would read a merged one instead — and that variable is exported
+// in exactly one place: the shell of a downstream-product developer, who is also the person most
+// likely to run this suite. Pointed at a missing file it fails those files at COLLECTION; pointed at
+// a real overlay it is worse, because the inclusion-based assertions pass against determinations the
+// committed policy does not carry.
+//
+// Deleted here rather than guarded at each call site: the suites' subject is the committed file, and
+// `degradation.test.ts` and `verify-shipping-set.test.ts` spawn the generator with `{...process.env}`,
+// so only removing it from this process covers the children too. A test that wants an overlay passes
+// the path explicitly.
+delete process.env.NOTICES_POLICY_OVERLAY;
