@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -4992,6 +4992,14 @@ export type SettingBase = StateBase & {
 	 * user unless an extension provides a way to interact with the setting.
 	 */
 	isHidden?: boolean;
+	/**
+	 * Interface modes in which this setting should be hidden. In a listed mode, the setting will not
+	 * show up in the settings dialog in `paranext-core`, exactly as if `isHidden` were `true`; in
+	 * every other mode it shows normally. Use this for settings that only take effect in some modes.
+	 * Omit (or use an empty array) for settings that should show in every mode — most settings need
+	 * no value here at all.
+	 */
+	hiddenInterfaceModes?: InterfaceMode[];
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
@@ -5380,6 +5388,14 @@ export declare const projectSettingsDocumentSchema: {
 						description: string;
 						type: string;
 					};
+					hiddenInterfaceModes: {
+						description: string;
+						type: string;
+						items: {
+							enum: string[];
+						};
+						uniqueItems: boolean;
+					};
 				};
 				required: string[];
 				$ref?: undefined;
@@ -5675,6 +5691,14 @@ export declare const settingsDocumentSchema: {
 					isHidden: {
 						description: string;
 						type: string;
+					};
+					hiddenInterfaceModes: {
+						description: string;
+						type: string;
+						items: {
+							enum: string[];
+						};
+						uniqueItems: boolean;
 					};
 				};
 				required: string[];

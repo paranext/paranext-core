@@ -102,3 +102,74 @@ describe('Setting disabled forwarding', () => {
     expect(screen.getByRole('textbox')).not.toBeDisabled();
   });
 });
+
+// The setting's label must name its control, or a screen reader announces an unnamed switch/textbox
+// and clicking the label does nothing.
+describe('Setting label association', () => {
+  it('names the Switch for a boolean setting', () => {
+    render(<Setting {...baseProps} settingKey="platform.isEditable" setting label="Editable" />);
+    expect(screen.getByRole('switch')).toHaveAccessibleName('Editable');
+  });
+
+  it('names the Input for a string setting', () => {
+    render(
+      <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
+    );
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Language');
+  });
+
+  it('names the JSON-editor Input for an object setting', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.modelTexts"
+        setting={{ dataVersion: '1.1.0', items: [] }}
+        label="Model texts"
+      />,
+    );
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Model texts');
+  });
+  it('keeps the associations separate when the same setting is mounted twice', () => {
+    // rc-dock keeps inactive settings tabs mounted, so one settingKey can be on screen twice at
+    // once. A settingKey-derived control id would be duplicated in the DOM and both labels would
+    // name the first control, so each instance must get its own id (hence useId).
+    render(
+      <>
+        <Setting
+          {...baseProps}
+          settingKey="platform.language"
+          setting="English"
+          label="Language (first tab)"
+        />
+        <Setting
+          {...baseProps}
+          settingKey="platform.language"
+          setting="Spanish"
+          label="Language (second tab)"
+        />
+      </>,
+    );
+
+    const first = screen.getByLabelText('Language (first tab)');
+    const second = screen.getByLabelText('Language (second tab)');
+    expect(first).toHaveAccessibleName('Language (first tab)');
+    expect(second).toHaveAccessibleName('Language (second tab)');
+    expect(first.id).not.toBe(second.id);
+  });
+
+  it('leaves the label unassociated for the interface-language composite', () => {
+    // UiLanguageSelector puts its `id` on a wrapper div, which `htmlFor` cannot label — so the
+    // opt-out is deliberate. Pointing the label at `controlId` here would dangle instead.
+    // interfaceLanguage is a user setting, and the props union forbids the project validator there.
+    const userSettingProps = { setSetting: baseProps.setSetting, isLoading: baseProps.isLoading };
+    render(
+      <Setting
+        {...userSettingProps}
+        settingKey="platform.interfaceLanguage"
+        setting={['en']}
+        label="Interface language"
+      />,
+    );
+    expect(screen.getByText('Interface language')).not.toHaveAttribute('for');
+  });
+});
