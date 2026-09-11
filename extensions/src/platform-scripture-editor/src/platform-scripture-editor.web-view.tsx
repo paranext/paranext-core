@@ -3058,6 +3058,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // The popover held DOM focus, and its anchor is a positioning div nothing can focus, so
     // closing it would otherwise drop focus onto the document body and the next keystroke would
     // go nowhere. Hand focus back to the text, as closing the footnotes pane does.
+    //
+    // The editor was blurred the whole time the popover was open, and Lexical's blur processing
+    // can null the live selection; `focus()` with no selection falls back to selecting the
+    // document end, which would drop the caret at the bottom of the chapter. Put the caret back
+    // from the focus-out capture first, as the palette paths do.
+    restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
     editorRef.current?.focus();
   }, [closeFootnoteEditor]);
 
