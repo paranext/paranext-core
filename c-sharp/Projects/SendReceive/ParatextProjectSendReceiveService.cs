@@ -218,7 +218,7 @@ internal class ParatextProjectSendReceiveService(
     /// Syncs the given projects (S/Rs them), then reads connected resources and projects (one level
     /// deep — connections of connections are not included) for the project(s) this call settles on,
     /// and S/Rs connected translation projects or DBL-updates connected resources for those as
-    /// needed. Unknown IDs are skipped. Deduplication is handled internally.
+    /// needed. Unknown IDs are skipped.
     /// Exception is thrown if this function is not implemented in the current application
     /// or if an error was encountered syncing.
     /// </summary>
