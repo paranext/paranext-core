@@ -11,16 +11,13 @@ import {
 } from 'platform-bible-react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { TriangleAlert } from 'lucide-react';
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
 import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
-import {
-  getIsConnectionLost,
-  subscribeToConnectionLost,
-} from '@renderer/services/connection-lost-store';
+import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
 
 // Declared without a `LocalizeKey` annotation so each keeps its literal type, which is what makes
 // `ConnectionLostKey` below a union of these exact keys rather than plain `string`.
@@ -275,11 +272,7 @@ export function ConnectionLostOverlayPresentational({
  * `.context/standards/Architecture-Decisions.md`.
  */
 export function ConnectionLostOverlay() {
-  // `subscribeToConnectionLost` already matches the `useSyncExternalStore` subscribe signature and
-  // is a stable module-level reference, so both can be passed directly. Re-reading the snapshot on
-  // subscribe is built into the hook, which closes the gap a manual subscribe effect has to cover
-  // by hand — a loss that lands between the first render and the subscription.
-  const isConnectionLost = useSyncExternalStore(subscribeToConnectionLost, getIsConnectionLost);
+  const isConnectionLost = useIsConnectionLost();
 
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
   const isPowerMode = useIsPowerMode();
