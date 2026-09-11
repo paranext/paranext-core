@@ -10,6 +10,7 @@ import { Meta } from '@storybook/addon-docs/blocks';
 - `Tab`: The combination of a `tab content` and a `tab header`
 - `Tab header`: Holds a title for the tab and represents that tab, can be used for dragging and has a [Context Menu](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-contextmenu--docs).
 - `Tab content`: The sub-interface of a tab in the dock layout (basically, a rectangle that is resizeable and in which you can put some UI)
+- `Pane`: A region of a tab content with its own layout. Most tabs are a single pane; the Scripture Editor tab has a text pane and a footnote pane, separated by a divider. Content zoom ("Zoom" in Settings) scales the text in panes; "Zoom factor" scales the whole application.
 - `Tab group`: A set of tabs that are sharing the same space in the dock layout, so you can see all of their tab headers but only one tab content at a time
 - `Floating tab group`: A tab group that is not within the shared space of the dock layout but is popped out of that shared space and is instead in front of the other tabs. It kinda feels like a separate window in that it has its own independent rectangle, but it's not literally a separate window; it's still inside the window whose dock layout it popped out of.
 - `WebView`: A specific type of tab content whose contents are wrapped in an iframe. You can generally think of all extension-provided UI as a WebView.
