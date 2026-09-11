@@ -165,6 +165,34 @@ export function resolveNoteEditingSurface({
   return viewType === 'standard' ? 'pane' : 'popover';
 }
 
+/**
+ * Decides which note's caller carries the highlight border, mirroring PT9's
+ * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
+ * only while the footnotes pane both holds a selected row AND owns DOM focus. Clicking back into
+ * the Scripture text leaves the row selected but takes the border off the caller; clicking the row
+ * (or its editor) again puts it back. Standard view is the only view that highlights callers at
+ * all.
+ *
+ * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
+ *   inline row editor)
+ * @param options.selectedIndex The footnotes pane's selected row, or `undefined` when nothing is
+ *   selected
+ * @returns The note index to highlight, or `undefined` to clear the highlight
+ */
+export function resolveCallerHighlight({
+  isStandardView,
+  paneHasFocus,
+  selectedIndex,
+}: {
+  isStandardView: boolean;
+  paneHasFocus: boolean;
+  selectedIndex: number | undefined;
+}): number | undefined {
+  if (!isStandardView || !paneHasFocus) return undefined;
+  return selectedIndex;
+}
+
 /** Snapshot of the state a collapsed-note caller click decides against. */
 export type NoteCallerClickState = {
   /**

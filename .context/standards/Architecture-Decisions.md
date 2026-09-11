@@ -1199,7 +1199,15 @@ step, no automation. Just a record.
   `getNoteIndex(noteKey)` / `getNoteKey(index)` for translating between the pane's addressing and
   the document's, and `highlightNote(keyOrIndex | undefined)` for applying PT9's
   `caller_highlight` border — rather than the host emulating either with DOM class hacks; the
-  highlight is presentational only and never dirties the document. The footnotes pane renders from
+  highlight is presentational only and never dirties the document. Which note carries that border
+  follows PT9's `CallerHighlightSynchronizer`, not the pane's selection: a second pure helper,
+  `resolveCallerHighlight({ isStandardView, paneHasFocus, selectedIndex })`, turns it on only while
+  the pane holds a selected row AND owns DOM focus, so clicking back into the Scripture text takes
+  the border off a row that stays selected. The pane reports its focus boundary with one
+  `onPaneFocusChange` prop (bubbled `onFocus`/`onBlur` on its container, ignoring moves that stay
+  inside it), and a caller click moves focus into the pane — onto the row editor where one opens,
+  onto the selected row in a read-only Standard view — so the border comes on for a click in the
+  text too. The footnotes pane renders from
   the editor's live USJ (falling back to the last-saved USJ before the editor has produced one)
   rather than only the last-saved USJ, so the pane and `getNoteIndex` always index the same
   document. That publish is gated on the pane actually being rendered: the web view pushes the

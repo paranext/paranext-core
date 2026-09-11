@@ -74,6 +74,7 @@ const usjWithTwoNotes: Usj = {
 const localizedStrings = { '%webView_footnoteList_close%': 'Close footnotes pane' };
 
 function renderPane(overrides: Partial<ComponentProps<typeof FootnotesLayout>> = {}) {
+  const { children = <div data-testid="editor" />, ...rest } = overrides;
   return render(
     <FootnotesLayout
       usj={usjWithTwoNotes}
@@ -81,9 +82,9 @@ function renderPane(overrides: Partial<ComponentProps<typeof FootnotesLayout>> =
       useWebViewState={useWebViewStateMock}
       localizedStrings={localizedStrings}
       onClose={() => {}}
-      {...overrides}
+      {...rest}
     >
-      <div data-testid="editor" />
+      {children}
     </FootnotesLayout>,
   );
 }
@@ -168,6 +169,61 @@ describe('FootnotesLayout editing seam', () => {
       </FootnotesLayout>,
     );
     expect(onSelectedFootnoteChange).toHaveBeenLastCalledWith(undefined);
+  });
+});
+
+describe('FootnotesLayout pane focus reporting', () => {
+  it('reports that the pane has focus when a row receives it', () => {
+    const onPaneFocusChange = vi.fn();
+    renderPane({ onPaneFocusChange });
+    screen.getAllByRole('option')[0].focus();
+    expect(onPaneFocusChange).toHaveBeenCalledTimes(1);
+    expect(onPaneFocusChange).toHaveBeenCalledWith(true);
+  });
+
+  it('reports that the pane lost focus when focus moves to the text outside it', () => {
+    const onPaneFocusChange = vi.fn();
+    renderPane({
+      onPaneFocusChange,
+      children: (
+        <button type="button" data-testid="text">
+          text
+        </button>
+      ),
+    });
+    screen.getAllByRole('option')[0].focus();
+    screen.getByTestId('text').focus();
+    expect(onPaneFocusChange).toHaveBeenNthCalledWith(1, true);
+    expect(onPaneFocusChange).toHaveBeenNthCalledWith(2, false);
+  });
+
+  it('keeps reporting focus while it moves from a row to the row editor inside the pane', () => {
+    const onPaneFocusChange = vi.fn();
+    renderPane({
+      onPaneFocusChange,
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => <input data-testid="row-editor" />,
+    });
+    screen.getAllByRole('option')[0].focus();
+    screen.getByTestId('row-editor').focus();
+    expect(onPaneFocusChange).toHaveBeenCalledTimes(1);
+    expect(onPaneFocusChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('FootnotesLayout focus request that asks the pane to take focus', () => {
+  it('focuses the selected row so the pane owns focus', () => {
+    renderPane({ focusRequest: { index: 1 }, focusRowOnFocusRequest: true });
+    const rows = screen.getAllByRole('option');
+    expect(rows[1]).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(rows[1]);
+  });
+
+  it('leaves focus alone for a request that did not ask for it', () => {
+    renderPane({ focusRequest: { index: 0 }, onFootnoteEditRequested: () => {} });
+    const rows = screen.getAllByRole('option');
+    expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).not.toBe(rows[0]);
   });
 });
 

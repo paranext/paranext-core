@@ -1,4 +1,12 @@
-import { PropsWithChildren, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  FocusEvent,
+  PropsWithChildren,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   Button,
@@ -65,6 +73,21 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   onFootnoteEditRequested?: (index: number, caretPosition: FootnoteCaretPosition) => void;
   /** Fires whenever the selected row changes (row click, focus request, or cleared). */
   onSelectedFootnoteChange?: (index: number | undefined) => void;
+  /**
+   * Whether an applied `focusRequest` should put DOM focus on the selected row. Set where the pane
+   * is the request's destination and opens no row editor of its own — a read-only Standard view,
+   * where PT9 still moves the caret into the note, and the caller highlight follows the focused
+   * pane. Views that answer a caller click with a popover leave it unset, so the pane never takes
+   * focus off that editor.
+   */
+  focusRowOnFocusRequest?: boolean;
+  /**
+   * Fires when DOM focus enters or leaves the pane — the row list, the inline row editor, and the
+   * pane's own chrome all count as inside it, so moving between them reports nothing. PT9's caller
+   * highlight marks where the focused pane's caret is, so the web view pairs this with the selected
+   * row to decide whether the caller border is on (see `resolveCallerHighlight`).
+   */
+  onPaneFocusChange?: (hasFocus: boolean) => void;
 }>;
 
 export function FootnotesLayout({
@@ -80,6 +103,8 @@ export function FootnotesLayout({
   renderEditingFootnote,
   onFootnoteEditRequested,
   onSelectedFootnoteChange,
+  focusRowOnFocusRequest,
+  onPaneFocusChange,
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -95,6 +120,37 @@ export function FootnotesLayout({
   const [selectedFootnote, setSelectedFootnote] = useState<
     { footnote: MarkerObject; index: number } | undefined
   >();
+
+  /**
+   * The pane panel's own element. Bounds every focus question this component answers: whether a
+   * blur left the pane at all, and which row a focus request should land on.
+   */
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const paneContainerRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Whether a focus request still owes the selected row a `.focus()` call — see
+   * `focusRowOnFocusRequest`.
+   */
+  const pendingRowFocusRef = useRef(false);
+
+  // Give the pane DOM focus for a focus request that asked for it, so the caller highlight (which
+  // PT9 ties to the focused pane's caret) comes on for a caller click in a read-only text just as
+  // it does when a row editor opens. Declared BEFORE the focus-request effect below so that within
+  // any one commit this runs while `pendingRowFocusRef` is still clear: the row it looks for is
+  // marked selected in the DOM only from the commit AFTER the request is applied, and running the
+  // other way around would find the previously selected row instead.
+  useEffect(() => {
+    if (!pendingRowFocusRef.current) return;
+    pendingRowFocusRef.current = false;
+    const selectedRow = paneContainerRef.current?.querySelector(
+      '[role="option"][aria-selected="true"]',
+    );
+    // The row is a roving-tabindex `li`, so it takes focus directly. Scrolling is left on: the
+    // list reveals the row for the same request, and suppressing it here would fight that.
+    if (selectedRow instanceof HTMLElement) selectedRow.focus({ preventScroll: false });
+  }, [selectedFootnote]);
 
   // Apply an externally-requested selection (a caller click in the editor body while the pane is
   // visible), mirroring what a real pane-row click does to `selectedFootnote`. Guarded by object
@@ -118,8 +174,9 @@ export function FootnotesLayout({
     // Mark applied only AFTER the bounds check passes, so a request that arrives while `footnotes`
     // is still empty (pane-mount frame) is retried when the `footnotes` dep repopulates.
     lastAppliedFocusRequestRef.current = focusRequest;
+    pendingRowFocusRef.current = focusRowOnFocusRequest === true;
     setSelectedFootnote({ footnote: footnotes[index], index });
-  }, [focusRequest, footnotes]);
+  }, [focusRequest, footnotes, focusRowOnFocusRequest]);
 
   // Mirrors `editingFootnoteIndex` into a ref so the USJ-processing effect below can read its
   // current value without depending on it: `editingFootnoteIndex` changes far more often relative
@@ -354,6 +411,32 @@ export function FootnotesLayout({
     [footnotes, footnoteListKey, onFootnoteEditRequested],
   );
 
+  /**
+   * Whether the pane currently holds DOM focus, so each crossing of its boundary is reported once.
+   * `focus`/`blur` bubble here (they are `focusin`/`focusout` underneath), so every move between
+   * elements inside the pane fires both.
+   */
+  const paneHasFocusRef = useRef(false);
+
+  const handlePaneFocus = useCallback(() => {
+    if (paneHasFocusRef.current) return;
+    paneHasFocusRef.current = true;
+    onPaneFocusChange?.(true);
+  }, [onPaneFocusChange]);
+
+  const handlePaneBlur = useCallback(
+    (event: FocusEvent<HTMLDivElement>) => {
+      // Focus landing on another element inside the pane (the list to the row editor and back)
+      // never leaves it. A null `relatedTarget` — focus going nowhere, e.g. the window losing it —
+      // does count as leaving, matching what the user sees: no caret in the pane.
+      if (event.relatedTarget && paneContainerRef.current?.contains(event.relatedTarget)) return;
+      if (!paneHasFocusRef.current) return;
+      paneHasFocusRef.current = false;
+      onPaneFocusChange?.(false);
+    },
+    [onPaneFocusChange],
+  );
+
   // Report every change to which row is selected (row click, focus request, or cleared) so the web
   // view can highlight the corresponding caller in the text.
   useEffect(() => {
@@ -381,38 +464,45 @@ export function FootnotesLayout({
           minSize={footnotesPaneMinPercent}
           maxSize={footnotesPaneMaxPercent}
         >
-          <div className="tw:flex tw:justify-end tw:shrink-0 tw:pr-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="tw:h-6 tw:w-6"
-              aria-label={localizedStrings['%webView_footnoteList_close%']}
-              onClick={onClose}
-            >
-              <X className="tw:h-4 tw:w-4" />
-            </Button>
-          </div>
-          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
-            <FootnoteList
-              classNameForItems="scripture-font"
-              listId={footnoteListKey}
-              layout={footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical'}
-              footnotes={footnotes}
-              showMarkers={showMarkers}
-              formatCaller={showMarkers ? (c) => c : undefined}
-              selectedFootnote={selectedFootnote?.footnote}
-              // The wrapper state object is minted fresh on every selection application (pane
-              // click or focus request), so its identity is the "reveal the row again" signal —
-              // a repeat focusRequest for the same footnote re-scrolls even though the derived
-              // footnote object and index are unchanged.
-              selectionRequest={selectedFootnote}
-              onFootnoteSelected={handleFootnoteSelected}
-              onFootnoteEditRequested={
-                onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
-              }
-              editingFootnoteIndex={editingFootnoteIndex}
-              renderEditingFootnote={renderEditingFootnote}
-            />
+          <div
+            ref={paneContainerRef}
+            className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+            onFocus={handlePaneFocus}
+            onBlur={handlePaneBlur}
+          >
+            <div className="tw:flex tw:justify-end tw:shrink-0 tw:pr-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw:h-6 tw:w-6"
+                aria-label={localizedStrings['%webView_footnoteList_close%']}
+                onClick={onClose}
+              >
+                <X className="tw:h-4 tw:w-4" />
+              </Button>
+            </div>
+            <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+              <FootnoteList
+                classNameForItems="scripture-font"
+                listId={footnoteListKey}
+                layout={footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical'}
+                footnotes={footnotes}
+                showMarkers={showMarkers}
+                formatCaller={showMarkers ? (c) => c : undefined}
+                selectedFootnote={selectedFootnote?.footnote}
+                // The wrapper state object is minted fresh on every selection application (pane
+                // click or focus request), so its identity is the "reveal the row again" signal —
+                // a repeat focusRequest for the same footnote re-scrolls even though the derived
+                // footnote object and index are unchanged.
+                selectionRequest={selectedFootnote}
+                onFootnoteSelected={handleFootnoteSelected}
+                onFootnoteEditRequested={
+                  onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
+                }
+                editingFootnoteIndex={editingFootnoteIndex}
+                renderEditingFootnote={renderEditingFootnote}
+              />
+            </div>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

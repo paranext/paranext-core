@@ -33,6 +33,7 @@ import {
   openOrUpdateRelatedPanels,
   parseMissingBookError,
   resolveResourceContentState,
+  resolveCallerHighlight,
   resolveNoteEditingSurface,
 } from './platform-scripture-editor.utils';
 
@@ -3073,6 +3074,36 @@ describe('resolveNoteEditingSurface', () => {
   it('has no editing surface when read-only, in any view', () => {
     expect(resolveNoteEditingSurface({ viewType: 'standard', isReadOnly: true })).toBe('none');
     expect(resolveNoteEditingSurface({ viewType: 'formatted', isReadOnly: true })).toBe('none');
+  });
+});
+
+describe('resolveCallerHighlight', () => {
+  it('highlights the selected note while Standard view has the pane focused', () => {
+    expect(
+      resolveCallerHighlight({ isStandardView: true, paneHasFocus: true, selectedIndex: 0 }),
+    ).toBe(0);
+  });
+
+  it('clears the highlight while the pane has no selection', () => {
+    expect(
+      resolveCallerHighlight({
+        isStandardView: true,
+        paneHasFocus: true,
+        selectedIndex: undefined,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('clears the highlight while focus is outside the pane', () => {
+    expect(
+      resolveCallerHighlight({ isStandardView: true, paneHasFocus: false, selectedIndex: 2 }),
+    ).toBeUndefined();
+  });
+
+  it('clears the highlight outside Standard view', () => {
+    expect(
+      resolveCallerHighlight({ isStandardView: false, paneHasFocus: true, selectedIndex: 2 }),
+    ).toBeUndefined();
   });
 });
 

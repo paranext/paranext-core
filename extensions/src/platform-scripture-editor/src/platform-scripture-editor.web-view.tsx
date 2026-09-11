@@ -169,6 +169,7 @@ import {
   openCommentListAndSelectThreadSafe,
   parseMissingBookError,
   resolveAddChapterNumberClick,
+  resolveCallerHighlight,
   resolveNoteEditingSurface,
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -2842,18 +2843,47 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [startPaneNoteEdit],
   );
 
+  /** The footnotes pane's selected row, or `undefined` when it has no selection. */
+  const paneSelectedIndexRef = useRef<number | undefined>(undefined);
+  /** Whether DOM focus is inside the footnotes pane (its row list or its inline row editor). */
+  const paneHasFocusRef = useRef(false);
+
   /**
-   * Marks the selected note's caller in the text (PT9's thin top-and-bottom border) whenever the
-   * footnotes pane's selection changes, whatever the cause and whatever the text's editability;
-   * `undefined` clears the mark. Standard view only — no other view highlights callers.
+   * Marks the pane's selected note's caller in the text with PT9's thin top-and-bottom border, or
+   * clears it — see {@link resolveCallerHighlight} for when each applies. Called from both inputs
+   * the rule reads, so either changing re-decides the whole thing rather than each input owning
+   * half the answer.
    *
-   * Kept stable: the pane calls this from an effect, so a fresh identity each render would re-run
-   * it.
+   * Kept stable: the pane reports through effects, so a fresh identity each render would re-run
+   * them.
    */
-  const handleSelectedFootnoteChange = useCallback((index: number | undefined) => {
-    if (viewTypeRef.current !== 'standard') return;
-    editorRef.current?.highlightNote(index);
+  const applyCallerHighlight = useCallback(() => {
+    editorRef.current?.highlightNote(
+      resolveCallerHighlight({
+        isStandardView: viewTypeRef.current === 'standard',
+        paneHasFocus: paneHasFocusRef.current,
+        selectedIndex: paneSelectedIndexRef.current,
+      }),
+    );
   }, []);
+
+  /** The footnotes pane's selected row changed, whatever the cause. */
+  const handleSelectedFootnoteChange = useCallback(
+    (index: number | undefined) => {
+      paneSelectedIndexRef.current = index;
+      applyCallerHighlight();
+    },
+    [applyCallerHighlight],
+  );
+
+  /** DOM focus entered or left the footnotes pane. */
+  const handlePaneFocusChange = useCallback(
+    (hasFocus: boolean) => {
+      paneHasFocusRef.current = hasFocus;
+      applyCallerHighlight();
+    },
+    [applyCallerHighlight],
+  );
 
   // #region PDP Save Write Path
 
@@ -3117,6 +3147,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     const wasRendered = wasFootnotesPaneRenderedRef.current;
     wasFootnotesPaneRenderedRef.current = footnotesPaneRendered;
     if (footnotesPaneRendered || !wasRendered) return;
+    // An unmounting pane reports neither: it fires no selection change and no blur on its way out,
+    // so a later re-mount would otherwise decide the highlight against what the last pane held.
+    paneSelectedIndexRef.current = undefined;
+    paneHasFocusRef.current = false;
     editorRef.current?.highlightNote(undefined);
     if (paneEditingIndexRef.current !== undefined) closeFootnoteEditor(false);
   }, [footnotesPaneRendered, closeFootnoteEditor]);
@@ -4227,6 +4261,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     noteEditingSurface === 'pane' ? handleFootnoteEditRequested : undefined
                   }
                   onSelectedFootnoteChange={handleSelectedFootnoteChange}
+                  // A caller click in a read-only Standard view has nowhere else to put focus, and
+                  // PT9 still moves the caret into the note — so the pane takes it, which is what
+                  // turns the caller highlight on. Everywhere else the click's own editor (the row
+                  // editor or the popover) owns focus and the pane must not pull it away.
+                  focusRowOnFocusRequest={viewType === 'standard' && noteEditingSurface === 'none'}
+                  onPaneFocusChange={handlePaneFocusChange}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />
