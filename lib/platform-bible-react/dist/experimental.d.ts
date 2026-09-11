@@ -31,6 +31,13 @@ interface ButtonProps extends React$1.ComponentProps<"button">, VariantProps<typ
 type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 /** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
 export type ScopeWithRange = Scope | "range";
+/** Visual layout variant for the scope options. */
+export type ScopeSelectorVariant = "radio" | "dropdown";
+/**
+ * Z-index for tooltips — must render above modal dialogs since tooltips can be triggered from
+ * elements inside a modal (e.g. help icons in form fields).
+ */
+export declare const Z_INDEX_TOOLTIP = 550;
 /** Minimal project metadata fed to the selector. */
 export type ProjectSelectorProject = {
 	/**
@@ -173,30 +180,30 @@ export type ProjectSelectorScrollGroupSelection = {
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export declare const PROJECT_SELECTOR_STRING_KEYS: readonly [
-	"%webView_project_selector_search_placeholder%",
-	"%webView_project_selector_view_options_aria_label%",
-	"%webView_project_selector_group_section_label%",
-	"%webView_project_selector_filter_section_label%",
-	"%webView_project_selector_filter_group_none%",
-	"%webView_project_selector_filter_group_by_open_tabs%",
-	"%webView_project_selector_filter_group_by_last_used%",
-	"%webView_project_selector_filter_group_by_language%",
-	"%webView_project_selector_filter_group_by_versification%",
-	"%webView_project_selector_filter_group_by_type%",
-	"%webView_project_selector_filter_group_by_custom%",
-	"%webView_project_selector_filter_show_selected_only%",
-	"%webView_project_selector_open_tabs_section_heading%",
-	"%webView_project_selector_other_projects_section_heading%",
-	"%webView_project_selector_versification_unknown_section_heading%",
-	"%webView_project_selector_language_unknown_section_heading%",
-	"%webView_project_selector_type_unknown_section_heading%",
-	"%webView_project_selector_last_used_recent_section_heading%",
-	"%webView_project_selector_last_used_other_section_heading%",
-	"%webView_project_selector_custom_unmatched_section_heading%",
-	"%webView_project_selector_bound_but_closed_tooltip%",
-	"%webView_project_selector_open_button_label%",
-	"%webView_project_selector_select_all%",
-	"%webView_project_selector_clear_all%"
+	"%webView_projectSelector_searchPlaceholder%",
+	"%webView_projectSelector_viewOptionsAriaLabel%",
+	"%webView_projectSelector_groupSectionLabel%",
+	"%webView_projectSelector_filterSectionLabel%",
+	"%webView_projectSelector_groupNone%",
+	"%webView_projectSelector_groupByOpenTabs%",
+	"%webView_projectSelector_groupByLastUsed%",
+	"%webView_projectSelector_groupByLanguage%",
+	"%webView_projectSelector_groupByVersification%",
+	"%webView_projectSelector_groupByType%",
+	"%webView_projectSelector_groupByCustom%",
+	"%webView_projectSelector_filterShowSelectedOnly%",
+	"%webView_projectSelector_openTabsSectionHeading%",
+	"%webView_projectSelector_otherProjectsSectionHeading%",
+	"%webView_projectSelector_versificationUnknownSectionHeading%",
+	"%webView_projectSelector_languageUnknownSectionHeading%",
+	"%webView_projectSelector_typeUnknownSectionHeading%",
+	"%webView_projectSelector_lastUsedRecentSectionHeading%",
+	"%webView_projectSelector_lastUsedOtherSectionHeading%",
+	"%webView_projectSelector_customUnmatchedSectionHeading%",
+	"%webView_projectSelector_boundButClosedTooltip%",
+	"%webView_projectSelector_openButtonLabel%",
+	"%webView_projectSelector_selectAll%",
+	"%webView_projectSelector_clearAll%"
 ];
 /** Type definition for the localized strings used in this component */
 export type ProjectSelectorLocalizedStrings = {
@@ -340,7 +347,7 @@ type CommonProps = {
 	 * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
 	 * order — a project lands in the first section whose `match` accepts it, and anything unmatched
 	 * collects into a trailing section headed by
-	 * `%webView_project_selector_custom_unmatched_section_heading%` ("Other"), which you can retitle
+	 * `%webView_projectSelector_customUnmatchedSectionHeading%` ("Other"), which you can retitle
 	 * through `localizedStrings`. Empty sections are not rendered.
 	 *
 	 * Must be referentially stable across renders — hoist it to a module constant or memoize it. The
@@ -350,9 +357,9 @@ type CommonProps = {
 	 * the hoisted-constant shape.
 	 *
 	 * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-	 * override `%webView_project_selector_filter_group_by_custom%` through `localizedStrings` — its
-	 * "Custom" default names the mechanism, and the user needs the name of the axis your sections
-	 * actually express. To pin the list to these sections and nothing else, pass
+	 * override `%webView_projectSelector_groupByCustom%` through `localizedStrings` — its "Custom"
+	 * default names the mechanism, and the user needs the name of the axis your sections actually
+	 * express. To pin the list to these sections and nothing else, pass
 	 * `availableGroupings={['custom']}` with `defaultGrouping="custom"` and `hideFilterMenu`, since a
 	 * one-item grouping menu is an inert control.
 	 *
@@ -466,13 +473,6 @@ export type ProjectSelectorProps = (CommonProps & {
  * ```
  */
 export declare function ProjectSelector(props: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
-/** Visual layout variant for the scope options. */
-export type ScopeSelectorVariant = "radio" | "dropdown";
-/**
- * Z-index for tooltips — must render above modal dialogs since tooltips can be triggered from
- * elements inside a modal (e.g. help icons in form fields).
- */
-export declare const Z_INDEX_TOOLTIP = 550;
 /**
  * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
  * the result as the `localizedStrings` prop.

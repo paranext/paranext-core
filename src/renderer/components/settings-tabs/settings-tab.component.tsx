@@ -58,6 +58,9 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_noSettingsFound%',
   '%settings_defaultMessage_noSettingsFoundDetails%',
   SYNC_BLOCKED_NOTICE_KEY,
+  // The sidebar embeds a ProjectSelector, so that component's keys resolve in the same
+  // subscription as the tab's own.
+  ...PROJECT_SELECTOR_STRING_KEYS,
 ];
 
 const filterSettingsContributions = (
@@ -90,10 +93,6 @@ const filterSettingsContributions = (
 
 export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
-
-  const [projectSelectorLocalizedStrings] = useLocalizedStrings(
-    useMemo(() => Array.from(PROJECT_SELECTOR_STRING_KEYS), []),
-  );
 
   const [selectedSidebarItem, setSelectedSidebarItem] = useState<SelectedSettingsSidebarItem>({
     label: '',
@@ -309,7 +308,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_generalSettingsLabel%']}
           projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectSettingsLabel%']}
           buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
-          projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
+          projectSelectorLocalizedStrings={localizedStrings}
         >
           <div className="project-or-settings-list-container">
             {selectedSidebarItem.projectId ? (

@@ -20,7 +20,6 @@ import {
   ProjectSelectorOpenTab,
   ProjectSelector,
   ProjectSelectorProject,
-  type ProjectSelectorLocalizedStrings,
 } from 'platform-bible-react/experimental';
 import type {
   ManageBooksAction,
@@ -170,10 +169,10 @@ export type ManageBooksSidebarProps = {
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string;
 
   /**
-   * Localized strings for the embedded `<ProjectSelector>` popover. Forwarded from the dialog via
-   * the same prop name.
+   * The dialog's resolved localized strings, forwarded to the embedded `<ProjectSelector>` popover.
+   * `MANAGE_BOOKS_DIALOG_STRING_KEYS` includes the picker's own keys.
    */
-  projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
+  localizedStrings?: ManageBooksDialogLocalizedStrings;
 
   /**
    * Drives the icon-only collapse. When true, the sidebar renders as a narrow rail (w-14) with
@@ -239,7 +238,7 @@ export function ManageBooksSidebar({
   isTargetEditable,
   targetShortName,
   t,
-  projectSelectorLocalizedStrings,
+  localizedStrings,
   isNarrow = false,
 }: ManageBooksSidebarProps) {
   const activeSectionId = actionToSectionId(active);
@@ -314,7 +313,7 @@ export function ManageBooksSidebar({
             // correct momentary fallback; once `projects` resolves and contains `projectId`,
             // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
             buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
-            localizedStrings={projectSelectorLocalizedStrings}
+            localizedStrings={localizedStrings}
           />
         </div>
       </div>

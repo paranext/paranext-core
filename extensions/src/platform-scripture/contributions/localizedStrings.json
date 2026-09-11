@@ -110,6 +110,54 @@
     },
     "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
+    },
+    "%manageBooks_projectSelector_boundButClosedTooltip%": {
+      "fallbackKey": "%webView_projectSelector_boundButClosedTooltip%"
+    },
+    "%manageBooks_projectSelector_clearAll%": {
+      "fallbackKey": "%webView_projectSelector_clearAll%"
+    },
+    "%manageBooks_projectSelector_filterAriaLabel%": {
+      "fallbackKey": "%webView_projectSelector_viewOptionsAriaLabel%"
+    },
+    "%manageBooks_projectSelector_filterGroupByOpenTabs%": {
+      "fallbackKey": "%webView_projectSelector_groupByOpenTabs%"
+    },
+    "%manageBooks_projectSelector_filterSectionLabel%": {
+      "fallbackKey": "%webView_projectSelector_filterSectionLabel%"
+    },
+    "%manageBooks_projectSelector_filterShowSelectedOnly%": {
+      "fallbackKey": "%webView_projectSelector_filterShowSelectedOnly%"
+    },
+    "%manageBooks_projectSelector_groupSectionLabel%": {
+      "fallbackKey": "%webView_projectSelector_groupSectionLabel%"
+    },
+    "%manageBooks_projectSelector_openButtonLabel%": {
+      "fallbackKey": "%webView_projectSelector_openButtonLabel%"
+    },
+    "%manageBooks_projectSelector_openTabsSectionHeading%": {
+      "fallbackKey": "%webView_projectSelector_openTabsSectionHeading%"
+    },
+    "%manageBooks_projectSelector_otherProjectsSectionHeading%": {
+      "fallbackKey": "%webView_projectSelector_otherProjectsSectionHeading%"
+    },
+    "%manageBooks_projectSelector_searchPlaceholder%": {
+      "fallbackKey": "%webView_projectSelector_searchPlaceholder%"
+    },
+    "%manageBooks_projectSelector_selectAll%": {
+      "fallbackKey": "%webView_projectSelector_selectAll%"
+    },
+    "%manageBooks_projectSelector_versificationUnknownSectionHeading%": {
+      "fallbackKey": "%webView_projectSelector_versificationUnknownSectionHeading%"
+    },
+    "%webView_find_projectSelector_searchPlaceholder%": {
+      "fallbackKey": "%webView_projectSelector_searchPlaceholder%"
+    },
+    "%webView_find_projectSelector_openTabsSectionHeading%": {
+      "fallbackKey": "%webView_projectSelector_openTabsSectionHeading%"
+    },
+    "%webView_find_projectSelector_otherProjectsSectionHeading%": {
+      "fallbackKey": "%webView_projectSelector_otherProjectsSectionHeading%"
     }
   },
   "localizedStrings": {

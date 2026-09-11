@@ -102,80 +102,80 @@ export type {
  */
 export const PROJECT_SELECTOR_STRING_KEYS = Object.freeze([
   /** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
-  '%webView_project_selector_search_placeholder%',
+  '%webView_projectSelector_searchPlaceholder%',
   /** Accessible label for the view-options icon button. Defaults to `"View options"`. */
-  '%webView_project_selector_view_options_aria_label%',
+  '%webView_projectSelector_viewOptionsAriaLabel%',
   /** View options: section heading for the grouping choices. Defaults to `"Group by"`. */
-  '%webView_project_selector_group_section_label%',
+  '%webView_projectSelector_groupSectionLabel%',
   /** View options: section heading for the filter toggles. Defaults to `"Filter"`. */
-  '%webView_project_selector_filter_section_label%',
+  '%webView_projectSelector_filterSectionLabel%',
   /** View options: "None" radio item under the Group by section. Defaults to `"None"`. */
-  '%webView_project_selector_filter_group_none%',
+  '%webView_projectSelector_groupNone%',
   /** View options: "Open tabs" item under the Group by section. Defaults to `"Open tabs"`. */
-  '%webView_project_selector_filter_group_by_open_tabs%',
+  '%webView_projectSelector_groupByOpenTabs%',
   /** View options: "Last used" item under the Group by section. Defaults to `"Last used"`. */
-  '%webView_project_selector_filter_group_by_last_used%',
+  '%webView_projectSelector_groupByLastUsed%',
   /** View options: "Language" item under the Group by section. Defaults to `"Language"`. */
-  '%webView_project_selector_filter_group_by_language%',
+  '%webView_projectSelector_groupByLanguage%',
   /** View options: "Versification" item under the Group by section. Defaults to `"Versification"`. */
-  '%webView_project_selector_filter_group_by_versification%',
+  '%webView_projectSelector_groupByVersification%',
   /** View options: "Type" item under the Group by section. Defaults to `"Type"`. */
-  '%webView_project_selector_filter_group_by_type%',
+  '%webView_projectSelector_groupByType%',
   /**
    * View options: "Custom" item under the Group by section, shown when `'custom'` is in
    * `availableGroupings`. Defaults to `"Custom"` — a mechanism name, not an axis a user recognizes,
    * so a caller offering `'custom'` should override it with the name of the axis their
    * `customSections` actually express (e.g. `"Relevance"`, `"Workflow stage"`).
    */
-  '%webView_project_selector_filter_group_by_custom%',
+  '%webView_projectSelector_groupByCustom%',
   /** View options: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
-  '%webView_project_selector_filter_show_selected_only%',
+  '%webView_projectSelector_filterShowSelectedOnly%',
   /** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
-  '%webView_project_selector_open_tabs_section_heading%',
+  '%webView_projectSelector_openTabsSectionHeading%',
   /** Section heading for the Other projects section. Defaults to `"Your projects & resources"`. */
-  '%webView_project_selector_other_projects_section_heading%',
+  '%webView_projectSelector_otherProjectsSectionHeading%',
   /**
    * Section heading rendered for the "Unknown versification" bucket in versification-grouping mode
    * — covers projects whose versification can't be resolved at load time. Defaults to `"Unknown
    * versification"`.
    */
-  '%webView_project_selector_versification_unknown_section_heading%',
+  '%webView_projectSelector_versificationUnknownSectionHeading%',
   /**
    * Section heading for rows without a `language` field when grouping by language. Defaults to
    * `"Unknown language"`.
    */
-  '%webView_project_selector_language_unknown_section_heading%',
+  '%webView_projectSelector_languageUnknownSectionHeading%',
   /**
    * Section heading for rows without a `type` field when grouping by type. Defaults to `"Unknown
    * type"`.
    */
-  '%webView_project_selector_type_unknown_section_heading%',
+  '%webView_projectSelector_typeUnknownSectionHeading%',
   /**
    * Section heading for the "Recently used" bucket when grouping by last used. Defaults to
    * `"Recently used"`.
    */
-  '%webView_project_selector_last_used_recent_section_heading%',
+  '%webView_projectSelector_lastUsedRecentSectionHeading%',
   /**
    * Section heading for the "Other" bucket when grouping by last used — rows without a `lastUsedAt`
    * timestamp. Defaults to `"Other"`.
    */
-  '%webView_project_selector_last_used_other_section_heading%',
+  '%webView_projectSelector_lastUsedOtherSectionHeading%',
   /**
    * Section heading for the trailing bucket of rows that no caller-supplied custom section claimed,
    * when the active grouping is `custom`. Defaults to `"Other"`.
    */
-  '%webView_project_selector_custom_unmatched_section_heading%',
+  '%webView_projectSelector_customUnmatchedSectionHeading%',
   /**
    * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
    * Defaults to `"Bound to {group} · not currently open"`.
    */
-  '%webView_project_selector_bound_but_closed_tooltip%',
+  '%webView_projectSelector_boundButClosedTooltip%',
   /** Label of the "Open" button shown on bound-but-closed rows. Defaults to `"Open"`. */
-  '%webView_project_selector_open_button_label%',
+  '%webView_projectSelector_openButtonLabel%',
   /** Multi-select: "Select all" button. Defaults to `"Select all"`. */
-  '%webView_project_selector_select_all%',
+  '%webView_projectSelector_selectAll%',
   /** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
-  '%webView_project_selector_clear_all%',
+  '%webView_projectSelector_clearAll%',
 ] as const);
 
 /** Type definition for the localized strings used in this component */
@@ -188,36 +188,45 @@ export type ProjectSelectorLocalizedStrings = {
  * selector reads correctly in a consumer that has not wired up localization yet.
  */
 const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
-  '%webView_project_selector_search_placeholder%': 'Search projects & resources',
-  '%webView_project_selector_view_options_aria_label%': 'View options',
-  '%webView_project_selector_group_section_label%': 'Group by',
-  '%webView_project_selector_filter_section_label%': 'Filter',
-  '%webView_project_selector_filter_group_none%': 'None',
-  '%webView_project_selector_filter_group_by_open_tabs%': 'Open tabs',
-  '%webView_project_selector_filter_group_by_last_used%': 'Last used',
-  '%webView_project_selector_filter_group_by_language%': 'Language',
-  '%webView_project_selector_filter_group_by_versification%': 'Versification',
-  '%webView_project_selector_filter_group_by_type%': 'Type',
-  '%webView_project_selector_filter_group_by_custom%': 'Custom',
-  '%webView_project_selector_filter_show_selected_only%': 'Show selected only',
-  '%webView_project_selector_open_tabs_section_heading%': 'Opened project & resource tabs',
-  '%webView_project_selector_other_projects_section_heading%': 'Your projects & resources',
-  '%webView_project_selector_versification_unknown_section_heading%': 'Unknown versification',
-  '%webView_project_selector_language_unknown_section_heading%': 'Unknown language',
-  '%webView_project_selector_type_unknown_section_heading%': 'Unknown type',
-  '%webView_project_selector_last_used_recent_section_heading%': 'Recently used',
-  '%webView_project_selector_last_used_other_section_heading%': 'Other',
-  '%webView_project_selector_custom_unmatched_section_heading%': 'Other',
-  '%webView_project_selector_bound_but_closed_tooltip%': 'Bound to {group} · not currently open',
-  '%webView_project_selector_open_button_label%': 'Open',
-  '%webView_project_selector_select_all%': 'Select all',
-  '%webView_project_selector_clear_all%': 'Clear all',
+  '%webView_projectSelector_searchPlaceholder%': 'Search projects & resources',
+  '%webView_projectSelector_viewOptionsAriaLabel%': 'View options',
+  '%webView_projectSelector_groupSectionLabel%': 'Group by',
+  '%webView_projectSelector_filterSectionLabel%': 'Filter',
+  '%webView_projectSelector_groupNone%': 'None',
+  '%webView_projectSelector_groupByOpenTabs%': 'Open tabs',
+  '%webView_projectSelector_groupByLastUsed%': 'Last used',
+  '%webView_projectSelector_groupByLanguage%': 'Language',
+  '%webView_projectSelector_groupByVersification%': 'Versification',
+  '%webView_projectSelector_groupByType%': 'Type',
+  '%webView_projectSelector_groupByCustom%': 'Custom',
+  '%webView_projectSelector_filterShowSelectedOnly%': 'Show selected only',
+  '%webView_projectSelector_openTabsSectionHeading%': 'Open project & resource tabs',
+  '%webView_projectSelector_otherProjectsSectionHeading%': 'Your projects & resources',
+  '%webView_projectSelector_versificationUnknownSectionHeading%': 'Unknown versification',
+  '%webView_projectSelector_languageUnknownSectionHeading%': 'Unknown language',
+  '%webView_projectSelector_typeUnknownSectionHeading%': 'Unknown type',
+  '%webView_projectSelector_lastUsedRecentSectionHeading%': 'Recently used',
+  '%webView_projectSelector_lastUsedOtherSectionHeading%': 'Older',
+  '%webView_projectSelector_customUnmatchedSectionHeading%': 'Other',
+  '%webView_projectSelector_boundButClosedTooltip%': 'Follows group {group} · not currently open',
+  '%webView_projectSelector_openButtonLabel%': 'Open',
+  '%webView_projectSelector_selectAll%': 'Select all',
+  '%webView_projectSelector_clearAll%': 'Clear all',
 };
 
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
-  return { ...DEFAULT_STRINGS, ...partial };
+  const resolved = { ...DEFAULT_STRINGS };
+  if (!partial) return resolved;
+  PROJECT_SELECTOR_STRING_KEYS.forEach((key) => {
+    const value = partial[key];
+    // `useLocalizedStrings` seeds every requested key with the key itself while localization is
+    // loading and whenever the lookup fails, so a value identical to its own key is not a
+    // translation. Keep the English default for those rather than rendering a raw `%key%`.
+    if (value && value !== key) resolved[key] = value;
+  });
+  return resolved;
 }
 
 // #endregion
@@ -391,7 +400,7 @@ type CommonProps = {
    * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
    * order — a project lands in the first section whose `match` accepts it, and anything unmatched
    * collects into a trailing section headed by
-   * `%webView_project_selector_custom_unmatched_section_heading%` ("Other"), which you can retitle
+   * `%webView_projectSelector_customUnmatchedSectionHeading%` ("Other"), which you can retitle
    * through `localizedStrings`. Empty sections are not rendered.
    *
    * Must be referentially stable across renders — hoist it to a module constant or memoize it. The
@@ -401,9 +410,9 @@ type CommonProps = {
    * the hoisted-constant shape.
    *
    * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-   * override `%webView_project_selector_filter_group_by_custom%` through `localizedStrings` — its
-   * "Custom" default names the mechanism, and the user needs the name of the axis your sections
-   * actually express. To pin the list to these sections and nothing else, pass
+   * override `%webView_projectSelector_groupByCustom%` through `localizedStrings` — its "Custom"
+   * default names the mechanism, and the user needs the name of the axis your sections actually
+   * express. To pin the list to these sections and nothing else, pass
    * `availableGroupings={['custom']}` with `defaultGrouping="custom"` and `hideFilterMenu`, since a
    * one-item grouping menu is an inert control.
    *
@@ -628,11 +637,10 @@ function ProjectRowView({
               onOpen(row);
             }}
             onMouseDown={(event: MouseEvent) => event.stopPropagation()}
-            aria-label={strings['%webView_project_selector_open_button_label%']}
-            title={strings['%webView_project_selector_open_button_label%']}
+            aria-label={strings['%webView_projectSelector_openButtonLabel%']}
           >
             <ArrowRight className="tw:h-3 tw:w-3" />
-            {strings['%webView_project_selector_open_button_label%']}
+            {strings['%webView_projectSelector_openButtonLabel%']}
           </Button>
         )}
       </span>
@@ -696,7 +704,7 @@ function ProjectRowView({
 
   const tooltipBoundBut =
     row.isBoundButClosed && letter
-      ? strings['%webView_project_selector_bound_but_closed_tooltip%'].replace('{group}', letter)
+      ? strings['%webView_projectSelector_boundButClosedTooltip%'].replace('{group}', letter)
       : undefined;
 
   return (
@@ -786,17 +794,17 @@ function groupingLabel(
 ): string {
   switch (option) {
     case 'openTabs':
-      return strings['%webView_project_selector_filter_group_by_open_tabs%'];
+      return strings['%webView_projectSelector_groupByOpenTabs%'];
     case 'lastUsed':
-      return strings['%webView_project_selector_filter_group_by_last_used%'];
+      return strings['%webView_projectSelector_groupByLastUsed%'];
     case 'language':
-      return strings['%webView_project_selector_filter_group_by_language%'];
+      return strings['%webView_projectSelector_groupByLanguage%'];
     case 'versification':
-      return strings['%webView_project_selector_filter_group_by_versification%'];
+      return strings['%webView_projectSelector_groupByVersification%'];
     case 'type':
-      return strings['%webView_project_selector_filter_group_by_type%'];
+      return strings['%webView_projectSelector_groupByType%'];
     case 'custom':
-      return strings['%webView_project_selector_filter_group_by_custom%'];
+      return strings['%webView_projectSelector_groupByCustom%'];
     default:
       return option;
   }
@@ -830,9 +838,9 @@ function ViewOptionsMenu({
             isViewModified &&
               'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
           )}
-          aria-label={strings['%webView_project_selector_view_options_aria_label%']}
+          aria-label={strings['%webView_projectSelector_viewOptionsAriaLabel%']}
           aria-pressed={isViewModified}
-          title={strings['%webView_project_selector_view_options_aria_label%']}
+          title={strings['%webView_projectSelector_viewOptionsAriaLabel%']}
           onMouseDown={(event: MouseEvent) => event.preventDefault()}
         >
           <SlidersHorizontal className="tw:h-4 tw:w-4" />
@@ -846,7 +854,7 @@ function ViewOptionsMenu({
         {availableGroupings.length > 0 && (
           <>
             <DropdownMenuLabel>
-              {strings['%webView_project_selector_group_section_label%']}
+              {strings['%webView_projectSelector_groupSectionLabel%']}
             </DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={activeGrouping}
@@ -857,7 +865,7 @@ function ViewOptionsMenu({
               {/* No `onSelect={preventDefault}` here — picking a grouping should close the menu
                   immediately, so the user sees the newly grouped list without a second click. */}
               <DropdownMenuRadioItem value="none">
-                {strings['%webView_project_selector_filter_group_none%']}
+                {strings['%webView_projectSelector_groupNone%']}
               </DropdownMenuRadioItem>
               {availableGroupings.map((option) => (
                 <DropdownMenuRadioItem key={option} value={option}>
@@ -871,14 +879,14 @@ function ViewOptionsMenu({
           <>
             {availableGroupings.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuLabel>
-              {strings['%webView_project_selector_filter_section_label%']}
+              {strings['%webView_projectSelector_filterSectionLabel%']}
             </DropdownMenuLabel>
             <DropdownMenuCheckboxItem
               checked={Boolean(showSelectedOnly)}
               onCheckedChange={onChangeShowSelectedOnly}
               onSelect={(event) => event.preventDefault()}
             >
-              {strings['%webView_project_selector_filter_show_selected_only%']}
+              {strings['%webView_projectSelector_filterShowSelectedOnly%']}
             </DropdownMenuCheckboxItem>
           </>
         )}
@@ -1034,17 +1042,16 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // The section headings are read into locals so the memo below can list them as plain
   // dependencies.
   const lastUsedRecentSectionHeading =
-    strings['%webView_project_selector_last_used_recent_section_heading%'];
+    strings['%webView_projectSelector_lastUsedRecentSectionHeading%'];
   const lastUsedOtherSectionHeading =
-    strings['%webView_project_selector_last_used_other_section_heading%'];
+    strings['%webView_projectSelector_lastUsedOtherSectionHeading%'];
   const languageUnknownSectionHeading =
-    strings['%webView_project_selector_language_unknown_section_heading%'];
+    strings['%webView_projectSelector_languageUnknownSectionHeading%'];
   const versificationUnknownSectionHeading =
-    strings['%webView_project_selector_versification_unknown_section_heading%'];
-  const typeUnknownSectionHeading =
-    strings['%webView_project_selector_type_unknown_section_heading%'];
+    strings['%webView_projectSelector_versificationUnknownSectionHeading%'];
+  const typeUnknownSectionHeading = strings['%webView_projectSelector_typeUnknownSectionHeading%'];
   const customUnmatchedSectionHeading =
-    strings['%webView_project_selector_custom_unmatched_section_heading%'];
+    strings['%webView_projectSelector_customUnmatchedSectionHeading%'];
 
   const sections = useMemo(() => {
     switch (activeGrouping) {
@@ -1349,7 +1356,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                 <CommandInput
                   value={query}
                   onValueChange={setQuery}
-                  placeholder={strings['%webView_project_selector_search_placeholder%']}
+                  placeholder={strings['%webView_projectSelector_searchPlaceholder%']}
                   className="tw:border-0"
                   // Picker semantics: with nothing typed, Space picks the highlighted project
                   // (the Enter UX) — the project list is the whole point here and a leading space
@@ -1375,10 +1382,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             {props.mode === 'project-multi' && (
               <div className="tw:flex tw:justify-between tw:border-b tw:py-2 tw:pe-4 tw:ps-2">
                 <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                  {`${strings['%webView_project_selector_select_all%']} (${allPairs.length.toString()})`}
+                  {`${strings['%webView_projectSelector_selectAll%']} (${allPairs.length.toString()})`}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={handleClearAll}>
-                  {`${strings['%webView_project_selector_clear_all%']} (${props.selection.pairs.length.toString()})`}
+                  {`${strings['%webView_projectSelector_clearAll%']} (${props.selection.pairs.length.toString()})`}
                 </Button>
               </div>
             )}
@@ -1421,9 +1428,9 @@ function sectionHeading(
 ): string | undefined {
   switch (section.kind) {
     case 'openTabs':
-      return strings['%webView_project_selector_open_tabs_section_heading%'];
+      return strings['%webView_projectSelector_openTabsSectionHeading%'];
     case 'other':
-      return strings['%webView_project_selector_other_projects_section_heading%'];
+      return strings['%webView_projectSelector_otherProjectsSectionHeading%'];
     case 'versification':
     case 'language':
     case 'type':

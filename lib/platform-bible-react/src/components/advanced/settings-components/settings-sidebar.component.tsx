@@ -1,6 +1,6 @@
+import { type LanguageStrings } from 'platform-bible-utils';
 import {
   ProjectSelector,
-  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';
@@ -52,10 +52,15 @@ export type SettingsSidebarProps = {
 
   /**
    * Localized strings for the project picker's popover (search placeholder, filter menu, section
-   * headings). Resolve them from `PROJECT_SELECTOR_STRING_KEYS`. Any key left out falls back to the
-   * picker's English default.
+   * headings), keyed by localize key. Resolve them from `PROJECT_SELECTOR_STRING_KEYS`, exported
+   * from `platform-bible-react/experimental`. Any key left unresolved falls back to the picker's
+   * English default.
+   *
+   * Typed structurally rather than as the picker's own `ProjectSelectorLocalizedStrings` so this
+   * stable-surface type does not name a type from the experimental entry point, whose shape carries
+   * no stability guarantee.
    */
-  projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
+  projectSelectorLocalizedStrings?: LanguageStrings;
 
   /** Additional css classes to help with unique styling of the sidebar */
   className?: string;

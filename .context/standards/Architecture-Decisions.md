@@ -3154,6 +3154,40 @@ step, no automation. Just a record.
   cycles against live controls and the `snap disconnect` repair for an already-broken install:
   https://claude.ai/code/artifact/cc4c4c08-2e75-4dd5-855a-312fc4a6a57e
 
+## adr-stable-barrel-avoids-experimental-types: A stable `platform-bible-react` type never names a type from the experimental entry point
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** `SettingsSidebar` embeds `ProjectSelector` and needed to accept the picker's localized
+  strings. The obvious typing was the picker's own `ProjectSelectorLocalizedStrings`, but
+  `SettingsSidebarProps` is exported from the stable barrel (`lib/platform-bible-react/src/index.ts`)
+  while that type is exported only from `platform-bible-react/experimental`, whose header disclaims
+  stability and promises no deprecation cycle. In the generated `dist/index.d.ts` the experimental
+  type appears without an `export`, so a stable-surface consumer could name neither the prop's type
+  nor `PROJECT_SELECTOR_STRING_KEYS` — it had to import from the unstable surface to use a stable
+  component. The alternative, re-exporting the picker's string contract from `index.ts`, would put a
+  support promise on part of a component that `adr-project-selector-stays-experimental` had
+  deliberately kept unstable days earlier.
+- **Decision:** A type on the stable barrel must not name a type from the experimental entry point.
+  Where a stable component forwards data to an experimental one, type the prop structurally with a
+  shared primitive — here `LanguageStrings` from `platform-bible-utils`, the same type
+  `useLocalizedStrings` already returns. The prop's TSDoc still points readers at the experimental
+  key array as the way to populate it, so discoverability survives without the type dependency.
+- **Alternatives considered:**
+  - *Re-export `PROJECT_SELECTOR_STRING_KEYS` and `ProjectSelectorLocalizedStrings` from `index.ts`.*
+    Makes the prop usable from the stable surface, but partially undoes
+    `adr-project-selector-stays-experimental` by promising support for a contract still in motion.
+  - *Move `SettingsSidebar` to the experimental surface.* Solves the layering but demotes a component
+    that is otherwise stable and widely used, for the sake of one optional prop.
+  - *Leave the cross-surface reference in place.* Typechecks today, but leaves stable consumers unable
+    to name a type they must supply.
+- **Consequences:** The stable prop is looser than the picker's own mapped type, so a caller passing a
+  wrong-but-well-formed string map is not caught at the sidebar boundary; the picker's own
+  `resolveStrings` falls back to its English defaults for anything unresolved, which bounds the
+  damage. The rule generalizes: any future stable component embedding an experimental one should
+  forward a shared primitive rather than re-export the inner contract. When a component graduates to
+  the stable barrel, its consumers' structural props can be tightened to the real type at that point.
+
 ## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
 - **Date:** 2026-08-16

@@ -23,7 +23,6 @@ import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  PROJECT_SELECTOR_STRING_KEYS,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
@@ -350,11 +349,7 @@ global.webViewComponent = function ManageBooksWebView({
   // (Hoisted above the project-change effect so the effect can read the localized title
   // template when computing the new tab title.)
   const stringKeys = useMemo(
-    () => [
-      ...MANAGE_BOOKS_DIALOG_STRING_KEYS,
-      ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS,
-      ...PROJECT_SELECTOR_STRING_KEYS,
-    ],
+    () => [...MANAGE_BOOKS_DIALOG_STRING_KEYS, ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS],
     [],
   );
   const [localizedStrings] = useLocalizedStrings(stringKeys);
@@ -1047,7 +1042,6 @@ global.webViewComponent = function ManageBooksWebView({
         localizedStrings={localizedStrings}
         sidebarProjects={sidebarProjects}
         openTabs={projectSelectorOpenTabs}
-        projectSelectorLocalizedStrings={localizedStrings}
       />
       <GreekEstherTemplatePicker
         open={pickerOpen}

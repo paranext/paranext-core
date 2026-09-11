@@ -6,6 +6,8 @@
  * pass the resolved map into the `localizedStrings` prop.
  */
 
+import { PROJECT_SELECTOR_STRING_KEYS } from 'platform-bible-react/experimental';
+
 /* ------------------------------------------------------------------ */
 /* Action / method / strategy unions                                  */
 /* ------------------------------------------------------------------ */
@@ -385,6 +387,9 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_bookNames_label%',
   '%manageBooks_bookNames_subtitle%',
   '%manageBooks_bookNames_notYetAvailable%',
+  // The dialog embeds ProjectSelector, so that component's localized strings are part of the
+  // dialog's own key list.
+  ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const);
 
 /** Localized strings consumed by `ManageBooksDialog`. */

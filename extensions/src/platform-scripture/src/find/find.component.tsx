@@ -134,7 +134,10 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_verseTextOnly%',
   // Preview-options keys live with their component; spread them so the two lists can't drift.
   ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
-  // Find renders a ProjectSelector, so it also needs that component's own popover strings.
+  // Find renders a ProjectSelector, so it also needs that component's own popover strings. The
+  // whole array is spread rather than the subset Find's configuration can reach today, because
+  // the component owns its key list — a hand-picked subset silently goes stale when the picker
+  // grows a control.
   ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const;
 

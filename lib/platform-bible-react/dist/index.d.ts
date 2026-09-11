@@ -1400,35 +1400,6 @@ export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRe
 export interface SelectMenuItemHandler {
 	(selectedMenuItem: MenuItemContainingCommand): void;
 }
-declare const PROJECT_SELECTOR_STRING_KEYS: readonly [
-	"%webView_project_selector_search_placeholder%",
-	"%webView_project_selector_view_options_aria_label%",
-	"%webView_project_selector_group_section_label%",
-	"%webView_project_selector_filter_section_label%",
-	"%webView_project_selector_filter_group_none%",
-	"%webView_project_selector_filter_group_by_open_tabs%",
-	"%webView_project_selector_filter_group_by_last_used%",
-	"%webView_project_selector_filter_group_by_language%",
-	"%webView_project_selector_filter_group_by_versification%",
-	"%webView_project_selector_filter_group_by_type%",
-	"%webView_project_selector_filter_group_by_custom%",
-	"%webView_project_selector_filter_show_selected_only%",
-	"%webView_project_selector_open_tabs_section_heading%",
-	"%webView_project_selector_other_projects_section_heading%",
-	"%webView_project_selector_versification_unknown_section_heading%",
-	"%webView_project_selector_language_unknown_section_heading%",
-	"%webView_project_selector_type_unknown_section_heading%",
-	"%webView_project_selector_last_used_recent_section_heading%",
-	"%webView_project_selector_last_used_other_section_heading%",
-	"%webView_project_selector_custom_unmatched_section_heading%",
-	"%webView_project_selector_bound_but_closed_tooltip%",
-	"%webView_project_selector_open_button_label%",
-	"%webView_project_selector_select_all%",
-	"%webView_project_selector_clear_all%"
-];
-type ProjectSelectorLocalizedStrings = {
-	[projectSelectorKey in (typeof PROJECT_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
-};
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -1456,10 +1427,15 @@ export type SettingsSidebarProps = {
 	buttonPlaceholderText: string;
 	/**
 	 * Localized strings for the project picker's popover (search placeholder, filter menu, section
-	 * headings). Resolve them from `PROJECT_SELECTOR_STRING_KEYS`. Any key left out falls back to the
-	 * picker's English default.
+	 * headings), keyed by localize key. Resolve them from `PROJECT_SELECTOR_STRING_KEYS`, exported
+	 * from `platform-bible-react/experimental`. Any key left unresolved falls back to the picker's
+	 * English default.
+	 *
+	 * Typed structurally rather than as the picker's own `ProjectSelectorLocalizedStrings` so this
+	 * stable-surface type does not name a type from the experimental entry point, whose shape carries
+	 * no stability guarantee.
 	 */
-	projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
+	projectSelectorLocalizedStrings?: LanguageStrings;
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
 };
