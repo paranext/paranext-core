@@ -3404,8 +3404,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           } else {
             // The note is still at its key, so the change came from elsewhere (typing in the text,
             // undo, a PDP echo, another note added or removed): reload the row editor to the note's
-            // current content (a fresh `noteOps` identity is what reloads it) and keep the editing
-            // row on the note, whose index moves as notes before it come and go.
+            // current content (a fresh `noteOps` identity is what reloads it).
             const noteOp = editorRef.current?.getNoteOps(sessionKey)?.at(0);
             // The guard narrows `DeltaOp` to the note embed the row editor loads; a note the index
             // above resolved always satisfies it. A fresh array identity is what reloads the row
