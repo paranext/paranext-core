@@ -83,6 +83,13 @@ export function FootnotesLayout({
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
+  /**
+   * How many notes the list currently holds, readable outside a state updater: whether the list id
+   * has to change is decided in the USJ effect's body, which cannot read `footnotes` (the effect
+   * depends on `usj` alone, so its closure's copy can be a commit stale).
+   */
+  const footnotesCountRef = useRef(0);
+
   const [footnoteListKey, setFootnoteListKey] = useState(0);
 
   const [selectedFootnote, setSelectedFootnote] = useState<
@@ -133,14 +140,13 @@ export function FootnotesLayout({
       });
       const newFootnotes = usjReaderWriter.findAllNotes();
 
-      setFootnotes((current) => {
-        // The list id tells FootnoteList its rows are new. Only additions and deletions make them
-        // new; a content edit (every live-applied keystroke in the row editor) or a same-shape
-        // echo must keep the rows — and the editing row's editor — mounted. Reordering with an
-        // unchanged count is not detected; the listId contract already treats it as unlikely.
-        if (current.length !== newFootnotes.length) setFootnoteListKey((prev) => prev + 1);
-        return newFootnotes;
-      });
+      // The list id tells FootnoteList its rows are new. Only additions and deletions make them
+      // new; a content edit (every live-applied keystroke in the row editor) or a same-shape
+      // echo must keep the rows — and the editing row's editor — mounted. Reordering with an
+      // unchanged count is not detected; the listId contract already treats it as unlikely.
+      if (newFootnotes.length !== footnotesCountRef.current) setFootnoteListKey((prev) => prev + 1);
+      footnotesCountRef.current = newFootnotes.length;
+      setFootnotes(newFootnotes);
 
       setSelectedFootnote((currentSelected) => {
         if (!currentSelected) return undefined;

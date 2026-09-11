@@ -3342,7 +3342,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // unavailable at this exact keystroke (should not happen in practice — `onUsjChange` only
       // fires from a mounted editor).
       //
-      // LOAD-BEARING: reverting `editorRef.current?.getUsj() ?? usj` back to the plain `usj`
+      // Read ONCE and shared with the pane's live-document publish below: both need the same
+      // settled snapshot, and a second `getUsj()` would re-serialize the whole chapter per
+      // keystroke.
+      //
+      // LOAD-BEARING: reverting `settledUsj` back to the plain `usj`
       // argument compiles and passes every existing test — this web view has no component-level
       // test harness for its save-scheduling path — but silently reopens a live corruption class:
       // a save that fires mid-keystroke (the debounce timer, a window-blur flush, or the
@@ -3351,8 +3355,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // marker-palette trigger) could reach disk as a phantom marker even when the exclusion itself
       // is working correctly. Only a live check (type a trigger literal, force a save before the
       // surface consumes it, inspect the saved bytes) catches a regression on this line.
+      const settledUsj = editorRef.current?.getUsj() ?? usj;
       saveUsjToPdpDebounced.schedule(
-        editorRef.current?.getUsj() ?? usj,
+        settledUsj,
         saveUsjToPdpIfUpdatedRef.current,
         chapterKeyRef.current,
       );
@@ -3360,7 +3365,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // debounced save to land: it and `EditorRef.getNoteIndex` must index the SAME document. Only
       // while the pane is rendered — see `liveEditorUsj` for why this stays off the hot path
       // otherwise.
-      if (footnotesPaneRenderedRef.current) setLiveEditorUsj(editorRef.current?.getUsj() ?? usj);
+      if (footnotesPaneRenderedRef.current) setLiveEditorUsj(settledUsj);
       if (editingNoteKey.current) {
         // Any editor change that lands while the note-editing session is open counts as
         // interaction with it — most importantly the popover's own save path (replaceEmbedUpdate
