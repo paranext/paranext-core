@@ -2106,8 +2106,7 @@ async function main() {
       // focused one is merely the best guess at which.
       const focusedWindowId = getFocusedWindowId();
       const parent =
-        (focusedWindowId ? getWindowById(focusedWindowId) : undefined) ??
-        getTrackedWindows()[0]?.window;
+        (focusedWindowId ? getWindowById(focusedWindowId) : undefined) ?? getWindows()[0];
       await openTermsOfServiceWindow(openExternal, parent);
     },
     {

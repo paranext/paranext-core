@@ -54,6 +54,23 @@ export function overlayFromEnv(env: typeof process.env = process.env): string | 
   return raw || undefined;
 }
 
+/**
+ * Refuses an overlay field that is not a list of strings.
+ *
+ * `readJsonFile<Partial<Policy>>` is a cast, so every value an overlay contributes is untyped until
+ * something tests it. A single identifier written as `"allowed": "Apache-2.0"` rather than
+ * `["Apache-2.0"]` would otherwise spread character by character into the classification list, and
+ * the identifier the author meant to admit would not be in it.
+ */
+function requireList(field: string, value: unknown, overlayName: string): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string'))
+    throw new Error(
+      `${overlayName} records "${field}" as ${Array.isArray(value) ? 'a list holding something other than a string' : `a ${typeof value}`}. ` +
+        'It is a list of strings; a single value still has to be written as a one-item list.',
+    );
+}
+
 /** The two lists' union, in base order then overlay order, each name once. */
 function unionLists(base: string[] | undefined, overlay: string[] | undefined): string[] {
   return [...new Set([...(base || []), ...(overlay || [])])];
@@ -155,6 +172,16 @@ export function mergePolicies(
   overlay: Partial<Policy>,
   names: { base: string; overlay: string },
 ): Policy {
+  // The document itself, before any field of it. `readJsonFile` parses and does not check a shape,
+  // so a `null` overlay would reach `Object.keys` and throw naming neither the file nor a remedy,
+  // and a JSON array, number or boolean would yield no keys at all - passing both refusals below
+  // and merging to the committed policy unchanged, which is the silent drop those refusals exist to
+  // prevent, reached through a different door.
+  if (!overlay || typeof overlay !== 'object' || Array.isArray(overlay))
+    throw new Error(
+      `${names.overlay} does not hold a JSON object. An overlay is a policy file with the same ` +
+        'shape as the committed one, carrying only the fields it contributes.',
+    );
   // Split, because the two cases send an author to different places: a key the policy has no field
   // for at all is a misspelling, while a `base-only` key is spelled correctly and simply reserved -
   // telling its author to check the spelling would send them hunting a typo that is not there.
@@ -180,6 +207,14 @@ export function mergePolicies(
       `${names.base} declares a "product" block. It describes what a DOWNSTREAM build produces, so ` +
         "it belongs in that build's overlay; this repository's own document uses the no-product " +
         'wording. Remove it.',
+    );
+  (['allowed', 'copyleft', 'platformOnlyPackages'] as const).forEach((field) =>
+    requireList(field, overlay[field], names.overlay),
+  );
+  if (overlay.exceptions !== undefined && !Array.isArray(overlay.exceptions))
+    throw new Error(
+      `${names.overlay} records "exceptions" as a ${typeof overlay.exceptions}. It is a list of ` +
+        'exception entries; a single exception still has to be written as a one-item list.',
     );
   const merged: Policy = {
     ...base,
@@ -461,6 +496,35 @@ function blocked(reason: string, extra: Partial<Verdict> = {}): BlockedFields {
  * natural spelling in this document is the autolink form.
  */
 export const PLACEHOLDER_TEMPLATE_VALUE = /^<(?![A-Za-z][A-Za-z0-9+.-]*:)[\s\S]*>$/;
+
+/**
+ * Refuses a policy field that is not a filled-in string.
+ *
+ * The type is checked rather than coerced, because these values arrive as untyped JSON: a policy
+ * that records a number, a boolean or an object reaches the document either as the literal
+ * `"[object Object]"` or as a `TypeError` from inside the renderer, both of which say less than
+ * naming the field here does.
+ *
+ * Shared by every policy value the document reproduces verbatim, so one table cannot quietly accept
+ * a shape another refuses. `subject` is the caller's own phrase for the thing being checked - "the
+ * "separatePrograms" entry for "Mercurial"", "the notices policy "product" block" - because a table
+ * keyed by name and a singleton block do not read the same way.
+ */
+export function requireText(subject: string, field: string, value: unknown): void {
+  if (typeof value !== 'string')
+    throw new Error(
+      `${subject} records "${field}" as ` +
+        `${value === undefined ? 'nothing' : `a ${typeof value}`}, and every field of it is ` +
+        'reproduced in the document as written. Record it as a string.',
+    );
+  const text = value.trim();
+  if (!text || PLACEHOLDER_TEMPLATE_VALUE.test(text))
+    throw new Error(
+      `${subject} records no usable "${field}". Every field of it is reproduced in the document ` +
+        'as the reviewed determination, so an empty or template value would ship as one - fill ' +
+        'it in.',
+    );
+}
 
 /**
  * Applies a reviewed exception. Exceptions are an override applied AFTER a block, never a path
@@ -1274,14 +1338,42 @@ function applyOverride(ctx: ClassifyContext, override: Override): Verdict {
     // link to a reviewed GPL-2.0-or-later program would carry any identifier at all - an
     // unreviewed copyleft one, or one on neither list - past the one gate this pipeline exists
     // to enforce, and the document would reproduce a text the reviewer never read.
-    const unreviewedId = recorded.ids.find((id) => !(program.spdx || []).includes(id));
+    // A `WITH` exception, an unrepresentable `+`, or a conjunction is refused BEFORE the identifier
+    // test, because `recorded.ids` is flattened: `declared.ts` keeps the operands separately and
+    // says why - the verdict, the lock and the reproduced text all describe the UNMODIFIED license.
+    // Compared against a program's plain identifiers, `GPL-2.0-or-later WITH Classpath-exception-2.0`
+    // would pass on its base operand alone, and the row and lock would then record terms - base plus
+    // exception - that nobody reviewed. The same gate the exception and declared paths already
+    // apply.
+    if (
+      recorded.exceptions.length ||
+      recorded.unrepresentablePlus.length ||
+      recorded.hasConjunction
+    )
+      return {
+        ...common,
+        ...blocked(
+          `the "overrides" entry for "${key}" records ${override.license}, which carries an ` +
+            'exception, an unrepresentable "+" or a conjunction. A linked override is admitted by ' +
+            'the terms a human read for the separate program, and those are recorded as plain ' +
+            `identifiers on "${programName}" - record the whole expression there, or name just the ` +
+            'identifier the entry carries.',
+        ),
+      };
+    // `Array.isArray`, because `program.spdx` is untyped overlay JSON until
+    // `assertSeparateProgramsRecorded` runs, and classification runs BEFORE it: a bare string would
+    // make this `String.prototype.includes`, so a narrower identifier would clear the gate merely by
+    // being a substring of the reviewed one. An empty list here blocks, and the assertion names the
+    // field a step later.
+    const reviewedIds = Array.isArray(program.spdx) ? program.spdx : [];
+    const unreviewedId = recorded.ids.find((id) => !reviewedIds.includes(id));
     if (unreviewedId)
       return {
         ...common,
         ...blocked(
           `the "overrides" entry for "${key}" records ${override.license} and is linked to ` +
             `separate program "${programName}", whose reviewed identifiers are ` +
-            `${(program.spdx || []).join(', ') || '(none)'}. A linked override is admitted by ` +
+            `${reviewedIds.join(', ') || '(none)'}. A linked override is admitted by ` +
             'the terms a human read for the program, so it cannot name ' +
             `${unreviewedId} - fix whichever is wrong.`,
         ),

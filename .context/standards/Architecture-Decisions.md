@@ -1878,9 +1878,13 @@ step, no automation. Just a record.
   `adr-notices-derived-from-what-ships`.
 - **Consequences:** `paratext-10-studio` generates and commits its own pair, copies it over this
   repository's in its clone before packaging, and runs `--verify-shipping-set` on every platform
-  and `--verify` on Linux against its own lock. The overlay cannot extend the committed corpus
-  index, so an identifier a downstream entry needs (`PSF-2.0`, `OpenSSL`, `blessing`, `TCL` and
-  `ZPL-2.1` today) is added to `allowed` here.
+  and `--verify` on Linux against its own lock. An identifier a downstream entry needs (`PSF-2.0`,
+  `OpenSSL`, `blessing`, `TCL` and `ZPL-2.1` today) is added to `allowed` here, because `allowed`
+  is what `reachableIds` walks to decide which canonical texts the committed corpus index holds.
+  The overlay reaches `build-corpus-index.ts` like every other policy reader, so a downstream that
+  runs the corpus builder with it set rewrites the committed index in its clone; `corpus-texts.ts`
+  asserts the index is exactly what the committed policy reaches, so such an index fails CI here
+  rather than travelling.
   The omission direction for a separate program has no generic source: a copyleft override with no
   `separateProgram` link still blocks, and a program added by any other route with no entry is the
   gap PT-4560 records for static content. **Revisit** when the extension template emits module

@@ -565,10 +565,13 @@ function pushPreamble(
   // a code span, where a backslash escape would print as a backslash.
   const subject = inlineText(product ? product.name : DEFAULT_PRODUCT_NAME);
   out.push('# Third-party notices', '');
-  // The opening sentences are one text with two endings, not two texts: `subject` is
-  // `DEFAULT_PRODUCT_NAME` when no product is declared, and everything up to "the redistributable"
-  // reads the same either way. Written once because it is legal prose - two copies drift the moment
-  // someone corrects the wording in the arm they happened to be reading.
+  // `subject` is `DEFAULT_PRODUCT_NAME` when no product is declared, so everything up to "the
+  // redistributable" reads the same either way and is written once below.
+  //
+  // The sentence AFTER it is not: the product and no-product arms each spell the npm-closure clause
+  // out in full, because they differ at both ends (the opening names the product and its source
+  // repository, and the tail names the added sections). It is legal prose, so a correction has to be
+  // applied to every arm - and only the no-product arm is byte-compared by the golden fixture.
   out.push(
     `${subject} incorporates the third-party components listed below. Where a component ships a`,
     'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
@@ -907,6 +910,10 @@ function addSeparateProgramTexts(
 ): void {
   separateProgramIds(separatePrograms).forEach((id) => {
     const text = canonicalText(id);
+    // The backstop for a caller that renders without running `assertSeparateProgramTextsAvailable`
+    // first - every production path does, so this never fires there. It is not redundant: `credit`
+    // below optional-chains, so without a seeded entry a required attribution would be dropped in
+    // silence rather than refused.
     if (!text)
       throw new Error(
         `the "separatePrograms" table names ${id}, and the SPDX corpus holds no text for it - run ` +
@@ -916,29 +923,51 @@ function addSeparateProgramTexts(
     // Normalized on the way in, for the reason `useCanonicalText` states.
     if (!canonical.has(id)) canonical.set(id, { text: normalizeText(text), packages: [] });
   });
-  const credit = (id: string, line: string) => canonical.get(id)?.packages.push(line);
-  Object.entries(separatePrograms).forEach(([name, program]) => {
-    new Set(program.spdx || []).forEach((id) =>
-      credit(
-        id,
-        `\`${name}\` (redistributed as a separate executable) — ${inlineNotice(program.copyright)}`,
-      ),
-    );
-    (program.deliveries || []).forEach((delivery) =>
-      (delivery.alsoContains || []).forEach((component) => {
-        const version = component.version ? ` ${component.version}` : '';
-        const notice = inlineNotice(component.copyright || '');
-        // The name sits in a code span, where a backslash escape would print as a backslash, so it
-        // is written through as `canonicalTextCredit` writes a package name; the platform and the
-        // notice are prose and are escaped.
-        const line =
-          `\`${component.name}${version}\` (bundled with the separate program \`${name}\` on ` +
-          `${inlineText(delivery.platform)}) — ` +
-          `${notice || 'no copyright notice recorded'}`;
-        new Set(component.spdx || []).forEach((id) => credit(id, line));
-      }),
-    );
-  });
+  // Thrown rather than optional-chained, unlike the two sibling traversals that set and get inside
+  // one iteration. Here the seeding loop above and the crediting walk below are SEPARATE traversals
+  // of the same table, and they agree only because each reproduces `separateProgramIds` clause for
+  // clause. Narrow either one and `get` returns undefined: a credit line the document is obliged to
+  // carry would then be dropped in silence, from an artifact that is byte-compared against a lock
+  // written in the same run, so nothing downstream could notice it either.
+  const credit = (id: string, line: string) => {
+    const collected = canonical.get(id);
+    if (!collected)
+      throw new Error(
+        `the "separatePrograms" table credits ${id}, and no canonical text was collected for it. ` +
+          'Every identifier the table names is seeded above, so the two traversals of it have gone ' +
+          'out of step - make the crediting walk cover the same identifiers `separateProgramIds` ' +
+          'returns.',
+      );
+    collected.packages.push(line);
+  };
+  // Sorted, as `pushSeparateProgramsSection` sorts: these lines are emitted in traversal order, so
+  // taking the table as it comes would make the credit order under a shared identifier a property of
+  // key order in the policy JSON - and the document is byte-compared against its lock, so reordering
+  // two keys would report as drift.
+  Object.entries(separatePrograms)
+    .sort(([a], [b]) => compareStrings(a, b))
+    .forEach(([name, program]) => {
+      new Set(program.spdx || []).forEach((id) =>
+        credit(
+          id,
+          `\`${name}\` (redistributed as a separate executable) — ${inlineNotice(program.copyright)}`,
+        ),
+      );
+      (program.deliveries || []).forEach((delivery) =>
+        (delivery.alsoContains || []).forEach((component) => {
+          const version = component.version ? ` ${component.version}` : '';
+          const notice = inlineNotice(component.copyright || '');
+          // The name sits in a code span, where a backslash escape would print as a backslash, so it
+          // is written through as `canonicalTextCredit` writes a package name; the platform and the
+          // notice are prose and are escaped.
+          const line =
+            `\`${component.name}${version}\` (bundled with the separate program \`${name}\` on ` +
+            `${inlineText(delivery.platform)}) — ` +
+            `${notice || 'no copyright notice recorded'}`;
+          new Set(component.spdx || []).forEach((id) => credit(id, line));
+        }),
+      );
+    });
 }
 
 /** Extensions packed from outside this repository - see `external-extensions.ts`. */

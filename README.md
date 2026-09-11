@@ -655,9 +655,10 @@ the shipping-set half would refuse to answer on every platform. The document is 
 `electron-builder` packs into each installer, so `package` verifies it before packaging it.
 
 `NOTICES_POLICY_OVERLAY=<path>` merges a second policy file over the committed one wherever a
-policy is read — generation, `verify:third-party-notices` and `verify:third-party-notices:shipping-set`.
-The `document` check reads no policy at all (it compares two committed files), so the overlay does
-not reach it. It exists for a downstream product built from this source, which keeps its own
+policy is read — generation, `verify:third-party-notices`, `verify:third-party-notices:shipping-set`
+and `build:third-party-notices:corpus`, which writes the committed SPDX corpus index and so writes a
+wider one while the variable is set. The `document` check reads no policy at all (it compares two
+committed files), so the overlay does not reach it. It exists for a downstream product built from this source, which keeps its own
 determinations beside its own build; see
 [`.erb/scripts/third-party-notices/README.md`](.erb/scripts/third-party-notices/README.md#downstream-products).
 

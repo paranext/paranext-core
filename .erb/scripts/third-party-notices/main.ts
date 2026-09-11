@@ -1016,21 +1016,26 @@ function verifyNpmShippingSet() {
   // whose Linux `--verify` leg never ran. `assertExternalExtensionsRecorded` is NOT among them: its
   // input is a directory listing that differs per platform, so it can only answer where the
   // installer's extensions actually are.
-  const policy = loadPolicy(POLICY);
-  assertProductMatchesPackaging(
-    policy.product,
-    readPackagingConfig(ELECTRON_BUILDER),
-    path.relative(REPO, ELECTRON_BUILDER),
-  );
-  assertSeparateProgramsRecorded(
-    REPO,
-    policy.separatePrograms || {},
-    new Set([...policy.allowed, ...policy.copyleft]),
-  );
-  assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
-  assertSeparateProgramLinksRecorded(policy.overrides || {}, policy.separatePrograms || {});
-
+  let policy;
   try {
+    // Inside the try, like every other failure this path can produce: `--verify-shipping-set` is
+    // the only notices gate the release workflows run, and a missing overlay file or a moved
+    // evidence path escaping as a raw Node stack trace is exactly the shape this script's
+    // message-only convention exists to avoid.
+    policy = loadPolicy(POLICY);
+    assertProductMatchesPackaging(
+      policy.product,
+      readPackagingConfig(ELECTRON_BUILDER),
+      path.relative(REPO, ELECTRON_BUILDER),
+    );
+    assertSeparateProgramsRecorded(
+      REPO,
+      policy.separatePrograms || {},
+      new Set([...policy.allowed, ...policy.copyleft]),
+    );
+    assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
+    assertSeparateProgramLinksRecorded(policy.overrides || {}, policy.separatePrograms || {});
+
     ({
       packages: npmPackages,
       unresolvedStylesheetSpecifiers,

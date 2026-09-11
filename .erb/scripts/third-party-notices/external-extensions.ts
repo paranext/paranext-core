@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { compareStrings } from './compare';
-import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
+import { requireText } from './policy';
 import type { PackagingConfig } from './product';
 import type { ExternalExtension } from './types';
 
@@ -28,13 +28,47 @@ import type { ExternalExtension } from './types';
  * would otherwise reach `.replace` on `undefined` and abort the run with a bare `TypeError`.
  */
 function normalizeFolder(value: unknown): string {
-  return typeof value === 'string' ? value.replace(/^\.\//, '').replace(/\/+$/, '') : '';
+  if (typeof value !== 'string' || !value.trim()) return '';
+  // Backslashes and repeated `./` segments spell the same folder, and a config edited on Windows
+  // produces both. Without collapsing them `extensions\dist` and `./././extensions/dist` fail the
+  // exclusion below and are treated as folders from outside this repository, which then fail with a
+  // remedy about a copy step that ran perfectly well.
+  return path.posix.normalize(value.replace(/\\/g, '/')).replace(/^\.\//, '').replace(/\/+$/, '');
+}
+
+/**
+ * Every `extraResources` list electron-builder reads, top-level and per-platform.
+ *
+ * App-builder-lib UNIONS a platform block's list with the top-level one rather than replacing it,
+ * so a folder declared under `win` alone still ships. Reading only the top level would answer "no
+ * external extensions" for such a build - and because that answer is empty rather than wrong, every
+ * refusal below stays silent and the section drops out of the document.
+ */
+function extraResourceEntries(config: PackagingConfig): unknown[] {
+  return [
+    config.extraResources,
+    config.mac?.extraResources,
+    config.win?.extraResources,
+    config.linux?.extraResources,
+  ].flatMap((list) => (Array.isArray(list) ? list : []));
+}
+
+/**
+ * Whether an `extraResources` element is the object form rather than the string one.
+ *
+ * A string entry copies to `resources/` PRESERVING its relative path, so the only string that could
+ * land zips in `resources/extensions` is one naming this repository's own `extensions` tree - which
+ * the exclusion in `externalExtensionFolders` drops anyway. `typeof null` is `'object'`, hence the
+ * truthiness test rather than `typeof` alone.
+ */
+function isFileSetEntry(entry: unknown): entry is { from?: unknown; to?: unknown } {
+  return Boolean(entry) && typeof entry === 'object';
 }
 
 /** Folders the packaging config maps to `./extensions`, other than this repository's own dist. */
 export function externalExtensionFolders(config: PackagingConfig): string[] {
-  return (config.extraResources || [])
-    .flatMap((entry) => (typeof entry === 'string' ? [] : [entry]))
+  return extraResourceEntries(config)
+    .filter(isFileSetEntry)
     .filter((entry) => normalizeFolder(entry.to) === 'extensions')
     .map((entry) => normalizeFolder(entry.from))
     .filter((from) => from && from !== 'extensions/dist')
@@ -65,8 +99,14 @@ export function externalExtensionNames(repo: string, config: PackagingConfig): s
     const zips = fs
       .readdirSync(dir, { withFileTypes: true })
       // `isFile` because a DIRECTORY named `something.zip` is not a packed extension, and counting
-      // one would invent a disclosure for an extension that does not ship.
-      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.zip'))
+      // one would invent a disclosure for an extension that does not ship. A symlink IS one:
+      // `readdirSync` does not stat the target, so a staged bundle reports `isSymbolicLink` and
+      // nothing else, while electron-builder follows it and packs the zip - the same treatment
+      // `readPackageFiles` gives the case in `package-files.ts`.
+      .filter(
+        (entry) =>
+          (entry.isFile() || entry.isSymbolicLink()) && entry.name.toLowerCase().endsWith('.zip'),
+      )
       .map((entry) => entry.name);
     // An existing folder holding no zip is refused for the same reason a missing one is: it answers
     // "none", the section drops out of the document, and the lock written beside it agrees - so the
@@ -131,12 +171,10 @@ export function assertExternalExtensionsRecorded(
           "generator cannot read a module manifest rooted in another repository's node_modules. " +
           'Record false with the reason until it can.',
       );
-    const reason = String(entry.reason || '').trim();
-    if (!reason || PLACEHOLDER_TEMPLATE_VALUE.test(reason))
-      throw new Error(
-        `the "externalExtensions" entry for "${name}" records no usable "reason". The document ` +
-          'reproduces it as the explanation for an omission - say where the extension is built ' +
-          'and why its bundle is not itemized.',
-      );
+    // The shared refusal, not a local coercion: `render.ts` interpolates this value straight into
+    // the document, so a non-string would ship as the literal `[object Object]` in the sentence
+    // that explains the omission. The separate-programs table refuses exactly that, and this one
+    // records the same kind of reviewer-written prose.
+    requireText(`the "externalExtensions" entry for "${name}"`, 'reason', entry.reason);
   });
 }
