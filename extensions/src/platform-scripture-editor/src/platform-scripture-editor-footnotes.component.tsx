@@ -1,6 +1,8 @@
-import { PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react';
+import { PropsWithChildren, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  Button,
+  FootnoteCaretPosition,
   FootnoteList,
   ResizableHandle,
   ResizablePanel,
@@ -9,16 +11,19 @@ import {
 import {
   getErrorMessage,
   getPaneSizeLimits,
+  LanguageStrings,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { EditorWebViewMessage } from 'platform-scripture-editor';
 import { UseWebViewStateHook } from '@papi/core';
 import { logger } from '@papi/frontend';
+import { X } from 'lucide-react';
 import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 // TODO (PT-3657): calculate these dynamically:
 const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
+const footnoteCloseRowHeightPx = 24; // The close row is one 24px icon button, no vertical padding.
 const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
 const footnoteHeaderWidthPx = 50;
 const minimumEditorWidthPx = 100;
@@ -29,6 +34,9 @@ export type FootnotesLayoutProps = PropsWithChildren<{
   usj: Usj;
   showMarkers: boolean;
   useWebViewState: UseWebViewStateHook;
+  localizedStrings: LanguageStrings;
+  /** Closes the pane, mirroring PT9's notes-pane close button. */
+  onClose: () => void;
   onFootnoteSelected?: (index: number) => void;
   /**
    * When set to a new object reference, requests that the pane select/highlight the footnote at
@@ -43,6 +51,20 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    * consistent).
    */
   focusRequest?: { index: number };
+  /** Index of the row rendered as an editor (pass-through to `FootnoteList`). */
+  editingFootnoteIndex?: number;
+  /**
+   * Render prop for the in-place editor shown for `editingFootnoteIndex`'s row (pass-through to
+   * `FootnoteList`).
+   */
+  renderEditingFootnote?: (footnote: MarkerObject, index: number) => ReactNode;
+  /**
+   * Row click/Enter when editing is possible (`FootnoteList`'s `onFootnoteEditRequested`). Also
+   * selects the row.
+   */
+  onFootnoteEditRequested?: (index: number, caretPosition: FootnoteCaretPosition) => void;
+  /** Fires whenever the selected row changes (row click, focus request, or cleared). */
+  onSelectedFootnoteChange?: (index: number | undefined) => void;
 }>;
 
 export function FootnotesLayout({
@@ -50,16 +72,66 @@ export function FootnotesLayout({
   usj,
   showMarkers,
   useWebViewState,
+  localizedStrings,
+  onClose,
   onFootnoteSelected,
   focusRequest,
+  editingFootnoteIndex,
+  renderEditingFootnote,
+  onFootnoteEditRequested,
+  onSelectedFootnoteChange,
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
+
+  /**
+   * How many notes the list currently holds, readable outside a state updater: whether the list id
+   * has to change is decided in the USJ effect's body, which cannot read `footnotes` (the effect
+   * depends on `usj` alone, so its closure's copy can be a commit stale).
+   */
+  const footnotesCountRef = useRef(0);
 
   const [footnoteListKey, setFootnoteListKey] = useState(0);
 
   const [selectedFootnote, setSelectedFootnote] = useState<
     { footnote: MarkerObject; index: number } | undefined
   >();
+
+  // Apply an externally-requested selection (a caller click in the editor body while the pane is
+  // visible), mirroring what a real pane-row click does to `selectedFootnote`. Guarded by object
+  // identity (not `usj`/`footnotes` changing) so unrelated content edits don't re-apply a stale
+  // request.
+  //
+  // Declared BEFORE the USJ-processing effect below so that when a `usj` change and a fresh
+  // `focusRequest` land in the same commit, this runs first (React fires effects in declaration
+  // order) and the USJ effect's functional `setSelectedFootnote` update — which reads the
+  // just-enqueued result of this effect as its input — has the last word. That ordering matters
+  // because `footnotes` here can still be one commit stale relative to the `usj` prop this render
+  // (the USJ effect's own `setFootnotes` call from the previous commit hasn't been applied yet), so
+  // a bounds check against it can wrongly pass against a list that's about to shrink; the
+  // reconciliation below is the correction that always resolves against the freshly parsed list.
+  const lastAppliedFocusRequestRef = useRef<FootnotesLayoutProps['focusRequest']>(undefined);
+  useEffect(() => {
+    if (!focusRequest || focusRequest === lastAppliedFocusRequestRef.current) return;
+
+    const { index } = focusRequest;
+    if (index < 0 || index >= footnotes.length) return;
+    // Mark applied only AFTER the bounds check passes, so a request that arrives while `footnotes`
+    // is still empty (pane-mount frame) is retried when the `footnotes` dep repopulates.
+    lastAppliedFocusRequestRef.current = focusRequest;
+    setSelectedFootnote({ footnote: footnotes[index], index });
+  }, [focusRequest, footnotes]);
+
+  // Mirrors `editingFootnoteIndex` into a ref so the USJ-processing effect below can read its
+  // current value without depending on it: `editingFootnoteIndex` changes far more often relative
+  // to `usj` staying fixed (entering/leaving edit mode) than the reverse, and re-running the USJ
+  // parse on every such change would re-mint every footnote's row key via `setFootnoteListKey`,
+  // remounting the entire list (including the editing row itself) for no content change. Declared
+  // BEFORE the USJ effect so the ref is already current when that effect reads it within the same
+  // commit.
+  const editingFootnoteIndexRef = useRef(editingFootnoteIndex);
+  useEffect(() => {
+    editingFootnoteIndexRef.current = editingFootnoteIndex;
+  }, [editingFootnoteIndex]);
 
   useEffect(() => {
     try {
@@ -68,16 +140,37 @@ export function FootnotesLayout({
       });
       const newFootnotes = usjReaderWriter.findAllNotes();
 
+      // The list id tells FootnoteList its rows are new. Only additions and deletions make them
+      // new; a content edit (every live-applied keystroke in the row editor) or a same-shape
+      // echo must keep the rows — and the editing row's editor — mounted. Reordering with an
+      // unchanged count is not detected; the listId contract already treats it as unlikely.
+      if (newFootnotes.length !== footnotesCountRef.current) setFootnoteListKey((prev) => prev + 1);
+      footnotesCountRef.current = newFootnotes.length;
       setFootnotes(newFootnotes);
-      setFootnoteListKey((prev) => prev + 1);
 
       setSelectedFootnote((currentSelected) => {
         if (!currentSelected) return undefined;
         const { index, footnote } = currentSelected;
         if (index < 0 || index >= newFootnotes.length) return undefined;
-        const f = newFootnotes[index];
-        if (f.marker === footnote.marker && deepEqualAcrossIframes(f.content, footnote.content)) {
-          return currentSelected;
+        const fresh = newFootnotes[index];
+        // The row being edited is the selection by definition: its content changes on every
+        // live-apply, so content equality must not decide whether it stays selected.
+        const isEditingRow =
+          editingFootnoteIndexRef.current !== undefined &&
+          index === editingFootnoteIndexRef.current;
+        if (
+          isEditingRow ||
+          (fresh.marker === footnote.marker &&
+            deepEqualAcrossIframes(fresh.content, footnote.content))
+        ) {
+          // Re-point at the new list's object: FootnoteList marks the selected row by identity, so
+          // holding onto the old object would lose the highlight the moment a PDP echo re-parses
+          // `usj` into fresh objects, even when the note's content is unchanged. Because the
+          // returned object is minted fresh here every time, `selectionRequest` identity changes on
+          // every echo too, which re-runs `FootnoteList`'s `scrollIntoView({ block: 'nearest' })` on
+          // an already-visible row (a no-op) and re-fires `onSelectedFootnoteChange(index)` with the
+          // same index (the consumer's `highlightNote` is idempotent).
+          return { footnote: fresh, index };
         }
         return undefined;
       });
@@ -90,22 +183,6 @@ export function FootnotesLayout({
       );
     }
   }, [usj]);
-
-  // Apply an externally-requested selection (a caller click in the editor body while the pane is
-  // visible), mirroring what a real pane-row click does to `selectedFootnote`. Guarded by object
-  // identity (not `usj`/`footnotes` changing) so unrelated content edits don't re-apply a stale
-  // request or fight with the "preserve selection across edits" logic above.
-  const lastAppliedFocusRequestRef = useRef<FootnotesLayoutProps['focusRequest']>(undefined);
-  useEffect(() => {
-    if (!focusRequest || focusRequest === lastAppliedFocusRequestRef.current) return;
-
-    const { index } = focusRequest;
-    if (index < 0 || index >= footnotes.length) return;
-    // Mark applied only AFTER the bounds check passes, so a request that arrives while `footnotes`
-    // is still empty (pane-mount frame) is retried when the `footnotes` dep repopulates.
-    lastAppliedFocusRequestRef.current = focusRequest;
-    setSelectedFootnote({ footnote: footnotes[index], index });
-  }, [focusRequest, footnotes]);
 
   const [containerHeight, setContainerHeight] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -196,7 +273,7 @@ export function FootnotesLayout({
   } =
     footnotesPanePosition === 'bottom'
       ? getPaneSizeLimits(containerHeight, {
-          secondaryPaneMinSizePx: footnoteRowHeightPx,
+          secondaryPaneMinSizePx: footnoteRowHeightPx + footnoteCloseRowHeightPx,
           mainPaneMinSizePx: minimumEditorHeightPx,
         })
       : getPaneSizeLimits(containerWidth, {
@@ -258,6 +335,31 @@ export function FootnotesLayout({
     [footnotes, footnoteListKey, onFootnoteSelected],
   );
 
+  /**
+   * Handle a footnote edit request (row click/Enter while editing is possible). Also selects the
+   * row.
+   */
+  const handleFootnoteEditRequested = useCallback(
+    (
+      _footnote: MarkerObject,
+      index: number,
+      listId: string | number,
+      caretPosition: FootnoteCaretPosition,
+    ) => {
+      if (index < 0 || index >= footnotes.length || listId !== footnoteListKey) return;
+
+      setSelectedFootnote({ footnote: footnotes[index], index });
+      onFootnoteEditRequested?.(index, caretPosition);
+    },
+    [footnotes, footnoteListKey, onFootnoteEditRequested],
+  );
+
+  // Report every change to which row is selected (row click, focus request, or cleared) so the web
+  // view can highlight the corresponding caller in the text.
+  useEffect(() => {
+    onSelectedFootnoteChange?.(selectedFootnote?.index);
+  }, [selectedFootnote, onSelectedFootnoteChange]);
+
   return (
     <div ref={setContainerRef} className="tw:h-full tw:w-full tw:min-h-0">
       <ResizablePanelGroup
@@ -279,6 +381,17 @@ export function FootnotesLayout({
           minSize={footnotesPaneMinPercent}
           maxSize={footnotesPaneMaxPercent}
         >
+          <div className="tw:flex tw:justify-end tw:shrink-0 tw:pr-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="tw:h-6 tw:w-6"
+              aria-label={localizedStrings['%webView_footnoteList_close%']}
+              onClick={onClose}
+            >
+              <X className="tw:h-4 tw:w-4" />
+            </Button>
+          </div>
           <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
             <FootnoteList
               classNameForItems="scripture-font"
@@ -294,6 +407,11 @@ export function FootnotesLayout({
               // footnote object and index are unchanged.
               selectionRequest={selectedFootnote}
               onFootnoteSelected={handleFootnoteSelected}
+              onFootnoteEditRequested={
+                onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
+              }
+              editingFootnoteIndex={editingFootnoteIndex}
+              renderEditingFootnote={renderEditingFootnote}
             />
           </div>
         </ResizablePanel>

@@ -9,6 +9,7 @@ import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture
 import {
   convertScriptureRangeToEditorRange,
   decideNoteCallerClickAction,
+  decideNoteSessionUpdate,
   finalizeProjectSwitch,
   formatEditorTitle,
   generateParagraphMenuListItems,
@@ -32,6 +33,7 @@ import {
   openOrUpdateRelatedPanels,
   parseMissingBookError,
   resolveResourceContentState,
+  resolveNoteEditingSurface,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2765,11 +2767,13 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     popoverShown: false,
     paneVisible: false,
     paneRendered: false,
-    isAutoShowEnabled: false,
+    isPowerMode: true,
+    surface: 'popover' as const,
+    isStandardView: false,
   };
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
-    expect(decideNoteCallerClickAction(base)).toEqual({
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2798,9 +2802,14 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
-    // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
+    // A leftover editingNoteKey must not silently swallow every future caller click.
     expect(
-      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
+      decideNoteCallerClickAction({
+        ...base,
+        editingNoteKey: 'note-1',
+        popoverShown: false,
+        isPowerMode: false,
+      }),
     ).toEqual({
       clearStaleEditingSession: true,
       action: 'open-popover',
@@ -2810,8 +2819,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('still opens the popover when the pane is rendered — the pane highlight rides alongside', () => {
-    // The popover is the only surface that can EDIT a note today, so a routed click always opens
-    // it; the rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
+    // On the popover surface (every view but Standard), a routed click opens the popover; the
+    // rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
     expect(decideNoteCallerClickAction({ ...base, paneVisible: true, paneRendered: true })).toEqual(
       {
         clearStaleEditingSession: false,
@@ -2822,8 +2831,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     );
   });
 
-  it('shows a closed pane when auto-show is on, and highlights the note once it mounts', () => {
-    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: true })).toEqual({
+  it('shows a closed pane in Power mode, and highlights the note once it mounts', () => {
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: true,
@@ -2831,8 +2840,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     });
   });
 
-  it('leaves a closed pane closed when auto-show is off', () => {
-    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: false })).toEqual({
+  it('leaves a closed pane closed in Simple mode', () => {
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2843,9 +2852,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   it('does not re-show a pane that is already toggled visible but still mounting its data', () => {
     // paneVisible without paneRendered: the toggle is on but the data has not loaded — nothing to
     // show and nothing to highlight yet.
-    expect(
-      decideNoteCallerClickAction({ ...base, paneVisible: true, isAutoShowEnabled: true }),
-    ).toEqual({
+    expect(decideNoteCallerClickAction({ ...base, paneVisible: true, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2867,6 +2874,205 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       sendPaneFocusRequest: true,
       showPane: false,
     });
+  });
+
+  it('Standard view: opens the pane editor and reveals a hidden pane', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', isStandardView: true });
+    expect(d).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-pane-editor',
+      showPane: true,
+      sendPaneFocusRequest: true,
+    });
+  });
+
+  it('Standard view: an open pane session is not stale bookkeeping', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      surface: 'pane',
+      isStandardView: true,
+      editingNoteKey: 'k1',
+      paneVisible: true,
+      paneRendered: true,
+    });
+    expect(d.clearStaleEditingSession).toBe(false);
+    expect(d.action).toBe('open-pane-editor');
+  });
+
+  it('read-only Standard view: navigates only, still revealing the pane in Power mode', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'none', isStandardView: true });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it('read-only Standard view in Simple mode: navigates within an already-rendered pane only', () => {
+    // Simple mode has no Standard view of its own, but the flag is read independently of the mode,
+    // so pin the pair rather than assume they cannot co-occur.
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'none',
+        isStandardView: true,
+        isPowerMode: false,
+      }),
+    ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: false });
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'none',
+        isStandardView: true,
+        isPowerMode: false,
+        paneVisible: true,
+        paneRendered: true,
+      }),
+    ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: true });
+  });
+
+  it.each([true, false])(
+    'read-only outside Standard view leaves the caller inert (isPowerMode=%s)',
+    (isPowerMode) => {
+      expect(
+        decideNoteCallerClickAction({
+          ...base,
+          surface: 'none',
+          isStandardView: false,
+          isPowerMode,
+          paneVisible: true,
+          paneRendered: true,
+        }),
+      ).toEqual({
+        clearStaleEditingSession: false,
+        action: 'ignore-read-only',
+        sendPaneFocusRequest: false,
+        showPane: false,
+      });
+    },
+  );
+
+  it('expanded caller is ignored regardless of surface', () => {
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'pane',
+        isStandardView: true,
+        isCollapsed: false,
+      }).action,
+    ).toBe('ignore-expanded');
+  });
+
+  it('popover surface keeps ignoring a click while the popover is open', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, popoverShown: true, editingNoteKey: 'k' }).action,
+    ).toBe('ignore-popover-open');
+  });
+
+  it('popover shown without a tracked key still blocks the click (never open a second popover)', () => {
+    // popoverShown alone is enough to block a routed click, even without editingNoteKey: opening a
+    // second popover while one is already on screen would be the bug, not the safe outcome.
+    const d = decideNoteCallerClickAction({
+      ...base,
+      surface: 'popover',
+      popoverShown: true,
+      editingNoteKey: undefined,
+    });
+    expect(d.action).toBe('ignore-popover-open');
+    expect(d.clearStaleEditingSession).toBe(false);
+  });
+});
+
+describe('decideNoteSessionUpdate (a row edit must not reload the row editor)', () => {
+  it('re-keys without reloading when the row editor replaced its own note', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: false,
+        insertedKeyIsNote: true,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'rekey', reloadRowEditor: false, refreshBaseline: true });
+  });
+
+  it('refreshes the comparison baseline on that re-key, so the next external change compares against what the row applied', () => {
+    // The defect this pins: leaving the baseline at the ops the row was LOADED with makes every
+    // later external change look like a change to this note, reloading the row editor once per
+    // edit cycle and dropping whatever is still inside the row editor's apply debounce.
+    const decision = decideNoteSessionUpdate({
+      sessionKeyResolves: false,
+      insertedKeyIsNote: true,
+      noteChanged: false,
+    });
+    expect(decision.refreshBaseline).toBe(true);
+    expect(decision.reloadRowEditor).toBe(false);
+  });
+
+  it('ends the session when the note is gone and nothing replaced it', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: false,
+        insertedKeyIsNote: false,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'end-session', reloadRowEditor: false, refreshBaseline: false });
+  });
+
+  it('leaves the row editor alone when the change was somewhere else in the chapter', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: false,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'follow-note', reloadRowEditor: false, refreshBaseline: false });
+  });
+
+  it('reloads the row editor when this note itself changed elsewhere', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: false,
+        noteChanged: true,
+      }),
+    ).toEqual({ action: 'follow-note', reloadRowEditor: true, refreshBaseline: true });
+  });
+
+  it('keeps following the still-resolving note even when an insert came with the change', () => {
+    // A note inserted elsewhere in the chapter does not re-key the session's own note, so the
+    // insert must not divert the session into the re-key branch.
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: true,
+        noteChanged: false,
+      }).action,
+    ).toBe('follow-note');
+  });
+
+  it('never reloads without refreshing the baseline (a reload is what the baseline tracks)', () => {
+    const cases = [true, false].flatMap((sessionKeyResolves) =>
+      [true, false].flatMap((insertedKeyIsNote) =>
+        [true, false].map((noteChanged) =>
+          decideNoteSessionUpdate({ sessionKeyResolves, insertedKeyIsNote, noteChanged }),
+        ),
+      ),
+    );
+    expect(
+      cases.filter((decision) => decision.reloadRowEditor && !decision.refreshBaseline),
+    ).toEqual([]);
+  });
+});
+
+describe('resolveNoteEditingSurface', () => {
+  it('routes Standard view to the pane', () => {
+    expect(resolveNoteEditingSurface({ viewType: 'standard', isReadOnly: false })).toBe('pane');
+  });
+
+  it.each(['formatted', 'markers'] as const)('routes %s view to the popover', (viewType) => {
+    expect(resolveNoteEditingSurface({ viewType, isReadOnly: false })).toBe('popover');
+  });
+
+  it('has no editing surface when read-only, in any view', () => {
+    expect(resolveNoteEditingSurface({ viewType: 'standard', isReadOnly: true })).toBe('none');
+    expect(resolveNoteEditingSurface({ viewType: 'formatted', isReadOnly: true })).toBe('none');
   });
 });
 

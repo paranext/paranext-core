@@ -511,11 +511,6 @@ async function toggleFootnotesPane(webViewId: string | undefined): Promise<void>
   await controller?.toggleFootnotesPaneVisibility();
 }
 
-async function toggleFootnotesAutoShow(webViewId: string | undefined): Promise<void> {
-  const controller = await getScriptureEditorController(webViewId);
-  await controller?.toggleFootnotesAutoShow();
-}
-
 async function changeFootnotesPaneLocation(webViewId: string | undefined): Promise<void> {
   const controller = await getScriptureEditorController(webViewId);
   await controller?.changeFootnotesPaneLocation();
@@ -756,28 +751,6 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           );
         } catch (e) {
           const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesPaneVisibility! ${getErrorMessage(e)}`;
-          logger.warn(message);
-          throw new Error(message);
-        }
-      },
-      async toggleFootnotesAutoShow() {
-        try {
-          logger.debug(
-            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to toggleFootnotesAutoShow`,
-          );
-          if (!currentWebViewDefinition.projectId)
-            throw new Error(`webViewDefinition.projectId is empty!`);
-
-          const message: EditorWebViewMessage = {
-            method: 'toggleFootnotesAutoShow',
-          };
-          await papi.webViewProviders.postMessageToWebView(
-            currentWebViewDefinition.id,
-            webViewNonce,
-            message,
-          );
-        } catch (e) {
-          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesAutoShow! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -1359,29 +1332,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  const toggleFootnotesAutoShowPromise = papi.commands.registerCommand(
-    'platformScriptureEditor.toggleFootnotesAutoShow',
-    toggleFootnotesAutoShow,
-    {
-      method: {
-        summary:
-          'Toggle the footnotes-pane auto-show/hide setting (default off; diverges from PT9, whose pane visibility is manual and persistent)',
-        params: [
-          {
-            name: 'webViewId',
-            required: false,
-            summary: 'The ID of the WebView to toggle the footnotes auto-show setting for',
-            schema: { type: 'string' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          schema: { type: 'null' },
-        },
-      },
-    },
-  );
-
   const changeFootnotesPaneLocationPromise = papi.commands.registerCommand(
     'platformScriptureEditor.changeFootnotesPaneLocation',
     changeFootnotesPaneLocation,
@@ -1581,7 +1531,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformResourceViewerPromise,
     await changeScriptureViewPromise,
     await toggleFootnotesPanePromise,
-    await toggleFootnotesAutoShowPromise,
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,

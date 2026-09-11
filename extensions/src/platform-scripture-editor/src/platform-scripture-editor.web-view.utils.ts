@@ -101,10 +101,9 @@ export function generateInlineMarkerMenuListItems(
 }
 
 /**
- * Identity of one loaded chapter, for the two places that need to compare "the chapter then"
- * against "the chapter now": the debounced save's chapter-safety guard and the footnotes pane's
- * per-chapter manual override. One helper so those two can never disagree about what counts as the
- * same chapter.
+ * Identity of one loaded chapter, for comparing "the chapter then" against "the chapter now" — used
+ * by the debounced save's chapter-safety guard to tell whether a pending save still targets the
+ * chapter it was scheduled for.
  *
  * Carries every identity field of the chapter-data selector (minus `verseNum`, which never changes
  * which document the subscription delivers): book, chapter number, AND versification. A
@@ -118,49 +117,6 @@ export function getChapterKey(
   versificationStr: string | undefined,
 ): string {
   return `${book}|${chapterNum}|${versificationStr ?? ''}`;
-}
-
-/** Inputs to {@link resolveFootnotesPaneAutoVisibility}. */
-export interface FootnotesPaneAutoVisibilityInput {
-  /** Whether the footnotes pane's auto-show/hide behavior is turned on. */
-  isAutoShowEnabled: boolean;
-  /** Whether the chapter currently loaded in the editor has at least one note. */
-  chapterHasNotes: boolean;
-  /**
-   * The chapter the user last manually showed or hid the pane in, or `undefined` when they have not
-   * done so. Same shape as {@link currentChapterKey}.
-   */
-  manualOverrideChapterKey: string | undefined;
-  /** The chapter currently loaded in the editor. */
-  currentChapterKey: string;
-}
-
-/**
- * Decides what the footnotes pane's auto-show/hide behavior should do right now: show the pane,
- * hide it, or leave it exactly as the user has it.
- *
- * Auto-show/hide is a PT9 divergence, off by default in Simple mode (so PT9's manual, persistent
- * pane visibility is what ships there) and on by default in Power mode — see the web view's
- * effective-setting derivation. It applies in EVERY editor view. When it applies, the pane follows
- * the loaded chapter: shown for a chapter that has notes, hidden for one that doesn't.
- *
- * A manual show/hide wins over that, but only for the chapter it was made in — the user asked for
- * THIS chapter to look a particular way, not for the feature to stop working. Recording the
- * override against a chapter, rather than as a flag some other code has to clear, is what makes it
- * expire on navigation without depending on which effect runs first.
- *
- * @returns `true` to show the pane, `false` to hide it, or `undefined` when the auto behavior has
- *   no opinion and the pane must be left however it already is
- */
-export function resolveFootnotesPaneAutoVisibility({
-  isAutoShowEnabled,
-  chapterHasNotes,
-  manualOverrideChapterKey,
-  currentChapterKey,
-}: FootnotesPaneAutoVisibilityInput): boolean | undefined {
-  if (!isAutoShowEnabled) return undefined;
-  if (manualOverrideChapterKey === currentChapterKey) return undefined;
-  return chapterHasNotes;
 }
 
 /**

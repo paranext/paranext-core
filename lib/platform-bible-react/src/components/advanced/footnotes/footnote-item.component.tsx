@@ -4,27 +4,40 @@ import { AlertCircle } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { FootnoteItemProps } from './footnotes.types';
 
-// Keys below are POSITIONAL (the child's index within its own siblings), not derived from the
-// content. A footnote's parts are frequently indistinguishable by content — two `\fp` paragraphs,
-// or two spans sharing a marker and leading text — so a content-derived key collides, and React
-// then duplicates or omits children. Position is unique among siblings by construction, which is
-// the only uniqueness React requires. These lists are a read-only projection re-rendered wholesale
-// from `footnote`, so there is no reordering for a positional key to lose identity across.
+/**
+ * PT9 separates a marker from the text it introduces with a no-break space (`Standard.xslt`'s
+ * `openmarker`), so a wrapping row never strands a marker at the end of a line. It is rendered
+ * INSIDE the `.marker` span - unlike PT9, which emits it as a sibling - so that everything a caret
+ * offset must skip as marker chrome is reachable from one selector (see `isMarkerText` in
+ * `footnote-caret.utils.ts`).
+ */
+const MARKER_SEPARATOR = '\u00a0';
+
+/** Placeholder PT9 renders for an empty note so its line keeps height and stays clickable. */
+const ZERO_WIDTH_NO_BREAK_SPACE = '\ufeff';
+
+/**
+ * USJ carries `closed: 'false'` on character runs that the source did not explicitly close
+ * (mirroring USX's `closed` attribute), but `MarkerObject` does not declare the property. PT9 shows
+ * a run's closing marker only when the run is closed (`Standard.xslt`'s `closemarker`).
+ */
+function isRunClosed(markerObj: MarkerObject): boolean {
+  // Narrow read of a property USJ produces but the published MarkerObject type omits
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (markerObj as MarkerObject & { closed?: string }).closed !== 'false';
+}
 
 function renderParagraphs(
   parentMarker: string | undefined,
   content?: MarkerContent[],
   showMarkers = true,
   footnoteClosing: React.ReactNode | undefined = undefined,
+  leadingContent: React.ReactNode | undefined = undefined,
 ): React.ReactNode {
-  if (!content || content.length === 0) return undefined;
-
-  const markerHierarchy: string[] = [];
-
   const paragraphs: MarkerContent[][] = [];
   let current: MarkerContent[] = [];
 
-  content.forEach((part) => {
+  (content ?? []).forEach((part) => {
     if (typeof part !== 'string' && part.marker === 'fp') {
       // End current paragraph before starting new one
       if (current.length > 0) paragraphs.push(current);
@@ -38,16 +51,31 @@ function renderParagraphs(
 
   if (current.length > 0) paragraphs.push(current);
 
+  // PT9 renders an empty note as a zero-width no-break space so the line keeps its height and
+  // stays a click target (`StandardNotes.xslt`). Keep one paragraph so the category and the
+  // closing marker still have somewhere to go.
+  const hasBodyContent = paragraphs.length > 0;
+  if (!hasBodyContent) paragraphs.push([]);
+
   return paragraphs.map((para, i) => {
+    const isFirst = i === 0;
     const isLast = i === paragraphs.length - 1;
     return (
-      // A footnote's paragraphs have no stable id, and keying on their CONTENT is what produced
-      // duplicate keys (two `\fp` paragraphs collide). This list is a read-only projection
-      // re-rendered wholesale and never reordered, so the identity the rule protects cannot be
-      // lost here. See the note above.
+      // PT9 wraps note text in `span.notetext`, whose `unicode-bidi: embed` keeps mixed-direction
+      // runs ordered as the note author wrote them. The class must sit on the element that
+      // directly contains the inline runs - `unicode-bidi` does not inherit.
+      //
+      // The index is the key here (and for the runs inside, see `renderContent`) because no
+      // content-derived key can be unique: a note may hold several runs with the same marker AND
+      // the same text (two `\fqa` runs, say), and paragraphs split from those runs inherit the
+      // collision. The rule guards against reordering corrupting state, which cannot happen here -
+      // these paragraphs are a pure projection of an immutable USJ node, always in source order,
+      // and they hold no state of their own.
       // eslint-disable-next-line react/no-array-index-key
-      <p key={`para-${i}`}>
-        {renderContent(parentMarker, para, showMarkers, true, markerHierarchy)}
+      <p className="notetext" key={`${parentMarker ?? 'note'}-p${i}`}>
+        {isFirst && !hasBodyContent && ZERO_WIDTH_NO_BREAK_SPACE}
+        {isFirst && leadingContent}
+        {renderContent(parentMarker, para, showMarkers)}
         {isLast && footnoteClosing}
       </p>
     );
@@ -59,12 +87,15 @@ function renderContent(
   content?: MarkerContent[],
   showMarkers = true,
   allowUnmarkedText = true,
-  markerHierarchy: string[] = [],
+  isNestedContent = false,
 ): React.ReactNode {
   if (!content || content.length === 0) return undefined;
 
-  return content.map((footnotePart, partIndex) => {
-    const key = `part-${partIndex}`;
+  return content.map((footnotePart, index) => {
+    // Keys are the sibling index, not the run's marker or text: a note may hold several runs with
+    // the same marker AND the same text (e.g. two `\fqa` runs), which any content-derived key
+    // collides on. Content is rendered in source order and never reordered, so the index is stable.
+    const key = `${parentMarker ?? 'note'}-${index}`;
     if (typeof footnotePart === 'string') {
       if (allowUnmarkedText) {
         const classes = cn(`usfm_${parentMarker}`);
@@ -86,35 +117,45 @@ function renderContent(
       );
     }
 
-    return renderMarkerObject(footnotePart, key, showMarkers, [
-      ...markerHierarchy,
-      parentMarker ?? 'unknown',
-    ]);
+    return renderMarkerObject(footnotePart, key, showMarkers, isNestedContent);
   });
 }
 
+/*
+ * KNOWN GAP - TODO(PT-4322): marker attributes are dropped. A run's attributes (`\xt
+ * |link-href="..."`, `\w |lemma="..."`) never reach the DOM, so the row shows the run's text with
+ * no sign they exist; PT9 renders them in a `span.attribute` between the content and the closing
+ * marker (`Base.xslt`'s `processAttributes`). Do NOT hand-roll the `|key="value"` list here - which
+ * properties are attributes, which belong on the opening marker, which are dropped, and when the
+ * `|value` default-attribute shorthand applies are all already resolved by
+ * `UsjReaderWriter.closingMarkerToUsfm` in platform-bible-utils. PT-4322 extracts that as a
+ * reusable helper; see the ticket for the caret-offset question this raises.
+ */
 function renderMarkerObject(
   markerObj: MarkerObject,
   key: React.Key,
   showMarkers: boolean,
-  markerHierarchy: string[] = [],
+  isNested = false,
 ): React.ReactNode {
   const { marker } = markerObj;
+  // PT9 prefixes a character marker nested inside another character marker with `+`
+  // (`Standard.xslt`'s `openmarkernospace`), matching how USFM 3.0 writes nested runs.
+  const markerName = `${isNested ? '+' : ''}${marker}`;
 
   return (
     <span key={key}>
       {marker ? (
-        showMarkers && <span className="marker">{`\\${marker} `}</span>
+        showMarkers && <span className="marker">{`\\${markerName}${MARKER_SEPARATOR}`}</span>
       ) : (
         <AlertCircle
           className="tw:text-error tw:mr-1 tw:inline-block tw:h-4 tw:w-4"
           aria-label="Missing marker"
         />
       )}
-      {renderContent(marker, markerObj.content, showMarkers, true, [
-        ...markerHierarchy,
-        marker ?? 'unknown',
-      ])}
+      {renderContent(marker, markerObj.content, showMarkers, true, true)}
+      {marker && showMarkers && isRunClosed(markerObj) && (
+        <span className="marker">{`\\${markerName}*`}</span>
+      )}
     </span>
   );
 }
@@ -129,25 +170,35 @@ export function FootnoteItem({
   const caller = formatCaller ? formatCaller(footnote.caller) : footnote.caller;
   const isCallerFormatted = caller !== footnote.caller;
 
-  // Split out target reference (first top-level fr/xo, if any)
-  let targetRef: MarkerContent | undefined;
-  let remainingContent = footnote.content;
-
-  if (
-    Array.isArray(footnote.content) &&
-    footnote.content.length > 0 &&
-    typeof footnote.content[0] !== 'string' &&
-    (footnote.content[0].marker === 'fr' || footnote.content[0].marker === 'xo')
-  ) {
-    [targetRef, ...remainingContent] = footnote.content;
-  }
-
+  // The separator after the note's own marker sits BETWEEN the header's spans rather than inside
+  // the `.marker` glyph, which `.marker-visible .marker` draws at 0.7em - a space kept inside it is
+  // drawn at 0.7em too and reads as `\f+`. The header is outside the caret origin
+  // (`getCaretPositionFromClick` walks `.textual-note-body` only), so unlike the body's markers it
+  // is free to keep its separator out of the span.
   const footnoteOpening = showMarkers ? (
     <span className="marker">{`\\${footnote.marker}`}</span>
   ) : undefined;
 
   const footnoteClosing = showMarkers ? (
-    <span className="marker">{` \\${footnote.marker}*`}</span>
+    <span className="marker">{`\\${footnote.marker}*`}</span>
+  ) : undefined;
+
+  // PT9 renders a study-Bible note's category at the head of the note text as its own marked-up
+  // run (`StandardNotes.xslt`), and shows it in its formatted pane too - there as raw `\cat …\cat*`
+  // text. Only the standard pane's marked-up representation is ported; it is used in both modes.
+  const footnoteCategory = footnote.category ? (
+    // Given its own class rather than a `usfm_*` one for the same reason the caller has one:
+    // `\cat` delimits the value but is not a style for it. The value is the note's data and stays
+    // visible either way; the `\cat` glyphs are marker display and follow the same switch every
+    // other marker in this component does.
+    <span className="note-category">
+      {showMarkers && <span className="marker">{`\\cat${MARKER_SEPARATOR}`}</span>}
+      {footnote.category}
+      {showMarkers && <span className="marker">\cat*</span>}
+      {/* With the closing glyph hidden nothing separates the value from the run that follows it
+          (the file has no space after `\cat*`), so the row supplies the space itself. */}
+      {!showMarkers && ' '}
+    </span>
   ) : undefined;
 
   const footnoteCaller = caller && (
@@ -157,31 +208,6 @@ export function FootnoteItem({
       {caller}
     </span>
   );
-  // The category is the one part of a footnote that never appears in `content`: it rides in the
-  // file as a `\cat` run directly after the caller (`\f + \cat People\cat*\fr 1.1 …`), and the USJ
-  // parser folds it onto the note as a field — so nothing renders it unless the note's own field
-  // is read. Placed after the caller so the pane reads in the file's order. Given its own class
-  // rather than a `usfm_*` one for the same reason the caller has one: `\cat` delimits the value
-  // but is not a style for it.
-  const footnoteCategory = footnote.category && (
-    <span className="note-category tw:inline-block">
-      {showMarkers && <span className="marker">{`\\cat `}</span>}
-      {footnote.category}
-      {showMarkers && <span className="marker">{`\\cat*`}</span>}
-    </span>
-  );
-  const footnoteTargetRef = targetRef && (
-    <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>
-  );
-
-  // The spaces separating the header's parts belong BETWEEN them, not inside them: CSS removes a
-  // collapsible space at the end of an inline-block's last line, so a trailing space in the caller
-  // or category box is in the DOM and yet invisible, running the two together (`+People`). Keeping
-  // them out here also draws them at the header's own size rather than the 0.7em the `.marker`
-  // glyphs use, which is what makes `\f + \cat People\cat*` read as separated rather than `\f+`.
-  const hasOpening = !!footnoteOpening;
-  const hasCaller = !!footnoteCaller;
-  const hasCategory = !!footnoteCategory;
 
   const layoutClass = layout === 'horizontal' ? 'horizontal' : 'vertical';
   const markerClass = showMarkers ? 'marker-visible' : '';
@@ -191,15 +217,13 @@ export function FootnoteItem({
 
   return (
     <>
+      {/* PT9's `div.leadingFloat`: the note's own marker and caller, and nothing else. Everything
+          past the caller - including a leading `\fr`/`\xo` target reference - stays in the note
+          text, so the line reads as one continuous USFM run the way PT9's notes pane renders it. */}
       <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteOpening}
-        {hasOpening && (hasCaller || hasCategory) && ' '}
+        {!!footnoteOpening && !!footnoteCaller && ' '}
         {footnoteCaller}
-        {hasCaller && hasCategory && ' '}
-        {footnoteCategory}
-      </div>
-      <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
-        {footnoteTargetRef}
       </div>
       <div
         className={cn(
@@ -208,8 +232,12 @@ export function FootnoteItem({
           baseClasses,
         )}
       >
-        {remainingContent && remainingContent.length > 0 && (
-          <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
+        {renderParagraphs(
+          footnote.marker,
+          footnote.content,
+          showMarkers,
+          footnoteClosing,
+          footnoteCategory,
         )}
       </div>
     </>
