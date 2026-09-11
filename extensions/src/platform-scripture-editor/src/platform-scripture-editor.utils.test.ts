@@ -3105,6 +3105,15 @@ describe('resolveCallerHighlight', () => {
       resolveCallerHighlight({ isStandardView: false, paneHasFocus: true, selectedIndex: 2 }),
     ).toBeUndefined();
   });
+
+  it('restores the highlight when Standard view comes back with the pane untouched', () => {
+    // A view round trip leaves the pane mounted, its row selected, and DOM focus where it was, so
+    // re-deriving on the way back has to give the index again rather than staying cleared.
+    const paneState = { paneHasFocus: true, selectedIndex: 2 };
+    expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
+    expect(resolveCallerHighlight({ isStandardView: false, ...paneState })).toBeUndefined();
+    expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
+  });
 });
 
 describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', () => {

@@ -2856,6 +2856,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    *
    * Kept stable: the pane reports through effects, so a fresh identity each render would re-run
    * them.
+   *
+   * A call can read one input before it has caught up — the first call in a caller-click cascade
+   * sees the selected index the pane has not reported yet — and is corrected by the next report one
+   * effect flush later; `highlightNote` is idempotent, so the intermediate answer costs nothing.
    */
   const applyCallerHighlight = useCallback(() => {
     editorRef.current?.highlightNote(
@@ -3116,11 +3120,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [scrRef.book, scrRef.chapterNum, closeFootnoteEditor]);
 
   // A caller highlight means something only in Standard view, and no other view would ever clear
-  // one left behind, so leaving Standard drops it — whether or not a session is open, since a
-  // selected pane row holds a highlight on its own (a read-only Standard view only ever has that).
+  // one left behind, so the highlight is re-derived on EVERY view change, in both directions.
+  // Leaving Standard drops it — whether or not a session is open, since a selected pane row holds a
+  // highlight on its own (a read-only Standard view only ever has that). Coming BACK to Standard
+  // restores it: the pane survives the round trip with its row still selected, and cycling the view
+  // (the `changeScriptureView` message) moves no DOM focus, so both of the rule's inputs can still
+  // hold on return with nothing else to re-apply the border. `viewTypeRef` is updated by an effect
+  // declared above this one, so the resolver reads the view this effect is reacting to.
   useEffect(() => {
-    if (viewType !== 'standard') editorRef.current?.highlightNote(undefined);
-  }, [viewType]);
+    applyCallerHighlight();
+  }, [viewType, applyCallerHighlight]);
 
   // The row editor exists only where the pane IS the editing surface, so leaving Standard view or
   // losing editability ends the session.

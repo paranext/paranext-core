@@ -197,7 +197,7 @@ describe('FootnotesLayout pane focus reporting', () => {
     expect(onPaneFocusChange).toHaveBeenNthCalledWith(2, false);
   });
 
-  it('keeps reporting focus while it moves from a row to the row editor inside the pane', () => {
+  it('keeps reporting focus while it moves between a row and the row editor inside the pane', () => {
     const onPaneFocusChange = vi.fn();
     renderPane({
       onPaneFocusChange,
@@ -206,6 +206,10 @@ describe('FootnotesLayout pane focus reporting', () => {
     });
     screen.getAllByRole('option')[0].focus();
     screen.getByTestId('row-editor').focus();
+    expect(onPaneFocusChange).toHaveBeenCalledTimes(1);
+    expect(onPaneFocusChange).toHaveBeenCalledWith(true);
+    // Back the other way: the pane's boundary is crossed in neither direction, so still one report.
+    screen.getAllByRole('option')[0].focus();
     expect(onPaneFocusChange).toHaveBeenCalledTimes(1);
     expect(onPaneFocusChange).toHaveBeenCalledWith(true);
   });
