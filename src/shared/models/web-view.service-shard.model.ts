@@ -12,6 +12,7 @@
 
 import { Layout } from '@shared/models/docking-framework.model';
 import {
+  ContentZoomAreaId,
   OpenWebViewOptions,
   SavedWebViewDefinition,
   WebViewId,
@@ -105,7 +106,7 @@ export interface WebViewServiceShard extends WebViewServiceType {
   adjustContentZoom(
     webViewId: WebViewId | undefined,
     deltaSteps: number,
-    areaId?: string,
+    areaId?: ContentZoomAreaId,
   ): Promise<void>;
 
   /**
@@ -114,7 +115,7 @@ export interface WebViewServiceShard extends WebViewServiceType {
    *
    * @experimental This method is unstable and may change or disappear without notice
    */
-  resetContentZoom(webViewId: WebViewId | undefined, areaId?: string): Promise<void>;
+  resetContentZoom(webViewId: WebViewId | undefined, areaId?: ContentZoomAreaId): Promise<void>;
 
   /**
    * Point a web view that carries its own independent reference at a new one.
