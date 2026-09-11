@@ -169,6 +169,7 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
   createInsertContextMenuItems,
+  doesEditorContextMenuOwnEnter,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
@@ -2262,6 +2263,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // representation, so it serializes as a plain space: the same data problem as an unmarked
         // split.
         if (event.key === 'Enter') {
+          // The editor's own right-click menu is open with an item highlighted: that menu claims
+          // Enter itself, one capture step further down (on `document`), and never sees the press if
+          // this handler stops it here. See `doesEditorContextMenuOwnEnter`.
+          if (doesEditorContextMenuOwnEnter()) return;
           const ctx = editorRef.current?.getMarkerMenuContext();
           // Pass through untouched when there's no context, inside a note, or inside marker glyph
           // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).

@@ -406,6 +406,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // Enter is claimed in EVERY modifier state, matching PT9's KeyPressEditHandler (no modifier
     // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
     // a soft line break with no USFM representation — opens the same menu.
+    // Not claimed while the editor's right-click context menu has an item highlighted: Enter
+    // invokes that item instead (see `doesEditorContextMenuOwnEnter`).
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
