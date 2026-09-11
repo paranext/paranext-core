@@ -1177,6 +1177,67 @@ step, no automation. Just a record.
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
 
+## adr-focus-in-a-background-window-is-latent: A `focus()` call inside a backgrounded window sets the active element without raising the window
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** Two comments in the withhold-activation code (PT-4465) asserted opposite claims about
+  the same call. One line of comments said a `focus()` call inside a window that does not hold OS
+  focus "asks the browser to activate that window" — implying the call itself could pull a
+  backgrounded window to the foreground, which is exactly what `activateWithoutDocumentFocus` exists
+  to prevent. Another line said the same call "is silently dropped rather than deferred" — implying
+  the element never becomes focused at all, so nothing is lost by skipping the withholding. Both
+  cannot be true, and the whole design of `activateWithoutDocumentFocus`
+  (`shouldContentAvoidDocumentFocus`, `noteWindowWithheldFromActivation`,
+  `web-view.service-router.ts`, `platform-dock-layout-storage.util.ts`,
+  `web-view.service-shard.model.ts`) rests on knowing which one is true.
+- **Decision:** Settle it by measurement rather than by documentation or memory — Electron does not
+  specify this. A throwaway two-window Electron probe was run on native Windows, not WSLg: WSLg's
+  compositor does not implement client-initiated window activation, so a negative result there would
+  be indistinguishable from Electron's own behavior and would misread as confirmation that nothing
+  happens. Window A was given OS focus; window B was left visible but backgrounded
+  (`winA.isFocused() === true`, `winB.isFocused() === false`, and B's own document reporting
+  `hasFocus() === false`). Then, inside backgrounded B:
+
+  | call inside backgrounded B | did B come forward? | B's `activeElement` after | B's `document.hasFocus()` after |
+  | --- | --- | --- | --- |
+  | `input.focus()` on a plain element | no | `target` | `false` |
+  | `iframe.focus()` on the iframe element | no | `frame` | `false` |
+  | `input.focus()` on an element inside the iframe | no | `frame` | `false` |
+  | control: `BrowserWindow.focus()` from main | yes | — | — |
+
+  The control is what makes the other three rows readable: this environment can activate a window on
+  request, so "B did not come forward" is a fact about `focus()`, not about the compositor refusing
+  every activation request. The result: a `focus()` call inside a window that does not hold OS focus
+  sets that document's active element — on a plain element, on an iframe, and on an element inside
+  the iframe alike — and does nothing at the OS level. The window is never raised and
+  `document.hasFocus()` stays `false`. The focus is real but latent: it becomes live keyboard focus
+  only if and when the window is separately raised.
+- **Alternatives:** Neither prior claim was arrived at by measurement — both were plausible-sounding
+  guesses about undocumented Electron/Chromium behavior, confident enough in code comments to become
+  load-bearing for why `activateWithoutDocumentFocus` exists. There was no live alternative to
+  measuring directly; the only choice was where to run the probe, and WSLg was rejected as the venue
+  for the reason above.
+- **Consequences:** The withholding flag's original stated rationale — that skipping it risks a
+  backgrounded window being pulled to the foreground by its own content — does not hold; `focus()`
+  never does that, with or without the flag. Its established remaining job is caret ownership at the
+  moment the window is ACTIVATED, by any means — including the user activating it themselves, which
+  is the common way a background window is next entered: several tabs' content can each call
+  `focus()` while a window sits backgrounded, and without withholding, whichever call lands last
+  claims the latent active element and wins the caret the instant the window is activated,
+  regardless of which tab that activation is actually
+  showing. Every comment and TSDoc entry across the withholding code (`activateWithoutDocumentFocus`
+  and its call sites, in both main and renderer, and the generated `papi.d.ts` entries that come from
+  it) that described what a `focus()` call does was corrected to state the latent-focus fact and this
+  narrower rationale in place of the two disproved claims; comments describing a genuine OS-level
+  raise (`shouldBringToFront`, `focusWindow`, `raiseMoveTarget`) needed no change; a `focus()` call is
+  not in tension with any of them. On a window that is never activated at all, the question does not
+  arise rather than going unanswered: nothing reads the latent active element while the window stays
+  in the background — every reader of `document.activeElement` in this repo lives inside a web
+  view's own document and is driven by interaction with that view — so which tab holds it has no
+  observable consequence until an activation makes it live, which is the case above.
+- **Source:** PT-4465; probe run 2026-09-09 on native Windows.
+
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Formerly:** ADR-0008
@@ -2450,6 +2511,105 @@ step, no automation. Just a record.
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
+
+## adr-per-window-focus-ring-keys-off-broadcast-window-id: A per-window focus ring keys off a main-broadcast window id, not local DOM focus
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** In multi-window layouts, each renderer window runs its own dock and its own DOM focus
+  tracking (`WindowDataProviderEngine`'s `focusin`/`focusout` listeners, feeding the `Focus` data
+  the active-tab focus ring keys off in `platform-tab-title.component.tsx`). That tracking is
+  correct per window but blind to every other window: several windows can each report a tab focused
+  in their own dock at the same time, so gating the ring purely on local DOM focus shows it in every
+  window at once, including windows the user is not currently in. Two related defects follow from
+  the same gap. First, opening or revealing a web view in a window other than the one the user is
+  working in can leave that window's tab marked as the DOM focus subject with nothing yet reflecting
+  that the window itself is backgrounded — the ring problem above. Second,
+  `openWebViewInOwningWindow` (`src/main/services/web-view.service-router.ts`) calls the shard's
+  `focus()` on the owner's tab while the owner window is still backgrounded, then raises the window
+  afterward with `focusWindow` — and a `focus()` call made from inside a window that does not hold
+  OS focus sets that document's active element without raising the window, latently, so whichever
+  tab's content focuses last owns the caret the moment the raise lands, rather than the tab the
+  raise is showing. See `adr-focus-in-a-background-window-is-latent` for the measurement.
+- **Decision:** Main is the process that already knows which window is focused
+  (`getFocusedWindowId`/`setFocusedWindowId` in `src/main/services/window-state.service.ts`), so it
+  is the source of truth broadcast to every renderer, rather than each renderer trying to infer "am
+  I the one the user is in" from its own DOM focus or OS blur events. A new network event,
+  `platform.onDidChangeFocusedWindowId` (`EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID` /
+  `FocusedWindowIdEvent` in `src/shared/services/window.service-model.ts`), announces
+  `getFocusedWindowId()` changes; each renderer seeds from the `platform.getFocusedWindowId` command
+  and then tracks the event (`window.service-shard.ts`'s `getIsThisWindowFocused` /
+  `onDidChangeIsThisWindowFocused`, consumed by the `useIsFocusedWindow` hook). The active-tab focus
+  ring effect in `platform-tab-title.component.tsx` is gated on `useIsFocusedWindow()` in addition
+  to the existing local focus-subject check, and a `platform-window-not-focused` class toggled on
+  `document.documentElement` suppresses the browser's own `:focus` outline on a backgrounded
+  window's web view in Power mode (`dock-layout-wrapper.component.scss`; Simple mode already
+  suppresses that outline unconditionally). For the router's cross-window reveal, the fix is to stop
+  treating the shard's own `focus()` call and the OS-level `focusWindow` raise as unrelated steps:
+  `openWebViewInOwningWindow` now computes whether it is about to raise the owner across windows
+  (`willLikelyRaiseAcrossWindows`) before opening, and when so, passes `activateWithoutDocumentFocus`
+  through the SAME withholding channel PT-4465 already built for windows awaiting their first
+  activation (`shouldContentAvoidDocumentFocus`, `noteTabAwaitingDocumentFocus`,
+  `takeTabAwaitingDocumentFocus`). The renderer then needs a second way to catch up on that note,
+  distinct from PT-4465's existing gesture-gated one (a click or keystroke inside a window still
+  awaiting its first activation): `runFocusCatchUpForRaisedWindow` in `window.service-shard.ts` runs
+  whenever this window transitions to focused via the broadcast above, and focuses the tab a
+  cross-window raise left waiting.
+- **Deliberately reused main's `focusedWindowId`, not `doesFocusedWindowHoldOsFocus`.** Main tracks
+  two related but different facts: which window is focused (survives the app losing OS focus
+  entirely, e.g. alt-tabbing to another application — it keeps naming the window the user was last
+  in) and whether the app currently holds OS focus at all (cleared on blur). The ring and the
+  catch-up both need the survive-blur answer — alt-tabbing away must not clear every window's ring,
+  and must not leave a raise's catch-up permanently stranded just because the user glanced at
+  another application in between. `FocusedWindowIdEvent` is deliberately built on
+  `getFocusedWindowId()`, not `isApplicationFocused()`/`doesFocusedWindowHoldOsFocus`.
+- **The renderer catch-up needs its own time bound, separate from PT-4465's gesture-gated one.** A
+  gesture-gated catch-up (a click IS the arrival it is catching up on) has no notion of staleness —
+  waiting indefinitely for the user to first interact with a backgrounded window is correct. A
+  focus-driven catch-up does not have that property: the OS focus change that triggers it can be
+  wholly unrelated to the raise that left the note (a much later, ordinary alt-tab back into a
+  window that has since moved on to something else), so consuming the note unboundedly would let a
+  stale raise steal focus into a tab days after the fact. `takeTabAwaitingDocumentFocusIfFresh`
+  (`window-activation.util.ts`) adds a bounded read gated on
+  `CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS` (5000ms — generous relative to how long a window
+  raise actually takes, since the cost of too short is the defect returning, and the cost of too
+  long is a rare stale catch-up firing on an activation the user was going to make anyway); the
+  unbounded `takeTabAwaitingDocumentFocus` remains for the gesture-gated path, which has no such
+  staleness risk.
+- **Alternatives:** Inferring window focus from each renderer's own blur/focus DOM events —
+  rejected: a renderer only sees its own window's events, and correlating "did some OTHER window
+  just take focus" from that alone would need every window comparing timestamps or racing each
+  other, reinventing what main already knows for certain as the process that owns every
+  `BrowserWindow`. Awaiting the raise before opening (reordering `openWebViewInOwningWindow` to
+  `focusWindow` first, open second) — rejected: raising a window the platform has not yet decided
+  to open anything into changes what the user sees before the content that motivated the raise
+  exists, and does not fit the router's existing shape where the shard's own open call already
+  decides tab activation.
+- **Consequences:** A ring shown in a backgrounded window (defect 1) and a tab left DOM-focused with
+  no visible indication or later ring after a cross-window raise (defect 2) are both fixed by the
+  same broadcast. The two halves are not alike, and the difference matters for the hidden-tab
+  question below: the ring is read-only state derivation and a CSS class toggle and moves nothing,
+  while the catch-up deliberately DOES move document focus — `runFocusCatchUpForRaisedWindow` calls
+  `focusTab`, which focuses the tab's web view iframe — because handing the caret to the tab the
+  raise is showing is the entire point of it. Single-window behavior is unaffected:
+  `useIsFocusedWindow()` is `true` for the sole window from the seed onward, so the new gate is a
+  no-op there.
+- **The hidden-tab case (`.claude/rules/cross-view-sync-hidden-views.md`):** the ring effect behaves
+  identically whether a tab is the visible one or not — it toggles a class on the root element and
+  reads no layout. The catch-up is layout-dependent and is **deliberately not guarded**. `focusTab`
+  makes the tab active and focuses its iframe in one synchronous stack, so a tab that was not
+  already its panel's active tab is still inside a `display: none` pane when `focus()` lands, and
+  the focus goes to the document body instead — the same trap `setDocumentFocusToTab` already
+  guards for its `lastFocusedElement` path with an `IntersectionObserver`. Reaching it needs the
+  noted tab to stop being its panel's active tab between the note and the raise, and no door
+  currently does that: every path that changes a withheld window's active tab goes through
+  `revealTabGroupAndSetDocumentFocusToTab`, which writes a fresh note for whichever tab it just
+  activated, and only the latest note is kept — so the note tracks the active tab rather than
+  drifting from it. Guarding it would mean deferring a focus move that must also survive a window
+  which is never raised at all, for a failure no path reaches; the note to whoever adds a door that
+  activates a tab without passing through that chokepoint is that this is the assumption it breaks.
+- **Source:** PT-4465 (`pt-4465-withhold-activation`), PR #2756, fix round addressing the
+  cross-window ring and reveal-without-a-ring reports.
 
 ## adr-per-window-service-scoping: Per-window service scoping via `${name}-${windowId}` network-object names
 
@@ -4466,7 +4626,7 @@ step, no automation. Just a record.
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 
 - **Date:** 2026-08-31
-- **Status:** Accepted — capability deferred to PT-4465
+- **Status:** Accepted — applied in PT-4465
 - **Context:** A window created while the user is working in another application should appear
   without stealing the foreground, and a window the user asked for must come to the front. The
   obvious source for that distinction is focus state, and it has been reached for multiple times
@@ -4480,13 +4640,15 @@ step, no automation. Just a record.
   window the user just asked for unfocused and flashing.
 - **Decision:** The question is *"did a person in this app ask for this window?"*, which is the
   caller's knowledge and nothing else's, so it is declared by the caller rather than inferred. No
-  window-creation path reads focus state to decide activation. The mechanism is PT-4465's to build:
+  window-creation path reads focus state to decide activation. The mechanism, built in PT-4465:
   an explicit user-intent flag on `createWindow`, passed by each call site (menu and
   `platform.createWindow`, dock-click and startup restore: yes; a `{ type: 'window' }` web-view
-  open or `moveWebViewToNewWindow` arriving from an extension: no). **None of that is wired yet** —
-  `createWindow` takes `restoreInfo` and `{ pendingContent }` and nothing else, and no
-  intent flag exists in the tree — so a reader looking for it will find it on the ticket, not in
-  the code. This entry exists so the inference is not re-attempted in the meantime.
+  open or `moveWebViewToNewWindow` arriving from an extension: no).
+  `createWindow` takes a required `isUserRequested` on its creation options, and
+  `planWindowActivation` (`src/main/window-activation.util.ts`) turns that into what the window
+  does to become visible. The flag is required rather than defaulted so a call site added later has
+  to answer the question rather than inherit an answer. This entry exists so the inference is not
+  re-attempted.
 - **Scope — this is about activating a NEW window, not about raising an existing one.** Focus state
   remains the right input for a raise, and is used deliberately today: `isApplicationFocused()`
   gates the cross-window open raise (`web-view.service-router.ts`) and the move raise, so an in-app
@@ -4495,15 +4657,62 @@ step, no automation. Just a record.
   case that was already shipped: the raise runs precisely when the app does not own the foreground,
   because the user asked by following the link. Those guards answer "is this app in front?", which
   focus state does know. Nothing here argues against them.
+- **Amended 2026-09-09:** The move raise picked up a second, inferred guard that this Scope note
+  did not cover: `raiseMoveTarget` (`web-view.service-router.ts`) started leaving a target window
+  alone whenever the platform was withholding it from activation, on the theory that a move landing
+  content there is never the user asking to go there. That theory is wrong for
+  `platform.moveWebViewToWindow`'s only production caller — the tab context menu's "Move to window",
+  which names a background window on purpose — so it reintroduced exactly the inference this entry
+  rules out, this time for a raise rather than a creation. The fix extends the same mechanism
+  instead of a new one: `platform.moveWebViewToWindow` gained its own optional `isUserRequested`,
+  mirroring `platform.moveWebViewToNewWindow`'s, and the tab context menu declares `true`.
+  `raiseMoveTarget` now raises a withheld target when the move declares it, and otherwise leaves it
+  alone, same as before. The cross-window open raise and `handleUri` are untouched by this — neither
+  gained a declared flag, and the paragraph above still describes them as written.
 - **Alternatives:** Infer from `getFocusedWindowId()` — rejected, cleared by `removeWindow`. Infer
   from an app-ever-focused latch — rejected, indistinguishable from the dock-click restore. Ship
   the third variation of a focus heuristic — rejected: every variation answers a question about the
   foreground, and the question being asked is about a person's intent.
-- **Consequences:** Until PT-4465 lands, every new window activates, including one an extension
-  creates while the user is elsewhere. That is the known cost of not guessing. When it does land,
-  withholding the constructor's `show` must stay scoped to the not-asked-for case: `did-fail-load`
+- **Consequences:** A window nobody asked for appears without taking the foreground and flashes;
+  every window a person asked for behaves exactly as before. Withholding the constructor's `show`
+  is scoped to the not-asked-for case, and that case carries a fallback for a page that never
+  reaches `ready-to-show`: `did-fail-load`
   only logs, so a window that never reaches `ready-to-show` would otherwise stay invisible, which is
-  worse than a badly-timed foreground.
+  worse than a badly-timed foreground. Withholding activation at creation is not enough on its own:
+  the declared status rides the content call to the renderer, since docking a web view focuses its
+  iframe and the dock cannot infer intent from focus state any more than window creation could.
+- **Withholding cannot actually keep a window out of the foreground, so the foreground is taken back
+  instead.** A window held back from the constructor still takes focus the moment its page first
+  paints, with no call from either process asking for it — established by instrumenting every raise
+  in main and every focus call in the renderer and finding neither fires. So a window the user did
+  not ask for DOES briefly hold the foreground, and focus is handed straight back to the window that
+  held it. Three bounds make that safe rather than a fight: it happens at most once per window, or a
+  window nobody can enter; only while the target still exists and is not minimized, or handing back
+  would undo the user putting it away; and only inside a short window after first paint —
+  2000ms (`SELF_FOCUS_WINDOW_MS`, `src/main/window-activation.util.ts`) — because on a compositor
+  that does not self-focus the first focus event IS the user's click and undoing it would be
+  worse than the problem. The visible cost is a brief flicker, and any keystroke landing in that
+  gap goes to the window that had focus for those milliseconds. The bound has two failure modes
+  at its edges: a user who reacts within those 2000ms to the deliberate taskbar flash and clicks
+  the window is bounced back out once anyway, because the click still lands inside the window;
+  and a self-focus that arrives after 2000ms — a slow cold start — skips the bounce, and any
+  record of it, entirely, leaving the window with whatever focus it already has.
+- **The hand-back cannot return focus to a foreign application.** A window that takes the
+  foreground from another application cannot hand it back, because `focusWindow` only moves focus
+  between our own windows. The hand-back is gated on whether this application already held focus
+  before the withheld window was revealed (`wasApplicationFocusedBeforeReveal` in
+  `shouldBounceFocusBack`, `src/main/window-activation.util.ts`): when it did, the bounce returns
+  focus to the window the user was actually in, which is the case this mechanism fixes. When it did
+  not — the user was in another application, or nothing of ours had focus at all — the gate leaves
+  the foreground on the newly-revealed window rather than raising a second window of ours over
+  whatever the user was in, but it cannot put the foreground back where it came from. That residual
+  case is unsolved by this PR.
+- **Where two answers disagree about the same window, the main process wins.** The renderer keeps
+  its own latch for the focus requests its panels and web views make as they mount, which never
+  leave that process; but that latch only sees gestures in the shell document, and a web view's
+  iframe swallows the user's clicks and keys. Main watches the window's own focus events and is
+  therefore better informed, so its explicit answer overrules the latch and the latch speaks only
+  where main has no opinion.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.
 

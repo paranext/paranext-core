@@ -46,6 +46,10 @@ vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
 }));
 
+vi.mock('@renderer/hooks/use-is-focused-window.hook', () => ({
+  useIsFocusedWindow: vi.fn(() => true),
+}));
+
 // Mock heavy transitive deps that run side-effects at module init in jsdom.
 vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
@@ -475,7 +479,12 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     fireEvent.click(screen.getByText('Move tab to new window'));
 
     await waitFor(() =>
-      expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToNewWindow', 'web-view-1'),
+      expect(sendCommand).toHaveBeenCalledWith(
+        'platform.moveWebViewToNewWindow',
+        'web-view-1',
+        // A person picked this from the menu, so the window it creates comes to the front
+        true,
+      ),
     );
   });
 
@@ -667,7 +676,12 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     fireEvent.click(screen.getByText('Move tab to new window'));
 
     await waitFor(() =>
-      expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToNewWindow', 'web-view-1'),
+      expect(sendCommand).toHaveBeenCalledWith(
+        'platform.moveWebViewToNewWindow',
+        'web-view-1',
+        // A person picked this from the menu, so the window it creates comes to the front
+        true,
+      ),
     );
     expect(notificationService.send).not.toHaveBeenCalled();
   });
@@ -840,6 +854,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
         'platform.moveWebViewToWindow',
         'web-view-1',
         MAIN_WINDOW.windowId,
+        true,
       ),
     );
   });

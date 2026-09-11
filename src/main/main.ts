@@ -96,6 +96,7 @@ import {
   getWindowIdOf,
   getWindows,
   handleWindowBlurred,
+  isApplicationFocused,
   isWindowAbandoned,
   isWindowClosing as isWindowMarkedClosing,
   isWindowTracked,
@@ -108,6 +109,7 @@ import {
   removeWindow,
   setFocusedWindowId,
   setWindowPendingContentPredicate,
+  startFocusedWindowIdEvent,
 } from '@main/services/window-state.service';
 import { confirmCloseAllWindows } from '@main/services/close-all-prompt.service';
 import { decideWindowClose } from '@main/services/window-close-decision.service';
@@ -127,6 +129,20 @@ import {
   writeNow,
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
+import {
+  SELF_FOCUS_WINDOW_MS,
+  forgetWindowBounce,
+  forgetWindowWithholding,
+  hasWindowBouncedFocusBack,
+  isWindowAwaitingFirstActivation,
+  noteWindowBouncedFocusBack,
+  noteWindowWithheldFromActivation,
+  shouldBounceFocusBack,
+  shouldFlashOnReveal,
+  planWindowActivation,
+  shouldRevealAfterLoadFailure,
+  shouldRevealAfterRendererGone,
+} from '@main/window-activation.util';
 import { summarizeWindows } from '@main/window-summary.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
@@ -161,6 +177,7 @@ import {
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
   THEME_STATE_QUERY_PARAMETER,
+  WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
@@ -392,6 +409,10 @@ async function main() {
   // Register the app-window input event so the window's mouse/keyboard hooks below can announce
   // the gestures that dismiss transient overlays
   await startAppWindowInputEvent();
+
+  // Register the focused-window-id event so the `focus`/`blur` handlers wired up per window below
+  // can announce every change made through `setFocusedWindowId`/`removeWindow`
+  await startFocusedWindowIdEvent();
 
   // The network object status service relies on seeing everything else start up later
   await startNetworkObjectStatusService();
@@ -728,14 +749,36 @@ async function main() {
     return path.join(globalThis.resourcesPath, 'assets', ...paths);
   }
 
+  /**
+   * Whether focus can be handed back to this window right now.
+   *
+   * Asked at the moment of the hand-back rather than when the withheld window was created: the
+   * window that held focus can have closed since, and one the user has minimized is not somewhere
+   * they are working — restoring it would undo their choice, which is the same harm as taking the
+   * foreground, pointed the other way.
+   */
+  const canWindowTakeFocusBack = (
+    windowIdToReturnFocusTo: string | undefined,
+    withheldWindowId: string,
+  ): boolean => {
+    if (windowIdToReturnFocusTo === undefined || windowIdToReturnFocusTo === withheldWindowId)
+      return false;
+    const target = getWindowById(windowIdToReturnFocusTo);
+    return !!target && !target.isDestroyed() && !target.isMinimized();
+  };
+
   /** Sets up the electron BrowserWindow renderer process */
   const createWindow = async (
-    restoreInfo?: WindowRestoreInfo,
-    creationOptions?: { pendingContent?: boolean },
+    restoreInfo: WindowRestoreInfo | undefined,
+    creationOptions: { isUserRequested: boolean; pendingContent?: boolean },
     // The platform id comes back alongside the window because this is the only place that has it:
     // it is minted here and is not readable from the BrowserWindow, so a caller that needs to name
     // the window afterwards would otherwise have to look it up by identity.
   ): Promise<{ window: BrowserWindow; windowId: string }> => {
+    // Declared by the caller rather than read from focus state, which answers a different question
+    // — see `adr-window-activation-is-declared-not-inferred`. Required rather than defaulted so a
+    // call site added later has to say which kind of window it is creating.
+    const activation = planWindowActivation(creationOptions.isUserRequested);
     // The menu and the `platform.createWindow` command stay live through a quit, because every
     // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
@@ -813,7 +856,7 @@ async function main() {
     // `getTitle()` with its own default, which is why `summarizeWindows` reads a window's readiness
     // rather than trusting its title.
     const newWindow = new BrowserWindow({
-      show: true,
+      show: activation.showOnCreate,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
       width: windowWidth,
       height: windowHeight,
@@ -859,9 +902,76 @@ async function main() {
 
     if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
 
+    // Content that docks into this window before it has ever been raised still calls focus() on its
+    // iframe, and a `focus()` inside a window that does not hold OS focus sets that document's
+    // active element without activating the window — latently, until the window is next activated.
+    // Left unchecked, whichever tab's content lands last would claim that latent focus and decide
+    // who owns the caret once the window is finally raised. Recorded here so the open that follows
+    // can withhold document focus and leave that decision open until raise time.
+    if (activation.revealWhenReady === 'inactive') noteWindowWithheldFromActivation(windowId);
+    // Read at the reveal itself (`showInactive()` below), not here: `isApplicationFocused`
+    // answers a live question, and this window is created with `show: false`, so nothing between
+    // here and that reveal can raise its own `focus` event to consume a stale answer. The window
+    // can, though, sit unrevealed for as long as its page takes to load -- long enough for the
+    // user to have switched applications since construction. Whether the application held focus
+    // immediately BEFORE the reveal is what tells the hand-back apart from raising one of our own
+    // windows over whatever the user is in by the time the window actually appears.
+    let wasApplicationFocusedBeforeReveal = false;
+    /**
+     * When the page may still take focus for itself, on the monotonic clock. Set at the reveal,
+     * because that is the paint the self-focus rides in on. Outside it, a focus event is a person,
+     * and a person's click must not be undone.
+     *
+     * Monotonic rather than wall-clock: this is a short deadline armed during window startup, which
+     * is exactly when the wall clock gets stepped, and a backwards step would leave the hand-back
+     * armed long past the paint it exists for.
+     */
+    let selfFocusWindowClosesAt: number | undefined;
+
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
+      // Where focus goes back to if this window takes it on its own: the window that actually HELD
+      // focus, not the routing target. They diverge — routing walks past a window that is not ready,
+      // is closing, or is pending content — and handing focus to a window the user was not in is a
+      // worse outcome than the foreground steal being undone.
+      //
+      // Asked HERE, at the hand-back, for the same reason the other two inputs to this decision are:
+      // a window can sit unrevealed for as long as its page takes to load, and the user is free to
+      // move to a different window of this app in that time. An answer taken at construction would
+      // hand focus to the window they have since left. Nothing has recorded THIS window as the
+      // focused one yet — that happens below, past the bounce — so this still names the window they
+      // came from, and `canWindowTakeFocusBack` rejects this window in any case.
+      const windowIdToReturnFocusTo = getFocusedWindowId();
+      // A window held back from the foreground takes focus anyway when its page first paints —
+      // nothing in either process calls for it, so it cannot be prevented here, only handed back.
+      if (
+        shouldBounceFocusBack({
+          isAwaitingFirstActivation: isWindowAwaitingFirstActivation(windowId),
+          hasAlreadyBouncedFocusBack: hasWindowBouncedFocusBack(windowId),
+          // Its state is asked for here too: the window focus would go back to can have closed or
+          // been minimized by now, and restoring a window the user put away is the same harm as
+          // stealing the foreground, in the other direction.
+          canReturnFocusElsewhere: canWindowTakeFocusBack(windowIdToReturnFocusTo, windowId),
+          isWithinSelfFocusWindow:
+            selfFocusWindowClosesAt !== undefined && performance.now() <= selfFocusWindowClosesAt,
+          wasApplicationFocusedBeforeReveal,
+        })
+      ) {
+        noteWindowBouncedFocusBack(windowId);
+        // Deliberately NOT recorded as the routing target: this window holds focus for the moment
+        // it takes to give it back, and pointing routing at it in that gap would send whatever a
+        // caller asks for next to a window the user is not in. The withholding also stays on — the
+        // user has still not been in this window.
+        if (windowIdToReturnFocusTo !== undefined) focusWindow(windowIdToReturnFocusTo);
+        return;
+      }
       setFocusedWindowId(windowId);
+      // The user is in this window now, so content arriving in it should take focus like anywhere
+      // else. One activation is enough — this window stops being a background one for good.
+      forgetWindowWithholding(windowId);
+      // Stop asking for attention: they are here. Windows does not cancel a flash on activation on
+      // its own, which is why `focusWindow` pairs its own flash the same way.
+      if (!newWindow.isDestroyed()) newWindow.flashFrame(false);
     });
     // The other half of focus tracking: a blur with no focus following it is the whole application
     // going to the background, which is what isApplicationFocused answers from
@@ -926,12 +1036,30 @@ async function main() {
     // What this window has spent of its crash-reload budget. Per window, because a crash loop is
     // one window's page failing rather than the app's.
     let crashReloadBudget = NO_RENDERER_CRASH_RELOADS_YET;
+    /**
+     * Show a window that will never reveal itself. A window held back from the constructor is
+     * revealed by `ready-to-show`, which a window that failed before it could paint never reaches:
+     * an empty window the user can see and close is recoverable, where one that exists, is tracked
+     * and routable, and never appears is not. Still inactive — a window nobody asked for does not
+     * earn the foreground by failing.
+     */
+    const revealAfterFailureIfNeeded = (shouldReveal: boolean) => {
+      if (shouldReveal && !newWindow.isDestroyed() && !newWindow.isVisible())
+        newWindow.showInactive();
+    };
+
     newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) => {
       logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
       // Everything this window registered died with its renderer, so routing has to move to a window
       // that can answer rather than spending the network service's registration retry on handlers
       // that no longer exist.
       markWindowNotReady(windowId);
+      // A renderer that died before the window could paint is the other way a withheld window never
+      // reaches `ready-to-show`. `did-fail-load` does not fire for it, so without this the window
+      // would stay tracked, routable and invisible for the rest of the session.
+      revealAfterFailureIfNeeded(
+        shouldRevealAfterRendererGone(activation, isWindowAwaitingFirstActivation(windowId)),
+      );
 
       // Nothing else brings a dead renderer back: Electron leaves the window there with no page in
       // it, and the `onDidRegisterWindowServiceShard` subscription that would mark this window ready
@@ -1005,6 +1133,17 @@ async function main() {
         logger.warn(
           `Window ${windowId} failed to load "${validatedURL}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
         );
+        // A window held back from the constructor is revealed by `ready-to-show`, which a page that
+        // failed to load never reaches. Reveal it here instead: an empty window the user can see and
+        // close is recoverable, where one that exists, is tracked and routable, and never appears is
+        // not. Still inactive — a window nobody asked for does not earn the foreground by failing.
+        revealAfterFailureIfNeeded(
+          shouldRevealAfterLoadFailure(activation, {
+            isMainFrame,
+            errorCode,
+            isAwaitingFirstActivation: isWindowAwaitingFirstActivation(windowId),
+          }),
+        );
       },
     );
 
@@ -1075,7 +1214,25 @@ async function main() {
         logger.info(`Window ${windowId} is starting minimized due to START_MINIMIZED env variable`);
         newWindow.minimize();
       } else {
-        newWindow.show();
+        // A window nobody asked for appears where it belongs without taking the foreground, and
+        // flashes so the user can find it — the same signal `focusWindow` gives when the OS refuses
+        // a raise.
+        if (activation.revealWhenReady === 'activate') newWindow.show();
+        else {
+          wasApplicationFocusedBeforeReveal = isApplicationFocused();
+          // Armed before the window is revealed, so the ordering carries no assumption about when
+          // Electron dispatches this window's `focus`: a handler running during `showInactive()`
+          // would find the hand-back unarmed and let a window nobody asked for keep the foreground.
+          // Arming microseconds early costs nothing against a bound measured in seconds.
+          selfFocusWindowClosesAt = performance.now() + SELF_FOCUS_WINDOW_MS;
+          newWindow.showInactive();
+          // Not flashed when this window already holds focus: `ready-to-show` fires again for a
+          // window that is re-created or reloaded, and a flash raised then has no `focus` event
+          // coming to pair with the `flashFrame(false)` that cancels it, so it would go on asking
+          // for attention the user has already given. `focusWindow` guards its own flash the same
+          // way.
+          if (shouldFlashOnReveal(activation) && !newWindow.isFocused()) newWindow.flashFrame(true);
+        }
         // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
         markStartupOnce('window-shown');
         if (isFirstWindowOfProcess && getCommandLineSwitch(CommandLineArgs.Maximize)) {
@@ -1366,6 +1523,10 @@ async function main() {
       // is destroyed by now, and reading a property off it can throw — which would abandon the rest
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
+      // Nothing will ask about this window again, and the sets should not grow for the life of the
+      // process.
+      forgetWindowWithholding(windowId);
+      forgetWindowBounce(windowId);
 
       // What this window's disappearance means for its entry. A deliberate close — the app stays up
       // — takes the entry with it, and the structure is rewritten without it below so the window
@@ -1427,6 +1588,10 @@ async function main() {
     // Tells the renderer which chrome to draw: the main window keeps the top-level menu, secondary
     // windows do not. Sent as a presence flag like the two above rather than a value.
     if (isFirstWindow) searchParamsObject[IS_MAIN_WINDOW_QUERY_PARAMETER] = '';
+    // The renderer has to know this for itself: the focus requests that would undo the withholding
+    // are made against this window's own service shard and never reach this process.
+    if (activation.revealWhenReady === 'inactive')
+      searchParamsObject[WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER] = '';
 
     // The scroll group state travels with the window rather than being asked for after it loads, so
     // the toolbar and every scroll-group-following web view render the reference the app is actually
@@ -1632,8 +1797,8 @@ async function main() {
   // so this must stay wired without first waiting for extension-host readiness: a wait here for an
   // extension-host ready signal would deadlock against that wait.
   setWebViewWindowCreator({
-    createPendingContentWindow: async () =>
-      (await createWindow(undefined, { pendingContent: true })).windowId,
+    createPendingContentWindow: async (isUserRequested: boolean) =>
+      (await createWindow(undefined, { isUserRequested, pendingContent: true })).windowId,
     closeWindow: (windowId) => {
       // Rolling back an open that never delivered must not put the close-all question on screen,
       // and it cannot: a window still waiting for its content never answers for the application, so
@@ -1658,7 +1823,10 @@ async function main() {
   const restoreWindows = async () => {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
-      const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
+      const legacyWindow = await createWindow(
+        { kind: 'legacy', boundsState: plan.boundsState },
+        { isUserRequested: true },
+      );
       setMainWindowId(legacyWindow.windowId);
       return;
     }
@@ -1667,10 +1835,13 @@ async function main() {
     // block on the extension host early in startup — so the first window never waits on it. The
     // saved structure keeps entry order regardless of window creation order.
     const { entries, mainEntryIndex } = plan;
-    const mainWindow = await createWindow({
-      kind: 'entry',
-      entry: entries[mainEntryIndex],
-    });
+    const mainWindow = await createWindow(
+      {
+        kind: 'entry',
+        entry: entries[mainEntryIndex],
+      },
+      { isUserRequested: true },
+    );
     setMainWindowId(mainWindow.windowId);
     if (entries.length <= 1) return;
 
@@ -1693,7 +1864,10 @@ async function main() {
         // Sequential on purpose: creating windows one at a time keeps the tracked window order
         // (and so the focus fallback and save order) deterministic
         // eslint-disable-next-line no-await-in-loop
-        await createWindow({ kind: 'entry', entry: entries[entryIndex] });
+        await createWindow(
+          { kind: 'entry', entry: entries[entryIndex] },
+          { isUserRequested: true },
+        );
       }
     }
   };
@@ -1922,7 +2096,7 @@ async function main() {
   commandService.registerCommand(
     'platform.createWindow',
     async () => {
-      await createWindow();
+      await createWindow(undefined, { isUserRequested: true });
     },
     {
       method: {

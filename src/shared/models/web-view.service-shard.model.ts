@@ -11,7 +11,12 @@
  */
 
 import { Layout } from '@shared/models/docking-framework.model';
-import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
+import {
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewId,
+  WebViewType,
+} from '@shared/models/web-view.model';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
@@ -22,6 +27,35 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
  * @experimental
  */
 export interface WebViewServiceShard extends WebViewServiceType {
+  /**
+   * The public open, plus the one thing only the process that created this window knows.
+   *
+   * Redeclared here rather than widened on {@link WebViewServiceType}: the public signature is what
+   * reaches `papi.d.ts`, and an extension has no use for this parameter — it describes the window
+   * the platform is opening into, not the web view being opened. An extra optional parameter is
+   * assignable to the public shape, so the extension-facing surface is unchanged.
+   *
+   * @param webViewType See {@link WebViewServiceType.openWebView}
+   * @param layout See {@link WebViewServiceType.openWebView}
+   * @param options See {@link WebViewServiceType.openWebView}
+   * @param activateWithoutDocumentFocus Dock the web view and make its tab active, but leave
+   *   document focus alone. Focusing the new tab focuses its iframe, and a `focus()` inside a
+   *   window that does not hold OS focus sets that document's active element without activating the
+   *   window — latently, until the window is next activated — so it would still claim the caret for
+   *   a window that was deliberately opened in the background, or for one about to be raised, ahead
+   *   of whichever tab the raise is actually meant to show. Passed by the main process both when it
+   *   created this window without activating it and the user has not activated it since, and when
+   *   it is about to raise this window across windows (its own OS-level `focusWindow` call happens
+   *   after this returns, so document focus would otherwise be requested too early)
+   * @experimental
+   */
+  openWebView: (
+    webViewType: WebViewType,
+    layout?: Layout,
+    options?: OpenWebViewOptions,
+    activateWithoutDocumentFocus?: boolean,
+  ) => Promise<WebViewId | undefined>;
+
   /**
    * Whether this window's dock holds the tab or tab group with the given ID.
    *
@@ -100,6 +134,12 @@ export interface WebViewServiceShard extends WebViewServiceType {
    * an adopt that fails leaves no state behind under an id this window does not hold.
    *
    * @param savedWebViewDefinition Captured definition to open from
+   * @param activateWithoutDocumentFocus Dock the adopted web view and make its tab active, but
+   *   leave document focus alone. Focusing the new tab focuses its iframe, and a `focus()` inside a
+   *   window that does not hold OS focus sets that document's active element without activating the
+   *   window — latently, until the window is next activated — so it would still claim the caret for
+   *   a window the move deliberately created in the background. Passed by the main process when it
+   *   created this window without activating it and the user has not activated it since
    * @returns Id of the web view this window now holds, or `undefined` if the provider declined
    * @throws If the definition does not carry a non-empty `id` and `webViewType`, or if `state` is
    *   present and is not a plain serializable object. Reachable from any process, so it checks
@@ -108,5 +148,8 @@ export interface WebViewServiceShard extends WebViewServiceType {
    *   wait
    * @experimental
    */
-  adoptWebView(savedWebViewDefinition: SavedWebViewDefinition): Promise<WebViewId | undefined>;
+  adoptWebView(
+    savedWebViewDefinition: SavedWebViewDefinition,
+    activateWithoutDocumentFocus?: boolean,
+  ): Promise<WebViewId | undefined>;
 }

@@ -213,8 +213,27 @@ export async function getFocusedWindowId(): Promise<string | undefined> {
  * window before falling back to delivering the focus notification at the Electron boundary itself.
  * Activation requests that a compositor honors at all are honored within a second or two, so ten
  * seconds of retries means it will not cooperate.
+ *
+ * Deliberately NOT shared with {@link RAISE_FOCUS_SYNTHESIS_BUDGET_MS} below, though the two do the
+ * same thing. The synthetic event satisfies `getFocusedWindowId()` but leaves `win.isFocused()`
+ * false, so every second spent synthesizing is a second in which a caller that goes on to assert
+ * REAL OS focus cannot be satisfied — and callers do assert exactly that, e.g. the
+ * foreground-withholding test in `web-view-move-between-windows.spec.ts`. This budget stays long
+ * enough to give a slow-but-cooperating compositor its chance.
  */
 const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
+
+/**
+ * The same fallback for {@link waitForWindowToBeRaised}, which cannot use the budget above.
+ *
+ * That helper waits on a raise the APP asked for, and the renderer only honors the note such a
+ * raise leaves behind for `CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS` (5000ms,
+ * `src/renderer/services/window-activation.util.ts`). A synthetic focus event delivered after that
+ * bound finds the note already stale, the catch-up declines it, and the assertion the caller is
+ * waiting on can never be satisfied. So this has to stay clearly under that bound — nothing
+ * enforces the relationship, which is why it is written down here.
+ */
+const RAISE_FOCUS_SYNTHESIS_BUDGET_MS = 3000;
 
 /**
  * Give a window focus and wait until the main process routes to it.
@@ -261,6 +280,35 @@ export async function focusWindowAndWaitForRouting(
     (focusedId) => focusedId === windowId,
     30_000,
     `main process to route to window ${windowId}`,
+  );
+}
+
+/**
+ * Wait for the main process to route to `windowId` after something INSIDE THE APP already asked the
+ * OS to raise it (`web-view.service-router.ts`'s cross-window reveal calling `focusWindow`) —
+ * deliberately never drives focus itself the way {@link focusWindowAndWaitForRouting} does, since
+ * doing so would prove this test's own focus-forcing worked rather than the app's raise. Simulates
+ * the compositor's own focus delivery only once a cooperation budget elapses without it, for the
+ * same reason {@link focusWindowAndWaitForRouting} does: this suite's WSLg/Weston compositor is
+ * known to sometimes ignore programmatic re-activation of an already-shown window, regardless of
+ * which code inside the app asked for it.
+ */
+export async function waitForWindowToBeRaised(
+  electronApp: ElectronApplication,
+  windowId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const startTime = Date.now();
+  await pollUntil(
+    async () => {
+      if (Date.now() - startTime >= RAISE_FOCUS_SYNTHESIS_BUDGET_MS) {
+        await withPlatformWindow(electronApp, windowId, (win) => win.emit('focus'));
+      }
+      return getFocusedWindowId();
+    },
+    (focusedId) => focusedId === windowId,
+    timeoutMs,
+    `main process to route to window ${windowId} after it was asked to be raised`,
   );
 }
 

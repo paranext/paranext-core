@@ -10,13 +10,19 @@
  * cannot exercise: mocks have no renderer to start, no dock to empty, and no emptiness report
  * racing the adopt.
  *
- * Two tests, each launching its own Electron instance (the isolated fixture is test-scoped and each
- * launch costs 30+ seconds, so related assertions are grouped into one instance):
+ * Three tests, each launching its own Electron instance (the isolated fixture is test-scoped and
+ * each launch costs 30+ seconds, so related assertions are grouped into one instance):
  *
- * 1. The USER'S route: right-click a web view's tab, choose "Move tab to new window". The web view
+ * 1. Foreground withholding: a window a move creates to hold the destination web view is not something
+ *    the user asked for — they may be working in an entirely different application — so it must
+ *    appear without pulling the OS foreground away from wherever they are. Moving a web view out of
+ *    window 1 into a brand new window leaves window 1 holding both OS focus and the routing target,
+ *    while the created window comes up visible but unfocused. Every other test here depends on a
+ *    created window activating normally, so this is the one place that pins the opposite.
+ * 2. The USER'S route: right-click a web view's tab, choose "Move tab to new window". The web view
  *    leaves the window it was in, a second window comes up holding it, the window it left docks a
  *    Home tab of its own, and the app ends with two windows.
- * 2. The COMMAND routes, where the id a move answers with is observable: `moveWebViewToWindow` into an
+ * 3. The COMMAND routes, where the id a move answers with is observable: `moveWebViewToWindow` into an
  *    already-open window, then `moveWebViewToNewWindow` back out of it. The first move empties its
  *    source window — the PRIMARY, which docks a Home tab of its own rather than closing, since only
  *    its ✕ and the Quit menu close it; the second move leaves its source window holding its other
@@ -89,7 +95,9 @@ import {
   createSecondWindow,
   createStepLogger,
   expectWindowDockHasOnlyHomeTab,
+  focusWindowAndWaitForRouting,
   getAppPages,
+  getFocusedWindowId,
   getHeldWebViewIds,
   getWindowIdOfPage,
   homeTabTitle,
@@ -98,6 +106,7 @@ import {
   quitAndExpectCleanExit,
   waitForRendererRegistered,
   webViewTabTitle,
+  withPlatformWindow,
 } from './multi-window.util';
 
 // #region move commands
@@ -275,8 +284,61 @@ test.use({
 test.describe('moving a web view between windows', () => {
   // Each test pays full app startup (up to ~180 s worst case) plus one or two extra window
   // startups — a move to a new window contains a whole cold renderer start of its own — and the
-  // second test adds a third move and a window close on top of that.
+  // third test adds a third move and a window close on top of that.
   test.setTimeout(480_000);
+
+  test('a window created for a moved web view does not take the foreground', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    // Nobody asked for this window: a move brought it into being, and the user may be working in
+    // another application entirely. It must appear — its content is on the way — without pulling
+    // the foreground away from wherever the user is. The window a person DID ask for is covered by
+    // every other test here, all of which depend on the new window activating normally.
+    const logStep = createStepLogger('withhold-activation');
+    await waitForAppReady(mainPage, { timeout: 180_000 });
+    const window1Id = getWindowIdOfPage(mainPage);
+    const webViewId = homeTabWebViewId(window1Id);
+    await expect(homeTabTitle(mainPage, window1Id)).toBeVisible({ timeout: 60_000 });
+    await expectAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
+
+    // Establish the routing target first, so "focus did not move" is a change that could have been
+    // observed rather than a value that was never set.
+    await focusWindowAndWaitForRouting(electronApp, window1Id);
+    expect(await getFocusedWindowId()).toBe(window1Id);
+    logStep(`window ${window1Id} holds focus before the move`);
+
+    await moveWebViewToNewWindow(webViewId);
+    await expectAppWindowCount(electronApp, 2, 60_000, 'the moved web view to get its own window');
+
+    // Matched by the platform's own windowId query parameter, not Electron's numeric
+    // `BrowserWindow.id` — see `withPlatformWindow`'s doc comment in `multi-window.util.ts`.
+    const createdWindowPage = getAppPages(electronApp).find(
+      (page) => getWindowIdOfPage(page) !== window1Id,
+    );
+    if (!createdWindowPage) throw new Error('the move did not create a second window');
+    const createdWindowId = getWindowIdOfPage(createdWindowPage);
+
+    // OS focus, not the routing target. Routing is the weaker claim of the two and on its own it
+    // cannot see this feature at all: the focus handler returns before recording a bounced window,
+    // so `getFocusedWindowId()` reads the same whether focus was handed back or never taken. Asking
+    // Electron which window the OS considers focused is what makes the hand-back observable.
+    const createdWindowState = await withPlatformWindow(electronApp, createdWindowId, (win) => ({
+      isFocused: win.isFocused(),
+      isVisible: win.isVisible(),
+    }));
+    const window1IsFocused = await withPlatformWindow(electronApp, window1Id, (win) =>
+      win.isFocused(),
+    );
+    expect(createdWindowState.isFocused).toBe(false);
+    expect(window1IsFocused).toBe(true);
+    // Visible as well as unfocused: asserting only the focus half would also pass for a window that
+    // never appeared at all, which is a worse outcome than the one under test.
+    expect(createdWindowState.isVisible).toBe(true);
+    // Routing follows, and is asserted second because it is the consequence rather than the thing.
+    expect(await getFocusedWindowId()).toBe(window1Id);
+    logStep(`window ${window1Id} holds OS focus; the created window is visible and unfocused`);
+  });
 
   test('a tab moved to a new window through its context menu leaves its window, arrives in the new one, and leaves a Home tab behind', async ({
     electronApp,
@@ -345,6 +407,37 @@ test.describe('moving a web view between windows', () => {
       timeout: 120_000,
     });
     logStep(`window ${window2Id} holds the moved web view as ${movedWebViewId}`);
+
+    // The other half of the withholding rule, and the half a test is most likely to lose: this move
+    // came from the tab's OWN CONTEXT MENU, so a person asked for it and the window they asked for
+    // must come to the front. Without this, withholding could be applied to every move — including
+    // the user's own — and the suite would still be green.
+    const menuMoveFocus = await electronApp.evaluate(
+      ({ BrowserWindow }, { id }) => {
+        // Matched on the `windowId` query parameter, not `BrowserWindow.id`: the platform's id is a
+        // durable GUID with no relationship to Electron's numeric id (see `withPlatformWindow`'s own
+        // doc comment in `multi-window.util.ts` for why).
+        const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
+          try {
+            return (
+              new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined
+            );
+          } catch {
+            return undefined;
+          }
+        };
+        const created = BrowserWindow.getAllWindows().find((win) => platformIdOf(win) !== id);
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        return {
+          createdIsFocused: created ? created.isFocused() : undefined,
+          focusedWindowId: focusedWindow ? platformIdOf(focusedWindow) : undefined,
+        };
+      },
+      { id: window1Id },
+    );
+    expect(menuMoveFocus.createdIsFocused).toBe(true);
+    expect(menuMoveFocus.focusedWindowId).toBe(window2Id);
+    logStep(`window ${window2Id} took the foreground, as a window the user asked for should`);
 
     // Gone from the window it left — the tab and its iframe both.
     await expect(webViewTabTitle(mainPage, webViewIdBeforeMove)).toHaveCount(0, {
