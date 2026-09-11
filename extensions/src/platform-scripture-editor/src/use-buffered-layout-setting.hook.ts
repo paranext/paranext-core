@@ -11,42 +11,46 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  * `platformScriptureEditor.onSharedLayoutApply` event fires for this `projectId`. Between arms, a
  * change to the underlying (synced) setting is held back — this is the team-member layout buffer.
  *
- * This hook is built for consumers that REMOUNT on a project switch (e.g. the resource/model-text
- * panels, which switch projects via `reloadWebView`; that regenerates the web view content with a
- * new nonce and so reloads the panel iframe — a fresh React mount with the new `projectId` baked
- * in). For such consumers `projectId` never changes in place for a live instance, so the switch is
- * covered by the mount arm and same-project re-applies are covered by `onSharedLayoutApply`; no
- * `projectId`-change re-arm effect is needed.
- *
- * It is NOT safe for consumers that change `projectId` IN PLACE via `updateWebViewDefinition({
- * projectId })` (as e.g. `checklist.web-view.tsx` / `checks-side-panel.web-view.tsx` do). Without a
- * remount the held copy would show the previous project's value; such a consumer would need a
- * PDP-subscription reset pattern instead (reset the held value to a not-yet-loaded sentinel when
- * the PDP identity changes, like `use-structure-protection-state.hook.ts`). A runtime tripwire
- * below `logger.warn`s if it ever detects an in-place `projectId` change so this assumption fails
- * loudly rather than silently returning stale data.
- *
- * The mount arm intentionally waits for `isLoading` to be `false` before applying/disarming.
- * `useProjectSetting` returns the `defaultValue` placeholder with `isLoading === true` until the
- * subscription resolves; applying during that window would lock the held copy onto the placeholder
- * and drop the real value when it arrives. Because `projectId` is fixed for a mount (see above),
- * `isLoading` is a reliable "the value is ready for this project" signal here.
- *
  * Only the admin/project layer should be buffered; callers that need the live value (e.g. an
  * admin's own edit control) should use `useProjectSetting` directly.
  *
- * A read error is never latched. The mount arm skips a {@link PlatformError} and stays armed, so a
- * setting that becomes readable later still lands without waiting for an `onSharedLayoutApply`. The
- * error itself is reported separately rather than as the held value, because the held value at that
- * point is the placeholder — indistinguishable from a genuinely empty setting.
+ * Consumers must REMOUNT on a project switch (e.g. the resource/model-text panels, which switch via
+ * `reloadWebView`; that reloads the panel iframe — a fresh React mount with the new `projectId`
+ * baked in). Binding an unbound consumer — `projectId` going from `undefined` to a project — is
+ * also safe: nothing loads while unbound, so the hook is still armed when the project arrives.
+ * Moving between two projects in place is NOT safe. `useProjectSetting` goes on serving the
+ * outgoing project's settled value for at least a commit after the switch, so the held copy stays
+ * on the outgoing project's value — or latches it, if the hook was still armed — and a read error
+ * for the incoming project goes unreported. The held copy, arm flag, and error gate are private, so
+ * a consumer cannot repair this from outside. A runtime tripwire `logger.warn`s on such a move.
  *
- * `settingError` is reported only while no real value has ever been applied. Once one has, holding
- * it across a failed re-read is exactly the job this buffer exists to do, so a later failure is
- * swallowed rather than replacing working content with an error message.
+ * TODO(PT-4316): the Scripture Text Grid still moves between projects in place, through
+ * `useTextCollectionSources`. While the grid is unbound — opened by the default layout with no
+ * `projectId` and not yet re-pointed by a reload — `resolveTextCollectionProjectId` can move it to
+ * another project without a remount. Its admin-shared list then stays on the outgoing project while
+ * its per-user list, overlay, and saved cell order follow the incoming one, so the grid's
+ * cell-order reconcile can prune the incoming project's saved order against the wrong admin list
+ * and persist the result. The candidate fixes are for the grid to stop moving in place, or for this
+ * hook to reset and re-arm when its project data provider changes; a reset keyed on `projectId`
+ * alone would still latch the outgoing provider's value.
  *
- * @returns `[heldSetting, isLoading, settingError]`. `settingError` is set while the setting cannot
- *   be read AND nothing readable has arrived yet. `heldSetting` may itself be a
- *   {@link PlatformError} if a first-render raw value were ever one; check with `isPlatformError`.
+ * The mount arm waits for `isLoading` to be `false`: until the subscription resolves,
+ * `useProjectSetting` returns the `defaultValue` placeholder, and applying it would lock the held
+ * copy onto the placeholder and drop the real value when it arrives. `isLoading` is a reliable
+ * readiness signal here only because a mount's `projectId` is fixed.
+ *
+ * A read error is never latched: the mount arm skips a {@link PlatformError} and stays armed, so a
+ * setting that becomes readable later still lands on its own. The error is reported on
+ * `settingError` rather than as the held value, because the held value at that point is the
+ * placeholder — indistinguishable from a genuinely empty setting. Once a real value has been
+ * applied, a later failed read is swallowed so working content is not replaced by an error.
+ *
+ * @returns `[heldSetting, isLoading, settingError]`. `isLoading` and `settingError` describe the
+ *   current read, not the held copy. The held copy is filled by an effect, so on the commit where a
+ *   value first becomes readable `isLoading` is already `false` while `heldSetting` is still the
+ *   placeholder. `settingError` is set while the setting cannot be read AND nothing readable has
+ *   arrived yet. `heldSetting` may itself be a {@link PlatformError} if a first-render raw value
+ *   were ever one; check with `isPlatformError`.
  */
 export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSettingNames>(
   projectId: string | undefined,
@@ -63,11 +67,9 @@ export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSetti
     ProjectSettingTypes[ProjectSettingName] | PlatformError
   >(rawSetting);
 
-  // Tripwire: this hook assumes consumers remount on a project switch, so `projectId` should never
-  // change in place. If it does, the held copy may show the previous project's value — warn so the
-  // unsupported usage is caught rather than silently returning stale data. Purely diagnostic: it
-  // does NOT re-arm or change the held value. On a true remount this effect never observes an
-  // in-place change, so it stays silent in normal operation.
+  // Tripwire: warn when `projectId` moves in place away from a defined project, which this hook does
+  // not support (see the hook doc). Binding from `undefined` is supported, so it stays silent.
+  // Purely diagnostic: it does NOT re-arm or change the held value.
   const previousProjectIdRef = useRef(projectId);
   useEffect(() => {
     if (previousProjectIdRef.current !== undefined && previousProjectIdRef.current !== projectId) {
