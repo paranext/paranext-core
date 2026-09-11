@@ -4,6 +4,10 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import type { FirstRunStatus } from '@renderer/services/first-run-store';
 import { SIMPLE_PANEL_ID_PROJECT } from '@renderer/components/docking/simple-layout.data';
+import {
+  reportConnectionLost,
+  resetConnectionLost,
+} from '@renderer/services/connection-lost-store';
 import type { TourProps, TourStep } from './tour.component';
 import { readTourDone, requestTourReplay, writeTourDone } from './onboarding-tour.store';
 import { OnboardingTour } from './onboarding-tour.component';
@@ -131,6 +135,7 @@ beforeEach(() => {
   mockTourDone = false;
   mockReplayCount = 0;
   mockTourDoneListeners.clear();
+  resetConnectionLost();
 
   layoutPanelEl = document.createElement('div');
   layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
@@ -144,6 +149,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   mockTourDone = false;
+  resetConnectionLost();
   layoutPanelEl?.remove();
   profileTriggerEl?.remove();
 });
@@ -360,6 +366,31 @@ describe('OnboardingTour', () => {
     act(() => {
       recordTourDoneElsewhere();
     });
+
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('closes the open tour without recording it as done when the connection is lost', () => {
+    // The done flag is permanent and shared, so consuming it here would cost the user a tour they
+    // never saw: the connection-lost state offers only a reload, and the reload comes back to an
+    // app that believes the tour has already been given.
+    render(<OnboardingTour />);
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+
+    act(() => {
+      reportConnectionLost();
+    });
+
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+    expect(readTourDone()).toBe(false);
+  });
+
+  it('does not render when the connection is already lost at mount', () => {
+    // The loss latches during startup often enough to matter — the socket can die before the dock
+    // layout resolves, which is exactly what the readiness gate is waiting for.
+    reportConnectionLost();
+
+    render(<OnboardingTour />);
 
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });

@@ -1,6 +1,10 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first-run-store';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import {
+  getIsConnectionLost,
+  subscribeToConnectionLost,
+} from '@renderer/services/connection-lost-store';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
@@ -203,6 +207,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
  *   replay runs in Power too, reduced by `Tour` to the stops whose anchors exist there)
  * - The app is not yet unlocked (`firstRunStatus.kind !== 'app'` — still loading or in the wizard)
  * - The tour has already been completed or skipped, and no replay has been requested
+ * - This renderer has lost its connection to the network
  *
  * Completion is recorded on Done and on Skip (Escape routes through Skip), and only then. Quitting
  * or reloading with the tour still open leaves the flag unwritten, so the tour resumes from stop 1
@@ -213,6 +218,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
  * `readDirection()`); this component never reads layout direction.
  */
 export function OnboardingTour() {
+  const isConnectionLost = useSyncExternalStore(subscribeToConnectionLost, getIsConnectionLost);
   // Replay requests arrive from the Help menu by way of the onboarding tour service shard. The
   // count is also the remount key, so asking again while the tour is open restarts it from stop 1
   // rather than leaving it wherever it was.
@@ -222,6 +228,15 @@ export function OnboardingTour() {
   // strings subscription and first-run/power-mode hooks for a tour that can never show. Read once
   // at mount, since only a replay can reopen the tour after that.
   const [doneAtMount] = useState(readTourDone);
+  // Stand the tour down entirely once the connection is lost, rather than only muting its keys.
+  // The overlay's Escape handler routes through `onSkip`, which persists the done flag — so the one
+  // key a stuck user is most likely to press would spend a tour they never saw, permanently and
+  // across windows, on the way to the only action left to them (a reload). Unmounting is what
+  // withdraws that handler and the card's focus trap together, leaving Escape and Tab to the
+  // connection-lost state's own shell as the keyboard-shortcut catalog describes. A tour
+  // interrupted this way resumes from stop 1 after the reload, which is the same thing quitting
+  // mid-tour already does: an interrupted user has not been oriented.
+  if (isConnectionLost) return undefined;
   // React components render nothing via null.
   // eslint-disable-next-line no-null/no-null
   if (doneAtMount && replayCount === 0) return null;
