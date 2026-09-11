@@ -239,6 +239,14 @@ button.toolbar-item {
 // is next refreshed.
 .typeahead-popover.auto-embed-menu ul {
   max-height: calc(100vh - 16px);
+
+  // The vendored rule pairs `overflow-y: scroll` with a hidden scrollbar, which suits the marker
+  // typeahead — you narrow that list by typing, not by scrolling. This menu has no filter, so when
+  // the panel is too short for the whole list the only way to the rest of it is to scroll, and a
+  // hidden scrollbar leaves nothing on screen saying there is more. `auto` keeps the gutter out of
+  // the way at the heights where the whole menu already fits.
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .CommentPlugin_CommentInputBox_Editor,
