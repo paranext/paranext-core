@@ -39,7 +39,13 @@ import {
   RefObject,
 } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
-import { ABORTED, getErrorMessage, isPlatformError, type PaletteItem } from 'platform-bible-utils';
+import {
+  ABORTED,
+  deepEqual,
+  getErrorMessage,
+  isPlatformError,
+  type PaletteItem,
+} from 'platform-bible-utils';
 import type { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -339,11 +345,14 @@ export default function FootnoteEditor({
   const initialNoteOpsJson = useRef('');
 
   /**
-   * What the parent editor is known to hold for this note: the ops it was loaded with, then
-   * whatever each inline apply wrote. Compared against before applying so an unchanged note is
-   * never written back (see {@link saveCurrentNoteOp}).
+   * What the parent editor is known to hold for this note: the op it was loaded with, then whatever
+   * each inline apply wrote. Compared against before applying so an unchanged note is never written
+   * back (see {@link saveCurrentNoteOp}). Held as the op itself and compared STRUCTURALLY: a
+   * serialized comparison would call two notes with the same content different whenever their keys
+   * happened to be written in a different order, which is exactly the silent re-key this dedupe
+   * exists to prevent.
    */
-  const lastAppliedNoteOpJsonRef = useRef('');
+  const lastAppliedNoteOpRef = useRef<DeltaOpInsertNoteEmbed | undefined>(undefined);
 
   // These control the placement of the inline markers menu by setting the location of the anchor
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
@@ -470,15 +479,14 @@ export default function FootnoteEditor({
       if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
         onChange?.([currentNoteOp]);
         if (applyToParent && parentEditorRef && noteKeyRef.current) {
-          const currentNoteOpJson = JSON.stringify(currentNoteOp);
           // `replaceEmbedUpdate` always swaps the note node, which re-mints its key, but the
           // parent only announces the swap (and the new key) when the document actually changed.
           // In inline mode the host holds that key for every later apply, so re-keying the note
           // behind its back with content it already has would silently strand the session. The
           // popover deliberately keeps applying unconditionally: its Save is also what confirms a
           // newly inserted note, which would otherwise be discarded as abandoned on close.
-          if (inline && currentNoteOpJson === lastAppliedNoteOpJsonRef.current) return;
-          lastAppliedNoteOpJsonRef.current = currentNoteOpJson;
+          if (inline && deepEqual(currentNoteOp, lastAppliedNoteOpRef.current)) return;
+          lastAppliedNoteOpRef.current = currentNoteOp;
           parentEditorRef.current?.replaceEmbedUpdate(noteKeyRef.current, [currentNoteOp]);
         }
       }
@@ -563,7 +571,7 @@ export default function FootnoteEditor({
     setIsAtInitialState(true);
     const noteOp = noteOps?.at(0);
     // The note about to be loaded is, by definition, what the parent already holds.
-    lastAppliedNoteOpJsonRef.current = noteOp ? JSON.stringify(noteOp) : '';
+    lastAppliedNoteOpRef.current = noteOp;
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       const rawCaller = noteOp.insert.note?.caller;
       // Parses the current caller

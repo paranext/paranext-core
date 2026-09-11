@@ -102,6 +102,26 @@ function makeNoteOps(text: string): DeltaOpInsertNoteEmbed[] {
   ];
 }
 
+/** The same note {@link makeNoteOps} builds, with every object's keys written in another order. */
+function makeKeyReorderedNoteOps(text: string): DeltaOpInsertNoteEmbed[] {
+  return [
+    {
+      insert: {
+        note: {
+          contents: {
+            ops: [
+              { attributes: { char: { style: 'fr' } }, insert: '1.1 ' },
+              { attributes: { char: { style: 'ft' } }, insert: text },
+            ],
+          },
+          style: 'f',
+          caller: '+',
+        },
+      },
+    },
+  ];
+}
+
 function renderEditor(overrides: Partial<Parameters<typeof FootnoteEditor>[0]> = {}) {
   const props = {
     noteOps: makeNoteOps('first'),
@@ -480,6 +500,39 @@ describe('FootnoteEditor inline live-apply', () => {
       content: [{ type: 'para' }],
     });
     primeCurrentOps('unchanged');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
+  });
+
+  // Same content, different key insertion order: a serialized comparison calls these two notes
+  // different and re-keys the note behind the host's back — the very thing the dedupe prevents.
+  it('does not apply back a note the parent already holds under a different key order', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    renderEditor({
+      inline: true,
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+      noteKey: 'key-reordered',
+      noteOps: makeNoteOps('unchanged'),
+    });
+    await vi.runOnlyPendingTimersAsync(); // initial load
+
+    // Two change notifications, as above: the first is the load snapshot the initialization guard
+    // swallows, the second schedules the apply this dedupe has to skip.
+    editorRefMock.getNoteOps.mockReturnValue(makeKeyReorderedNoteOps('unchanged'));
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
     latestEditorialProps.onUsjChange?.({
       type: 'USJ',
       version: '3.1',
