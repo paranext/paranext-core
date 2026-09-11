@@ -31,6 +31,7 @@ import {
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { resolveShardForWindow } from '@main/services/target-shard-resolver.util';
 import {
+  ContentZoomAreaId,
   GetWebViewOptions,
   OpenWebViewOptions,
   ReloadWebViewOptions,
@@ -457,7 +458,11 @@ async function resolveContentZoomShard(
   areaId: unknown,
   operation: string,
 ): Promise<
-  | { shard: WebViewServiceShard; targetId: WebViewId | undefined; areaId: string | undefined }
+  | {
+      shard: WebViewServiceShard;
+      targetId: WebViewId | undefined;
+      areaId: ContentZoomAreaId | undefined;
+    }
   | undefined
 > {
   assertOptionalContentZoomArgument(webViewId, 'web view id', operation);

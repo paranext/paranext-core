@@ -65,6 +65,10 @@ describe('web-view-content-zoom.service', () => {
   }
   const settings: Record<string, unknown> = { 'platform.webViewContentZoom': 1, [MEMORY]: {} };
   const memoryCallbacks: Array<(value: unknown) => void> = [];
+  const defaultCallbacks: Array<(value: unknown) => void> = [];
+  let onDidUpdateWebViewCallback:
+    | ((event: { webView: SavedWebViewDefinition }) => void)
+    | undefined;
   const settingsSet = vi.fn(async (key: string, value: unknown) => {
     settings[key] = value;
     return true;
@@ -84,6 +88,8 @@ describe('web-view-content-zoom.service', () => {
     settings['platform.webViewContentZoom'] = 1;
     settings[MEMORY] = {};
     memoryCallbacks.length = 0;
+    defaultCallbacks.length = 0;
+    onDidUpdateWebViewCallback = undefined;
     settingsSet.mockClear();
     updateDefinition.mockClear();
     showIndicator.mockClear();
@@ -105,13 +111,17 @@ describe('web-view-content-zoom.service', () => {
       getDefinition: (id: string) => definitions.get(id),
       updateDefinition,
       getAllOpenDefinitions: () => [...definitions.values()],
-      onDidUpdateWebView: () => () => false,
+      onDidUpdateWebView: (callback) => {
+        onDidUpdateWebViewCallback = callback;
+        return () => false;
+      },
       getLastFocusedTabId: () => lastFocused,
       settings: {
         get: async (key: string) => settings[key],
         set: settingsSet,
         subscribe: async (key: string, callback: (value: unknown) => void) => {
           if (key === MEMORY) memoryCallbacks.push(callback);
+          else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
           // Mirrors the production subscription's immediate delivery of the current value
           // (`retrieveDataImmediately` defaults to true), which is what primes the module's caches
           // on initialization rather than leaving them to wait for the first live change.
@@ -655,5 +665,53 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-1')?.state).toEqual({});
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
     expect(showIndicator).toHaveBeenLastCalledWith('main', `Default · ${formatZoomPercent(1)}`);
+  });
+
+  it('repushes every open pane, including one granted the whole-iframe fallback, when the default setting changes', () => {
+    definitions.set('url-1', {
+      id: 'url-1',
+      webViewType: 'someExtension.urlView',
+      contentType: 'url',
+    });
+    expect(defaultCallbacks).toHaveLength(1);
+    defaultCallbacks[0](1.5); // no re-init: this is the live subscription callback, fired directly
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
+    expect(iframe.style.zoom).toBe('1.5');
+  });
+
+  it("pushes a pane's variables when it is adopted into this window (onDidUpdateWebView)", () => {
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.6 } };
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1'); // not pushed yet
+    if (!onDidUpdateWebViewCallback) throw new Error('onDidUpdateWebView callback not captured');
+    onDidUpdateWebViewCallback({ webView: requireDefinition('editor-1') });
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.6');
+  });
+
+  it('flushes a pending memory write immediately on beforeunload, without waiting for the debounce delay', async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main');
+      expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
+      window.dispatchEvent(new Event('beforeunload'));
+      // Real time never advances past the debounce delay here (fake timers, 0 ms advanced): the
+      // pending write's own promise chain still settles, since that only needs its microtasks
+      // drained, but the debounce's own timer never gets the chance to fire on its own. So this can
+      // only pass because `beforeunload` itself flushed the write, not because the delay elapsed.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settingsSet).toHaveBeenCalledTimes(1);
+      expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:proj-A:main': 1.1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores a non-finite deltaSteps, writing no state, memory or indicator', async () => {
+    await adjustContentZoom('editor-1', Number.NaN, 'main');
+    await adjustContentZoom('editor-1', Number.POSITIVE_INFINITY, 'main');
+    await __flushContentZoomMemoryForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(updateDefinition).not.toHaveBeenCalled();
+    expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
+    expect(showIndicator).not.toHaveBeenCalled();
   });
 });
