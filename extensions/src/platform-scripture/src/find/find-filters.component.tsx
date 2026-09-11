@@ -69,6 +69,8 @@ const EXPLANATION_BUTTON_CLASS_NAME =
  * The panel is portalled with a z-index above the tooltip layer, and each tooltip is portalled
  * separately beside it, so a tooltip at its default layer renders behind the panel it sits inside.
  */
+// TODO(PT-4345): Remove once tooltips layer above popovers on the shared scale; this local
+// override only exists to lift these two past the panel until then.
 const EXPLANATION_TOOLTIP_STYLE = { zIndex: Z_INDEX_ABOVE_POPOVER };
 
 export function FindFilters({
@@ -118,10 +120,8 @@ export function FindFilters({
           view, so moving focus down it scrolls the document instead, and the popper repositions on
           every keypress. Scrolling inside the panel keeps it anchored.
 
-          The rest keeps this panel looking like the app's overlay menus rather than a plain popover:
-          `gap-0` stops PopoverContent's flex gap stacking on each fieldset's own bottom margin, the
-          translucent background and blurred `before:` layer are the menus' glass treatment, and
-          `animate-none!` matches their lack of an open animation.
+          `gap-0` stops PopoverContent's flex gap stacking on each fieldset's own bottom margin, which
+          would spread the groups further apart than those margins intend.
 
           A popover, unlike a menu, is not named by the button that opens it, so the name is given
           explicitly. */}
@@ -129,7 +129,7 @@ export function FindFilters({
         align="end"
         collisionPadding={8}
         aria-label={localizedStrings.toggleFilters}
-        className="tw:relative tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:gap-0 tw:overflow-x-hidden tw:overflow-y-auto tw:bg-popover/70 tw:p-3 tw:animate-none! tw:data-[state=closed]:overflow-hidden tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:-z-1 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150"
+        className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:gap-0 tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
       >
         {/* 1. Match content in */}
         <fieldset className="tw:mb-3">

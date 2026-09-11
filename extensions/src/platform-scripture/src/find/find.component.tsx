@@ -1178,7 +1178,11 @@ export function Find({
           is about to auto-search (debounce pending, or waiting on the data provider) — otherwise a
           restored/carried-over term would flash the idle prompt below before the search starts. */}
       {resultsAreaState === 'skeleton' && (
-        <div className="tw:space-y-2">
+        // `min-h-0` and `overflow-hidden` let these placeholder cards give way in a short panel
+        // instead of pushing the root past its height cap. Overflowing would grow the root its own
+        // scrollbar for the length of the search, narrowing the toolbar and sliding the filters
+        // popover anchored to it sideways.
+        <div className="tw:min-h-0 tw:space-y-2 tw:overflow-hidden">
           {Array.from({ length: 5 }).map((_value, index) => (
             // As this is a placeholder, it is safe to use the index as a key
             // eslint-disable-next-line react/no-array-index-key
