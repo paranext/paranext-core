@@ -565,14 +565,18 @@ function pushPreamble(
   // a code span, where a backslash escape would print as a backslash.
   const subject = inlineText(product ? product.name : DEFAULT_PRODUCT_NAME);
   out.push('# Third-party notices', '');
+  // The opening sentences are one text with two endings, not two texts: `subject` is
+  // `DEFAULT_PRODUCT_NAME` when no product is declared, and everything up to "the redistributable"
+  // reads the same either way. Written once because it is legal prose - two copies drift the moment
+  // someone corrects the wording in the arm they happened to be reading.
   out.push(
+    `${subject} incorporates the third-party components listed below. Where a component ships a`,
+    'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
+    'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
+    'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',
+    'accounted for separately in the last section. This file covers the redistributable',
     ...(product
       ? [
-          `${subject} incorporates the third-party components listed below. Where a component ships a`,
-          'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
-          'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
-          'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',
-          'accounted for separately in the last section. This file covers the redistributable',
           `closure of **${subject}**, built from paranext-core by \`${product.repository}\`: the npm`,
           'packages webpack actually compiled into `dist/` (plus the stylesheet-only packages Tailwind',
           'inlines before webpack runs, and anything `release/app` ships unbundled beside the bundle), the',
@@ -584,11 +588,6 @@ function pushPreamble(
             : ['NuGet closure of the bundled .NET data provider, and Electron.']),
         ]
       : [
-          `${DEFAULT_PRODUCT_NAME} incorporates the third-party components listed below. Where a component ships a`,
-          'license file of its own, that text is reproduced in full, as those licenses require; where it ships',
-          'none but declares an SPDX identifier, the canonical text of that license is reproduced instead,',
-          'marked as coming from SPDX rather than from the component. Apache-style `NOTICE` files are',
-          'accounted for separately in the last section. This file covers the redistributable',
           'closure of **this repository**: the npm packages webpack actually compiled into `dist/` (plus the',
           'stylesheet-only packages Tailwind inlines before webpack runs, and anything `release/app` ships',
           'unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.',
@@ -678,14 +677,6 @@ function pushElectronSection(out: string[], shipsElectron: boolean): void {
 }
 
 /**
- * The UBS lexical database, which is redistributed data and belongs to neither package graph.
- *
- * Gated on `platform-lexical-tools` being among the extensions the installer packs. The database is
- * fetched into that extension's assets at install time, so with the extension gone the artifact
- * contains no database - and an ungated section would go on making UBS copyright claims and CC
- * BY-SA 4.0 attributions for content no installer carries.
- */
-/**
  * What the document says about the portions of the lexical database UBS has not open-licensed.
  *
  * Three cases, because the sentence is a claim about whose distribution UBS permitted:
@@ -725,6 +716,14 @@ function lexicalDatabasePermission(product: ProductBlock | undefined): string[] 
   ];
 }
 
+/**
+ * The UBS lexical database, which is redistributed data and belongs to neither package graph.
+ *
+ * Gated on `platform-lexical-tools` being among the extensions the installer packs. The database is
+ * fetched into that extension's assets at install time, so with the extension gone the artifact
+ * contains no database - and an ungated section would go on making UBS copyright claims and CC
+ * BY-SA 4.0 attributions for content no installer carries.
+ */
 function pushLexicalDatabaseSection(
   out: string[],
   packedExtensions: string[],
@@ -928,14 +927,14 @@ function addSeparateProgramTexts(
     (program.deliveries || []).forEach((delivery) =>
       (delivery.alsoContains || []).forEach((component) => {
         const version = component.version ? ` ${component.version}` : '';
-        const notice = (component.copyright || '').replace(/\s+/g, ' ').trim();
+        const notice = inlineNotice(component.copyright || '');
         // The name sits in a code span, where a backslash escape would print as a backslash, so it
         // is written through as `canonicalTextCredit` writes a package name; the platform and the
         // notice are prose and are escaped.
         const line =
           `\`${component.name}${version}\` (bundled with the separate program \`${name}\` on ` +
           `${inlineText(delivery.platform)}) — ` +
-          `${notice ? inlineText(notice) : 'no copyright notice recorded'}`;
+          `${notice || 'no copyright notice recorded'}`;
         new Set(component.spdx || []).forEach((id) => credit(id, line));
       }),
     );

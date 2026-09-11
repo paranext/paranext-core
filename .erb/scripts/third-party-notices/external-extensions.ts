@@ -20,9 +20,6 @@ import type { ExternalExtension } from './types';
  * inventing a table.
  */
 
-/** A value still spelled as a `<...>` placeholder. */
-const PLACEHOLDER = PLACEHOLDER_TEMPLATE_VALUE;
-
 /**
  * `./extensions/` and `extensions` and `./extensions` are one folder.
  *
@@ -135,7 +132,7 @@ export function assertExternalExtensionsRecorded(
           'Record false with the reason until it can.',
       );
     const reason = String(entry.reason || '').trim();
-    if (!reason || PLACEHOLDER.test(reason))
+    if (!reason || PLACEHOLDER_TEMPLATE_VALUE.test(reason))
       throw new Error(
         `the "externalExtensions" entry for "${name}" records no usable "reason". The document ` +
           'reproduces it as the explanation for an omission - say where the extension is built ' +

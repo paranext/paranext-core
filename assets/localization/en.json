@@ -6,7 +6,7 @@
   "%about_db_ip_attribution_intro%": "Internet safety features use data from",
   "%about_db_ip_attribution_terms%": "Terms",
   "%about_error_couldNotOpenTermsOfService%": "The Terms of Service could not be opened. The document is installed beside the application as TERMS-OF-SERVICE.md.",
-  "%about_error_couldNotOpenTermsOfService_2%": "The Terms of Service could not be opened. The document is installed beside the application as TERMS-OF-SERVICE.html.",
+  "%about_error_couldNotOpenTermsOfService_2%": "The Terms of Service could not be opened. You can open TERMS-OF-SERVICE.html, installed beside the application, in your web browser.",
   "%about_licenseLabel_format%": "License: {license}",
   "%about_licenseLabel_termsOfService%": "Paratext Terms of Service",
   "%about_versionLabel_format%": "Version: {version}",

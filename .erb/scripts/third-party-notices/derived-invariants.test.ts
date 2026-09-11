@@ -501,3 +501,48 @@ describe('the Terms of Service document is spelled the same in all three places'
     expect(opener).toContain(`TERMS_OF_SERVICE_FILE_NAME = '${declared}'`);
   });
 });
+
+describe('the Terms of Service document keeps the properties its window relies on', () => {
+  // The window shows this document and nothing else: `terms-of-service-window.ts` denies every
+  // window-open and prevents every navigation, handing the URL to main's `openExternal` instead,
+  // which admits only `https:`, `mailto:` and the application's own scheme. The document is
+  // hand-regenerated and prettier-ignored, so a dropped CSP or a reintroduced `http://` link would
+  // surface as a link that silently does nothing when a reader clicks it - the file's own header
+  // comment asks a regenerator to keep both, and this is what holds them to it.
+  //
+  // Derived from the manifest's filename, like the block above, so a rename cannot leave this
+  // checking a document the application no longer ships.
+  const NAME_FROM_MANIFEST = /"license"\s*:\s*"SEE LICENSE IN ([^"]+)"/;
+  const manifest = fs.readFileSync(path.join(REPO, 'release', 'app', 'package.json'), 'utf8');
+  const declared = NAME_FROM_MANIFEST.exec(manifest)?.[1] ?? '';
+  const document = fs.readFileSync(path.join(REPO, declared), 'utf8');
+
+  /**
+   * Every `href` the document carries, however it is quoted.
+   *
+   * Deliberately broader than the schemes under test: it matches the attribute rather than the
+   * values expected to be there, so a link spelled in a way this file has not seen before is a
+   * failure to look at rather than a line the pattern skips. It does not match an unquoted
+   * attribute value, which the generated document does not produce.
+   */
+  const hrefs = [...document.matchAll(/href\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]);
+
+  it('carries links at all, so the cases below are not passing on an empty set', () => {
+    expect(hrefs.length).toBeGreaterThan(0);
+  });
+
+  it('declares a Content-Security-Policy that denies every default source', () => {
+    expect(document).toMatch(/<meta[^>]+http-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>/i);
+    expect(document).toContain("default-src 'none'");
+  });
+
+  it('leaves the application only through a scheme openExternal admits', () => {
+    // A fragment stays in the document - Electron fires no `will-navigate` for a same-document
+    // navigation - so a table of contents remains open to the document's authors. Anything else,
+    // including a relative path to another file, is a link this window cannot follow.
+    const unreachable = hrefs.filter(
+      (href) => !/^https:\/\//i.test(href) && !/^mailto:/i.test(href) && !href.startsWith('#'),
+    );
+    expect(unreachable).toEqual([]);
+  });
+});

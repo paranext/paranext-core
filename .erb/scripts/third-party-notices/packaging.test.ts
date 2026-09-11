@@ -1,24 +1,19 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import JSON5 from 'json5';
 import { describe, expect, it } from 'vitest';
 import { extensionCacheDirectory } from '../../../extensions/webpack/webpack.util';
+import { ELECTRON_BUILDER } from './main';
+import { readPackagingConfig } from './product';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
-const config = JSON5.parse(fs.readFileSync(path.join(REPO, 'electron-builder.json5'), 'utf8'));
+// Read through the pipeline's own reader, so the packaging config has one parser and one shape.
+const config = readPackagingConfig(ELECTRON_BUILDER);
 
-const extraResources: unknown[] = config.extraResources || [];
+/** Where an `extraResources` entry copies from, whichever of its two shapes it takes. */
+const resourcePath = (entry: string | { from: string; to: string }): string =>
+  typeof entry === 'string' ? entry : entry.from;
 
-// A narrowing helper rather than `(r as { from: string }).from`: this repo bans type assertions
-// (`no-type-assertion/no-type-assertion`) and does not exempt test files.
-function resourcePath(entry: unknown): string {
-  if (typeof entry === 'string') return entry;
-  if (entry && typeof entry === 'object' && 'from' in entry && typeof entry.from === 'string')
-    return entry.from;
-  return '';
-}
-
-const asStrings = extraResources.map(resourcePath);
+const asStrings = (config.extraResources || []).map(resourcePath);
 
 describe('electron-builder packaging', () => {
   it('ships THIRD-PARTY-NOTICES.md', () => {

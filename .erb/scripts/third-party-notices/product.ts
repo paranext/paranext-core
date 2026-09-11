@@ -8,6 +8,10 @@ export type PackagingConfig = {
   productName?: string;
   extraResources?: (string | { from: string; to: string })[];
   snap?: { stagePackages?: string[] };
+  /** Unset in this repository, and `packaging.test.ts` is what holds them that way. */
+  nsis?: { license?: string };
+  dmg?: { license?: string };
+  directories?: { buildResources?: string };
 };
 
 /** Parses the packaging config once, for every reader in this pipeline. */

@@ -65,10 +65,10 @@ function readPermittedModuleSpecifiers(): string[] {
  * The SHAPE of dispatching on the module name against hard-coded literals, rather than one expected
  * spelling of it.
  *
- * `/moduleName === /` matched exactly that text with exactly that spacing, so `switch
- * (moduleName)`, `moduleName.startsWith('react')` and a collapsed `moduleName==='react'` all passed
- * while doing the very thing it forbids. Anchoring on the syntax that has to be present - and
- * letting the noise through - is what `.claude/rules/grep-safety-net.md` asks for.
+ * A pattern spelled for one expected form - `/moduleName === /`, with exactly that spacing - is
+ * satisfied by `switch (moduleName)`, `moduleName.startsWith('react')` and a collapsed
+ * `moduleName==='react'` doing the very thing it forbids. Anchoring on the syntax that has to be
+ * present - and letting the noise through - is what `.claude/rules/grep-safety-net.md` asks for.
  *
  * A string LITERAL on the other side is what makes it the dangerous shape: comparing the name to a
  * variable is how a membership test against the allowlist itself is written

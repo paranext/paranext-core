@@ -1324,7 +1324,9 @@ step, no automation. Just a record.
   binary under it. The installer carries `LICENSE` (the AGPL text), `TERMS-OF-SERVICE.html`,
   `THIRD-PARTY-NOTICES.md`, and `LICENSING.md` — the last because the others otherwise state
   several things about the user's rights with nothing reconciling them, and because LICENSING.md is
-  what 3.B.1 means by "the AGPL Components identified by Paratext".
+  what 3.B.2 means by "the AGPL Components identified by SIL and UBSA in the license notices
+  accompanying the Paratext 10 application" (**amended 2026-09-10:** the 14 August 2026 Terms read
+  "identified by Paratext", and this entry cited the phrase as 3.B.1; it has always been in 3.B.2).
 - **Alternatives:** relicense everything, including the `lib/` packages — rejected: it makes the AGPL
   viral for third-party extensions and defeats the extension model. Key the rule on the
   `dependencies`/`devDependencies` section — rejected because that field was already wrong:
@@ -1866,7 +1868,9 @@ step, no automation. Just a record.
   prose; a `separatePrograms` table for third-party programs redistributed as separate executables,
   whose entries are reviewed determinations pinned to evidence in the tree; and an
   `externalExtensions` table that records, as a stated omission, extension zips packed from another
-  repository. This repository ships both tables empty and its own document is byte-identical.
+  repository. This repository ships both tables empty, so neither adds a section here; its own
+  document changes only in the preamble sentence that names the two new categories alongside the
+  five existing ones, and `THIRD-PARTY-NOTICES.lock.json`'s `documentSha256` moves with it.
 - **Alternatives:** A downstream generator - rejected: it would either duplicate this pipeline or
   depend on its internal module API across a clone boundary. Carrying the downstream entries in
   the downstream patch to this policy file - rejected: every change to this file would conflict

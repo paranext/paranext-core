@@ -88,9 +88,12 @@ function mergeTable<T>(
  *
  * Declared as a table rather than spelled out per field in `mergePolicies`, because the merge
  * returns `Policy` by spreading the base: a field added to `Policy` later would satisfy the return
- * type while being silently taken from the base, with the overlay's value dropped and no type error
- * and no test to catch it. `satisfies Record<keyof Policy, MergeKind>` makes that a compile error
- * instead - a new field has to say how it merges before this file builds.
+ * type while being silently taken from the base, with the overlay's value dropped and no type
+ * error. `satisfies Record<keyof Policy, MergeKind>` makes a field that declares nothing a compile
+ * error - it has to say how it merges before this file builds. It cannot make the merge IMPLEMENT
+ * what the field declares, and `OVERLAY_KEYS` is derived from here, so a key declared and left
+ * unwired would be accepted on the way in and dropped on the way out; `policy.test.ts` walks this
+ * table and fails on exactly that.
  *
  * - `union` - the two lists' union, in base order then overlay order.
  * - `concat` - appended; `assertOneExceptionPerPackage` then rejects a duplicate key.
@@ -100,7 +103,7 @@ function mergeTable<T>(
  */
 type MergeKind = 'union' | 'concat' | 'table' | 'base-only' | 'overlay-only';
 
-const MERGE_KINDS = {
+export const MERGE_KINDS = {
   allowed: 'union',
   copyleft: 'union',
   platformOnlyPackages: 'union',
@@ -152,15 +155,25 @@ export function mergePolicies(
   overlay: Partial<Policy>,
   names: { base: string; overlay: string },
 ): Policy {
-  const unknown = Object.keys(overlay)
-    .filter((key) => !OVERLAY_KEYS.has(key))
-    .sort(compareStrings);
-  if (unknown.length)
+  // Split, because the two cases send an author to different places: a key the policy has no field
+  // for at all is a misspelling, while a `base-only` key is spelled correctly and simply reserved -
+  // telling its author to check the spelling would send them hunting a typo that is not there.
+  const refused = Object.keys(overlay).filter((key) => !OVERLAY_KEYS.has(key));
+  const misspelled = refused.filter((key) => !Object.hasOwn(MERGE_KINDS, key)).sort(compareStrings);
+  const reserved = refused.filter((key) => Object.hasOwn(MERGE_KINDS, key)).sort(compareStrings);
+  if (misspelled.length)
     throw new Error(
-      `${names.overlay} records ${unknown.map((key) => `"${key}"`).join(', ')}, which the notices ` +
-        'policy has no such field for. An overlay key this merge does not know is dropped in ' +
-        'silence, so what it was meant to declare would go undisclosed - check the spelling ' +
+      `${names.overlay} records ${misspelled.map((key) => `"${key}"`).join(', ')}, which the ` +
+        'notices policy has no such field for. An overlay key this merge does not know is dropped ' +
+        'in silence, so what it was meant to declare would go undisclosed - check the spelling ' +
         `against ${names.base}.`,
+    );
+  if (reserved.length)
+    throw new Error(
+      `${names.overlay} records ${reserved.map((key) => `"${key}"`).join(', ')}, which ` +
+        `${names.base} reserves to itself. The field exists and is spelled correctly, but an ` +
+        'overlay may not contribute one - these describe the committed file for a reader of it, ' +
+        'and nothing in the pipeline reads them.',
     );
   if (base.product)
     throw new Error(
