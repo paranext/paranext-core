@@ -66,6 +66,50 @@ describe('externalExtensionFolders', () => {
     );
   });
 
+  describe('narrowed to one platform', () => {
+    // Writing the document reads every platform's blocks, because the document covers every
+    // platform. A check running beside a build reads only what THAT build packages: the folders
+    // another platform's block maps were never copied in here, and refusing their absence would
+    // report a missing copy step that was not supposed to run.
+    const perPlatform = {
+      extraResources: [{ from: './extensions/dist/', to: './extensions' }],
+      win: { extraResources: [{ from: './windows-only-extensions', to: './extensions' }] },
+      linux: { extraResources: [{ from: './linux-only-extensions', to: './extensions' }] },
+    };
+
+    it('unions every platform when no platform is named', () => {
+      expect(externalExtensionFolders(perPlatform)).toEqual([
+        'linux-only-extensions',
+        'windows-only-extensions',
+      ]);
+    });
+
+    it.each([
+      ['win32', 'windows-only-extensions'],
+      ['linux', 'linux-only-extensions'],
+    ] as const)('reads only the %s block plus the top level', (platform, expected) => {
+      expect(externalExtensionFolders(perPlatform, platform)).toEqual([expected]);
+    });
+
+    it('reads the top level alone for a platform with no block of its own', () => {
+      expect(externalExtensionFolders(perPlatform, 'darwin')).toEqual([]);
+      expect(
+        externalExtensionFolders(
+          { ...perPlatform, extraResources: [{ from: './everywhere', to: './extensions' }] },
+          'darwin',
+        ),
+      ).toEqual(['everywhere']);
+    });
+
+    it('still refuses a folder this platform does map but has not copied in', () => {
+      // The narrowing must not turn the refusal into an empty answer for the platform in hand -
+      // that is the silence the whole module exists to prevent.
+      expect(() => externalExtensionNames(repo, perPlatform, 'win32')).toThrow(
+        /windows-only-extensions does not exist/,
+      );
+    });
+  });
+
   it('ignores an entry that is not an object', () => {
     // `typeof null === 'object'`, so without the object test such an element reaches `.to` and
     // throws a bare TypeError.

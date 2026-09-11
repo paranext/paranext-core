@@ -1934,6 +1934,57 @@ describe('what a curated override may carry across', () => {
       expect(v.reason).toContain('separate program');
     });
 
+    // The bound `readInstruments` puts on an UNLINKED override - the package must declare nothing
+    // parseable and identify no license text - does not apply to a linked one. Everything above
+    // uses the silent shape (`declaredField: undefined`, empty detection), which is the shape that
+    // hides this: with the bound in force the route works only while the package says nothing, so
+    // the feature's live case would rest on a third party's packaging metadata not changing.
+    describe('is consulted whatever the package says about itself', () => {
+      it('admits the program when the package declares the same copyleft license', () => {
+        const v = classify({
+          ...withOverride(linked, withPrograms),
+          declaredField: 'GPL-2.0-or-later',
+        });
+        expect(v.verdict).toBe('overridden');
+        expect(v.spdxId).toBe('GPL-2.0-or-later');
+        expect(v.reason).toContain('separate program "Mercurial"');
+      });
+
+      it('admits the program when a license text was identified in its files', () => {
+        const v = classify({
+          ...withOverride(linked, withPrograms),
+          detection: detected('GPL-2.0-or-later'),
+        });
+        expect(v.verdict).toBe('overridden');
+        expect(v.spdxId).toBe('GPL-2.0-or-later');
+      });
+
+      // The reviewed entry is still the only thing admitting the identifier: reaching
+      // `applyOverride` is not the same as clearing it.
+      it('still refuses a linked override naming a license the program does not record', () => {
+        const v = classify({
+          ...withOverride({ ...linked, license: 'AGPL-3.0-only' }, withPrograms),
+          declaredField: 'AGPL-3.0-only',
+        });
+        expect(v.verdict).toBe('blocked');
+        expect(v.reason).toContain('AGPL-3.0-only');
+      });
+
+      // The other half of the contract, and what keeps the exemption narrow: an override with no
+      // link is exactly as weak as it was, so it still cannot contradict a package's own metadata.
+      it('leaves an unlinked override bound by what the package declares', () => {
+        // Destructured only to drop it from `unlinked` below.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { separateProgram, ...unlinked } = linked;
+        const v = classify({
+          ...withOverride({ ...unlinked, license: 'MIT' }, withPrograms),
+          declaredField: 'GPL-2.0-or-later',
+        });
+        expect(v.verdict).toBe('blocked');
+        expect(v.spdxId).toBeUndefined();
+      });
+    });
+
     it('admits a linked override naming any identifier the program does record', () => {
       const withTwoIds = (policy: Policy): Policy => {
         const programs = withPrograms(policy).separatePrograms || {};

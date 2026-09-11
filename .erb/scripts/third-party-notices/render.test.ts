@@ -128,6 +128,78 @@ const report = {
   shipsElectron: true,
 };
 
+/**
+ * The same report as a DOWNSTREAM PRODUCT's, which is the arm core's own document never renders.
+ *
+ * Everything that branches on `product` - the preamble's two arms, the UBS permission paragraph's
+ * three, the license pointer - is prose a lawyer may be asked to reword, and a substring assertion
+ * on the clause that differs passes while the sentences around it rot. The three sections a product
+ * adds have no byte-level check at all otherwise: the unit tests below assert phrases inside them.
+ *
+ * Short-canonical-text identifiers on purpose. The renderer reproduces the canonical text of every
+ * identifier a separate program names, so building the fixture around GPL-2.0-or-later would add
+ * ~340 lines of license text to the golden and check nothing the shorter ones do not.
+ */
+const productReport = {
+  ...report,
+  product: {
+    name: 'Paratext 10',
+    repository: 'paranext/paratext-10-studio',
+    isParatext: true,
+    licenseDocument: {
+      label: 'the Paratext Terms of Service',
+      file: 'TERMS-OF-SERVICE.html',
+      href: 'https://registry.paratext.org/terms',
+    },
+  },
+  separatePrograms: {
+    'Example Tool': {
+      spdx: ['Zlib'],
+      copyright: 'Copyright (c) 2014 Example Authors',
+      reviewer: 'reviewer@example.org',
+      date: '2026-09-04',
+      reason:
+        'Redistributed unmodified as a separate executable and invoked as a subprocess through its ' +
+        'command-line interface. No product code links against it or shares an address space with it.',
+      sourceAvailability:
+        'Corresponding source is published beside the binaries at <https://example.org/src>.',
+      deliveries: [
+        {
+          platform: 'Windows',
+          version: '2.1.0',
+          mechanism: 'NuGet package',
+          evidence: { file: 'electron-builder.json5', contains: 'extraResources' },
+          carriesNotices: 'LICENSE.txt beside the executable',
+          alsoContains: [
+            {
+              name: 'example-runtime',
+              version: '3.9.6',
+              spdx: ['ISC'],
+              copyright: 'Copyright (c) 2001 Example Runtime Foundation',
+            },
+          ],
+        },
+        {
+          platform: 'Linux (snap)',
+          version: '1.8.2',
+          mechanism: 'Debian packages staged into the snap',
+          evidence: { file: 'electron-builder.json5', contains: 'stagePackages' },
+          carriesNotices: false,
+          alsoContains: [{ name: 'example-runtime', version: '2.7.18', spdx: ['ISC'] }],
+        },
+      ],
+    },
+  },
+  externalExtensions: {
+    'example-private-extension': {
+      itemized: false,
+      reason:
+        'Built in another repository, which emits no module manifest yet, so its bundle cannot be ' +
+        'itemized here - see PT-4604.',
+    },
+  },
+};
+
 describe('render', () => {
   it('matches the golden document', () => {
     // Regenerating the fixture can never leave this test GREEN. An
@@ -151,6 +223,52 @@ describe('render', () => {
       );
     }
     expect(actual).toBe(expected);
+  });
+
+  // Same mechanism, same UPDATE_NOTICES_GOLDEN escape hatch, for the arm this repository's own
+  // document never exercises - see `productReport`. Nothing in core sets NOTICES_POLICY_OVERLAY, so
+  // without this the only full-output check of the overlay's whole point is a golden that renders
+  // none of it.
+  it('matches the golden document for a downstream product', () => {
+    const file = path.join(GOLDEN, 'expected-product.md');
+    const actual = render(productReport);
+    const expected = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    if (actual !== expected && process.env.UPDATE_NOTICES_GOLDEN) {
+      fs.writeFileSync(file, actual);
+      throw new Error(
+        `rewrote ${path.relative(process.cwd(), file)} from this run. Read the diff, then re-run ` +
+          'without UPDATE_NOTICES_GOLDEN.',
+      );
+    }
+    expect(actual).toBe(expected);
+  });
+
+  // The two goldens have to differ in the ways the product arm is FOR. Comparing them is what makes
+  // the pair a check on the branching rather than two independent snapshots, either of which could
+  // be regenerated into agreement with a renderer that had stopped branching at all.
+  it('renders the product arm differently from the reference arm', () => {
+    const reference = render(report);
+    const forProduct = render(productReport);
+
+    expect(reference).toContain('Platform.Bible incorporates');
+    expect(forProduct).toContain('Paratext 10 incorporates');
+    expect(reference).toContain(
+      '**This is a reference, not the notices for any shipped product.**',
+    );
+    expect(forProduct).not.toContain(
+      'This is a reference, not the notices for any shipped product',
+    );
+    expect(reference).toContain('Some of what this repository distributes');
+    expect(forProduct).toContain('Some of what this application distributes');
+    expect(reference).toContain('[LICENSING.md](./LICENSING.md)');
+    expect(forProduct).not.toContain('[LICENSING.md](./LICENSING.md)');
+    // The three sections a product adds, none of which core's own document can have.
+    expect(forProduct).toContain('## Third-party programs redistributed as separate executables');
+    expect(forProduct).toContain('## Extensions packed from other repositories');
+    expect(reference).not.toContain(
+      '## Third-party programs redistributed as separate executables',
+    );
+    expect(reference).not.toContain('## Extensions packed from other repositories');
   });
 
   // The paragraph asserts a PROVENANCE - "the union of the restore closure … with licenses read
@@ -769,7 +887,18 @@ describe('the license cell for a row that was both elected and excepted', () => 
 });
 
 describe('product block', () => {
-  const product = { name: 'Paratext 10 Studio', repository: 'paranext/paratext-10-studio' };
+  const product = {
+    name: 'Paratext 10',
+    repository: 'paranext/paratext-10-studio',
+    licenseDocument: {
+      label: 'the Paratext Terms of Service',
+      file: 'TERMS-OF-SERVICE.html',
+      href: 'https://registry.paratext.org/terms',
+    },
+  };
+
+  /** The fact `pushLexicalDatabaseSection` is gated on, so the UBS paragraph renders at all. */
+  const withLexicalTools = { ...report, packedExtensions: ['platform-lexical-tools'] };
 
   it('keeps the reference wording when no product is declared', () => {
     const out = render(report);
@@ -781,21 +910,26 @@ describe('product block', () => {
 
   it('names the product and drops the reference paragraph when one is declared', () => {
     const out = render({ ...report, product });
-    expect(out).toContain(
-      'Paratext 10 Studio incorporates the third-party components listed below.',
-    );
+    expect(out).toContain('Paratext 10 incorporates the third-party components listed below.');
     expect(out).toContain('built from paranext-core by `paranext/paratext-10-studio`');
     expect(out).not.toContain('This is a reference, not the notices for any shipped product');
     expect(out).toContain('Some of what this application distributes');
     expect(out).not.toContain('Some of what this repository distributes');
-    expect(out).toContain('For the license covering Paratext 10 Studio itself');
+    // Named, not linked: a relative LICENSING.md resolves to this repository's file in the
+    // installer and to a file that may not exist in the product's repository, and the product's
+    // terms are not LICENSING.md in the first place.
+    expect(out).toContain('For the license covering Paratext 10 itself, see the Paratext Terms of');
+    expect(out).toContain('which ships beside');
+    expect(out).toContain('this document as');
+    expect(out).toContain('`TERMS-OF-SERVICE.html`');
+    expect(out).toContain('<https://registry.paratext.org/terms>');
+    expect(out).not.toContain('[LICENSING.md](./LICENSING.md)');
   });
 
   it('says the UBS permission covers a Paratext product, and only a Paratext product', () => {
-    const packed = { ...report, packedExtensions: ['platform-lexical-tools'] };
-    expect(render(packed)).toContain('That permission is specific to');
-    expect(render({ ...packed, product })).toContain('That permission is specific to');
-    const paratext = render({ ...packed, product: { ...product, isParatext: true } });
+    expect(render(withLexicalTools)).toContain('That permission is specific to');
+    expect(render({ ...withLexicalTools, product })).toContain('That permission is specific to');
+    const paratext = render({ ...withLexicalTools, product: { ...product, isParatext: true } });
     // Matched across a wrap: the paragraph is wrapped in the source and the product name's length
     // decides where the break lands.
     expect(paratext).toMatch(/is a Paratext\s+product, and that permission covers it\./);
@@ -806,12 +940,15 @@ describe('product block', () => {
   });
 
   it('names a declared non-Paratext product as one the permission does not reach', () => {
-    const packed = { ...report, packedExtensions: ['platform-lexical-tools'] };
     // Deliberately not a Paratext name: `assertProductMatchesPackaging` refuses a product called
     // Paratext that does not record `isParatext`, because the paragraph below would contradict
     // itself. This arm is for the products that genuinely are not covered.
-    const other = { name: 'Scripture Studio', repository: 'org/scripture-studio' };
-    const rendered = render({ ...packed, product: other });
+    const other = {
+      name: 'Scripture Studio',
+      repository: 'org/scripture-studio',
+      licenseDocument: { label: 'its LICENSE file', file: 'LICENSE' },
+    };
+    const rendered = render({ ...withLexicalTools, product: other });
 
     // Leaving the reader to infer it from "specific to Paratext" is the one thing this paragraph
     // exists to state plainly, and "this repository" would be paranext-core's point of view in a
@@ -821,9 +958,62 @@ describe('product block', () => {
     expect(rendered).not.toContain('building from this repository');
   });
 
+  // Byte-level, all three arms. The two goldens cover the no-product and Paratext-product arms as
+  // whole documents; a third whole-document fixture for one paragraph would be ~350 lines of
+  // unrelated output. What actually needs pinning is the sentence, because this paragraph states a
+  // THIRD PARTY's grant: UBS permitted distribution in Paratext and nowhere else, and each arm says
+  // who that does and does not reach. A substring assertion on the clause that differs - which is
+  // all the cases above do - passes while the sentences around it are reworded or dropped, and a
+  // lawyer-requested change applied to one arm leaves the other two silently stale.
+  const ubsParagraph = (rendered: string): string => {
+    const start = rendered.indexOf('Portions of the database are');
+    expect(start).toBeGreaterThan(-1);
+    const end = rendered.indexOf('ubs-open-license>.', start);
+    expect(end).toBeGreaterThan(start);
+    return rendered.slice(start, end + 'ubs-open-license>.'.length);
+  };
+
+  it('states the UBS permission for a Paratext product, word for word', () => {
+    expect(
+      ubsParagraph(render({ ...withLexicalTools, product: { ...product, isParatext: true } })),
+    ).toBe(
+      'Portions of the database are © United Bible Societies and are **not** available under an open\n' +
+        'source license. UBS permits their distribution in **Paratext**. Paratext 10 is a Paratext\n' +
+        'product, and that permission covers it. It does not extend to Platform.Bible, nor to anyone\n' +
+        'else redistributing the database, including a third party building from paranext-core — see\n' +
+        'LICENSING.md. The open-licensed content can be obtained separately from\n' +
+        '<https://github.com/ubsicap/ubs-open-license>.',
+    );
+  });
+
+  it('states it for a product the permission does not reach, word for word', () => {
+    const other = {
+      name: 'Scripture Studio',
+      repository: 'org/scripture-studio',
+      licenseDocument: { label: 'its LICENSE file', file: 'LICENSE' },
+    };
+    expect(ubsParagraph(render({ ...withLexicalTools, product: other }))).toBe(
+      'Portions of the database are © United Bible Societies and are **not** available under an open\n' +
+        'source license. UBS permits their distribution in **Paratext**. That permission is specific to\n' +
+        'Paratext: it does not extend to Scripture Studio, nor to Platform.Bible, nor to\n' +
+        'anyone else redistributing the database, including a third party building from paranext-core\n' +
+        '— see LICENSING.md. The open-licensed content can be obtained separately from\n' +
+        '<https://github.com/ubsicap/ubs-open-license>.',
+    );
+  });
+
+  it('states it for this repository itself, word for word', () => {
+    expect(ubsParagraph(render(withLexicalTools))).toBe(
+      'Portions of the database are © United Bible Societies and are **not** available under an open\n' +
+        'source license. UBS permits their distribution in **Paratext**. That permission is specific to\n' +
+        'Paratext: it does not extend to Platform.Bible, nor to anyone else redistributing the database,\n' +
+        'including a third party building from this repository — see LICENSING.md. The open-licensed\n' +
+        'content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.',
+    );
+  });
+
   it("keeps this repository's own wording when no product is declared", () => {
-    const packed = { ...report, packedExtensions: ['platform-lexical-tools'] };
-    const rendered = render(packed);
+    const rendered = render(withLexicalTools);
 
     expect(rendered).toContain('including a third party building from this repository');
   });
@@ -957,7 +1147,7 @@ describe('separate programs section', () => {
 
 describe('external extensions section', () => {
   it('is absent when none is packed', () => {
-    expect(render(report)).not.toContain('## Extensions packed from outside this repository');
+    expect(render(report)).not.toContain('## Extensions packed from other repositories');
   });
 
   it('names each packed extension and states that its bundle is not itemized', () => {
@@ -971,7 +1161,7 @@ describe('external extensions section', () => {
         },
       },
     });
-    expect(out).toContain('## Extensions packed from outside this repository');
+    expect(out).toContain('## Extensions packed from other repositories');
     expect(out).toContain('### paratext-bible-send-receive');
     expect(out).toContain('bundled dependencies are **not itemized** in this document');
     expect(out).toContain('emits no module manifest yet.');

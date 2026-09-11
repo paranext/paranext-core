@@ -1326,7 +1326,11 @@ step, no automation. Just a record.
   several things about the user's rights with nothing reconciling them, and because LICENSING.md is
   what 3.B.2 means by "the AGPL Components identified by SIL and UBSA in the license notices
   accompanying the Paratext 10 application" (**amended 2026-09-10:** the 14 August 2026 Terms read
-  "identified by Paratext", and this entry cited the phrase as 3.B.1; it has always been in 3.B.2).
+  "identified by Paratext", and this entry cited the phrase as 3.B.1; in that revision it was in
+  3.B.2 alone. **Amended 2026-09-11:** the 11 September 2026 Terms carry it in BOTH — 3.B.1 gained
+  "and are identified as such in the license notices accompanying the Paratext 10 application"
+  alongside 3.B.2's "the AGPL Components identified by SIL and UBSA in the license notices
+  accompanying the Paratext 10 application", so citing either section is now correct).
 - **Alternatives:** relicense everything, including the `lib/` packages — rejected: it makes the AGPL
   viral for third-party extensions and defeats the extension model. Key the rule on the
   `dependencies`/`devDependencies` section — rejected because that field was already wrong:
@@ -1871,6 +1875,26 @@ step, no automation. Just a record.
   repository. This repository ships both tables empty, so neither adds a section here; its own
   document changes only in the preamble sentence that names the two new categories alongside the
   five existing ones, and `THIRD-PARTY-NOTICES.lock.json`'s `documentSha256` moves with it.
+
+  Two sub-decisions within it:
+
+  - **The product names its own license document.** `product.licenseDocument` records a label, the
+    file name the installer carries, and optionally a published URL; the document NAMES that file
+    rather than linking it. A relative link cannot be right in both places a product's notices are
+    read — in the product's repository, where this repository's terms file does not exist, and in
+    the installer, whose `LICENSING.md` is this repository's — and a product's terms are frequently
+    not `LICENSING.md` at all (Paratext 10's are the Terms of Service). Naming the file also keeps
+    the pointer usable offline, where the shipped copy is the one that licenses the build in hand.
+    `product.ts` refuses a name no `extraResources` entry produces, because the sentence promises
+    the reader it sits beside them.
+  - **A `separateProgram`-linked override is not bound by what the package declares.** An unlinked
+    override applies only where the package declares nothing parseable and no license text was
+    identified, so it can never contradict what a package says about itself. A linked one is
+    exempt: it may only name a program `separatePrograms` records and may only carry an identifier
+    that reviewed entry itself names, which is stronger evidence than package metadata, and binding
+    it the same way would make the whole route depend on a third party's repackaging staying
+    license-silent. The trade-off accepted: where a declaration and the reviewed entry disagree,
+    the entry wins and nothing reports the disagreement.
 - **Alternatives:** A downstream generator - rejected: it would either duplicate this pipeline or
   depend on its internal module API across a clone boundary. Carrying the downstream entries in
   the downstream patch to this policy file - rejected: every change to this file would conflict
@@ -1887,8 +1911,9 @@ step, no automation. Just a record.
   rather than travelling.
   The omission direction for a separate program has no generic source: a copyleft override with no
   `separateProgram` link still blocks, and a program added by any other route with no entry is the
-  gap PT-4560 records for static content. **Revisit** when the extension template emits module
-  manifests, which is what lets `externalExtensions` become `itemized: true`.
+  gap PT-4560 records for static content. **Revisit** under PT-4604 when the extension template
+  emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
+  is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild

@@ -630,9 +630,40 @@ function pushPreamble(
     '> recorded in `THIRD-PARTY-NOTICES.lock.json` so a verdict that moved because the matcher was',
     '> upgraded stays distinguishable from one that moved because a license changed.',
     '',
-    `For the license covering ${subject} itself, see [LICENSING.md](./LICENSING.md).`,
+    ...licensePointer(product, subject),
     '',
   );
+}
+
+/**
+ * Where the reader is sent for the terms the SUBJECT of this document is licensed under.
+ *
+ * With no product declared the subject is this repository, and `LICENSING.md` is both the right
+ * answer and a link that resolves - it sits beside this document in the repository and beside it
+ * again in the installer.
+ *
+ * A product's answer is neither. Its notices are generated into ITS repository, where a terms file
+ * this repository ships may not exist, and packed into an installer whose `LICENSING.md` is this
+ * repository's - so a relative link is wrong in one place or the other, and the product's terms are
+ * frequently not `LICENSING.md` at all (Paratext 10's are the Terms of Service). So the file is
+ * NAMED rather than linked, which reads correctly from either vantage point, and the published copy
+ * is offered second: a link can move, and the file in the installer is the copy that licenses the
+ * build holding it.
+ */
+function licensePointer(product: ProductBlock | undefined, subject: string): string[] {
+  if (!product)
+    return [`For the license covering ${subject} itself, see [LICENSING.md](./LICENSING.md).`];
+  const { label, file, href } = product.licenseDocument;
+  return [
+    `For the license covering ${subject} itself, see ${inlineText(label)}, which ships beside`,
+    `this document as \`${inlineText(file)}\`.`,
+    ...(href
+      ? [
+          `The current published copy is at <${href}>; the file shipped`,
+          'with this build is the one that applies to it.',
+        ]
+      : []),
+  ];
 }
 
 /**
@@ -970,7 +1001,7 @@ function addSeparateProgramTexts(
     });
 }
 
-/** Extensions packed from outside this repository - see `external-extensions.ts`. */
+/** Extensions packed from other repositories - see `external-extensions.ts`. */
 function pushExternalExtensionsSection(
   out: string[],
   externalExtensions: Record<string, ExternalExtension>,
@@ -979,7 +1010,7 @@ function pushExternalExtensionsSection(
     compareStrings(first, second),
   );
   if (!entries.length) return;
-  out.push('## Extensions packed from outside this repository', '');
+  out.push('## Extensions packed from other repositories', '');
   out.push(
     'The installer also carries these extensions, built in other repositories and packed as zips',
     'beside the ones built here. Each bundles every dependency outside the extension host’s',

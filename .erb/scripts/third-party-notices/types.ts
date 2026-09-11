@@ -198,6 +198,38 @@ export type ProductBlock = {
    * actually packs `platform-lexical-tools`.
    */
   isParatext?: boolean;
+  /** Where a reader finds the terms the PRODUCT is licensed under - see `LicenseDocument`. */
+  licenseDocument: LicenseDocument;
+};
+
+/**
+ * The document that licenses a product to its user, named so the notices can point at it.
+ *
+ * This repository's own document links `LICENSING.md`, which sits beside it in the repository AND
+ * in the installer. Neither holds for a downstream product: the notices are generated into the
+ * product's repository, where the terms file may not exist at all, and packed into an installer
+ * whose `LICENSING.md` is this repository's - so a relative link resolves to the wrong file in one
+ * place or the other, and the product's terms are frequently not `LICENSING.md` in the first
+ * place.
+ *
+ * So the file is NAMED rather than linked, and the name is checked against what the installer
+ * actually carries. A reader in the repository gets a filename they can look up; a reader of the
+ * installed product finds the file beside the document they are reading, which is the copy that
+ * applies to the build in their hands - offline, and whatever the published copy has moved on to
+ * saying since.
+ */
+export type LicenseDocument = {
+  /** How the document is referred to in prose, e.g. `the Paratext Terms of Service`. */
+  label: string;
+  /**
+   * Its file name as the installer carries it, e.g. `TERMS-OF-SERVICE.html`.
+   *
+   * Must be a file the packaging config copies into `resources/`; `assertProductMatchesPackaging`
+   * refuses a name no installer ships, because the document tells the reader to look beside it.
+   */
+  file: string;
+  /** An optional published copy. The shipped `file` is authoritative for the build that carries it. */
+  href?: string;
 };
 
 /** A checked-in copy of a staged library's Ubuntu `copyright` file. */
@@ -301,9 +333,14 @@ export type BundledComponent = {
   nonSpdx?: boolean;
 };
 
-/** An extension packed from outside this repository - see `external-extensions.ts`. */
+/** An extension packed from another repository - see `external-extensions.ts`. */
 export type ExternalExtension = {
-  /** Whether its bundled dependencies have rows in this document. Only `false` is accepted today. */
+  /**
+   * Whether its bundled dependencies have rows in this document.
+   *
+   * TODO(PT-4604): only `false` is accepted today.
+   * https://paratextstudio.atlassian.net/browse/PT-4604
+   */
   itemized: boolean;
   /**
    * A Markdown paragraph, reproduced verbatim in the document - it is NOT escaped, so it may carry
@@ -445,7 +482,7 @@ export type Report = {
   copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
   /** Third-party programs redistributed as separate executables - see `separate-programs.ts`. */
   separatePrograms?: Record<string, SeparateProgram>;
-  /** Extensions packed from outside this repository - see `external-extensions.ts`. */
+  /** Extensions packed from other repositories - see `external-extensions.ts`. */
   externalExtensions?: Record<string, ExternalExtension>;
   /** Folder names of the extensions an installer packs - see `packedExtensionNames`. */
   packedExtensions?: string[];

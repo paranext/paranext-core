@@ -1,0 +1,10 @@
+Standing in for the packaging file a real overlay's delivery evidence points at.
+
+A `separatePrograms` delivery names a file and a substring, and the guard refuses the entry when
+either is gone - so a reviewed determination cannot outlive the mechanism that put the program in
+the installer. The fixture overlay beside this file points its two deliveries here rather than at
+`electron-builder.json5`, so that editing the real packaging config cannot break a test about
+merging, and so that the substrings below say what they are for.
+
+example-tool-windows-delivery
+example-tool-linux-delivery

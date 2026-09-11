@@ -61,7 +61,13 @@ export async function openTermsOfServiceWindow(
     width: 900,
     height: 800,
     minWidth: 480,
-    autoHideMenuBar: true,
+    // Created hidden and shown once the document has loaded, below. A window is mapped at
+    // construction otherwise, so an empty 900x800 rectangle in Chromium's default white sits on
+    // screen for the whole load - and on the failure path it appears and then vanishes, because
+    // that path destroys it. `backgroundColor` matches the document's own `body`, so what a reader
+    // sees before the first frame is the page's colour rather than a flash of white.
+    show: false,
+    backgroundColor: '#f5f5f3',
     icon: path.join(globalThis.resourcesPath, 'assets', 'icon.png'),
     // The document neither needs nor gets the application's preload and Node access
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
@@ -92,8 +98,17 @@ export async function openTermsOfServiceWindow(
     await newWindow.loadFile(termsOfServicePath);
   } catch (e) {
     newWindow.destroy();
-    throw new Error(
-      `Could not open the Terms of Service at ${termsOfServicePath}: ${getErrorMessage(e)}`,
-    );
+    const message = `Could not open the Terms of Service at ${termsOfServicePath}: ${getErrorMessage(e)}`;
+    // Logged as well as thrown. The caller is whatever invoked `platform.openTermsOfService` - the
+    // About dialog, or any PAPI client - and what it shows the user is a localized sentence with no
+    // path in it, so without this line nothing in the application records which file was tried.
+    logger.warn(message);
+    throw new Error(message);
   }
+
+  // After the load, not on `ready-to-show`: this function already awaits the load, so the extra
+  // event is one more way for the window to end up never shown. Shown unconditionally on success,
+  // because a window created with `show: false` that nothing shows is a resolved command the user
+  // sees no result from.
+  newWindow.show();
 }

@@ -43,6 +43,59 @@ export function readPackagingConfig(file: string): PackagingConfig {
  */
 export const DEFAULT_PRODUCT_NAME = 'Platform.Bible';
 
+/** Every file name the packaging config copies into the installed `resources/` directory. */
+function packedResourceNames(config: PackagingConfig): string[] {
+  const entries = [
+    config.extraResources,
+    config.mac?.extraResources,
+    config.win?.extraResources,
+    config.linux?.extraResources,
+  ].flatMap((list) => (Array.isArray(list) ? list : []));
+  return entries.flatMap((entry) => {
+    // A string entry copies to `resources/` preserving its relative path; the object form names its
+    // destination. Either way what a reader of the installed product sees beside the notices is the
+    // last path segment, which is what the document tells them to look for.
+    const spelled = typeof entry === 'string' ? entry : entry?.to || entry?.from;
+    if (typeof spelled !== 'string') return [];
+    const name = spelled.replace(/\\/g, '/').replace(/\/+$/, '').split('/').pop();
+    return name ? [name] : [];
+  });
+}
+
+/**
+ * Refuses a product block whose license document is not one the installer carries.
+ *
+ * The sentence this drives tells the reader the file sits beside the document they are reading. A
+ * name no `extraResources` entry produces makes that sentence false in the one place it is most
+ * likely to be read - inside the installed product, offline, by someone looking for the terms they
+ * agreed to.
+ */
+function assertLicenseDocumentShips(
+  product: ProductBlock,
+  config: PackagingConfig,
+  configName: string,
+): void {
+  const block = 'the notices policy "product" block\'s "licenseDocument"';
+  const document = product.licenseDocument;
+  if (!document || typeof document !== 'object')
+    throw new Error(
+      `the notices policy "product" block records no "licenseDocument". The document states where ` +
+        `a reader finds the terms ${product.name} itself is licensed under, and this repository's ` +
+        'own answer - LICENSING.md - is about this repository. Record the label, the file name the ' +
+        'installer carries, and optionally a published copy.',
+    );
+  requireText(block, 'label', document.label);
+  requireText(block, 'file', document.file);
+  if (document.href !== undefined) requireText(block, 'href', document.href);
+  const packed = packedResourceNames(config);
+  if (!packed.includes(document.file.trim()))
+    throw new Error(
+      `${block} names "${document.file}", and ${configName} copies no such file into the ` +
+        'installed resources directory. The document tells the reader it ships beside them, so a ' +
+        `name no installer carries states something false. Packed today: ${packed.join(', ')}.`,
+    );
+}
+
 /**
  * Refuses a product block that is incomplete or that names a product the packaging config does not
  * build, and a build that renames the product without declaring one at all.
@@ -115,4 +168,7 @@ export function assertProductMatchesPackaging(
         `not extend to ${product.name}. Record "isParatext": true if the permission covers this ` +
         'product, or rename it if it does not.',
     );
+  // Last, because the checks above are about WHICH product this is: a block naming the wrong
+  // product would otherwise be reported as a license-document problem.
+  assertLicenseDocumentShips(product, config, configName);
 }

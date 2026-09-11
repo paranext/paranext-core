@@ -494,8 +494,15 @@ function blocked(reason: string, extra: Partial<Verdict> = {}): BlockedFields {
  * template: the fields this guards (`SeparateProgram.sourceAvailability`,
  * `ExternalExtension.reason`) are documented as paragraphs that may carry a link, and a bare URL's
  * natural spelling in this document is the autolink form.
+ *
+ * The carve-out names the two schemes this document's links actually use rather than matching any
+ * scheme shape, because a scheme is `word:` and so is the opening of an ordinary note: `<TODO: ask
+ * legal where the source lives>` and `<NOTE: fill me in>` are placeholders in every sense that
+ * matters here, and a general `[A-Za-z][A-Za-z0-9+.-]*:` lookahead admits both. `http` is kept
+ * beside `https` not because this document should carry an insecure link but because refusing one
+ * as "a placeholder from the template" is a message that describes the wrong problem.
  */
-export const PLACEHOLDER_TEMPLATE_VALUE = /^<(?![A-Za-z][A-Za-z0-9+.-]*:)[\s\S]*>$/;
+export const PLACEHOLDER_TEMPLATE_VALUE = /^<(?!(?:https?|mailto):)[\s\S]*>$/;
 
 /**
  * Refuses a policy field that is not a filled-in string.
@@ -1577,9 +1584,10 @@ function readInstruments(
   const exception = applyException(policy, key, version, sha256, allowed, copyleft);
   // A curated override records what a human established about a package whose own metadata
   // establishes nothing - the SIL packages whose nuspecs declare no license at all, and the
-  // Windows-only ICU runtime that no restore on this machine resolves. It is applied ONLY where the
-  // package declares nothing parseable AND no license text was identified, so an override can never
-  // mask or contradict something a package actually says: if `ParatextData` ever starts declaring a
+  // Windows-only ICU runtime that no restore on this machine resolves. Unless it links to a
+  // reviewed separate program (see the bound below), it is applied ONLY where the package declares
+  // nothing parseable AND no license text was identified, so an override can never mask or
+  // contradict something a package actually says: if `ParatextData` ever starts declaring a
   // copyleft license, it blocks exactly as it would with no entry here.
   //
   // An override bypasses the allow list only where its value is deliberately NOT an SPDX expression
@@ -1604,8 +1612,27 @@ function readInstruments(
   // excluded because `NOASSERTION`/`NONE` are licensee reporting that it identified nothing, which
   // is the case an override exists for.
   const identifiedText = files.find((file) => !SENTINELS.has(file.spdxId));
+  // A `separateProgram` link is exempt from that bound, because it is not the weak instrument the
+  // bound exists to hold back. An unlinked override is a claim keyed by name and pinned to nothing;
+  // a linked one may only name a program `separatePrograms` records - reviewer, date, reason and
+  // source availability included - and may only carry an identifier that reviewed entry itself
+  // names (`applyOverride`). The determination behind it is strictly better evidence than a
+  // package's own metadata, so it does not have to wait for that metadata to be silent.
+  //
+  // Bounding it the same way would make the whole route depend on a third party's packaging
+  // staying license-silent: the NuGet delivery of a separate program is somebody's repackaging of
+  // an upstream release, and the day it declares its licence - the direction NuGet has pushed for
+  // years - the package would hard-block with no policy entry able to clear it, on a program a
+  // human had already reviewed. That is the reverse of what the reviewed entry is for.
+  //
+  // What this does NOT do is reconcile a disagreement: where the package declares one licence and
+  // the reviewed entry names another, the entry wins and the document records the entry's. That is
+  // the right authority - a person read the program's terms - but it is not a check, so a
+  // declaration that contradicts a reviewed program is worth noticing by hand.
+  const linkedToSeparateProgram = override?.separateProgram !== undefined;
   // `override` itself rather than a boolean, so the stage it clears reads the entry it applies.
-  const overridable = !declared.ok && !identifiedText ? override : undefined;
+  const overridable =
+    linkedToSeparateProgram || (!declared.ok && !identifiedText) ? override : undefined;
 
   return { exception, overridable };
 }
