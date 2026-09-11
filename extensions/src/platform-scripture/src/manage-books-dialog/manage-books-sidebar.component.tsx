@@ -20,6 +20,7 @@ import {
   ProjectSelectorOpenTab,
   ProjectSelector,
   ProjectSelectorProject,
+  type ProjectSelectorGrouping,
   type ProjectSelectorLocalizedStrings,
 } from 'platform-bible-react/experimental';
 import type {
@@ -176,6 +177,13 @@ export type ManageBooksSidebarProps = {
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 
   /**
+   * Grouping options offered by the sidebar's project picker. Forwarded from the dialog via the
+   * same prop name. When omitted, the ProjectSelector's auto-add behavior applies (openTabs only,
+   * when applicable).
+   */
+  projectSelectorGroupings?: readonly ProjectSelectorGrouping[];
+
+  /**
    * Drives the icon-only collapse. When true, the sidebar renders as a narrow rail (w-14) with
    * hidden labels + group headings. When false, the full w-64 rail. Sourced from the dialog's
    * ResizeObserver on its own width.
@@ -240,6 +248,7 @@ export function ManageBooksSidebar({
   targetShortName,
   t,
   projectSelectorLocalizedStrings,
+  projectSelectorGroupings,
   isNarrow = false,
 }: ManageBooksSidebarProps) {
   const activeSectionId = actionToSectionId(active);
@@ -292,28 +301,21 @@ export function ManageBooksSidebar({
             onChangeSelection={({ projectId: nextId }) => {
               if (nextId) onProjectIdChange(nextId);
             }}
-            // Narrow rail: full-width trigger, no chevron (it would consume the
-            // whole content box), tighter padding + text-xs so the leading
-            // characters of the shortName stay visible — enough to identify the
-            // project. The outline variant keeps it recognizable as a control;
-            // the trigger's own tooltip carries the full label.
-            buttonClassName={cn(
-              'tw:h-8 tw:font-normal',
-              isNarrow ? 'tw:w-full tw:px-0.5 tw:text-xs' : 'tw:w-full',
-            )}
-            hideTriggerChevron={isNarrow}
             isDisabled={isSubmitting}
             isLoading={isLoadingProjects}
-            ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
             triggerLabelFormat="shortNameAndFullName"
-            // Fallback when the project list is still loading or the active projectId hasn't
-            // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
-            // are GUIDs and would render as a 32-char hex string in the trigger, which the
-            // verifier flagged as unreadable. The localized "Select project" string is the
-            // correct momentary fallback; once `projects` resolves and contains `projectId`,
-            // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
-            buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
-            localizedStrings={projectSelectorLocalizedStrings}
+            availableGroupings={projectSelectorGroupings}
+            localizedStrings={{
+              ...projectSelectorLocalizedStrings,
+              ariaLabel: t('%manageBooks_header_projectLabel%', 'Project'),
+              // Fallback when the project list is still loading or the active projectId hasn't
+              // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
+              // are GUIDs and would render as a 32-char hex string in the trigger, which the
+              // verifier flagged as unreadable. The localized "Select project" string is the
+              // correct momentary fallback; once `projects` resolves and contains `projectId`,
+              // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
+              buttonPlaceholder: t('%manageBooks_sidebar_projectPlaceholder%', 'Select project'),
+            }}
           />
         </div>
       </div>

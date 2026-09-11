@@ -22,10 +22,16 @@ import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  ProjectSelectorLocalizedStrings,
-  ProjectSelectorOpenTab,
-  ProjectSelectorProject,
+import {
+  PROJECT_SELECTOR_STRING_KEYS,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  makeBuiltInGroupings,
+  type ProjectSelectorGrouping,
+  type ProjectSelectorLocalizedStrings,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProject,
+  type ProjectSelectorResolvedStrings,
 } from 'platform-bible-react/experimental';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
@@ -350,7 +356,12 @@ global.webViewComponent = function ManageBooksWebView({
   // (Hoisted above the project-change effect so the effect can read the localized title
   // template when computing the new tab title.)
   const stringKeys = useMemo(
-    () => [...MANAGE_BOOKS_DIALOG_STRING_KEYS, ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS],
+    () => [
+      ...MANAGE_BOOKS_DIALOG_STRING_KEYS,
+      ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS,
+      // Central ProjectSelector keys used by every picker in the dialog.
+      ...PROJECT_SELECTOR_STRING_KEYS,
+    ],
     [],
   );
   const [localizedStrings] = useLocalizedStrings(stringKeys);
@@ -447,53 +458,32 @@ global.webViewComponent = function ManageBooksWebView({
     return out;
   }, [localizedStrings]);
 
-  // The ProjectSelector popover's internal strings (search placeholder,
-  // filter labels, section headings) are not localized by default. Build a
-  // ProjectSelectorLocalizedStrings object from the resolved manage-books
-  // strings so all three pickers (sidebar / Copy "From" / Create "Based on")
-  // share the same translations.
-  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(() => {
-    const resolve = (key: keyof typeof localizedStrings, fallback: string) => {
-      const value = localizedStrings[key];
-      return typeof value === 'string' ? value : fallback;
-    };
-    return {
-      searchPlaceholder: resolve(
-        '%manageBooks_projectSelector_searchPlaceholder%',
-        'Search projects & resources',
+  // The ProjectSelector popover reads its strings from the shared `%projectSelector_*%` central
+  // keys. useLocalizedStrings echoes the raw key literal until each entry resolves so every value
+  // is a string; the cast just narrows the generic record to the specific key set the helper
+  // needs.
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
+    () =>
+      buildProjectSelectorLocalizedStrings(
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        localizedStrings as ProjectSelectorResolvedStrings,
       ),
-      filterAriaLabel: resolve('%manageBooks_projectSelector_filterAriaLabel%', 'Filter'),
-      groupSectionLabel: resolve('%manageBooks_projectSelector_groupSectionLabel%', 'Group'),
-      filterSectionLabel: resolve('%manageBooks_projectSelector_filterSectionLabel%', 'Filter'),
-      filterGroupByOpenTabs: resolve(
-        '%manageBooks_projectSelector_filterGroupByOpenTabs%',
-        'By open tabs',
+    [localizedStrings],
+  );
+
+  // Built-in groupings (openTabs / lastUsed / language / type) shared by the sidebar's primary
+  // project picker and the Copy "From" picker. The Create "Based on" picker doesn't consume these
+  // — it locks into a bespoke versification grouping built on the dialog side.
+  const projectSelectorGroupings = useMemo<ProjectSelectorGrouping[]>(
+    () =>
+      makeBuiltInGroupings(
+        buildBuiltInGroupingStrings(
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          localizedStrings as ProjectSelectorResolvedStrings,
+        ),
       ),
-      filterShowSelectedOnly: resolve(
-        '%manageBooks_projectSelector_filterShowSelectedOnly%',
-        'Show selected only',
-      ),
-      openTabsSectionHeading: resolve(
-        '%manageBooks_projectSelector_openTabsSectionHeading%',
-        'Opened project & resource tabs',
-      ),
-      otherProjectsSectionHeading: resolve(
-        '%manageBooks_projectSelector_otherProjectsSectionHeading%',
-        'Your projects & resources',
-      ),
-      versificationUnknownSectionHeading: resolve(
-        '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
-        'Unknown versification',
-      ),
-      boundButClosedTooltip: resolve(
-        '%manageBooks_projectSelector_boundButClosedTooltip%',
-        'Bound to {group} · not currently open',
-      ),
-      openButtonLabel: resolve('%manageBooks_projectSelector_openButtonLabel%', 'Open'),
-      selectAll: resolve('%manageBooks_projectSelector_selectAll%', 'Select all'),
-      clearAll: resolve('%manageBooks_projectSelector_clearAll%', 'Clear all'),
-    };
-  }, [localizedStrings]);
+    [localizedStrings],
+  );
 
   // ===== PAPI: project list =================================================
   // Resolve the manage-books NetworkObject lazily on first render.
@@ -1092,6 +1082,7 @@ global.webViewComponent = function ManageBooksWebView({
         sidebarProjects={sidebarProjects}
         openTabs={projectSelectorOpenTabs}
         projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
+        projectSelectorGroupings={projectSelectorGroupings}
       />
       <GreekEstherTemplatePicker
         open={pickerOpen}

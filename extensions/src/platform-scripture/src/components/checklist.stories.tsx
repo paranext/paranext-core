@@ -41,7 +41,7 @@ function sampleTrigger(label: string) {
  */
 const englishFallbacks: ChecklistLocalizedStrings = {
   '%markersChecklist_toolbar_primaryProject%': 'Select primary Scripture text',
-  '%markersChecklist_toolbar_comparativeTexts%': 'Select comparative texts',
+  '%markersChecklist_toolbar_comparativeTexts%': 'Select comparative projects',
   '%markersChecklist_toolbar_verseRange%': 'Select verse range',
   '%markersChecklist_toolbar_copy%': 'Copy',
   '%markersChecklist_toolbar_view%': 'View',

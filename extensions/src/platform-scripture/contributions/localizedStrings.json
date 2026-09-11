@@ -16,13 +16,106 @@
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },
     "%webView_find_projectSelector_searchPlaceholder%": {
-      "fallbackKey": "%manageBooks_projectSelector_searchPlaceholder%"
+      "fallbackKey": "%projectSelector_searchPlaceholder%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_searchPlaceholder% key."
+      }
     },
     "%webView_find_projectSelector_openTabsSectionHeading%": {
-      "fallbackKey": "%manageBooks_projectSelector_openTabsSectionHeading%"
+      "fallbackKey": "%projectSelector_openTabsSectionHeading%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_openTabsSectionHeading% key."
+      }
     },
     "%webView_find_projectSelector_otherProjectsSectionHeading%": {
-      "fallbackKey": "%manageBooks_projectSelector_otherProjectsSectionHeading%"
+      "fallbackKey": "%projectSelector_otherProjectsSectionHeading%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_otherProjectsSectionHeading% key."
+      }
+    },
+    "%manageBooks_projectSelector_boundButClosedTooltip%": {
+      "fallbackKey": "%projectSelector_boundButClosedTooltip%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_boundButClosedTooltip% key."
+      }
+    },
+    "%manageBooks_projectSelector_clearAll%": {
+      "fallbackKey": "%projectSelector_clearAll%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_clearAll% key."
+      }
+    },
+    "%manageBooks_projectSelector_filterAriaLabel%": {
+      "fallbackKey": "%projectSelector_filterAriaLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_filterAriaLabel% key."
+      }
+    },
+    "%manageBooks_projectSelector_filterGroupByOpenTabs%": {
+      "fallbackKey": "%projectSelector_grouping_openTabs_label%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Grouping labels now live on ProjectSelectorGrouping objects; see the platform-wide %projectSelector_grouping_openTabs_label% key."
+      }
+    },
+    "%manageBooks_projectSelector_filterSectionLabel%": {
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "ProjectSelector no longer renders a filter subsection — the Show-selected-only toggle was replaced by a Selection grouping (%projectSelector_grouping_selection_label%)."
+      }
+    },
+    "%manageBooks_projectSelector_filterShowSelectedOnly%": {
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "ProjectSelector no longer renders a Show-selected-only toggle. Use the Selection grouping (%projectSelector_grouping_selection_label%) to bucket rows into Selected / Unselected sections."
+      }
+    },
+    "%manageBooks_projectSelector_groupSectionLabel%": {
+      "fallbackKey": "%projectSelector_groupSectionLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_groupSectionLabel% key."
+      }
+    },
+    "%manageBooks_projectSelector_openButtonLabel%": {
+      "fallbackKey": "%projectSelector_openButtonLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_openButtonLabel% key."
+      }
+    },
+    "%manageBooks_projectSelector_openTabsSectionHeading%": {
+      "fallbackKey": "%projectSelector_openTabsSectionHeading%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_openTabsSectionHeading% key."
+      }
+    },
+    "%manageBooks_projectSelector_otherProjectsSectionHeading%": {
+      "fallbackKey": "%projectSelector_otherProjectsSectionHeading%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_otherProjectsSectionHeading% key."
+      }
+    },
+    "%manageBooks_projectSelector_searchPlaceholder%": {
+      "fallbackKey": "%projectSelector_searchPlaceholder%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "Superseded by the platform-wide %projectSelector_searchPlaceholder% key."
+      }
+    },
+    "%manageBooks_projectSelector_selectAll%": {
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "ProjectSelector no longer offers a Select all button — it was redundant with the Selection grouping. Only Clear all remains."
+      }
     },
     "%manageBooks_copy_confirmMergeFromSource%": {
       "fallbackKey": "%manageBooks_copy_onlyNonExistingChapters%"
@@ -613,7 +706,7 @@
       "%markersChecklist_settings_cancel%": "Cancel",
       "%markersChecklist_settings_helpIconAriaLabel%": "Help",
       "%markersChecklist_toolbar_primaryProject%": "Select primary Scripture text",
-      "%markersChecklist_toolbar_comparativeTexts%": "Select comparative texts",
+      "%markersChecklist_toolbar_comparativeTexts%": "Select comparative projects",
       "%markersChecklist_toolbar_verseRange%": "Select verse range",
       "%markersChecklist_toolbar_copy%": "Copy",
       "%markersChecklist_toolbar_view%": "View",

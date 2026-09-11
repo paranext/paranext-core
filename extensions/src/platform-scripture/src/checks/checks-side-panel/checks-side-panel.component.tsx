@@ -14,6 +14,7 @@ import {
   ProjectSelector,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
+  makeBuiltInGroupings,
 } from 'platform-bible-react/experimental';
 import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
@@ -226,19 +227,18 @@ export function ChecksSidePanel({
             onChangeSelection={({ projectId: nextId }) => {
               if (nextId) onSelectProject(nextId);
             }}
-            buttonPlaceholder={
-              localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
-            }
-            commandEmptyMessage={
-              localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
-            }
-            ariaLabel={
-              localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-            }
-            buttonVariant="outline"
-            buttonClassName="tw:w-full tw:font-normal"
-            popoverContentClassName="tw:w-[300px]"
-            alignDropDown="start"
+            localizedStrings={{
+              buttonPlaceholder:
+                localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%'],
+              commandEmptyMessage:
+                localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%'],
+              ariaLabel:
+                localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
+            }}
+            // English-only labels for now — this panel doesn't currently pull the shared
+            // `%projectSelector_grouping_*_label%` keys via `useLocalizedStrings`. Wire those into
+            // the panel's key list to localize.
+            availableGroupings={makeBuiltInGroupings()}
           />
         </div>
 

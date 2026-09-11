@@ -3,7 +3,7 @@
 import { DblResourceData, LanguageStrings, LocalizeKey, ResourceType, ScrollGroupId } from 'platform-bible-utils';
 import { ALL_BOOK_IDS, ForwardedPaletteKeyEvent, PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import React$1 from 'react';
-import { CSSProperties, MouseEventHandler, MutableRefObject, ReactNode } from 'react';
+import { MouseEventHandler, MutableRefObject, ReactNode } from 'react';
 
 type ClassValue = ClassArray | ClassDictionary | string | number | bigint | null | boolean | undefined;
 type ClassDictionary = Record<string, any>;
@@ -38,13 +38,17 @@ export type ScopeSelectorVariant = "radio" | "dropdown";
  * elements inside a modal (e.g. help icons in form fields).
  */
 export declare const Z_INDEX_TOOLTIP = 550;
-/** Minimal project metadata fed to the selector. */
+/**
+ * Minimal project metadata fed to the selector.
+ *
+ * Grouping-specific fields (versification, language, type, last-used) are NOT typed here — they
+ * live in {@link customData}. This keeps the component's public shape minimal and lets any grouping
+ * (built-in or consumer-defined) declare its own key without widening the row type.
+ */
 export type ProjectSelectorProject = {
 	id: string;
 	shortName: string;
 	fullName: string;
-	language?: string;
-	languageCode?: string;
 	/**
 	 * When `true`, the row for this project is rendered muted, is not selectable, and the
 	 * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
@@ -57,64 +61,24 @@ export type ProjectSelectorProject = {
 	/** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
 	disabledReason?: string;
 	/**
-	 * Locale-stable versification identifier (e.g. the numeric `ScrVersType` enum as a string). Used
-	 * by the selector's optional versification-grouping mode to bucket projects by canon, and to pin
-	 * the consumer-supplied "priority" versification group to the top. Pair with `versificationName`
-	 * for display.
+	 * Consumer-owned extra fields read by `ProjectSelectorGrouping.getGroupKey` implementations. The
+	 * component itself never introspects this map — it just carries it through to the grouping's
+	 * partitioner.
+	 *
+	 * Well-known keys used by the built-ins returned from `makeBuiltInGroupings`:
+	 *
+	 * - `lastUsedAt: number` — ms-epoch timestamp; the built-in `lastUsed` grouping bins projects with
+	 *   a timestamp under "Recently used" and the rest under "Other".
+	 * - `language: string` — language name; the built-in `language` grouping buckets by exact equality
+	 *   and uses the value as the section heading.
+	 * - `type: string` — locale-stable type key; the built-in `type` grouping buckets by exact
+	 *   equality. `typeName: string` (optional) supplies a friendlier heading — the grouping uses the
+	 *   first non-empty `typeName` observed in each bucket.
+	 *
+	 * Custom groupings are free to define any keys they like. Values are `unknown` so the grouping's
+	 * `getGroupKey` narrows them itself.
 	 */
-	versificationId?: string;
-	/**
-	 * Human-readable versification name (e.g. "English", "Vulgate"). Used as the section header in
-	 * versification-grouping mode. Defaults to a "Unknown" bucket when a project has a
-	 * `versificationId` but no `versificationName`. Pair with `versificationId`.
-	 */
-	versificationName?: string;
-	/**
-	 * Locale-stable type key for the "Group by type" option.
-	 *
-	 * **This field is a free-form `string` on purpose — the selector does NOT enforce a taxonomy.**
-	 * It groups rows by exact key equality (case-sensitive) and displays them under whatever
-	 * {@link typeName} the caller supplies. No enum, no union, no wire contract, and no localization
-	 * key set for the values is defined by this component.
-	 *
-	 * ### Why free-form?
-	 *
-	 * Rows in a single picker can come from more than one already-established taxonomy, and none of
-	 * them are owned by `platform-bible-react`:
-	 *
-	 * - **Paratext project types** — the PT9 `ProjectType` enum, surfaced by the C# ParatextData
-	 *   library via `ScrText.Settings.TranslationInfo.Type.InternalValue` and forwarded on the wire
-	 *   as `ProjectListResult.projectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values
-	 *   include `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
-	 *   `"StudyBibleAdditions"`, `"ConsultantNotes"`, `"Transliteration"`,
-	 *   `"TransliterationWithEncoder"`.
-	 * - **DBL resource types** — the `ResourceType` union in `platform-bible-utils`
-	 *   (`lib/platform-bible-utils/src/resources.model.ts`): `"ScriptureResource"`,
-	 *   `"CommentaryResource"`, `"EnhancedResource"`, `"XmlResource"`, `"SourceLanguageResource"`.
-	 *
-	 * Constraining `type` to a hard-coded union would either duplicate one of those taxonomies (and
-	 * quickly drift from its source of truth) or invent a new one, and neither buys the selector
-	 * anything — grouping only needs equality.
-	 *
-	 * If a future consumer wants type-safety on the caller side, the recommended shape is a typed
-	 * literal at the call site (e.g. `type: 'Standard' satisfies string`), not a widening of this
-	 * type. Escalating this to a union is a deliberate, future decision — not something to add
-	 * ad-hoc.
-	 */
-	type?: string;
-	/**
-	 * Human-readable label for {@link type} used as the section header in type-grouping mode. Falls
-	 * back to the raw `type` key when absent. Callers own the mapping from `type` to `typeName` and
-	 * should provide a localized string (e.g. `"Back translation"`, `"Study Bible"`, `"Scripture
-	 * resource"`). The selector does not resolve labels itself — see {@link type} for the rationale.
-	 */
-	typeName?: string;
-	/**
-	 * Millisecond-epoch timestamp of when the caller last used this project/resource. Optional;
-	 * consumed by the "Group by last used" option, which places rows with a timestamp under a
-	 * "Recently used" section (sorted newest-first) and rows without under "Other".
-	 */
-	lastUsedAt?: number;
+	customData?: Readonly<Record<string, unknown>>;
 };
 /** A project that is currently open in a specific scroll group. */
 export type ProjectSelectorOpenTab = {
@@ -145,83 +109,237 @@ type ProjectScrollGroupSelection = {
 	projectId?: string;
 	scrollGroupId?: ScrollGroupId;
 };
+/**
+ * One partitioned grouping definition. See {@link partitionByGrouping} and `makeBuiltInGroupings` in
+ * `project-selector.component`.
+ */
+export type ProjectSelectorGrouping = {
+	/**
+	 * Unique id — used as the radio value in the filter menu and to persist the "active grouping"
+	 * choice within a single mount. Must be unique within an `availableGroupings` array.
+	 *
+	 * The id `'openTabs'` is reserved: when present, partitioning derives from the separate
+	 * `openTabs` prop (see {@link partitionByOpenTabs}) rather than any row data, and `getGroupKey` is
+	 * ignored.
+	 */
+	id: string;
+	/**
+	 * Label rendered in the filter menu's radio item. Consumer supplies a localized string; the
+	 * component does not resolve labels on its own.
+	 */
+	label: string;
+	/**
+	 * Extract the row's group key. Called per project. Returning `undefined` routes the project into
+	 * the "unknown" bucket (see {@link unknownSectionHeading}). Ignored for the built-in `'openTabs'`
+	 * and `'selection'` groupings — those partition off row state (open-tabs prop / `isSelected`),
+	 * not project fields.
+	 */
+	getGroupKey?: (project: ProjectSelectorProject) => string | undefined;
+	/**
+	 * Format the section heading for a given group key. Called once per non-empty bucket with the key
+	 * and every project in the bucket (so consumers can lift a friendlier heading from `customData`,
+	 * e.g. `typeName`). Defaults to the key verbatim.
+	 *
+	 * For the built-in `'selection'` grouping, this is called with the keys `'selected'` and
+	 * `'unselected'` (in that order); the returned strings are used as the two section headings.
+	 * Ignored for `'openTabs'`.
+	 */
+	getSectionHeading?: (key: string, projects: readonly ProjectSelectorProject[]) => string;
+	/**
+	 * Heading for the "unknown" bucket — rows where `getGroupKey` returned `undefined`. When absent,
+	 * the unknown bucket is not emitted (its rows are dropped from the grouping's output).
+	 */
+	unknownSectionHeading?: string;
+	/**
+	 * Pin the bucket with this key to the top. Other buckets fall through to `compareSections`.
+	 * Ignored for `'openTabs'` and `'selection'` (which have fixed ordering).
+	 */
+	priorityKey?: string;
+	/**
+	 * Ordering for non-priority buckets. Defaults to alphabetic (case-insensitive) by heading.
+	 * Ignored for `'openTabs'` and `'selection'`.
+	 */
+	compareSections?: (a: {
+		key: string;
+		heading: string;
+	}, b: {
+		key: string;
+		heading: string;
+	}) => number;
+};
+/**
+ * Localization inputs for {@link makeBuiltInGroupings}. All fields are optional; missing entries
+ * fall back to English. The keys mirror the `%projectSelector_*%` central localization block so
+ * consumers can wire them from `useLocalizedStrings` in one shot.
+ */
+export type BuiltInGroupingStrings = {
+	openTabsLabel?: string;
+	lastUsedLabel?: string;
+	languageLabel?: string;
+	typeLabel?: string;
+	lastUsedRecentSectionHeading?: string;
+	lastUsedOtherSectionHeading?: string;
+	languageUnknownSectionHeading?: string;
+	typeUnknownSectionHeading?: string;
+};
+/**
+ * Build the four built-in groupings (`openTabs`, `lastUsed`, `language`, `type`) with the supplied
+ * (or English default) labels and section headings.
+ *
+ * Consumers that don't need custom groupings pass the returned array directly as
+ * `availableGroupings`. Consumers that want to extend the set spread it and append their own
+ * `ProjectSelectorGrouping` objects.
+ *
+ * The built-in groupings read from `project.customData` under well-known keys — see
+ * `ProjectSelectorProject.customData` for the contract.
+ */
+export declare function makeBuiltInGroupings(strings?: BuiltInGroupingStrings): ProjectSelectorGrouping[];
+/**
+ * Convenience: the four built-in groupings with English labels. Suitable for stories, tests, and
+ * consumers that don't need localization. Production consumers usually call
+ * {@link makeBuiltInGroupings} with a strings object built from the platform's `%projectSelector_*%`
+ * localization keys.
+ */
+export declare const defaultGroupings: readonly ProjectSelectorGrouping[];
+/** Localization inputs for {@link makeSelectionGrouping}. All fields optional. */
+export type SelectionGroupingStrings = {
+	label?: string;
+	selectedSectionHeading?: string;
+	unselectedSectionHeading?: string;
+};
+/**
+ * Build the built-in `'selection'` grouping. Meant for `project-multi` mode: partitions rows into
+ * "Selected" (rows.isSelected === true) and "Unselected", with Selected on top.
+ * `partitionByGrouping` recognizes the reserved id `'selection'` and does the split off
+ * `row.isSelected`; `getGroupKey` on this object is never called.
+ *
+ * Append it to a `makeBuiltInGroupings(...)` result to expose it in the grouping menu, e.g.:
+ *
+ * ```ts
+ * const groupings = useMemo(
+ *   () => [...makeBuiltInGroupings(strings), makeSelectionGrouping(strings)],
+ *   [strings],
+ * );
+ * ```
+ */
+export declare function makeSelectionGrouping(strings?: SelectionGroupingStrings): ProjectSelectorGrouping;
+/**
+ * Every user-facing string the selector can render. All keys are optional; unset values fall back
+ * to English defaults. Consumers wire this from a shared platform-level localization block (see
+ * `%projectSelector_*%` keys in the platform's localizedStrings JSON) so every ProjectSelector in
+ * the app reads the same vocabulary.
+ *
+ * Grouping _labels_ (the radio items in the filter menu) are NOT in this map — those live on the
+ * {@link ProjectSelectorGrouping} objects the caller passes via `availableGroupings`, so custom
+ * groupings can supply their own localized label without a separate string channel.
+ */
 export type ProjectSelectorLocalizedStrings = {
-	/** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
+	/** Trigger `aria-label`. */
+	ariaLabel?: string;
+	/** Trigger fallback text when nothing is selected. */
+	buttonPlaceholder?: string;
+	/** "No results" message inside the popover when the search has no matches. */
+	commandEmptyMessage?: string;
+	/** Placeholder for the popover's search input. */
 	searchPlaceholder?: string;
-	/** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */
+	/** Accessible label + `title` for the filter menu icon button. */
 	filterAriaLabel?: string;
-	/** Filter menu: section heading for the grouping toggle. Defaults to `"Group by"`. */
+	/** Filter menu: section heading for the grouping radio group. */
 	groupSectionLabel?: string;
-	/** Filter menu: section heading for the filter toggles. Defaults to `"Filter"`. */
-	filterSectionLabel?: string;
-	/** Filter menu: "None" radio item under the Group by section. Defaults to `"None"`. */
+	/** Filter menu: "None" grouping radio item — the "no grouping" option. */
 	filterGroupNone?: string;
-	/** Filter menu: "Open tabs" item under the Group by section. Defaults to `"Open tabs"`. */
-	filterGroupByOpenTabs?: string;
-	/** Filter menu: "Language" item under the Group by section. Defaults to `"Language"`. */
-	filterGroupByLanguage?: string;
-	/** Filter menu: "Last used" item under the Group by section. Defaults to `"Last used"`. */
-	filterGroupByLastUsed?: string;
-	/** Filter menu: "Versification" item under the Group by section. Defaults to `"Versification"`. */
-	filterGroupByVersification?: string;
-	/** Filter menu: "Type" item under the Group by section. Defaults to `"Type"`. */
-	filterGroupByType?: string;
-	/** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
-	filterShowSelectedOnly?: string;
-	/** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
+	/** Section heading rendered above the "open tabs" bucket. */
 	openTabsSectionHeading?: string;
-	/** Section heading for the Other projects section. Defaults to `"Your projects & resources"`. */
+	/** Section heading rendered above the "other projects" bucket. */
 	otherProjectsSectionHeading?: string;
 	/**
-	 * Section heading rendered for the "Unknown versification" bucket in versification-grouping mode
-	 * — covers projects whose versification can't be resolved at load time. Defaults to `"Unknown
-	 * versification"`.
+	 * Radio label used by the auto-added `openTabs` grouping (renders whenever `openTabs.length > 0`
+	 * and the caller didn't already include an `openTabs` grouping in `availableGroupings`).
 	 */
-	versificationUnknownSectionHeading?: string;
+	autoOpenTabsGroupingLabel?: string;
 	/**
-	 * Section heading for rows without a `language` field when grouping by language. Defaults to
-	 * `"Unknown language"`.
+	 * Radio label used by the auto-added `selection` grouping (renders in `project-multi` mode when
+	 * the caller didn't already include a `selection` grouping).
 	 */
-	languageUnknownSectionHeading?: string;
+	autoSelectionGroupingLabel?: string;
+	/** Auto-added selection grouping: heading over the "Selected" bucket. */
+	autoSelectionSelectedSectionHeading?: string;
+	/** Auto-added selection grouping: heading over the "Unselected" bucket. */
+	autoSelectionUnselectedSectionHeading?: string;
 	/**
-	 * Section heading for rows without a `type` field when grouping by type. Defaults to `"Unknown
-	 * type"`.
-	 */
-	typeUnknownSectionHeading?: string;
-	/**
-	 * Section heading for the "Recently used" bucket when grouping by last used. Defaults to
-	 * `"Recently used"`.
-	 */
-	lastUsedRecentSectionHeading?: string;
-	/**
-	 * Section heading for the "Other" bucket when grouping by last used — rows without a `lastUsedAt`
-	 * timestamp. Defaults to `"Other"`.
-	 */
-	lastUsedOtherSectionHeading?: string;
-	/**
-	 * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
-	 * Defaults to `"Bound to {group} · not currently open"`.
+	 * Tooltip on a bound-but-closed chip. `{group}` is replaced with the scroll-group letter (e.g.
+	 * `"A"`).
 	 */
 	boundButClosedTooltip?: string;
-	/** Label of the "Open" button shown on bound-but-closed rows. Defaults to `"Open"`. */
+	/** Label of the "Open" button shown on bound-but-closed rows. */
 	openButtonLabel?: string;
-	/** Multi-select: "Select all" button. Defaults to `"Select all"`. */
-	selectAll?: string;
-	/** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
+	/** Multi-select: "Clear all" button (shown only when at least one pair is selected). */
 	clearAll?: string;
 };
-type ProjectSelectorGroupingOption = "openTabs" | "lastUsed" | "language" | "versification" | "type";
+/**
+ * The platform-level localization keys that back every shared ProjectSelector string. Consumers
+ * pass this list to `useLocalizedStrings` to fetch them all in one go, then feed the resolved
+ * strings into {@link buildProjectSelectorLocalizedStrings} and (for the built-in groupings)
+ * {@link makeBuiltInGroupings}.
+ *
+ * Consumer-specific strings (per-picker `ariaLabel` and `buttonPlaceholder`) are NOT in this list —
+ * those are picker-role copy and should be resolved from the consumer's own l10n keys and merged in
+ * on top.
+ */
+export declare const PROJECT_SELECTOR_STRING_KEYS: readonly [
+	"%projectSelector_searchPlaceholder%",
+	"%projectSelector_commandEmptyMessage%",
+	"%projectSelector_filterAriaLabel%",
+	"%projectSelector_groupSectionLabel%",
+	"%projectSelector_filterGroupNone%",
+	"%projectSelector_openTabsSectionHeading%",
+	"%projectSelector_otherProjectsSectionHeading%",
+	"%projectSelector_boundButClosedTooltip%",
+	"%projectSelector_openButtonLabel%",
+	"%projectSelector_clearAll%",
+	"%projectSelector_grouping_openTabs_label%",
+	"%projectSelector_grouping_lastUsed_label%",
+	"%projectSelector_grouping_lastUsed_recentSectionHeading%",
+	"%projectSelector_grouping_lastUsed_otherSectionHeading%",
+	"%projectSelector_grouping_language_label%",
+	"%projectSelector_grouping_language_unknownSectionHeading%",
+	"%projectSelector_grouping_type_label%",
+	"%projectSelector_grouping_type_unknownSectionHeading%",
+	"%projectSelector_grouping_selection_label%",
+	"%projectSelector_grouping_selection_selectedSectionHeading%",
+	"%projectSelector_grouping_selection_unselectedSectionHeading%"
+];
+/** The union of {@link PROJECT_SELECTOR_STRING_KEYS} entries. */
+export type ProjectSelectorLocalizedStringKey = (typeof PROJECT_SELECTOR_STRING_KEYS)[number];
+/** A map from every {@link ProjectSelectorLocalizedStringKey} to its resolved localized value. */
+export type ProjectSelectorResolvedStrings = Readonly<Record<ProjectSelectorLocalizedStringKey, string>>;
+/**
+ * Convert the raw `%projectSelector_*%` resolved strings into a
+ * {@link ProjectSelectorLocalizedStrings} bag ready to pass as the `localizedStrings` prop. Merge
+ * consumer-specific strings (`ariaLabel`, `buttonPlaceholder`) on top afterwards.
+ */
+export declare function buildProjectSelectorLocalizedStrings(strings: ProjectSelectorResolvedStrings): ProjectSelectorLocalizedStrings;
+/**
+ * Convert the raw `%projectSelector_*%` resolved strings into the labels + section-heading strings
+ * that {@link makeBuiltInGroupings} accepts. Pair with {@link buildProjectSelectorLocalizedStrings}
+ * to wire the whole picker from a single {@link PROJECT_SELECTOR_STRING_KEYS} call.
+ */
+export declare function buildBuiltInGroupingStrings(strings: ProjectSelectorResolvedStrings): BuiltInGroupingStrings;
+/**
+ * Convert the raw `%projectSelector_*%` resolved strings into the labels + section-heading strings
+ * that {@link makeSelectionGrouping} accepts. Pair with {@link buildProjectSelectorLocalizedStrings}
+ * to wire the multi-select "Selection" grouping from the same {@link PROJECT_SELECTOR_STRING_KEYS}
+ * call.
+ */
+export declare function buildSelectionGroupingStrings(strings: ProjectSelectorResolvedStrings): SelectionGroupingStrings;
 type CommonProps = {
 	projects: readonly ProjectSelectorProject[];
 	openTabs: readonly ProjectSelectorOpenTab[];
-	buttonPlaceholder?: string;
-	commandEmptyMessage?: string;
-	ariaLabel?: string;
+	/**
+	 * Shadcn Button variant. Defaults to `'outline'`. Use `'default'` for a primary-fill affordance
+	 * (call-to-action) when the picker is empty and the user is expected to make a choice.
+	 */
 	buttonVariant?: ButtonProps["variant"];
-	buttonClassName?: string;
-	popoverContentClassName?: string;
-	popoverContentStyle?: React$1.CSSProperties;
-	alignDropDown?: "start" | "center" | "end";
 	isDisabled?: boolean;
 	/**
 	 * When true, the trigger shows a spinner (instead of the chevron) and is disabled, signalling
@@ -229,53 +347,47 @@ type CommonProps = {
 	 * busy/blocked state with no spinner.
 	 */
 	isLoading?: boolean;
+	/**
+	 * All user-facing strings. Optional keys fall back to English defaults. Consumers should wire
+	 * this from the platform's central `%projectSelector_*%` localization block plus any
+	 * consumer-specific overrides (typically `ariaLabel` and `buttonPlaceholder`, which vary per
+	 * picker role).
+	 */
 	localizedStrings?: ProjectSelectorLocalizedStrings;
 	/**
-	 * Grouping options exposed in the filter menu, in the order they appear. Defaults to all five
-	 * (`['openTabs', 'lastUsed', 'language', 'versification', 'type']`) so existing callers get every
-	 * grouping without changing props. Pass a subset to hide the ones your data doesn't support (e.g.
-	 * `['openTabs']` if none of your rows carry `type`/`lastUsedAt`), or an empty array to hide the
-	 * filter menu entirely.
-	 */
-	availableGroupings?: readonly ProjectSelectorGroupingOption[];
-	/**
-	 * The grouping selected on initial mount. When absent, defaults to `'openTabs'` if the array
-	 * includes it, otherwise `'none'`. Pass `'none'` to explicitly open with a flat list. A value not
-	 * present in `availableGroupings` falls through to the same default.
-	 */
-	defaultGrouping?: ProjectSelectorGroupingOption | "none";
-	/**
-	 * Legacy shorthand for `defaultGrouping`. When `false`, opens with `'none'`; when `true` or
-	 * absent, uses the resolved default. Prefer `defaultGrouping` for new code. Superseded silently
-	 * if both are set.
+	 * The grouping options exposed in the filter menu, in order. Each entry is a
+	 * {@link ProjectSelectorGrouping} — either one of the built-ins from {@link makeBuiltInGroupings}
+	 * or a consumer-defined custom grouping.
 	 *
-	 * @deprecated Use {@link defaultGrouping} instead.
-	 */
-	defaultGroupByOpenTabs?: boolean;
-	/**
-	 * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
-	 * sidebar ~56px wide) the chevron plus its margin consumes the entire content box and the label
-	 * truncates to nothing; hiding it leaves room for a few characters of the project name. Keep the
-	 * trigger visually recognizable as a control through its button variant when using this. Defaults
-	 * to `false`.
-	 */
-	hideTriggerChevron?: boolean;
-	/**
-	 * Versification id whose bucket should render first when the active grouping is `versification`
-	 * (typically the caller's active project's versification). Ignored under any other grouping.
-	 * Optional — when absent, versification buckets sort alphabetically by `versificationName`.
-	 */
-	priorityVersificationId?: string;
-	/**
-	 * When true, the funnel/filter menu next to the search box is not rendered. Defaults to `false`.
+	 * Behavior:
 	 *
-	 * For a picker whose rows are ALL open tabs (so "Group by open tabs" only toggles a section
-	 * heading over an otherwise identical list) and which is single-select (so "Show selected only"
-	 * never renders), the menu reduces to a control with no meaningful effect. Set this to drop the
-	 * affordance rather than present an inert one. Grouping still applies per
-	 * `defaultGroupByOpenTabs`; only the user-facing toggle goes away.
+	 * - **Omitted** — the component auto-derives from context: adds `openTabs` when `openTabs.length >
+	 *   0`, and adds `selection` in `project-multi` mode. Pickers that don't care about the grouping
+	 *   menu can leave this prop unset and get a sensible default.
+	 * - **`[]`** — explicit empty. No filter menu renders. The list opens flat.
+	 * - **Length 1** — the grouping is applied and the user is locked into it: the filter menu has
+	 *   nothing to switch between so the funnel button is dropped entirely. Use this for pickers
+	 *   whose grouping is the entire point (e.g. manage-books Create "Based on" locked into
+	 *   versification).
+	 * - **Length ≥ 2** — a filter menu renders with a "None" radio (above a separator) plus one radio
+	 *   per grouping.
+	 *
+	 * A caller that wants the historical set of built-ins passes `defaultGroupings` (or
+	 * `makeBuiltInGroupings(strings)`) explicitly. When you pass a list — even a single-entry lock —
+	 * the component uses it verbatim with no auto-additions on top.
 	 */
-	hideFilterMenu?: boolean;
+	availableGroupings?: readonly ProjectSelectorGrouping[];
+	/**
+	 * The grouping active on initial mount, identified by `id`. When absent (or when the id isn't
+	 * present in `availableGroupings`), the active grouping resolves to:
+	 *
+	 * - The sole entry when `availableGroupings.length === 1` (single-grouping lock),
+	 * - `'openTabs'` when it's in the array,
+	 * - `'none'` (flat) otherwise.
+	 *
+	 * Pass `'none'` to explicitly open flat even when groupings are available.
+	 */
+	defaultGrouping?: string | "none";
 };
 type ProjectSelectorProps = (CommonProps & {
 	mode: "project";
@@ -303,15 +415,6 @@ type ProjectSelectorProps = (CommonProps & {
 	 * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
 	 */
 	onOpenProjectInGroup?: (projectId: string, scrollGroupId: ScrollGroupId) => void;
-	/**
-	 * Optional custom trigger label when at least one pair is selected. Receives the list of
-	 * selected `(project, scrollGroupId)` tuples. Defaults to `"N: short1 (A), short2 (B),
-	 * ..."`.
-	 */
-	getSelectedText?: (selected: ReadonlyArray<{
-		project: ProjectSelectorProject;
-		scrollGroupId?: ScrollGroupId;
-	}>) => string;
 }) | (CommonProps & {
 	mode: "projectScrollGroup";
 	selection: ProjectScrollGroupSelection;

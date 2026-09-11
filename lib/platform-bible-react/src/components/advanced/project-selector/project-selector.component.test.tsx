@@ -42,33 +42,31 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollIntoView !== 'function') {
     Element.prototype.scrollIntoView = () => {};
   }
+  // jsdom returns a 0-width rect from getBoundingClientRect since it does no layout, which would
+  // trip ProjectSelector's auto-narrow observer (threshold 100px) and drop the chevron on every
+  // trigger. Stub the trigger button's rect so the default behavior matches production layout;
+  // individual narrow-mode tests override this per-instance below.
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  // Prototype assignment needs an anonymous function expression to preserve `this`.
+  // eslint-disable-next-line func-names
+  Element.prototype.getBoundingClientRect = function () {
+    const rect = originalGetBoundingClientRect.call(this);
+    if (this instanceof HTMLElement && this.getAttribute('role') === 'combobox') {
+      return { ...rect, width: 200, height: 32 };
+    }
+    return rect;
+  };
 });
 
 const SAMPLE_PROJECTS: ProjectSelectorProject[] = [
-  {
-    id: 'esvus16',
-    shortName: 'ESVUS16',
-    fullName: 'English Standard Version (US) 2016',
-    language: 'English',
-    languageCode: 'en-US',
-  },
-  {
-    id: 'esv16uk',
-    shortName: 'ESV16UK',
-    fullName: 'English Standard Version (UK) 2016',
-    language: 'English',
-    languageCode: 'en-GB',
-  },
-  {
-    id: 'web',
-    shortName: 'WEB',
-    fullName: 'World English Bible',
-    language: 'English',
-    languageCode: 'en',
-  },
+  { id: 'esvus16', shortName: 'ESVUS16', fullName: 'English Standard Version (US) 2016' },
+  { id: 'esv16uk', shortName: 'ESV16UK', fullName: 'English Standard Version (UK) 2016' },
+  { id: 'web', shortName: 'WEB', fullName: 'World English Bible' },
 ];
 
 const SAMPLE_OPEN_TABS: ProjectSelectorOpenTab[] = [];
+
+const HARNESS_STRINGS = { buttonPlaceholder: 'Select a project', ariaLabel: 'Project' };
 
 function ProjectSelectorHarness({ initialSelected }: { initialSelected: string | undefined }) {
   const [projectId, setProjectId] = useState<string | undefined>(initialSelected);
@@ -79,8 +77,7 @@ function ProjectSelectorHarness({ initialSelected }: { initialSelected: string |
       openTabs={SAMPLE_OPEN_TABS}
       selection={{ projectId }}
       onChangeSelection={({ projectId: next }) => setProjectId(next)}
-      buttonPlaceholder="Select a project"
-      ariaLabel="Project"
+      localizedStrings={HARNESS_STRINGS}
     />
   );
 }
@@ -93,29 +90,39 @@ function setupUser() {
 }
 
 describe('ProjectSelector — trigger chevron', () => {
-  it('renders a chevron icon in the trigger by default', () => {
+  it('renders a chevron icon in the trigger at normal widths', async () => {
     render(<ProjectSelectorHarness initialSelected="esvus16" />);
     const trigger = screen.getByRole('combobox', { name: 'Project' });
-    expect(trigger.querySelector('svg')).not.toBeNull();
+    // The auto-narrow observer runs on mount via a useEffect; wait one microtask.
+    await waitFor(() => {
+      expect(trigger.querySelector('svg')).not.toBeNull();
+    });
   });
 
-  it('hides the chevron icon when hideTriggerChevron is set', () => {
-    render(
-      <ProjectSelector
-        mode="project"
-        projects={SAMPLE_PROJECTS}
-        openTabs={SAMPLE_OPEN_TABS}
-        selection={{ projectId: 'esvus16' }}
-        onChangeSelection={() => {}}
-        buttonPlaceholder="Select a project"
-        ariaLabel="Project"
-        hideTriggerChevron
-      />,
-    );
-    const trigger = screen.getByRole('combobox', { name: 'Project' });
-    expect(trigger.querySelector('svg')).toBeNull();
-    // The label still renders so a narrow trigger shows the project name.
-    expect(trigger).toHaveTextContent('ESVUS16');
+  it('auto-hides the chevron when the rendered trigger is below the narrow threshold', async () => {
+    // Override the default 200px stub for this test — the trigger renders at 56px, which sits
+    // below the component's internal narrow-mode threshold and should drop the chevron.
+    const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    // Prototype assignment needs an anonymous function expression to preserve `this`.
+    // eslint-disable-next-line func-names
+    Element.prototype.getBoundingClientRect = function () {
+      const rect = originalGetBoundingClientRect.call(this);
+      if (this instanceof HTMLElement && this.getAttribute('role') === 'combobox') {
+        return { ...rect, width: 56, height: 32 };
+      }
+      return rect;
+    };
+    try {
+      render(<ProjectSelectorHarness initialSelected="esvus16" />);
+      const trigger = screen.getByRole('combobox', { name: 'Project' });
+      await waitFor(() => {
+        expect(trigger.querySelector('svg')).toBeNull();
+      });
+      // The label still renders so a narrow trigger shows the project name.
+      expect(trigger).toHaveTextContent('ESVUS16');
+    } finally {
+      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    }
   });
 });
 
@@ -128,8 +135,7 @@ describe('ProjectSelector — loading state (I1)', () => {
         openTabs={SAMPLE_OPEN_TABS}
         selection={{ projectId: undefined }}
         onChangeSelection={() => {}}
-        buttonPlaceholder="Select a project"
-        ariaLabel="Project"
+        localizedStrings={HARNESS_STRINGS}
         isLoading
       />,
     );
@@ -140,24 +146,38 @@ describe('ProjectSelector — loading state (I1)', () => {
     expect(icon?.getAttribute('class') ?? '').toContain('animate-spin');
   });
 
-  it('shows the loading spinner even when hideTriggerChevron is set (narrow rail)', () => {
-    render(
-      <ProjectSelector
-        mode="project"
-        projects={SAMPLE_PROJECTS}
-        openTabs={SAMPLE_OPEN_TABS}
-        selection={{ projectId: undefined }}
-        onChangeSelection={() => {}}
-        buttonPlaceholder="Select a project"
-        ariaLabel="Project"
-        hideTriggerChevron
-        isLoading
-      />,
-    );
-    const trigger = screen.getByRole('combobox', { name: 'Project' });
-    const icon = trigger.querySelector('svg');
-    expect(icon).not.toBeNull();
-    expect(icon?.getAttribute('class') ?? '').toContain('animate-spin');
+  it('shows the loading spinner even in the auto-narrow trigger case (icon-rail sidebar)', () => {
+    // Simulate a narrow trigger — auto-narrow would normally drop the chevron, but the spinner
+    // takes precedence so the user sees the loading state.
+    const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    // Prototype assignment needs an anonymous function expression to preserve `this`.
+    // eslint-disable-next-line func-names
+    Element.prototype.getBoundingClientRect = function () {
+      const rect = originalGetBoundingClientRect.call(this);
+      if (this instanceof HTMLElement && this.getAttribute('role') === 'combobox') {
+        return { ...rect, width: 56, height: 32 };
+      }
+      return rect;
+    };
+    try {
+      render(
+        <ProjectSelector
+          mode="project"
+          projects={SAMPLE_PROJECTS}
+          openTabs={SAMPLE_OPEN_TABS}
+          selection={{ projectId: undefined }}
+          onChangeSelection={() => {}}
+          localizedStrings={HARNESS_STRINGS}
+          isLoading
+        />,
+      );
+      const trigger = screen.getByRole('combobox', { name: 'Project' });
+      const icon = trigger.querySelector('svg');
+      expect(icon).not.toBeNull();
+      expect(icon?.getAttribute('class') ?? '').toContain('animate-spin');
+    } finally {
+      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    }
   });
 });
 
@@ -180,8 +200,7 @@ describe('ProjectSelector — trigger label format', () => {
         openTabs={SAMPLE_OPEN_TABS}
         selection={{ projectId: 'esvus16' }}
         onChangeSelection={() => {}}
-        buttonPlaceholder="Select a project"
-        ariaLabel="Project"
+        localizedStrings={HARNESS_STRINGS}
         triggerLabelFormat="shortNameAndFullName"
       />,
     );
@@ -200,8 +219,7 @@ describe('ProjectSelector — trigger label format', () => {
         openTabs={SAMPLE_OPEN_TABS}
         selection={{ projectId: 'p1' }}
         onChangeSelection={() => {}}
-        buttonPlaceholder="Select a project"
-        ariaLabel="Project"
+        localizedStrings={HARNESS_STRINGS}
         triggerLabelFormat="shortNameAndFullName"
       />,
     );
@@ -218,8 +236,7 @@ describe('ProjectSelector — trigger label format', () => {
         openTabs={SAMPLE_OPEN_TABS}
         selection={{ projectId: undefined }}
         onChangeSelection={() => {}}
-        buttonPlaceholder="Select a project"
-        ariaLabel="Project"
+        localizedStrings={HARNESS_STRINGS}
         triggerLabelFormat="shortNameAndFullName"
       />,
     );

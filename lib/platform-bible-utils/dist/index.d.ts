@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -4941,6 +4941,82 @@ export interface PaletteItem {
 	 */
 	muted?: boolean;
 }
+/**
+ * Well-known keys the ProjectSelector's built-in groupings (`language`, `type`, `lastUsed`) read
+ * from `ProjectSelectorProject.customData`. Reference these constants rather than typing the
+ * key strings inline so a rename here surfaces at every callsite.
+ */
+export declare const PROJECT_SELECTOR_CUSTOM_DATA_KEYS: Readonly<{
+	readonly language: "language";
+	readonly type: "type";
+	readonly typeName: "typeName";
+	readonly lastUsedAt: "lastUsedAt";
+}>;
+/**
+ * The typed shape of the well-known {@link PROJECT_SELECTOR_CUSTOM_DATA_KEYS} entries. Every
+ * field is optional — a grouping whose key is missing routes that project into its "unknown"
+ * bucket (or is elided per the grouping's `unknownSectionHeading` config).
+ */
+export type ProjectSelectorCustomDataShape = {
+	/**
+	 * Language name — bucketed by exact equality by the built-in `language` grouping and used as
+	 * the section heading verbatim. Consumer supplies a localized human-readable name.
+	 */
+	language?: string;
+	/**
+	 * Locale-stable type key — bucketed by exact equality by the built-in `type` grouping. Free
+	 * form; consumers pair it with `typeName` for display.
+	 */
+	type?: string;
+	/**
+	 * Human-readable label for {@link type}. The built-in `type` grouping uses the first non-empty
+	 * `typeName` observed in a bucket as the section heading (falls back to the raw `type` key
+	 * when no row in the bucket carries one).
+	 */
+	typeName?: string;
+	/**
+	 * Millisecond-epoch timestamp of the last time the caller-relevant "use" of this project
+	 * happened. The built-in `lastUsed` grouping partitions rows into a "Recently used" bucket
+	 * (any project with a timestamp) and an "Other" bucket (no timestamp), sorted newest-first
+	 * within Recently used.
+	 *
+	 * If your data source is an ordered recency list rather than per-project timestamps (as
+	 * `platformScripture.recentlyOpenedProjects.RecentProjects` returns), synthesize timestamps
+	 * via {@link recencyMapFromOrderedIds} — that preserves the source's ordering under the
+	 * built-in grouping's newest-first sort.
+	 */
+	lastUsedAt?: number;
+};
+/**
+ * Pack a subset of {@link ProjectSelectorCustomDataShape} into a plain record ready to assign to
+ * `ProjectSelectorProject.customData`. Keys with a wrong-typed value (or `undefined`) are
+ * omitted so groupings see them as "missing" rather than as a bogus empty string / NaN.
+ *
+ * Consumers with additional custom groupings can spread the returned record with their own keys:
+ *
+ * ```ts
+ * const customData = {
+ *   ...makeProjectSelectorCustomData({ language, type, typeName, lastUsedAt }),
+ *   versificationId, // consumer-defined key for a custom `versification` grouping
+ * };
+ * ```
+ */
+export declare function makeProjectSelectorCustomData(input: ProjectSelectorCustomDataShape): Readonly<Record<string, unknown>>;
+/**
+ * Convert a recency-ordered list of project ids (most-recent FIRST, as returned by
+ * `platformScripture.recentlyOpenedProjects.RecentProjects`) into a map of projectId → synthetic
+ * `lastUsedAt` value suitable for feeding into `ProjectSelectorProject.customData`.
+ *
+ * The recently-opened-projects service exposes order without timestamps; this helper synthesizes
+ * a monotonic descending value (higher = more recent) so the built-in `lastUsed` grouping's
+ * newest-first sort inside "Recently used" preserves the source's ordering. Projects NOT in the
+ * list get no entry, so they fall into the grouping's "Other" bucket per the built-in behavior.
+ *
+ * The synthesized values are DETERMINISTIC (do not call `Date.now()`), so calling this at render
+ * time is safe — the returned map has stable content and consumers can memoize on the input list
+ * identity.
+ */
+export declare function recencyMapFromOrderedIds(orderedProjectIds: readonly string[]): ReadonlyMap<string, number>;
 export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;

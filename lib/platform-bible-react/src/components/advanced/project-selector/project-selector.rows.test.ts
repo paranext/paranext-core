@@ -7,7 +7,10 @@ import { describe, it, expect } from 'vitest';
 import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   computeRows,
-  partitionAndSort,
+  partitionByGrouping,
+  partitionByOpenTabs,
+  partitionFlat,
+  type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from './project-selector.rows';
@@ -293,27 +296,27 @@ describe('computeRows — projectScrollGroup mode', () => {
   });
 });
 
-describe('partitionAndSort', () => {
-  it('flat mode returns a single section with no section kind header', () => {
+describe('partitionFlat / partitionByOpenTabs', () => {
+  it('partitionFlat returns a single section with no section kind header', () => {
     const rows = computeRows({
       mode: 'project',
       projects,
       openTabs,
       selection: { projectId: 'b' },
     });
-    const sections = partitionAndSort(rows, false);
+    const sections = partitionFlat(rows);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
   });
 
-  it('grouped mode splits into Open tabs / Other projects for project mode', () => {
+  it('partitionByOpenTabs splits into Open tabs / Other projects for project mode', () => {
     const rows = computeRows({
       mode: 'project',
       projects,
       openTabs,
       selection: { projectId: undefined },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
     expect(sections[0].rows.map((r) => r.projectId).sort()).toEqual(['a', 'b']);
     expect(sections[1].rows.map((r) => r.projectId)).toEqual(['c']);
@@ -326,7 +329,7 @@ describe('partitionAndSort', () => {
       openTabs,
       selection: { projectId: 'a', scrollGroupId: C },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     const other = sections.find((s) => s.kind === 'other');
     expect(other).toBeDefined();
     expect(other!.rows.some((r) => r.isBoundButClosed && r.projectId === 'a')).toBe(true);
@@ -347,20 +350,20 @@ describe('partitionAndSort', () => {
       openTabs: [{ projectId: 'z', scrollGroupId: A }],
       selection: { pairs: [{ projectId: 'm' }] },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     const other = sections.find((s) => s.kind === 'other');
     expect(other!.rows.map((r) => r.projectId)).toEqual(['a', 'm']);
   });
 
-  it('selection state is preserved across groupByOpenTabs flips', () => {
+  it('selection state is preserved across flat / openTabs flips', () => {
     const rows = computeRows({
       mode: 'projectScrollGroup',
       projects,
       openTabs,
       selection: { projectId: 'a', scrollGroupId: B },
     });
-    const flat = partitionAndSort(rows, false);
-    const grouped = partitionAndSort(rows, true);
+    const flat = partitionFlat(rows);
+    const grouped = partitionByOpenTabs(rows);
     const flatSelected = flat.flatMap((s) => s.rows).filter((r) => r.isSelected);
     const groupedSelected = grouped.flatMap((s) => s.rows).filter((r) => r.isSelected);
     expect(flatSelected.map((r) => `${r.projectId}:${r.scrollGroupId}`)).toEqual(
@@ -375,11 +378,11 @@ describe('partitionAndSort', () => {
       openTabs,
       selection: { projectId: 'a' },
     });
-    const flatKeys = partitionAndSort(rows, false)
+    const flatKeys = partitionFlat(rows)
       .flatMap((s) => s.rows)
       .map((r) => r.rowKey)
       .sort();
-    const groupedKeys = partitionAndSort(rows, true)
+    const groupedKeys = partitionByOpenTabs(rows)
       .flatMap((s) => s.rows)
       .map((r) => r.rowKey)
       .sort();
@@ -402,7 +405,7 @@ describe('partitionAndSort', () => {
       openTabs: tabs,
       selection: { projectId: undefined, scrollGroupId: undefined },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     const open = sections.find((s) => s.kind === 'openTabs');
     expect(open!.rows.map((r) => `${r.projectId}:${r.scrollGroupId}`)).toEqual([
       'p:0',
@@ -485,15 +488,15 @@ describe('computeRows — isDisabled / disabledReason flow-through', () => {
   });
 });
 
-describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
-  it('returns a single flat section (no headings) when grouping is on but no rows belong to Open Tabs', () => {
+describe('partitionByOpenTabs — flat fallback when no Open Tabs section', () => {
+  it('returns a single flat section (no headings) when no rows belong to Open Tabs', () => {
     const rows = computeRows({
       mode: 'project',
       projects,
       openTabs: [],
       selection: { projectId: undefined },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
     expect(sections[0].rows).toHaveLength(projects.length);
@@ -506,7 +509,7 @@ describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
       openTabs: [{ projectId: 'a', scrollGroupId: A }],
       selection: { projectId: undefined },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
     expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
   });
 
@@ -517,7 +520,131 @@ describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
       openTabs: [],
       selection: { pairs: [] },
     });
-    const sections = partitionAndSort(rows, true);
+    const sections = partitionByOpenTabs(rows);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+  });
+});
+
+describe('partitionByGrouping — dispatch', () => {
+  const p: ProjectSelectorProject[] = [
+    { id: 'en1', shortName: 'EN1', fullName: 'English 1', customData: { language: 'English' } },
+    { id: 'en2', shortName: 'EN2', fullName: 'English 2', customData: { language: 'English' } },
+    { id: 'de1', shortName: 'DE1', fullName: 'German 1', customData: { language: 'German' } },
+    { id: 'legacy', shortName: 'LEG', fullName: 'Legacy' },
+  ];
+  const rows = computeRows({
+    mode: 'project',
+    projects: p,
+    openTabs: [],
+    selection: { projectId: undefined },
+  });
+
+  it("delegates the reserved 'openTabs' id to partitionByOpenTabs", () => {
+    const rowsWithTabs = computeRows({
+      mode: 'project',
+      projects: p,
+      openTabs: [{ projectId: 'en1', scrollGroupId: A }],
+      selection: { projectId: undefined },
+    });
+    const openTabsGrouping: ProjectSelectorGrouping = { id: 'openTabs', label: 'Open tabs' };
+    const sections = partitionByGrouping(rowsWithTabs, openTabsGrouping);
+    expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
+  });
+
+  it('buckets rows by getGroupKey, emitting one grouping section per key', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      unknownSectionHeading: 'Unknown',
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    const labels = sections.map((s) => s.label);
+    // Alphabetical by heading (English before German), unknown bucket last.
+    expect(labels).toEqual(['English', 'German', 'Unknown']);
+    expect(sections[0].rows.map((r) => r.projectId).sort()).toEqual(['en1', 'en2']);
+    expect(sections[2].rows.map((r) => r.projectId)).toEqual(['legacy']);
+  });
+
+  it('drops the unknown bucket when unknownSectionHeading is absent', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['English', 'German']);
+    // 'legacy' is elided since it has no language and no unknown heading was provided.
+    expect(sections.flatMap((s) => s.rows).find((r) => r.projectId === 'legacy')).toBeUndefined();
+  });
+
+  it('honors priorityKey by pinning that bucket first', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      priorityKey: 'German',
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['German', 'English']);
+    expect(sections[0].isPriority).toBe(true);
+    expect(sections[1].isPriority).toBe(false);
+  });
+
+  it('honors compareSections for non-priority ordering', () => {
+    const grouping: ProjectSelectorGrouping = {
+      id: 'lang',
+      label: 'Language',
+      getGroupKey: (project) =>
+        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      // Reverse alphabetic.
+      compareSections: (a, b) => b.heading.localeCompare(a.heading),
+    };
+    const sections = partitionByGrouping(rows, grouping);
+    expect(sections.map((s) => s.label)).toEqual(['German', 'English']);
+  });
+
+  it('getSectionHeading receives all projects in the bucket so it can lift a friendlier heading', () => {
+    const typed: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A', customData: { type: 'std' } },
+      {
+        id: 'b',
+        shortName: 'B',
+        fullName: 'B',
+        customData: { type: 'std', typeName: 'Standard translation' },
+      },
+    ];
+    const rowsTyped = computeRows({
+      mode: 'project',
+      projects: typed,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    const grouping: ProjectSelectorGrouping = {
+      id: 'type',
+      label: 'Type',
+      getGroupKey: (project) =>
+        typeof project.customData?.type === 'string' ? project.customData.type : undefined,
+      getSectionHeading: (key, bucketProjects) => {
+        const first = bucketProjects.find(
+          (project) => typeof project.customData?.typeName === 'string',
+        );
+        const heading = first?.customData?.typeName;
+        return typeof heading === 'string' ? heading : key;
+      },
+    };
+    const sections = partitionByGrouping(rowsTyped, grouping);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].label).toBe('Standard translation');
+  });
+
+  it('falls back to a flat section when the grouping has no getGroupKey and is not `openTabs`', () => {
+    const grouping: ProjectSelectorGrouping = { id: 'no-op', label: 'No-op' };
+    const sections = partitionByGrouping(rows, grouping);
     expect(sections).toHaveLength(1);
     expect(sections[0].kind).toBe('flat');
   });

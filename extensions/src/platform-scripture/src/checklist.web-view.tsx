@@ -9,9 +9,17 @@ import {
 } from 'platform-bible-react';
 import {
   ProjectSelector,
+  PROJECT_SELECTOR_STRING_KEYS,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  buildSelectionGroupingStrings,
+  makeBuiltInGroupings,
+  makeSelectionGrouping,
+  type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
+  type ProjectSelectorResolvedStrings,
   type ScopeWithRange,
 } from 'platform-bible-react/experimental';
 import {
@@ -20,6 +28,8 @@ import {
   formatScrRef,
   getErrorMessage,
   isPlatformError,
+  makeProjectSelectorCustomData,
+  recencyMapFromOrderedIds,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
@@ -45,6 +55,15 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
+
+// Stable empty-array reference for the comparative-texts picker's openTabs prop — see the picker
+// wiring below for why this must always be empty.
+const NO_COMPARATIVE_OPEN_TABS: readonly ProjectSelectorOpenTab[] = Object.freeze([]);
+
+// Stable empty-array reference for the recently-opened-projects `useData` default. `useData`
+// resubscribes when the default identity changes, so keeping this at module scope avoids
+// per-render re-subscriptions.
+const EMPTY_RECENT_PROJECTS: readonly string[] = Object.freeze([]);
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -215,6 +234,9 @@ global.webViewComponent = function ChecklistWebView({
 
   const scopeSelectorStringKeys = useMemo(() => Array.from(SCOPE_SELECTOR_STRING_KEYS), []);
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(scopeSelectorStringKeys);
+
+  const projectSelectorStringKeys = useMemo(() => Array.from(PROJECT_SELECTOR_STRING_KEYS), []);
+  const [projectSelectorResolvedStrings] = useLocalizedStrings(projectSelectorStringKeys);
 
   // ─── Service + editability ────────────────────────────────────────────────
 
@@ -571,14 +593,17 @@ global.webViewComponent = function ChecklistWebView({
   // tabs for the "Open tabs" section in the popover. On selection change, map the returned
   // `ProjectSelectorProjectPair[]` back to our `ChecklistComparativeTextRef[]` persistence shape.
 
-  const [allProjects] = usePromise(
+  const [allProjectsRaw] = usePromise(
     useCallback(async () => {
       const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
         // Scripture + Paratext project interfaces — mirrors checks-side-panel's filter so we pick
         // up the same project set that the scripture editor shows.
         includeProjectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.USFM_Book'],
       });
-      const results: ProjectSelectorProject[] = [];
+      // Load id/name/fullName/language for every project in parallel. `platform.language` is a
+      // core project setting; fetching it here lets the built-in `language` grouping partition
+      // rows into real per-language buckets rather than everything under "Unknown language".
+      const results: Array<ProjectSelectorProject & { rawLanguage: string | undefined }> = [];
       await Promise.all(
         allMetadata.map(async (metadata) => {
           try {
@@ -586,7 +611,7 @@ global.webViewComponent = function ChecklistWebView({
             const [shortName, fullName, language] = await Promise.all([
               pdp.getSetting('platform.name'),
               pdp.getSetting('platform.fullName'),
-              Promise.resolve(undefined), // language not strictly required
+              pdp.getSetting('platform.language').catch(() => undefined),
             ]);
             // pdp.getSetting can return `null` for missing settings — must compare against null
             // explicitly here, so we disable the no-null rule for this guard only.
@@ -596,7 +621,7 @@ global.webViewComponent = function ChecklistWebView({
                 id: metadata.id,
                 shortName,
                 fullName: fullName ?? shortName,
-                language,
+                rawLanguage: typeof language === 'string' ? language : undefined,
               });
             }
           } catch (err) {
@@ -608,8 +633,27 @@ global.webViewComponent = function ChecklistWebView({
       );
       return results;
     }, []),
-    useMemo<ProjectSelectorProject[]>(() => [], []),
+    useMemo<Array<ProjectSelectorProject & { rawLanguage: string | undefined }>>(() => [], []),
   );
+
+  // Recency order for the built-in `lastUsed` grouping. The service exposes an ordered id list
+  // (most-recent first) without timestamps, so we synthesize monotonic values via
+  // `recencyMapFromOrderedIds` to feed the grouping's newest-first sort.
+  const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
+    undefined,
+    EMPTY_RECENT_PROJECTS,
+  );
+
+  const allProjects = useMemo<ProjectSelectorProject[]>(() => {
+    const recencyMap = recencyMapFromOrderedIds(recentProjectIds);
+    return allProjectsRaw.map(({ rawLanguage, ...rest }) => ({
+      ...rest,
+      customData: makeProjectSelectorCustomData({
+        language: rawLanguage,
+        lastUsedAt: recencyMap.get(rest.id),
+      }),
+    }));
+  }, [allProjectsRaw, recentProjectIds]);
 
   const comparativeProjects = useMemo<ProjectSelectorProject[]>(
     () => allProjects.filter((p) => p.id !== projectId),
@@ -655,20 +699,85 @@ global.webViewComponent = function ChecklistWebView({
     [allProjects, setComparativeTexts],
   );
 
+  // useLocalizedStrings echoes the raw key literal until each entry resolves, so every value is
+  // always a string; the cast just narrows the generic `LanguageStrings` record to the specific
+  // key set the helper needs.
+  const projectSelectorLocalizedStrings = useMemo(
+    () =>
+      buildProjectSelectorLocalizedStrings(
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        projectSelectorResolvedStrings as ProjectSelectorResolvedStrings,
+      ),
+    [projectSelectorResolvedStrings],
+  );
+
+  // Built-in groupings (openTabs / lastUsed / language / type) for the primary-project picker.
+  const primaryProjectGroupings = useMemo(
+    () =>
+      makeBuiltInGroupings(
+        buildBuiltInGroupingStrings(
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          projectSelectorResolvedStrings as ProjectSelectorResolvedStrings,
+        ),
+      ),
+    [projectSelectorResolvedStrings],
+  );
+
+  // Comparative-texts picker: same built-in options as the primary picker PLUS the multi-select
+  // Selection grouping (Selected / Unselected bucketing). Explicit array — when a consumer
+  // passes `availableGroupings`, the component uses it verbatim with no auto-additions.
+  const comparativeTextsGroupings = useMemo<ProjectSelectorGrouping[]>(
+    () => [
+      ...makeBuiltInGroupings(
+        buildBuiltInGroupingStrings(
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          projectSelectorResolvedStrings as ProjectSelectorResolvedStrings,
+        ),
+      ),
+      makeSelectionGrouping(
+        buildSelectionGroupingStrings(
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          projectSelectorResolvedStrings as ProjectSelectorResolvedStrings,
+        ),
+      ),
+    ],
+    [projectSelectorResolvedStrings],
+  );
+
+  // Selection grouping is auto-added by ProjectSelector for `project-multi` mode. We pass
+  // `openTabs={[]}` here on purpose: comparative-texts selection is stored per-project (no
+  // scrollGroupId), and passing real openTabs would produce per-scroll-group rows that never
+  // match the stored per-project pairs — clicks would always land in the ADD path and duplicate
+  // the same project. Empty openTabs collapses rows to one-per-project, matching the storage
+  // shape. Auto-openTabs grouping is skipped for the same reason (nothing open to bucket).
   const comparativeTextsSelectorNode = useMemo(
     () => (
-      <div data-testid="checklist-comparative-texts-trigger">
+      <div data-testid="checklist-comparative-texts-trigger" className="tw:min-w-32">
         <ProjectSelector
           mode="project-multi"
           projects={comparativeProjects}
-          openTabs={comparativeOpenTabs}
+          openTabs={NO_COMPARATIVE_OPEN_TABS}
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
-          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
+          localizedStrings={{
+            ...projectSelectorLocalizedStrings,
+            buttonPlaceholder:
+              localizedStrings['%markersChecklist_toolbar_comparativeTexts%'] ??
+              'Select comparative projects',
+            ariaLabel: localizedStrings['%markersChecklist_toolbar_comparativeTexts%'],
+          }}
+          availableGroupings={comparativeTextsGroupings}
         />
       </div>
     ),
-    [comparativeProjects, comparativeOpenTabs, comparativeSelection, handleComparativeTextsChange],
+    [
+      comparativeProjects,
+      comparativeSelection,
+      handleComparativeTextsChange,
+      projectSelectorLocalizedStrings,
+      comparativeTextsGroupings,
+      localizedStrings,
+    ],
   );
 
   // ─── ScopeSelector handlers (R1: snapshot at click-time) ─────────────────
@@ -773,7 +882,7 @@ global.webViewComponent = function ChecklistWebView({
 
   const primaryProjectSelectorNode = useMemo(
     () => (
-      <div data-testid="checklist-primary-project-trigger">
+      <div data-testid="checklist-primary-project-trigger" className="tw:min-w-32">
         <ProjectSelector
           mode="project"
           projects={allProjects}
@@ -782,11 +891,13 @@ global.webViewComponent = function ChecklistWebView({
           onChangeSelection={(next: { projectId: string }) =>
             updateWebViewDefinition({ projectId: next.projectId })
           }
-          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
-          buttonPlaceholder={
-            localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel
-          }
-          ariaLabel={localizedStrings['%markersChecklist_toolbar_primaryProject%']}
+          availableGroupings={primaryProjectGroupings}
+          localizedStrings={{
+            ...projectSelectorLocalizedStrings,
+            buttonPlaceholder:
+              localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel,
+            ariaLabel: localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+          }}
         />
       </div>
     ),
@@ -797,6 +908,8 @@ global.webViewComponent = function ChecklistWebView({
       updateWebViewDefinition,
       localizedStrings,
       primaryProjectLabel,
+      projectSelectorLocalizedStrings,
+      primaryProjectGroupings,
     ],
   );
 
