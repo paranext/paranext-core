@@ -75,6 +75,45 @@ step, no automation. Just a record.
 
 ---
 
+## adr-abandoned-window-notice-offers-manual-close: A window whose renderer crash-loops past its reload budget gets a native "close it?" notice, not a silent leave-open or an automatic close
+
+- **Date:** 2026-09-07
+- **Status:** Accepted
+- **Context:** `decideRendererCrashReload`'s reload budget (`renderer-crash-reload-budget.util.ts`,
+  seeded from `NO_RENDERER_CRASH_RELOADS_YET`) already leaves a window whose renderer keeps dying
+  open rather than closing it out from under the user — closing it costs nothing once
+  `keepsItsEntryOnClose` (`window-entry-disposition.util.ts`) keeps its entry, but taking a window
+  away unasked is not this handler's to decide. Left alone and merely marked (`markWindowAbandoned`),
+  that window is a dead page with no explanation, excluded from `platform.getWindows`, and the only
+  trace is a log line nobody reads.
+- **Decision:** `offerToCloseAbandonedWindow` (in `main.ts`) puts a native message box to the user,
+  mirroring `confirmCloseAllWindows`'s shape (bounded localization race, `AbortSignal` dismissal on
+  quit, English fallback on a failed localization lookup) so the application's native yes/no
+  questions about closing windows look and behave alike. Whether to ask at all, and which window
+  carries the question when the abandoned one is off screen, are decided through pure, unit-tested
+  functions — `decideAbandonedWindowNotice`, `chooseNoticeParentWindowId`, and
+  `eligibleNoticeParentCandidates` (`abandoned-window-notice.util.ts`) — rather than inline in the
+  handler. Offering the close is safe specifically because `keepsItsEntryOnClose` already keeps an
+  abandoned window's entry, so closing it only brings the window back later rather than costing the
+  user its tabs.
+- **Alternatives:** Automatically close the window once its crash budget is spent — rejected: closing
+  a window unasked is not the crash handler's to decide, and a user working around a misbehaving
+  extension might disagree. Leave it open with no further signal — rejected: that is exactly the
+  confusing dead page this notice exists to explain. A different UI shape (a toast, a persistent
+  banner) — rejected: the application's other one-shot question about closing windows already uses a
+  native message box (`confirmCloseAllWindows`), and a second idiom for the same kind of question
+  would itself be an inconsistency.
+- **Consequences:** The notice's own text promises only that the window comes back, not that closing
+  it is free of side effects — an abandoned window that still holds the primary role reaches the same
+  `decideWindowClose`/`confirmCloseAllWindows` path an ordinary primary-window close does when the
+  user answers "close it", so closing what looks like one dead window can still surface the
+  whole-application close-all prompt. That escalation is a known, separately tracked gap this
+  decision does not resolve.
+- **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
+  (`2026-09-02-pt-4286-mode-switch-spec.md`); depends on `adr-primary-window-owns-app-lifetime` for
+  what makes a window "primary" and on the crash-reload-budget decision in
+  `renderer-crash-reload-budget.util.ts` for when a window counts as abandoned.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -1438,6 +1477,80 @@ step, no automation. Just a record.
   `.claude/rules/architecture/react-patterns.md`.
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
+
+## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** Simple mode is single-window and power mode is not, but nothing in the main process
+  reacted to the mode changing: its only settings subscription was `platform.zoomFactor`, and every
+  `platform.interfaceMode` read there was one-shot. A live switch therefore reloaded each open
+  window's own dock independently and did nothing to the set of windows — so switching to simple
+  left secondary windows open in a mode whose chrome cannot reach them, and switching back brought
+  nothing back. The requirement is that switching to simple saves the power layout including
+  secondaries, closes them, and loads simple in one window, and that switching back reopens them.
+- **Decision:** The mode owns the window set, and the set needs no new record. `window-layouts.json`
+  already holds one entry per window, `handleWindowRemoved` can keep an entry while dropping its
+  runtime id, and a write emits every entry whether or not a window lives in it — so a preserved
+  entry IS a saved window with nothing on screen, and "the windows the power session had open" is
+  exactly the entries with no live window. Main subscribes to the mode once for the session and, on
+  a switch to simple, closes every window but the primary with its entry kept; on a switch back to
+  power, creates a window from each entry left behind. The survivor is whoever the runtime primary
+  lookup names — the window holding the marked entry when one is live, and otherwise the oldest live
+  window. The persisted flag does not move; the role can. Usually they are the same window, so the
+  survivor is also the entry simple mode restores next launch; in the fallback state they are not,
+  and the survivor's layout is then not the one that comes back, because the restore opens the
+  marked entry. When no live window is fit to be the survivor — every one is either abandoned or
+  already closing — nothing closes at all: the switch aborts, the cached mode rolls back to what it
+  was, and the setting is written back to match, so a switch that could not be carried out does not
+  leave the cache and the setting disagreeing with a window set that never changed. Once the switch
+  is known to be to simple, refusing to create a further window keeps that mode from *gaining* a
+  window beyond the survivor — but a delivery of "simple" arriving while the cache is still unknown
+  is adopted outright with nothing closed, so the mode can briefly read simple while every window
+  from before remains open, until the next delivery gives the switch a known "from" to act on. Only
+  the primary window runs the renderer-side switch at all:
+  that switch starts a send/receive, applies the administrator's shared layout, records a
+  recently-opened project and writes an application-wide browser-storage cache, all of which a
+  window being closed by the same switch would duplicate — and could resolve to a different project
+  than the survivor when the cache is cold.
+- **Alternatives:** A new session-scoped record of "the power window set" — rejected: the entry list
+  already is it, and a second account of which windows exist is the thing that goes stale. Reusing
+  the quit latch to make the secondaries keep their entries, as the window-close rule does —
+  rejected: the application is not quitting, and setting that latch would both make window creation
+  refuse (breaking the switch back) and run the application's shutdown tasks. Having a renderer ask
+  main to close the other windows — rejected: which renderer, and what if two ask. Having the
+  renderer decide for itself which window it is — rejected: only the main process knows which window
+  holds the role, and it is the process that acts on the answer. Making
+  the renderer switch idempotent in the extension host instead of gating it — rejected as a second
+  mechanism for one problem, and it would not have covered the cold-cache case.
+- **Consequences:** Closing secondaries on a switch to simple makes the colliding-web-view-id
+  precondition true rather than assumed: the simple-mode fast path loads a static layout whose tab
+  ids are identical in every window and are never window-scoped, and only single-window simple mode
+  keeps two windows from holding them at once. It also depends on how a window decides whether it is
+  the one to run the switch, and that decision fails CLOSED. The window list leaves out windows that
+  can no longer take work — one whose close has begun, and one whose renderer has been given up on —
+  and either can be the window holding the role, so the list can name no primary at all. A window
+  therefore runs the switch only when the list says it is the primary, and stands down on silence.
+  Reading silence as "then it must be me" was what let every secondary run the switch at once. Closing the secondaries narrows the
+  colliding-id window rather than closing it outright: the ids are still unscoped, and two windows
+  can still hold them if a window runs the switch when it should not. Two residuals are deliberate.
+  A question that cannot be answered still runs the switch, because nothing was learned and leaving
+  the mode changed with the dock never reloaded is worse; on that path the duplicate side effects
+  above are unchanged. And the renderer stands down expecting the main process to close it, with no
+  fallback if that half never runs — reachable four ways, all tolerated: the subscription failing
+  at startup, the reaction returning early because it is unwired or the application is shutting
+  down, the mode arriving in the main process as an error while the renderer got a good value, and a
+  window that stood down and was then rescued by `undoModeSwitchClose` rather than actually closed —
+  it is shown again on its power-mode dock while the cached mode already reads simple, with nothing
+  left to re-trigger the renderer-side switch since the mode is not changing again.
+  A window stranded that way keeps its power layout while the application reads simple, and its
+  layout pushes are refused, until the mode changes again. And the layout-push refusal is scoped to windows closing for
+  a mode switch rather than to any closing window: a window is recorded as closing before it flushes
+  its layout, so the wider guard would lose a layout change made just before a quit. The
+  simple-to-power overwrite defect in the renderer's own save guards is out of scope and unchanged.
+- **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
+  (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
+  `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 

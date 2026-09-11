@@ -89,6 +89,13 @@ export async function performShutdownTasks(): Promise<void> {
 }
 
 async function performShutdownTasksInternal(): Promise<void> {
+  // Drained before the mode is even read, not just before either branch: a closing window's sync
+  // belongs to no mode, since it was started under whichever mode was in force when that window
+  // closed and the mode can have changed since. An unreadable mode must not skip this wait either —
+  // it is the only thing that can ever cover that window's editors, and both branches below go on
+  // to cancel whatever is in progress once this has drained.
+  await drainInFlightWindowCloseSyncs();
+
   // An unreadable mode must NOT fall through to Simple mode's open-editor S/R (symmetric with
   // startup): the read can fail exactly when the app is closing, and Simple mode S/Rs whatever
   // writable editors happen to be open — for a Power user, possibly projects they excluded from
@@ -146,22 +153,87 @@ const inFlightWindowCloseSyncs = new Set<Promise<void>>();
  * @param closingWindowId Window that is closing
  */
 export async function performWindowCloseTasks(closingWindowId: string): Promise<void> {
+  await beginWindowCloseSync(closingWindowId);
+}
+
+/**
+ * A closing window's open web view definitions, dispatched eagerly and swallowed if never consumed.
+ *
+ * Reused by {@link startWindowCloseTasksWithoutWaiting} to close the race between letting the window
+ * go and asking it what it had open: dispatching this at the point where the window is still
+ * certainly alive, rather than after {@link performWindowCloseTasksInternal}'s own first await,
+ * means the request is already in flight by the time the caller destroys the window.
+ */
+function readOpenWebViewDefinitionsEagerly(
+  closingWindowId: string,
+): ReturnType<typeof getOpenWebViewDefinitionsForWindow> {
+  const openWebViewDefinitions = getOpenWebViewDefinitionsForWindow(closingWindowId);
+  // The interface-mode branch inside performWindowCloseTasksInternal may discard this entirely (a
+  // Power-mode close never awaits it), so a rejection must not go unhandled while it waits to be
+  // consumed or dropped.
+  openWebViewDefinitions.catch(() => {});
+  return openWebViewDefinitions;
+}
+
+/**
+ * Start a closing window's sync and let the window go without waiting for it.
+ *
+ * For a window closing because the interface mode changed. Such a window is coming back — its entry
+ * is kept and the next switch recreates it — so holding it on screen for the length of a
+ * send/receive would make changing mode take as long as a sync, once per window. What the window
+ * had open is still worth pushing, though, so the sync is started while the window is still alive
+ * to be asked what that was.
+ *
+ * The sync joins {@link inFlightWindowCloseSyncs} exactly as an awaited one does, which is what
+ * keeps it from being lost: the shutdown drains that set before either mode's sync cancels
+ * anything, so a quit arriving mid-sync still lets it finish — including one arriving after the
+ * mode changed again, since the sync belongs to the window rather than to a mode.
+ *
+ * @param closingWindowId Window that is closing
+ */
+export function startWindowCloseTasksWithoutWaiting(closingWindowId: string): void {
+  // Dispatched here, synchronously, before the caller regains control and can destroy the window —
+  // see readOpenWebViewDefinitionsEagerly.
+  const openWebViewDefinitions = readOpenWebViewDefinitionsEagerly(closingWindowId);
+  // Deliberately neither awaited nor returned: the caller closes the window now, and failures are
+  // already swallowed and logged inside the sync itself.
+  beginWindowCloseSync(closingWindowId, openWebViewDefinitions).catch(() => {});
+}
+
+/**
+ * Run a closing window's sync, registered in {@link inFlightWindowCloseSyncs} for as long as it
+ * takes. The one place that set is maintained, so an awaited close and one that lets go of the
+ * window cannot drift apart.
+ *
+ * @param closingWindowId Window that is closing
+ * @param openWebViewDefinitions The window's own open web view definitions, already dispatched.
+ *   Only a caller that lets the window go immediately needs to pass this
+ *   ({@link startWindowCloseTasksWithoutWaiting}); left undefined, it is read lazily, after the mode
+ *   check, inside {@link performWindowCloseTasksInternal} — which is fine for a caller that awaits
+ *   this before doing anything to the window ({@link performWindowCloseTasks}).
+ * @returns The sync, which never rejects
+ */
+function beginWindowCloseSync(
+  closingWindowId: string,
+  openWebViewDefinitions?: ReturnType<typeof getOpenWebViewDefinitionsForWindow>,
+): Promise<void> {
   const windowCloseSync = (async () => {
     try {
-      await performWindowCloseTasksInternal(closingWindowId);
+      await performWindowCloseTasksInternal(closingWindowId, openWebViewDefinitions);
     } catch (e) {
       logger.error(`Unexpected error while syncing the projects of a closing window:`, e);
     }
   })();
   inFlightWindowCloseSyncs.add(windowCloseSync);
-  try {
-    await windowCloseSync;
-  } finally {
+  return windowCloseSync.finally(() => {
     inFlightWindowCloseSyncs.delete(windowCloseSync);
-  }
+  });
 }
 
-async function performWindowCloseTasksInternal(closingWindowId: string): Promise<void> {
+async function performWindowCloseTasksInternal(
+  closingWindowId: string,
+  openWebViewDefinitions?: ReturnType<typeof getOpenWebViewDefinitionsForWindow>,
+): Promise<void> {
   // An unreadable mode skips the sync rather than falling through to Simple mode's behavior, for the
   // same reason performShutdownTasksInternal does: Simple mode would S/R whichever writable editors
   // are open, which for a Power user may be projects they deliberately excluded from their schedule.
@@ -178,8 +250,11 @@ async function performWindowCloseTasksInternal(closingWindowId: string): Promise
 
   let projectIds: string[];
   try {
+    // Read here, lazily, only when no eagerly-dispatched read was already passed in: this is the
+    // awaited-caller path (performWindowCloseTasks), reached only once Simple mode is confirmed, so
+    // there is no race to close and no point asking before knowing the answer matters.
     projectIds = getWritableEditorProjectIds(
-      await getOpenWebViewDefinitionsForWindow(closingWindowId),
+      await (openWebViewDefinitions ?? getOpenWebViewDefinitionsForWindow(closingWindowId)),
     );
   } catch (e) {
     // Said plainly rather than swallowed: this is the last moment anything can know what this
@@ -224,18 +299,31 @@ function getWritableEditorProjectIds(definitions: SavedWebViewDefinition[]): str
   return [...new Set(writableEditorProjectIds)];
 }
 
-async function performSimpleModeShutdownSync(): Promise<void> {
-  // A window that closed a moment ago is already syncing what went with it, and nothing else can:
-  // its editors only ever existed in it. Waited for rather than cancelled below — it is bounded by
-  // the same shutdown wait everything else here is, so the cost is a delay and the alternative is
-  // that window's edits never going out at all.
-  if (inFlightWindowCloseSyncs.size > 0) {
+/**
+ * Let every sync a closing window started finish before the shutdown cancels what is in progress.
+ *
+ * A window that closed a moment ago is already syncing what went with it, and nothing else can: its
+ * editors only ever existed in it. Waited for rather than cancelled or raced — it is bounded by the
+ * same shutdown wait everything else here is, so the cost is a delay and the alternative is that
+ * window's edits never going out at all. Simple mode goes on to cancel whatever is in progress;
+ * power mode runs a scheduled sync of its own against projects this one may still be writing.
+ */
+async function drainInFlightWindowCloseSyncs(): Promise<void> {
+  // Looped rather than a single snapshot: a window can start closing while this already awaits the
+  // syncs that were in flight when it began, and a snapshot taken once would leave that later sync
+  // to be cancelled by the very shutdown this exists to protect it from.
+  while (inFlightWindowCloseSyncs.size > 0) {
     logger.info(
-      `Waiting for ${inFlightWindowCloseSyncs.size} closing window sync(s) before cancelling in-progress syncs for shutdown`,
+      `Waiting for ${inFlightWindowCloseSyncs.size} closing window sync(s) before the shutdown starts its own`,
     );
+    // Each pass must re-snapshot the set after the previous wait, since a new sync may have
+    // registered during it.
+    // eslint-disable-next-line no-await-in-loop -- serial by design, not a missed Promise.all
     await Promise.allSettled([...inFlightWindowCloseSyncs]);
   }
+}
 
+async function performSimpleModeShutdownSync(): Promise<void> {
   // Cancel any in-progress sync first (e.g. a first-sync on startup), then S/R the active project.
   try {
     await networkService.requestNoRetry(
