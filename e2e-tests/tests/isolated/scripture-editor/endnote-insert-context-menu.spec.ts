@@ -1,5 +1,5 @@
 /**
- * PT-4195: the editor right-click menu offers the same inserts as the Insert top-menu (footnote,
+ * The editor right-click menu offers the same inserts as the Insert top-menu (footnote,
  * cross-reference, end note, comment — in that order), and inserting an end note creates a real
  * `\fe` note (caller `+`, PT9 shape) that survives the PDP save/USFM echo round-trip.
  *
@@ -18,8 +18,8 @@
  * construction — a pre-existing trait of this menu that affects the shipped footnote and
  * cross-reference items identically. The keyboard path is unaffected by that churn (the highlight
  * is plugin state, and an auto-retrying locator re-queries the re-created item), so it is asserted
- * here; clicking the item is on the hand-QA list. The insert is additionally driven through the
- * registered `insertEndnoteAtSelection` command, the same web-view callback the menu item invokes.
+ * here. The insert is additionally driven through the registered `insertEndnoteAtSelection`
+ * command, the same web-view callback the menu item invokes.
  *
  * ONE test() per spec file (isolated-fixture constraint — see standard-default-power-mode.spec.ts).
  * Run: `npm run test:e2e:isolated scripture-editor`.
