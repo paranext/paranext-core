@@ -834,7 +834,13 @@ export function Find({
   };
 
   return (
-    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
+    // `overflow-hidden` makes `max-h-screen` hold, so the document never scrolls. It otherwise does,
+    // and since a search re-runs whenever a filter changes, the results area crosses the viewport
+    // boundary often enough that the document scrollbar toggles. Each toggle narrows the viewport by
+    // the scrollbar's width, shifting this right-aligned toolbar sideways — which anything anchored
+    // to it, such as the filters popover, visibly follows. Nothing is clipped: the results list below
+    // shrinks to the space left over and scrolls within it.
+    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:overflow-hidden tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
         {/* Project selector + Find/Replace toggle share one row. The responsiveness guideline caps a
@@ -1195,7 +1201,11 @@ export function Find({
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={resultsContainerRef}
-        className="tw:min-h-48 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
+        // `min-h-0` rather than a fixed floor so this list can shrink below its content when the
+        // panel is short. A floor here would refuse to give way and push the root past its height
+        // cap, which is what previously forced the document to scroll. The empty-state placeholder
+        // carries its own minimum height, so the idle view is unaffected.
+        className="tw:min-h-0 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}

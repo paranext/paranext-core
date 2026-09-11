@@ -2,10 +2,10 @@ import { Info, SlidersHorizontal } from 'lucide-react';
 import {
   Button,
   Checkbox,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
   Label,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   RadioGroup,
   RadioGroupItem,
   Tooltip,
@@ -74,12 +74,17 @@ export function FindFilters({
   open,
   onOpenChange,
 }: FindFiltersProps) {
+  // These filters are a form of grouped settings, not a menu of commands. A menu container would
+  // give them `role="menu"`, whose keyboard model only navigates registered menu items and calls
+  // preventDefault on Tab — leaving these plain form controls unreachable by keyboard. A popover
+  // is an inert container, so the controls keep their native keyboard behavior: Tab moves between
+  // groups and arrow keys move within a radio group.
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
+            <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="icon"
@@ -88,12 +93,25 @@ export function FindFilters({
               >
                 <SlidersHorizontal className="tw:h-4 tw:w-4" />
               </Button>
-            </DropdownMenuTrigger>
+            </PopoverTrigger>
           </TooltipTrigger>
           <TooltipContent>{localizedStrings.toggleFilters}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DropdownMenuContent align="end" className="tw:w-72 tw:p-3">
+      {/* The height cap and internal scrolling are load-bearing, and PopoverContent — unlike
+          DropdownMenuContent — does not supply them. Without them this panel outgrows a short web
+          view, so moving focus down it scrolls the document instead, and the popper repositions on
+          every keypress. Scrolling inside the panel keeps it anchored.
+
+          `overflow-y-scroll` rather than `auto` because the popper recomputes the available height
+          on each re-render, and a filter change re-renders; under `auto` those small differences
+          take the content across the threshold where a scrollbar is needed and the bar flickers in
+          and out. This content is taller than the space it gets, so the scrollbar is always
+          warranted — showing it unconditionally just stops it blinking. */}
+      <PopoverContent
+        align="end"
+        className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
+      >
         {/* 1. Match content in */}
         <fieldset className="tw:mb-3">
           <legend className="tw:px-2 tw:py-1.5 tw:text-sm tw:font-semibold">
@@ -252,7 +270,7 @@ export function FindFilters({
             </Label>
           </div>
         </fieldset>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   );
 }
