@@ -288,6 +288,7 @@ export function ManageBooksSidebar({
             mode="project"
             projects={projects}
             openTabs={openTabs ?? []}
+            availableGroupings={['openTabs']}
             selection={{ projectId }}
             onChangeSelection={({ projectId: nextId }) => {
               if (nextId) onProjectIdChange(nextId);

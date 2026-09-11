@@ -39,6 +39,9 @@
     "%manageBooks_view_diff_label%": {
       "fallbackKey": "%manageBooks_view_compareVersions_label%"
     },
+    "%manageBooks_projectSelector_filterAriaLabel%": {
+      "fallbackKey": "%manageBooks_projectSelector_viewOptionsAriaLabel%"
+    },
     "%inventoryName_Character%": {
       "fallbackKey": "%CheckType_3%"
     },
@@ -242,7 +245,6 @@
       "%manageBooks_genericError%": "An unexpected error occurred.",
       "%manageBooks_projectSelector_boundButClosedTooltip%": "Bound to {group} · not currently open",
       "%manageBooks_projectSelector_clearAll%": "Clear all",
-      "%manageBooks_projectSelector_filterAriaLabel%": "Filter",
       "%manageBooks_projectSelector_filterGroupByOpenTabs%": "By open tabs",
       "%manageBooks_projectSelector_filterSectionLabel%": "Filter",
       "%manageBooks_projectSelector_filterShowSelectedOnly%": "Show selected only",
@@ -254,6 +256,7 @@
       "%manageBooks_projectSelector_selectAll%": "Select all",
       "%manageBooks_projectSelector_versificationSectionHeading%": "{0} versification",
       "%manageBooks_projectSelector_versificationUnknownSectionHeading%": "Unknown versification",
+      "%manageBooks_projectSelector_viewOptionsAriaLabel%": "View options",
       "%manageBooks_filter_buttonAriaLabel%": "Filter",
       "%manageBooks_filter_clearButton%": "Clear filter",
       "%manageBooks_filter_menuLabel%": "Show",

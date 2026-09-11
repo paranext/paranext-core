@@ -2723,6 +2723,83 @@ step, no automation. Just a record.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
 
+## adr-project-selector-custom-sections: ProjectSelector takes ordered section descriptors, not a grouping callback
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** `ProjectSelector`'s sections were computed entirely internally, so a consumer could
+  not express a list like "Recent / Your projects". The titlebar picker therefore stayed bespoke
+  and re-implemented the list from scratch. Two shapes were available: ordered declarative
+  descriptors, or a `groupRows` callback receiving the filtered rows and returning sections.
+- **Decision:** Callers pass `customSections` — ordered `{ id, label, match, compare? }`
+  descriptors — selected by a `'custom'` member of `ProjectSelectorGroupingOption`. The component
+  keeps ownership of heading resolution, empty-section elision and the default sort. `match` is
+  evaluated once per project and its verdict applied to all of that project's rows, because
+  `project-multi` fans one project into several rows.
+- **Alternatives considered:**
+  - **A `groupRows` callback.** Rejected: it would put `RowSection` on the public barrel and hand
+    every caller responsibility for sort order, heading text and empty-section elision. (`ProjectRow`
+    is already re-exported from `project-selector.component.tsx`, so only `RowSection` would be
+    newly public.)
+  - **Widening `RowSection` itself.** Rejected: `RowSection` is an internal shape, so widening it
+    describes no public API — a caller cannot construct or name it. `customSections` is the
+    caller-facing surface the capability actually needs.
+- **Consequences:** A section whose meaning implies an order the component cannot know needs its
+  own `compare` — the canonical sort is alphabetical by `shortName`, which would render a "Recent"
+  section alphabetically. `RowSection` needed an `id` for React keys, since two custom sections can
+  share a `kind` and both lack a `label`.
+
+## adr-project-selector-stays-experimental: ProjectSelector keeps its experimental entry point while its shape is still moving
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** `ProjectSelector` is the platform's shared project/resource picker, and the picker
+  lane adds capabilities to it across several consecutive work items — caller-supplied sections and
+  a row type indicator here, an "All projects…" footer affordance and further consumers after. The
+  question was whether to move it to the stable barrel now, on the strength of its consumer count,
+  or leave it on `platform-bible-react/experimental` until the surface settles.
+- **Decision:** It stays on `experimental`. The capabilities land; the barrel move does not. The
+  stable barrel is a support promise, and the component is still acquiring props with each
+  consumer — `customSections`, `renderProjectIndicator`, and the footer affordance deferred to the
+  next item all arrived or will arrive after the promotion was first proposed.
+- **Alternatives considered:**
+  - **Promote now.** Rejected: it fixes the public shape at the point of greatest churn. Names that
+    are free to change today (`hideFilterMenu`, which no longer matches the "view options" concept
+    the control now expresses) become breaking changes the moment the component is supported.
+  - **Promote with the experimental barrel kept as a deprecated re-export.** Rejected: that entry
+    point's own header declares no stability guarantee and promises no deprecation cycle, so the
+    shim would buy nothing while putting the component in two bundles.
+- **Consequences:** Consumers import from `platform-bible-react/experimental` and accept the
+  no-guarantee contract, which is what they already did. Renames and prop reshapes stay free until
+  promotion. Promotion becomes its own work item, whose entry criterion is that a consumer can be
+  added without adding a prop — and it should carry the API-surface TSDoc and localized-key
+  conventions the stable barrel expects, rather than bundling them into a capability change.
+
+## adr-project-selector-type-stays-free-form: ProjectSelectorProject.type is a free-form string, not a closed union
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** Projects and resources rendered identically in the picker, with the distinction
+  carried only by localized copy. Adding a discriminator raised whether `type` should be a closed
+  TypeScript union or an open string.
+- **Decision:** `type` stays `string`. Rows are grouped by exact key equality and displayed under a
+  caller-supplied `typeName`; the library defines no taxonomy, no enum and no localization key set
+  for the values.
+- **Alternatives considered:**
+  - **A closed union.** Rejected: a single picker's rows can come from two established
+    vocabularies, neither owned by `platform-bible-react` — Paratext project types (Paratext.Data's
+    `ProjectType` enum, used in this repo as `Enum<ProjectType>`, e.g. in
+    `c-sharp/ManageBooks/CopyBooksOrchestrator.cs`, and owned upstream, not here) and DBL
+    resource types (the `ResourceType` union in `lib/platform-bible-utils/src/resources.model.ts`).
+    The Paratext side reaches the wire already flattened to a plain string —
+    `ProjectSummary.ProjectType` (`c-sharp/ManageBooks/ProjectSummary.cs`), sourced from
+    `scrText.Settings.TranslationInfo.Type.InternalValue` (e.g. `"Standard"`, `"BackTranslation"`,
+    `"Daughter"`). A union would duplicate one of these taxonomies and drift from its source, or
+    invent a third. Grouping needs only equality.
+- **Consequences:** The library will never resolve a type's label or icon, so every picker must
+  supply both — `typeName` for grouping headers and `renderProjectIndicator` for the row glyph. A
+  caller wanting compile-time safety should type the literal at its own call site.
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25

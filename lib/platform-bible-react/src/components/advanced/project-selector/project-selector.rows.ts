@@ -7,10 +7,28 @@ export type ProjectSelectorMode = 'project' | 'project-multi' | 'projectScrollGr
 
 /** Minimal project metadata fed to the selector. */
 export type ProjectSelectorProject = {
+  /**
+   * Canonical project id, echoed back in `onChangeSelection` and matched against
+   * `ProjectSelectorOpenTab.projectId` case-insensitively. Must be unique within `projects`.
+   */
   id: string;
+  /** Short name shown as the row's first line and as the trigger label. */
   shortName: string;
+  /**
+   * Full name shown as the row's muted second line and as the tooltip title. Pass the short name
+   * (or omit the distinction upstream) when there is no fuller name — the selector suppresses the
+   * second line rather than repeat it.
+   */
   fullName: string;
+  /**
+   * Human-readable language name (e.g. `"English"`). Surfaced in the row tooltip, searchable from
+   * the popover's search box, and used as the section heading when grouping by language.
+   */
   language?: string;
+  /**
+   * BCP-47-style language tag (e.g. `"en-US"`). Shown beside {@link language} in the row tooltip and
+   * searchable, so a user can find a project by its tag when several share a language name.
+   */
   languageCode?: string;
   /**
    * When `true`, the row for this project is rendered muted, is not selectable, and the
@@ -36,11 +54,67 @@ export type ProjectSelectorProject = {
    * `versificationId` but no `versificationName`. Pair with `versificationId`.
    */
   versificationName?: string;
+  /**
+   * Locale-stable type key for the "Group by type" option. Free-form on purpose: the selector
+   * groups rows by exact key equality (case-sensitive) and labels the bucket with whatever
+   * {@link typeName} the caller supplies, so it enforces no taxonomy of its own. Rows in one picker
+   * can mix Paratext project types with DBL resource types, and neither vocabulary is owned by this
+   * library — see the `adr-project-selector-type-stays-free-form` entry in
+   * `.context/standards/Architecture-Decisions.md` for why.
+   *
+   * A caller who wants type-safety over their own values should narrow at their own call site — a
+   * union of the types they actually produce, assigned into this field — rather than ask this type
+   * to carry it.
+   */
+  type?: string;
+  /**
+   * Human-readable label for {@link type} used as the section header in type-grouping mode. Falls
+   * back to the raw `type` key when absent. Callers own the mapping from `type` to `typeName` and
+   * should provide a localized string (e.g. `"Back translation"`, `"Study Bible"`, `"Scripture
+   * resource"`). The selector does not resolve labels itself — see {@link type} for the rationale.
+   */
+  typeName?: string;
+  /**
+   * Millisecond-epoch timestamp of when the caller last used this project/resource. Optional;
+   * consumed by the "Group by last used" option, which places rows with a timestamp under a
+   * "Recently used" section (sorted newest-first) and rows without under "Other".
+   */
+  lastUsedAt?: number;
+};
+
+/**
+ * One consumer-defined section of the project list, used when the active grouping is `'custom'`.
+ * Sections are evaluated in the order supplied and a project lands in the first one whose `match`
+ * accepts it, so a trailing `match: () => true` reads as "everything else".
+ */
+export type ProjectSelectorSection = {
+  /** Stable unique key. Becomes the rendered section's React key. */
+  id: string;
+  /**
+   * Localized section heading. Omit for a section with no header row — but note the rows still
+   * render as a group under a separator, so omitting this leaves a visually delimited block with no
+   * accessible name, which is the same problem `unmatchedLabel` exists to solve for the trailing
+   * bucket. Omit it only when the section's membership is self-evident from the rows themselves.
+   */
+  label?: string;
+  /** Whether a project belongs in this section. Called once per project, never per row. */
+  match: (project: ProjectSelectorProject) => boolean;
+  /**
+   * Row order within this section. Omit to use the selector's canonical order (alphabetical by
+   * `shortName`). Supply one when the section's meaning implies an order the selector cannot know —
+   * a "Recent" section is the motivating case, since alphabetical order defeats its purpose.
+   */
+  compare?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
 
 /** A project that is currently open in a specific scroll group. */
 export type ProjectSelectorOpenTab = {
+  /**
+   * The open project's id. Matched against {@link ProjectSelectorProject.id} case-insensitively, so
+   * a lowercased id from a tab's state still finds its project.
+   */
   projectId: string;
+  /** The scroll group this tab is bound to. Rendered as the row's chip letter (`0`→`A`, …). */
   scrollGroupId: ScrollGroupId;
   /**
    * Optional, pre-formatted "current scripture reference" for this scroll group (e.g. `"MAT
@@ -60,17 +134,17 @@ export type ProjectSelectorProjectPair = {
 };
 
 /** Selection shape for single `project` mode. */
-export type ProjectSelection = { projectId?: string };
+export type ProjectSelectorSelection = { projectId?: string };
 
 /**
  * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair; the
  * same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined when a
  * project that is not currently open anywhere is selected.
  */
-export type ProjectMultiSelection = { pairs: readonly ProjectSelectorProjectPair[] };
+export type ProjectSelectorMultiSelection = { pairs: readonly ProjectSelectorProjectPair[] };
 
 /** Selection shape for `projectScrollGroup` mode. */
-export type ProjectScrollGroupSelection = {
+export type ProjectSelectorScrollGroupSelection = {
   projectId?: string;
   scrollGroupId?: ScrollGroupId;
 };
@@ -122,6 +196,12 @@ export type ProjectRow = {
   versificationId?: string;
   /** Mirrors {@link ProjectSelectorProject.versificationName}. */
   versificationName?: string;
+  /** Mirrors {@link ProjectSelectorProject.type}. */
+  type?: string;
+  /** Mirrors {@link ProjectSelectorProject.typeName}. */
+  typeName?: string;
+  /** Mirrors {@link ProjectSelectorProject.lastUsedAt}. */
+  lastUsedAt?: number;
 };
 
 export type ComputeRowsArgs =
@@ -129,19 +209,19 @@ export type ComputeRowsArgs =
       mode: 'project';
       projects: readonly ProjectSelectorProject[];
       openTabs: readonly ProjectSelectorOpenTab[];
-      selection: ProjectSelection;
+      selection: ProjectSelectorSelection;
     }
   | {
       mode: 'project-multi';
       projects: readonly ProjectSelectorProject[];
       openTabs: readonly ProjectSelectorOpenTab[];
-      selection: ProjectMultiSelection;
+      selection: ProjectSelectorMultiSelection;
     }
   | {
       mode: 'projectScrollGroup';
       projects: readonly ProjectSelectorProject[];
       openTabs: readonly ProjectSelectorOpenTab[];
-      selection: ProjectScrollGroupSelection;
+      selection: ProjectSelectorScrollGroupSelection;
     };
 
 // #endregion
@@ -179,7 +259,10 @@ function pairIsSelected(
   projectId: string,
   scrollGroupId: ScrollGroupId | undefined,
 ): boolean {
-  return pairs.some((p) => p.projectId === projectId && p.scrollGroupId === scrollGroupId);
+  const normalized = normalizeProjectId(projectId);
+  return pairs.some(
+    (p) => normalizeProjectId(p.projectId) === normalized && p.scrollGroupId === scrollGroupId,
+  );
 }
 
 // #endregion
@@ -215,6 +298,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         disabledReason: project.disabledReason,
         versificationId: project.versificationId,
         versificationName: project.versificationName,
+        type: project.type,
+        typeName: project.typeName,
+        lastUsedAt: project.lastUsedAt,
       };
     });
   }
@@ -255,6 +341,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         disabledReason: project.disabledReason,
         versificationId: project.versificationId,
         versificationName: project.versificationName,
+        type: project.type,
+        typeName: project.typeName,
+        lastUsedAt: project.lastUsedAt,
       });
       return;
     }
@@ -276,6 +365,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         disabledReason: project.disabledReason,
         versificationId: project.versificationId,
         versificationName: project.versificationName,
+        type: project.type,
+        typeName: project.typeName,
+        lastUsedAt: project.lastUsedAt,
       });
     });
   });
@@ -286,11 +378,17 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   selectedPairs.forEach((pair) => {
     if (pair.scrollGroupId === undefined) return;
     if (
-      rows.some((r) => r.projectId === pair.projectId && r.scrollGroupId === pair.scrollGroupId)
+      rows.some(
+        (r) =>
+          normalizeProjectId(r.projectId) === normalizeProjectId(pair.projectId) &&
+          r.scrollGroupId === pair.scrollGroupId,
+      )
     ) {
       return;
     }
-    const project = args.projects.find((p) => p.id === pair.projectId);
+    const project = args.projects.find(
+      (p) => normalizeProjectId(p.id) === normalizeProjectId(pair.projectId),
+    );
     if (!project) return;
     rows.push({
       rowKey: `closed:${project.id}:${pair.scrollGroupId}`,
@@ -309,6 +407,9 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
       disabledReason: project.disabledReason,
       versificationId: project.versificationId,
       versificationName: project.versificationName,
+      type: project.type,
+      typeName: project.typeName,
+      lastUsedAt: project.lastUsedAt,
     });
   });
 
@@ -321,15 +422,29 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 
 export type RowSection = {
   /**
-   * 'flat' means no section header (grouping toggle off). 'versification' is a custom-labeled
-   * section that surfaces the versification name; the priority versification group (typically the
-   * active project's versification) is pinned to the top by `partitionByVersification`.
+   * 'flat' means no section header (grouping off). 'versification', 'language', 'type', 'lastUsed'
+   * and 'custom' are labeled sections whose header comes from `label`; the priority versification
+   * group (typically the active project's versification) is pinned to the top by
+   * `partitionByVersification`.
    */
-  kind: 'openTabs' | 'other' | 'flat' | 'versification';
+  kind:
+    | 'openTabs'
+    | 'other'
+    | 'flat'
+    | 'versification'
+    | 'language'
+    | 'type'
+    | 'lastUsed'
+    | 'custom';
   rows: ProjectRow[];
   /**
-   * Set on `versification` sections — the localized versification name to render as the section
-   * header. `undefined` for other section kinds.
+   * Stable identity for the section, used as its React key. Set on `custom` sections, where two
+   * sections can share a `kind` AND an absent `label` and would otherwise collide.
+   */
+  id?: string;
+  /**
+   * The localized label to render as the section header. `undefined` for `flat`, `openTabs` and
+   * `other`, whose headings come from ProjectSelector's strings map instead.
    */
   label?: string;
   /** Set on `versification` sections — true for the consumer-supplied priority bucket. */
@@ -449,6 +564,267 @@ export function partitionByVersification(
     });
   }
   return sections;
+}
+
+/**
+ * Bucket rows by `language`, sort each bucket by `compareRows`, and emit sections alphabetically by
+ * language name. Rows without a `language` are collected into a single trailing "Unknown language"
+ * section using `unknownLabel`. Empty sections are elided (no bucket is created for a language with
+ * zero rows, and the unknown bucket is omitted when empty).
+ */
+export function partitionByLanguage(
+  rows: readonly ProjectRow[],
+  unknownLabel: string,
+): RowSection[] {
+  const buckets = new Map<string, ProjectRow[]>();
+  const unknownRows: ProjectRow[] = [];
+  rows.forEach((row) => {
+    const key = row.language;
+    if (!key) {
+      unknownRows.push(row);
+      return;
+    }
+    const existing = buckets.get(key);
+    if (existing) existing.push(row);
+    else buckets.set(key, [row]);
+  });
+  const entries = [...buckets.entries()].map(([label, groupRows]) => ({
+    label,
+    rows: [...groupRows].sort(compareRows),
+  }));
+  entries.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  const sections: RowSection[] = entries.map(({ label, rows: groupRows }) => ({
+    kind: 'language' as const,
+    rows: groupRows,
+    label,
+  }));
+  if (unknownRows.length > 0) {
+    sections.push({
+      kind: 'language',
+      rows: [...unknownRows].sort(compareRows),
+      label: unknownLabel,
+    });
+  }
+  return sections;
+}
+
+/**
+ * Bucket rows by `type` key, using `typeName` for the section label (falling back to `type` when
+ * `typeName` is absent). Emits sections alphabetically by label. Rows without a `type` go into a
+ * single trailing "Unknown type" section using `unknownLabel`. Empty sections are elided.
+ */
+export function partitionByType(rows: readonly ProjectRow[], unknownLabel: string): RowSection[] {
+  const buckets = new Map<string, { label: string; rows: ProjectRow[] }>();
+  const unknownRows: ProjectRow[] = [];
+  rows.forEach((row) => {
+    const key = row.type;
+    if (!key) {
+      unknownRows.push(row);
+      return;
+    }
+    const label = row.typeName ?? key;
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.rows.push(row);
+      // Adopt the first non-empty typeName observed — protects against a row missing
+      // typeName while siblings within the same type key have it.
+      if (existing.label === key && row.typeName) existing.label = row.typeName;
+    } else {
+      buckets.set(key, { label, rows: [row] });
+    }
+  });
+  const entries = [...buckets.values()].map(({ label, rows: groupRows }) => ({
+    label,
+    rows: [...groupRows].sort(compareRows),
+  }));
+  entries.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  const sections: RowSection[] = entries.map(({ label, rows: groupRows }) => ({
+    kind: 'type' as const,
+    rows: groupRows,
+    label,
+  }));
+  if (unknownRows.length > 0) {
+    sections.push({
+      kind: 'type',
+      rows: [...unknownRows].sort(compareRows),
+      label: unknownLabel,
+    });
+  }
+  return sections;
+}
+
+/**
+ * Split rows into "Recently used" (rows with a `lastUsedAt`, sorted newest-first) and "Other" (rows
+ * without a timestamp, sorted by `compareRows`). Both section labels are caller-provided; empty
+ * sections are elided.
+ */
+export function partitionByLastUsed(
+  rows: readonly ProjectRow[],
+  recentLabel: string,
+  otherLabel: string,
+): RowSection[] {
+  const recent: ProjectRow[] = [];
+  const other: ProjectRow[] = [];
+  rows.forEach((row) => {
+    if (typeof row.lastUsedAt === 'number') recent.push(row);
+    else other.push(row);
+  });
+  recent.sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
+  other.sort(compareRows);
+  const sections: RowSection[] = [];
+  if (recent.length > 0) sections.push({ kind: 'lastUsed', rows: recent, label: recentLabel });
+  if (other.length > 0) sections.push({ kind: 'lastUsed', rows: other, label: otherLabel });
+  return sections;
+}
+
+/** Section id for the trailing bucket holding rows no caller-supplied section claimed. */
+const UNMATCHED_SECTION_ID = '__unmatched__';
+
+/**
+ * Returns the first `section.id` that collides with an earlier one, or with the reserved id used
+ * for the trailing unmatched bucket, or `undefined` if none does.
+ */
+function findDuplicateSectionId(sections: readonly ProjectSelectorSection[]): string | undefined {
+  const seenIds = new Set<string>();
+  return sections
+    .map((section) => section.id)
+    .find((id) => {
+      if (id === UNMATCHED_SECTION_ID || seenIds.has(id)) return true;
+      seenIds.add(id);
+      return false;
+    });
+}
+
+/**
+ * Duplicate ids already reported, so a misconfigured `customSections` array yields one warning per
+ * offending id rather than one per call. Partitioning runs on every keystroke in the selector's
+ * search box, and the caller cannot act on the same message repeated hundreds of times.
+ */
+const warnedDuplicateSectionIds = new WeakMap<object, Set<string>>();
+
+function warnOnceAboutDuplicateSectionId(
+  sections: readonly ProjectSelectorSection[],
+  duplicateId: string,
+): void {
+  let warned = warnedDuplicateSectionIds.get(sections);
+  if (!warned) {
+    warned = new Set<string>();
+    warnedDuplicateSectionIds.set(sections, warned);
+  }
+  if (warned.has(duplicateId)) return;
+  warned.add(duplicateId);
+  console.warn(
+    `ProjectSelector: duplicate custom section id "${duplicateId}" — matching is unaffected because ` +
+      `each section buckets by its own \`match\`, but sections sharing an id collide as React keys, which can cause stale or misapplied rendering.`,
+  );
+}
+
+/**
+ * Bucket rows into caller-supplied sections, in the order supplied. A project lands in the first
+ * section whose `match` accepts it; rows whose project matched nothing (or is absent from
+ * `projectsById`) collect into a single trailing section headed by `unmatchedLabel`. Sections that
+ * end up empty are omitted.
+ *
+ * `unmatchedLabel` gives that trailing bucket an accessible name, so it does not render as a group
+ * of headingless rows below a bare separator. Omit it only when the caller genuinely wants no
+ * heading there.
+ *
+ * `match` is evaluated once per _project_, and the verdict applies to every row that project
+ * produced — `project-multi` and `projectScrollGroup` fan one project out into a row per scroll
+ * group plus synthetic bound-but-closed rows, and those must not be split across sections.
+ *
+ * `projectsById` must be keyed by `normalizeProjectId(project.id)`: canonical project ids are
+ * uppercase while open-tab ids can arrive lowercased, so an un-normalized lookup silently drops
+ * every row into the unmatched bucket.
+ *
+ * @example
+ *
+ * ```ts
+ * const sections = [
+ *   { id: 'recent', label: 'Recent', match: (p) => recentIds.has(p.id) },
+ *   { id: 'yours', label: 'Your projects', match: () => true },
+ * ];
+ * const partitioned = partitionByCustomSections(rows, sections, projectsById, 'Other');
+ * ```
+ *
+ * @param rows Rows to bucket, in the selector's canonical order.
+ * @param sections Caller-defined sections, evaluated in order. An empty array yields one flat
+ *   section.
+ * @param projectsById Projects keyed by `normalizeProjectId(project.id)`, used to resolve each
+ *   row's project before calling `match`.
+ * @param unmatchedLabel Heading for the trailing bucket of rows that matched no section. Omit for
+ *   an unheaded bucket.
+ * @returns Sections in the supplied order, empty ones omitted, followed by the unmatched bucket
+ *   when it has rows.
+ */
+export function partitionByCustomSections(
+  rows: readonly ProjectRow[],
+  sections: readonly ProjectSelectorSection[],
+  projectsById: ReadonlyMap<string, ProjectSelectorProject>,
+  unmatchedLabel?: string,
+): RowSection[] {
+  if (sections.length === 0) {
+    return [{ kind: 'flat', rows: [...rows].sort(compareRows) }];
+  }
+
+  const duplicateId = findDuplicateSectionId(sections);
+  if (duplicateId !== undefined) warnOnceAboutDuplicateSectionId(sections, duplicateId);
+
+  // Resolve each project once, then reuse the verdict for all of its rows.
+  const sectionIndexByProjectKey = new Map<string, number>();
+  const resolveSectionIndex = (key: string): number => {
+    const cached = sectionIndexByProjectKey.get(key);
+    if (cached !== undefined) return cached;
+    const project = projectsById.get(key);
+    const index = project ? sections.findIndex((section) => section.match(project)) : -1;
+    sectionIndexByProjectKey.set(key, index);
+    return index;
+  };
+
+  const buckets: ProjectRow[][] = sections.map(() => []);
+  const unmatched: ProjectRow[] = [];
+  rows.forEach((row) => {
+    const index = resolveSectionIndex(normalizeProjectId(row.projectId));
+    if (index < 0) unmatched.push(row);
+    else buckets[index].push(row);
+  });
+
+  const sortRows = (bucket: ProjectRow[], section: ProjectSelectorSection): ProjectRow[] => {
+    const { compare } = section;
+    if (!compare) return [...bucket].sort(compareRows);
+    return [...bucket].sort((a, b) => {
+      const projectA = projectsById.get(normalizeProjectId(a.projectId));
+      const projectB = projectsById.get(normalizeProjectId(b.projectId));
+      // A row in this bucket always resolved to a project, but guard the lookup anyway so a
+      // caller's compare never receives undefined.
+      if (!projectA || !projectB) return compareRows(a, b);
+      const byCaller = compare(projectA, projectB);
+      // Same project in two scroll groups compares equal; fall back to the canonical tie-break
+      // so those rows keep a stable, predictable order.
+      return byCaller !== 0 ? byCaller : compareRows(a, b);
+    });
+  };
+
+  const result: RowSection[] = [];
+  sections.forEach((section, index) => {
+    const bucket = buckets[index];
+    if (bucket.length === 0) return;
+    result.push({
+      kind: 'custom',
+      id: section.id,
+      rows: sortRows(bucket, section),
+      label: section.label,
+    });
+  });
+  if (unmatched.length > 0) {
+    result.push({
+      kind: 'custom',
+      id: UNMATCHED_SECTION_ID,
+      rows: [...unmatched].sort(compareRows),
+      label: unmatchedLabel,
+    });
+  }
+  return result;
 }
 
 // #endregion

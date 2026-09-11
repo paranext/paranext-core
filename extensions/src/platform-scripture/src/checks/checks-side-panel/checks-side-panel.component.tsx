@@ -222,6 +222,7 @@ export function ChecksSidePanel({
             mode="project"
             projects={sortedProjects}
             openTabs={openTabs}
+            availableGroupings={['openTabs']}
             selection={{ projectId: selectedProjectId ?? '' }}
             onChangeSelection={({ projectId: nextId }) => {
               if (nextId) onSelectProject(nextId);

@@ -662,6 +662,7 @@ global.webViewComponent = function ChecklistWebView({
           mode="project-multi"
           projects={comparativeProjects}
           openTabs={comparativeOpenTabs}
+          availableGroupings={['openTabs']}
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
           buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
@@ -778,6 +779,7 @@ global.webViewComponent = function ChecklistWebView({
           mode="project"
           projects={allProjects}
           openTabs={comparativeOpenTabs}
+          availableGroupings={['openTabs']}
           selection={{ projectId }}
           onChangeSelection={(next: { projectId: string }) =>
             updateWebViewDefinition({ projectId: next.projectId })
