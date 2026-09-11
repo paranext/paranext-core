@@ -40,6 +40,9 @@ jobs:
         with:
           file_path: 'package.json'
 
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
       - name: Install Node and NPM
         uses: actions/setup-node@v4
         with:
@@ -48,9 +51,10 @@ jobs:
 
       - name: Install packages
         run: |
-          # Bumping versions only needs core's dev tooling (ts-node, prettier), so skip the
-          # postinstall chain. It links scripture-editors via yalc, which needs Volta-managed pnpm
-          # on PATH, and builds the Electron DLL — none of which a version bump reads or writes.
+          # Bumping versions only needs core's dev tooling (ts-node, tsx, prettier), so skip the
+          # lifecycle scripts. That skips staging the dev packages too, leaving their `file:`
+          # targets as dangling symlinks — which npm accepts silently and a version bump never
+          # resolves — and skips building the Electron DLL. Neither is read or written here.
           npm ci --ignore-scripts
 
       - name: Bump repo versions

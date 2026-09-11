@@ -507,7 +507,8 @@ function accountNpmRows(npmDescribed: DescribedRow[]): NpmAccount {
   // These rows' version and identifier do NOT come from the package on disk, and a legal artifact
   // has to say where each of its claims came from - see `DEV_LINK` and
   // `correctLinkDistortedResolutions` in `shipping-set.ts`. They are reported separately because
-  // they are different facts: one package was replaced by a link, the other was DISPLACED by one.
+  // they are different facts: one package was staged from another repository, the other was
+  // DISPLACED by a link.
   const devLinked = npmDescribed.filter((row) => row.devLinked);
   // A platform-only row is `fromLock` too, but nothing DISPLACED it - npm simply never installs
   // it here. It has its own paragraph below.
@@ -928,18 +929,18 @@ function pushNpmSection(
 
   if (devLinked.length) {
     out.push(
-      'Replaced on this machine by a `yalc` dev link (see `dev-packages.json`), which points at a',
-      'branch of another repository rather than at a published release. The version and license',
-      'below are the ones `package-lock.json` pins, and nothing was read from the link, so this file',
-      'describes what this repository depends on rather than what a developer happens to have built',
-      `locally: ${packageNames(devLinked)}.`,
+      'Installed from a folder this repository stages out of another repository (see',
+      '`dev-packages.json`), which tracks a branch there rather than a published release. The version',
+      'and license below are the ones `package-lock.json` records for that folder, and nothing was',
+      'read from the folder itself, so this file describes what this repository has committed to',
+      `depending on rather than what a developer happens to have built locally: ${packageNames(devLinked)}.`,
       '',
     );
   }
   if (displaced.length) {
     out.push(
-      'Resolved differently on this machine than `package-lock.json` records, because a `yalc` dev',
-      'link replaces a package with a symlink and takes the copies nested under it off disk with it.',
+      'Resolved differently on this machine than `package-lock.json` records, because a dev link',
+      'replaces a package with a symlink and takes the copies nested under it off disk with it.',
       'The version and license below are the ones the lockfile resolves, and nothing was read from',
       `the copy this machine happens to hold: ${packageNames(displaced)}.`,
       '',
@@ -949,7 +950,7 @@ function pushNpmSection(
     out.push(
       'The following ship no license file of their own, so the identifier in the table below comes',
       devLinked.length || displaced.length
-        ? 'from their `package.json` (or, where a dev link is involved, from `package-lock.json`)'
+        ? 'from their `package.json` (or, where a staged dev package is involved, from `package-lock.json`)'
         : 'from their `package.json`',
       'and nothing of',
       'theirs appears under "License texts". The canonical text of the license each one declares is',

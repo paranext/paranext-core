@@ -54,7 +54,10 @@ bin
 obj
 storybook-static
 
-# yalc
+
+# Left behind on any checkout that predates staged dev packages: nothing creates a `.yalc`
+# tree any more, but an existing one is still on disk and still walked by Prettier, which
+# descends into dot-directories.
 .yalc
 yalc.lock
 

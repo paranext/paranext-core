@@ -507,9 +507,9 @@ const EDITORIAL_OPTIONS = {
  * marble-word annotations against freshly mounted USJ. Since the resolver's "no-op + log" is the
  * editor's defined safe-fallback path, the log line is noise to us, not an actionable error.
  *
- * Cannot change the editor (yalc-pinned 0.8.15 per the stabilization charter), so we wrap the papi
- * logger and downgrade exactly this one message to debug. Everything else from Editorial still
- * surfaces at the original level.
+ * Cannot change the editor (pinned per the stabilization charter), so we wrap the papi logger and
+ * downgrade exactly this one message to debug. Everything else from Editorial still surfaces at the
+ * original level.
  */
 const FAILED_TO_FIND_ANNOTATION_MARKER = 'Failed to find start or end node of the annotation';
 

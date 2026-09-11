@@ -163,8 +163,8 @@ free text rather than as an SPDX identifier the corpus holds a canonical text fo
 | Apache-2.0 (elected from MPL-2.0 OR Apache-2.0) | 1 |
 | ISC | 1 |
 
-Resolved differently on this machine than `package-lock.json` records, because a `yalc` dev
-link replaces a package with a symlink and takes the copies nested under it off disk with it.
+Resolved differently on this machine than `package-lock.json` records, because a dev link
+replaces a package with a symlink and takes the copies nested under it off disk with it.
 The version and license below are the ones the lockfile resolves, and nothing was read from
 the copy this machine happens to hold: `epsilon@5.0.0`.
 

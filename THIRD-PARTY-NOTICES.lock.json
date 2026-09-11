@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "b811f4d3efe13e08e515a92e451f8afdf97bdb1ff055e96ddf36b43af549d472",
+  "documentSha256": "e8c91ee42d6f6b7a78489368fb81e3221756c057cd1cddd7266abb0ceb9308a9",
   "packages": [
     {
       "ecosystem": "npm",
@@ -15,7 +15,7 @@
     {
       "ecosystem": "npm",
       "name": "@eten-tech-foundation/platform-editor",
-      "version": "0.8.15",
+      "version": "0.8.16",
       "spdxId": "MIT",
       "confidence": 0
     },

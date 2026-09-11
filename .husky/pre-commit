@@ -34,16 +34,68 @@ fi
 echo "No secrets found"
 
 # ============================================
-# Standard hooks (ALL branches)
+# Provisional dev-package builds (ALL branches)
 # ============================================
-# Block commits when package-lock.json contains yalc-linked entries (staged or unstaged)
-if grep -q '\.yalc' package-lock.json 2>/dev/null; then
-  echo ""
-  echo "Error: package-lock.json contains yalc links (.yalc entries)."
-  echo "Run 'npm run unlink-dev-packages' to fix, then inspect package.json for unintentional changes and commit again."
-  exit 1
+# `npm run build:editor` stages your uncommitted scripture-editors working tree, and a dirty
+# checkout stages whatever it happens to hold. `npm install` then records THAT package's dependency
+# closure in package-lock.json, and committing the result publishes a lockfile built from work that
+# exists only on your machine.
+#
+# Deliberately only those two. Staging a checkout that sits on a pushed feature branch is a normal
+# way to develop both repos at once, and the lockfile that comes out of it is reproducible by
+# anyone with that branch — so it is committable, and this does not block it.
+if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.json'; then
+  # Driven by `dev-packages.json`, not by what is on disk. Nothing removes a staging folder when a
+  # package is renamed or dropped, and a leftover one carrying an old `-local` marker would block
+  # every lockfile commit while naming a package this repo no longer consumes — with no way to
+  # clear it, since `npm install` only rewrites declared folders.
+  PROVISIONAL=$(node -e '
+    const fs = require("fs");
+    const config = JSON.parse(fs.readFileSync("dev-packages.json", "utf8"));
+    const folders = (config.repos ?? []).flatMap((repo) =>
+      (repo.devPackages ?? []).map((devPackage) => devPackage.stagingFolder).filter(Boolean),
+    );
+    const provisional = folders.filter((folder) => {
+      const marker = `dev-packages/staging/${folder}/.staged-from`;
+      if (!fs.existsSync(marker)) return false;
+      const stamp = fs.readFileSync(marker, "utf8");
+      return (
+        stamp.includes("-local") || stamp.includes("-dirty") || stamp.includes("-unpushed")
+      );
+    });
+    process.stdout.write(provisional.map((f) => `dev-packages/staging/${f}`).join("\n"));
+  ' 2>/dev/null || true)
+  if [ -n "$PROVISIONAL" ]; then
+    echo ""
+    echo "=========================================="
+    echo "PROVISIONAL DEV PACKAGE STAGED — commit blocked"
+    echo "=========================================="
+    echo "package-lock.json is staged, but these dev packages were staged from a local or dirty"
+    echo "build rather than from a commit:"
+    echo ""
+    echo "$PROVISIONAL" | sed 's|^|  |'
+    echo ""
+    echo "Its dependency closure came from a local or dirty build, or from a commit that is not on"
+    echo "the remote, so the lockfile would record something nobody else can reproduce. To fix:"
+    echo ""
+    echo "  npm install    # restages the pinned revision and rewrites package-lock.json"
+    echo ""
+    echo "If that install stops with \"has working changes\", the scripture-editors checkout it"
+    echo "stages from is dirty: commit or stash there first, then run it again. It refuses to touch"
+    echo "a dirty checkout, so the marker cannot clear until it is clean."
+    echo ""
+    echo "If the marker says -unpushed, the editor commit it was staged from exists only on your"
+    echo "machine: push that branch, then run npm install again."
+    echo ""
+    echo "Then stage package-lock.json again."
+    echo "=========================================="
+    exit 1
+  fi
 fi
 
+# ============================================
+# Standard hooks (ALL branches)
+# ============================================
 # Block committing a package-lock.json whose root name has drifted (staged only). The root
 # package.json deliberately has no "name" field (see adr-root-package-json-no-name in
 # .context/standards/Architecture-Decisions.md), so npm falls back to the containing directory name:

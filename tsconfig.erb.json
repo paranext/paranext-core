@@ -1,12 +1,14 @@
 {
-  // Type-check gate for the build-time TypeScript under .erb, which the root tsconfig's `include`
-  // ("src", "assets") leaves out: the packaging clean-up entry point, the startup-waterfall parser
-  // + CLI, and the third-party-notices pipeline. Without this, a type error in any of them would
-  // keep CI green and surface only at manual runtime - and the notices pipeline is ~4,700 lines
-  // that decide which licenses may ship and then write the artifact asserting it, so a renamed
-  // verdict field has to fail here rather than produce a wrong document. Scoped to these files (not
-  // all of .erb/scripts) because the older scripts there carry pre-existing type issues from their
-  // own heavy deps and are out of scope.
+  // Type-check gate for the build-time and install-time TypeScript under .erb, which the root
+  // tsconfig's `include` ("src", "assets") leaves out: the packaging clean-up entry point, the
+  // startup-waterfall parser + CLI, the third-party-notices pipeline, and the two scripts npm runs
+  // as `preinstall`/`postinstall`. Without this, a type error in any of them would keep CI green and
+  // surface only at runtime - for the notices pipeline that is ~4,700 lines deciding which licenses
+  // may ship and then writing the artifact asserting it, so a renamed verdict field has to fail here
+  // rather than produce a wrong document; for the install scripts that runtime is every developer's
+  // and every CI job's `npm install`. Scoped to these files (not all of .erb/scripts) because the
+  // older scripts there carry pre-existing type issues from their own heavy deps and are out of
+  // scope.
   // Test files are excluded for the same reason the root config excludes all `*.test.ts`: they rely
   // on Vitest's runtime rather than on tsc. Referenced by `npm run typecheck` via `typecheck:erb`.
   // Emits nothing - it is purely a gate.
@@ -18,12 +20,20 @@
   "compilerOptions": {
     "noEmit": true,
     "incremental": false,
-    "types": ["node"]
+    "types": ["node"],
+    // The install scripts are plain CommonJS with no import or export, so TypeScript would put
+    // their top-level declarations in one shared global scope and report every name they have in
+    // common as a redeclaration. Node decides CommonJS-vs-ESM from package.json, never from file
+    // contents, so giving each file its own scope here changes nothing about how they run.
+    "moduleDetection": "force"
   },
   "include": [
     ".erb/scripts/clean.ts",
     ".erb/scripts/startup-waterfall.ts",
     ".erb/scripts/startup-waterfall.util.ts",
+    ".erb/scripts/stage-dev-packages.ts",
+    ".erb/scripts/stage-dev-packages.util.ts",
+    ".erb/scripts/postinstall.ts",
     ".erb/scripts/notices-build-id.ts",
     ".erb/scripts/third-party-notices/*.ts",
     ".erb/configs/emit-shipped-modules-plugin.ts"
