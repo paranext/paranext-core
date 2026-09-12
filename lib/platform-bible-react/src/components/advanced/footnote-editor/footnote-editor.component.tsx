@@ -32,10 +32,12 @@ import {
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  Ref,
   RefObject,
 } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
@@ -62,12 +64,27 @@ import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 import { MarkerMenu } from '../marker-menu.component';
-import {
-  createNoteBodyTextNodeFilter,
-  generateInlineMarkerMenuListItems,
-  placeCaretAtPosition,
-} from './footnote-editor.utils';
+import { generateInlineMarkerMenuListItems } from './footnote-editor.utils';
 import { FootnoteCaretPosition } from '../footnotes/footnotes.types';
+
+/**
+ * What a host can ask an inline `FootnoteEditor` to do directly, rather than through props.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export interface FootnoteEditorHandle {
+  /**
+   * Applies to the parent editor whatever inline edit is still sitting inside the live-apply
+   * debounce, right now.
+   *
+   * A host that ends an editing session must call this BEFORE tearing its own bookkeeping down.
+   * Unmounting this component flushes too, but that happens a commit later, by which time the host
+   * no longer recognizes the apply as the session's own tail — and a note replacement that arrives
+   * unattributed is indistinguishable from a newly inserted note. A no-op when nothing is pending
+   * or the note is unchanged.
+   */
+  flushPendingEdits: () => void;
+}
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
@@ -110,6 +127,12 @@ export interface FootnoteEditorProps {
    * @default false
    */
   inline?: boolean;
+  /**
+   * Imperative handle for an inline-mode host. See {@link FootnoteEditorHandle}.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  ref?: Ref<FootnoteEditorHandle>;
   /**
    * Where to place the caret in the note text after the note loads. `'end'` matches PT9's
    * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row. When
@@ -287,6 +310,7 @@ export default function FootnoteEditor({
   localizedStrings,
   parentEditorRef,
   inline = false,
+  ref,
   initialCaretPosition,
   markerPalette,
   onNoteEdit,
@@ -315,6 +339,26 @@ export default function FootnoteEditor({
   useEffect(() => {
     initialCaretPositionRef.current = initialCaretPosition;
   }, [initialCaretPosition]);
+
+  /**
+   * Puts the caret where this editing session should begin: at the consumer's
+   * `initialCaretPosition` when it gave one, and otherwise at the end of the note's text - PT9's
+   * "ready to type immediately". `0` is this editor's own note index; it always holds exactly one
+   * note (see the other `getNoteOps(0)` call sites below).
+   *
+   * The editor resolves an offset against its own nodes (`EditorRef.selectNoteTextOffset`), over
+   * the note's CONTENT text — the same characters `FootnoteItem` renders in a row's
+   * `.textual-note-body`, and the origin {@link FootnoteCaretPosition} defines. Nothing here
+   * measures the DOM, so the placement needs no deferral: the note it addresses exists as soon as
+   * the load's `applyUpdate` has run, and because the caret becomes the editor's OWN remembered
+   * selection, a `focus()` alongside re-asserts it rather than overwriting it.
+   */
+  const placeInitialCaret = useCallback(() => {
+    const caretPosition = initialCaretPositionRef.current;
+    if (caretPosition !== undefined && caretPosition !== 'end')
+      editorRef.current?.selectNoteTextOffset(0, caretPosition.utf16Offset);
+    else editorRef.current?.selectNote(0);
+  }, []);
 
   // Lock the container width to its natural rendered width so content changes (e.g. switching
   // language, undo/redo enabling) don't cause the popover to resize while editing.
@@ -563,7 +607,6 @@ export default function FootnoteEditor({
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
-    let caretTimeout: ReturnType<typeof setTimeout>;
     let reassertFrame: ReturnType<typeof requestAnimationFrame> | undefined;
     let reassertTimeout: ReturnType<typeof setTimeout> | undefined;
     hasInitializedEditor.current = false;
@@ -602,65 +645,26 @@ export default function FootnoteEditor({
         // `applyCallerToEditor` performs.
         const loadedNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
         editorRef.current?.applyUpdate(loadedNoteOp ? [noteOp, { delete: 1 }] : [noteOp]);
-        // Land the caret at the end of the last footnote-text char span (`\ft`/`\xt`) to match
-        // PT9 behavior of being ready to type immediately. `0` is this popover's own note index —
-        // it always holds exactly one note (see the other `getNoteOps(0)` call sites below).
-        // Applies to REOPENED notes too: each popover instance mounts fresh, so there is never a
-        // prior caret to preserve — only Radix's open-autofocus parking the DOM caret at the
-        // wrapper-para start (outside the note body), where Enter plain-split and the `\`
-        // palette both resolved against the WRONG context. An `initialCaretPosition` overrides
-        // this a macrotask later (below); the re-assert defers to whatever landed last.
-        editorRef.current?.selectNote(0);
+        // Put the caret where this session starts (see `placeInitialCaret`), so the user can type
+        // immediately. Applies to REOPENED notes too: each popover instance mounts fresh, so there
+        // is never a prior caret to preserve — only Radix's open-autofocus parking the DOM caret at
+        // the wrapper-para start (outside the note body), where Enter plain-split and the `\`
+        // palette both resolved against the WRONG context.
+        placeInitialCaret();
         editorRef.current?.focus();
         // Radix's open-autofocus (load-bearing for the focus handoff into this popover —
         // preventing it was falsified live) can land AFTER this and park the DOM caret at the
         // wrapper-para start, where Enter plain-splits instead of inserting \fp.
-        // Re-assert the note selection once the autofocus has settled (a frame plus a
-        // macrotask later); skipped when the caret is already inside the note so neither a
-        // user's own click nor an `initialCaretPosition` placement is ever overridden.
+        // Re-assert the session's caret once the autofocus has settled (a frame plus a
+        // macrotask later); skipped when the caret is already inside the note, so a user's own
+        // click in the meantime is never overridden.
         reassertFrame = requestAnimationFrame(() => {
           reassertTimeout = setTimeout(() => {
             if (isDomCaretInsideNote()) return;
-            editorRef.current?.selectNote(0);
+            placeInitialCaret();
             editorRef.current?.focus();
           }, 0);
         });
-        const caretPosition = initialCaretPositionRef.current;
-        if (caretPosition !== undefined) {
-          // Let the editor render the applied note before measuring its DOM.
-          caretTimeout = setTimeout(() => {
-            const editorInput =
-              editorParentRef.current?.querySelector<HTMLElement>('.editor-input') ?? undefined;
-            if (editorInput) {
-              // Deliberately NOT calling editorRef.current?.focus() alongside this placement.
-              // Verified live in Storybook, by patching
-              // `Selection.prototype` and tracing the call stack: Lexical's own `EditorRef.focus()`
-              // schedules an internal reconciliation of its OWN remembered selection model; that
-              // reconciliation runs microtasks later and silently overwrites a caret placed via the
-              // raw Range/Selection APIs in between (`$commitPendingUpdates` -> `updateDOMSelection`
-              // -> `Selection.setBaseAndExtent`, landing back at the position the editor's own
-              // model held BEFORE this call). The placed caret read back correctly immediately
-              // after being set, then reverted moments later - confirmed via `Selection.prototype`
-              // instrumentation, not by the naive "did it look right right away" check. Dropping
-              // this call fixes it: `placeCaretAtPosition`'s own `Selection.addRange()` already
-              // moves DOM focus onto `editorInput` as an intrinsic side effect of selecting inside
-              // a `contenteditable` (confirmed live via `document.activeElement`), and the
-              // pre-existing marker-menu-visibility effect elsewhere in this component already
-              // focuses the editor unconditionally on mount, well before this timeout fires - so no
-              // separate focus() call is needed or safe here.
-              //
-              // The captured position's offset origin is the note's displayed BODY text only (see
-              // FootnoteCaretPosition); the editor's flat text also includes the rendered caller and
-              // structural spacing, so align via createNoteBodyTextNodeFilter rather than walking
-              // the editor's raw text nodes.
-              placeCaretAtPosition(
-                editorInput,
-                caretPosition,
-                createNoteBodyTextNodeFilter(editorInput),
-              );
-            }
-          }, 0);
-        }
       }, 0);
     }
 
@@ -677,13 +681,10 @@ export default function FootnoteEditor({
       if (timeout) {
         clearTimeout(timeout);
       }
-      if (caretTimeout) {
-        clearTimeout(caretTimeout);
-      }
       if (reassertFrame !== undefined) cancelAnimationFrame(reassertFrame);
       if (reassertTimeout !== undefined) clearTimeout(reassertTimeout);
     };
-  }, [noteOps, flushPendingApply, isDomCaretInsideNote]);
+  }, [noteOps, flushPendingApply, isDomCaretInsideNote, placeInitialCaret]);
 
   // Ending an inline editing session = unmounting this component; unsaved edits must land.
   // useLayoutEffect (not useEffect): on unmount, React detaches `editorRef` before passive-effect
@@ -692,6 +693,8 @@ export default function FootnoteEditor({
   useLayoutEffect(() => {
     return () => flushPendingApply();
   }, [flushPendingApply]);
+
+  useImperativeHandle(ref, () => ({ flushPendingEdits: flushPendingApply }), [flushPendingApply]);
 
   const closeAndSave = useCallback(() => {
     // Abandonment window: settle pending mid-edit marker text before the final read

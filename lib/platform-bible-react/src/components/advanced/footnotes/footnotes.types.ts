@@ -4,26 +4,26 @@ import { ReactNode } from 'react';
 export type FootnoteLayout = 'horizontal' | 'vertical';
 
 /**
- * Where the caret should land within a footnote's rendered text.
+ * Where the caret should land within a footnote's text.
  *
- * The offset origin is the note text as displayed by `FootnoteItem` in a row's
- * `.textual-note-body`: every character run the note contains, including a leading `fr`/`xo` target
- * reference, which PT9's notes pane and `FootnoteItem` alike render inline at the head of the note
- * text. It EXCLUDES two kinds of chrome: the caller (`FootnoteItem` renders it in a separate header
- * div) and the rendered USFM markers themselves (`.marker` spans; see `isMarkerText` in
- * `footnote-caret.utils.ts`), which the editor renders as non-editable decorators rather than text.
- * A consumer that resolves this offset against a DIFFERENT text flattening - e.g. the editor's raw
- * DOM, which also renders the caller and inserts structural spacing text nodes between top-level
- * runs - must first align to this same origin (see `createNoteBodyTextNodeFilter` in
- * `footnote-editor.utils.ts`).
+ * The offset origin is the note's CONTENT: every character run the note contains, including a
+ * leading `fr`/`xo` target reference, which PT9's notes pane and `FootnoteItem` alike render inline
+ * at the head of the note text. It excludes everything that is display rather than content — the
+ * caller (`FootnoteItem` renders it in a separate header div) and the USFM markers themselves
+ * (`.marker` spans; see `isMarkerText` in `footnote-caret.utils.ts`).
  *
- * - `'end'`: after the last character of the note text (not the raw editor DOM's last text node,
- *   which may include trailing structural text - see `createNoteBodyTextNodeFilter`).
- * - `{ utf16Offset }`: a flat offset over the note body's visible text content, in UTF-16 code units
- *   (the unit used by DOM Selection APIs and the editor's text nodes). Offsets originate from
- *   browser caret APIs (`caretPositionFromPoint`), which only produce positions at valid caret
- *   boundaries, so surrogate pairs and combining sequences are never split by construction.
- *   Consumers walk text nodes and accumulate `Text.data.length` to resolve it; an offset past the
+ * That origin is the note's USJ text, NOT any one rendering of it, which is what lets a position
+ * captured over a read-only row resolve inside a live editor: the editor adds its own display
+ * artifacts around the same content (marker glyphs that are real text under `markerMode:
+ * "editable"`, NBSP separators, structural spacers), and only the editor can tell those from
+ * content — so `EditorRef.selectNoteTextOffset` resolves the offset against its own nodes rather
+ * than any consumer walking its DOM.
+ *
+ * - `'end'`: after the last character of the note's text.
+ * - `{ utf16Offset }`: a flat offset over the note's content text, in UTF-16 code units (the unit
+ *   used by DOM Selection APIs and the editor's text nodes). Offsets originate from browser caret
+ *   APIs (`caretPositionFromPoint`), which only produce positions at valid caret boundaries, so
+ *   surrogate pairs and combining sequences are never split by construction. An offset past the
  *   available text resolves to `'end'`.
  */
 export type FootnoteCaretPosition = 'end' | { utf16Offset: number };

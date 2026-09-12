@@ -79,6 +79,7 @@ export { getCaretPositionFromClick } from './components/advanced/footnotes/footn
 export {
   default as FootnoteEditor,
   INLINE_APPLY_DEBOUNCE_MS,
+  type FootnoteEditorHandle,
   type FootnoteEditorProps,
   type FootnoteEditorMarkerPalette,
   markerMenuItemToPaletteItem,

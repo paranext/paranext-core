@@ -2,11 +2,13 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { forwardRef, useImperativeHandle } from 'react';
+import { createRef, forwardRef, useImperativeHandle } from 'react';
 import type { DeltaOpInsertNoteEmbed, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import FootnoteEditor from '@/components/advanced/footnote-editor/footnote-editor.component';
+import FootnoteEditor, {
+  type FootnoteEditorHandle,
+} from '@/components/advanced/footnote-editor/footnote-editor.component';
 import type { FootnoteEditorLocalizedStrings } from '@/components/advanced/footnote-editor/footnote-editor.types';
 
 // ---- Editorial stub harness ------------------------------------------------
@@ -21,6 +23,7 @@ const editorRefMock = {
   getNoteOps: vi.fn(),
   focus: vi.fn(),
   selectNote: vi.fn(),
+  selectNoteTextOffset: vi.fn(),
   commitPendingMarkerEdits: vi.fn(),
   undo: vi.fn(),
   redo: vi.fn(),
@@ -588,85 +591,150 @@ describe('FootnoteEditor inline live-apply', () => {
   // note's noteOps on a MOUNTED inline editor) must flush a still-pending debounced apply before
   // the reload - otherwise the pending timer would later fire against note B's just-loaded
   // content, silently discarding note A's last edit.
-  it('flushes a pending apply for the OUTGOING note before an in-place noteOps reload', async () => {
-    vi.useFakeTimers();
-    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
-    const noteOpsA = makeNoteOps('note A first');
-    const { rerender, props } = renderEditor({
-      inline: true,
-      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      parentEditorRef: parentRef as never,
-      noteKey: 'key-A',
-      noteOps: noteOpsA,
-    });
-    await vi.runOnlyPendingTimersAsync(); // initial load of note A
-
-    primeCurrentOps('note A snapshot');
-    latestEditorialProps.onUsjChange?.({
-      type: 'USJ',
-      version: '3.1',
-      content: [{ type: 'para' }],
-    });
-    // First onUsjChange after load only snapshots initial state - no save yet.
-    primeCurrentOps('note A latest edit');
-    latestEditorialProps.onUsjChange?.({
-      type: 'USJ',
-      version: '3.1',
-      content: [{ type: 'para' }],
-    }); // schedules the 300ms debounce for note A's edit
-
-    // Still inside the debounce window: the consumer swaps in note B (new noteOps identity, new
-    // noteKey) on this SAME mounted instance - the load effect reloads in place.
-    rerender(
-      <FootnoteEditor
-        {...props}
-        inline
+  describe('FootnoteEditor imperative flush', () => {
+    it('applies a pending edit on demand, before the debounce would have', async () => {
+      vi.useFakeTimers();
+      const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+      // The ref needs to start out with null for it to work as a component ref
+      // eslint-disable-next-line no-null/no-null
+      const handleRef = createRef<FootnoteEditorHandle>();
+      renderEditor({
+        inline: true,
+        ref: handleRef,
         // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        parentEditorRef={parentRef as never}
-        noteKey="key-B"
-        noteOps={makeNoteOps('note B first')}
-      />,
-    );
+        parentEditorRef: parentRef as never,
+        noteKey: 'key-handle-flush',
+      });
+      await vi.runOnlyPendingTimersAsync();
 
-    // The flush must have happened synchronously as part of the reload's cleanup - before note
-    // B's own load timers even run - targeting note A's key and its LATEST (not snapshot) edit.
-    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
-    expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-A', 'note A latest edit');
+      primeCurrentOps('initial'); // snapshot call
+      latestEditorialProps.onUsjChange?.({
+        type: 'USJ',
+        version: '3.1',
+        content: [{ type: 'para' }],
+      });
+      primeCurrentOps('unsaved edit');
+      latestEditorialProps.onUsjChange?.({
+        type: 'USJ',
+        version: '3.1',
+        content: [{ type: 'para' }],
+      });
+      expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
 
-    // If the old pending timer had survived the reload uncancelled, it would fire again here -
-    // a redundant duplicate call (possibly against note B's content).
-    await vi.runAllTimersAsync();
-    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+      // A host ending the session: the edit has to reach the parent while the session that owns it
+      // is still open, not a commit later when this component unmounts.
+      handleRef.current?.flushPendingEdits();
+
+      expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+      expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-handle-flush', 'unsaved edit');
+    });
+
+    it('is a no-op when the note is unchanged, so ending a session never rewrites it', async () => {
+      vi.useFakeTimers();
+      const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+      // The ref needs to start out with null for it to work as a component ref
+      // eslint-disable-next-line no-null/no-null
+      const handleRef = createRef<FootnoteEditorHandle>();
+      renderEditor({
+        inline: true,
+        ref: handleRef,
+        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        parentEditorRef: parentRef as never,
+        noteKey: 'key-handle-clean',
+      });
+      await vi.runOnlyPendingTimersAsync();
+
+      handleRef.current?.flushPendingEdits();
+
+      expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
+    });
+
+    it('flushes a pending apply for the OUTGOING note before an in-place noteOps reload', async () => {
+      vi.useFakeTimers();
+      const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+      const noteOpsA = makeNoteOps('note A first');
+      const { rerender, props } = renderEditor({
+        inline: true,
+        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        parentEditorRef: parentRef as never,
+        noteKey: 'key-A',
+        noteOps: noteOpsA,
+      });
+      await vi.runOnlyPendingTimersAsync(); // initial load of note A
+
+      primeCurrentOps('note A snapshot');
+      latestEditorialProps.onUsjChange?.({
+        type: 'USJ',
+        version: '3.1',
+        content: [{ type: 'para' }],
+      });
+      // First onUsjChange after load only snapshots initial state - no save yet.
+      primeCurrentOps('note A latest edit');
+      latestEditorialProps.onUsjChange?.({
+        type: 'USJ',
+        version: '3.1',
+        content: [{ type: 'para' }],
+      }); // schedules the 300ms debounce for note A's edit
+
+      // Still inside the debounce window: the consumer swaps in note B (new noteOps identity, new
+      // noteKey) on this SAME mounted instance - the load effect reloads in place.
+      rerender(
+        <FootnoteEditor
+          {...props}
+          inline
+          // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          parentEditorRef={parentRef as never}
+          noteKey="key-B"
+          noteOps={makeNoteOps('note B first')}
+        />,
+      );
+
+      // The flush must have happened synchronously as part of the reload's cleanup - before note
+      // B's own load timers even run - targeting note A's key and its LATEST (not snapshot) edit.
+      expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+      expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-A', 'note A latest edit');
+
+      // If the old pending timer had survived the reload uncancelled, it would fire again here -
+      // a redundant duplicate call (possibly against note B's content).
+      await vi.runAllTimersAsync();
+      expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+    });
   });
-});
 
-describe('FootnoteEditor initial caret position', () => {
-  // Caret placement must NOT call editorRef.current?.focus() itself. Verified
-  // live in Storybook (Selection.prototype instrumentation): Lexical's own EditorRef.focus()
-  // schedules an internal reconciliation of ITS remembered selection that fires a tick later and
-  // silently overwrites a caret just placed via the raw Range/Selection APIs - the caret read
-  // back correctly immediately after being set, then reverted moments later. Dropping the call
-  // fixed it: placeCaretAtPosition's own Selection.addRange() already moves DOM focus onto the
-  // editor input as an intrinsic side effect of selecting inside a contenteditable, and the
-  // pre-existing marker-menu-visibility effect elsewhere in this component already focuses the
-  // editor unconditionally on mount. So caret-position renders must NOT add any extra focus()
-  // call beyond that baseline. The DOM-level caret math itself is covered by the
-  // placeCaretAtPosition util tests; jsdom cannot exercise the real editor DOM.
-  async function countFocusCalls(props: Partial<Parameters<typeof FootnoteEditor>[0]>) {
-    editorRefMock.focus.mockClear();
-    const { unmount } = renderEditor(props);
-    await vi.runAllTimersAsync();
-    const count = editorRefMock.focus.mock.calls.length;
-    unmount();
-    return count;
-  }
+  describe('FootnoteEditor initial caret position', () => {
+    // WHERE the caret lands is resolved by the editor, against its own nodes
+    // (`EditorRef.selectNoteTextOffset`) - see FootnoteCaretPosition for why a consumer cannot
+    // resolve it by walking the editor's DOM. What this component owns is which of the two
+    // placements it asks for, and that it asks on load.
+    it('asks the editor to resolve an offset over the note text', async () => {
+      vi.useFakeTimers();
+      renderEditor({ inline: true, initialCaretPosition: { utf16Offset: 7 } });
+      await vi.runAllTimersAsync();
 
-  it('does not add an extra focus call for caret placement', async () => {
-    vi.useFakeTimers();
-    const baseline = await countFocusCalls({ inline: true });
-    const withCaret = await countFocusCalls({ inline: true, initialCaretPosition: 'end' });
-    expect(withCaret).toBe(baseline);
+      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 7);
+      expect(editorRefMock.selectNote).not.toHaveBeenCalled();
+    });
+
+    it("lands at the end of the note's text for 'end'", async () => {
+      vi.useFakeTimers();
+      renderEditor({ inline: true, initialCaretPosition: 'end' });
+      await vi.runAllTimersAsync();
+
+      expect(editorRefMock.selectNote).toHaveBeenCalledWith(0);
+      expect(editorRefMock.selectNoteTextOffset).not.toHaveBeenCalled();
+    });
+
+    it('lands at the end when the consumer asks for no particular position', async () => {
+      vi.useFakeTimers();
+      renderEditor({ inline: true });
+      await vi.runAllTimersAsync();
+
+      expect(editorRefMock.selectNote).toHaveBeenCalledWith(0);
+      expect(editorRefMock.selectNoteTextOffset).not.toHaveBeenCalled();
+    });
   });
 });

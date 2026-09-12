@@ -3,10 +3,11 @@ import { FootnoteCaretPosition } from './footnotes.types';
 /**
  * Whether a text node is rendered marker chrome (a `.marker` span) rather than note text.
  *
- * `FootnoteItem` renders USFM markers as visible text; the editor renders them as Lexical
- * decorators inside `contenteditable="false"` wrappers, which `createNoteBodyTextNodeFilter`
- * excludes from its caret origin. Both sides must exclude them or an offset captured with markers
- * shown lands early in the editor by the length of the marker text before the click.
+ * `FootnoteItem` renders USFM markers as visible text, but a marker is display, not content, so it
+ * is outside the offset origin {@link FootnoteCaretPosition} defines. The editor excludes its own
+ * marker rendering from that same origin (`EditorRef.selectNoteTextOffset`), whichever form it
+ * takes; both sides must, or an offset captured with markers shown resolves off by the length of
+ * every marker before the click.
  */
 function isMarkerText(node: Node, body: HTMLElement): boolean {
   let ancestor = node.parentElement;

@@ -882,26 +882,26 @@ interface FilterProps extends MultiSelectComboBoxProps {
 export declare function Filter({ entries, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type FootnoteLayout = "horizontal" | "vertical";
 /**
- * Where the caret should land within a footnote's rendered text.
+ * Where the caret should land within a footnote's text.
  *
- * The offset origin is the note text as displayed by `FootnoteItem` in a row's
- * `.textual-note-body`: every character run the note contains, including a leading `fr`/`xo` target
- * reference, which PT9's notes pane and `FootnoteItem` alike render inline at the head of the note
- * text. It EXCLUDES two kinds of chrome: the caller (`FootnoteItem` renders it in a separate header
- * div) and the rendered USFM markers themselves (`.marker` spans; see `isMarkerText` in
- * `footnote-caret.utils.ts`), which the editor renders as non-editable decorators rather than text.
- * A consumer that resolves this offset against a DIFFERENT text flattening - e.g. the editor's raw
- * DOM, which also renders the caller and inserts structural spacing text nodes between top-level
- * runs - must first align to this same origin (see `createNoteBodyTextNodeFilter` in
- * `footnote-editor.utils.ts`).
+ * The offset origin is the note's CONTENT: every character run the note contains, including a
+ * leading `fr`/`xo` target reference, which PT9's notes pane and `FootnoteItem` alike render inline
+ * at the head of the note text. It excludes everything that is display rather than content — the
+ * caller (`FootnoteItem` renders it in a separate header div) and the USFM markers themselves
+ * (`.marker` spans; see `isMarkerText` in `footnote-caret.utils.ts`).
  *
- * - `'end'`: after the last character of the note text (not the raw editor DOM's last text node,
- *   which may include trailing structural text - see `createNoteBodyTextNodeFilter`).
- * - `{ utf16Offset }`: a flat offset over the note body's visible text content, in UTF-16 code units
- *   (the unit used by DOM Selection APIs and the editor's text nodes). Offsets originate from
- *   browser caret APIs (`caretPositionFromPoint`), which only produce positions at valid caret
- *   boundaries, so surrogate pairs and combining sequences are never split by construction.
- *   Consumers walk text nodes and accumulate `Text.data.length` to resolve it; an offset past the
+ * That origin is the note's USJ text, NOT any one rendering of it, which is what lets a position
+ * captured over a read-only row resolve inside a live editor: the editor adds its own display
+ * artifacts around the same content (marker glyphs that are real text under `markerMode:
+ * "editable"`, NBSP separators, structural spacers), and only the editor can tell those from
+ * content — so `EditorRef.selectNoteTextOffset` resolves the offset against its own nodes rather
+ * than any consumer walking its DOM.
+ *
+ * - `'end'`: after the last character of the note's text.
+ * - `{ utf16Offset }`: a flat offset over the note's content text, in UTF-16 code units (the unit
+ *   used by DOM Selection APIs and the editor's text nodes). Offsets originate from browser caret
+ *   APIs (`caretPositionFromPoint`), which only produce positions at valid caret boundaries, so
+ *   surrogate pairs and combining sequences are never split by construction. An offset past the
  *   available text resolves to `'end'`.
  */
 export type FootnoteCaretPosition = "end" | {
@@ -1063,6 +1063,24 @@ export type FootnoteEditorLocalizedStrings = {
 	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]: string;
 };
 export type FootnoteCallerType = "generated" | "hidden" | "custom";
+/**
+ * What a host can ask an inline `FootnoteEditor` to do directly, rather than through props.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export interface FootnoteEditorHandle {
+	/**
+	 * Applies to the parent editor whatever inline edit is still sitting inside the live-apply
+	 * debounce, right now.
+	 *
+	 * A host that ends an editing session must call this BEFORE tearing its own bookkeeping down.
+	 * Unmounting this component flushes too, but that happens a commit later, by which time the host
+	 * no longer recognizes the apply as the session's own tail — and a note replacement that arrives
+	 * unattributed is indistinguishable from a newly inserted note. A no-op when nothing is pending
+	 * or the note is unchanged.
+	 */
+	flushPendingEdits: () => void;
+}
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
 	/** Class name for styling the embedded `Editor` component in this editor popover */
@@ -1104,6 +1122,12 @@ export interface FootnoteEditorProps {
 	 * @default false
 	 */
 	inline?: boolean;
+	/**
+	 * Imperative handle for an inline-mode host. See {@link FootnoteEditorHandle}.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	ref?: React$1.Ref<FootnoteEditorHandle>;
 	/**
 	 * Where to place the caret in the note text after the note loads. `'end'` matches PT9's
 	 * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row. When
@@ -1179,7 +1203,7 @@ export declare const INLINE_APPLY_DEBOUNCE_MS = 300;
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, initialCaretPosition, markerPalette, onNoteEdit, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, ref, initialCaretPosition, markerPalette, onNoteEdit, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /**
