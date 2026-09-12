@@ -3698,7 +3698,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   it. **Migrating the choice into the project when one opens** — rejected: it would write a personal
   scratch choice into a setting that is shared and admin-visible.
 - **Consequences:** Two settings that only one caller writes, which is why they are `isHidden` and
-  why their validator (`no-project-reference-list.validator.ts`) is stricter than the project-scoped
+  why their validator (`no-project-reference-list.utils.ts`) is stricter than the project-scoped
   `resourceReferenceListValidator` — it accepts only DBL references. Because the settings are
   declared in JSON while `CURRENT_DATA_VERSION` lives in TypeScript, and nothing typechecks a
   contribution's `default` against `SettingTypes`, a test pins the two together. Free-resource
