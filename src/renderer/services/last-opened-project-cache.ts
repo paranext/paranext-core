@@ -60,3 +60,23 @@ export function setLastOpenedProject(project: LastOpenedProject): void {
     // best-effort cache; a failed write just means the next switch falls back to the slow path
   }
 }
+
+/**
+ * Forget the cached project.
+ *
+ * The cache outlives the project in it: the id survives the project being deleted, moved, or left
+ * behind on another machine, and nothing else ever invalidates it. A caller that discovers the
+ * cached project cannot be found clears it here so the next switch takes the recents walk instead
+ * of the fast path, rather than returning to the same dead id on every switch for the life of the
+ * install.
+ *
+ * A no-op (including on failure) rather than throwing — see the module doc comment for why this
+ * cache is best-effort.
+ */
+export function clearLastOpenedProject(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // best-effort cache; a failed clear just means the next switch re-checks the same id
+  }
+}

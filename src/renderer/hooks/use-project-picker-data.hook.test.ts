@@ -578,9 +578,9 @@ describe('useProjectPickerData', () => {
   });
 
   it('recovers the current project after a failed lookup once the editor closes and reopens', async () => {
-    // When even the direct lookup fails (nothing provides the id yet), the hook shows the error
-    // card. That state must clear when there is no current editor, so the project can resolve on a
-    // later open instead of staying wedged on 'Unable to load current project details'.
+    // When even the direct lookup fails (nothing provides the id yet), the hook reports no current
+    // project. That state must not stick: the project has to resolve on a later open rather than
+    // leaving the picker permanently unable to name what is open.
     const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
       await importMocks();
     let webViewCallback: (() => void) | undefined;
@@ -609,8 +609,12 @@ describe('useProjectPickerData', () => {
 
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
-    // Phase 1: absent from snapshot and direct lookup fails → error card.
-    expect(result.current.currentSimpleProjectError).toBe('Unable to load current project details');
+    // Phase 1: absent from snapshot and direct lookup fails → the project is not on this machine,
+    // so the picker reports no current project. It deliberately does NOT show the error card: the
+    // editor beside it renders its no-project empty state on the same signal, and an error the
+    // user cannot act on would disagree with what they can see.
+    expect(result.current.currentSimpleProject).toBeUndefined();
+    expect(result.current.currentSimpleProjectError).toBeUndefined();
 
     // Phase 2: editor closes → current project clears (and the error resets).
     openDefs = [];
@@ -670,9 +674,9 @@ describe('useProjectPickerData', () => {
 
       const { result } = renderHook(() => useProjectPickerData());
       await settle(result);
-      expect(result.current.currentSimpleProjectError).toBe(
-        'Unable to load current project details',
-      );
+      // A project the lookup cannot find is reported as no current project, not as an error.
+      expect(result.current.currentSimpleProject).toBeUndefined();
+      expect(result.current.currentSimpleProjectError).toBeUndefined();
       expect(vi.mocked(projectLookupService.getMetadataForProject)).toHaveBeenCalledTimes(1);
 
       // Drive well past the budget. Each turn is one retry window.
@@ -746,9 +750,9 @@ describe('useProjectPickerData', () => {
 
       const { result } = renderHook(() => useProjectPickerData());
       await settle(result);
-      expect(result.current.currentSimpleProjectError).toBe(
-        'Unable to load current project details',
-      );
+      // A project the lookup cannot find is reported as no current project, not as an error.
+      expect(result.current.currentSimpleProject).toBeUndefined();
+      expect(result.current.currentSimpleProjectError).toBeUndefined();
 
       // First project spends the whole budget
       expect(await exhaustBudget(result)).toBe(MAX_METADATA_FETCH_RETRIES);
@@ -765,13 +769,34 @@ describe('useProjectPickerData', () => {
       activeProjectId = 'proj-broken-2';
       act(() => webViewCallback!());
       await settle(result);
-      expect(result.current.currentSimpleProjectError).toBe(
-        'Unable to load current project details',
-      );
+      // A project the lookup cannot find is reported as no current project, not as an error.
+      expect(result.current.currentSimpleProject).toBeUndefined();
+      expect(result.current.currentSimpleProjectError).toBeUndefined();
       expect(await exhaustBudget(result)).toBe(MAX_METADATA_FETCH_RETRIES);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('still shows the error card when project metadata itself cannot be fetched', async () => {
+    // The counterpart to the absent-project case. "Not in the list" only means the project is
+    // absent if the list arrived; when the metadata read itself fails, nothing is known about the
+    // project and reporting "no project" would state as fact something the hook never established.
+    const { getAllOpenWebViewDefinitionsSync, projectLookupService } = await importMocks();
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-unknown' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockRejectedValue(
+      new Error('metadata service unreachable') as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+
+    expect(result.current.currentSimpleProjectError).toBe('Unable to load current project details');
+    // The direct by-id lookup is not even reached — there is no point asking a service that just
+    // failed to answer the broader question.
+    expect(vi.mocked(projectLookupService.getMetadataForProject)).not.toHaveBeenCalled();
   });
 
   it('does not re-fetch metadata on web view events (metadata cache is decoupled from them)', async () => {

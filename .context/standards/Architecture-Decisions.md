@@ -775,6 +775,59 @@ step, no automation. Just a record.
   public audience.
 - **Source:** the multi-agent review of #2654, finding 1.
 
+## adr-dangling-project-id-resolves-to-no-project: A project id that cannot be resolved is treated as no project at read time, never pruned from the layout
+
+- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Context:** A web view definition can name a project that is not on this machine — a layout
+  restored after the project was deleted or moved, a recents entry for a project never cloned here,
+  or the `lastOpenedProject` cache, which nothing invalidates when a project goes away. Nothing
+  distinguished that id from one whose PDP factory simply had not registered yet, so every
+  project-scoped hook downstream waited on a data provider that would never arrive. The reading
+  panels sat on `getResourcePanelReadiness`'s `loading` state for the life of the window — no error,
+  no timeout, no way out (see `adr-panel-readiness-from-sources`, whose state machine is correct
+  here: the list genuinely never arrives). The editor showed a blank pane and the toolbar picker an
+  error card the user could not act on. Recovery was blocked too: the Simple-mode switch bakes a
+  project id into a cloned layout, and both the cached fast path and the recents walk would hand it
+  a dead id — the walk's `isPublished` check treated a failed lookup as "not published, proceed". So
+  picking another project from the toolbar re-entered the same wedge.
+- **Decision:** An unresolvable project id resolves to "no project" at the point of use, and is
+  never written back. `useResolvedContainerProjectId` (`platform-scripture-editor`) reports the id
+  unchanged until `projectLookupService.getMetadataForProject` rejects, then reports `undefined`;
+  the editor and both reading panels read the resolved value rather than the raw prop, so a dead id
+  reaches neither a read nor a write. `getMetadataForProject` is the confidence bar because it
+  already waits for a PDP factory and retries across the startup grace period, so it rejects only
+  once "absent" is the best available answer. The picker reaches the same verdict from the same call
+  and reports no current project instead of its error card, which is reserved for a metadata fetch
+  that itself failed — "not in the list" only means absent if the list arrived. Separately, no dead
+  id may be _chosen_: `isUsableSwitchTarget` answers existence and published-ness from one metadata
+  read and skips the candidate on either, and the Simple-mode switch confirms the cached last-opened
+  project before building a layout around it, clearing the cache on a definite miss.
+- **Alternatives:** **Prune dangling project ids from the restored layout at startup** — rejected,
+  and it was the original proposal. It cannot tell a deleted project from one merely absent from
+  this machine, and the saved id is the only record of which project a tab belongs to; power mode
+  re-persists the pruned layout, so a user who later Send/Receive-clones that project gets an
+  unbound tab instead of their editor. Read-time resolution has neither problem and re-binds by
+  itself. **Treat the id as missing while the lookup is in flight** — rejected: a PDP factory
+  registers well after the window paints, so a real project would flash the no-project prompt on
+  every start. **Parse the rejection message to separate "absent" from an infrastructure failure** —
+  rejected as brittle; the picker gets the same distinction structurally instead, from whether the
+  metadata list arrived.
+- **Consequences:** "No project" is now reachable two ways — none was named, or the named one is
+  gone — and every consumer must treat them identically, because that equivalence is what makes the
+  free-resource reading path (`adr-no-project-reading-choice-in-app-settings`) the answer for both. A
+  consumer that needs to tell them apart has to keep the raw prop deliberately. The resolution cannot
+  distinguish absence from an infrastructure failure outlasting the lookup's own waits; both land on
+  the no-project path, which renders something usable and re-resolves when the id changes, rather
+  than on the spinner this removes. A view that adds a project-scoped data source must read the
+  resolved id, not the prop, or it reintroduces the wedge for itself alone. Skipping unusable switch
+  candidates means an infrastructure failure that fails every candidate ends with no target and the
+  bare layout plus the default project picker — a working state, and a deliberate trade against
+  baking in an id that cannot load.
+- **Source:** Field report against `pt-4326-free-resources-no-project`: a tester who emptied their
+  projects folder to exercise the no-project reading path found the restored layout still naming the
+  removed projects, leaving both reading panels on "Loading…" indefinitely.
+
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
 - **Date:** 2026-09-03
