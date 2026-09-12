@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { logger } from '@shared/services/logger.service';
 import { settingsService } from '@shared/services/settings.service';
-import { isFirstRunComplete } from '@main/first-run-consent.util';
+import {
+  deferAutomaticSyncForSession,
+  getAutomaticSyncConsent,
+  resetAutomaticSyncDeferral,
+} from '@main/first-run-consent.util';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -15,46 +19,56 @@ const mockLoggerWarn = vi.mocked(logger.warn);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetAutomaticSyncDeferral();
 });
 
 /**
- * Tests the consent gate at its source. Each of the three call sites (startup, shutdown, window
- * close) proves it acts on the answer; this proves the answer itself, so the fail-closed default
- * does not depend on any one call site's suite surviving.
+ * Tests the consent gate at its source. Each call site proves it acts on the answer; this proves
+ * the answer itself, so the fail-closed default does not depend on any one call site's suite
+ * surviving.
  */
-describe('isFirstRunComplete', () => {
-  it('reports complete once the wizard has finished', async () => {
+describe('getAutomaticSyncConsent', () => {
+  it('grants consent once the wizard has finished', async () => {
     mockSettingsGet.mockResolvedValue(true);
 
-    await expect(isFirstRunComplete()).resolves.toBe(true);
+    await expect(getAutomaticSyncConsent()).resolves.toBe('granted');
     expect(mockSettingsGet).toHaveBeenCalledWith('platform.firstRunComplete');
     expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
-  it('reports not complete while the wizard is unfinished', async () => {
+  it('withholds consent while the wizard is unfinished', async () => {
     mockSettingsGet.mockResolvedValue(false);
 
-    await expect(isFirstRunComplete()).resolves.toBe(false);
+    await expect(getAutomaticSyncConsent()).resolves.toBe('unconfirmed');
     expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
-  it('reports not complete for a non-boolean value, so only a literal true opens the gate', async () => {
+  it('withholds consent for a non-boolean value, so only a literal true grants it', async () => {
     mockSettingsGet.mockResolvedValue('simple');
 
-    await expect(isFirstRunComplete()).resolves.toBe(false);
+    await expect(getAutomaticSyncConsent()).resolves.toBe('unconfirmed');
   });
 
-  it('reports not complete when the flag cannot be read (fails CLOSED) rather than rejecting, and says so', async () => {
-    // The consent-safe default, and the reason the gate exists: syncing without consent cannot be
-    // undone, so an unreadable flag must never be the thing that lets a sync through. Resolving
-    // rather than rejecting is what lets every call site gate on this without its own try/catch, and
-    // the warn is what tells a reader the gate closed for this reason rather than an unfinished
-    // wizard.
+  it('withholds consent when the flag cannot be read (fails CLOSED) rather than rejecting, and says so', async () => {
+    // Syncing without consent cannot be undone, so an unreadable flag must never be what lets a
+    // sync through. Resolving rather than rejecting is what lets every call site gate on this
+    // without its own try/catch, and the warn is the only record that a failed read closed the gate.
     mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
 
-    await expect(isFirstRunComplete()).resolves.toBe(false);
+    await expect(getAutomaticSyncConsent()).resolves.toBe('unconfirmed');
     expect(mockLoggerWarn).toHaveBeenCalledWith(
       expect.stringContaining('Could not read platform.firstRunComplete'),
     );
+  });
+
+  it('withholds consent for the rest of the session once the user defers sync, even with the wizard finished', async () => {
+    // "Don't sync yet" marks the wizard finished too, so without the deferral every gate would open
+    // the moment the user declined.
+    mockSettingsGet.mockResolvedValue(true);
+
+    deferAutomaticSyncForSession();
+
+    await expect(getAutomaticSyncConsent()).resolves.toBe('deferred');
+    await expect(getAutomaticSyncConsent()).resolves.toBe('deferred');
   });
 });
