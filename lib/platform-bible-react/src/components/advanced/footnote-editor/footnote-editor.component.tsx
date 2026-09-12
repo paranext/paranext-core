@@ -331,6 +331,33 @@ export default function FootnoteEditor({
    */
   const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
 
+  /**
+   * Restores the caret when the editor's selection has been lost, leaving a live one alone.
+   *
+   * A nulled selection sends `focus` to the document END — here the note's closing marker, outside
+   * the character runs, where anything typed joins no text. {@link lastFocusOutSelectionRef} is
+   * exactly where the user last saw the caret; the note's own text is the last resort.
+   */
+  const restoreSelectionIfLost = useCallback(() => {
+    if (editorRef.current?.getSelection()) return;
+    const lastFocusOutSelection = lastFocusOutSelectionRef.current;
+    if (lastFocusOutSelection) editorRef.current?.setSelection(lastFocusOutSelection);
+    else editorRef.current?.selectNote(0);
+  }, []);
+
+  /**
+   * Puts the caret back in the note's text and focuses the editor, so the user can carry on typing
+   * after a control in the popover has taken focus.
+   *
+   * Use this wherever focus is handed back from a control that may have outlived the selection — a
+   * dropdown that replaced the note. A bare `focus` is right only where the selection is known to
+   * still be live, since with none it resolves to the end of the document.
+   */
+  const focusNoteText = useCallback(() => {
+    restoreSelectionIfLost();
+    editorRef.current?.focus();
+  }, [restoreSelectionIfLost]);
+
   // Options for the editorial component
   const options = useMemo<EditorOptions>(
     () => ({
@@ -369,8 +396,9 @@ export default function FootnoteEditor({
         () => setShowMarkersMenu(false),
         localizedStrings,
         contextMarker,
+        noteType,
       ),
-    [localizedStrings, contextMarker],
+    [localizedStrings, contextMarker, noteType],
   );
 
   // Makes it so that the footnote type change tooltip doesn't automatically focus when the
@@ -489,6 +517,32 @@ export default function FootnoteEditor({
   );
 
   /**
+   * Replaces the note in the editor with `noteOp`, then puts the caret back in the note's text.
+   *
+   * Both callers are dropdowns the user reaches mid-edit, and re-applying the note discards the
+   * editor's selection — leaving the caret on the note itself, outside the character runs, where
+   * the next keystroke joins no text.
+   *
+   * What the restore buys is the right NODE, not the right offset: the popover re-focuses its
+   * editor after the change, and that focus resolves to the end of whatever run the caret is in. It
+   * is still worth reading, because it is taken while the selection is live and inside the note's
+   * text — the focus-out capture {@link focusNoteText} otherwise falls back to is only as good as
+   * wherever focus happened to leave from, which can be the note level. Deleting this line drops
+   * the caret out of the character runs entirely; `footnote-editor.note-type-change.test.tsx` fails
+   * if it goes.
+   */
+  const replaceNoteKeepingCaret = useCallback(
+    (noteOp: DeltaOpInsertNoteEmbed) => {
+      const selectionBeforeChange = editorRef.current?.getSelection();
+      // Insert the rewritten embed, then delete the one unit it replaces.
+      editorRef.current?.applyUpdate([noteOp, { delete: 1 }]);
+      if (selectionBeforeChange) editorRef.current?.setSelection(selectionBeforeChange);
+      focusNoteText();
+    },
+    [focusNoteText],
+  );
+
+  /**
    * Writes a new caller into the note the popover is editing, exactly as
    * {@link handleNoteTypeChange} writes a new style: mutate the embed and replace it in the editor.
    * The editor is what the caller is DISPLAYED from in editable marker mode (`+` is text the user
@@ -511,10 +565,9 @@ export default function FootnoteEditor({
       }
       if (currentNoteOp.insert.note.caller === caller) return;
       currentNoteOp.insert.note.caller = caller;
-      // Insert the rewritten embed, then delete the one unit it replaces.
-      editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
+      replaceNoteKeepingCaret(currentNoteOp);
     },
-    [],
+    [replaceNoteKeepingCaret],
   );
 
   const closeAndSave = useCallback(() => {
@@ -594,7 +647,7 @@ export default function FootnoteEditor({
       }
 
       // Inserts the new footnote/cross-reference and deletes the old one — triggers handleUsjChange
-      editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
+      replaceNoteKeepingCaret(currentNoteOp);
     }
   };
 
@@ -731,19 +784,10 @@ export default function FootnoteEditor({
             passive,
             keyForwarding,
           ),
-        restoreSelectionIfLost: () => {
-          // A nulled selection would send focus() to the document END — here the note's closing
-          // marker, where the apply lands the marker as an invalid trailing span while the typed
-          // literal strands at the real caret (live-observed: a red `\fq` after `\f*`). Restore
-          // the focus-out capture (exactly where the user last saw the caret), or land at the
-          // end of the note content as a last resort. A still-live selection is left completely
-          // alone.
-          if (!editorRef.current?.getSelection()) {
-            const lastFocusOutSelection = lastFocusOutSelectionRef.current;
-            if (lastFocusOutSelection) editorRef.current?.setSelection(lastFocusOutSelection);
-            else editorRef.current?.selectNote(0);
-          }
-        },
+        // What a lost selection costs on this path specifically: the apply lands the marker as an
+        // invalid trailing span after the note's closing marker while the typed literal strands at
+        // the real caret (live-observed: a red `\fq` after `\f*`).
+        restoreSelectionIfLost,
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) =>
           editorRef.current?.applyMarkerMenuSelection(selected, {
@@ -764,7 +808,7 @@ export default function FootnoteEditor({
         },
       });
     },
-    [markerPalette],
+    [markerPalette, restoreSelectionIfLost],
   );
 
   /**
@@ -1065,12 +1109,14 @@ export default function FootnoteEditor({
               noteType={noteType}
               handleNoteTypeChange={handleNoteTypeChange}
               localizedStrings={localizedStrings}
+              focusNoteText={focusNoteText}
             />
             <FootnoteCallerDropdown
               callerType={callerType}
               customCaller={customCaller}
               updateCaller={handleCallerChange}
               localizedStrings={localizedStrings}
+              focusNoteText={focusNoteText}
             />
           </div>
           <div className="tw:flex tw:w-full tw:justify-end">
