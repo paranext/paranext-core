@@ -1,6 +1,6 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { usePrimaryInterfaceLanguage } from '@renderer/hooks/use-primary-interface-language.hook';
-import { completeFirstRun } from '@renderer/services/first-run-store';
+import { completeFirstRun, declineFirstRunSync } from '@renderer/services/first-run-store';
 import { FirstRunStep, NumberedStep } from '@renderer/services/first-run.model';
 import { Button, Spinner, WizardStepper } from 'platform-bible-react';
 import {
@@ -132,8 +132,8 @@ export function FirstRunShell({
     setStep(next);
   }, []);
 
-  // Finishing the wizard is identical from the last step's Next/Finish and from the decline button.
   const completeWizard = useCallback(() => runAction(completeFirstRun), [runAction]);
+  const declineWizardSync = useCallback(() => runAction(declineFirstRunSync), [runAction]);
 
   const onNext = useCallback(() => {
     // Guard against re-entrant calls (e.g. step calls onNext programmatically while busy). Read the
@@ -152,8 +152,8 @@ export function FirstRunShell({
     [isInterstitial, index, entryIndex, goToStep],
   );
 
-  // No useMemo: `completeWizard` is already stable, so both branches are referentially stable.
-  const onSkip = canSkip ? completeWizard : undefined;
+  // No useMemo: `declineWizardSync` is already stable, so both branches are referentially stable.
+  const onSkip = canSkip ? declineWizardSync : undefined;
 
   // React refs passed to DOM elements must be initialized with null, not undefined.
   // eslint-disable-next-line no-null/no-null
@@ -208,6 +208,7 @@ export function FirstRunShell({
           setCanProceed={setCanProceed}
           setCanSkip={setCanSkip}
           setManagesOwnFooter={setManagesOwnFooter}
+          isBusy={isBusy}
           allowContinueWithoutRegistration={allowContinueWithoutRegistration}
         />
 

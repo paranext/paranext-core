@@ -8,6 +8,8 @@ const meta: Meta<typeof SyncConsentStep> = {
   tags: ['autodocs'],
   args: {
     onNext: fn(),
+    // Supplied by the wizard shell once the step asks for it, so present in every story.
+    onSkip: fn(),
     // Resolves immediately so the story shows the Sync button in its resting state.
     onSync: fn().mockResolvedValue(undefined),
   },
@@ -16,19 +18,32 @@ export default meta;
 
 type Story = StoryObj<typeof SyncConsentStep>;
 
-/**
- * The step's own content and its primary "Sync" action. The "Don't sync yet" button is rendered by
- * the wizard shell's footer, not by this step — see [First run/FirstRunShell →
- * SyncConsent](?path=/story/first-run-firstrunshell--sync-consent) for the step as the user
- * actually sees it.
- */
+/** "Don't sync yet" beside the primary "Sync", as a user resuming after the Identify step sees it. */
 export const Default: Story = {};
 
-/** "Sync" has been clicked; the button shows a spinner and is disabled while the sync runs. */
+/** Reached by walking forward through the wizard, so Back is available too. */
+export const WithBack: Story = {
+  args: {
+    onBack: fn(),
+  },
+};
+
+/** "Sync" has been clicked: it shows a spinner and is disabled, and "Don't sync yet" is withdrawn. */
 export const Syncing: Story = {
   args: {
     // Never resolves so the component stays in the syncing/busy state indefinitely.
     onSync: () => new Promise(() => {}),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /^sync$/i }));
+  },
+};
+
+/** "Sync" failed: the error shows above the buttons, and "Don't sync yet" is offered again. */
+export const SyncFailed: Story = {
+  args: {
+    onSync: () => Promise.reject(new Error('Could not reach the Send/Receive server.')),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
