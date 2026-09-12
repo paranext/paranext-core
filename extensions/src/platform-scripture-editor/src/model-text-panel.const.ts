@@ -18,15 +18,15 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   // Shown with no project open and nothing free to offer, so there is no picker worth showing.
   '%webView_modelTextPanel_noProject%',
   // The no-project entry point, where the panel offers free / openly-licensed resources instead of
-  // the project's configured model text. Separate wording because there is no model relationship to
-  // name — the user is choosing something to read, not a text to translate against.
-  '%webView_modelTextPanel_noProject_emptyState_prompt%',
-  '%webView_modelTextPanel_noProject_pick%',
+  // the project's configured model text. Shared with the Bible texts panel's entry point, which asks
+  // the same thing: there is no model relationship to name, only something to read.
+  '%webView_resourcePanel_noProject_emptyState_prompt%',
+  '%webView_resourcePanel_noProject_pick%',
   // Shown when the DBL catalog is unreachable specifically because the registration is missing or
   // invalid. Paired with the register action rather than a retry, which cannot succeed until the
   // registration changes.
-  '%webView_modelTextPanel_noProject_registrationRequired%',
-  '%webView_modelTextPanel_noProject_register%',
+  '%webView_resourcePanel_noProject_registrationRequired%',
+  '%webView_resourcePanel_noProject_register%',
   // No-project variants of the panel's failure wording. The project-scoped originals all name a
   // "model text", which is a relationship that does not exist here — the user is choosing something
   // to read, not a text to translate against.

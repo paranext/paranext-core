@@ -35,16 +35,10 @@ export const noProjectReferenceListValidator: SettingValidator<
   if (!Array.isArray(newValue.items))
     throw new Error('No-project reference list `items` must be an array.');
 
+  // `isDblResourceReference` checks that `id` and `name` are present, not that they are strings.
   const invalidIndex = newValue.items.findIndex(
     (item) =>
-      typeof item !== 'object' ||
-      !item ||
-      !('type' in item) ||
-      item.type !== 'dblResource' ||
-      !('id' in item) ||
-      typeof item.id !== 'string' ||
-      !('name' in item) ||
-      typeof item.name !== 'string',
+      !isDblResourceReference(item) || typeof item.id !== 'string' || typeof item.name !== 'string',
   );
   if (invalidIndex !== -1)
     throw new Error(

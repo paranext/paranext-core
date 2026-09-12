@@ -54,8 +54,8 @@ const meta: Meta<typeof PanelReadinessView> = {
     pickLabel: localizedStrings['%webView_resourcePanel_bibleTexts_pick%'],
     retryLabel: localizedStrings['%webView_resourcePanel_retry%'],
     registrationRequiredMessage:
-      localizedStrings['%webView_resourcePanel_bibleTexts_noProject_registrationRequired%'],
-    registerLabel: localizedStrings['%webView_resourcePanel_bibleTexts_noProject_register%'],
+      localizedStrings['%webView_resourcePanel_noProject_registrationRequired%'],
+    registerLabel: localizedStrings['%webView_resourcePanel_noProject_register%'],
   },
 };
 export default meta;

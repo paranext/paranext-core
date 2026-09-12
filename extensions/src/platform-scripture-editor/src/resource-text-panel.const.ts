@@ -41,13 +41,13 @@ export const RESOURCE_PANEL_STRING_KEYS = Object.freeze([
   '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%',
   '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%',
   '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%',
-  // The Bible-texts tab's no-project free-resource entry point. Not part of
-  // RESOURCE_PANEL_TYPED_STRING_KEYS for the same reason: nothing in the commentary catalogue is
-  // openly licensed, so the Commentaries tab has no such entry point to word.
-  '%webView_resourcePanel_bibleTexts_noProject_emptyState_prompt%',
-  '%webView_resourcePanel_bibleTexts_noProject_pick%',
-  '%webView_resourcePanel_bibleTexts_noProject_registrationRequired%',
-  '%webView_resourcePanel_bibleTexts_noProject_register%',
+  // The Bible-texts tab's no-project free-resource entry point, shared with the model text panel's.
+  // Not part of RESOURCE_PANEL_TYPED_STRING_KEYS for the same reason: nothing in the commentary
+  // catalogue is openly licensed, so the Commentaries tab has no such entry point to word.
+  '%webView_resourcePanel_noProject_emptyState_prompt%',
+  '%webView_resourcePanel_noProject_pick%',
+  '%webView_resourcePanel_noProject_registrationRequired%',
+  '%webView_resourcePanel_noProject_register%',
   // Shown above the picker's list whenever it is restricted to free resources. Explains a list that
   // is short — or empty, if the catalog carries none of the allowlisted resources — which the
   // dialog itself cannot account for, because it only sees the already-narrowed array.

@@ -36,6 +36,8 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...MODEL_TEXT_PANEL_STRING_KEYS,
   '%webView_modelTextPanel_title%',
   '%webView_modelTextPanel_title_withResource%',
+  '%webView_modelTextPanel_noProject_title%',
+  '%webView_modelTextPanel_noProject_title_withResource%',
 ];
 
 /**
@@ -63,6 +65,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   // free-resource choice when none is. Same state shape either way, so everything below is unchanged.
   const modelTextSource = useResourceReferenceSource(projectId, 'platformScripture.modelTexts');
   const effectiveModelTextsState = modelTextSource.state;
+  // An empty allowlist means there is nothing to offer, so the entry point stays off and the panel
+  // shows its plain no-project message instead of a picker that cannot be populated.
+  const isFreeResourceEntryPoint = modelTextSource.isNoProject && HAS_FREE_RESOURCES;
   const effectiveModelTexts =
     effectiveModelTextsState.status === 'ready' ? effectiveModelTextsState.list : undefined;
 
@@ -105,18 +110,33 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     modelResourceProjectId,
   );
 
+  // At the free-resource entry point the tab names no model text, matching the panel body: without a
+  // project there is no model relationship, only a text being read.
+  const titleKey = isFreeResourceEntryPoint
+    ? '%webView_modelTextPanel_noProject_title%'
+    : '%webView_modelTextPanel_title%';
+  const titleWithResourceKey = isFreeResourceEntryPoint
+    ? '%webView_modelTextPanel_noProject_title_withResource%'
+    : '%webView_modelTextPanel_title_withResource%';
+
   useEffect(() => {
-    const baseTitle = localizedStrings['%webView_modelTextPanel_title%'];
+    const baseTitle = localizedStrings[titleKey];
     if (!baseTitle) return;
     if (modelTextSmallName) {
-      const fmt = localizedStrings['%webView_modelTextPanel_title_withResource%'];
+      const fmt = localizedStrings[titleWithResourceKey];
       updateWebViewDefinition({
         title: formatReplacementString(fmt, { textName: modelTextSmallName }),
       });
     } else {
       updateWebViewDefinition({ title: baseTitle });
     }
-  }, [modelTextSmallName, localizedStrings, updateWebViewDefinition]);
+  }, [
+    modelTextSmallName,
+    localizedStrings,
+    titleKey,
+    titleWithResourceKey,
+    updateWebViewDefinition,
+  ]);
 
   // Ctrl+F opens Find for the displayed model resource.
   useOpenFindShortcut(webViewId, modelResourceProjectId);
@@ -141,11 +161,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     refetchCatalog,
   );
 
-  const { getUserList: getUserModelTexts, setUserList, isNoProject } = modelTextSource;
-
-  // An empty allowlist means there is nothing to offer, so the entry point stays off and the panel
-  // shows its plain no-project message instead of a picker that cannot be populated.
-  const isFreeResourceEntryPoint = isNoProject && HAS_FREE_RESOURCES;
+  const { getUserList: getUserModelTexts, setUserList } = modelTextSource;
 
   const setUserModelTexts = useCallback(
     async (list: ResourceReferenceList) => {

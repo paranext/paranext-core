@@ -92,6 +92,9 @@ export type ResourcePickerDialogOptions = DialogOptions & {
    * Omit it to offer the whole catalog. An empty array offers nothing, which is the correct reading
    * of "this caller may offer no resource", not a synonym for "no restriction".
    *
+   * Matched case-insensitively: a hand-curated list and the catalog's `dblEntryUid` values need not
+   * agree on case.
+   *
    * `readonly` because the dialog only reads it: callers restricting the catalog typically hold a
    * frozen module-level allowlist, and copying it per render just to satisfy a mutable parameter
    * would give the dialog callback a new identity on every render.

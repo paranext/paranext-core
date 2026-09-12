@@ -52,7 +52,7 @@ import {
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
-import { noProjectReferenceListValidator } from './no-project-reference-list.validator';
+import { noProjectReferenceListValidator } from './no-project-reference-list.utils';
 
 logger.debug('Scripture Editor is importing!');
 
