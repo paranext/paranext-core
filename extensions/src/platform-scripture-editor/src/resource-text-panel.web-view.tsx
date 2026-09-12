@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useResourceReferenceSource } from './use-resource-reference-source.hook';
+import { useResolvedContainerProjectId } from './use-resolved-container-project-id.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
 import type { PickerResource } from './downloaded-resources.utils';
 import {
@@ -94,12 +95,17 @@ const NO_PROJECT_PICKER_OPTIONS = { includeDownloaded: false } as const;
  */
 globalThis.webViewComponent = function ResourceTextPanelWebView({
   id: webViewId,
-  projectId,
+  projectId: savedProjectId,
   updateWebViewDefinition,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
+
+  // A saved layout can name a project that no longer exists; resolving it here is what keeps that
+  // from parking the panel on a spinner nothing ever ends. Everything below reads this, never the
+  // raw prop, so a dead id takes the same no-project path as an absent one.
+  const projectId = useResolvedContainerProjectId(savedProjectId);
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 

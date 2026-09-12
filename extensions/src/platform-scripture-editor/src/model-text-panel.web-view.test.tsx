@@ -43,6 +43,11 @@ vi.mock('@papi/frontend', () => ({
     dialogs: {
       showDialog: vi.fn(),
     },
+    // `useResolvedContainerProjectId` confirms the container project exists, so the saved project
+    // id is kept, which is the state these renders assume.
+    projectLookup: {
+      getMetadataForProject: vi.fn(async () => ({})),
+    },
   },
   logger: { warn: mockLoggerWarn, error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
