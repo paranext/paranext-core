@@ -969,7 +969,32 @@ export type NavigationHistoryButtonsProps = {
  * arrow icons, and tooltip shortcut hints), matching Paratext 9.
  */
 export declare function NavigationHistoryButtons({ canGoBack, canGoForward, backItems, forwardItems, onNavigate, localizedStrings, showKeyboardShortcuts, className, variant, groupClassName, showDivider, }: NavigationHistoryButtonsProps): import("react/jsx-runtime").JSX.Element;
-type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
+/**
+ * How the app is permitted to use the internet. Local alias — identical string literals to the
+ * extension's `InternetUse` type, defined here so platform-bible-react does not depend on the
+ * paratext-registration extension package.
+ *
+ * SYNC WARNING: Keep this alias identical to `InternetUse` in
+ * extensions/src/paratext-registration/src/types/paratext-registration.d.ts and the matching C#
+ * enum. Structural typing makes them mutually assignable today, but divergence (e.g. C# adding a
+ * new value) will silently break the wizard step's prop wiring. Update this alias whenever the
+ * authoritative type changes.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
+/**
+ * Whether the app can honor this internet-use value.
+ *
+ * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
+ * apps keep separate copies thereafter), so a stored value may name an option this app does not
+ * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
+ * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
+ * Next button) should refuse to advance until this returns true.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isSupportedInternetUse(value: InternetUse): boolean;
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[];
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -982,16 +1007,19 @@ export type InternetAccessOptionListProps = {
 	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */
 	disabled: boolean;
-	/**
-	 * Whether to show the "disabled options are planned for future updates" note below the rows.
-	 * Defaults to true. Set false where vertical space is tight (the first-run wizard step, whose
-	 * heading and Next button compete for the same fold) — the per-row "Coming soon" badges still
-	 * convey that those options are not yet available.
-	 */
-	showFooter?: boolean;
 };
-/** @experimental This export is unstable and may change shape or disappear without notice */
-export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, showFooter, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The five internet-access options as radio rows. Each row's description sits behind an info icon
+ * button, revealed as a tooltip on hover or keyboard focus.
+ *
+ * The descriptions run to two sentences — longer than `Guidelines/Tooltips` allows a tooltip on a
+ * control, and within the one-to-two sentences the guidelines allow an info icon button's tooltip.
+ * That allowance and the info icon button pattern are defined in `Guidelines/Providing Help`, added
+ * by paranext-core PR #2787 (open as of 2026-09-11).
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
 type ServerType = "Production" | "QualityAssurance" | "Development" | "Test";
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];
@@ -999,11 +1027,11 @@ export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];
 export type DeveloperSectionProps = {
 	/** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
 	localizedStrings: LanguageStrings;
-	/** The currently selected server type. Every `ServerType` has its own item in the toggle. */
+	/** The currently selected server type. Every `ServerType` has its own radio. */
 	selectedServer: ServerType;
 	/** Called when the user switches to a different server type. */
 	onServerChange: (server: ServerType) => void;
-	/** When true, the toggle items are non-interactive (loading or saving in progress). */
+	/** When true, the radio items are non-interactive (loading or saving in progress). */
 	disabled: boolean;
 };
 /** @experimental This export is unstable and may change shape or disappear without notice */
