@@ -313,21 +313,17 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   private usfmInternal: string | undefined;
 
   /**
-   * Messages already reported by {@link reportProblemOnce}, so a problem is reported once per
-   * instance rather than once per occurrence. A caller that builds a new instance per user action
-   * reports each problem again per action.
+   * Messages already reported by {@link reportProblemOnce}, so each distinct problem is reported
+   * once per instance rather than once per occurrence. A commentary or UBS Handbook repeats markers
+   * this class's markers map does not carry tens of thousands of times per book, and a web view's
+   * console calls cross IPC to the main process's log file, so reporting per occurrence costs work
+   * proportional to the document.
    *
-   * A commentary or UBS Handbook can repeat one marker this class's markers map does not carry tens
-   * of thousands of times per book, and a web view's console calls cross IPC to the main process's
-   * log file — so reporting per occurrence costs work proportional to the document rather than to
-   * the number of distinct problems in it. Deliberately not reset by {@link usjChanged}: these
-   * describe the marker, not where it appeared.
-   *
-   * Messages are keyed by their full text, so how much this saves depends on what the message
-   * names. The marker reports name only the marker, so they collapse to one line per distinct
-   * marker however large the document. The chapter and verse reports also name the position they
-   * were found at, so they collapse only where that position repeats — a document with many
-   * distinct malformed verse numbers still reports each one, and holds each in this set.
+   * Keyed by full message text, so a report collapses only as far as its text repeats: the marker
+   * reports name only the marker, while the chapter and verse reports also name a position. The set
+   * lives as long as the instance, so a caller that builds a new instance per action reports each
+   * problem again per action. Deliberately not reset by {@link usjChanged}: these describe the
+   * marker, not where it appeared.
    */
   private readonly reportedProblems = new Set<string>();
 
@@ -340,10 +336,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (providedMarkersMap) {
       this.markersMap = providedMarkersMap;
 
-      // Warn if the passed in markers map is not compatible. Names the book rather than serializing
-      // the document: callers pair a whole resource with one markers map, and a chapter of a
-      // commentary is megabytes of USX, but with several reader-writers alive the versions alone
-      // do not say which document mismatched.
+      // Warn if the passed in markers map is not compatible. Name the book, since several
+      // reader-writers can be alive at once and the versions alone do not say which document
+      // mismatched, but keep the document itself out of the message: callers pair a whole resource
+      // with one markers map, and a chapter of a commentary is megabytes of USX.
       if (!UsjReaderWriter.areUsjVersionsCompatible(this.usj.version, this.markersMap.version))
         console.warn(
           `Warning: USJ for book ${this.getBookIdForLogging()} has version ${
@@ -373,7 +369,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     this.shouldAllowInvisibleCharacters = shouldAllowInvisibleCharacters ?? false;
   }
 
-  // If new variables are created to speed up queries, they should be reset here
+  // If new variables are created to speed up queries, they should be reset here. `reportedProblems`
+  // is not a query cache and is deliberately kept; see its doc
   usjChanged(): void {
     this.parentMapInternal = undefined;
     this.fragmentsByIndexInUsfmInternal = undefined;
@@ -3230,10 +3227,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             } else {
               // Reported per occurrence, unlike its siblings above: this message names both verse
               // numbers, so every occurrence is already a distinct message and reporting it once
-              // per document would cost a set entry each without dropping a single line. It also
-              // stays quiet on the documents that motivated de-duplicating the others — a
-              // commentary referring back to an earlier verse takes the duplicate branch above,
-              // since that verse has been seen; this branch needs a descent into unseen verses.
+              // per document would cost a set entry each without dropping a single line.
               if (nextVerseNum < position.verseNum)
                 console.debug(
                   `Found ${VERSE_TYPE} marker with number ${nextVerseNum} lower than current ${
