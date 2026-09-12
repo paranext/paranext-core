@@ -24,12 +24,13 @@ import {
 } from 'platform-bible-react';
 import {
   debounce,
+  DebouncedFunction,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
   PlatformError,
 } from 'platform-bible-utils';
-import { ChangeEvent, useEffect, useId, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useId, useMemo, useRef, useState } from 'react';
 import './settings.component.scss';
 
 /** Props shared between the user and project setting components */
@@ -164,6 +165,8 @@ export function Setting({
   // once (each opens with a fresh tab id) and rc-dock keeps inactive tabs mounted, so a key-derived
   // id would be duplicated in the DOM.
   const controlId = useId();
+  const labelId = useId();
+  const descriptionId = useId();
   const isUiLanguageSelector =
     Array.isArray(setting) && settingKey === 'platform.interfaceLanguage';
 
@@ -262,7 +265,25 @@ export function Setting({
     }
   };
 
-  const debouncedHandleChange = debounce(handleChangeSetting, 500);
+  // One debounced function for the life of the component, so edits made across re-renders collapse
+  // into a single write. It calls through a ref so the write always runs the latest handler, which
+  // closes over the current setting, setter, validator, and strings. A ref rather than `useMemo`
+  // holds the instance: it owns a live timer, and React may discard a memoized value, which would
+  // leave the discarded instance's armed timer to write alongside its replacement's.
+  const handleChangeSettingRef = useRef(handleChangeSetting);
+  handleChangeSettingRef.current = handleChangeSetting;
+  const debouncedHandleChangeRef = useRef<
+    DebouncedFunction<typeof handleChangeSetting> | undefined
+  >(undefined);
+  if (!debouncedHandleChangeRef.current)
+    debouncedHandleChangeRef.current = debounce(
+      (...args: Parameters<typeof handleChangeSetting>) => handleChangeSettingRef.current(...args),
+      500,
+    );
+  const debouncedHandleChange = debouncedHandleChangeRef.current;
+
+  const ariaDescribedBy = description ? descriptionId : undefined;
+  const ariaInvalid = errorMessage ? true : undefined;
 
   // The control and the id the label points at are derived together so `htmlFor` cannot drift from
   // the branch that actually renders: a branch with nothing labelable returns no `labelFor`.
@@ -276,6 +297,8 @@ export function Setting({
             onChange={debouncedHandleChange}
             defaultValue={setting}
             disabled={disabled}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={ariaInvalid}
           />
         ),
         labelFor: controlId,
@@ -290,6 +313,8 @@ export function Setting({
             onCheckedChange={debouncedHandleChange}
             defaultChecked={setting}
             disabled={disabled}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={ariaInvalid}
           />
         ),
         labelFor: controlId,
@@ -298,22 +323,28 @@ export function Setting({
     if (typeof setting === 'object') {
       if (isUiLanguageSelector)
         return {
-          // interfaceLanguage is a user (not project) setting, so it is never subject to per-project
-          // Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled` prop, so none is passed.
+          // UiLanguageSelector puts its `id` on a wrapper div, which `htmlFor` cannot label, so the
+          // label names a group around the selector instead.
           control: (
-            <UiLanguageSelector
-              className="language-selector"
+            <div
               key={settingKey}
-              knownUiLanguages={isPlatformError(languages) ? defaultLanguages : languages}
-              primaryLanguage={setting[0]}
-              fallbackLanguages={setting.slice(1)}
-              onLanguagesChange={debouncedHandleChange}
-              localizedStrings={localizedStrings}
-            />
+              role="group"
+              aria-labelledby={labelId}
+              aria-describedby={ariaDescribedBy}
+            >
+              {/* interfaceLanguage is a user (not project) setting, so it is never subject to
+                  per-project Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled`
+                  prop, so none is passed. */}
+              <UiLanguageSelector
+                className="language-selector"
+                knownUiLanguages={isPlatformError(languages) ? defaultLanguages : languages}
+                primaryLanguage={setting[0]}
+                fallbackLanguages={setting.slice(1)}
+                onLanguagesChange={debouncedHandleChange}
+                localizedStrings={localizedStrings}
+              />
+            </div>
           ),
-          // Known a11y gap: UiLanguageSelector puts its `id` on a wrapper div, which `htmlFor`
-          // cannot label, so platform.interfaceLanguage has no accessible name. Closing it needs
-          // `aria-labelledby` support in UiLanguageSelector (platform-bible-react).
           labelFor: undefined,
         };
 
@@ -325,6 +356,8 @@ export function Setting({
             onChange={debouncedHandleChange}
             defaultValue={JSON.stringify(setting, undefined, 2)}
             disabled={disabled}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={ariaInvalid}
           />
         ),
         labelFor: controlId,
@@ -345,7 +378,10 @@ export function Setting({
     defaultLanguages,
     disabled,
     controlId,
+    labelId,
     isUiLanguageSelector,
+    ariaDescribedBy,
+    ariaInvalid,
   ]);
 
   return (
@@ -359,17 +395,25 @@ export function Setting({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Label htmlFor={labelFor} className="setting-label">
+                <Label id={labelId} htmlFor={labelFor} className="setting-label">
                   {label}
                 </Label>
               </TooltipTrigger>
               {description && <TooltipContent>{description}</TooltipContent>}
             </Tooltip>
           </TooltipProvider>
+          {/* The tooltip is hover-only; this copy is what the control's `aria-describedby` reads. */}
+          {description && (
+            <span id={descriptionId} className="tw:sr-only">
+              {description}
+            </span>
+          )}
           <div className="setting-container">
             {control}
             {errorMessage && (
-              <>
+              // Mounted only while there is an error, so the alert announces when one appears. The
+              // flex column repeats `.setting-container`'s so the error rows keep their spacing.
+              <div role="alert" className="tw:flex tw:flex-col tw:gap-2">
                 <Label className="error-label">
                   {localizedStrings['%settings_errorMessages_errorOccurred%']}
                 </Label>
@@ -378,7 +422,7 @@ export function Setting({
                     {localizedStrings['%settings_errorMessages_viewError%']}
                   </Label>
                 </ErrorPopover>
-              </>
+              </div>
             )}
           </div>
         </div>

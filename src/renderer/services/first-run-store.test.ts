@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { settingsService } from '@shared/services/settings.service';
+import { sendCommand } from '@shared/services/command.service';
 import { getCurrentLocale } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -12,6 +13,7 @@ import {
 import {
   completeFirstRun,
   continueWithoutRegistration,
+  declineFirstRunSync,
   getFirstRunStatus,
   markJustRegistered,
   resetFirstRunStore,
@@ -21,6 +23,9 @@ import {
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn(), set: vi.fn() },
+}));
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(),
 }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -39,6 +44,7 @@ vi.mock('platform-bible-utils', async (importOriginal) => ({
 
 const mockGet = vi.mocked(settingsService.get);
 const mockSet = vi.mocked(settingsService.set);
+const mockSendCommand = vi.mocked(sendCommand);
 const mockResolveReg = vi.mocked(resolver.resolveRegistrationValidity);
 const mockGetCurrentLocale = vi.mocked(getCurrentLocale);
 const mockGetSetupDialogLanguages = vi.mocked(localizationService.getSetupDialogLanguages);
@@ -73,6 +79,8 @@ beforeEach(() => {
   localStorage.clear();
   // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
   mockSet.mockResolvedValue(undefined);
+  // clearAllMocks keeps implementations, so a rejection set by one test would leak into the next.
+  mockSendCommand.mockReset();
   resetFirstRunStore();
   // Required, not hygiene: the gate now resolves registration through the shared store, which caches
   // a definitive answer for the session. Without this reset a value cached by one test would be
@@ -312,15 +320,36 @@ describe('completeFirstRun', () => {
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBe('true');
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
+});
 
-  it('declining at sync consent leaves startup auto-sync enabled (PT-4369)', async () => {
-    // "Don't sync yet" ends the wizard through this same entry point (see first-run-shell). It is a
-    // wizard-scoped deferral: it must NOT persist platform.syncOnStartup=false, which would silently
-    // disable startup auto-sync on every later launch with no way back from the wizard.
-    await completeFirstRun();
-    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+describe('declineFirstRunSync', () => {
+  it('withholds automatic sync for the session before persisting completion', async () => {
+    await declineFirstRunSync();
+
+    expect(mockSendCommand).toHaveBeenCalledWith('platform.deferAutomaticSyncForSession');
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
+    // Persisted completion opens every automatic sync gate, so the deferral must be recorded first.
+    expect(mockSendCommand.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSet.mock.invocationCallOrder[0],
+    );
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+  });
+
+  it('persists no sync preference, so the next launch syncs as usual', async () => {
+    // A persisted platform.syncOnStartup=false would disable startup sync on every later launch,
+    // with no way back from the wizard.
+    await declineFirstRunSync();
+
     expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
+  });
+
+  it('completes nothing when the deferral cannot be recorded', async () => {
+    mockSendCommand.mockRejectedValue(new Error('main process unavailable'));
+
+    await expect(declineFirstRunSync()).rejects.toThrow('main process unavailable');
+
+    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunComplete', true);
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).toBeNull();
   });
 });
 

@@ -47,12 +47,8 @@ export const platformSettings: SettingsContribution = [
       },
       'platform.syncOnStartup': {
         label: '%settings_platform_syncOnStartup_label%',
-        description: '%settings_platform_syncOnStartup_description%',
         default: true,
-        // Only the Simple-mode startup path reads this setting; Power mode returns from
-        // performPowerModeStartupSync before ever consulting it (see startup-tasks.ts), so showing
-        // the toggle there would be a control that does nothing.
-        hiddenInterfaceModes: ['power'],
+        isHidden: true,
       },
       'platform.showRegistrationReminderOnStartup': {
         label: '%settings_platform_showRegistrationReminderOnStartup_label%',
