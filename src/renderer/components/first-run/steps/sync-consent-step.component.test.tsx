@@ -20,6 +20,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
+      '%firstRun_button_dontSyncYet%': "Don't sync yet",
+      '%firstRun_button_back%': 'Back',
+      '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
     };
     const result: Record<string, string> = {};
     keys.forEach((k) => {
@@ -50,7 +53,7 @@ describe('SyncConsentStep', () => {
     expect(screen.getByText(/shared projects/i)).toBeInTheDocument();
   });
 
-  it('calls setCanSkip(true) on mount to signal the shell to show a Skip button', async () => {
+  it('calls setCanSkip(true) on mount so the shell supplies the decline action', async () => {
     const setCanSkip = vi.fn();
     render(<SyncConsentStep onNext={vi.fn()} setCanSkip={setCanSkip} onSync={makeOnSync()} />);
     await waitFor(() => expect(setCanSkip).toHaveBeenCalledWith(true));
@@ -64,13 +67,67 @@ describe('SyncConsentStep', () => {
     await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(undefined));
   });
 
-  it('renders a Sync button but no Back or decline buttons of its own', () => {
+  it('calls setManagesOwnFooter(true) on mount so the shell does not render a second footer', () => {
+    const setManagesOwnFooter = vi.fn();
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        setManagesOwnFooter={setManagesOwnFooter}
+        onSync={makeOnSync()}
+      />,
+    );
+    expect(setManagesOwnFooter).toHaveBeenCalledWith(true);
+  });
+
+  it('offers "Don\'t sync yet" beside "Sync" once the shell supplies the decline action', async () => {
+    const onSkip = vi.fn();
+    render(<SyncConsentStep onNext={vi.fn()} onSkip={onSkip} onSync={makeOnSync()} />);
+
+    expect(screen.getByRole('button', { name: /^sync$/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /don't sync yet/i }));
+
+    expect(onSkip).toHaveBeenCalledOnce();
+  });
+
+  it('renders no decline or Back button until the shell supplies those actions', () => {
     render(<SyncConsentStep onNext={vi.fn()} onSync={makeOnSync()} />);
     expect(screen.getByRole('button', { name: /^sync$/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
-    // The decline button belongs to the shell footer. Match its real label — `/skip/i` matched
-    // nothing after the rename, so it could not fail.
     expect(screen.queryByRole('button', { name: /don't sync yet/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
+  });
+
+  it('disables every footer action while the shell is busy finishing the wizard', () => {
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+        onSkip={vi.fn()}
+        isBusy
+        onSync={makeOnSync()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /back/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /don't sync yet/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^sync$/i })).toBeDisabled();
+  });
+
+  it('withdraws "Don\'t sync yet" and announces the sync while it is in flight', async () => {
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        onSkip={vi.fn()}
+        onSync={makeOnSync(() => new Promise(() => {}))}
+      />,
+    );
+    expect(screen.queryByText('Syncing your projects.')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+
+    expect(screen.queryByRole('button', { name: /don't sync yet/i })).not.toBeInTheDocument();
+    expect(await screen.findByText('Syncing your projects.')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
   });
 
   it('calls setCanSkip(false) when sync starts to prevent Skip while in-flight', async () => {
@@ -124,8 +181,8 @@ describe('SyncConsentStep', () => {
     expect(screen.getByRole('button', { name: /^sync$/i })).not.toBeDisabled();
   });
 
-  // Positive control for the PT-4369 first-run sync consent gate: the sync the user explicitly
-  // clicks here is the ONE sync allowed before consent, so exercise the component's real default
+  // Positive control for the first-run sync consent gate: the sync the user explicitly clicks here
+  // is the ONE sync allowed before consent is recorded, so exercise the component's real default
   // sync path (no injected `onSync`). Without this, an over-correction that stopped the wizard's own
   // sync from firing would leave every other test in this file green.
   it('"Sync" button sends the real sync command when onSync is not injected', async () => {

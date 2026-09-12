@@ -10,6 +10,7 @@ import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.compon
 
 vi.mock('@renderer/services/first-run-store', () => ({
   completeFirstRun: vi.fn(),
+  declineFirstRunSync: vi.fn(),
   // Required by IdentifyStep when rendered via DEFAULT_STEP_COMPONENTS
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
@@ -156,8 +157,9 @@ vi.mock('platform-bible-react', () => {
 });
 
 const mockComplete = vi.mocked(store.completeFirstRun);
+const mockDecline = vi.mocked(store.declineFirstRunSync);
 
-/** The shell footer's decline button on the sync-consent step ("%firstRun_button_dontSyncYet%"). */
+/** The sync-consent step's decline button ("%firstRun_button_dontSyncYet%"). */
 const DONT_SYNC_YET = /don't sync yet/i;
 
 // Dummy step components for shell tests — decouples navigation tests from real step content.
@@ -197,10 +199,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   // clearAllMocks clears call history but NOT implementations, and no global mockReset is
   // configured. Later tests set mockRejectedValue / a never-settling mockReturnValue on
-  // completeFirstRun; without this reset those implementations leak into subsequent tests and the
-  // suite passes only by accident of ordering. Reset just this stub (a blanket resetAllMocks would
-  // also wipe the useLocalizedStrings implementation set in the mock factory above).
+  // completeFirstRun and declineFirstRunSync; without this reset those implementations leak into
+  // subsequent tests and the suite passes only by accident of ordering. Reset just these stubs (a
+  // blanket resetAllMocks would also wipe the useLocalizedStrings implementation set in the mock
+  // factory above).
   mockComplete.mockReset();
+  mockDecline.mockReset();
 });
 
 describe('FirstRunShell', () => {
@@ -246,12 +250,12 @@ describe('FirstRunShell', () => {
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
-  it('completes the wizard with no persisted preference when "Don\'t sync yet" is clicked', async () => {
+  it('declines the wizard sync, rather than just completing, when "Don\'t sync yet" is clicked', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    // SyncConsentStep calls setCanSkip(true) on mount; the shell renders its own decline button.
     await userEvent.click(await screen.findByRole('button', { name: DONT_SYNC_YET }));
-    // No arguments: the decline is wizard-scoped, so the store persists nothing beyond completion.
-    expect(mockComplete).toHaveBeenCalledWith();
+    // Completing alone would open every automatic sync gate for the rest of the session.
+    expect(mockDecline).toHaveBeenCalledTimes(1);
+    expect(mockComplete).not.toHaveBeenCalled();
   });
 
   it('shows "Don\'t sync yet" only on syncConsent, not on other numbered steps', async () => {
@@ -372,9 +376,9 @@ describe('FirstRunShell', () => {
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
   });
 
-  it('does not call completeFirstRun twice if onSkip fires twice in one tick (runAction guard)', async () => {
+  it('does not decline twice if onSkip fires twice in one tick (runAction guard)', async () => {
     let done!: () => void;
-    mockComplete.mockImplementation(
+    mockDecline.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
           done = resolve;
@@ -404,17 +408,23 @@ describe('FirstRunShell', () => {
     );
     await userEvent.click(await screen.findByRole('button', { name: /double skip/i }));
     done();
-    await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockDecline).toHaveBeenCalledTimes(1));
   });
 
   it('disables the "Don\'t sync yet" button while an async action is in flight (isBusy guard)', async () => {
     // Never-settling promise keeps isBusy=true indefinitely so the assertion doesn't race.
-    mockComplete.mockReturnValue(new Promise<void>(() => {}));
+    mockDecline.mockReturnValue(new Promise<void>(() => {}));
     render(<FirstRunShell entryStep="syncConsent" />);
-    // SyncConsentStep calls setCanProceed(undefined) so Next is hidden; the decline button is the
-    // only footer button.
     await userEvent.click(await screen.findByRole('button', { name: DONT_SYNC_YET }));
     await waitFor(() => expect(screen.getByRole('button', { name: DONT_SYNC_YET })).toBeDisabled());
+  });
+
+  it('keeps the wizard open and shows the error when declining fails', async () => {
+    mockDecline.mockRejectedValue(new Error('could not defer sync'));
+    render(<FirstRunShell entryStep="syncConsent" />);
+    await userEvent.click(await screen.findByRole('button', { name: DONT_SYNC_YET }));
+    expect(await screen.findByText(/could not defer sync/i)).toBeInTheDocument();
+    expect(mockComplete).not.toHaveBeenCalled();
   });
 
   it('surfaces an error when completeFirstRun throws (syncProgress signals done)', async () => {

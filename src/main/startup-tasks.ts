@@ -8,7 +8,10 @@ import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
-import { isFirstRunComplete } from '@main/first-run-consent.util';
+import {
+  getAutomaticSyncConsent,
+  WITHHELD_SYNC_CONSENT_REASONS,
+} from '@main/first-run-consent.util';
 import {
   RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
   type ScheduledSessionSyncResult,
@@ -298,18 +301,17 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
 
 /**
  * What {@link evaluateSimpleModeSyncGates} decided — and when it decided not to run, why and at
- * which level to report it. `logLevel` is `'info'` for the consent gate so that skip survives the
- * packaged builds' info log level, matching the shutdown and window-close consent skips
- * (`shutdown-tasks.ts`), which support reads to explain a session that did not sync.
+ * which level to report it. `logLevel` is `'info'` for a withheld consent so that skip survives the
+ * packaged builds' info log level, where support reads it to explain a session that did not sync.
  */
 type SimpleModeSyncGateResult =
   | { run: true }
   | { run: false; reason: string; logLevel: 'debug' | 'info' };
 
 /**
- * Evaluates the three settings gates that must all pass before the Simple-mode startup sync fires:
- * `platform.interfaceMode` must still be `'simple'`, `platform.firstRunComplete` must be `true`,
- * and `platform.syncOnStartup` must not be `false`.
+ * Evaluates the three gates that must all pass before the Simple-mode startup sync fires:
+ * `platform.interfaceMode` must still be `'simple'`, the first-run sync consent gate must grant
+ * consent (see {@link getAutomaticSyncConsent}), and `platform.syncOnStartup` must not be `false`.
  *
  * Called twice by {@link performStartupTasksInternal} — once before the readiness wait and again
  * immediately after it, since that wait can park for up to the readiness budget (120 s) and any of
@@ -326,8 +328,8 @@ type SimpleModeSyncGateResult =
  *   Logged as a warning (production-visible even in packaged builds).
  * - A mode that has moved away from `'simple'` (e.g. to `'power'`, mid-wait) is also `run: false` —
  *   this function only ever green-lights the Simple-mode sync.
- * - An unreadable or `false` `platform.firstRunComplete` skips (consent-safe: a fresh user must not
- *   sync before consenting, and an unreadable flag defaults to NOT syncing).
+ * - Withheld consent skips, and fails closed: an unanswered wizard, an unreadable completion flag,
+ *   and a "Don't sync yet" earlier in this session all mean NOT syncing.
  * - `platform.syncOnStartup === false` skips (the user explicitly opted out). An unreadable flag
  *   defaults to PROCEEDING with sync instead (consent-safe the other way: a read failure should not
  *   silently suppress a sync the user never actually declined). Logged as a warning.
@@ -360,14 +362,12 @@ async function evaluateSimpleModeSyncGates(): Promise<SimpleModeSyncGateResult> 
   if (interfaceMode !== 'simple')
     return { run: false, reason: 'interface mode is no longer simple', logLevel: 'debug' };
 
-  // Consent gate (see isFirstRunComplete): no automatic sync until the user has been asked. An
-  // unreadable flag reads as not complete, and warns for itself.
-  if (!(await isFirstRunComplete()))
-    return { run: false, reason: 'first-run sync consent not confirmed', logLevel: 'info' };
+  const consent = await getAutomaticSyncConsent();
+  if (consent !== 'granted')
+    return { run: false, reason: WITHHELD_SYNC_CONSENT_REASONS[consent], logLevel: 'info' };
 
-  // Startup-sync preference: if the user turned off platform.syncOnStartup in Settings, honor that.
-  // On an unreadable flag, default to syncing (consent-safe: the user likely never turned it off —
-  // a read failure here should not silently suppress a legitimate sync).
+  // Startup-sync preference: honor `platform.syncOnStartup === false`. On an unreadable flag,
+  // default to syncing — a read failure should not suppress a sync the user never turned off.
   let syncDisabled = false;
   try {
     syncDisabled = (await settingsService.get('platform.syncOnStartup')) === false;

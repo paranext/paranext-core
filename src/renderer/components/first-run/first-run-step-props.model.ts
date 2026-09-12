@@ -16,7 +16,10 @@ export interface FirstRunStepProps {
   onNext: () => void;
   /** Return to the previous step. Absent on the first step (Language). */
   onBack?: () => void;
-  /** Skip the rest of setup and finish. Present when the current step has called `setCanSkip(true)`. */
+  /**
+   * Decline the current step and finish the wizard — on the sync-consent step, "Don't sync yet".
+   * Present when the current step has called `setCanSkip(true)`.
+   */
   onSkip?: () => void;
   /**
    * Report whether the shell's Next button should be enabled. If not called, the shell's prior
@@ -40,6 +43,12 @@ export interface FirstRunStepProps {
    * button).
    */
   setManagesOwnFooter?: (managesOwnFooter: boolean) => void;
+  /**
+   * Whether the shell is running an async action, such as finishing the wizard. A step that renders
+   * its own footer disables the shell-supplied actions (`onBack`, `onSkip`) while this is `true`,
+   * as the shell's own footer does.
+   */
+  isBusy?: boolean;
   /**
    * Re-register mode: set only when the wizard was raised by the background registration re-check
    * for an already-onboarded user (not fresh onboarding). Steps use it to surface re-register-only

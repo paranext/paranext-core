@@ -1,4 +1,5 @@
 import { settingsService } from '@shared/services/settings.service';
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
 import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
@@ -373,11 +374,9 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
 }
 
 /**
- * Finish the wizard: persist completion, clear the active marker, reveal the app.
- *
- * Persists no other preference. In particular, declining at the sync-consent step ("Don't sync
- * yet") is wizard-scoped: it defers only this session's sync, and startup auto-sync
- * (`platform.syncOnStartup`) stays on for later launches.
+ * Finish the wizard: persist completion, clear the active marker, reveal the app. Persists no sync
+ * preference. Persisted completion opens the automatic sync gates, so declining the wizard's sync
+ * goes through {@link declineFirstRunSync} instead.
  */
 export async function completeFirstRun(): Promise<void> {
   // Unlike continueWithoutRegistration, this doesn't bump resolutionGeneration: completeFirstRun is
@@ -390,6 +389,20 @@ export async function completeFirstRun(): Promise<void> {
   }
   await markFirstRunComplete();
   setStatus({ kind: 'app' });
+}
+
+/**
+ * Finish the wizard by declining its sync ("Don't sync yet"): withhold automatic sync for the rest
+ * of this app session, then complete as {@link completeFirstRun} does. Persists no sync preference,
+ * so the next launch syncs as usual.
+ *
+ * The deferral is recorded before completion is persisted, because persisted completion is what
+ * opens the automatic sync gates. If the deferral cannot be recorded this throws and completes
+ * nothing, so the wizard stays open rather than finishing with every gate open.
+ */
+export async function declineFirstRunSync(): Promise<void> {
+  await sendCommand('platform.deferAutomaticSyncForSession');
+  await completeFirstRun();
 }
 
 /**

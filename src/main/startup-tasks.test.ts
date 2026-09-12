@@ -125,7 +125,7 @@ describe('performStartupTasks', () => {
   it('still fires the power-mode startup sync when first run is not complete', async () => {
     // Regression guard: do NOT hoist the gate above the `interfaceMode === 'power'` early return.
     // It would look symmetric and would permanently, silently disable Power mode's scheduled startup
-    // sync, with no UI to turn it back on (see isFirstRunComplete). Needs the per-setting
+    // sync, with no UI to turn it back on (see getAutomaticSyncConsent). Needs the per-setting
     // stub: the blanket mockResolvedValue('power') the other Power tests use answers the
     // firstRunComplete read with 'power', which is not `false` and so cannot express this case.
     stubSettings({ mode: 'power', firstRunComplete: false });

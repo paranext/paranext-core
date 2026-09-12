@@ -15,6 +15,7 @@ import {
   startWindowCloseTasksWithoutWaiting,
 } from './shutdown-tasks';
 import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
+import { deferAutomaticSyncForSession, resetAutomaticSyncDeferral } from './first-run-consent.util';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -74,6 +75,7 @@ const stubSettings = createSettingsStub(mockSettingsGet, {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetAutomaticSyncDeferral();
   mockRequestNoRetry.mockResolvedValue(undefined);
 });
 
@@ -436,7 +438,7 @@ describe('performShutdownTasks', () => {
     }
 
     it('does NOT S/R on shutdown while the first-run wizard is still unfinished', async () => {
-      // Reachable mid-wizard: the Identify step restarts the app (see isFirstRunComplete).
+      // Reachable mid-wizard: the Identify step restarts the app.
       stubSettings({ mode: 'simple', firstRunComplete: false });
       stubWritableEditorOpen();
 
@@ -446,7 +448,7 @@ describe('performShutdownTasks', () => {
         expect.stringContaining('sendReceiveProjects'),
       );
       // The skip must stay distinguishable from "nothing was open" — the whole reason
-      // skipped-consent-not-confirmed exists as its own outcome rather than reusing skipped.
+      // skipped-consent-unconfirmed exists as its own outcome rather than reusing skipped.
       expect(mockLoggerInfo).toHaveBeenCalledWith(
         expect.stringContaining('first-run sync consent not confirmed'),
       );
@@ -494,8 +496,25 @@ describe('performShutdownTasks', () => {
       );
     });
 
+    it('does NOT S/R on shutdown after the user chose "Don\'t sync yet" this session', async () => {
+      // Declining also marks the wizard complete, so only the session deferral can stop this S/R.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      deferAutomaticSyncForSession();
+      stubWritableEditorOpen();
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
+      expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+        expect.stringContaining('sendReceiveProjects'),
+      );
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringContaining('automatic sync deferred for this session'),
+      );
+    });
+
     it('leaves the power-mode shutdown sync ungated by the consent setting', async () => {
-      // The gate is Simple-mode only, on purpose (see isFirstRunComplete): the setting is never
+      // The gate is Simple-mode only, on purpose (see getAutomaticSyncConsent): the setting is never
       // written in Power mode, so gating there would permanently kill scheduled sync.
       stubSettings({ mode: 'power', firstRunComplete: false });
 
@@ -754,6 +773,19 @@ describe('performWindowCloseTasks', () => {
     expect(mockRequestNoRetry).toHaveBeenCalledWith(
       expect.stringContaining('sendReceiveProjects'),
       ['p1'],
+    );
+  });
+
+  it('does NOT sync a closing window after the user chose "Don\'t sync yet" this session', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true });
+    deferAutomaticSyncForSession();
+    mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
+
+    await performWindowCloseTasks('2');
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining('automatic sync deferred for this session'),
     );
   });
 
