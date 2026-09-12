@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { forwardRef, ReactNode, useImperativeHandle } from 'react';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { ContentZoomAreaProvider } from '@/components/advanced/content-zoom-root.component';
 import userEvent from '@testing-library/user-event';
@@ -17,38 +17,13 @@ import FootnoteEditor, {
   FootnoteEditorMarkerPalette,
   markerMenuItemToPaletteItem,
 } from './footnote-editor.component';
+import { installPopoverJsdomStubs } from './footnote-editor.test-harness';
 import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditorLocalizedStrings,
 } from './footnote-editor.types';
 
-// cmdk (Command/CommandInput, used by the inline MarkerMenu popover) instantiates a
-// ResizeObserver on mount and schedules scrollTo; jsdom ships neither. No-op stubs are sufficient
-// since these tests never open that popover. scrollIntoView is shimmed repo-wide in vitest.setup.ts.
-class NoopResizeObserver implements ResizeObserver {
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
-}
-
-beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (typeof Element.prototype.scrollTo !== 'function') {
-    Element.prototype.scrollTo = () => {};
-  }
-});
+installPopoverJsdomStubs();
 
 /**
  * Mutable holder for the mocked `EditorRef` the stubbed `Editorial` below exposes via
