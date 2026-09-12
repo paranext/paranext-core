@@ -58,11 +58,11 @@ const STRINGS = {
   '%webView_modelTextPanel_settingsUnavailable%':
     "Couldn't load your model text. It will appear once it's available.",
   '%webView_modelTextPanel_noProject%': 'No project selected.',
-  '%webView_modelTextPanel_noProject_emptyState_prompt%': 'Choose a freely available text to read.',
-  '%webView_modelTextPanel_noProject_pick%': 'Choose a text',
-  '%webView_modelTextPanel_noProject_registrationRequired%':
+  '%webView_resourcePanel_noProject_emptyState_prompt%': 'Choose a freely available text to read.',
+  '%webView_resourcePanel_noProject_pick%': 'Choose a text',
+  '%webView_resourcePanel_noProject_registrationRequired%':
     'Register Paratext to browse freely available texts.',
-  '%webView_modelTextPanel_noProject_register%': 'Register Paratext',
+  '%webView_resourcePanel_noProject_register%': 'Register Paratext',
   '%webView_modelTextPanel_noProject_unknownResource%': 'The selected text could not be found.',
   '%webView_resourcePanel_textUnavailable%': 'This text could not be loaded.',
   '%webView_modelTextPanel_emptyState_moreInfo%': 'More info',

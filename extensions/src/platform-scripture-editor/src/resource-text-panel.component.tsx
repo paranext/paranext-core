@@ -560,7 +560,7 @@ export function ResourceTextPanel({
         emptyPrompt={localize(
           localizedStrings,
           isFreeResourceEntryPoint
-            ? '%webView_resourcePanel_bibleTexts_noProject_emptyState_prompt%'
+            ? '%webView_resourcePanel_noProject_emptyState_prompt%'
             : emptyStatePromptKey,
         )}
         moreInfo={
@@ -590,16 +590,13 @@ export function ResourceTextPanel({
         )}
         registrationRequiredMessage={localize(
           localizedStrings,
-          '%webView_resourcePanel_bibleTexts_noProject_registrationRequired%',
+          '%webView_resourcePanel_noProject_registrationRequired%',
         )}
-        registerLabel={localize(
-          localizedStrings,
-          '%webView_resourcePanel_bibleTexts_noProject_register%',
-        )}
+        registerLabel={localize(localizedStrings, '%webView_resourcePanel_noProject_register%')}
         loadingLabel={localize(localizedStrings, '%webView_resourcePanel_loading%')}
         pickLabel={localize(
           localizedStrings,
-          isFreeResourceEntryPoint ? '%webView_resourcePanel_bibleTexts_noProject_pick%' : pickButtonKey,
+          isFreeResourceEntryPoint ? '%webView_resourcePanel_noProject_pick%' : pickButtonKey,
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onPick={() => onShowResourcePicker()}

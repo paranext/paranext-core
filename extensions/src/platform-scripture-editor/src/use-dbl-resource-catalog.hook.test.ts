@@ -101,7 +101,9 @@ describe('useDblResourceCatalog', () => {
     const { result } = renderHook(() => useDblResourceCatalog());
 
     await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextRegistration.doesUserHaveValidRegistration');
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextRegistration.doesUserHaveValidRegistration',
+    );
     expect(result.current.hasRegistrationError).toBe(false);
   });
 

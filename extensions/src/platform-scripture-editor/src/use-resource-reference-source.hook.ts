@@ -103,11 +103,9 @@ export function useResourceReferenceSource(
   // #region App-scoped source
 
   // One subscription, for the setting this panel actually reads. Both keys are declared
-  // `ResourceReferenceList`, so indexing by the caller's setting name keeps a concrete type — an
-  // earlier version read both unconditionally on the belief that it would not, which cost every
-  // panel instance a second live PAPI subscription and a second `get()` round trip on every
-  // app-wide settings write. Simple mode mounts three of these panels, so that was six
-  // subscriptions where three do, and all six are waste whenever a project is open.
+  // `ResourceReferenceList`, so indexing by the caller's setting name keeps a concrete type; reading
+  // both would cost every panel instance a second live PAPI subscription and a second `get()` round
+  // trip on every app-wide settings write.
   const [storedList, setStoredList, , isLoadingStored] = useSetting(
     NO_PROJECT_SETTING_NAMES[settingName],
     DEFAULT_RESOURCE_REFERENCE_LIST,
@@ -167,12 +165,12 @@ export function useResourceReferenceSource(
         // future pick — permanently, and invisibly, since the read path relabels it for display and
         // this setting is hidden with no repair UI.
         dataVersion: CURRENT_DATA_VERSION,
-        // Written through unfiltered, deliberately. Filtering here destroyed any stored entry the
-        // allowlist did not currently cover: `selectTextConnection` round-trips the whole list, so
-        // one unrelated pick permanently dropped a resource that a later, wider allowlist would
-        // have restored. The exclusion guarantee does not need this — the picker is restricted, the
-        // read path filters what is shown, and `noProjectReferenceListValidator` refuses newly
-        // ADDED non-free references while letting stored ones survive.
+        // Written through unfiltered, deliberately. `selectTextConnection` round-trips the whole
+        // list, so filtering here would let one unrelated pick permanently drop a stored resource
+        // that a later, wider allowlist would restore. The exclusion guarantee does not need it —
+        // the picker is restricted, the read path filters what is shown, and
+        // `noProjectReferenceListValidator` refuses newly ADDED non-free references while letting
+        // stored ones survive.
         items: Array.isArray(list.items) ? list.items : [],
       });
     },
