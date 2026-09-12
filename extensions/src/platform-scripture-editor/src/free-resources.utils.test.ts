@@ -11,7 +11,6 @@ vi.mock('./free-resources.const', () => ({
 }));
 
 const {
-  FREE_RESOURCE_IDS,
   HAS_FREE_RESOURCES,
   filterFreeReferences,
   freeResourcePickerOptions,
@@ -74,12 +73,6 @@ describe('filterFreeReferences', () => {
   });
 });
 
-describe('FREE_RESOURCE_IDS', () => {
-  it('exposes the curated list as-is, in its original case', () => {
-    expect([...FREE_RESOURCE_IDS]).toEqual(['AAAA1111BBBB2222', 'cccc3333dddd4444']);
-  });
-});
-
 describe('HAS_FREE_RESOURCES', () => {
   it('is true while the allowlist has entries', () => {
     expect(HAS_FREE_RESOURCES).toBe(true);
@@ -89,7 +82,8 @@ describe('HAS_FREE_RESOURCES', () => {
 describe('freeResourcePickerOptions', () => {
   it('restricts the picker to the allowlist at the free-resource entry point', () => {
     expect(freeResourcePickerOptions(true, 'Only free texts.')).toEqual({
-      allowedResourceIds: FREE_RESOURCE_IDS,
+      // The curated list as-is, in its original case: the picker matches case-insensitively itself.
+      allowedResourceIds: ['AAAA1111BBBB2222', 'cccc3333dddd4444'],
       notice: 'Only free texts.',
     });
   });

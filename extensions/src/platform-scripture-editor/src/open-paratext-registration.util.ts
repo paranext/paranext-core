@@ -9,8 +9,8 @@ import { getErrorMessage } from 'platform-bible-utils';
  * uses for this failure (`platform-get-resources`' `home.web-view.tsx`).
  *
  * Kept out of `free-resources.utils.ts` deliberately: that module is also imported by
- * `no-project-reference-list.validator.ts`, which runs in the extension host, where
- * `@papi/frontend` does not exist (see `extension-host-import-boundary.test.ts`).
+ * `no-project-reference-list.utils.ts`, which runs in the extension host, where `@papi/frontend`
+ * does not exist (see `extension-host-import-boundary.test.ts`).
  *
  * Rejections are logged rather than surfaced: this is already the error state, and a second failure
  * message stacked on top of it tells the user nothing they can act on.

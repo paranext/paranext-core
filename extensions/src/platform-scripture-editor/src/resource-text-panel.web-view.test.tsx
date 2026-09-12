@@ -49,6 +49,9 @@ vi.mock('@papi/frontend', () => ({
     commands: {
       sendCommand: vi.fn(() => Promise.resolve([])),
     },
+    // Answers both lookups these renders make: the copy limit's interface check on the resource, and
+    // `useResolvedContainerProjectId` confirming the container project exists — so the saved project
+    // id is kept, which is the state these renders assume.
     projectLookup: {
       getMetadataForProject: vi.fn(async () => ({
         projectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.CopyLimit'],
@@ -142,7 +145,9 @@ vi.mock('./resource-text-panel.component', async (importOriginal) => {
 });
 
 // Local hooks — mock at module boundaries so tests control the data the component sees
-vi.mock('./use-effective-resource-reference-list.hook', () => ({
+// Partial: `useResourceReferenceSource` also reads this module's pure `mergeResourceReferenceLists`.
+vi.mock('./use-effective-resource-reference-list.hook', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./use-effective-resource-reference-list.hook')>()),
   useEffectiveResourceReferenceList: (...args: unknown[]) =>
     mockUseEffectiveResourceReferenceList(...args),
   default: (...args: unknown[]) => mockUseEffectiveResourceReferenceList(...args),
