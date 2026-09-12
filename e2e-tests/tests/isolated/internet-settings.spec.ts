@@ -4,7 +4,8 @@
  * Covers:
  *
  * - Opening via profile popover
- * - Radio row visibility (2 active, 3 coming-soon with badges) and hover-revealed descriptions
+ * - Radio row visibility (2 active, 3 coming-soon with badges) and descriptions revealed from each
+ *   option's info button
  * - Descriptions staying shut for a programmatic focus, which the panel takes on load
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
@@ -24,6 +25,7 @@ import {
   openInternetSettings,
   openInternetSettingsPanel,
   openUserProfilePopover,
+  optionInfoButton,
   saveAndRestartButton,
   selectTheOtherConnectivityOption,
   serverTypeRadio,
@@ -76,7 +78,7 @@ test.describe('Internet & Connectivity settings', () => {
     ).toBeEnabled();
 
     // Each description still reaches the panel, but only as the screen-reader copy — never as body
-    // copy, and no tooltip is open until the pointer settles on a row. (`sr-only` is a 1x1 clipped
+    // copy, and no tooltip is open until an info button is used. (`sr-only` is a 1x1 clipped
     // box that Playwright counts as visible, so assert on element type rather than visibility.)
     const enabledDescription = /Allows Paratext to use the internet for all services/;
     await expect(frame.getByText(enabledDescription)).toHaveCount(1);
@@ -99,12 +101,9 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(frame.getByText(/Disabled options are planned for future updates/)).toHaveCount(0);
   });
 
-  // The panel focuses the checked radio once its fetch resolves, and Radix opens a tooltip on any
-  // focus — so a description would pop open every time the panel loads unless that focus is told
-  // apart from a keyboard one. This has to be asserted in a real browser: the distinction is
-  // Chromium behaviour, and the obvious `:focus-visible` guard does not make it (Chromium reports
-  // `:focus-visible` as true for a programmatic focus in a document that has seen no pointer input,
-  // which is this panel's iframe — the click that opened it landed in the host document).
+  // The panel focuses the checked radio once its fetch resolves. Descriptions open only from each
+  // option's info button, so that load-time focus must reveal nothing — asserted in a real browser,
+  // since how Radix and Chromium treat a programmatic focus is exactly what jsdom cannot reproduce.
   test('a programmatic focus on a radio reveals no tooltip', async ({ mainPage }) => {
     const frame = await openInternetSettingsPanel(mainPage);
     await waitForSettingsLoaded(frame);
@@ -121,15 +120,16 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(descriptionTooltip(frame)).toHaveCount(0);
   });
 
-  test('hovering a row reveals its description in a tooltip', async ({ mainPage }) => {
+  test("hovering an option's info button reveals its description in a tooltip", async ({
+    mainPage,
+  }) => {
     const frame = await openInternetSettingsPanel(mainPage);
     await waitForSettingsLoaded(frame);
 
-    // Nothing is revealed until the pointer settles on a row.
+    // Nothing is revealed until the pointer settles on an info button.
     await expect(descriptionTooltip(frame)).toHaveCount(0);
 
-    // The whole row is the hover target, so hovering the radio button is enough.
-    await internetUseRadio(frame, 'Unrestricted').hover();
+    await optionInfoButton(frame, /Allows Paratext to use the internet for all services/).hover();
 
     // toBeVisible, not just present: this is the assertion that would catch the tooltip painting
     // behind a higher-stacking ancestor.

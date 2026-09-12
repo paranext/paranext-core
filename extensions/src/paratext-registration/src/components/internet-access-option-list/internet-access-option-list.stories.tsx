@@ -35,7 +35,7 @@ function createDecorator(initialValue: InternetUse) {
   };
 }
 
-/** Option 1 (Unrestricted) selected — active row, description text visible. */
+/** Option 1 (Unrestricted) selected — descriptions open from each option's info button. */
 export const Unrestricted: Story = {
   decorators: [createDecorator('Enabled')],
 };

@@ -54,8 +54,8 @@ export const WizardActive: Story = { args: { status: { kind: 'wizard', step: 'la
  *
  * The gate is an opaque dialog at `Z_INDEX_FIRST_RUN` (700) while tooltips portal to
  * `document.body` at `Z_INDEX_TOOLTIP` (550), so without `TooltipPortalContainerProvider` a tooltip
- * opened here would paint _behind_ the gate and be invisible. Hover any option row to confirm it
- * does not.
+ * opened here would paint _behind_ the gate and be invisible. Hover any option's info button to
+ * confirm it does not.
  *
  * Uses the shell's `stepComponents` override rather than the real step, because the real one waits
  * on a PAPI data provider that has no backend in Storybook and would show only a spinner.
