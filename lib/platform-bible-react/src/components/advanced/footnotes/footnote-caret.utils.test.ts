@@ -53,10 +53,11 @@ describe('getCaretPositionFromClick', () => {
     expect(getCaretPositionFromClick(10, 10, row)).toBe('end');
   });
 
-  // The editor renders USFM markers as Lexical decorators inside `contenteditable="false"`
-  // wrappers, which `createNoteBodyTextNodeFilter` excludes from the caret origin. The read-only
-  // row must exclude its own `.marker` spans to match, or every offset captured with markers shown
-  // lands early in the editor by the length of the marker text preceding the click.
+  // A marker is display, not content, so it is outside the offset origin FootnoteCaretPosition
+  // defines — and the editor excludes its own marker rendering from that same origin
+  // (`EditorRef.selectNoteTextOffset`). The read-only row must exclude its `.marker` spans to
+  // match, or every offset captured with markers shown resolves off by the length of the marker
+  // text preceding the click.
   it('excludes marker text from the offset so it matches the editor origin', () => {
     const row = makeRow(
       `<p class="notetext">${markedRun('fr', '1.11')}${markedRun('ft', 'abc')}</p>`,
