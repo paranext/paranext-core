@@ -20,6 +20,7 @@ import { LocationUsfmAndUsj } from './usj-reader-writer-test-data/test-data.mode
 import { testUSFM2SaCh1Locations } from './usj-reader-writer-test-data/testUSFM-2SA-1-locations';
 import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew-1-and-2-locations';
 import {
+  NO_BOOK_ID,
   UsfmScrRefVerseLocation,
   UsfmVerseRefVerseLocation,
   UsjAttributeKeyLocation,
@@ -2113,16 +2114,18 @@ describe('Marker problems are reported once each, not once per occurrence', () =
     expect(reports.some((report) => report.includes('scr'))).toBe(true);
   });
 
-  test('names the book when warning that the markers map version does not match', () => {
+  test('names the book, but not the document, when warning that the markers map version does not match', () => {
     // Several reader-writers can be alive at once, so the versions alone would not say which
     // document mismatched. `USJ_VERSION` is 3.1, which these 3.0 options deliberately disagree
     // with.
+    const textOnlyInTheDocument = 'text found nowhere but this document';
     const usjForMark: Usj = {
       type: USJ_TYPE,
       version: USJ_VERSION,
       content: [
         { type: 'book', marker: 'id', code: 'MRK' },
         { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'para', marker: 'p', content: [textOnlyInTheDocument] },
       ],
     };
 
@@ -2130,7 +2133,25 @@ describe('Marker problems are reported once each, not once per occurrence', () =
       new UsjReaderWriter(usjForMark, usjReaderWriterOptionsParatext3_0).toUsfm();
     });
 
-    expect(warn.some((message) => message.includes('USJ for book MRK'))).toBe(true);
+    const versionWarning = warn.find((message) => message.includes('USJ for book MRK'));
+    expect(versionWarning).toBeDefined();
+    // Callers pair a whole resource with one markers map, so a warning that carried the document
+    // would be megabytes per line.
+    expect(versionWarning).not.toContain(textOnlyInTheDocument);
+  });
+
+  test('says the book is unknown when warning about a document that names no book', () => {
+    const booklessUsj: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [{ type: 'chapter', marker: 'c', number: '1' }],
+    };
+
+    const { warn } = collectConsoleWhile(() => {
+      new UsjReaderWriter(booklessUsj, usjReaderWriterOptionsParatext3_0).toUsfm();
+    });
+
+    expect(warn.some((message) => message.includes(`USJ for book ${NO_BOOK_ID} has`))).toBe(true);
   });
 
   test('reports marker problems at debug level, not as warnings', () => {
@@ -2168,6 +2189,61 @@ describe('Marker problems are reported once each, not once per occurrence', () =
     }).warn;
 
     expect(fewReports.some((report) => report.includes('existing number'))).toBe(true);
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+
+  test('reports an unparseable chapter number once however many times it repeats', () => {
+    const usjWithUnparseableChapters = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: Array.from(
+        { length: occurrences },
+        (): MarkerObject => ({ type: 'chapter', marker: 'c', number: 'one' }),
+      ),
+    });
+
+    const fewReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(
+        usjWithUnparseableChapters(10),
+        usjReaderWriterOptionsParatext3_0,
+      ).toUsfm();
+    }).warn;
+    const manyReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(
+        usjWithUnparseableChapters(200),
+        usjReaderWriterOptionsParatext3_0,
+      ).toUsfm();
+    }).warn;
+
+    expect(fewReports.some((report) => report.includes('could not parse chapter number'))).toBe(
+      true,
+    );
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+
+  test('reports a verse number with no digits once however many times it repeats', () => {
+    const usjWithDigitlessVerses = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        ...Array.from(
+          { length: occurrences },
+          (): MarkerObject => ({ type: 'verse', marker: 'v', number: 'one' }),
+        ),
+      ],
+    });
+
+    const fewReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjWithDigitlessVerses(10), usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).warn;
+    const manyReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjWithDigitlessVerses(200), usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).warn;
+
+    expect(
+      fewReports.some((report) => report.includes('could not find starting verse number')),
+    ).toBe(true);
     expect(manyReports).toHaveLength(fewReports.length);
   });
 

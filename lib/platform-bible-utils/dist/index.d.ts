@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -6262,21 +6262,17 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private indicesInUsfmByVerseRefInternal;
 	private usfmInternal;
 	/**
-	 * Messages already reported by {@link reportProblemOnce}, so a problem is reported once per
-	 * instance rather than once per occurrence. A caller that builds a new instance per user action
-	 * reports each problem again per action.
+	 * Messages already reported by {@link reportProblemOnce}, so each distinct problem is reported
+	 * once per instance rather than once per occurrence. A commentary or UBS Handbook repeats markers
+	 * this class's markers map does not carry tens of thousands of times per book, and a web view's
+	 * console calls cross IPC to the main process's log file, so reporting per occurrence costs work
+	 * proportional to the document.
 	 *
-	 * A commentary or UBS Handbook can repeat one marker this class's markers map does not carry tens
-	 * of thousands of times per book, and a web view's console calls cross IPC to the main process's
-	 * log file — so reporting per occurrence costs work proportional to the document rather than to
-	 * the number of distinct problems in it. Deliberately not reset by {@link usjChanged}: these
-	 * describe the marker, not where it appeared.
-	 *
-	 * Messages are keyed by their full text, so how much this saves depends on what the message
-	 * names. The marker reports name only the marker, so they collapse to one line per distinct
-	 * marker however large the document. The chapter and verse reports also name the position they
-	 * were found at, so they collapse only where that position repeats — a document with many
-	 * distinct malformed verse numbers still reports each one, and holds each in this set.
+	 * Keyed by full message text, so a report collapses only as far as its text repeats: the marker
+	 * reports name only the marker, while the chapter and verse reports also name a position. The set
+	 * lives as long as the instance, so a caller that builds a new instance per action reports each
+	 * problem again per action. Deliberately not reset by {@link usjChanged}: these describe the
+	 * marker, not where it appeared.
 	 */
 	private readonly reportedProblems;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
@@ -6286,9 +6282,8 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * The book this document is for, for naming it in a log message.
 	 *
 	 * Reads the book marker straight off the top level of the content already in memory and stops at
-	 * the first one, so it costs nothing beyond that scan and does not walk into nested content.
-	 * Only call it on a path that is about to log — there is no reason to look for the book
-	 * otherwise.
+	 * the first one, so it costs nothing beyond that scan and does not walk into nested content. Only
+	 * call it on a path that is about to log — there is no reason to look for the book otherwise.
 	 *
 	 * @returns The book code, or {@link NO_BOOK_ID} if the document does not carry one
 	 */
