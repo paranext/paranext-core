@@ -18,29 +18,11 @@ import { $getRoot, $isElementNode, LexicalEditor, LexicalNode } from 'lexical';
 import {
   caretIsInsideNote,
   editableView,
+  installPopoverJsdomStubs,
   renderPopoverAndWaitForInit,
 } from './footnote-editor.test-harness';
 
-// jsdom doesn't implement `getBoundingClientRect` on `Range`; moving the caret can make
-// Lexical's post-commit scroll-into-view read a Range rect. Stub it (a zero rect nothing
-// here asserts on) — same as the engine's own markerEdit tests.
-if (typeof Range.prototype.getBoundingClientRect !== 'function') {
-  Range.prototype.getBoundingClientRect = function getBoundingClientRect(): DOMRect {
-    return {
-      x: 0,
-      y: 0,
-      width: 0,
-      height: 0,
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: 0,
-      toJSON() {
-        return this;
-      },
-    };
-  };
-}
+installPopoverJsdomStubs();
 
 /**
  * Parks the DOM caret at the wrapper-para start and focuses the editor — the exact state Radix's

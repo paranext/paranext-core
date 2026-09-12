@@ -15,13 +15,15 @@ import type { DeltaOpInsertNoteEmbed } from '@eten-tech-foundation/platform-edit
 import {
   CARET_IN_NOTE_TEXT,
   caretAncestry,
+  editableView,
   installPopoverJsdomStubs,
+  REAL_EDITOR_TEST_TIMEOUT_MS,
   renderPopoverAndWaitForInit,
+  settle,
 } from './footnote-editor.test-harness';
 
 installPopoverJsdomStubs();
-
-const editableView = { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } as const;
+vi.setConfig({ testTimeout: REAL_EDITOR_TEST_TIMEOUT_MS });
 
 type OnChange = (noteOps: DeltaOpInsertNoteEmbed[]) => void;
 
@@ -39,17 +41,9 @@ async function pickHiddenCaller() {
   await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
   // Choosing an item also CLOSES the menu, and the close is what commits the selection.
   await user.click(screen.getByRole('menuitemcheckbox', { name: /hidden/i }));
-  await new Promise((resolve) => {
-    setTimeout(resolve, 50);
-  });
+  await settle();
   return { onChange };
 }
-
-// Vitest's 5s default is too tight for this file's `userEvent`-driven Radix menu interactions on a
-// Windows CI worker, where the `unit` project runs alongside the Playwright-backed `storybook`
-// project and a single click can take seconds. Raised here rather than for the whole project so a
-// genuinely hanging test elsewhere still fails fast.
-vi.setConfig({ testTimeout: 20_000 });
 
 describe('footnote caller dropdown', () => {
   it('reports the caller the user picked, exactly once', async () => {
@@ -86,9 +80,7 @@ describe('footnote caller dropdown', () => {
 
     await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
     await user.click(screen.getByRole('menuitemcheckbox', { name: /hidden/i }));
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await settle();
 
     expect(caretAncestry(lexical)).toEqual(CARET_IN_NOTE_TEXT);
     expect(document.activeElement).toBe(editorInput);
@@ -102,9 +94,7 @@ describe('footnote caller dropdown', () => {
 
     await user.click(trigger);
     await user.keyboard('{Escape}');
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await settle();
 
     // Nothing was committed, so the user keeps their place in the toolbar.
     expect(document.activeElement).toBe(trigger);
@@ -132,9 +122,7 @@ async function commitCustomCallerByClickingTheCheck(caller: string) {
   await user.type(screen.getByRole('textbox'), caller);
   // The second click is on the check of an already-selected row — the confirmation.
   await user.click(customRow);
-  await new Promise((resolve) => {
-    setTimeout(resolve, 50);
-  });
+  await settle();
   return { onChange, user };
 }
 
@@ -185,10 +173,34 @@ describe('footnote caller dropdown, custom caller', () => {
     await user.clear(screen.getByRole('textbox'));
     await user.type(screen.getByRole('textbox'), '#');
     await user.keyboard('{Enter}');
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await settle();
 
     expect(reportedCallers(onChange)).toEqual(['#']);
+  });
+
+  it('discards the typed caller on Escape, leaving the note and the menu as they were', async () => {
+    // Escape is a cancel. Unlike Enter and the row check it must not apply what was typed, and the
+    // abandoned choice must not linger to be committed by the next close.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onChange: MockedFunction<OnChange> = vi.fn();
+    await renderPopoverAndWaitForInit(editableView, { onChange });
+    onChange.mockClear();
+    const trigger = screen.getByRole('button', { name: /callerDropdown/i });
+
+    await user.click(trigger);
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /custom/i }));
+    await user.clear(screen.getByRole('textbox'));
+    await user.type(screen.getByRole('textbox'), '%');
+    await user.keyboard('{Escape}');
+    await settle();
+
+    expect(reportedCallers(onChange)).toEqual([]);
+    expect(document.activeElement).toBe(trigger);
+
+    await user.click(trigger);
+    expect(screen.getByRole('menuitemcheckbox', { name: /generated/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
   });
 });
