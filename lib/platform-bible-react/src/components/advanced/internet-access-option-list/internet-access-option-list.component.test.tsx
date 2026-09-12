@@ -68,13 +68,18 @@ const ROWS: [label: string, description: string][] = [
   ['Configure proxy sentinel', 'Desc Proxy sentinel'],
 ];
 
+/** A row's info button, found by the description it carries as its accessible name. */
+function infoButtonFor(description: string) {
+  return screen.getByRole('button', { name: description });
+}
+
 describe('InternetAccessOptionList', () => {
   test('renders all 5 option labels', () => {
     renderList();
     ROWS.forEach(([label]) => expect(screen.getByLabelText(label)).toBeInTheDocument());
   });
 
-  // The descriptions moved out of always-visible <p>s and into hover tooltips. Assertions here are
+  // Descriptions live in tooltips, not in always-visible <p>s. Assertions here are
   // structural rather than visibility-based: vitest loads no stylesheet, so `tw:sr-only` computes
   // to nothing and toBeVisible() would pass for anything in the DOM. The "is it actually hidden
   // from sighted users" check lives in the Playwright spec, where real CSS applies.
@@ -100,43 +105,42 @@ describe('InternetAccessOptionList', () => {
     });
   });
 
+  // The info button sits beside the label, not inside it, precisely so this holds.
   test('the description is not part of the radio accessible name', () => {
     renderList();
     expect(screen.getByLabelText('Unrestricted')).toHaveAccessibleName('Unrestricted');
   });
 
-  // Without a visible marker, nothing on the row hints that a description exists and users who
-  // click straight through never see one. Decorative, so it must stay out of the a11y tree.
-  test('every row shows an info affordance, hidden from assistive tech', () => {
-    const { container } = renderList();
-    const icons = container.querySelectorAll('svg.lucide-info');
-    expect(icons).toHaveLength(ROWS.length);
-    icons.forEach((icon) => expect(icon).toHaveAttribute('aria-hidden', 'true'));
+  // Without a visible marker, nothing on a row hints that a description exists. It is a real button
+  // rather than a decorative icon so every description is reachable by keyboard — including on the
+  // coming-soon rows, whose disabled radios never take focus.
+  test('every row, including the coming-soon ones, has an info button named by its description', () => {
+    renderList();
+    ROWS.forEach(([, description]) => expect(infoButtonFor(description)).toBeEnabled());
+  });
+
+  // The description explains the option rather than being part of the setting, so loading or
+  // saving the setting must not take it away.
+  test('info buttons stay usable while the list is disabled', () => {
+    renderList({ disabled: true });
+    ROWS.forEach(([, description]) => expect(infoButtonFor(description)).toBeEnabled());
   });
 
   const visibleTooltips = queryVisibleTooltips;
 
-  function rowFor(label: string) {
-    const row = screen.getByLabelText(label).closest('[data-slot="tooltip-trigger"]');
-    if (!row) throw new Error(`expected the "${label}" row to be the tooltip trigger`);
-    return row;
-  }
-
-  test('hovering anywhere on a row reveals its description in a tooltip', async () => {
+  test("hovering a row's info button reveals its description in a tooltip", async () => {
     const user = userEvent.setup();
     renderList();
     expect(visibleTooltips()).toHaveLength(0);
 
-    // Hover the row (the trigger wrapping both the radio and the label), not the radio itself.
-    await user.hover(rowFor('Unrestricted'));
+    await user.hover(infoButtonFor('Desc Enabled sentinel'));
 
     await waitFor(() => expect(visibleTooltips()).toHaveLength(1));
     expect(visibleTooltips()[0]).toHaveTextContent('Desc Enabled sentinel');
   });
 
-  // The standalone panel focuses the checked radio when its fetch resolves. Radix opens a tooltip on
-  // any focus, so without the trigger's focus guard that would pop a description open unprompted
-  // every time the panel loads.
+  // The standalone panel focuses the checked radio when its fetch resolves. Descriptions open only
+  // from the info buttons, so that load-time focus must not pop one open.
   test('programmatic focus on a radio does not reveal a tooltip', async () => {
     renderList({ value: 'VpnRequired' });
 
@@ -145,32 +149,22 @@ describe('InternetAccessOptionList', () => {
     await waitFor(() => expect(visibleTooltips()).toHaveLength(0));
   });
 
-  // The other half of the guard: a focus the user actually drove must still reveal the description.
-  // Both directions are assertable here because the trigger keys off the last input modality rather
-  // than `:focus-visible`, which jsdom always reports as false.
-  test('tabbing to a radio reveals its tooltip', async () => {
+  test("tabbing reaches a coming-soon row's info button and reveals its description", async () => {
     const user = userEvent.setup();
     renderList({ value: 'Enabled' });
     expect(visibleTooltips()).toHaveLength(0);
 
-    // Roving tabindex puts the single tab stop on the checked radio.
+    // Roving tabindex gives the radio group a single tab stop, on the checked radio; each info
+    // button after it is a tab stop of its own, in row order.
     await user.tab();
     expect(screen.getByLabelText('Unrestricted')).toHaveFocus();
+    await user.tab(); // Unrestricted's info button
+    await user.tab(); // Disable access's info button
+    await user.tab(); // Disable ALL's info button, on the first coming-soon row
+    expect(infoButtonFor('Desc Disabled sentinel')).toHaveFocus();
 
     await waitFor(() => expect(visibleTooltips()).toHaveLength(1));
-    expect(visibleTooltips()[0]).toHaveTextContent('Desc Enabled sentinel');
-  });
-
-  // A click also focuses the radio, but the pointer already revealed the description on hover — so
-  // the focus that follows the click must not be treated as a keyboard gesture.
-  test('clicking a row does not leave a focus-driven tooltip behind', async () => {
-    const user = userEvent.setup();
-    renderList({ value: 'VpnRequired' });
-
-    await user.click(screen.getByLabelText('Unrestricted'));
-    await user.unhover(rowFor('Unrestricted'));
-
-    await waitFor(() => expect(visibleTooltips()).toHaveLength(0));
+    expect(visibleTooltips()[0]).toHaveTextContent('Desc Disabled sentinel');
   });
 
   test('clicking an active option calls onChange with the correct value', () => {

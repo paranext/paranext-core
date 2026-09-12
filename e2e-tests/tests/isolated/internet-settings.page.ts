@@ -111,7 +111,15 @@ export function internetUseRadio(frame: FrameLocator, label: string | RegExp): L
 }
 
 /**
- * The description tooltip revealed by hovering an option row. Each description lives here rather
+ * An option's info button, by the description it carries as its accessible name. Hovering or
+ * keyboard-focusing it opens that description in a tooltip.
+ */
+export function optionInfoButton(frame: FrameLocator, description: string | RegExp): Locator {
+  return frame.getByRole('button', { name: description });
+}
+
+/**
+ * The description tooltip revealed from an option's info button. Each description lives here rather
  * than in always-visible body copy, so an empty locator means nothing is currently revealed.
  *
  * Targets the visible content, NOT `getByRole('tooltip')` — Radix puts that role on a

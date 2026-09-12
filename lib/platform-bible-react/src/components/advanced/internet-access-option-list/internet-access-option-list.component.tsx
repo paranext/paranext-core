@@ -1,6 +1,7 @@
 import { Info, TriangleAlert } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn-ui/alert';
 import { Badge } from '@/components/shadcn-ui/badge';
+import { Button } from '@/components/shadcn-ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import {
   Tooltip,
@@ -15,7 +16,6 @@ import {
   type LocalizeKey,
 } from 'platform-bible-utils';
 import { useId } from 'react';
-import { useInteractionModalityRef } from '@/hooks/use-interaction-modality.hook';
 
 /**
  * How the app is permitted to use the internet. Local alias — identical string literals to the
@@ -122,23 +122,13 @@ export type InternetAccessOptionListProps = {
 };
 
 /**
- * The five internet-access options as radio rows, each with its description behind a hover- or
- * keyboard-revealed tooltip.
+ * The five internet-access options as radio rows. Each row's description sits behind an info icon
+ * button, revealed as a tooltip on hover or keyboard focus.
  *
- * Two deliberate deviations, recorded here so a later reader does not read them as oversights. Both
- * are UX calls made when the descriptions moved off the page; revisit them with UX rather than
- * quietly, since either change costs new localized strings:
- *
- * - **Tooltip length.** `Guidelines/Tooltips` asks that tooltip copy be a hint, supplemental to a UI
- *   that reads without it. These descriptions run 100–190 characters and are what explains each
- *   option, so they exceed that. Shortening them means new strings; the descriptions were kept
- *   whole and the info icon added so the content at least announces itself.
- * - **Keyboard reach on the "Coming soon" rows.** Those rows' only focusable child is a `disabled`
- *   radio, so they take no tab stop and a sighted keyboard-only user cannot open their tooltip.
- *   Screen-reader users are unaffected — the `sr-only` copy below reaches them on every row.
- *   Closing the gap means either making the info icon a real focusable trigger (a new accessible
- *   name, plus five extra tab stops) or `aria-disabled` rows that arrow-keys can land on and
- *   select.
+ * The descriptions run to two sentences — longer than `Guidelines/Tooltips` allows a tooltip on a
+ * control, and within the one-to-two sentences the guidelines allow an info icon button's tooltip.
+ * That allowance and the info icon button pattern are defined in `Guidelines/Providing Help`, added
+ * by paranext-core PR #2787 (open as of 2026-09-11).
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -153,7 +143,6 @@ export function InternetAccessOptionList({
   const idPrefix = useId();
   const radioId = (optionValue: OptionRow['value']) => `${idPrefix}-${optionValue}`;
   const descriptionId = (optionValue: OptionRow['value']) => `${radioId(optionValue)}-description`;
-  const interactionModality = useInteractionModalityRef();
 
   // A stored value the app cannot honor still selects its row, so the user can see exactly which
   // setting is carried over, and this banner says why nothing will act on it. Derived from the
@@ -198,92 +187,83 @@ export function InternetAccessOptionList({
           disabled={disabled}
         >
           {OPTION_ROWS.map((row) => (
-            // The row — not the radio — is the tooltip trigger, so hovering the radio OR the label
-            // reveals the description. Keyboard reach is free: React delegates onFocus via focusin,
-            // which bubbles up from the radio. No tabIndex here; that would add a second tab stop
-            // in front of every radio.
-            <Tooltip key={row.value}>
-              <TooltipTrigger
-                asChild
-                onFocus={(event) => {
-                  // Radix opens a tooltip on any focus, including the programmatic one the
-                  // standalone panel puts on the checked radio when its fetch resolves — which
-                  // would pop a description open with no user gesture. Preventing the default
-                  // suppresses Radix's focus handler, leaving hover and a keyboard arrival as the
-                  // only ways in. See useInteractionModalityRef for why modality, not
-                  // `:focus-visible`, is what tells those apart. `'none'` (no input yet in this
-                  // document) falls on the suppress side here — the opposite of the reveal-side
-                  // reading in `toolbar-compound-label`, because a description that pops open as
-                  // the panel loads is the exact bug this guard exists for.
-                  if (interactionModality.current !== 'keyboard') event.preventDefault();
-                }}
-              >
-                <div
-                  className={cn(
-                    'tw:flex tw:w-full tw:items-start tw:gap-2 tw:rounded tw:px-2 tw:py-1.5',
-                    !disabled && row.isEnabled && 'tw:hover:bg-accent',
-                  )}
-                >
-                  <RadioGroupItem
-                    value={row.value}
-                    id={radioId(row.value)}
-                    aria-describedby={descriptionId(row.value)}
-                    disabled={disabled || !row.isEnabled}
-                    className="tw:mt-0.5"
-                  />
-                  <div className="tw:flex tw:flex-1 tw:flex-col">
-                    <div className="tw:flex tw:items-center tw:justify-between">
-                      {/* flex-1 so the label spans the row: the row-wide hover highlight then
-                          matches what is actually clickable, instead of highlighting dead space.
-                          A raw <label> rather than the shadcn Label used in DeveloperSection —
-                          Label's disabled treatment rides on `tw:peer-disabled:`, a *sibling*
-                          combinator, and this label is nested two levels below the RadioGroupItem,
-                          so it would never match. Hence the explicit disabled classes here. */}
-                      <label
-                        htmlFor={radioId(row.value)}
-                        aria-disabled={!row.isEnabled || undefined}
-                        className={cn(
-                          'tw:flex-1 tw:text-sm tw:font-medium',
-                          row.isEnabled && !disabled
-                            ? 'tw:cursor-pointer'
-                            : 'tw:cursor-not-allowed tw:text-muted-foreground',
-                        )}
-                      >
-                        {localizedStrings[row.labelKey]}
-                        {/* Visible affordance that a description exists — without it nothing on the
-                            row hints at hidden content, so anyone clicking straight through never
-                            learns what the options mean. In the text flow rather than a flex item
-                            beside it, so that a label long enough to wrap — as several do in the
-                            first-run wizard's narrow column — keeps the icon trailing its last
-                            word instead of parking it at the row's edge against the "Coming soon"
-                            badge. `tw:inline` overrides the preflight's `svg { display: block }`.
-                            aria-hidden, so it adds no tab stop and does not leak into the radio's
-                            accessible name; assistive tech gets the text from the sr-only copy
-                            below instead. */}
-                        <Info
-                          aria-hidden
-                          className="tw:ms-1.5 tw:inline tw:size-3.5 tw:align-middle"
-                        />
-                      </label>
-                      {!row.isEnabled && (
-                        <Badge variant="muted">
-                          {localizedStrings['%paratextRegistration_internetUse_comingSoon%']}
-                        </Badge>
+            // `tw:relative` anchors the label's row-wide click target below.
+            <div
+              key={row.value}
+              className={cn(
+                'tw:relative tw:flex tw:w-full tw:items-start tw:gap-2 tw:rounded tw:px-2 tw:py-1.5',
+                !disabled && row.isEnabled && 'tw:hover:bg-accent',
+              )}
+            >
+              <RadioGroupItem
+                value={row.value}
+                id={radioId(row.value)}
+                aria-describedby={descriptionId(row.value)}
+                disabled={disabled || !row.isEnabled}
+                className="tw:mt-0.5"
+              />
+              <div className="tw:flex tw:flex-1 tw:flex-col">
+                <div className="tw:flex tw:items-center tw:justify-between tw:gap-2">
+                  <div className="tw:flex-1 tw:text-sm">
+                    {/* The label's `::after` stretches over the whole row, so clicking anywhere on
+                        the row selects its option and the row-wide hover highlight matches what is
+                        actually clickable. The label itself stays inline so that, when a label
+                        wraps — as several do in the first-run wizard's narrow column — the info
+                        button trails its last word instead of parking at the row's edge against
+                        the "Coming soon" badge.
+                        A raw <label> rather than the shadcn Label used in DeveloperSection —
+                        Label's disabled treatment rides on `tw:peer-disabled:`, a *sibling*
+                        combinator, and this label is nested two levels below the RadioGroupItem,
+                        so it would never match. Hence the explicit disabled classes here. */}
+                    <label
+                      htmlFor={radioId(row.value)}
+                      aria-disabled={!row.isEnabled || undefined}
+                      className={cn(
+                        'tw:font-medium tw:after:absolute tw:after:inset-0',
+                        row.isEnabled && !disabled
+                          ? 'tw:cursor-pointer'
+                          : 'tw:cursor-not-allowed tw:text-muted-foreground',
                       )}
-                    </div>
-                    {/* Radix puts aria-describedby on the trigger (the row), which screen readers
-                        never announce — focus lands on the radio inside it, and coming-soon rows
-                        aren't focusable at all. So the tooltip is sighted-hover only, and this
-                        hidden copy is what reaches assistive tech. Outside the label on purpose:
-                        inside, it would be absorbed into the radio's accessible name. */}
-                    <span id={descriptionId(row.value)} className="tw:sr-only">
-                      {localizedStrings[row.descriptionKey]}
-                    </span>
+                    >
+                      {localizedStrings[row.labelKey]}
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        {/* Outside the label: inside, its name would be absorbed into the radio's
+                            accessible name. `tw:relative` lifts it above the label's row-wide
+                            click target, so a click meant for the description does not select
+                            the option. Its aria-label carries the whole description, as the info
+                            icon button pattern asks. Never disabled — the description explains
+                            the option rather than being part of the setting, so it stays
+                            reachable while the list loads or saves, and on the "Coming soon" rows
+                            whose disabled radios never take focus. */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={localizedStrings[row.descriptionKey]}
+                          className="tw:relative tw:ms-1 tw:size-5 tw:align-middle"
+                        >
+                          <Info className="tw:size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{localizedStrings[row.descriptionKey]}</TooltipContent>
+                    </Tooltip>
                   </div>
+                  {!row.isEnabled && (
+                    <Badge variant="muted">
+                      {localizedStrings['%paratextRegistration_internetUse_comingSoon%']}
+                    </Badge>
+                  )}
                 </div>
-              </TooltipTrigger>
-              <TooltipContent>{localizedStrings[row.descriptionKey]}</TooltipContent>
-            </Tooltip>
+                {/* The tooltip belongs to the info button, so a screen-reader user moving through
+                    the radios with the arrow keys would otherwise hear no description. This hidden
+                    copy is what describes each radio. Outside the label on purpose: inside, it
+                    would be absorbed into the radio's accessible name. */}
+                <span id={descriptionId(row.value)} className="tw:sr-only">
+                  {localizedStrings[row.descriptionKey]}
+                </span>
+              </div>
+            </div>
           ))}
         </RadioGroup>
       </TooltipProvider>
