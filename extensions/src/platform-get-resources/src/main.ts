@@ -42,8 +42,8 @@ let syncInFlight: Promise<void> | undefined;
 
 async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
-  // The contract itself lives in `dbl-catalog.utils` so it can be tested: this module imports web
-  // views through webpack's `?inline` loader and so cannot be loaded by the test runner.
+  // The contract itself lives in `dbl-catalog.utils`, where it is tested directly; `main.test.ts`
+  // covers how this module wires it into the cache.
   const catalog = await resolveDblCatalog(provider);
   if (catalog.status !== 'available') return catalog;
 
