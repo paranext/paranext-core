@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedStringValue } from 'platform-bible-utils';
 import { IconSearch } from '@tabler/icons-react';
 import { cn } from '@/utils/shadcn-ui/utils';
@@ -38,10 +38,15 @@ export type InterfaceLanguagePickerProps = {
 };
 
 /**
- * Folds text for searching: decomposes accented characters and drops their combining marks so an
- * unaccented query (`francais`) still matches an accented name (`Français`). Only the Latin
- * combining-accent block (U+0300–U+036F) is stripped, so marks that carry meaning in other scripts
- * (Devanagari matras, Khmer vowel signs) survive untouched.
+ * Folds text for searching: decomposes characters and drops the Combining Diacritical Marks
+ * (U+0300–U+036F), so an unaccented query (`francais`) still matches an accented name (`Français`),
+ * and likewise for Greek tonos and Vietnamese tone marks. Marks outside that block, such as
+ * Devanagari matras and Khmer vowel signs, survive untouched.
+ *
+ * The block is not specific to one script, so this also merges some letters that are distinct
+ * rather than accented, such as Cyrillic `й`/`и` and `ё`/`е`. The query is folded the same way as
+ * the names, so that only broadens what matches. Letters whose diacritic does not decompose (`Ø`,
+ * `Ł`, `Đ`, `Æ`, `ß`) are not folded: `foroyskt` does not find `Føroyskt`.
  */
 function foldForSearch(text: string): string {
   return text
@@ -96,11 +101,18 @@ export function InterfaceLanguagePicker({
   // Command root div so arrow-key / Enter navigation continues to work.
   const [search, setSearch] = useState('');
 
-  // cmdk's keyboard highlight, controlled so it can follow our filtering. cmdk keeps highlighting
-  // whatever it last selected, and with `shouldFilter={false}` it doesn't know we narrowed the
-  // list, so after typing the highlight can sit on a row that is no longer rendered and Enter has
-  // nothing to choose. Starts on the current language so Enter without typing re-picks it.
-  const [highlightedTag, setHighlightedTag] = useState(value);
+  // The row the user moved cmdk's highlight onto (arrow keys, hover, or click). Cleared whenever the
+  // query changes, so a row chosen under the old query doesn't outrank the new query's matches.
+  const [preferredTag, setPreferredTag] = useState<string>();
+
+  // null is the canonical initial value for React DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const inputRef = useRef<HTMLInputElement>(null);
+  // null is the canonical initial value for React DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const listRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const [listId, setListId] = useState<string>();
 
   // Precompute the folded search keywords per language here so they aren't rebuilt on every render.
   const entries = useMemo(
@@ -119,7 +131,42 @@ export function InterfaceLanguagePicker({
 
   const visibleEntries = useMemo(() => filterEntries(entries, search), [entries, search]);
 
+  // cmdk's keyboard highlight: the row Enter chooses. With `shouldFilter={false}` cmdk can't tell
+  // the list changed, and a controlled cmdk value naming no rendered row highlights nothing and
+  // swallows Enter. So derive it from what is rendered now, however that changed (typing, or
+  // `value` / `languages` arriving after mount): the row the user moved to, else the current
+  // language (so Enter without typing re-picks it), else the top match.
+  const highlightedTag = useMemo(() => {
+    const isVisible = (tag: string | undefined): tag is string =>
+      !!tag && visibleEntries.some((entry) => entry.tag === tag);
+    if (isVisible(preferredTag)) return preferredTag;
+    if (isVisible(value)) return value;
+    return visibleEntries[0]?.tag ?? '';
+  }, [preferredTag, value, visibleEntries]);
+
   const showSearch = entries.length > 1;
+
+  // cmdk overwrites the ids of its list and rows with its own, so they are read back from the DOM.
+  useLayoutEffect(() => {
+    setListId(listRef.current?.id);
+  }, []);
+
+  // A controlled cmdk value skips the follow-up cmdk does when it moves the highlight itself, so
+  // do it here. The active descendant changes on every highlight move, so it is written straight to
+  // the input rather than through state, which would render twice per keystroke. Scroll only when
+  // this component moved the highlight: cmdk already scrolls for arrow keys, and deliberately never
+  // scrolls the row under the pointer.
+  useLayoutEffect(() => {
+    const row = rowRefs.current.get(highlightedTag);
+    // Absent while there is only one language; `showSearch` re-runs this when the box appears.
+    const input = showSearch ? inputRef.current : undefined;
+    if (input) {
+      if (row) input.setAttribute('aria-activedescendant', row.id);
+      else input.removeAttribute('aria-activedescendant');
+    }
+    if (row && highlightedTag !== preferredTag) row.scrollIntoView({ block: 'nearest' });
+  }, [highlightedTag, preferredTag, showSearch]);
+
   const searchPlaceholder = localizedStrings['%firstRun_language_search_placeholder%'] ?? '';
   const noResults = localizedStrings['%firstRun_language_noResults%'] ?? '';
   const selectedLabel = localizedStrings['%firstRun_language_selected%'] ?? '';
@@ -130,7 +177,7 @@ export function InterfaceLanguagePicker({
       className={cn('pr-twp', className)}
       shouldFilter={false}
       value={highlightedTag}
-      onValueChange={setHighlightedTag}
+      onValueChange={setPreferredTag}
     >
       {showSearch && (
         // Plain <input> (not CommandPrimitive.Input) so cmdk cannot update this field after
@@ -139,16 +186,21 @@ export function InterfaceLanguagePicker({
         <div data-slot="command-input-wrapper" className="tw:p-1 tw:pb-0">
           <InputGroup className="tw:h-8! tw:rounded-lg! tw:border-input/30 tw:bg-input/30 tw:shadow-none! tw:*:data-[slot=input-group-addon]:ps-2!">
             <input
+              ref={inputRef}
               data-slot="command-input"
               type="text"
+              // The list is always shown, so this is an always-expanded combobox.
+              // `aria-activedescendant` is set in the layout effect above.
+              role="combobox"
+              aria-expanded
+              aria-controls={listId}
+              aria-autocomplete="list"
               placeholder={searchPlaceholder}
               aria-label={searchPlaceholder}
               value={search}
               onChange={(e) => {
-                const nextSearch = e.currentTarget.value;
-                setSearch(nextSearch);
-                // Move the highlight to the top match so Enter chooses it without arrowing first.
-                setHighlightedTag(filterEntries(entries, nextSearch)[0]?.tag ?? '');
+                setSearch(e.currentTarget.value);
+                setPreferredTag(undefined);
               }}
               className="tw:w-full tw:text-sm tw:outline-hidden tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
             />
@@ -158,13 +210,17 @@ export function InterfaceLanguagePicker({
           </InputGroup>
         </div>
       )}
-      <CommandList>
+      <CommandList ref={listRef}>
         <CommandEmpty>{noResults}</CommandEmpty>
         {visibleEntries.map(({ tag, info }) => {
           const isSelected = tag === value;
           return (
             <CommandItem
               key={tag}
+              ref={(row) => {
+                if (row) rowRefs.current.set(tag, row);
+                else rowRefs.current.delete(tag);
+              }}
               value={tag}
               // aria-current (not aria-selected, which cmdk uses for the keyboard-highlighted item).
               // `data-checked` drives the check mark the vendored CommandItem ALREADY renders
