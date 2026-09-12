@@ -31,7 +31,7 @@ import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scrip
 
 // TODO (PT-3657): calculate these dynamically:
 const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
-const footnoteCloseRowHeightPx = 24; // The close row is one 24px icon button, no vertical padding.
+const footnoteCloseButtonSizePx = 24; // The close button floats over the list; it is 24px square.
 const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
 const footnoteHeaderWidthPx = 50;
 const minimumEditorWidthPx = 100;
@@ -88,6 +88,17 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    * row to decide whether the caller border is on (see `resolveCallerHighlight`).
    */
   onPaneFocusChange?: (hasFocus: boolean) => void;
+  /**
+   * Fires when DOM focus leaves the pane for another element in the SAME document — clicking into
+   * the Scripture text, the toolbar, anywhere the user has visibly moved on to. PT9 treats that as
+   * leaving the note being edited, so this is what tells the host to end a row-editing session.
+   *
+   * Deliberately NOT fired when focus leaves the document entirely (`relatedTarget` is null): that
+   * is a command palette or dialog rendered in the host frame outside this web view's iframe, or
+   * the window itself losing focus. In neither case has the user moved off the row editor, and
+   * ending the session there would close the editor they are still working in.
+   */
+  onPaneFocusLeft?: () => void;
 }>;
 
 export function FootnotesLayout({
@@ -105,6 +116,7 @@ export function FootnotesLayout({
   onSelectedFootnoteChange,
   focusRowOnFocusRequest,
   onPaneFocusChange,
+  onPaneFocusLeft,
 }: FootnotesLayoutProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
@@ -330,7 +342,9 @@ export function FootnotesLayout({
   } =
     footnotesPanePosition === 'bottom'
       ? getPaneSizeLimits(containerHeight, {
-          secondaryPaneMinSizePx: footnoteRowHeightPx + footnoteCloseRowHeightPx,
+          // The close button floats over the list rather than taking a row of its own, so the
+          // pane's floor is whichever of the two is taller, not their sum.
+          secondaryPaneMinSizePx: Math.max(footnoteRowHeightPx, footnoteCloseButtonSizePx),
           mainPaneMinSizePx: minimumEditorHeightPx,
         })
       : getPaneSizeLimits(containerWidth, {
@@ -412,6 +426,40 @@ export function FootnotesLayout({
   );
 
   /**
+   * Width of the footnote list's scrollbar, in pixels — how far the floating close button has to
+   * sit from the pane's trailing edge to leave the scrollbar grabbable. Measured rather than
+   * assumed: it is 0 on overlay-scrollbar platforms and whenever the list does not overflow, and
+   * ~15px with classic scrollbars, and it changes as content comes and goes.
+   */
+  const [listScrollbarWidthPx, setListScrollbarWidthPx] = useState(0);
+
+  const listScrollbarObserverRef = useRef<ResizeObserver | undefined>(undefined);
+
+  // The scrolling element is `FootnoteList`'s own root, which the list marks `role="listbox"` —
+  // its ARIA role, not a styling hook, so this reads the list's semantics rather than its markup.
+  // A ResizeObserver watches the CONTENT box, which is exactly what changes when a scrollbar
+  // appears or disappears.
+  const setFootnoteListWrapperRef = useCallback((node: HTMLDivElement | null) => {
+    listScrollbarObserverRef.current?.disconnect();
+    listScrollbarObserverRef.current = undefined;
+    const scrollElement = node?.querySelector('[role="listbox"]');
+    if (!(scrollElement instanceof HTMLElement)) {
+      setListScrollbarWidthPx(0);
+      return;
+    }
+    const measure = () =>
+      setListScrollbarWidthPx(Math.max(scrollElement.offsetWidth - scrollElement.clientWidth, 0));
+    const observer = new ResizeObserver(measure);
+    observer.observe(scrollElement);
+    measure();
+    listScrollbarObserverRef.current = observer;
+  }, []);
+
+  useEffect(() => {
+    return () => listScrollbarObserverRef.current?.disconnect();
+  }, []);
+
+  /**
    * Whether the pane currently holds DOM focus, so each crossing of its boundary is reported once.
    * `focus`/`blur` bubble here (they are `focusin`/`focusout` underneath), so every move between
    * elements inside the pane fires both.
@@ -433,8 +481,11 @@ export function FootnotesLayout({
       if (!paneHasFocusRef.current) return;
       paneHasFocusRef.current = false;
       onPaneFocusChange?.(false);
+      // Only a move to a real element in this document is the user leaving the pane behind — see
+      // `onPaneFocusLeft` for why a null `relatedTarget` is not.
+      if (event.relatedTarget) onPaneFocusLeft?.();
     },
-    [onPaneFocusChange],
+    [onPaneFocusChange, onPaneFocusLeft],
   );
 
   // Report every change to which row is selected (row click, focus request, or cleared) so the web
@@ -466,22 +517,29 @@ export function FootnotesLayout({
         >
           <div
             ref={paneContainerRef}
-            className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+            className="tw:relative tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
             onFocus={handlePaneFocus}
             onBlur={handlePaneBlur}
           >
-            <div className="tw:flex tw:justify-end tw:shrink-0 tw:pr-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw:h-6 tw:w-6"
-                aria-label={localizedStrings['%webView_footnoteList_close%']}
-                onClick={onClose}
-              >
-                <X className="tw:h-4 tw:w-4" />
-              </Button>
-            </div>
-            <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+            {/* Floats over the list's top trailing corner (leading corner in RTL, which
+                `inset-inline-end` follows on its own) rather than taking a row of its own, so the
+                pane spends all of its height on notes. Held clear of the scrollbar so that stays
+                grabbable, carrying the pane's own background so the note text it covers does not
+                read through it, and above the z-10 a focused row raises itself to. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="tw:absolute tw:top-0 tw:z-20 tw:h-6 tw:w-6 tw:bg-sidebar"
+              style={{ insetInlineEnd: listScrollbarWidthPx }}
+              aria-label={localizedStrings['%webView_footnoteList_close%']}
+              onClick={onClose}
+            >
+              <X className="tw:h-4 tw:w-4" />
+            </Button>
+            <div
+              ref={setFootnoteListWrapperRef}
+              className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+            >
               <FootnoteList
                 classNameForItems="scripture-font"
                 listId={footnoteListKey}

@@ -96,6 +96,61 @@ describe('FootnotesLayout close button', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close footnotes pane' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('floats over the list instead of taking a row above it', () => {
+    renderPane();
+    const closeButton = screen.getByRole('button', { name: 'Close footnotes pane' });
+    // Absolutely positioned: it is out of flow, so the pane spends all of its height on notes.
+    expect(closeButton.className).toContain('tw:absolute');
+    // And it is a sibling of the list rather than sitting in a strip above it, so nothing in the
+    // pane's layout reserves room for it.
+    expect(closeButton.parentElement?.querySelector('[role="listbox"]')).toBeTruthy();
+  });
+});
+
+describe('FootnotesLayout reporting that the user left the pane', () => {
+  it('reports a move to another element in this document', () => {
+    const onPaneFocusLeft = vi.fn();
+    renderPane({
+      onPaneFocusLeft,
+      children: (
+        <button type="button" data-testid="text">
+          text
+        </button>
+      ),
+    });
+    screen.getAllByRole('option')[0].focus();
+    screen.getByTestId('text').focus();
+    expect(onPaneFocusLeft).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays silent when focus leaves the document entirely', () => {
+    const onPaneFocusLeft = vi.fn();
+    const onPaneFocusChange = vi.fn();
+    renderPane({ onPaneFocusLeft, onPaneFocusChange });
+    const row = screen.getAllByRole('option')[0];
+    row.focus();
+    // What a marker palette rendered in the host frame (outside this web view's iframe) looks like
+    // from in here, and what the window losing focus looks like: a blur with no related target.
+    // The user has not moved off the row editor, so the session must survive it — even though the
+    // pane does report that it no longer holds focus.
+    // eslint-disable-next-line no-null/no-null
+    fireEvent.blur(row, { relatedTarget: null });
+    expect(onPaneFocusChange).toHaveBeenLastCalledWith(false);
+    expect(onPaneFocusLeft).not.toHaveBeenCalled();
+  });
+
+  it('stays silent while focus moves within the pane', () => {
+    const onPaneFocusLeft = vi.fn();
+    renderPane({
+      onPaneFocusLeft,
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => <input data-testid="row-editor" />,
+    });
+    screen.getAllByRole('option')[0].focus();
+    screen.getByTestId('row-editor').focus();
+    expect(onPaneFocusLeft).not.toHaveBeenCalled();
+  });
 });
 
 describe('FootnotesLayout editing seam', () => {
