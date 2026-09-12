@@ -62,7 +62,7 @@ import {
   showCommentariesTab,
   showTextCollectionTab,
 } from './show-panel.util';
-import { noProjectReferenceListValidator } from './no-project-reference-list.validator';
+import { noProjectReferenceListValidator } from './no-project-reference-list.utils';
 
 logger.debug('Scripture Editor is importing!');
 

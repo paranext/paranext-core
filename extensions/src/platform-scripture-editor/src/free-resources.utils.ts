@@ -13,15 +13,6 @@ const FREE_RESOURCE_UID_SET: ReadonlySet<string> = new Set(
 );
 
 /**
- * The allowlisted UIDs in their original case, as a stable array.
- *
- * Module-level (not derived per render) because it is passed to the resource picker through
- * `useDialogCallback`/`useMemo` dependency arrays — a fresh array each render would give the dialog
- * callback a new identity every render and rebuild it continuously.
- */
-export const FREE_RESOURCE_IDS: readonly string[] = FREE_RESOURCE_DBL_ENTRY_UIDS;
-
-/**
  * Whether any resource is allowlisted at all.
  *
  * Gates the whole no-project entry point. With an empty allowlist the panels would otherwise offer
@@ -55,7 +46,7 @@ const UNRESTRICTED_PICKER_OPTIONS = Object.freeze({});
  */
 export function freeResourcePickerOptions(isFreeResourceEntryPoint: boolean, notice: string) {
   return isFreeResourceEntryPoint
-    ? { allowedResourceIds: FREE_RESOURCE_IDS, notice }
+    ? { allowedResourceIds: FREE_RESOURCE_DBL_ENTRY_UIDS, notice }
     : UNRESTRICTED_PICKER_OPTIONS;
 }
 

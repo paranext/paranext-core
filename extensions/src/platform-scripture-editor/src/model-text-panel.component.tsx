@@ -114,7 +114,7 @@ const NO_PROJECT_WORDING: Record<NoProjectWordingKey, ModelTextPanelLocalizedStr
   '%webView_modelTextPanel_bookNotAvailable%':
     '%webView_modelTextPanel_noProject_bookNotAvailable%',
   '%webView_modelTextPanel_emptyState_prompt%':
-    '%webView_modelTextPanel_noProject_emptyState_prompt%',
+    '%webView_resourcePanel_noProject_emptyState_prompt%',
   '%webView_modelTextPanel_installFailed%': '%webView_modelTextPanel_noProject_installFailed%',
   '%webView_modelTextPanel_installFailedOffline%':
     '%webView_modelTextPanel_noProject_installFailedOffline%',
@@ -122,7 +122,7 @@ const NO_PROJECT_WORDING: Record<NoProjectWordingKey, ModelTextPanelLocalizedStr
     '%webView_modelTextPanel_noProject_installedButUnavailable%',
   '%webView_modelTextPanel_settingsUnavailable%':
     '%webView_modelTextPanel_noProject_settingsUnavailable%',
-  '%webView_modelTextPanel_pickModelText%': '%webView_modelTextPanel_noProject_pick%',
+  '%webView_modelTextPanel_pickModelText%': '%webView_resourcePanel_noProject_pick%',
   '%webView_modelTextPanel_unknownResource%': '%webView_modelTextPanel_noProject_unknownResource%',
 };
 
@@ -501,7 +501,7 @@ export function ModelTextPanel({
   // never costs the editor its content.
   useEffect(() => {
     if (usj) editorRef.current?.setUsj(usj);
-  }, [usj, isBookMissing, isBlankChapter]);
+  }, [usj]);
 
   // --- Resource picker / selection ---
 
@@ -628,9 +628,9 @@ export function ModelTextPanel({
         )}
         registrationRequiredMessage={localize(
           localizedStrings,
-          '%webView_modelTextPanel_noProject_registrationRequired%',
+          '%webView_resourcePanel_noProject_registrationRequired%',
         )}
-        registerLabel={localize(localizedStrings, '%webView_modelTextPanel_noProject_register%')}
+        registerLabel={localize(localizedStrings, '%webView_resourcePanel_noProject_register%')}
         loadingLabel={localize(localizedStrings, '%webView_modelTextPanel_loading%')}
         emptyPrompt={wording('%webView_modelTextPanel_emptyState_prompt%')}
         moreInfo={
