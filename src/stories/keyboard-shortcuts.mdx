@@ -37,3 +37,11 @@ mistaken for omissions:
 - **Configurable reference submit keys** — `book-chapter-control.component.tsx` lets a caller pass a
   `submitKeys` prop (e.g. space or `-`) to submit the scripture reference in the navigation input.
   This is caller-configured input behavior rather than a fixed application shortcut.
+- **Escape to close the Book Chapter Control popover** — `book-chapter-control.component.tsx` has no
+  `Escape` branch anywhere in the component; Radix's `PopoverContent` dismissable layer closes the
+  popover on its own, with no application code involved. This is unlike the same component's
+  arrow-key grid navigation, Enter/Space grid activation, and Backspace back-navigation, which ARE
+  hand-rolled and ARE catalogued above (`book-chapter-control-move-grid-highlight`,
+  `book-chapter-control-activate-grid-item`, `book-chapter-control-back`) — those bypass cmdk's
+  defaults and implement custom grid semantics, while Escape is an unmodified library default with
+  nothing to document.

@@ -251,6 +251,119 @@ step, no automation. Just a record.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
 
+## adr-bcv-item-value-contract: BookChapterControl owns the cmdk item-value contract; activation reads component state, not cmdk's DOM internals
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** `BookChapterControl`'s chapter and verse grids render as cmdk `CommandItem`s
+  (`lib/platform-bible-react/src/components/advanced/book-chapter-control/`), and its
+  Enter/Space activation previously read the highlighted cell straight off cmdk's own DOM state —
+  `commandRef.current?.querySelector('[cmdk-item][data-selected="true"]:not([data-disabled="true"])')`,
+  then `.click()` on whatever it found. Those attribute names (`cmdk-item`, `data-selected`,
+  `data-disabled`) are cmdk implementation details, not a contract the `cmdk` package documents or
+  versions; nothing in this codebase pinned them, so a `cmdk` upgrade could rename or drop one and
+  the Enter/Space handler would silently stop finding a highlighted cell, with no compiler or type
+  error to catch it. Separately, the cmdk `CommandItem` `value` string that both drives the
+  highlight and gets parsed back into a chapter/verse number was hand-built inline at six call
+  sites, each spelling its own
+  `` `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ...` `` template, and
+  parsed back with two ad hoc regexes (`commandValue.match(/:(\d+)$/)` and
+  `commandValue.match(/(\d+)$/)`), each of which had to agree with every builder site by
+  convention alone.
+- **Decision:** Keep cmdk (`Command`/`CommandItem`/`CommandList`/`CommandInput`) for list
+  rendering and filtering, but own the item-value contract: `chapterItemValue` / `verseItemValue`
+  build the `CommandItem` value, `parseChapterFromItemValue` / `parseVerseFromItemValue` read it
+  back, and `TOP_MATCH_ITEM_VALUE` is a fixed sentinel for the top-match row — all in one place,
+  `lib/platform-bible-react/src/components/shared/book-item.utils.ts`, consumed by both the grid
+  components and the keyboard handler. Enter/Space activation in `handleCommandKeyDown`
+  (`book-chapter-control.component.tsx`) reads the highlighted item number out of the
+  `commandValue` state the component already owns and calls the same `handleVerseSelect` /
+  `handleChapterSelect` callback the grid's own `onSelect` would call — never reading a cmdk DOM
+  attribute, never synthesizing a click.
+- **Scope — one path is deliberately NOT migrated.** `CommandInput`'s `spaceSelectsHighlightedItem`
+  (`components/shadcn-ui/command.tsx`), which `BookChapterControl` opts into for the books view's
+  "Space picks the highlighted book on an empty query", still does
+  `querySelector('[cmdk-item][data-selected="true"]:not([data-disabled="true"])')` followed by
+  `.click()` — exactly the shape this decision removes from the grid path. It is shared by seven
+  pickers (project selector, book scope picker, combo boxes, the inline marker menu), so migrating
+  it is a change to all of them rather than to this control, and it is left for whoever takes the
+  roving-`tabindex` follow-up in alternative (b). Until then, the books-view Space path remains
+  bound to cmdk internals: a `cmdk` rename would break it silently, with no type or build error.
+- **Alternatives:** (a) **keep steering cmdk through its private DOM attributes** — rejected:
+  nothing pins those attributes across `cmdk` versions, and a break would be silent (no type error,
+  no failing build — just Enter/Space quietly doing nothing). (b) **replace the grids with a
+  roving-`tabindex` native-focus grid** (the WAI-ARIA grid pattern) — the structurally honest fix,
+  since cmdk is a 1-D listbox primitive being asked to render and drive a 2-D grid (6 columns,
+  wrap-around horizontal movement, RTL mirroring); deferred as a follow-up rather than built here,
+  since it would replace `ChapterGrid`/`VerseGrid`'s rendering model, not just their keyboard
+  wiring.
+- **Consequences:** The grids and the keyboard handler cannot drift apart — both read and write
+  through the same builder/parser pair instead of six independently-formatted template strings.
+  Disabled-item filtering, which the removed `:not([data-disabled="true"])` DOM selector provided
+  for free, now has to be checked explicitly (`makeIsChapterDisabled` / `makeIsVerseDisabled`) in
+  the activation branch — an easy thing to forget when adding a new activation path. Grid movement
+  arithmetic (wrap-around horizontal, clamp vertical, RTL mirroring) is now one pure function,
+  `computeTargetGridItem` in `book-chapter-control.utils.ts`, shared by both grids instead of two
+  near-duplicate `switch` statements that had already drifted from each other before this branch.
+- **Source:** PT-4345 (BookChapterControl keyboard-navigation rework), PR #2750. The removed
+  DOM-query activation and the six inline value-builders are in that PR's diff of
+  `lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx`.
+  A round-trip check in `parseChapterFromItemValue` is part of the contract, not an optimization:
+  two canon books have English names that end in digits (`PS2` → "Psalm 151", `PS3` → "Psalms
+  152-155"), so a trailing-number match alone reads a book ROW as a chapter cell of itself.
+
+## adr-bcv-keyboard-ownership: The BookChapterControl popover is one keyboard surface — exactly one thing is focused, and Tab stays inside it
+
+- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Context:** The picker stacks three keyboard consumers in one popover: a text input (the search
+  box, which owns a caret), a cmdk list whose highlight is a `data-selected` ring on an item that
+  never holds DOM focus, and header buttons (quick navigation, recent searches) that do hold DOM
+  focus and draw their own ring. Reviewing the shipped behaviour surfaced three ways they collided.
+  Tabbing to a quick-nav arrow left the book list's ring painted alongside the button's, so two
+  focus indicators were on screen with nothing saying which one the next keystroke addressed.
+  `Tab` in the chapters and verses views dismissed the whole picker, because those views render no
+  tab stop of their own — the back button is deliberately out of the tab order — so focus left the
+  popover and Radix closed it, discarding a book-and-chapter selection the user had already made.
+  And the horizontal arrows stayed with the caret unconditionally, which is right while the user is
+  typing but strands anyone who has stepped into the preview grid with a vertical arrow: they can
+  move the highlight down a row and never back along one.
+- **Decision:** Treat the open popover as a single keyboard surface with one focused thing at a
+  time. (1) **One focus indicator.** While a header control holds focus, the list and grids paint
+  no keyboard ring — `suppressKeyboardHighlight` on `BookItem` / `NumberedItemGrid` suppresses the
+  *paint*, not cmdk's highlight state, so the ring returns to exactly where the user left it.
+  (2) **Tab cycles, never dismisses.** `Tab` / `Shift+Tab` wrap through the current view's own tab
+  stops and are swallowed outright in views that have none; `Escape` and the trigger remain the
+  ways out. (3) **The grid takes the arrows once entered.** In the books view a horizontal arrow
+  belongs to the caret until either the caret has nowhere left to go or a vertical arrow has
+  stepped into the preview grid; editing the query hands them back. The vertical arrows are the way
+  in and typing is the way out, so the caret is never taken from someone still typing.
+- **Alternatives:** (a) **Clear cmdk's highlight when a button takes focus** rather than suppress
+  its paint — rejected: an empty controlled value hands the highlight to cmdk's select-first-item
+  fallback, which *moves* it rather than removing it, and the user's place is lost on the way back.
+  (b) **Let Tab dismiss, as the WAI-ARIA combobox pattern has it** — rejected for this surface: the
+  pattern assumes a popup whose whole content is one listbox, whereas this popover is a multi-view
+  picker with its own toolbar, and dismissing mid-selection costs more than the convention buys.
+  The trap is bounded by `Escape` still closing, which is what keeps it from stranding a keyboard
+  user. (c) **Give the horizontal arrows to the grid unconditionally once a preview is on screen**
+  — rejected: it freezes the caret mid-query and silently retargets what Enter submits, since the
+  top-match row prefers the highlighted cell over the parsed query. (d) **Make the vertical arrows
+  a pure mode switch that does not move the highlight** — rejected as a larger change to a reviewed
+  behaviour than the report warranted; the first vertical arrow both enters the grid and moves,
+  which reads correctly because a single-row grid has nowhere to move to and so shows only the
+  entry.
+- **Consequences:** Three surfaces now agree on one rule, so a future keyboard change has one
+  invariant to preserve rather than three local conventions. The suppression is a prop rather than
+  a CSS descendant rule, which keeps it assertable in jsdom, where no stylesheet is applied. Tab
+  being trapped means `Escape` is load-bearing for keyboard exit; it is Radix's own
+  document-capture handler, ahead of this control's handlers, so the picker cannot swallow it. The
+  books view's preview grids lost their headings as part of the same pass — the top-match row
+  directly above already names the book, so the heading repeated it one line later — which means
+  the top-match row is now the only place the resolved book is named in that view.
+- **Source:** PT-4345, PR #2750, review round three. Supplements
+  [`adr-bcv-item-value-contract`](#adr-bcv-item-value-contract-bookchaptercontrol-owns-the-cmdk-item-value-contract-activation-reads-component-state-not-cmdks-dom-internals),
+  which governs how the highlight is spelled; this one governs who owns the keyboard.
+
 ## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25
@@ -2865,6 +2978,45 @@ step, no automation. Just a record.
 - **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
   architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
 
+## adr-recent-searches-menu-semantics: RecentSearches is a menu, not a listbox
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `RecentSearches`
+  (`lib/platform-bible-react/src/components/advanced/recent-searches.component.tsx`) was built on
+  `Popover` + cmdk's `Command`/`CommandItem`. Inside the BCV control that nesting misbehaved twice
+  over: cmdk items are never DOM-focused (the list container owns focus and items only carry
+  `data-selected`), so the inner list competed with the outer picker's own cmdk instance for arrow
+  keys and highlight state; and a popover-in-a-popover left the recent-searches list on the same
+  stacking tier as its host. The component is exported from
+  `lib/platform-bible-react/src/index.ts`, so the roles it renders are public API.
+- **Decision:** Rebuild it on Radix `DropdownMenu` + `DropdownMenuItem`, with `modal={false}`. A
+  list of past references that you pick one item from is a menu, and menu semantics
+  (`role="menu"` / `role="menuitem"`, roving DOM focus, type-ahead, Escape-to-close) are what
+  Radix already implements correctly. `modal={false}` is required rather than cosmetic: Radix menus
+  default to modal, which traps focus and sets `pointer-events: none` on `<body>` for as long as
+  the menu is open — this list opens beside a search input the user is still typing in, usually
+  inside another popover, so the surrounding controls must stay clickable. The component carries
+  its own `TooltipProvider` because it is exported standalone and cannot assume a host tree has
+  one.
+- **Alternatives:** (a) **keep `Popover` + `Command` and coordinate the two cmdk instances** —
+  rejected: two cmdk roots sharing a keyboard surface means arbitrating `data-selected` between
+  them on every keystroke, which is the bug, not a fix for it. (b) **keep listbox semantics and
+  hand-roll roving focus on the items** — rejected: reimplements what Radix ships, and listbox is
+  the wrong role for a pick-one-action-and-close list. (c) **ship the role change undocumented** —
+  rejected: it silently breaks any consumer querying `role="option"`, which is exactly the class of
+  drift this log exists to catch.
+- **Consequences:** This is a **breaking accessibility-contract change** for consumers outside this
+  repo: `getByRole('option')` / `listbox` queries against `RecentSearches` no longer match, and
+  screen readers announce a menu rather than a listbox. In-repo the only consumers are
+  `BookChapterControl` and its story, so nothing here needed updating — which is precisely why the
+  change needed pinning. `recent-searches.component.test.tsx` now asserts both halves (menu
+  semantics present, listbox semantics absent), so a swap back fails a test rather than a
+  consumer. The `ariaLabel` prop additionally became the button's visible tooltip text, so it is
+  now user-visible microcopy and its TSDoc says so.
+- **Source:** PT-4345 (BCV styling/keyboard-nav epic), where the nested-cmdk keyboard conflict
+  surfaced while rebuilding the picker's arrow-key navigation.
+
 ## adr-registration-validity-once-per-session: Registration validity resolves once per session, in a store the first-run gate and the UI share
 
 - **Date:** 2026-08-22
@@ -4730,3 +4882,76 @@ step, no automation. Just a record.
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
+## adr-z-index-ordering-invariants: The z-index scale is defined by ordering invariants, pinned by tests — not by the individual numbers
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** PR #2365 raised `Z_INDEX_ABOVE_DOCK`
+  (`lib/platform-bible-react/src/components/z-index.ts`) from 250 to 600 for an unrelated
+  combobox-in-a-modal fix. That silently put every tooltip (550 at the time) behind every popover,
+  select, context menu, and the menubar, which all sit on `Z_INDEX_ABOVE_DOCK`. Nothing failed: no
+  test asserted the relative order between tiers, only their existence. Separately,
+  `Z_INDEX_OVERLAY`'s doc comment claimed the shadcn popovers used it, when in fact no shadcn
+  overlay does: each sets a constant from this scale that matches its own tier —
+  `dropdown-menu.tsx`, `select.tsx`, `popover.tsx` and `context-menu.tsx` on `Z_INDEX_ABOVE_DOCK`,
+  `tooltip.tsx` on `Z_INDEX_TOOLTIP`, `dialog.tsx` on `Z_INDEX_MODAL`/`Z_INDEX_MODAL_BACKDROP`.
+  That stale comment is what led PR #2229 to place a menu at `Z_INDEX_OVERLAY` (400) underneath its
+  own 600-tier host.
+- **Decision:** Define the scale by **ordering invariants**, not the individual numbers:
+  backdrop (`Z_INDEX_MODAL_BACKDROP`, 450) < modal (`Z_INDEX_MODAL`, 500) < overlay content
+  (`Z_INDEX_ABOVE_DOCK`, 600) < content portalled out of a popover (`Z_INDEX_ABOVE_POPOVER`, 650) <
+  tooltip (`Z_INDEX_TOOLTIP`, 675) < first-run gate (`Z_INDEX_FIRST_RUN`, 700). Pin these with
+  order-only assertions in `lib/platform-bible-react/src/components/z-index.test.tsx` (e.g.
+  `expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_ABOVE_POPOVER)`), plus rendered-stacking tests that
+  render a tooltip inside a popover and a dropdown menu on its own, and assert the resulting
+  `style.zIndex` values. Overlay components own their own z-index — every shadcn overlay sets the
+  constant for its own tier itself — rather than leaving each consumer to pick a value, closing the
+  PR #2229 failure mode. Overlays nested inside other overlays (a tooltip inside a
+  popover, a menu inside a dialog) share the overlay tier and resolve by DOM/paint document order
+  rather than getting a tier of their own.
+- **Alternatives:** (a) **a dedicated numeric tier per nesting level** — rejected: does not compose
+  past one level (a third nesting depth needs a fourth number, in perpetuity), and every new tier
+  needs a name nobody can define ahead of the UI that will eventually need it. (b) **a React
+  context threading the host's z-index down to descendants** so a child can compute "host + 1" —
+  more machinery than the problem warrants; the document-order rule already gives the same visual
+  result once both layers share a tier. (c) **rename `Z_INDEX_ABOVE_DOCK`** to describe what it
+  actually is now (the general overlay tier, not "the value that clears the dock") — rejected here
+  only because it is exported public API from `lib/platform-bible-react/src/index.ts`, so a rename
+  is a breaking change for any extension importing it; worth doing at the next breaking-change
+  window.
+- **Consequences:** Re-tiering the scale (moving every layer's absolute number to make room)
+  stays cheap, but *reordering* it (swapping which tier sits above which) now fails a test
+  immediately instead of shipping a silent visual regression like PR #2365's.
+  `src/renderer/styles/_vars.scss` restates the scale for SCSS consumers, and a test reads that file
+  to assert it still agrees with the TypeScript constants — a twin that drifts is worse than a
+  duplicated one, because neither copy can then be trusted to say what a layer's value is.
+  `Z_INDEX_OVERLAY`
+  (400) itself was left largely untouched as out of scope for this work: it sits below
+  `Z_INDEX_MODAL_BACKDROP` in the scale and is not covered by any ordering test above, so it may
+  warrant its own review. Its consumers were audited for the one shape this decision does forbid —
+  a consumer pinning an overlay BELOW the host it renders inside — and the two instances found in
+  `project-selector.component.tsx` (a filter menu and a row tooltip inside that component's own
+  `PopoverContent`) were removed rather than left as counterexamples. One consumer override
+  survives, in `settings-sidebar.component.tsx`, carrying a TODO: it pins a host popover rather
+  than nesting an overlay under one, and needs verifying against the surfaces that sidebar renders
+  in before it can be dropped.
+- **Follow-through:** "Every shadcn overlay sets the constant for its own tier itself" was not true
+  of `menubar.tsx` when this was written — its content and submenu were still on Tailwind's
+  `tw:z-50`, two orders of magnitude below the tier `tooltip.tsx`'s own comment named it as a member
+  of. It now sets `Z_INDEX_ABOVE_DOCK`, with a rendered-stacking test in `z-index.test.tsx`.
+  `DropdownMenuSubContent` sets `Z_INDEX_ABOVE_POPOVER` rather than copying its parent's tier, so a
+  caller that lifts a menu to that tier (the footnote type and caller dropdowns do) cannot leave its
+  own submenu painting underneath it.
+- **Known remaining violations — the claim above is about the overlays this work reached, not all of
+  them.** `drawer.tsx` still hard-codes `tw:z-50` on both `DrawerOverlay` and `DrawerContent`, which
+  are portalled surfaces; by the shape of the scale they belong on `Z_INDEX_MODAL_BACKDROP` /
+  `Z_INDEX_MODAL` alongside `dialog.tsx`. It is left alone deliberately: its only consumers are the
+  `platform-lexical-tools` dictionary components, re-tiering a modal surface changes what it covers,
+  and there is no test or Storybook play function that would catch a mistake. Consumer overrides
+  that pin an overlay BELOW its own host also survive in `overlay-context-menu.component.tsx`,
+  `manage-books-dialog.component.tsx` and `settings-sidebar.component.tsx`. TODO(PT-4345-followup):
+  these want their own pass, with the app running to verify each surface.
+- **Source:** PT-4345 (BCV styling/keyboard-nav epic, the z-index repair task), which reconciles the
+  drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
+  PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
+  adding the ordering tests in `z-index.test.tsx` and this decision record.

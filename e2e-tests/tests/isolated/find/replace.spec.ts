@@ -489,7 +489,7 @@ test.describe('Search history on close', () => {
     // never pressed and the inactivity debounce has not elapsed. So if the term were already
     // here, the assertion after the close would pass without the close doing anything.
     await openHistoryDropdown(frame);
-    await expect(frame.getByRole('option', { name: term })).toHaveCount(0);
+    await expect(frame.getByRole('menuitem', { name: term })).toHaveCount(0);
     await frame.locator('#search-term').press('Escape');
 
     // Opening the dropdown leaves the pointer on its trigger, and the tooltip that follows renders
@@ -514,6 +514,6 @@ test.describe('Search history on close', () => {
 
     const reopened = await openFindPanel(mainPage);
     await openHistoryDropdown(reopened);
-    await expect(reopened.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
+    await expect(reopened.getByRole('menuitem', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 });
