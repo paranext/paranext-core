@@ -10,6 +10,7 @@ import {
   convertScriptureRangeToEditorRange,
   decideNoteCallerClickAction,
   decideNoteSessionUpdate,
+  resolveNoteVerseRef,
   finalizeProjectSwitch,
   formatEditorTitle,
   generateParagraphMenuListItems,
@@ -3611,3 +3612,108 @@ describe('openOrUpdateRelatedPanels', () => {
 });
 
 // #endregion openOrUpdateRelatedPanels
+
+// #region resolveNoteVerseRef
+
+describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
+  const currentScrRef = {
+    book: 'GEN',
+    chapterNum: 1,
+    verseNum: 1,
+    versificationStr: 'English',
+  };
+
+  function note(text: string): object {
+    return {
+      type: 'note',
+      marker: 'f',
+      caller: '+',
+      content: [{ type: 'char', marker: 'ft', content: [text] }],
+    };
+  }
+
+  const chapterWithNotesInTwoVerses: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN', content: ['Test'] },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'a ',
+          note('alpha'),
+          { type: 'verse', marker: 'v', number: '4' },
+          'b ',
+          note('beta'),
+        ],
+      },
+    ],
+  };
+
+  it('resolves each note to the verse it sits in', () => {
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 0, currentScrRef)).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 1,
+      versificationStr: 'English',
+    });
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, currentScrRef)).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 4,
+      versificationStr: 'English',
+    });
+  });
+
+  it('changes nothing but the verse — the editor holds one chapter', () => {
+    const resolved = resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, {
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 1,
+      versificationStr: 'Vulgate',
+    });
+    expect(resolved).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 4,
+      versificationStr: 'Vulgate',
+    });
+  });
+
+  it('resolves a note that sits before the first verse to verse 0, not to nothing', () => {
+    const noteInAHeading: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'book', marker: 'id', code: 'GEN', content: ['Test'] },
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'para', marker: 's', content: ['Heading ', note('about the heading')] },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '1' }, 'a'],
+        },
+      ],
+    };
+    expect(resolveNoteVerseRef(noteInAHeading, 0, currentScrRef)?.verseNum).toBe(0);
+  });
+
+  it('leaves the reference alone when there is no note at that index', () => {
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 5, currentScrRef)).toBeUndefined();
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, -1, currentScrRef)).toBeUndefined();
+    expect(resolveNoteVerseRef(undefined, 0, currentScrRef)).toBeUndefined();
+  });
+
+  it('reports nothing rather than throwing out of a click handler on USJ it cannot read', () => {
+    // Content that is not an array at all: the reader throws walking it, and a caller-click
+    // handler must see `undefined` rather than an exception.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const unreadable = { type: USJ_TYPE, version: USJ_VERSION, content: 'oops' } as unknown as Usj;
+    expect(resolveNoteVerseRef(unreadable, 0, currentScrRef)).toBeUndefined();
+  });
+});
+
+// #endregion resolveNoteVerseRef

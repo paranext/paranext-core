@@ -27,7 +27,12 @@ import {
   UsjNodeOptions,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import {
+  MarkerObject,
+  Usj,
+  USJ_TYPE,
+  USJ_VERSION,
+} from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -54,6 +59,7 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteCaretPosition,
   FootnoteEditor,
+  type FootnoteEditorHandle,
   type FootnoteEditorMarkerPalette,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
@@ -171,6 +177,7 @@ import {
   resolveAddChapterNumberClick,
   resolveCallerHighlight,
   resolveNoteEditingSurface,
+  resolveNoteVerseRef,
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
@@ -945,6 +952,50 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [liveEditorUsj, setLiveEditorUsj] = useState<Usj | undefined>(undefined);
 
   /**
+   * The notes the pane is already showing — what a fresh document is compared against before it is
+   * published. Kept as the notes rather than as the document because a document is a fresh object
+   * on every keystroke while its notes usually are not, and the notes are all the pane reads.
+   */
+  const publishedPaneNotesRef = useRef<MarkerObject[] | undefined>(undefined);
+
+  /**
+   * Publishes the editor's document to the pane, but only when the NOTES in it differ from what the
+   * pane already holds.
+   *
+   * Typing in the Scripture body changes the document on every keystroke and the note list on none
+   * of them, and publishing regardless re-renders this whole web view — the Scripture editor
+   * included — per character, which is felt as typing lag with the pane open. Editing inside a row
+   * editor does change a note, but only once per live-apply debounce, so the pane still repaints as
+   * fast as anything it shows actually changes.
+   *
+   * That makes `liveEditorUsj`'s guarantee "a document whose NOTES are current" rather than "the
+   * current document" — which is what the pane and `EditorRef.getNoteIndex` have to agree on. A
+   * comparison that throws publishes, so a document this reader cannot walk can never wedge the
+   * pane on stale notes.
+   */
+  const publishLiveEditorUsjIfNotesChanged = useCallback((usj: Usj) => {
+    let notes: MarkerObject[] | undefined;
+    try {
+      notes = new UsjReaderWriter(usj, {
+        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+      }).findAllNotes();
+    } catch (e) {
+      logger.warn(
+        `Could not read the notes out of the editor's document; publishing it to the footnotes ` +
+          `pane anyway: ${getErrorMessage(e)}`,
+      );
+    }
+    if (
+      notes &&
+      publishedPaneNotesRef.current &&
+      deepEqualAcrossIframes(notes, publishedPaneNotesRef.current)
+    )
+      return;
+    publishedPaneNotesRef.current = notes;
+    setLiveEditorUsj(usj);
+  }, []);
+
+  /**
    * Row of the footnotes pane currently rendered as an inline editor (Standard view only), or
    * `undefined` when no row is being edited. Exclusive with the popover (`showFootnoteEditor`): the
    * note being edited is the same session (`editingNoteKey`/`editingNoteOps`) on whichever surface
@@ -956,6 +1007,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [paneEditingCaret, setPaneEditingCaret] = useState<FootnoteCaretPosition>('end');
 
   /**
+   * The mounted row editor, for the one thing ending a session has to ask it directly: flush its
+   * pending live-apply while the session that owns it is still open (see `closeFootnoteEditor`).
+   */
+  // The ref needs to start out with null for it to work as a component ref
+  // eslint-disable-next-line no-null/no-null
+  const paneNoteEditorRef = useRef<FootnoteEditorHandle>(null);
+
+  /**
    * Mirror of {@link paneEditingIndex} readable from `handleEditorialUsjChange`, which runs on the
    * editor's change path and is handed to the editor as `onUsjChange`: adding the editing row to
    * its dependencies would give it a fresh identity every time the row moves.
@@ -964,6 +1023,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     paneEditingIndexRef.current = paneEditingIndex;
   }, [paneEditingIndex]);
+
+  /**
+   * Always-current {@link navigateToNote}, which is declared far below this point: the ref keeps
+   * `nodeOptions` (and so every caller node built from it) independent of anything that moves as
+   * the reference does.
+   */
+  const navigateToNoteRef = useRef<(index: number) => void>(() => {});
 
   /**
    * Starts a note-editing session on the footnotes pane's row `index`, taking the shared session
@@ -1015,6 +1081,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `usjFromPdp` rather than list the previous chapter's notes.
   useEffect(() => {
     setFootnotePaneFocusRequest(undefined);
+    publishedPaneNotesRef.current = undefined;
     setLiveEditorUsj(undefined);
   }, [scrRef.book, scrRef.chapterNum]);
 
@@ -1183,6 +1250,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             `paneVisible=${footnotesPaneVisibleRef.current} paneRendered=${footnotesPaneRenderedRef.current} ` +
             `viewType=${viewTypeRef.current} surface=${surface}`,
         );
+        const isStandardView = viewTypeRef.current === 'standard';
         const decision = decideNoteCallerClickAction({
           isCollapsed,
           editingNoteKey: editingNoteKey.current,
@@ -1193,7 +1261,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           paneRendered: footnotesPaneRenderedRef.current,
           isPowerMode: isPowerModeRef.current,
           surface,
-          isStandardView: viewTypeRef.current === 'standard',
+          isStandardView,
         });
         if (decision.clearStaleEditingSession) {
           // A prior session's key survived without its popover — orphaned bookkeeping that
@@ -1232,6 +1300,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               'noteCallerOnClick: clicked note is no longer attached; pane focus request dropped',
             );
         }
+
+        // Standard view treats a note and its verse as one place (see `navigateToNote`): the
+        // caret parks just past the caller the user clicked, and the scroll group follows the
+        // note's verse. Every other view answers a caller click with a popover anchored on the
+        // caller and leaves the text exactly where it was.
+        if (isStandardView && index !== undefined) navigateToNoteRef.current(index);
 
         // A read-only text has no editing surface, so the navigation above is the whole click.
         if (decision.action === 'navigate-only') return;
@@ -2538,6 +2612,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   /**
+   * Always-current `scrRef` and {@link setScrRefNoScroll} for the note-navigation path, which has to
+   * stay identity-stable: `noteCallerOnClick` is baked into the caller nodes when the document
+   * loads, so anything it reaches must not be rebuilt as the reference moves.
+   */
+  const scrRefRef = useRef(scrRef);
+  useEffect(() => {
+    scrRefRef.current = scrRef;
+  }, [scrRef]);
+  const setScrRefNoScrollRef = useRef(setScrRefNoScroll);
+  useEffect(() => {
+    setScrRefNoScrollRef.current = setScrRefNoScroll;
+  }, [setScrRefNoScroll]);
+
+  /**
    * Whether we have gotten the Scripture data for the very first time. Used to scroll to the
    * current scrRef on startup
    */
@@ -2683,6 +2771,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // The pane and the text share this web view's iframe, so tab visibility takes both away together:
   // this catch-up is about the pane's own render gate, not about tab activation.
   useEffect(() => {
+    // Unconditional in both directions, and it resets the comparison baseline with it: the notes
+    // remembered from the last time the pane was open say nothing about what it should open onto
+    // now.
+    publishedPaneNotesRef.current = undefined;
     setLiveEditorUsj(footnotesPaneRendered ? editorRef.current?.getUsj() : undefined);
   }, [footnotesPaneRendered]);
   // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
@@ -2801,36 +2893,78 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   /**
-   * A footnotes pane row was selected without an edit request: Space in any view, or a row click in
-   * a view that opens no row editor (a read-only Standard view). Standard view scrolls the text to
-   * the note's caller and leaves the caret alone — it belongs to the pane, and the caller highlight
-   * (see {@link handleSelectedFootnoteChange}) is what marks the note in the text. Every other view
-   * moves the text caret into the note.
+   * Everything picking a note in Standard view does to the TEXT, wherever the pick came from — a
+   * caller click, a pane row click, or a pane row selected with the keyboard.
+   *
+   * PT9 treats a note and the verse it sits in as one place, so all three do the same three things:
+   * reveal the caller, park the caret just past it (where the user lands when they come back from
+   * the note — the pane's X, the popover closing, or simply clicking in the text), and move the
+   * scroll group to the note's verse.
+   *
+   * The caret goes through `selectAfterNote`, which never pulls DOM focus into the text: a pane row
+   * click has to leave focus in the row editor it just opened. That the caret ends up in the verse
+   * being published also keeps the editor's own reference handling quiet — its scrRef-driven
+   * placement no-ops when the caret is already in the target verse, so publishing here cannot yank
+   * the caret to the verse start.
+   *
+   * The reference is resolved from the editor's LIVE document, the same one the pane's indexes are
+   * computed against; `usjFromPdp` lags it by the save debounce.
    */
-  const handleFootnoteSelected = useCallback((index: number) => {
-    if (viewTypeRef.current === 'standard') {
-      scrollToNoteCaller(index);
+  const navigateToNote = useCallback((index: number) => {
+    scrollToNoteCaller(index);
+    editorRef.current?.selectAfterNote(index);
+    const noteScrRef = resolveNoteVerseRef(editorRef.current?.getUsj(), index, scrRefRef.current);
+    if (!noteScrRef) {
+      logger.warn(
+        `navigateToNote: could not resolve the verse for note ${index}; leaving the reference alone`,
+      );
       return;
     }
-    // Mark that we want the next scrRef change (even if it matches our internalVerseLocationRef)
-    // to trigger scrolling/highlighting. This volatile flag is cleared the first time the
-    // scrRef-useEffect observes it, so there is a risk of a race condition. It would be better to
-    // note the Scripture reference of this note and check for that in the scrRef-useEffect, but at
-    // this time, notes don't have Scripture references filled in and `selectNote` does not return
-    // that information.
-    allowScrollForInternalRef.current = true;
-    editorRef.current?.selectNote(index);
+    // Publishing a reference the scroll group already holds would be a no-op everywhere except
+    // `internalVerseLocationRef`, which would be left armed against a verse nothing is going to
+    // scroll to — and would then swallow the scroll for a real navigation back to it later.
+    if (noteScrRef.verseNum === scrRefRef.current.verseNum) return;
+    setScrRefNoScrollRef.current(noteScrRef);
   }, []);
+
+  useEffect(() => {
+    navigateToNoteRef.current = navigateToNote;
+  }, [navigateToNote]);
+
+  /**
+   * A footnotes pane row was selected without an edit request: Space in any view, or a row click in
+   * a view that opens no row editor (a read-only Standard view). Standard view navigates the text
+   * to the note (see {@link navigateToNote}) and leaves DOM focus in the pane, where the caller
+   * highlight (see {@link handleSelectedFootnoteChange}) marks the note. Every other view moves the
+   * text caret into the note.
+   */
+  const handleFootnoteSelected = useCallback(
+    (index: number) => {
+      if (viewTypeRef.current === 'standard') {
+        navigateToNote(index);
+        return;
+      }
+      // Mark that we want the next scrRef change (even if it matches our internalVerseLocationRef)
+      // to trigger scrolling/highlighting. This volatile flag is cleared the first time the
+      // scrRef-useEffect observes it, so there is a risk of a race condition. It would be better to
+      // note the Scripture reference of this note and check for that in the scrRef-useEffect, but at
+      // this time, notes don't have Scripture references filled in and `selectNote` does not return
+      // that information.
+      allowScrollForInternalRef.current = true;
+      editorRef.current?.selectNote(index);
+    },
+    [navigateToNote],
+  );
 
   /**
    * Standard view: a footnotes pane row click opens that note in the row editor with the caret
-   * where the user clicked, and scrolls the text to its caller (the highlight follows through the
-   * pane's selection change). Passed to the pane only while the pane is this view's editing
-   * surface.
+   * where the user clicked, and navigates the text to the note (see {@link navigateToNote}); the
+   * caller highlight follows through the pane's selection change. Passed to the pane only while the
+   * pane is this view's editing surface.
    */
   const handleFootnoteEditRequested = useCallback(
     (index: number, caretPosition: FootnoteCaretPosition) => {
-      scrollToNoteCaller(index);
+      navigateToNote(index);
       const noteKey = editorRef.current?.getNoteKey(index);
       const noteOp = editorRef.current?.getNoteOps(index)?.at(0);
       if (!noteKey || !noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
@@ -2840,7 +2974,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
       startPaneNoteEdit(index, noteKey, noteOp, caretPosition);
     },
-    [startPaneNoteEdit],
+    [navigateToNote, startPaneNoteEdit],
   );
 
   /** The footnotes pane's selected row, or `undefined` when it has no selection. */
@@ -2888,6 +3022,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     },
     [applyCallerHighlight],
   );
+
+  /**
+   * The user moved off the pane to something else in this view — clicking into the Scripture text
+   * is the usual one. PT9 ends note editing there, so the row goes back to being a plain note
+   * again; nothing is discarded, since every edit has already been applied as it was made.
+   *
+   * Only a move to another element counts (see `FootnotesLayoutProps.onPaneFocusLeft`), so this
+   * never fires for the marker palette — which renders outside this iframe and takes focus with it
+   * while the user is very much still editing the note.
+   */
+  const handlePaneFocusLeft = useCallback(() => {
+    if (paneEditingIndexRef.current === undefined) return;
+    closeFootnoteEditorRef.current(false);
+  }, []);
 
   // #region PDP Save Write Path
 
@@ -3071,6 +3219,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * nothing (PT9 keeps an inserted note).
    */
   const closeFootnoteEditor = useCallback((deleteIfNew: boolean) => {
+    // Land whatever the row editor still has inside its live-apply debounce FIRST, while this
+    // session is still open. The row unmounts a commit later and flushes then anyway, but by that
+    // point the session is gone and `handleEditorialUsjChange` has no way to recognize the apply
+    // as its tail: `replaceEmbedUpdate` emits a note insert op, so an unattributed one reads as a
+    // brand-new note and re-opens an editor on it. Flushing here keeps every close path going
+    // through the same session-integrity branch every other change does.
+    if (paneEditingIndexRef.current !== undefined) paneNoteEditorRef.current?.flushPendingEdits();
     if (deleteIfNew && editingNoteIsNew.current && editingNoteKey.current)
       editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, []);
     editingNoteIsNew.current = false;
@@ -3174,6 +3329,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => (
       <FootnoteEditor
         inline
+        ref={paneNoteEditorRef}
         classNameForEditor="scripture-font"
         noteOps={editingNoteOps.current}
         noteKey={editingNoteKey.current}
@@ -3434,9 +3590,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
       // Republish the editor's live document for the footnotes pane, which cannot wait for the
       // debounced save to land: it and `EditorRef.getNoteIndex` must index the SAME document. Only
-      // while the pane is rendered — see `liveEditorUsj` for why this stays off the hot path
-      // otherwise.
-      if (footnotesPaneRenderedRef.current) setLiveEditorUsj(settledUsj);
+      // while the pane is rendered, and only when the NOTES changed — see `liveEditorUsj` for why
+      // this stays off the hot path otherwise.
+      if (footnotesPaneRenderedRef.current) publishLiveEditorUsjIfNotesChanged(settledUsj);
       if (editingNoteKey.current) {
         // Any editor change that lands while the note-editing session is open counts as
         // interaction with it — most importantly the popover's own save path (replaceEmbedUpdate
@@ -3500,7 +3656,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         else if (!editorRef.current?.getNoteOps(editingNoteKey.current)) closeFootnoteEditor(false); // false => the note caller is already gone.
       } else openNoteEditorOnNewNote(ops, insertedNodeKey);
     },
-    [closeFootnoteEditor, openNoteEditorOnNewNote, saveUsjToPdpDebounced],
+    [
+      closeFootnoteEditor,
+      openNoteEditorOnNewNote,
+      publishLiveEditorUsjIfNotesChanged,
+      saveUsjToPdpDebounced,
+    ],
   );
 
   // #endregion Debounced Save Scheduling
@@ -4270,6 +4431,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     noteEditingSurface === 'pane' ? handleFootnoteEditRequested : undefined
                   }
                   onSelectedFootnoteChange={handleSelectedFootnoteChange}
+                  onPaneFocusLeft={handlePaneFocusLeft}
                   // A caller click in a read-only Standard view has nowhere else to put focus, and
                   // PT9 still moves the caret into the note — so the pane takes it, which is what
                   // turns the caller highlight on. Everywhere else the click's own editor (the row

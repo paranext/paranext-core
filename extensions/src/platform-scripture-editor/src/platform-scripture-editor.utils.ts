@@ -395,6 +395,52 @@ export function decideNoteSessionUpdate(state: NoteSessionUpdateState): NoteSess
   };
 }
 
+/**
+ * The Scripture reference of the verse a note sits in, so selecting a note in the footnotes pane
+ * (or clicking its caller) can move the scroll group there, as PT9's notes pane does.
+ *
+ * Resolved from the USJ rather than from the editor's own selection reporting, so a read-only text
+ * — which has no caret to report from — navigates exactly like an editable one.
+ *
+ * @param usj The chapter document the pane and `EditorRef.getNoteIndex` both index; pass the
+ *   editor's live document, not the PDP's, or an index typed ahead of the save debounce names a
+ *   different note
+ * @param noteIndex Document-order index of the note among the chapter's notes The editor holds
+ *   exactly one chapter, so the only thing the note's position can say that the current reference
+ *   does not is its VERSE; book, chapter, and versification all ride through unchanged. That also
+ *   keeps a document with no `\c` of its own (which resolves as chapter 0) from navigating the user
+ *   into front matter.
+ * @param currentScrRef The reference in effect now — everything but the verse comes from it
+ * @returns The reference to publish, or `undefined` when the note cannot be located (no note at
+ *   that index, or USJ this reader cannot walk) — in which case the caller should leave the current
+ *   reference alone rather than guess, and report that it did
+ */
+export function resolveNoteVerseRef(
+  usj: Usj | undefined,
+  noteIndex: number,
+  currentScrRef: SerializedVerseRef,
+): SerializedVerseRef | undefined {
+  if (!usj || noteIndex < 0) return undefined;
+  try {
+    const usjReaderWriter = new UsjReaderWriter(usj, {
+      markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+    });
+    const note = usjReaderWriter.findAllNotes()[noteIndex];
+    if (!note) return undefined;
+    const { verseRef } = usjReaderWriter.nodeToUsfmVerseRefVerseLocation(
+      note,
+      undefined,
+      currentScrRef.book,
+    );
+    return { ...currentScrRef, verseNum: verseRef.verseNum };
+  } catch {
+    // Malformed USJ is a navigation that does not happen, never a thrown error out of a click
+    // handler. Stays silent here — this module loads in the extension host, which has no logger —
+    // and the caller reports the `undefined` it gets back.
+    return undefined;
+  }
+}
+
 // #region Editor Title Formatting
 
 const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
