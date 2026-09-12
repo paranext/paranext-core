@@ -57,12 +57,27 @@ export function installPopoverJsdomStubs() {
   }
 }
 
-/** The non-editable marker mode the scripture editor uses outside Standard view. */
-export const visibleView: EditorOptions['view'] = {
-  markerMode: 'visible',
-  hasSpacing: true,
-  isFormattedFont: true,
-};
+/**
+ * The per-test timeout for suites that mount the real editor and drive its Radix menus. Vitest's 5s
+ * default is too tight for those interactions on a Windows CI worker, where the `unit` project runs
+ * alongside the Playwright-backed `storybook` project and a single click can take seconds.
+ *
+ * Apply it per suite with `vi.setConfig({ testTimeout: REAL_EDITOR_TEST_TIMEOUT_MS })` rather than
+ * for the whole project, so a genuinely hanging test elsewhere still fails fast.
+ */
+export const REAL_EDITOR_TEST_TIMEOUT_MS = 20_000;
+
+/**
+ * Waits `ms` of real time inside `act`, so the timers, change listeners and re-renders an
+ * interaction scheduled have all run before the test reads the result.
+ */
+export async function settle(ms = 50) {
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  });
+}
 
 /**
  * Mounts the REAL `FootnoteEditor` (no mocked `Editorial`) for the given view, waits for its
@@ -109,11 +124,7 @@ export async function renderPopoverAndWaitForInit(
 
   // Let the deferred init effects run for real rather than mocking timers, matching the effect's
   // own scheduling.
-  await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, waitMs);
-    });
-  });
+  await settle(waitMs);
 
   // Lexical exposes its mounted editor instance on the root DOM element via this non-public,
   // underscore-prefixed property — there's no public API to reach it from outside a React ref, and

@@ -8,19 +8,23 @@
  * suite mounts the REAL editor via the shared harness: the caret's resting place is a Lexical
  * selection effect that a mocked `Editorial` cannot report.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { DeltaOpInsertNoteEmbed } from '@eten-tech-foundation/platform-editor';
 import { $getRoot, $isElementNode, $isTextNode, LexicalNode, TextNode } from 'lexical';
 import {
   CARET_IN_NOTE_TEXT,
   caretAncestry,
   installPopoverJsdomStubs,
+  REAL_EDITOR_TEST_TIMEOUT_MS,
   renderPopoverAndWaitForInit,
+  settle,
   visibleView,
 } from './footnote-editor.test-harness';
 
 installPopoverJsdomStubs();
+vi.setConfig({ testTimeout: REAL_EDITOR_TEST_TIMEOUT_MS });
 
 /** Partway through the note text, standing in for where a user was editing. */
 const MID_TEXT_OFFSET = 2;
@@ -37,24 +41,25 @@ function findNoteTextNode(): TextNode {
   return found;
 }
 
+/**
+ * The note-type dropdown's trigger. Matched on the localized-string KEY: the harness maps every key
+ * to itself, and the caller dropdown's own label would match a looser pattern.
+ */
+function noteTypeTrigger() {
+  return screen.getByRole('button', { name: /footnoteEditor_noteType_footnote_label/ });
+}
+
+/** Opens the note-type dropdown and picks the row whose label matches `label`. */
+async function pickNoteType(label: RegExp) {
+  await userEvent.click(noteTypeTrigger());
+  await userEvent.click(await screen.findByRole('menuitemcheckbox', { name: label }));
+  // Let the replacement's change listeners settle before reading the caret.
+  await settle();
+}
+
 /** Switches the note type from footnote to cross-reference through the dropdown. */
 async function switchNoteTypeToCrossReference() {
-  // Matched on the localized-string KEY: the harness maps every key to itself, and the caller
-  // dropdown's own label would match a looser pattern.
-  await userEvent.click(
-    screen.getByRole('button', { name: /footnoteEditor_noteType_footnote_label/ }),
-  );
-  await userEvent.click(
-    await screen.findByRole('menuitemcheckbox', {
-      name: /footnoteEditor_noteType_crossReference_label/,
-    }),
-  );
-  // Let the replacement's change listeners settle before reading the caret.
-  await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
-  });
+  await pickNoteType(/footnoteEditor_noteType_crossReference_label/);
 }
 
 describe('FootnoteEditor note-type change', () => {
@@ -68,7 +73,7 @@ describe('FootnoteEditor note-type change', () => {
     // Choosing from the dropdown leaves focus on its button, so typing would go nowhere even with
     // the caret in the right place.
     expect(document.activeElement).toBe(editorInput);
-  }, 20000);
+  });
 
   // The caret is NOT returned to the exact offset the user was at: the popover re-focuses its
   // editor after a note-type change, and with the selection discarded by the replacement that
@@ -90,25 +95,34 @@ describe('FootnoteEditor note-type change', () => {
     await switchNoteTypeToCrossReference();
 
     expect(caretAncestry(lexical)).toEqual(CARET_IN_NOTE_TEXT);
-  }, 20000);
+  });
 
   it('returns focus to the dropdown when it is dismissed without choosing', async () => {
     const { editorInput } = await renderPopoverAndWaitForInit(visibleView);
     editorInput.focus();
-    const trigger = screen.getByRole('button', {
-      name: /footnoteEditor_noteType_footnote_label/,
-    });
+    const trigger = noteTypeTrigger();
 
     await userEvent.click(trigger);
     await userEvent.keyboard('{Escape}');
-    await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 50);
-      });
-    });
+    await settle();
 
     // Nothing changed, so the user goes back to the control they opened rather than being
     // relocated into the editor — they keep their place in the toolbar.
     expect(document.activeElement).toBe(trigger);
-  }, 20000);
+  });
+
+  it('treats re-picking the current type as a dismissal, not a change', async () => {
+    const onChange = vi.fn<(noteOps: DeltaOpInsertNoteEmbed[]) => void>();
+    const { editorInput } = await renderPopoverAndWaitForInit(visibleView, { onChange });
+    onChange.mockClear();
+    editorInput.focus();
+    const trigger = noteTypeTrigger();
+
+    // The note is already a footnote, and Radix still reports a check for its checked row.
+    await pickNoteType(/footnoteEditor_noteType_footnote_label/);
+
+    // Nothing changed, so the note is not replaced (no save) and focus stays in the toolbar.
+    expect(onChange).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(trigger);
+  });
 });

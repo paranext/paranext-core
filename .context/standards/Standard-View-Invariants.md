@@ -117,10 +117,23 @@ Every keyboard handler change here must also update `src/stories/keyboard-shortc
   the way through.
 - **Custom is the one caller row a click does not commit.** It keeps the menu open on purpose
   (`onSelect` preventDefault) so a character can be typed, which leaves its own check as the
-  confirming gesture — the same commit Enter performs. Two consequences worth knowing before
+  confirming gesture — the same commit Enter performs. Escape is not a commit: the caller
+  dropdown's `onEscapeKeyDown` discards the pending caller. Two consequences worth knowing before
   touching it: the check's indicator is `pointer-events-none`, so a click on it arrives on the ROW,
   and Radix resolves selection on POINTER-UP, so by click time the row already reads as checked —
   whether the click is arming or confirming can only be answered from before the press.
+- **A dropdown hands focus to the note only after it changed something.** The note-type and caller
+  dropdowns apply a choice by replacing the note, which discards the editor's selection, and the
+  user reached the dropdown mid-edit. After a committed change each one claims Radix's
+  `onCloseAutoFocus` and calls the popover's `focusNoteText`, which restores a lost selection before
+  focusing — a bare `focus()` with no selection resolves to the document end, outside the note's
+  text, where typing joins nothing. After a dismissal (Escape, or re-picking the value already
+  applied) nothing changed, so Radix's own restore to the trigger stands, as WCAG 2.4.3 asks.
+- **The inline markers menu falls back to the enclosing note's marker.** With the caret in a
+  character run (`ft`, `xt`, …) the context marker defines no children, so
+  `generateInlineMarkerMenuListItems` (`footnote-editor.utils.ts`) builds the menu from the note's
+  own marker instead. That marker has to be the live note type, not a fixed one: `xo` belongs to
+  `\x` alone, so a note switched to a cross-reference must offer it.
 - **The footnotes pane renders a note's `category` from the note's own field.** It is the one part
   of a footnote that never appears in `content`: the parser folds the file's `\cat People\cat*` run
   onto the note as an attribute, so anything rendering a footnote from `content` alone drops it

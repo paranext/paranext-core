@@ -551,6 +551,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
   },
   {

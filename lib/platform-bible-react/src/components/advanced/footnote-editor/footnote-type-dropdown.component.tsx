@@ -86,6 +86,9 @@ export function FootnoteTypeDropdown({
   const choseNoteType = useRef(false);
 
   const chooseNoteType = (newNoteType: string) => {
+    // Radix still reports a check when the already-checked row is clicked. Nothing changes then, so
+    // it is a dismissal: the note is left alone and Radix's own restore keeps focus on the trigger.
+    if (newNoteType === noteType) return;
     choseNoteType.current = true;
     handleNoteTypeChange(newNoteType);
   };

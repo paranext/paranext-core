@@ -190,10 +190,20 @@ export function FootnoteCallerDropdown({
       </TooltipProvider>
       <DropdownMenuContent
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
+        // Escape is a cancel, never a commit: a caller chosen or typed in this visit is discarded.
+        // Radix runs this and then closes the menu within the same event, before React re-renders,
+        // so the refs the close handler reads are reset directly — resetting only the state would
+        // still leave the close handler committing the abandoned choice.
+        onEscapeKeyDown={() => {
+          selectedCallerTypeRef.current = callerType;
+          newCustomCallerRef.current = customCaller;
+          setSelectedCallerType(callerType);
+          setNewCustomCaller(customCaller);
+        }}
         // Mirrors the note-type dropdown: after a committed caller, claim Radix's restore and send
         // focus to the note text, since the caller is applied by replacing the note and the user is
-        // mid-edit. After a dismissal nothing changed, so Radix's own restore to this trigger is
-        // both what the user expects and what WCAG 2.4.3 asks for.
+        // mid-edit. After Escape, or any close that changed nothing, Radix's own restore to this
+        // trigger is both what the user expects and what WCAG 2.4.3 asks for.
         onCloseAutoFocus={(event) => {
           if (!committedCaller.current) return;
           committedCaller.current = false;

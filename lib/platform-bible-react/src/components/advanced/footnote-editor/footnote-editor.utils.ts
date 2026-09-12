@@ -12,6 +12,8 @@ import { MarkerMenuItem } from '../marker-menu.component';
  * Take the marker set from the project's stylesheet instead.
  *
  * @param editorRef The ref for the editor component to be able to insert markers
+ * @param closeMarkersMenu Closes the markers menu once a chosen marker has been inserted
+ * @param localizedStrings Localized strings for the marker descriptions shown as item titles
  * @param parentMarker The current parent marker which is used to determine which markers to include
  * @param noteMarker The marker of the note being edited (`f`, `fe`, `x`), used when the caret's own
  *   marker defines no children of its own

@@ -9,29 +9,30 @@
  * Mounts the REAL editor via the shared harness: the menu is gated on a live DOM selection inside
  * the note, which only a real Lexical mount produces.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   CARET_IN_NOTE_TEXT,
   caretAncestry,
   installPopoverJsdomStubs,
+  REAL_EDITOR_TEST_TIMEOUT_MS,
   renderPopoverAndWaitForInit,
+  settle,
   visibleView,
 } from './footnote-editor.test-harness';
 
 installPopoverJsdomStubs();
+vi.setConfig({ testTimeout: REAL_EDITOR_TEST_TIMEOUT_MS });
 
 const MARKER_MENU_TRIGGER = '\\';
 
 /** Sends a key to the popover's document-level handler and lets the result render. */
 async function pressKey(key: string) {
-  await act(async () => {
+  act(() => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
   });
+  await settle();
 }
 
 function markerMenuSearchBox() {
@@ -55,7 +56,7 @@ describe('FootnoteEditor inline markers menu', () => {
     // Dismissing focuses the editor again; that bare focus must not push the caret out of the
     // character runs, or the user is back to typing where their text joins nothing.
     expect(caretAncestry(lexical)).toEqual(CARET_IN_NOTE_TEXT);
-  }, 20000);
+  });
 
   it('offers the markers of the note actually being edited, not a fixed note type', async () => {
     const { editorInput } = await renderPopoverAndWaitForInit(visibleView);
@@ -75,6 +76,6 @@ describe('FootnoteEditor inline markers menu', () => {
     // `xo` belongs to `\x` alone — `\f` offers only `\xt` from the cross-reference group — so this
     // can only pass if the note's own marker is what the menu was built from.
     expect(markerMenuSearchBox()).not.toBeNull();
-    expect(screen.getByText('xo')).toBeDefined();
-  }, 20000);
+    expect(screen.queryByText('xo')).not.toBeNull();
+  });
 });
