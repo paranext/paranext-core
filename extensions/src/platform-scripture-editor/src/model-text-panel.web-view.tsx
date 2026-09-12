@@ -11,6 +11,7 @@ import type {
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useResourceReferenceSource } from './use-resource-reference-source.hook';
+import { useResolvedContainerProjectId } from './use-resolved-container-project-id.hook';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { HAS_FREE_RESOURCES, freeResourcePickerOptions } from './free-resources.utils';
 import { openParatextRegistration } from './open-paratext-registration.util';
@@ -44,7 +45,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
  */
 globalThis.webViewComponent = function ModelTextPanelWebView({
   id: webViewId,
-  projectId,
+  projectId: savedProjectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
   useWebViewState,
@@ -52,6 +53,11 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   const [localizedStrings] = useLocalizedStrings(useMemo(() => ALL_STRING_KEYS, []));
 
   // --- Raw data sources ---
+
+  // A saved layout can name a project that no longer exists; resolving it here is what keeps that
+  // from parking the panel on a spinner nothing ever ends. Everything below reads this, never the
+  // raw prop, so a dead id takes the same no-project path as an absent one.
+  const projectId = useResolvedContainerProjectId(savedProjectId);
 
   // Reads the project's configured model text when a project is open, and the app-scoped
   // free-resource choice when none is. Same state shape either way, so everything below is unchanged.
