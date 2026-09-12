@@ -73,6 +73,7 @@ import { logger } from '@shared/services/logger.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { startWorkspaceUpdate } from '@renderer/services/workspace-updating-store';
 import {
+  clearLastOpenedProject,
   getLastOpenedProject,
   setLastOpenedProject,
 } from '@renderer/services/last-opened-project-cache';
@@ -1598,12 +1599,13 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 }
 
 /**
- * Bound on the whole {@link getMostRecentUsableProjectId} walk (recents fetch plus every candidate's
- * `isPublished` check) while resolving the Simple-mode cold-start path (no cached last-opened
- * project). Without this, a slow or not-yet-registered PDP factory can leave
- * `projectLookupService.getMetadataForProject` waiting up to 20s for a factory plus a further
- * startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the whole switch for
- * tens of seconds - defeating the point of this being the "fast" switch path.
+ * Bound on each project lookup the Simple-mode switch makes: the confirmation of a cached
+ * last-opened project, and the whole {@link getMostRecentUsableProjectId} walk (recents fetch plus
+ * every candidate's {@link isUsableSwitchTarget} check) on the cold-start path. Without this, a slow
+ * or not-yet-registered PDP factory can leave `projectLookupService.getMetadataForProject` waiting
+ * up to 20s for a factory plus a further startup-grace retry loop (see
+ * `project-lookup.service-model.ts`), stalling the whole switch for tens of seconds - defeating the
+ * point of this being the "fast" switch path.
  */
 export const COLD_START_LOOKUP_TIMEOUT_MS = 3000;
 
@@ -1712,11 +1714,13 @@ async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
  * with no empty-placeholder → reload round-trip.
  *
  * Fast path: `getLastOpenedProject` returns the cached id synchronously (kept current by the
- * Scripture Editor tab event subscription further down this file).
+ * Scripture Editor tab event subscription further down this file), and one bounded lookup confirms
+ * the project is still there before the layout is built around it — see {@link isUsableSwitchTarget}
+ * for why an unconfirmable id is worse than no id at all.
  *
- * Slow path: cold start (no cache yet) — fall back to {@link getMostRecentUsableProjectId}, which
- * walks the recents list trying each candidate until one isn't a published resource, bounded
- * overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
+ * Slow path: cold start (no cache yet), or a cached project that is gone — fall back to
+ * {@link getMostRecentUsableProjectId}, which walks the recents list trying each candidate until one
+ * is usable, bounded overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
  *
  * Fallback: if neither cache nor recents can produce a usable project, load the bare `simpleLayout`
  * and let the picker do the slow legacy path.
@@ -1759,11 +1763,30 @@ export async function handleSwitchToSimpleMode(
     // The `finally` releases the overlay on this return like any other.
     if (!(await isThisWindowRunningTheSwitchToSimple())) return;
 
+    // Confirmed before use, not taken on trust. The cache is never invalidated when a project goes
+    // away, so a deleted or not-yet-cloned project stays the fast path's answer indefinitely — and
+    // baking it into the layout wedges every project-scoped view in that layout on a data provider
+    // that never arrives. The check is bounded the same way the cold-start walk is, so a
+    // slow-to-answer lookup costs the switch a bounded wait rather than the fast path's whole point.
     const cached = getLastOpenedProject();
     if (cached) {
-      await runProjectBoundSimpleSwitch(cached.id, generation);
-      switchedProjectId = cached.id;
-      return;
+      const isCachedUsable = await withTimeout(
+        () => isUsableSwitchTarget(cached.id),
+        COLD_START_LOOKUP_TIMEOUT_MS,
+      );
+      if (isCachedUsable === true) {
+        await runProjectBoundSimpleSwitch(cached.id, generation);
+        switchedProjectId = cached.id;
+        return;
+      }
+      // A timeout says nothing about the project, so leave the cache alone and let the walk below
+      // (which re-checks it as the most recent entry) decide. Only a definite "not usable" clears
+      // it, so the next switch stops returning to a dead id.
+      if (isCachedUsable === false) clearLastOpenedProject();
+      else
+        logger.warn(
+          `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms confirming the cached Simple-mode project ${cached.id}; falling back to the recents walk.`,
+        );
     }
 
     const resolvedId = await withTimeout(
@@ -1949,8 +1972,8 @@ function waitForNextPaint(): Promise<void> {
 /**
  * Resolves the most-recently-opened project id that's usable as a Simple-mode switch target: the
  * first entry in `recentlyOpenedProjects` (most-recent first, already capped at
- * `MAX_RECENT_PROJECTS` by the provider) that isn't a published resource, or `undefined` if the
- * list holds none. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
+ * `MAX_RECENT_PROJECTS` by the provider) that passes {@link isUsableSwitchTarget}, or `undefined` if
+ * the list holds none. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
  * `platform-scripture-editor.utils.ts` (the default project picker's own recents fallback) - but
  * scoped to what this fast-path switch needs: a project id, not an opened editor. A published
  * resource is never a valid target here, matching `cacheLastOpenedSimpleProject`'s exclusion on the
@@ -1971,15 +1994,16 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
     const recents = await recentsProvider.getRecentProjects(undefined);
     if (!Array.isArray(recents)) return undefined;
     // Checked CONCURRENTLY, then picked in recents order. Checking them one at a time would stop
-    // at the first usable candidate and so issue fewer lookups, but every published resource ahead
-    // of that candidate adds a full round trip - `getMetadataForProject` waits on a PDP factory and
-    // then retries - and the whole walk shares one {@link COLD_START_LOOKUP_TIMEOUT_MS} budget. A
-    // run of resources at the head of the list could therefore exhaust the budget and leave Simple
-    // mode with no project at all, which became reachable once the titlebar picker started
-    // offering read-only projects. The list is already capped at `MAX_RECENT_PROJECTS`, so the
-    // extra lookups are bounded, and concurrently they cost about what one costs.
-    const publishedFlags = await Promise.all(recents.map(resolveProjectIsPublished));
-    return recents.find((_candidateId, index) => !publishedFlags[index]);
+    // at the first usable candidate and so issue fewer lookups, but every unusable candidate ahead
+    // of that one adds a full round trip - `getMetadataForProject` waits on a PDP factory and then
+    // retries, and a lookup for a project that is no longer on the machine is slow to fail - and
+    // the whole walk shares one {@link COLD_START_LOOKUP_TIMEOUT_MS} budget. A single dead entry,
+    // or a run of published resources, at the head of the list could therefore exhaust the budget
+    // and leave Simple mode with no project at all. The list is already capped at
+    // `MAX_RECENT_PROJECTS`, so the extra lookups are bounded, and concurrently they cost about
+    // what one costs.
+    const usableFlags = await Promise.all(recents.map(isUsableSwitchTarget));
+    return recents.find((_candidateId, index) => usableFlags[index]);
   } catch (err) {
     // Distinct from a timeout (logged separately by the caller, which races this whole function
     // against COLD_START_LOOKUP_TIMEOUT_MS via withTimeout): this is a genuine failure of the
@@ -1994,19 +2018,27 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
 }
 
 /**
- * Resolves whether a candidate project from {@link getMostRecentUsableProjectId} is a published
- * (read-only) resource. Defaults to `false` on a lookup failure, matching `platform.isPublished`'s
- * own "absent means not a resource" default (see `project-metadata.model.ts`) - the safer
- * assumption is to proceed with the candidate rather than silently skip it over a transient lookup
- * error.
+ * Whether a candidate project from {@link getMostRecentUsableProjectId} can be baked into a
+ * Simple-mode layout: it has to exist, and it must not be a published (read-only) resource.
+ *
+ * Both answers come from the one metadata read, because both failure modes end the same way — this
+ * candidate is skipped and the walk moves on to the next one. Recents outlive the projects in them
+ * (a project deleted, moved, or never cloned onto this machine still has an entry), and a layout
+ * built around an id nothing can resolve leaves every project-scoped view in it waiting on a data
+ * provider that never arrives. Skipping costs at most the next candidate; the last resort is the
+ * bare layout and the default project picker, which is a working state.
+ *
+ * A lookup failure is therefore treated as "not usable" rather than assumed benign. In the worst
+ * case — an infrastructure failure that fails every candidate — the walk ends with no target and
+ * the caller falls back to that same bare layout.
  */
-async function resolveProjectIsPublished(projectId: string): Promise<boolean> {
+async function isUsableSwitchTarget(projectId: string): Promise<boolean> {
   try {
     const metadata = await projectLookupService.getMetadataForProject(projectId);
-    return metadata.isPublished === true;
+    return metadata.isPublished !== true;
   } catch (err) {
     logger.warn(
-      `Could not resolve whether project ${projectId} is a published resource while switching to Simple mode, assuming it is not: ${getErrorMessage(err)}`,
+      `Skipping recent project ${projectId} as a Simple-mode switch target; it could not be found: ${getErrorMessage(err)}`,
     );
     return false;
   }
