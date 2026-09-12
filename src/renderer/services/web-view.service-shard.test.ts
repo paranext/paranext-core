@@ -707,7 +707,59 @@ describe('handleSwitchToSimpleMode', () => {
     // buildSimpleLayoutForProject directly above. dataProviderGetMock is legitimately still called
     // with this same id post-switch, for the unrelated recordProjectOpened side effect (see the
     // dedicated tests for that behavior below).
-    expect(getMetadataForProjectMock).not.toHaveBeenCalled();
+    //
+    // The one lookup it does make is the cached id's own confirmation - a single read, not a walk.
+    expect(getMetadataForProjectMock).toHaveBeenCalledTimes(1);
+    expect(getMetadataForProjectMock).toHaveBeenCalledWith('proj-cached');
+  });
+
+  it('fast path: falls back to the recents walk when the cached project no longer exists', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject, getLastOpenedProject } = await import(
+      '@renderer/services/last-opened-project-cache'
+    );
+    setLastOpenedProject({ id: 'proj-deleted' });
+    // The cached project is gone (deleted, moved, or never cloned onto this machine); the next
+    // recent one is still there.
+    getMetadataForProjectMock.mockImplementation(async (projectId: string) => {
+      if (projectId === 'proj-deleted') throw new Error('No project found with ID proj-deleted');
+      return {};
+    });
+    dataProviderGetMock.mockResolvedValue({
+      getRecentProjects: async () => ['proj-deleted', 'proj-alive'],
+      recordProjectOpened: async () => undefined,
+    });
+
+    await host.handleSwitchToSimpleMode();
+
+    // Building the layout around an id nothing can resolve is what leaves every project-scoped
+    // view in it waiting on a data provider that never arrives.
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalledWith('proj-deleted');
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-alive');
+    // ...and the dead id is forgotten, so the next switch doesn't return to it.
+    expect(getLastOpenedProject()).toEqual({ id: 'proj-alive' });
+  });
+
+  it('fast path: loads the bare layout when neither the cached project nor any recent one exists', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-deleted' });
+    getMetadataForProjectMock.mockRejectedValue(new Error('No project found'));
+    dataProviderGetMock.mockResolvedValue({
+      getRecentProjects: async () => ['proj-deleted', 'proj-also-deleted'],
+      recordProjectOpened: async () => undefined,
+    });
+
+    await host.handleSwitchToSimpleMode();
+
+    // The bare layout plus the default project picker is a working state; a layout bound to a dead
+    // project is not.
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    expect(fakeDockLayout.loadLayout).toHaveBeenCalled();
   });
 
   it('fast path: the tabs-resolved tracker only waits on VISIBLE_SIMPLE_LAYOUT_TAB_IDS, not the full SIMPLE_LAYOUT_TAB_IDS list', async () => {
@@ -852,7 +904,7 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getLastOpenedProject()).toBeUndefined();
   });
 
-  it('slow path: falls back to the bare layout and warns if resolving whether the project is published hangs past the cold-start bound', async () => {
+  it('slow path: falls back to the bare layout and warns if resolving whether a candidate is a usable target hangs past the cold-start bound', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);

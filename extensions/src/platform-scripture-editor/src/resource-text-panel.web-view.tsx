@@ -6,7 +6,6 @@ import {
   useDialogCallback,
   useLocalizedStrings,
   useProjectData,
-  useProjectDataProvider,
   useProjectSetting,
   useSetting,
 } from '@papi/frontend/react';
@@ -20,9 +19,9 @@ import {
   ResourceType,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ResourceReferenceList } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { useResourceReferenceSource } from './use-resource-reference-source.hook';
+import { useResolvedContainerProjectId } from './use-resolved-container-project-id.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
 import type { PickerResource } from './downloaded-resources.utils';
 import {
@@ -31,6 +30,8 @@ import {
   type ResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
+import { HAS_FREE_RESOURCES, freeResourcePickerOptions } from './free-resources.utils';
+import { openParatextRegistration } from './open-paratext-registration.util';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
@@ -70,9 +71,19 @@ const COMMENTARIES_ICON_URLS: TabIconUrls = {
   lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
 };
 
-// This panel offers locally-downloaded resources alongside the ones already in the text
-// collection, so its rows are the union of both.
-const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
+// This panel offers locally-downloaded resources alongside the ones already in the text collection,
+// so its rows are normally the union of both.
+//
+// WITHOUT a project that union is wrong, and dangerously so. Downloaded rows are whatever happens
+// to be installed on the machine — licensed DBL resources from an earlier session, commentaries —
+// and nothing filters them: `allowedResourceIds` guards only the picker dialog and
+// `filterFreeReferences` only the stored setting, so a downloaded row reaches the panel through
+// neither. It would then be auto-selected by `resolveResourceSelection`'s `rows[0]` fallback and
+// rendered, and offered in the selector dropdown, bypassing the exclusion guarantee outright. With
+// no project the only rows that may appear are the user's stored picks, which ARE allowlist-filtered
+// on read.
+const WITH_PROJECT_PICKER_OPTIONS = { includeDownloaded: true } as const;
+const NO_PROJECT_PICKER_OPTIONS = { includeDownloaded: false } as const;
 
 /**
  * Thin data-loader for the Bible Texts / Commentaries panel. It wires PAPI to the props of
@@ -85,12 +96,17 @@ const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
  */
 globalThis.webViewComponent = function ResourceTextPanelWebView({
   id: webViewId,
-  projectId,
+  projectId: savedProjectId,
   updateWebViewDefinition,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
+
+  // A saved layout can name a project that no longer exists; resolving it here is what keeps that
+  // from parking the panel on a spinner nothing ever ends. Everything below reads this, never the
+  // raw prop, so a dead id takes the same no-project path as an absent one.
+  const projectId = useResolvedContainerProjectId(savedProjectId);
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
@@ -156,33 +172,30 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // #region Data sources
 
-  const effectiveResourcesState = useEffectiveResourceReferenceList(
+  // Reads the project's referenced resources when a project is open, and the app-scoped
+  // free-resource choice when none is. Same state shape either way, so everything below is unchanged.
+  const resourceSource = useResourceReferenceSource(
     projectId,
     'platformScripture.referencedProjectsAndResources',
   );
-
-  const textConnectionsProvider = useProjectDataProvider(
-    'platformScripture.textConnectionSettings',
-    projectId,
-  );
+  const effectiveResourcesState = resourceSource.state;
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  const { dblResources, isCatalogReady, hasCatalogError, hasRegistrationError, refetchCatalog } =
+    useDblResourceCatalog();
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
-    projectId,
-    RESOURCE_PICKER_OPTIONS,
+    effectiveResourcesState,
+    resourceSource.isNoProject ? NO_PROJECT_PICKER_OPTIONS : WITH_PROJECT_PICKER_OPTIONS,
     dblResources,
     isCatalogReady || hasCatalogError,
   );
-  const getUserResourceTexts = useCallback(
-    async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
-    [textConnectionsProvider],
-  );
-  const setUserResourceTexts = useCallback(
-    async (resources: ResourceReferenceList) =>
-      textConnectionsProvider?.setUserReferencedProjectsAndResources(resources),
-    [textConnectionsProvider],
-  );
+  const { getUserList: getUserResourceTexts, setUserList: setUserResourceTexts } = resourceSource;
+
+  // Bible-texts-only, and only while something is actually allowlisted: an empty allowlist leaves
+  // nothing to offer, so the tab keeps its plain "no project" message rather than a picker that
+  // cannot be populated.
+  const isFreeResourceEntryPoint =
+    resourceSource.isNoProject && resourceType === 'ScriptureResource' && HAS_FREE_RESOURCES;
 
   // Re-resolve the cached resource list once an install completes so the resource flips to
   // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
@@ -209,6 +222,12 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     listState: effectiveResourcesState,
     isCatalogReady,
     hasCatalogError,
+    // Scoped to the free-resource entry point: with a project open the panel may still have an
+    // installed resource to show, so the retryable catalog error stays the better answer there.
+    hasRegistrationError: isFreeResourceEntryPoint && hasRegistrationError,
+    // The free-resource prompt can only offer what the catalog supplies, so it must not appear
+    // before the catalog has settled.
+    needsCatalogBeforeEmpty: isFreeResourceEntryPoint,
     matchingCount: filteredResources.length,
   });
 
@@ -447,8 +466,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds, isModal: true }),
-      [resourceType, currentFilteredDblIds],
+      () => ({
+        resourceType,
+        selectedResourceIds: currentFilteredDblIds,
+        ...freeResourcePickerOptions(
+          isFreeResourceEntryPoint,
+          localizedStrings['%webView_resourcePanel_freeResourcesOnly_notice%'],
+        ),
+        isModal: true,
+      }),
+      [resourceType, currentFilteredDblIds, isFreeResourceEntryPoint, localizedStrings],
     ),
     useCallback(
       (resource: DblResourceData | undefined) => {
@@ -467,12 +494,14 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     <ResourceTextPanel
       localizedStrings={localizedStrings}
       hasProject={!!projectId}
+      isFreeResourceEntryPoint={isFreeResourceEntryPoint}
       resourceType={resourceType}
       filteredResources={filteredResources}
       selectedRef={selectedRef}
       readiness={readiness}
       dblResources={dblResources}
       onRetryCatalog={refetchCatalog}
+      onOpenRegistration={openParatextRegistration}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
       onSelectResource={setSelectedResourceId}

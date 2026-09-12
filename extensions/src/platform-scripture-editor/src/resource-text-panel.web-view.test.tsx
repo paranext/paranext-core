@@ -22,6 +22,11 @@ vi.mock('@papi/frontend', () => ({
     commands: {
       sendCommand: vi.fn(() => Promise.resolve([])),
     },
+    // `useResolvedContainerProjectId` confirms the container project exists. A lookup that never
+    // settles keeps the saved project id, which is the state these renders assume.
+    projectLookup: {
+      getMetadataForProject: vi.fn(() => new Promise(() => {})),
+    },
   },
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
@@ -86,7 +91,9 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
 }));
 
 // Local hooks — mock at module boundaries so tests control the data the component sees
-vi.mock('./use-effective-resource-reference-list.hook', () => ({
+// Partial: `useResourceReferenceSource` also reads this module's pure `mergeResourceReferenceLists`.
+vi.mock('./use-effective-resource-reference-list.hook', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./use-effective-resource-reference-list.hook')>()),
   useEffectiveResourceReferenceList: (...args: unknown[]) =>
     mockUseEffectiveResourceReferenceList(...args),
   default: (...args: unknown[]) => mockUseEffectiveResourceReferenceList(...args),

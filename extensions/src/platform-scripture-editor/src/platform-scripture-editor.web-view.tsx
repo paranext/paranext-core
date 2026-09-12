@@ -138,6 +138,7 @@ import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
+import { useResolvedContainerProjectId } from './use-resolved-container-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
@@ -386,12 +387,23 @@ const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
-  projectId,
+  projectId: savedProjectId,
   title,
   useWebViewState,
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
 }: WebViewProps) {
+  // A restored layout can name a project that is no longer here — deleted, moved, or not yet cloned
+  // onto this machine. Resolving it is what turns that into the no-project empty state below
+  // instead of an editor waiting on data providers that never arrive. Everything downstream reads
+  // this, never the raw prop, so the dead id cannot reach a read OR a write.
+  //
+  // Deliberately not written back into the web view definition: the saved id is the only record of
+  // which project this tab belongs to, and a project that is merely absent from this machine comes
+  // back (a Send/Receive clone, a restore) — at which point this re-resolves and the tab re-binds
+  // on its own. Clearing it would make that unrecoverable.
+  const projectId = useResolvedContainerProjectId(savedProjectId);
+
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 

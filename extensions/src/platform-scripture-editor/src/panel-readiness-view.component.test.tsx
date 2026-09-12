@@ -11,13 +11,20 @@ const STRINGS = {
   emptyPrompt: 'No Bible text selected.',
   pickLabel: 'Pick Bible text…',
   retryLabel: 'Try again',
+  registrationRequiredMessage: 'Register Paratext to browse freely available texts.',
+  registerLabel: 'Register Paratext',
 };
 
 function renderView(
-  readiness: 'loading' | 'error' | 'catalogError' | 'empty' | 'configured',
+  readiness: 'loading' | 'error' | 'catalogError' | 'registrationRequired' | 'empty' | 'configured',
   overrides = {},
 ) {
-  const props = { onPick: vi.fn(), onRetryCatalog: vi.fn(), ...overrides };
+  const props = {
+    onPick: vi.fn(),
+    onRetryCatalog: vi.fn(),
+    onOpenRegistration: vi.fn(),
+    ...overrides,
+  };
   const result = render(<PanelReadinessView readiness={readiness} {...STRINGS} {...props} />);
   return { ...result, ...props };
 }
@@ -84,10 +91,26 @@ describe('PanelReadinessView', () => {
     expect(screen.queryByText('No Bible text selected.')).not.toBeInTheDocument();
   });
 
+  it('offers registration, not a retry, when the registration is what is missing', () => {
+    // A retry cannot succeed until the registration changes, so this state pairs the message with
+    // the one action that can — the same pairing Home uses for this failure.
+    const { onOpenRegistration } = renderView('registrationRequired');
+
+    expect(
+      screen.getByText('Register Paratext to browse freely available texts.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    // Nor the pick prompt: there is nothing to pick from without a catalog.
+    expect(screen.queryByText('No Bible text selected.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Register Paratext' }));
+    expect(onOpenRegistration).toHaveBeenCalledTimes(1);
+  });
+
   it('gives each front state its own icon so they are distinguishable at a glance', () => {
     // AC-4. Before this, `empty` and `catalogError` rendered character-identical containers —
     // centred text plus a button — while their buttons did opposite things (reconfigure vs. retry).
-    const iconOf = (readiness: 'error' | 'catalogError' | 'empty') => {
+    const iconOf = (readiness: 'error' | 'catalogError' | 'registrationRequired' | 'empty') => {
       const { container, unmount } = renderView(readiness);
       const icon = container.querySelector('[data-slot="empty-icon"] svg');
       const name = icon?.getAttribute('class') ?? undefined;
@@ -97,11 +120,15 @@ describe('PanelReadinessView', () => {
 
     const settingsError = iconOf('error');
     const catalogError = iconOf('catalogError');
+    const registrationRequired = iconOf('registrationRequired');
     const empty = iconOf('empty');
 
     expect(settingsError).toBeDefined();
     expect(catalogError).toBeDefined();
+    expect(registrationRequired).toBeDefined();
     expect(empty).toBeDefined();
-    expect(new Set([settingsError, catalogError, empty]).size).toBe(3);
+    // `registrationRequired` is the one most at risk of colliding: like `catalogError` it is a
+    // failed-catalog state, and like `empty` it carries a single button.
+    expect(new Set([settingsError, catalogError, registrationRequired, empty]).size).toBe(4);
   });
 });

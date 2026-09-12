@@ -1,12 +1,7 @@
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import {
-  useDataProvider,
-  useLocalizedStrings,
-  useProjectDataProvider,
-  useScrollGroupScrRef,
-} from '@papi/frontend/react';
+import { useDataProvider, useLocalizedStrings, useScrollGroupScrRef } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import type {
@@ -15,8 +10,11 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo } from 'react';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { useResourceReferenceSource } from './use-resource-reference-source.hook';
+import { useResolvedContainerProjectId } from './use-resolved-container-project-id.hook';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
+import { HAS_FREE_RESOURCES, freeResourcePickerOptions } from './free-resources.utils';
+import { openParatextRegistration } from './open-paratext-registration.util';
 import { isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
@@ -38,6 +36,8 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...MODEL_TEXT_PANEL_STRING_KEYS,
   '%webView_modelTextPanel_title%',
   '%webView_modelTextPanel_title_withResource%',
+  '%webView_modelTextPanel_noProject_title%',
+  '%webView_modelTextPanel_noProject_title_withResource%',
 ];
 
 /**
@@ -47,7 +47,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
  */
 globalThis.webViewComponent = function ModelTextPanelWebView({
   id: webViewId,
-  projectId,
+  projectId: savedProjectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
   useWebViewState,
@@ -56,20 +56,24 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // --- Raw data sources ---
 
-  const effectiveModelTextsState = useEffectiveResourceReferenceList(
-    projectId,
-    'platformScripture.modelTexts',
-  );
+  // A saved layout can name a project that no longer exists; resolving it here is what keeps that
+  // from parking the panel on a spinner nothing ever ends. Everything below reads this, never the
+  // raw prop, so a dead id takes the same no-project path as an absent one.
+  const projectId = useResolvedContainerProjectId(savedProjectId);
+
+  // Reads the project's configured model text when a project is open, and the app-scoped
+  // free-resource choice when none is. Same state shape either way, so everything below is unchanged.
+  const modelTextSource = useResourceReferenceSource(projectId, 'platformScripture.modelTexts');
+  const effectiveModelTextsState = modelTextSource.state;
+  // An empty allowlist means there is nothing to offer, so the entry point stays off and the panel
+  // shows its plain no-project message instead of a picker that cannot be populated.
+  const isFreeResourceEntryPoint = modelTextSource.isNoProject && HAS_FREE_RESOURCES;
   const effectiveModelTexts =
     effectiveModelTextsState.status === 'ready' ? effectiveModelTextsState.list : undefined;
 
-  const textConnectionsProvider = useProjectDataProvider(
-    'platformScripture.textConnectionSettings',
-    projectId,
-  );
-
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  const { dblResources, isCatalogReady, hasCatalogError, hasRegistrationError, refetchCatalog } =
+    useDblResourceCatalog();
 
   // --- Dynamic title: "Model text: {displayName}" when a resource is loaded ---
   // Computed inline (rather than in the presentational component) because updateWebViewDefinition
@@ -106,18 +110,33 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     modelResourceProjectId,
   );
 
+  // At the free-resource entry point the tab names no model text, matching the panel body: without a
+  // project there is no model relationship, only a text being read.
+  const titleKey = isFreeResourceEntryPoint
+    ? '%webView_modelTextPanel_noProject_title%'
+    : '%webView_modelTextPanel_title%';
+  const titleWithResourceKey = isFreeResourceEntryPoint
+    ? '%webView_modelTextPanel_noProject_title_withResource%'
+    : '%webView_modelTextPanel_title_withResource%';
+
   useEffect(() => {
-    const baseTitle = localizedStrings['%webView_modelTextPanel_title%'];
+    const baseTitle = localizedStrings[titleKey];
     if (!baseTitle) return;
     if (modelTextSmallName) {
-      const fmt = localizedStrings['%webView_modelTextPanel_title_withResource%'];
+      const fmt = localizedStrings[titleWithResourceKey];
       updateWebViewDefinition({
         title: formatReplacementString(fmt, { textName: modelTextSmallName }),
       });
     } else {
       updateWebViewDefinition({ title: baseTitle });
     }
-  }, [modelTextSmallName, localizedStrings, updateWebViewDefinition]);
+  }, [
+    modelTextSmallName,
+    localizedStrings,
+    titleKey,
+    titleWithResourceKey,
+    updateWebViewDefinition,
+  ]);
 
   // Ctrl+F opens Find for the displayed model resource.
   useOpenFindShortcut(webViewId, modelResourceProjectId);
@@ -142,26 +161,27 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     refetchCatalog,
   );
 
+  const { getUserList: getUserModelTexts, setUserList } = modelTextSource;
+
   const setUserModelTexts = useCallback(
     async (list: ResourceReferenceList) => {
-      await textConnectionsProvider?.setUserModelTexts(list);
+      await setUserList(list);
     },
-    [textConnectionsProvider],
-  );
-
-  const getUserModelTexts = useCallback(
-    async () => textConnectionsProvider?.getUserModelTexts(),
-    [textConnectionsProvider],
+    [setUserList],
   );
 
   const showResourcePicker = useCallback(
     (selectedResourceIds: string[]) =>
       papi.dialogs.showDialog('platform.resourcePicker', {
         selectedResourceIds,
+        ...freeResourcePickerOptions(
+          isFreeResourceEntryPoint,
+          localizedStrings['%webView_resourcePanel_freeResourcesOnly_notice%'],
+        ),
         isModal: true,
         resourceType: 'ScriptureResource',
       }),
-    [],
+    [isFreeResourceEntryPoint, localizedStrings],
   );
 
   const getResourceChapter = useCallback(
@@ -196,11 +216,14 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     <ModelTextPanel
       localizedStrings={localizedStrings}
       hasProject={projectId !== undefined}
+      isFreeResourceEntryPoint={isFreeResourceEntryPoint}
+      hasRegistrationError={hasRegistrationError}
       modelTextsState={effectiveModelTextsState}
       dblResources={dblResources}
       isCatalogReady={isCatalogReady}
       hasCatalogError={hasCatalogError}
       onRetryCatalog={refetchCatalog}
+      onOpenRegistration={openParatextRegistration}
       getUserModelTexts={getUserModelTexts}
       scrRef={scrRef}
       onScrRefChange={setScrRef}

@@ -251,6 +251,35 @@ step, no automation. Just a record.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
 
+## adr-bcv-falls-back-to-projectless-editor: BCV navigation falls back to a project-less editor, so a reader without a project is not pinned to one reference
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** The top toolbar disables its book/chapter control when navigation resolves no target
+  (`isBookChapterControlDisabled = !resolvedWebView`). Simple mode always pins resolution to the
+  main editor, and that lookup (`findFirstEditorWebViewDefinition`) requires a Scripture editor web
+  view **with a `projectId`**. With no project open there is none, so the control disabled — which
+  did not matter while the no-project state had nothing to read, and started mattering the moment
+  PT-4326 let those panels show a resource. Without a fix, a user could choose a resource, watch it
+  render, and be stuck at GEN 1:1. PT-4346 does not address this; it consults open resources only
+  *after* a target resolves.
+- **Decision:** Add a third resolution step: when no editor has a project, resolve to the first open
+  Scripture editor web view anyway. In Simple mode that editor is always present and it drives
+  scroll group 0, which both reading panels follow. Non-editor views that merely show a toolbar are
+  deliberately NOT eligible — in Simple mode the toolbar navigates through the editor and every
+  panel follows it.
+- **Alternatives considered:** **Resolve to the reading panel itself** — rejected: its definition
+  `projectId` is the container project, not the resource's, so it supplies the toolbar nothing
+  useful, and it would make the target swing with focus in a mode whose whole navigation model is a
+  single pinned target. **Relax `findFirstEditorWebViewDefinition`** — rejected: that helper is
+  shared with project-picker logic that genuinely means "an editor with a project"; a project-less
+  editor is a distinct case and is kept as one, ordered after it so an open project still wins.
+- **Consequences:** With no project, `platformScripture.booksPresent` stays at its default and the
+  control offers the whole canon. Navigating to a book the chosen resource lacks lands in the
+  panel's "book not available" message, which is a better answer than a disabled control. The
+  ordering is load-bearing and is pinned by a test that lists the project-less editor first.
+- **Source:** PT-4326.
+
 ## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25
@@ -745,6 +774,59 @@ step, no automation. Just a record.
   the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
   public audience.
 - **Source:** the multi-agent review of #2654, finding 1.
+
+## adr-dangling-project-id-resolves-to-no-project: A project id that cannot be resolved is treated as no project at read time, never pruned from the layout
+
+- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Context:** A web view definition can name a project that is not on this machine — a layout
+  restored after the project was deleted or moved, a recents entry for a project never cloned here,
+  or the `lastOpenedProject` cache, which nothing invalidates when a project goes away. Nothing
+  distinguished that id from one whose PDP factory simply had not registered yet, so every
+  project-scoped hook downstream waited on a data provider that would never arrive. The reading
+  panels sat on `getResourcePanelReadiness`'s `loading` state for the life of the window — no error,
+  no timeout, no way out (see `adr-panel-readiness-from-sources`, whose state machine is correct
+  here: the list genuinely never arrives). The editor showed a blank pane and the toolbar picker an
+  error card the user could not act on. Recovery was blocked too: the Simple-mode switch bakes a
+  project id into a cloned layout, and both the cached fast path and the recents walk would hand it
+  a dead id — the walk's `isPublished` check treated a failed lookup as "not published, proceed". So
+  picking another project from the toolbar re-entered the same wedge.
+- **Decision:** An unresolvable project id resolves to "no project" at the point of use, and is
+  never written back. `useResolvedContainerProjectId` (`platform-scripture-editor`) reports the id
+  unchanged until `projectLookupService.getMetadataForProject` rejects, then reports `undefined`;
+  the editor and both reading panels read the resolved value rather than the raw prop, so a dead id
+  reaches neither a read nor a write. `getMetadataForProject` is the confidence bar because it
+  already waits for a PDP factory and retries across the startup grace period, so it rejects only
+  once "absent" is the best available answer. The picker reaches the same verdict from the same call
+  and reports no current project instead of its error card, which is reserved for a metadata fetch
+  that itself failed — "not in the list" only means absent if the list arrived. Separately, no dead
+  id may be _chosen_: `isUsableSwitchTarget` answers existence and published-ness from one metadata
+  read and skips the candidate on either, and the Simple-mode switch confirms the cached last-opened
+  project before building a layout around it, clearing the cache on a definite miss.
+- **Alternatives:** **Prune dangling project ids from the restored layout at startup** — rejected,
+  and it was the original proposal. It cannot tell a deleted project from one merely absent from
+  this machine, and the saved id is the only record of which project a tab belongs to; power mode
+  re-persists the pruned layout, so a user who later Send/Receive-clones that project gets an
+  unbound tab instead of their editor. Read-time resolution has neither problem and re-binds by
+  itself. **Treat the id as missing while the lookup is in flight** — rejected: a PDP factory
+  registers well after the window paints, so a real project would flash the no-project prompt on
+  every start. **Parse the rejection message to separate "absent" from an infrastructure failure** —
+  rejected as brittle; the picker gets the same distinction structurally instead, from whether the
+  metadata list arrived.
+- **Consequences:** "No project" is now reachable two ways — none was named, or the named one is
+  gone — and every consumer must treat them identically, because that equivalence is what makes the
+  free-resource reading path (`adr-no-project-reading-choice-in-app-settings`) the answer for both. A
+  consumer that needs to tell them apart has to keep the raw prop deliberately. The resolution cannot
+  distinguish absence from an infrastructure failure outlasting the lookup's own waits; both land on
+  the no-project path, which renders something usable and re-resolves when the id changes, rather
+  than on the spinner this removes. A view that adds a project-scoped data source must read the
+  resolved id, not the prop, or it reintroduces the wedge for itself alone. Skipping unusable switch
+  candidates means an infrastructure failure that fails every candidate ends with no target and the
+  bare layout plus the default project picker — a working state, and a deliberate trade against
+  baking in an id that cannot load.
+- **Source:** Field report against `pt-4326-free-resources-no-project`: a tester who emptied their
+  projects folder to exercise the no-project reading path found the restored layout still naming the
+  removed projects, leaving both reading panels on "Loading…" indefinitely.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
@@ -2043,6 +2125,41 @@ step, no automation. Just a record.
   resolved before such flows can be wired end-to-end.
 - **Source:** project backup-and-restore port (restore-to-new-project scope cut, PT10 source grep
   2026-05-19).
+
+## adr-no-project-reading-choice-in-app-settings: A no-project reading choice lives in an app-scoped hidden setting, not the project text-connection PDP
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** PT-4326 lets a user with no project open pick and read freely-licensed resources in
+  the two reading panels that flank the editor. Everything those panels do downstream of "which
+  resources are chosen" is already project-independent — both render
+  `platformScripture.USJ_Chapter` for the **resource's own** project id, never the container
+  project. Only the chosen-reference list is project-scoped: it lives in the
+  `platformScripture.textConnectionSettings` project data provider, which does not exist when no
+  project is open.
+- **Decision:** Store the no-project choice in two hidden app settings —
+  `platformScriptureEditor.noProjectModelTexts` and
+  `platformScriptureEditor.noProjectReferencedResources` — carrying the same `ResourceReferenceList`
+  shape as their project-scoped counterparts, and select between the two sources in one hook
+  (`useResourceReferenceSource`) that returns the same `EffectiveResourceReferenceListState` either
+  way. The panels branch on *which source*, never on a second copy of the readiness/install/render
+  state machine. The lists never migrate into a project: opening one reloads both panels with a real
+  `projectId` and the project source takes over.
+- **Alternatives considered:** **`useWebViewState`** — rejected: Simple mode never persists its
+  layout (`saveLayout` no-ops), so a pick would be lost on every restart, for exactly the
+  just-finished-setup user the feature exists to help. **`UserStateContribution`** — it looks
+  purpose-built for this, but it is a type-only stub: its sole reference outside
+  `settings.model.ts` is a re-export in `platform-bible-utils/src/index.ts`, and nothing implements
+  it. **Migrating the choice into the project when one opens** — rejected: it would write a personal
+  scratch choice into a setting that is shared and admin-visible.
+- **Consequences:** Two settings that only one caller writes, which is why they are `isHidden` and
+  why their validator (`no-project-reference-list.utils.ts`) is stricter than the project-scoped
+  `resourceReferenceListValidator` — it accepts only DBL references. Because the settings are
+  declared in JSON while `CURRENT_DATA_VERSION` lives in TypeScript, and nothing typechecks a
+  contribution's `default` against `SettingTypes`, a test pins the two together. Free-resource
+  filtering is applied on read as well as on write, so a UID stored while the allowlist was wider
+  cannot keep rendering.
+- **Source:** PT-4326.
 
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
 
