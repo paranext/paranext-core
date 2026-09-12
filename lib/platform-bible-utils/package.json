@@ -59,7 +59,7 @@
     "typecheck": "tsc -p ./tsconfig.json"
   },
   "dependencies": {
-    "@eten-tech-foundation/scripture-utilities": "~0.1.6",
+    "@eten-tech-foundation/scripture-utilities": "file:../../dev-packages/staging/scripture-utilities",
     "async-mutex": "^0.5.0",
     "dompurify": "^3.4.0",
     "jsonpath-plus": "^10.3.0",

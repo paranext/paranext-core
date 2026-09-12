@@ -1,0 +1,172 @@
+import * as fsPromises from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
+import { afterAll, describe, expect, it } from 'vitest';
+import * as prettier from 'prettier';
+import { BUNDLED_EXTENSION_LICENSE, decideLicenseStamp, stampExtensionLicense } from './git.util';
+import type { DeclaredLicense } from './git.util';
+
+const declared = (
+  file: string,
+  license: unknown,
+  licenseIsDeliberate?: unknown,
+): DeclaredLicense => ({
+  file,
+  present: true,
+  license,
+  licenseIsDeliberate,
+});
+const absent = (file: string): DeclaredLicense => ({ file, present: false, license: undefined });
+
+describe('decideLicenseStamp', () => {
+  it('stamps a folder whose files carry the template license', () => {
+    expect(
+      decideLicenseStamp([declared('package.json', 'MIT'), declared('manifest.json', 'MIT')]),
+    ).toEqual({ stamp: true });
+  });
+
+  it('leaves a folder whose MIT is declared deliberate', () => {
+    // The value alone cannot tell the template's untouched default from a decision: LICENSING.md
+    // requires a runtime-linked package to stay MIT so third-party extension authors do not inherit
+    // AGPL obligations, and an extension in that position would otherwise be relicensed by a
+    // routine template merge, in a commit whose subject is "update from templates".
+    const decision = decideLicenseStamp([
+      declared('package.json', 'MIT', true),
+      declared('manifest.json', 'MIT'),
+    ]);
+    expect(decision.stamp).toBe(false);
+    expect(decision.reason).toContain('licenseIsDeliberate');
+  });
+
+  it('stamps a folder whose files declare nothing yet', () => {
+    expect(
+      decideLicenseStamp([
+        declared('package.json', undefined),
+        declared('manifest.json', undefined),
+      ]),
+    ).toEqual({ stamp: true });
+  });
+
+  it('stamps a folder already carrying this repository’s license', () => {
+    expect(decideLicenseStamp([declared('manifest.json', BUNDLED_EXTENSION_LICENSE)])).toEqual({
+      stamp: true,
+    });
+  });
+
+  // The decision is per FOLDER, not per file: stamping one file while a sibling keeps other terms
+  // leaves two files in one folder declaring different licenses, with no text copied for either.
+  it('leaves the whole folder alone when any file declares other terms', () => {
+    const decision = decideLicenseStamp([
+      declared('package.json', 'Apache-2.0'),
+      declared('manifest.json', undefined),
+    ]);
+    expect(decision.stamp).toBe(false);
+    expect(decision.reason).toContain('Apache-2.0');
+    expect(decision.reason).toContain('package.json');
+  });
+
+  it('leaves the folder alone when the OTHER file is the one with its own terms', () => {
+    expect(
+      decideLicenseStamp([declared('package.json', 'MIT'), declared('manifest.json', 'Apache-2.0')])
+        .stamp,
+    ).toBe(false);
+  });
+
+  // `extensions/src/c-sharp-provider-test/` has a manifest and no package.json. Reading the
+  // declaration from package.json alone leaves it permanently undefined, so the folder's
+  // hand-placed LICENSE is never checked against the terms it declares.
+  it('reads a manifest-only extension from its manifest', () => {
+    expect(decideLicenseStamp([absent('package.json'), declared('manifest.json', 'MIT')])).toEqual({
+      stamp: true,
+    });
+    expect(
+      decideLicenseStamp([absent('package.json'), declared('manifest.json', 'Apache-2.0')]).stamp,
+    ).toBe(false);
+  });
+
+  it('does nothing for a folder with neither file', () => {
+    expect(decideLicenseStamp([absent('package.json'), absent('manifest.json')])).toEqual({
+      stamp: false,
+    });
+  });
+});
+
+describe('stampExtensionLicense', () => {
+  const created: string[] = [];
+  afterAll(() =>
+    Promise.all(created.map((dir) => fsPromises.rm(dir, { recursive: true, force: true }))),
+  );
+
+  /** A throwaway repository root: a root `LICENSE`, and one extension folder under it. */
+  async function makeTree(rootLicense: string, manifest: Record<string, unknown>) {
+    const root = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'stamp-license-'));
+    created.push(root);
+    await fsPromises.writeFile(path.join(root, 'LICENSE'), rootLicense, 'utf8');
+    const folder = 'extensions/src/example';
+    await fsPromises.mkdir(path.join(root, folder), { recursive: true });
+    await fsPromises.writeFile(
+      path.join(root, folder, 'manifest.json'),
+      `${JSON.stringify(manifest, undefined, 2)}\n`,
+      'utf8',
+    );
+    return { root, folder };
+  }
+
+  /** The `license` a JSON file declares, narrowed rather than asserted. */
+  const declaredLicense = async (file: string): Promise<unknown> => {
+    const parsed: unknown = JSON.parse(await fsPromises.readFile(file, 'utf8'));
+    return parsed && typeof parsed === 'object' && 'license' in parsed ? parsed.license : undefined;
+  };
+
+  it('stamps the field and copies the text when the root LICENSE is the AGPL', async () => {
+    const { root, folder } = await makeTree('GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3\n', {
+      name: 'example',
+      version: '0.0.1',
+    });
+    await stampExtensionLicense(folder, root);
+    expect(await declaredLicense(path.join(root, folder, 'manifest.json'))).toBe(
+      BUNDLED_EXTENSION_LICENSE,
+    );
+    expect(await fsPromises.readFile(path.join(root, folder, 'LICENSE'), 'utf8')).toContain(
+      'GNU AFFERO GENERAL PUBLIC LICENSE',
+    );
+  });
+
+  it('leaves a manifest Prettier would reformat in the shape Prettier writes', async () => {
+    // `stampLicenseInJson` reprints the WHOLE file rather than editing the one field, and
+    // `JSON.stringify` always expands a short array across three lines where Prettier keeps it
+    // inline. Without formatting the result, `update-from-templates` produces a tree that fails
+    // `npm run format:check` - surfacing far from here, in an unrelated CI step after a template
+    // merge, against a file nobody edited. No extension manifest carries a short array today, so
+    // this is the guard that keeps the tripwire disarmed rather than a bug being fixed.
+    const { root, folder } = await makeTree('GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3\n', {
+      name: 'example',
+      version: '0.0.1',
+      commands: ['dotnet-csharpier'],
+    });
+
+    await stampExtensionLicense(folder, root);
+
+    const file = path.join(root, folder, 'manifest.json');
+    const written = await fsPromises.readFile(file, 'utf8');
+    expect(written).toContain('"commands": ["dotnet-csharpier"]');
+    expect(await prettier.check(written, { filepath: file, parser: 'json' })).toBe(true);
+  });
+
+  it('declares nothing it cannot also give the text for', async () => {
+    // The failure this orders against: writing the `license` field first and reading the canonical
+    // text afterwards leaves a folder whose root LICENSE is not the AGPL declaring
+    // AGPL-3.0-or-later with a different license text beside it - and a re-run cannot repair that,
+    // because a folder that already declares the value is short-circuited before any text is
+    // copied. Nothing may be stamped unless the text that has to accompany it is in hand.
+    const { root, folder } = await makeTree('MIT License\n\nPermission is hereby granted...\n', {
+      name: 'example',
+      version: '0.0.1',
+    });
+    await expect(stampExtensionLicense(folder, root)).rejects.toThrow(
+      /is not the AGPL-3\.0-or-later text/,
+    );
+    expect(await declaredLicense(path.join(root, folder, 'manifest.json'))).toBeUndefined();
+    await expect(fsPromises.readFile(path.join(root, folder, 'LICENSE'), 'utf8')).rejects.toThrow();
+  });
+});

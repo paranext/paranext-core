@@ -3,11 +3,19 @@
   "repos": [
     {
       "folder": "scripture-editors",
-      "cloneUrl": "https://github.com/eten-tech-foundation/scripture-editors.git",
+      "cloneUrl": "https://github.com/paranext/scripture-editors.git",
       "revision": "platform-yalc",
       "devPackages": [
-        { "devpubTarget": "platform-editor", "repoLinkScript": "editor" },
-        { "devpubTarget": "utilities", "repoLinkScript": "utils" }
+        {
+          "nxProject": "platform-editor",
+          "packagePath": "packages/platform",
+          "stagingFolder": "platform-editor"
+        },
+        {
+          "nxProject": "utilities",
+          "packagePath": "packages/utilities",
+          "stagingFolder": "scripture-utilities"
+        }
       ]
     }
   ]

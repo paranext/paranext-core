@@ -2164,6 +2164,30 @@ declare module 'shared/models/rpc.interface' {
      * @experimental
      */
     onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Event that fires when this process's own connection to the network is lost unexpectedly — the
+     * websocket closed without the app having asked it to.
+     *
+     * This is platform-internal core plumbing between the process that holds a client connection and
+     * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+     * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+     *
+     * This is a local, in-process event. Only a process that holds a client connection can lose one,
+     * so it fires exclusively on clients; in the process that owns the websocket server it is a real
+     * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the
+     * close code, and a close the app asked for is not a loss.
+     *
+     * Nor does a connection that was never established. A socket that dies during the opening
+     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
+     * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
+     * event is only for losing a connection that was up.
+     *
+     * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
+     * to react to the loss rather than to classify it.
+     *
+     * @experimental
+     */
+    onDidLoseConnection: PlatformEvent<void>;
   }
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
@@ -2286,6 +2310,14 @@ declare module 'client/services/rpc-client' {
      */
     readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
     /**
+     * Fires when this client's established websocket closes without the app having asked it to. A
+     * socket that dies before it ever opened is a failed connection attempt rather than a loss, and
+     * is silent here. See {@link IRpcMethodRegistrar.onDidLoseConnection}.
+     *
+     * @experimental
+     */
+    readonly onDidLoseConnection: PlatformEvent<void>;
+    /**
      * Whether {@link onWebSocketClose} has already run for the current socket.
      *
      * A closed socket's listener is already removed, but a caller holding a stale reference to the
@@ -2307,6 +2339,7 @@ declare module 'client/services/rpc-client' {
     private readonly registrationMutexMap;
     private readonly connectionComplete;
     private readonly clientDisconnectEmitter;
+    private readonly connectionLostEmitter;
     /**
      * Label identifying this process in connection log lines, so multi-window logs stay readable.
      *
@@ -2606,6 +2639,13 @@ declare module 'main/services/rpc-websocket-listener' {
      * @experimental
      */
     readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Never fires here. Only a process holding a client connection can lose one; this end of the seam
+     * exists so shared code can subscribe in any process without asking which one it is running in.
+     *
+     * @experimental
+     */
+    readonly onDidLoseConnection: PlatformEvent<void>;
     private localEventHandler;
     private webSocketServer;
     private nextSocketNumber;
@@ -2626,6 +2666,7 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private readonly warnedForeignAnnouncements;
     private readonly clientDisconnectEmitter;
+    private readonly connectionLostEmitter;
     /**
      * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
      *   overridden only by tests that need to bind a real socket without colliding with a running
@@ -2733,6 +2774,26 @@ declare module 'shared/services/network.service' {
    * @experimental
    */
   export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Fires when this process's own connection to the network is lost unexpectedly — the websocket
+   * closed without the app having asked it to.
+   *
+   * This is platform-internal core plumbing between the process that holds a client connection and
+   * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+   * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+   *
+   * This is a local, in-process event. Only a process that holds a client connection can lose one, so
+   * it fires exclusively on clients; in the process that owns the websocket server it is a real event
+   * that simply never fires. A deliberate disconnect does not fire it: intent travels in the close
+   * code, and a close the app asked for is not a loss. Neither does a connection that never opened —
+   * only an established connection can be lost, so a failed startup attempt is silent here.
+   *
+   * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
+   * handler to subscribe to. Carries no payload; the close detail is logged where it is observed.
+   *
+   * @experimental
+   */
+  export const onDidLoseConnection: PlatformEvent<void>;
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -5342,6 +5403,20 @@ declare module 'papi-shared-types' {
      * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+    /**
+     * Open the Terms of Service document that ships beside the application - the terms the
+     * distributed application is licensed to the user under, rather than this repository's AGPL
+     * source (see LICENSING.md).
+     *
+     * The document is handed to whatever the operating system opens Markdown with; if nothing does,
+     * it is revealed in the file manager instead.
+     *
+     * @throws If the document could not be opened - which includes the case where it was revealed
+     *   in the file manager instead, because that fallback cannot report whether it succeeded
+     *   either. A caller that offers this as a link needs to be able to tell the user the document
+     *   did not open, so the failure is reported rather than only logged.
+     */
+    'platform.openTermsOfService': () => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -6299,6 +6374,7 @@ declare module 'shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
   import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
+  import type { WebViewId } from 'shared/models/web-view.model';
   export type Severity = 'info' | 'warning' | 'error';
   /**
    * The placements a notification can appear in, as a frozen array so it can be the single source of
@@ -6433,6 +6509,14 @@ declare module 'shared/models/notification.service-model' {
      * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
      * the value it had on the previous `send` for that id - omitting a field never clears it. Pass
      * the field explicitly to change it.
+     *
+     * The one exception is {@link webViewId}: which window a `send` runs in is decided in the main
+     * process before the renderer ever sees the notification to merge it, so omitting `webViewId` on
+     * an update does NOT keep routing to the window the original send resolved to - it always routes
+     * by the rules {@link webViewId} documents, using only what this call passed. An update that lands
+     * in a different window updates nothing: that window has never seen the id, so it opens a second
+     * notification with no merge applied, and the original stays up in the window it was routed to.
+     * Pass the same `webViewId` on every `send` that shares an id.
      */
     notificationId?: string | number;
     /**
@@ -6443,6 +6527,23 @@ declare module 'shared/models/notification.service-model' {
      * seconds).
      */
     duration?: number;
+    /**
+     * Optional id of a web view this notification is about. When provided, the notification is routed
+     * to the window that owns that web view instead of the focused window — for a notification or
+     * prompt raised about a specific project or editor that may not be the one the user is currently
+     * looking at. Falls back to the focused window whenever the web view's window cannot be
+     * determined — it is open nowhere, a window that might have it could not be asked, or it is
+     * moving between windows.
+     *
+     * Omit for a generic notice, which should keep routing to the focused window — where the user is
+     * looking is the right place for something that is not about anything in particular.
+     *
+     * The narrowest key available: a notification about a project with no web view currently open has
+     * no `webViewId` to name, and routes to the focused window like a generic notice would.
+     *
+     * @experimental
+     */
+    webViewId?: WebViewId;
   }
   /**
    * Type signature for a command handler that is called when a user clicks on a notification.

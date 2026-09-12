@@ -335,6 +335,29 @@ describe('ModelTextPanel', () => {
     expect(installResource).toHaveBeenCalledTimes(1);
   });
 
+  it('drops the connection hint when the install succeeded but the catalog has not caught up', async () => {
+    // Offline, but the resource is already on disk: the no-op install succeeds, so blaming the
+    // network would send the user off fixing the wrong thing.
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const installResource = vi.fn(async () => {});
+    const props = makeProps({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [UNINSTALLED_RESOURCE],
+      installResource,
+    });
+    const { rerender } = render(<ModelTextPanel {...props} />);
+    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
+    rerender(<ModelTextPanel {...props} dblResources={[]} />);
+    rerender(<ModelTextPanel {...props} dblResources={[{ ...UNINSTALLED_RESOURCE }]} />);
+
+    expect(await screen.findByText("The model text couldn't be installed.")).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "The model text couldn't be installed. Check your connection and try again.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it('does not auto-install a model text whose resource is already installed', async () => {
     const installResource = vi.fn(async () => {});
     const getResourceChapter = vi.fn(async () => ({ usj: undefined, textDirection: 'ltr' }));

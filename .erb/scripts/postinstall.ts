@@ -1,0 +1,293 @@
+/**
+ * Root postinstall: verifies that npm actually installed the staged dev packages' dependencies,
+ * then runs the build chain (`postinstall:build`).
+ *
+ * Why this exists: npm resolves the dependency tree from the on-disk state it saw at startup. On a
+ * fresh clone, `dev-packages/staging/` is only created during this same install (by `preinstall`),
+ * so `npm install` links the staged packages but never reads their manifests — their dependencies
+ * are silently missing from the tree, with exit code 0. (`npm ci` is immune: it installs the
+ * closure recorded in `package-lock.json`.)
+ *
+ * The fix is to run the install again: staging now exists, so npm reads the manifests and installs
+ * the closure. This script detects the incomplete tree and does that re-run itself, once, guarded
+ * by an environment variable so a genuinely broken state fails instead of looping. The nested run
+ * executes the full lifecycle — including this script and the build chain — so when it succeeds,
+ * this outer run has nothing left to do and skips the chain.
+ *
+ * If the closure is missing but this repo's tree cannot fix it — the staged manifest declares a
+ * dependency `package-lock.json` does not record — the re-run would not help: `npm install` would
+ * update the lockfile locally, which is the right move for a developer but must be a committed
+ * change, not a CI side effect. Under `npm ci`, in CI, or on the guarded second pass, this fails
+ * with instructions instead.
+ *
+ * Plain Node importing only the standard library, like `stage-dev-packages.ts`: on the very install
+ * this script exists to repair, devDependencies may be incomplete.
+ */
+
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+// Explicit `.ts`: this runs under bare `node` with type stripping, where extensionless resolution
+// of a TypeScript file does not work.
+const {
+  RESCUED_COMMITS_FILE,
+  diffStagedAgainstLock,
+  formatRescuedCommitsBanner,
+  isEnvFlagEnabled,
+} = require('./stage-dev-packages.util.ts');
+
+/**
+ * Check-only mode: report whether the staged dev packages match `package-lock.json`, and do nothing
+ * else. This is what `npm run verify:dev-packages` runs.
+ *
+ * It exists for consumers. They install this repo with `npm ci --ignore-scripts` - required,
+ * because this script's build chain builds an Electron DLL they have no use for - and that skips
+ * the very check that says whether the editor they are about to build against is the one this
+ * repo's lockfile describes. Without a way to run the check alone, eight repositories build against
+ * whatever the pinned branch happened to hold at that moment, with nothing to notice the drift.
+ */
+const isCheckOnly = process.argv.includes('--check');
+
+const REPO_ROOT: string = path.resolve(__dirname, '..', '..');
+const STAGING_ROOT: string = path.resolve(REPO_ROOT, 'dev-packages', 'staging');
+
+/** Environment variable guarding the one-shot re-run so it can never recurse. */
+const RERUN_GUARD = 'PT_DEV_PACKAGES_RERUN';
+
+type Manifest = {
+  name?: string;
+  dependencies?: Record<string, string>;
+};
+
+/** The dependency sections of a staged manifest or lockfile entry that get compared. */
+type DependencySections = Record<string, Record<string, unknown> | undefined>;
+
+/** The staging folder names `dev-packages.json` declares, which are the only ones that count. */
+function getDeclaredStagingFolders(): string[] {
+  const config: { repos?: { devPackages?: { stagingFolder?: string }[] }[] } = JSON.parse(
+    fs.readFileSync(path.resolve(REPO_ROOT, 'dev-packages.json'), 'utf8'),
+  );
+  return (config.repos ?? []).flatMap((repo) =>
+    (repo.devPackages ?? [])
+      .map((devPackage) => devPackage.stagingFolder)
+      .filter((folder): folder is string => !!folder),
+  );
+}
+
+/**
+ * Returns the names of dependencies declared by staged packages that do not resolve in this repo's
+ * `node_modules`. Only `dependencies` are checked: those are what npm installs for a `file:`
+ * package. Peer dependencies are the host's responsibility and are declared in this repo's own
+ * manifests already.
+ *
+ * Driven by `dev-packages.json` rather than by what is on disk. Nothing removes a staging folder
+ * when a package is renamed or dropped, and reading a leftover one would report its dependencies —
+ * which this repo has correctly stopped installing — as missing.
+ */
+function getMissingStagedDependencies(): string[] {
+  if (!fs.existsSync(STAGING_ROOT)) return [];
+
+  const missing = new Set<string>();
+  getDeclaredStagingFolders().forEach((folder: string) => {
+    const manifestPath = path.resolve(STAGING_ROOT, folder, 'package.json');
+    if (!fs.existsSync(manifestPath)) return;
+    const manifest: Manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    Object.keys(manifest.dependencies ?? {}).forEach((dependencyName) => {
+      // `file:` specifiers point at sibling staged folders, which are linked, not installed.
+      if (manifest.dependencies?.[dependencyName].startsWith('file:')) return;
+      // Looked up from the staged package outward rather than only in the root `node_modules`: npm
+      // may legitimately nest a copy under the staged folder when the root holds an incompatible
+      // version, and a root-only check would call that "not installed" and fail the install with a
+      // diagnosis pointing at the lockfile.
+      if (!isDependencyInstalledFrom(path.resolve(STAGING_ROOT, folder), dependencyName))
+        missing.add(dependencyName);
+    });
+  });
+  return [...missing];
+}
+
+/**
+ * Whether `dependencyName` is installed anywhere Node would find it from `fromDir`.
+ *
+ * Walks the `node_modules` chain by hand rather than asking `require.resolve`: a package whose
+ * `exports` map declares no `.` entry — `@lexical/react`, which the editor depends on, is exactly
+ * this — throws there even though it is installed and imported by subpath everywhere it is used.
+ * Treating that as missing would fail every install with a lockfile diagnosis that is not the
+ * problem. Presence of the directory is what this needs to know.
+ *
+ * The walk stops at the repository root. Everything npm installs for a staged package lands at or
+ * below it — including the nested copy this walks outward to find — so a `node_modules` above it
+ * (`$HOME/node_modules`, `/node_modules`) holds something this repository did not install. Node
+ * would resolve through one, which is what makes the tree look complete on the one machine that has
+ * it: counting it here skips the repair re-run and reports success on a tree that breaks anywhere
+ * else.
+ */
+function isDependencyInstalledFrom(fromDir: string, dependencyName: string): boolean {
+  let dir = fromDir;
+  for (;;) {
+    if (fs.existsSync(path.resolve(dir, 'node_modules', dependencyName))) return true;
+    if (dir === REPO_ROOT) return false;
+    const parent = path.dirname(dir);
+    if (parent === dir) return false;
+    dir = parent;
+  }
+}
+
+/**
+ * Describes every place `package-lock.json`'s record of a staged package disagrees with the
+ * manifest actually staged.
+ *
+ * Presence in `node_modules` is not enough on its own: npm builds its ideal tree from the on-disk
+ * state it saw at startup, so a staged package whose dependency _range_ moved — `^0.43.0` to
+ * `^0.44.0`, say — resolves to the already-installed version, reports "up to date", and leaves the
+ * lockfile recording the old range. Every later `npm ci` then fails on the mismatch, in CI, for
+ * everyone. Comparing the recorded sections against the staged manifest is what catches it while it
+ * is still repairable.
+ */
+function getStagedLockMismatches(): string[] {
+  const lockPath = path.resolve(REPO_ROOT, 'package-lock.json');
+  if (!fs.existsSync(lockPath)) return [];
+  const lock: { packages?: Record<string, DependencySections> } = JSON.parse(
+    fs.readFileSync(lockPath, 'utf8'),
+  );
+
+  return getDeclaredStagingFolders().flatMap((folder: string) => {
+    const manifestPath = path.resolve(STAGING_ROOT, folder, 'package.json');
+    if (!fs.existsSync(manifestPath)) return [];
+    return diffStagedAgainstLock(
+      folder,
+      JSON.parse(fs.readFileSync(manifestPath, 'utf8')),
+      lock.packages?.[`dev-packages/staging/${folder}`],
+    );
+  });
+}
+
+function runBuildChain(): void {
+  execSync('npm run postinstall:build', { stdio: 'inherit', cwd: REPO_ROOT });
+}
+
+/**
+ * Re-announces commits `stage-dev-packages` moved aside, and forgets the ones already dealt with.
+ *
+ * Staging runs as `preinstall`, so what it printed is buried under npm's own output and a full
+ * build chain by the time the install ends. This is the last thing the install prints.
+ *
+ * A ref that no longer resolves has been dealt with, so its entry goes; when none are left the
+ * record goes too. That is what stops the reminder - nothing deletes these refs automatically,
+ * because the commits on them exist on exactly one machine.
+ */
+function announceRescuedCommits(): void {
+  // The nested repair install runs this same script; letting it announce would print the banner
+  // once from inside the nested run and again from this one.
+  if (isEnvFlagEnabled(process.env[RERUN_GUARD])) return;
+
+  const recordPath = path.resolve(REPO_ROOT, RESCUED_COMMITS_FILE);
+  if (!fs.existsSync(recordPath)) return;
+
+  let rescues: { repoPath: string; rescueRef: string }[];
+  try {
+    rescues = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
+  } catch {
+    // Nothing here is worth failing an install over, and a record this cannot read says nothing
+    // about the commits themselves - they are still on their refs, and git is where they are found.
+    return;
+  }
+
+  const live = rescues.filter((rescue) => {
+    try {
+      execSync(`git show-ref --verify --quiet "${rescue.rescueRef}"`, {
+        cwd: rescue.repoPath,
+        stdio: 'ignore',
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  if (live.length === 0) {
+    fs.rmSync(recordPath, { force: true });
+    return;
+  }
+  if (live.length !== rescues.length)
+    fs.writeFileSync(recordPath, `${JSON.stringify(live, undefined, 2)}\n`);
+  console.warn(formatRescuedCommitsBanner(live));
+}
+
+function postinstall(): void {
+  const missing = getMissingStagedDependencies();
+  const mismatches = getStagedLockMismatches();
+
+  if (missing.length === 0 && mismatches.length === 0) {
+    if (isCheckOnly) {
+      console.log('The staged dev packages match package-lock.json.');
+      return;
+    }
+    runBuildChain();
+    return;
+  }
+
+  const problems = [
+    ...missing.map((name) => `${name} (declared by a staged package, not installed)`),
+    ...mismatches,
+  ];
+
+  // Check-only mode never repairs anything - it has no business running an install in a tree it was
+  // only asked about, least of all a consumer's CI checkout of this repo.
+  if (isCheckOnly) {
+    console.error(
+      `\nThe staged dev packages do not match this repo's package-lock.json:\n\n  ${problems.join(
+        '\n  ',
+      )}\n\nThe staged packages come from the branch dev-packages.json pins, which moves independently\nof this repo's commits, so a checkout of this repo can be older than what it stages. Building\nagainst this tree builds against dependencies this repo never resolved.\n\nIn this repo: run \`npm install\` and commit the package-lock.json change.\nConsuming this repo: use a paranext-core commit whose lockfile was refreshed against the\ncurrent pinned revision.\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  // `npm ci` cannot repair this: it installs the closure `package-lock.json` records and never
+  // re-resolves, so a second pass would arrive here with the same missing dependencies. Only an
+  // `npm install` — whose lockfile change has to be committed — can.
+  if (
+    isEnvFlagEnabled(process.env[RERUN_GUARD]) ||
+    isEnvFlagEnabled(process.env.CI) ||
+    process.env.npm_command === 'ci'
+  ) {
+    console.error(
+      `\nThis repo's package-lock.json does not match the staged dev packages:\n\n  ${problems.join(
+        '\n  ',
+      )}\n\nThis means scripture-editors' dependencies changed but this repo's package-lock.json was\nnot updated to match. To fix: run \`npm install\` in this repo (with the scripture-editors\ncheckout present) and commit the package-lock.json change.\n`,
+    );
+    // Not `process.exit`: it tears down the process synchronously, dropping anything still
+    // queued on a piped stderr (which is how npm runs lifecycle scripts) past the ~64KB buffer.
+    // The explicit `return` is what keeps the re-run below from firing on the way past.
+    process.exitCode = 1;
+    return;
+  }
+
+  // Fresh-clone `npm install`: staging did not exist when npm resolved the tree, so the closure was
+  // skipped. Staging exists now, so running the same install again resolves it properly. The nested
+  // run executes the full lifecycle — preinstall re-stages (a fast no-op via its freshness marker),
+  // and its own postinstall runs the build chain — so this outer run is done when it returns.
+  console.log(
+    '\nThe staged dev packages do not match what npm resolved this run — they were created or\nchanged after it had already built the dependency tree. Running the install again to pick them\nup...\n',
+  );
+  try {
+    execSync('npm install', {
+      stdio: 'inherit',
+      cwd: REPO_ROOT,
+      env: { ...process.env, [RERUN_GUARD]: '1' },
+    });
+  } catch {
+    // The nested install has already printed its own reason, and it runs this same script, so its
+    // message is the actionable one. Rethrowing would stack a second stack trace from this process
+    // on top of it for the one cause.
+    console.error(
+      '\nThe repeat install failed; its error is above. Nothing here can repair that — fix what it\nreports and run `npm install` again.\n',
+    );
+    process.exitCode = 1;
+  }
+}
+
+postinstall();
+// After everything, including the build chain, so it is the last thing the install prints.
+if (!isCheckOnly) announceRescuedCommits();

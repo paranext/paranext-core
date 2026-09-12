@@ -228,6 +228,7 @@ function resetPanelHooks() {
   mockUseDblResourceAutoInstall.mockReturnValue({
     isInstalling: false,
     installFailed: false,
+    installFailureReason: undefined,
     retryInstall: vi.fn(),
     clearInstallFailure: vi.fn(),
     markInstallFailed: vi.fn(),
@@ -273,6 +274,7 @@ describe('ResourceTextPanel — failed install recovery', () => {
     mockUseDblResourceAutoInstall.mockReturnValue({
       isInstalling: false,
       installFailed: true,
+      installFailureReason: 'installRejected',
       retryInstall,
       clearInstallFailure: vi.fn(),
       markInstallFailed: vi.fn(),
