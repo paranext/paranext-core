@@ -15,7 +15,7 @@ import {
   type MouseEvent,
   type RefObject,
 } from 'react';
-import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Group, Loader2 } from 'lucide-react';
 import {
   getLocalizeKeyForScrollGroupId,
   normalizeProjectId,
@@ -94,7 +94,7 @@ export {
 } from './project-selector.groupings';
 
 // The selector's own popover already sits at `Z_INDEX_ABOVE_DOCK`; overlays that portal from
-// inside it (the row tooltip and the filter dropdown) must stack above that popover, not behind.
+// inside it (the row tooltip and the group-by dropdown) must stack above that popover, not behind.
 const Z_INDEX_ABOVE_SELECTOR_POPOVER = Z_INDEX_ABOVE_DOCK + 50;
 
 // Below this trigger width the chevron + its 8px margin + the button's own padding leave no room
@@ -111,7 +111,7 @@ const NARROW_TRIGGER_THRESHOLD_PX = 100;
  * `%projectSelector_*%` keys in the platform's localizedStrings JSON) so every ProjectSelector in
  * the app reads the same vocabulary.
  *
- * Grouping _labels_ (the radio items in the filter menu) are NOT in this map — those live on the
+ * Grouping _labels_ (the radio items in the group-by menu) are NOT in this map — those live on the
  * {@link ProjectSelectorGrouping} objects the caller passes via `availableGroupings`, so custom
  * groupings can supply their own localized label without a separate string channel.
  */
@@ -124,12 +124,12 @@ export type ProjectSelectorLocalizedStrings = {
   commandEmptyMessage?: string;
   /** Placeholder for the popover's search input. */
   searchPlaceholder?: string;
-  /** Accessible label + `title` for the filter menu icon button. */
-  filterAriaLabel?: string;
-  /** Filter menu: section heading for the grouping radio group. */
+  /** Accessible label + `title` for the group-by menu icon button. */
+  groupByAriaLabel?: string;
+  /** Group-by menu: section heading for the grouping radio group. */
   groupSectionLabel?: string;
-  /** Filter menu: "None" grouping radio item — the "no grouping" option. */
-  filterGroupNone?: string;
+  /** Group-by menu: "None" grouping radio item — the "no grouping" option. */
+  groupByNone?: string;
   /** Section heading rendered above the "open tabs" bucket. */
   openTabsSectionHeading?: string;
   /** Section heading rendered above the "other projects" bucket. */
@@ -164,9 +164,9 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   buttonPlaceholder: '',
   commandEmptyMessage: 'No projects found',
   searchPlaceholder: 'Search projects & resources',
-  filterAriaLabel: 'Filter',
+  groupByAriaLabel: 'Group by',
   groupSectionLabel: 'Group by',
-  filterGroupNone: 'None',
+  groupByNone: 'None',
   openTabsSectionHeading: 'Opened project & resource tabs',
   otherProjectsSectionHeading: 'Your projects & resources',
   autoOpenTabsGroupingLabel: 'Open tabs',
@@ -197,9 +197,9 @@ function resolveStrings(
 export const PROJECT_SELECTOR_STRING_KEYS = [
   '%projectSelector_searchPlaceholder%',
   '%projectSelector_commandEmptyMessage%',
-  '%projectSelector_filterAriaLabel%',
+  '%projectSelector_groupByAriaLabel%',
   '%projectSelector_groupSectionLabel%',
-  '%projectSelector_filterGroupNone%',
+  '%projectSelector_groupByNone%',
   '%projectSelector_openTabsSectionHeading%',
   '%projectSelector_otherProjectsSectionHeading%',
   '%projectSelector_boundButClosedTooltip%',
@@ -237,9 +237,9 @@ export function buildProjectSelectorLocalizedStrings(
   return {
     searchPlaceholder: strings['%projectSelector_searchPlaceholder%'],
     commandEmptyMessage: strings['%projectSelector_commandEmptyMessage%'],
-    filterAriaLabel: strings['%projectSelector_filterAriaLabel%'],
+    groupByAriaLabel: strings['%projectSelector_groupByAriaLabel%'],
     groupSectionLabel: strings['%projectSelector_groupSectionLabel%'],
-    filterGroupNone: strings['%projectSelector_filterGroupNone%'],
+    groupByNone: strings['%projectSelector_groupByNone%'],
     openTabsSectionHeading: strings['%projectSelector_openTabsSectionHeading%'],
     otherProjectsSectionHeading: strings['%projectSelector_otherProjectsSectionHeading%'],
     autoOpenTabsGroupingLabel: strings['%projectSelector_grouping_openTabs_label%'],
@@ -335,7 +335,7 @@ type CommonProps = {
    */
   localizedStrings?: ProjectSelectorLocalizedStrings;
   /**
-   * The grouping options exposed in the filter menu, in order. Each entry is a
+   * The grouping options exposed in the group-by menu, in order. Each entry is a
    * {@link ProjectSelectorGrouping} — either one of the built-ins from {@link makeBuiltInGroupings}
    * or a consumer-defined custom grouping.
    *
@@ -344,12 +344,12 @@ type CommonProps = {
    * - **Omitted** — the component auto-derives from context: adds `openTabs` when `openTabs.length >
    *   0`, and adds `selection` in `project-multi` mode. Pickers that don't care about the grouping
    *   menu can leave this prop unset and get a sensible default.
-   * - **`[]`** — explicit empty. No filter menu renders. The list opens flat.
-   * - **Length 1** — the grouping is applied and the user is locked into it: the filter menu has
+   * - **`[]`** — explicit empty. No group-by menu renders. The list opens flat.
+   * - **Length 1** — the grouping is applied and the user is locked into it: the group-by menu has
    *   nothing to switch between so the funnel button is dropped entirely. Use this for pickers
    *   whose grouping is the entire point (e.g. manage-books Create "Based on" locked into
    *   versification).
-   * - **Length ≥ 2** — a filter menu renders with a "None" radio (above a separator) plus one radio
+   * - **Length ≥ 2** — a group-by menu renders with a "None" radio (above a separator) plus one radio
    *   per grouping.
    *
    * A caller that wants the historical set of built-ins passes `defaultGroupings` (or
@@ -620,26 +620,26 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
 
 // #endregion
 
-// #region Filter menu
+// #region Group-by menu
 
 /** Sentinel used for the "no grouping" radio value. Kept module-local (not exported). */
 const NO_GROUPING = 'none';
 
 type ActiveGroupingId = string;
 
-type FilterMenuProps = {
+type GroupByMenuProps = {
   availableGroupings: readonly ProjectSelectorGrouping[];
   activeGrouping: ActiveGroupingId;
   onChangeGrouping: (value: ActiveGroupingId) => void;
   strings: Required<ProjectSelectorLocalizedStrings>;
 };
 
-function FilterMenu({
+function GroupByMenu({
   availableGroupings,
   activeGrouping,
   onChangeGrouping,
   strings,
-}: FilterMenuProps) {
+}: GroupByMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -647,11 +647,11 @@ function FilterMenu({
           variant="ghost"
           size="sm"
           className="tw:h-8 tw:w-8 tw:shrink-0 tw:p-0"
-          aria-label={strings.filterAriaLabel}
-          title={strings.filterAriaLabel}
+          aria-label={strings.groupByAriaLabel}
+          title={strings.groupByAriaLabel}
           onMouseDown={(event: MouseEvent) => event.preventDefault()}
         >
-          <Filter className="tw:h-4 tw:w-4" />
+          <Group className="tw:h-4 tw:w-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -663,9 +663,7 @@ function FilterMenu({
         <DropdownMenuRadioGroup value={activeGrouping} onValueChange={onChangeGrouping}>
           {/* No `onSelect={preventDefault}` here — picking a grouping should close the menu
               immediately, so the user sees the newly grouped list without a second click. */}
-          <DropdownMenuRadioItem value={NO_GROUPING}>
-            {strings.filterGroupNone}
-          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value={NO_GROUPING}>{strings.groupByNone}</DropdownMenuRadioItem>
           {/* Visually separate "None" from the real grouping options — "None" is the "off state"
               and the actual grouping choices sit below the divider. */}
           <DropdownMenuSeparator />
@@ -1080,9 +1078,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
   );
 
-  // The filter menu only exists to let the user switch between groupings. With 0 or 1 groupings
+  // The group-by menu only exists to let the user switch between groupings. With 0 or 1 groupings
   // there is nothing to switch between (single-grouping lock), so drop the funnel button entirely.
-  const showFilterMenu = availableGroupings.length > 1;
+  const showGroupByMenu = availableGroupings.length > 1;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -1109,8 +1107,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   spaceSelectsHighlightedItem
                 />
               </div>
-              {showFilterMenu && (
-                <FilterMenu
+              {showGroupByMenu && (
+                <GroupByMenu
                   availableGroupings={availableGroupings}
                   activeGrouping={activeGrouping}
                   onChangeGrouping={setActiveGrouping}

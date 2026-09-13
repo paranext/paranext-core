@@ -361,3 +361,26 @@ describe('ProjectSelector — scroll-to-selected on open', () => {
     }
   });
 });
+
+describe('group-by menu naming', () => {
+  it('labels the menu trigger with groupByAriaLabel, not a filter label', async () => {
+    const user = userEvent.setup();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={[{ id: 'a', shortName: 'A', fullName: 'Project A' }]}
+        openTabs={[]}
+        selection={{ projectId: 'a' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ groupByAriaLabel: 'Group by', groupByNone: 'None' }}
+        availableGroupings={[
+          { id: 'openTabs', label: 'Open tabs' },
+          { id: 'language', label: 'Language', getGroupKey: () => 'x' },
+        ]}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    expect(screen.getByRole('button', { name: 'Group by' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /filter/i })).not.toBeInTheDocument();
+  });
+});

@@ -51,10 +51,10 @@
       }
     },
     "%manageBooks_projectSelector_filterAriaLabel%": {
-      "fallbackKey": "%projectSelector_filterAriaLabel%",
+      "fallbackKey": "%projectSelector_groupByAriaLabel%",
       "deprecationInfo": {
         "date": "2026-09-11",
-        "message": "Superseded by the platform-wide %projectSelector_filterAriaLabel% key."
+        "message": "Superseded by the platform-wide %projectSelector_groupByAriaLabel% key."
       }
     },
     "%manageBooks_projectSelector_filterGroupByOpenTabs%": {
