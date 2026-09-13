@@ -200,51 +200,102 @@ If you are developing `paranext-core` itself or developing extensions based on a
 
 `npm install` will clone and install the following repositories in `dev-packages` at the revision listed in [`dev-packages.json`](./dev-packages.json) if they are not in one of the expected directories as mentioned above:
 
-- [`eten-tech-foundation/scripture-editors`](https://github.com/eten-tech-foundation/scripture-editors?tab=readme-ov-file#developer-quick-start)
+- [`paranext/scripture-editors`](https://github.com/paranext/scripture-editors?tab=readme-ov-file#developer-quick-start)
 
-Running `npm install` in `paranext-core` will automatically link development versions of npm packages `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` from `scripture-editors` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
+Running `npm install` in `paranext-core` builds development versions of the npm packages `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` from `scripture-editors` and stages them into `dev-packages/staging/`. This repo's `package.json` files depend on those staged folders with `file:` specifiers, so `npm install` reads each staged package's own manifest and installs its dependencies into this repo's tree. The staged copies are symlinked into `node_modules`, so a rebuild is visible immediately without reinstalling.
 
-Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc` when this repo is on `main` and `release-prep` when this repo is on `release-prep`. To make your local development and build servers use changes from `scripture-editors/main`, update the corresponding branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
+`scripture-editors` commits its built `dist/`, so this is a copy rather than a build: **you do not need its toolchain — no pnpm, no nx — to run Platform.Bible.** A build only happens if you are editing the editor yourself (`npm run build:editor`) or your checkout predates the committed build.
+
+This means `scripture-editors` is free to add, bump, or drop its own dependencies without this repo restating them, and nothing here resolves the editor from the npm registry.
+
+**Fresh clones just work:** on the very first `npm install`, the staged packages are created
+during the install itself — after npm has already resolved the dependency tree — so the install
+automatically runs a second pass to pick up their dependencies. You will see a message about this;
+no action is needed. (`npm ci` doesn't need the second pass at all: it installs the staged
+packages' dependencies from `package-lock.json`.) Repeat installs skip the editor build entirely
+when the staged copy is already current, so this cost is paid only when `scripture-editors`
+actually changed.
+
+**When `scripture-editors`' own dependencies change** (its `package.json`, not ours), this repo's
+`package-lock.json` must be refreshed to match: run `npm install` here and commit the lockfile
+change. Until that lands, `npm ci` and CI builds fail with a message pointing at exactly this
+paragraph's fix — loudly, not with stale packages. The check on `scripture-editors`'
+`platform-yalc` branch watches for this so the person updating that branch is reminded to open the
+core PR.
+
+Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc` when this repo is on `main` and `release-prep` when this repo is on `release-prep`. `platform-yalc` exists so a breaking change can land on `scripture-editors`' `main` before build servers pick it up; move it forward only once this repo is ready for it.
+
+To make your local development and build servers use changes from `scripture-editors/main`, use that repo's own script rather than moving the branch by hand:
 
 ```bash
-# from a clone of scripture-editors (or adjust path accordingly)
-git fetch origin
-git checkout platform-yalc
-git rebase origin/main
-git push --force-with-lease
+# from a clone of scripture-editors, with platform-yalc checked out and a clean tree
+npm run move-platform-yalc
 ```
 
-To manually set up `scripture-editors` to be linked locally (this should all be done automatically during `npm install`):
+It resets your local branch to origin's state, rebases it onto `origin/main`, checks that this repo's `package-lock.json` still matches the editor's dependencies, and force-pushes **only if that passes** — so a move that would break every core build stops before the push rather than after it. `-- --dry-run` stops short of pushing; `-- --skip-verify` is the emergency hatch. Give it a token first (`export GITHUB_TOKEN=$(gh auth token)`) — the check reads this repo through the GitHub API and the unauthenticated budget is 60 requests an hour.
+
+Moving the branch by hand skips all of that — most importantly the lockfile check, which is the one failure that breaks every build here rather than only the mover's.
+
+To manually set up `scripture-editors` to be staged locally (this should all be done automatically during `npm install`):
 
 1. Clone `scripture-editors` as a sibling to this repo (alternatively, clone it in `paranext-core/dev-packages`):
    ```bash
    # from paranext-core
    cd ..
-   git clone https://github.com/eten-tech-foundation/scripture-editors.git scripture-editors
+   git clone https://github.com/paranext/scripture-editors.git scripture-editors
    # optionally checkout the platform-yalc branch to match the build servers
    cd scripture-editors
    git checkout platform-yalc
    # go back to paranext-core
    cd ../paranext-core
    ```
-2. Install dependencies in `scripture-editors` (if you are using [Volta](#javascript-tool-manager), you must set the environment variable [`VOLTA_FEATURE_PNPM` to `1`](https://docs.volta.sh/advanced/pnpm)):
+2. Run `npm install` in this repo. The preinstall script stages each package from `scripture-editors` into `dev-packages/staging/`, building it only when the pinned revision has no committed `dist/` to copy.
+
+   Only that build needs `scripture-editors`' own dependencies, so install them only if you are editing the editor (if you are using [Volta](#javascript-tool-manager), you must set the environment variable [`VOLTA_FEATURE_PNPM` to `1`](https://docs.volta.sh/advanced/pnpm)):
+
    ```bash
    # from paranext-core
    cd ../scripture-editors
    pnpm install
    cd ../paranext-core
    ```
-3. Run `npm install` in this repo. The postinstall script will automatically run `devpub` in `scripture-editors` and link the packages via yalc.
 
-You can also manually link/unlink packages using:
+**A sibling checkout is used and moved, not just read.** When `../scripture-editors` exists, `npm install` here stages from it rather than from its own clone under `dev-packages/` — and staging brings that checkout to the pinned revision, fetching and switching branches in it. It refuses to touch a checkout with uncommitted changes, and leaves one alone with a warning when it is on a branch of your own or parked on a detached commit; a clean checkout on `main` or on the pinned branch is moved. If you would rather keep your own clone out of this entirely, move it somewhere that is not a sibling of this repo and let `npm install` manage its own under `dev-packages/scripture-editors`.
 
-- `npm run link-dev-packages` (will also run `devpub` in `scripture-editors`)
-- `npm run unlink-dev-packages`
+#### Getting your `scripture-editors` changes into this repo
 
-OR
+Pick by what you need the change to show up in:
 
-- `npm run editor:link` / `npm run editor:unlink`
-- `npm run utils:link` / `npm run utils:unlink`
+| You want to                                           | Run, in this repo                                 |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| see it in the running dev app                         | `npm run build:editor`                            |
+| run tests, typecheck, or a production build           | `npm run stage-dev-packages -- --local`           |
+| pick up a change to the editor's own **dependencies** | commit in `scripture-editors`, then `npm install` |
+
+`--local` is the whole difference between the first two and a normal install: it stages **your working tree, uncommitted changes included**, instead of the revision [`dev-packages.json`](./dev-packages.json) pins. `npm run build:editor` is that plus a webpack DLL rebuild, and the dev app needs both halves — the dev renderer serves `@eten-tech-foundation/platform-editor` out of the DLL, so staging alone leaves the app running the old editor while your tests and lint pass against the new one. Restart the dev server afterwards.
+
+The dependency case is the odd one out because npm, not this repo, has to install whatever the editor now declares, and that only happens on a full `npm install` — which stages a _committed_ revision and refuses to run against a checkout with uncommitted changes. So commit in `scripture-editors` first; committing on a branch of your own is enough. (A lockfile built from uncommitted editor work would record a dependency closure nobody else can reproduce, which the pre-commit hook blocks you from committing anyway.)
+
+`npm install` leaves your editor checkout alone unless it is somewhere nothing is being kept — a clean checkout on `main`, or on the pinned branch itself, which is force-pushed by design. On a branch of your own, or parked on a detached commit, it warns and stages what it finds rather than moving you. So developing both repos at once works the way you would expect: keep your editor branch checked out and this repo builds against it.
+
+Where it does move your checkout, it never discards commits. Anything on the branch that the remote does not have is parked on a `refs/stage-rescue/…` ref first, and the install prints how to get it back — at the end of its own output as well as when it happens, so it is not lost in the middle of a build. Nothing deletes those refs, so the notice repeats on every install until you deal with the commits and `git update-ref -d` the ref.
+
+#### Checking that what is staged matches this repo's lockfile
+
+```bash
+npm run verify:dev-packages
+```
+
+`package-lock.json` records each staged package's version and dependencies, but the packages themselves come from the branch [`dev-packages.json`](./dev-packages.json) pins, which moves independently of this repo's commits. A checkout of this repo can therefore stage an editor its own lockfile does not describe.
+
+A plain `npm install` here makes this check on its own and repairs what it can. This command is the check by itself, for the case that cannot: **a consumer repo**. Every repo that builds against this one installs it with `npm ci --ignore-scripts` — required, because this repo's `postinstall` builds an Electron DLL they have no use for — and that skips the check along with everything else. Run it in this repo's directory right after that install:
+
+```bash
+# in the paranext-core checkout, after: npm ci --ignore-scripts
+npm run verify:dev-packages
+```
+
+It reads the tree and reports; it never installs or repairs anything. It needs Node 22.18 or later, like `stage-dev-packages` — below that, invoke it the same way you invoke that one (`node --experimental-strip-types .erb/scripts/postinstall.ts --check`).
 
 #### Install and build
 
@@ -370,7 +421,7 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 1. Prepare each repository in your [`dev-packages.json`](./dev-packages.json) depending on what kind of release you are publishing:
 
    - Release candidate, alpha, etc.: rebase `release-prep` on `main` if it has not been rebased already for this release cycle.
-   - Full release: publish an actual release of that npm package, and update the version used in this repo accordingly. Remove the entry from `dev-packages.json` entirely so it uses the real published package.
+   - Full release: create a release of that repository, then set its `revision` in [`dev-packages.json`](./dev-packages.json) to that release's tag. These packages are not published to npm — this repo stages them from a checkout of that revision — so a release is pinned by naming its tag here.
 
 2. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
 
