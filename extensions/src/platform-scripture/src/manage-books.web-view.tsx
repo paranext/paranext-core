@@ -24,6 +24,7 @@ import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PROJECT_SELECTOR_STRING_KEYS,
+  type ProjectSelectorResolvedStrings,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
   makeBuiltInGroupings,
@@ -31,7 +32,6 @@ import {
   type ProjectSelectorLocalizedStrings,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
-  type ProjectSelectorResolvedStrings,
 } from 'platform-bible-react/experimental';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
@@ -459,30 +459,25 @@ global.webViewComponent = function ManageBooksWebView({
   }, [localizedStrings]);
 
   // The ProjectSelector popover reads its strings from the shared `%projectSelector_*%` central
-  // keys. useLocalizedStrings echoes the raw key literal until each entry resolves so every value
-  // is a string; the cast just narrows the generic record to the specific key set the helper
-  // needs.
+  // keys. `useLocalizedStrings` returns a loose `LanguageStrings` record, while the ProjectSelector
+  // string builders published in the `platform-bible-react` dist still take the fully-resolved
+  // record, and TypeScript cannot build a required-key record from a runtime loop without an
+  // assertion. The builders in source now accept the loose record directly, so this single
+  // narrowing goes away with the next `platform-bible-react` dist regeneration.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const projectSelectorStrings = localizedStrings as ProjectSelectorResolvedStrings;
+
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
-    () =>
-      buildProjectSelectorLocalizedStrings(
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        localizedStrings as ProjectSelectorResolvedStrings,
-      ),
-    [localizedStrings],
+    () => buildProjectSelectorLocalizedStrings(projectSelectorStrings),
+    [projectSelectorStrings],
   );
 
   // Built-in groupings (openTabs / lastUsed / language / type) shared by the sidebar's primary
   // project picker and the Copy "From" picker. The Create "Based on" picker doesn't consume these
   // — it locks into a bespoke versification grouping built on the dialog side.
   const projectSelectorGroupings = useMemo<ProjectSelectorGrouping[]>(
-    () =>
-      makeBuiltInGroupings(
-        buildBuiltInGroupingStrings(
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          localizedStrings as ProjectSelectorResolvedStrings,
-        ),
-      ),
-    [localizedStrings],
+    () => makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)),
+    [projectSelectorStrings],
   );
 
   // ===== PAPI: project list =================================================

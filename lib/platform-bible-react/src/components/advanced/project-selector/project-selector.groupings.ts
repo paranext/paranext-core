@@ -43,6 +43,26 @@ export type ProjectSelectorResolvedStrings = Readonly<
 >;
 
 /**
+ * The lookup the `%projectSelector_*%` string builders accept: anything keyed by localization key,
+ * including the loose `LanguageStrings` record `useLocalizedStrings` returns. Values are read one
+ * key at a time and used only when they are strings, so consumers pass their localized-strings bag
+ * straight through with no narrowing.
+ */
+export type ProjectSelectorStringLookup = Readonly<Record<string, unknown>>;
+
+/**
+ * Read one `%projectSelector_*%` entry out of a {@link ProjectSelectorStringLookup}. Returns
+ * `undefined` for a missing or non-string value so the caller's own English fallback applies.
+ */
+export function readProjectSelectorString(
+  strings: ProjectSelectorStringLookup,
+  key: ProjectSelectorLocalizedStringKey,
+): string | undefined {
+  const value = strings[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+/**
  * Localization inputs for {@link makeBuiltInGroupings}. All fields are optional; missing entries
  * fall back to English. The keys mirror the `%projectSelector_*%` central localization block so
  * consumers can wire them from `useLocalizedStrings` in one shot.
@@ -173,39 +193,54 @@ export function makeSelectionGrouping(strings?: SelectionGroupingStrings): Proje
 
 /**
  * Convert the raw `%projectSelector_*%` resolved strings into the labels + section-heading strings
- * that {@link makeBuiltInGroupings} accepts. Pair with `buildProjectSelectorLocalizedStrings`
- * to wire the whole picker from a single {@link PROJECT_SELECTOR_STRING_KEYS} call.
+ * that {@link makeBuiltInGroupings} accepts. Pair with `buildProjectSelectorLocalizedStrings` to
+ * wire the whole picker from a single {@link PROJECT_SELECTOR_STRING_KEYS} call.
  */
 export function buildBuiltInGroupingStrings(
-  strings: ProjectSelectorResolvedStrings,
+  strings: ProjectSelectorStringLookup,
 ): BuiltInGroupingStrings {
   return {
-    openTabsLabel: strings['%projectSelector_grouping_openTabs_label%'],
-    lastUsedLabel: strings['%projectSelector_grouping_lastUsed_label%'],
-    lastUsedRecentSectionHeading:
-      strings['%projectSelector_grouping_lastUsed_recentSectionHeading%'],
-    lastUsedOtherSectionHeading: strings['%projectSelector_grouping_lastUsed_otherSectionHeading%'],
-    languageLabel: strings['%projectSelector_grouping_language_label%'],
-    languageUnknownSectionHeading:
-      strings['%projectSelector_grouping_language_unknownSectionHeading%'],
-    typeLabel: strings['%projectSelector_grouping_type_label%'],
-    typeUnknownSectionHeading: strings['%projectSelector_grouping_type_unknownSectionHeading%'],
+    openTabsLabel: readProjectSelectorString(strings, '%projectSelector_grouping_openTabs_label%'),
+    lastUsedLabel: readProjectSelectorString(strings, '%projectSelector_grouping_lastUsed_label%'),
+    lastUsedRecentSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_lastUsed_recentSectionHeading%',
+    ),
+    lastUsedOtherSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_lastUsed_otherSectionHeading%',
+    ),
+    languageLabel: readProjectSelectorString(strings, '%projectSelector_grouping_language_label%'),
+    languageUnknownSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_language_unknownSectionHeading%',
+    ),
+    typeLabel: readProjectSelectorString(strings, '%projectSelector_grouping_type_label%'),
+    typeUnknownSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_type_unknownSectionHeading%',
+    ),
   };
 }
 
 /**
  * Convert the raw `%projectSelector_*%` resolved strings into the labels + section-heading strings
- * that {@link makeSelectionGrouping} accepts. Pair with `buildProjectSelectorLocalizedStrings`
- * to wire the multi-select "Selection" grouping from the same {@link PROJECT_SELECTOR_STRING_KEYS}
+ * that {@link makeSelectionGrouping} accepts. Pair with `buildProjectSelectorLocalizedStrings` to
+ * wire the multi-select "Selection" grouping from the same {@link PROJECT_SELECTOR_STRING_KEYS}
  * call.
  */
 export function buildSelectionGroupingStrings(
-  strings: ProjectSelectorResolvedStrings,
+  strings: ProjectSelectorStringLookup,
 ): SelectionGroupingStrings {
   return {
-    label: strings['%projectSelector_grouping_selection_label%'],
-    selectedSectionHeading: strings['%projectSelector_grouping_selection_selectedSectionHeading%'],
-    unselectedSectionHeading:
-      strings['%projectSelector_grouping_selection_unselectedSectionHeading%'],
+    label: readProjectSelectorString(strings, '%projectSelector_grouping_selection_label%'),
+    selectedSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_selection_selectedSectionHeading%',
+    ),
+    unselectedSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_selection_unselectedSectionHeading%',
+    ),
   };
 }

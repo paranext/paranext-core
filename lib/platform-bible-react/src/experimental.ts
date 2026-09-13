@@ -21,6 +21,7 @@ export {
   type ProjectSelectorLocalizedStrings,
   type ProjectSelectorLocalizedStringKey,
   type ProjectSelectorResolvedStrings,
+  type ProjectSelectorStringLookup,
   type BuiltInGroupingStrings,
   type SelectionGroupingStrings,
   PROJECT_SELECTOR_STRING_KEYS,

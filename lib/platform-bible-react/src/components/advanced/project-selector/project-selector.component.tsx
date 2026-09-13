@@ -68,7 +68,10 @@ import {
   type RowSection,
 } from './project-selector.rows';
 
-import type { ProjectSelectorResolvedStrings } from './project-selector.groupings';
+import {
+  readProjectSelectorString,
+  type ProjectSelectorStringLookup,
+} from './project-selector.groupings';
 
 export type {
   ProjectSelectorOpenTab,
@@ -93,6 +96,7 @@ export {
   type SelectionGroupingStrings,
   type ProjectSelectorLocalizedStringKey,
   type ProjectSelectorResolvedStrings,
+  type ProjectSelectorStringLookup,
 } from './project-selector.groupings';
 
 // The selector's own popover already sits at `Z_INDEX_ABOVE_DOCK`; overlays that portal from
@@ -196,25 +200,47 @@ function resolveStrings(
  * consumer-specific strings (`ariaLabel`, `buttonPlaceholder`) on top afterwards.
  */
 export function buildProjectSelectorLocalizedStrings(
-  strings: ProjectSelectorResolvedStrings,
+  strings: ProjectSelectorStringLookup,
 ): ProjectSelectorLocalizedStrings {
   return {
-    searchPlaceholder: strings['%projectSelector_searchPlaceholder%'],
-    commandEmptyMessage: strings['%projectSelector_commandEmptyMessage%'],
-    groupByAriaLabel: strings['%projectSelector_groupByAriaLabel%'],
-    groupSectionLabel: strings['%projectSelector_groupSectionLabel%'],
-    groupByNone: strings['%projectSelector_groupByNone%'],
-    openTabsSectionHeading: strings['%projectSelector_openTabsSectionHeading%'],
-    otherProjectsSectionHeading: strings['%projectSelector_otherProjectsSectionHeading%'],
-    autoOpenTabsGroupingLabel: strings['%projectSelector_grouping_openTabs_label%'],
-    autoSelectionGroupingLabel: strings['%projectSelector_grouping_selection_label%'],
-    autoSelectionSelectedSectionHeading:
-      strings['%projectSelector_grouping_selection_selectedSectionHeading%'],
-    autoSelectionUnselectedSectionHeading:
-      strings['%projectSelector_grouping_selection_unselectedSectionHeading%'],
-    boundButClosedTooltip: strings['%projectSelector_boundButClosedTooltip%'],
-    openButtonLabel: strings['%projectSelector_openButtonLabel%'],
-    clearAll: strings['%projectSelector_clearAll%'],
+    searchPlaceholder: readProjectSelectorString(strings, '%projectSelector_searchPlaceholder%'),
+    commandEmptyMessage: readProjectSelectorString(
+      strings,
+      '%projectSelector_commandEmptyMessage%',
+    ),
+    groupByAriaLabel: readProjectSelectorString(strings, '%projectSelector_groupByAriaLabel%'),
+    groupSectionLabel: readProjectSelectorString(strings, '%projectSelector_groupSectionLabel%'),
+    groupByNone: readProjectSelectorString(strings, '%projectSelector_groupByNone%'),
+    openTabsSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_openTabsSectionHeading%',
+    ),
+    otherProjectsSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_otherProjectsSectionHeading%',
+    ),
+    autoOpenTabsGroupingLabel: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_openTabs_label%',
+    ),
+    autoSelectionGroupingLabel: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_selection_label%',
+    ),
+    autoSelectionSelectedSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_selection_selectedSectionHeading%',
+    ),
+    autoSelectionUnselectedSectionHeading: readProjectSelectorString(
+      strings,
+      '%projectSelector_grouping_selection_unselectedSectionHeading%',
+    ),
+    boundButClosedTooltip: readProjectSelectorString(
+      strings,
+      '%projectSelector_boundButClosedTooltip%',
+    ),
+    openButtonLabel: readProjectSelectorString(strings, '%projectSelector_openButtonLabel%'),
+    clearAll: readProjectSelectorString(strings, '%projectSelector_clearAll%'),
   };
 }
 

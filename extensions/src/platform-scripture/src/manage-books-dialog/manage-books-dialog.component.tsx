@@ -847,9 +847,9 @@ export function ManageBooksDialog({
       // locks the picker into it and hides the filter menu. Kept as a static English string so
       // no localization wiring exists just for a string that isn't drawn.
       label: 'Versification',
-      getGroupKey: (project) =>
-        typeof project.customData?.versificationId === 'string'
-          ? project.customData.versificationId
+      getGroupKey: (candidateProject) =>
+        typeof candidateProject.customData?.versificationId === 'string'
+          ? candidateProject.customData.versificationId
           : undefined,
       getSectionHeading: (key, groupProjects) => {
         const first = groupProjects.find(

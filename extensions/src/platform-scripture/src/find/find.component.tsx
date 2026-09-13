@@ -42,8 +42,8 @@ import {
   ProjectSelectorLocalizedStrings,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
-  ProjectSelectorResolvedStrings,
   PROJECT_SELECTOR_STRING_KEYS,
+  ProjectSelectorResolvedStrings,
   ScopeWithRange,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
@@ -815,17 +815,24 @@ export function Find({
     [projects],
   );
 
+  // `useLocalizedStrings` returns a loose `LanguageStrings` record, while the ProjectSelector
+  // string builders published in the `platform-bible-react` dist still take the fully-resolved
+  // record, and TypeScript cannot build a required-key record from a runtime loop without an
+  // assertion. The builders in source now accept the loose record directly, so this single
+  // narrowing goes away with the next `platform-bible-react` dist regeneration.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const projectSelectorStrings = localizedStrings as ProjectSelectorResolvedStrings;
+
   // Every ProjectSelector across the app resolves the shared `%projectSelector_*%` keys, then
   // merges Find-specific overrides (placeholder, empty message, aria-label) on top.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      ...buildProjectSelectorLocalizedStrings(localizedStrings as ProjectSelectorResolvedStrings),
+      ...buildProjectSelectorLocalizedStrings(projectSelectorStrings),
       buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
       commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
       ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
     }),
-    [localizedStrings],
+    [localizedStrings, projectSelectorStrings],
   );
 
   // Built-in groupings (openTabs / language) wired to the shared central
@@ -841,13 +848,10 @@ export function Find({
   //   by recency — the picker sorts every bucket alphabetically by short name.
   const projectSelectorGroupings = useMemo(
     () =>
-      makeBuiltInGroupings(
-        buildBuiltInGroupingStrings(
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          localizedStrings as ProjectSelectorResolvedStrings,
-        ),
-      ).filter((grouping) => grouping.id !== 'type' && grouping.id !== 'lastUsed'),
-    [localizedStrings],
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter(
+        (grouping) => grouping.id !== 'type' && grouping.id !== 'lastUsed',
+      ),
+    [projectSelectorStrings],
   );
 
   // Presentation shared by both project-picker configurations, so the `hideScrollGroups` branch

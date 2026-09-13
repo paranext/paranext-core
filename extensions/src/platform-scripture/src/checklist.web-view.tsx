@@ -751,28 +751,23 @@ global.webViewComponent = function ChecklistWebView({
     [allProjects, setComparativeTexts],
   );
 
-  // useLocalizedStrings echoes the raw key literal until each entry resolves, so every value is
-  // always a string; the cast just narrows the generic `LanguageStrings` record to the specific
-  // key set the helper needs.
+  // `useLocalizedStrings` returns a loose `LanguageStrings` record, while the ProjectSelector
+  // string builders published in the `platform-bible-react` dist still take the fully-resolved
+  // record, and TypeScript cannot build a required-key record from a runtime loop without an
+  // assertion. The builders in source now accept the loose record directly, so this single
+  // narrowing goes away with the next `platform-bible-react` dist regeneration.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const projectSelectorStrings = projectSelectorResolvedStrings as ProjectSelectorResolvedStrings;
+
   const projectSelectorLocalizedStrings = useMemo(
-    () =>
-      buildProjectSelectorLocalizedStrings(
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        projectSelectorResolvedStrings as ProjectSelectorResolvedStrings,
-      ),
-    [projectSelectorResolvedStrings],
+    () => buildProjectSelectorLocalizedStrings(projectSelectorStrings),
+    [projectSelectorStrings],
   );
 
   // Built-in groupings (openTabs / lastUsed / language / type) for the primary-project picker.
   const primaryProjectGroupings = useMemo(
-    () =>
-      makeBuiltInGroupings(
-        buildBuiltInGroupingStrings(
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          projectSelectorResolvedStrings as ProjectSelectorResolvedStrings,
-        ),
-      ),
-    [projectSelectorResolvedStrings],
+    () => makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)),
+    [projectSelectorStrings],
   );
 
   // Comparative-texts picker: same built-in options as the primary picker PLUS the multi-select
@@ -780,20 +775,10 @@ global.webViewComponent = function ChecklistWebView({
   // passes `availableGroupings`, the component uses it verbatim with no auto-additions.
   const comparativeTextsGroupings = useMemo<ProjectSelectorGrouping[]>(
     () => [
-      ...makeBuiltInGroupings(
-        buildBuiltInGroupingStrings(
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          projectSelectorResolvedStrings as ProjectSelectorResolvedStrings,
-        ),
-      ),
-      makeSelectionGrouping(
-        buildSelectionGroupingStrings(
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          projectSelectorResolvedStrings as ProjectSelectorResolvedStrings,
-        ),
-      ),
+      ...makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)),
+      makeSelectionGrouping(buildSelectionGroupingStrings(projectSelectorStrings)),
     ],
-    [projectSelectorResolvedStrings],
+    [projectSelectorStrings],
   );
 
   const comparativeTextsSelectorNode = useMemo(
