@@ -143,6 +143,30 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
    * @experimental
    */
   onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Event that fires when this process's own connection to the network is lost unexpectedly — the
+   * websocket closed without the app having asked it to.
+   *
+   * This is platform-internal core plumbing between the process that holds a client connection and
+   * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+   * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+   *
+   * This is a local, in-process event. Only a process that holds a client connection can lose one,
+   * so it fires exclusively on clients; in the process that owns the websocket server it is a real
+   * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the
+   * close code, and a close the app asked for is not a loss.
+   *
+   * Nor does a connection that was never established. A socket that dies during the opening
+   * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
+   * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
+   * event is only for losing a connection that was up.
+   *
+   * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
+   * to react to the loss rather than to classify it.
+   *
+   * @experimental
+   */
+  onDidLoseConnection: PlatformEvent<void>;
 }
 
 export type RegisteredRpcMethodDetails = {
