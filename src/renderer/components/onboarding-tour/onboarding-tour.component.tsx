@@ -207,9 +207,10 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
  * - This renderer has lost its connection to the network
  *
  * Completion is recorded on Done and on Skip (Escape routes through Skip), and only then. Quitting
- * or reloading with the tour still open leaves the flag unwritten, so the tour resumes from stop 1
- * on the next launch: a user who never reached the end has not yet been oriented, and the whole
- * point of the tour is that they are.
+ * or reloading with the tour still open — or losing the connection, which closes a _running_ tour
+ * by unmounting it — leaves the flag unwritten, so the tour resumes from stop 1 on the next launch:
+ * a user who never reached the end has not yet been oriented, and the whole point of the tour is
+ * that they are.
  *
  * RTL is handled entirely inside `Tour` (logical `start`/`end` sides resolved via
  * `readDirection()`); this component never reads layout direction.
@@ -233,6 +234,14 @@ export function OnboardingTour() {
   // connection-lost state's own shell as the keyboard-shortcut catalog describes. A tour
   // interrupted this way resumes from stop 1 after the reload, which is the same thing quitting
   // mid-tour already does: an interrupted user has not been oriented.
+  //
+  // Two edges the guard does not reach. The connection-lost state latches only on an ESTABLISHED
+  // connection dropping, so reloading while the server is still down comes back to a renderer that
+  // never latches and mounts the tour with its Escape handler intact — that residual belongs to
+  // PT-4494/PT-4495, which cover a failed opening handshake. And the latch is per renderer while
+  // the done flag is `localStorage` shared across windows, so a second window whose socket survived
+  // can still spend the flag; there the user has a working app and a visible tour, so dismissing it
+  // is a genuine dismissal.
   if (isConnectionLost) return undefined;
   if (doneAtMount && replayCount === 0) return undefined;
   return <OnboardingTourNotYetDone key={replayCount} isReplay={replayCount > 0} />;

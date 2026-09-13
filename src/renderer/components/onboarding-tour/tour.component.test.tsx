@@ -128,6 +128,30 @@ describe('Tour', () => {
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
+  it('reports nothing when an open tour is unmounted', () => {
+    // Unmounting an open tour is a close path in its own right — callers that cannot run while the
+    // app is unusable take it, and `OnboardingTour` takes it on every connection loss. It has to
+    // stay callback-free, because callers persist a permanent "tour done" flag from `onSkip`:
+    // moving any auto-dismissal into a cleanup function would spend a tour the user never saw.
+    const onSkip = vi.fn();
+    const { unmount } = render(
+      <div>
+        <div id="a">A</div>
+        <Tour
+          steps={[{ target: '#a', title: 'A', description: 'x' }]}
+          open
+          onDone={vi.fn()}
+          onSkip={onSkip}
+        />
+      </div>,
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    unmount();
+
+    expect(onSkip).not.toHaveBeenCalled();
+  });
+
   it('renders nothing and calls onSkip when no targets resolve', () => {
     // Without the onSkip call the caller would be left with `open` stuck true behind an overlay
     // that renders nothing and never reports back, so the tour would be retried forever.

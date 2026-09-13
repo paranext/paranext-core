@@ -135,6 +135,9 @@ beforeEach(() => {
   mockTourDone = false;
   mockReplayCount = 0;
   mockTourDoneListeners.clear();
+  // The connection-lost store is a module-level singleton that never clears itself, so it is reset
+  // on both sides: before, in case another file sharing this worker latched it, and after, so a
+  // test in this file that latches it does not leave every later test permanently stood down.
   resetConnectionLost();
 
   layoutPanelEl = document.createElement('div');

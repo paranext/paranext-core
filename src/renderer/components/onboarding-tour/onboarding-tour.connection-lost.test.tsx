@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { FirstRunStatus } from '@renderer/services/first-run-store';
-import { SIMPLE_PANEL_ID_PROJECT } from '@renderer/components/docking/simple-layout.data';
+import {
+  SIMPLE_PANEL_ID_MODEL_TEXT,
+  SIMPLE_PANEL_ID_PROJECT,
+} from '@renderer/components/docking/simple-layout.data';
 import {
   reportConnectionLost,
   resetConnectionLost,
@@ -79,6 +82,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
  * Gives an element a non-empty box. jsdom reports every rect as zero-size, and Tour drops any step
  * whose target cannot be measured — with nothing left to spotlight it reports a skip, which is the
  * very flag this file is checking never gets written.
+ *
+ * Assigns per element rather than swapping `Element.prototype.getBoundingClientRect`, which a file
+ * rendering the real tree must not do. It keeps no handle on what it overwrote, so it is only safe
+ * on elements that live no longer than one test — the fixtures below are built in `beforeEach` and
+ * removed in `afterEach`. Anything longer-lived needs a restoring variant.
  */
 function stubBoundingRect(element: HTMLElement, width: number, height: number) {
   const rect: DOMRect = {
@@ -98,6 +106,9 @@ function stubBoundingRect(element: HTMLElement, width: number, height: number) {
 // OnboardingTour polls for this element before it opens (the dock layout loads async, so the
 // panel divs are not present at startup; we add a stand-in so the layoutReady gate clears).
 let layoutPanelEl: HTMLElement;
+// The model-text panel. Present so the tour has three visible stops rather than two, which leaves
+// a genuinely mid-tour step index to lose — the state a socket dying on suspend actually catches.
+let modelTextPanelEl: HTMLElement;
 // The toolbar's Profile button — the one stop that survives Tour's filter in Power mode, and so
 // what the readiness gate waits for there. `platform-bible-toolbar` renders it in both modes.
 let profileTriggerEl: HTMLElement;
@@ -110,12 +121,20 @@ beforeEach(() => {
   mockReplayCount = 0;
   mockTourDoneListeners.clear();
   mockReplayListeners.clear();
+  // The connection-lost store is a module-level singleton that never clears itself, so it is reset
+  // on both sides: before, in case another file sharing this worker latched it, and after, so a
+  // test in this file that latches it does not leave every later test permanently stood down.
   resetConnectionLost();
 
   layoutPanelEl = document.createElement('div');
   layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
   stubBoundingRect(layoutPanelEl, 300, 400);
   document.body.appendChild(layoutPanelEl);
+
+  modelTextPanelEl = document.createElement('div');
+  modelTextPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_MODEL_TEXT);
+  stubBoundingRect(modelTextPanelEl, 300, 400);
+  document.body.appendChild(modelTextPanelEl);
 
   profileTriggerEl = document.createElement('button');
   profileTriggerEl.setAttribute('data-testid', 'user-profile-popover-trigger');
@@ -128,8 +147,23 @@ afterEach(() => {
   mockTourDone = false;
   resetConnectionLost();
   layoutPanelEl?.remove();
+  modelTextPanelEl?.remove();
   profileTriggerEl?.remove();
 });
+
+/**
+ * Presses Escape the way a user does — at the focused element, letting it bubble — rather than
+ * dispatching on `window`, which nothing below `window` would ever see. Faithful whichever host the
+ * overlay's listener is attached to.
+ */
+function pressEscape() {
+  act(() => {
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+  });
+}
+
+// `useLocalizedStrings` is mocked to echo its keys, so the tour's chrome is labelled by key.
+const NEXT_LABEL = '%firstRun_button_next%';
 
 describe('OnboardingTour with the real Tour overlay', () => {
   it('leaves Escape unable to record the tour as done once the connection is lost', () => {
@@ -137,19 +171,36 @@ describe('OnboardingTour with the real Tour overlay', () => {
     // The real overlay is a modal dialog; its presence is what puts the Escape listener on window.
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
+    // Advance off the first stop. A socket dies on suspend far more often than on the first frame,
+    // and a mid-tour tour is the one holding a saved focus target and a step index — the state the
+    // stand-down has to give up cleanly rather than report as a dismissal.
+    fireEvent.click(screen.getByRole('button', { name: NEXT_LABEL }));
+    // The counter template is an un-substituted echoed key here, so the stop's own title is what
+    // identifies which stop is showing.
+    expect(screen.getByText('%onboardingTour_step_modelText_title%')).toBeInTheDocument();
+
     act(() => {
       reportConnectionLost();
     });
 
     expect(screen.queryByRole('dialog')).toBeNull();
 
-    // Tour listens in the capture phase on window, so this is the same path a real Escape takes.
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    });
+    pressEscape();
 
     // Nothing is left to route the key through onSkip, so the permanent, cross-window done flag
     // stays unwritten and the tour is still owed to the user after they reload.
     expect(readTourDone()).toBe(false);
+  });
+
+  it('records the tour as done when Escape is pressed while the connection is intact', () => {
+    // Positive control for the test above. Without it, a dispatch that never reached the handler
+    // at all would read as proof the handler was withdrawn, and the file's central assertion would
+    // pass while asserting nothing.
+    render(<OnboardingTour />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    pressEscape();
+
+    expect(readTourDone()).toBe(true);
   });
 });

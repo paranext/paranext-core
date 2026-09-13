@@ -552,8 +552,10 @@ step, no automation. Just a record.
     entry rather than papered over. Escape is separately prevented (`onEscapeKeyDown`), making this the one dialog in the app
     where Escape closes nothing; that is catalogued as its own entry.
 
-  - **Arbitration with the other app-gating modal:** `FirstRunOverlay` stands down entirely once
-    the connection-lost state has latched. `Z_INDEX_CONNECTION_LOST` (800) above `Z_INDEX_FIRST_RUN`
+  - **Arbitration with the other app-gating surfaces:** `FirstRunOverlay`, `OverlayHost` and
+    `OnboardingTour` each stand down entirely once the connection-lost state has latched. The
+    argument below is written about `FirstRunOverlay`, whose stand-down came first; it applies
+    unchanged to the other two. `Z_INDEX_CONNECTION_LOST` (800) above `Z_INDEX_FIRST_RUN`
     (700) decides only what is VISIBLE; Radix's `FocusScope` and `DismissableLayer` arbitrate
     between two open modal `Dialog`s by MOUNT ORDER. A first-run gate raised after the
     connection-lost state would therefore take the focus trap and leave the visible Reload button

@@ -76,7 +76,14 @@ export interface TourProps {
   open: boolean;
   /** Called when the user finishes the last step (Done). */
   onDone: () => void;
-  /** Called when the user dismisses the tour (Skip button or Escape). */
+  /**
+   * Called when the user dismisses the tour (Skip button or Escape).
+   *
+   * Destroying an open tour is a third close path, and it deliberately reports nothing: callers
+   * persist a permanent "tour done" flag from here, so a teardown that routed through `onSkip`
+   * would spend a tour the user never finished. Keep any auto-dismissal (e.g. the no-targets skip)
+   * in an effect _body_, never in a cleanup function.
+   */
   onSkip: () => void;
   /** Resolved values for {@link TOUR_STRING_KEYS}. Absent keys fall back to English. */
   localizedStrings?: TourLocalizedStrings;
