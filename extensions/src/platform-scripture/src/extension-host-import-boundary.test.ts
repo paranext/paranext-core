@@ -92,6 +92,14 @@ function resolveRelativeImport(specifier: string, importingFile: string): string
   return candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
 }
 
+/**
+ * Path of `file` relative to `SRC_DIR`, always with `/` separators so paths compare identically on
+ * Windows, macOS and Linux.
+ */
+function toRelativePosixPath(file: string): string {
+  return path.relative(SRC_DIR, file).split(path.sep).join('/');
+}
+
 type Violation = { file: string; specifier: string };
 
 /**
@@ -115,7 +123,7 @@ function findImportBoundaryViolations(): { violations: Violation[]; filesInGraph
       return;
     }
     if (!ALLOWED_MODULES.has(specifier))
-      violations.push({ file: path.relative(SRC_DIR, importingFile), specifier });
+      violations.push({ file: toRelativePosixPath(importingFile), specifier });
   }
 
   function walk(file: string) {
@@ -141,7 +149,7 @@ function findImportBoundaryViolations(): { violations: Violation[]; filesInGraph
   }
 
   walk(ENTRY_POINT);
-  return { violations, filesInGraph: [...visited].map((file) => path.relative(SRC_DIR, file)) };
+  return { violations, filesInGraph: [...visited].map(toRelativePosixPath) };
 }
 
 const { violations, filesInGraph } = findImportBoundaryViolations();
