@@ -1042,9 +1042,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
               )}
             </div>
             {props.mode === 'project-multi' && props.selection.pairs.length > 0 && (
-              // Right-aligned "Clear all" only. Select all was removed — it is redundant with the
-              // built-in Selection grouping (which surfaces what's selected in its own bucket) and
-              // encouraged sloppy bulk selection. Clear all is hidden while nothing is selected.
+              // Right-aligned "Clear all" only. There is deliberately no "Select all": selecting every
+              // project mounts a data subscription per project, so on a large installation it is a
+              // performance hazard rather than a convenience. Clear all is hidden while nothing is selected.
               <div className="tw:flex tw:justify-end tw:border-b tw:py-2 tw:pe-4 tw:ps-2">
                 <Button variant="ghost" size="sm" onClick={handleClearAll}>
                   {`${strings.clearAll} (${props.selection.pairs.length.toString()})`}
