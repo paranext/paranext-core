@@ -4943,8 +4943,8 @@ export interface PaletteItem {
 }
 /**
  * Well-known keys the ProjectSelector's built-in groupings (`language`, `type`, `lastUsed`) read
- * from `ProjectSelectorProject.customData`. Reference these constants rather than typing the
- * key strings inline so a rename here surfaces at every callsite.
+ * from `ProjectSelectorProject.customData`. Reference these constants rather than typing the key
+ * strings inline so a rename here surfaces at every callsite.
  */
 export declare const PROJECT_SELECTOR_CUSTOM_DATA_KEYS: Readonly<{
 	readonly language: "language";
@@ -4953,44 +4953,44 @@ export declare const PROJECT_SELECTOR_CUSTOM_DATA_KEYS: Readonly<{
 	readonly lastUsedAt: "lastUsedAt";
 }>;
 /**
- * The typed shape of the well-known {@link PROJECT_SELECTOR_CUSTOM_DATA_KEYS} entries. Every
- * field is optional — a grouping whose key is missing routes that project into its "unknown"
- * bucket (or is elided per the grouping's `unknownSectionHeading` config).
+ * The typed shape of the well-known {@link PROJECT_SELECTOR_CUSTOM_DATA_KEYS} entries. Every field
+ * is optional — a grouping whose key is missing routes that project into its "unknown" bucket (or
+ * is elided per the grouping's `unknownSectionHeading` config).
  */
 export type ProjectSelectorCustomDataShape = {
 	/**
-	 * Language name — bucketed by exact equality by the built-in `language` grouping and used as
-	 * the section heading verbatim. Consumer supplies a localized human-readable name.
+	 * Language name — bucketed by exact equality by the built-in `language` grouping and used as the
+	 * section heading verbatim. Consumer supplies a localized human-readable name.
 	 */
 	language?: string;
 	/**
-	 * Locale-stable type key — bucketed by exact equality by the built-in `type` grouping. Free
-	 * form; consumers pair it with `typeName` for display.
+	 * Locale-stable type key — bucketed by exact equality by the built-in `type` grouping. Free form;
+	 * consumers pair it with `typeName` for display.
 	 */
 	type?: string;
 	/**
 	 * Human-readable label for {@link type}. The built-in `type` grouping uses the first non-empty
-	 * `typeName` observed in a bucket as the section heading (falls back to the raw `type` key
-	 * when no row in the bucket carries one).
+	 * `typeName` observed in a bucket as the section heading (falls back to the raw `type` key when
+	 * no row in the bucket carries one).
 	 */
 	typeName?: string;
 	/**
 	 * Millisecond-epoch timestamp of the last time the caller-relevant "use" of this project
-	 * happened. The built-in `lastUsed` grouping partitions rows into a "Recently used" bucket
-	 * (any project with a timestamp) and an "Other" bucket (no timestamp), sorted newest-first
-	 * within Recently used.
+	 * happened. The built-in `lastUsed` grouping partitions rows into a "Recently used" bucket (any
+	 * project with a timestamp) and an "Other" bucket (no timestamp), sorted newest-first within
+	 * Recently used.
 	 *
 	 * If your data source is an ordered recency list rather than per-project timestamps (as
-	 * `platformScripture.recentlyOpenedProjects.RecentProjects` returns), synthesize timestamps
-	 * via {@link recencyMapFromOrderedIds} — that preserves the source's ordering under the
-	 * built-in grouping's newest-first sort.
+	 * `platformScripture.recentlyOpenedProjects.RecentProjects` returns), synthesize timestamps via
+	 * {@link recencyMapFromOrderedIds} — that preserves the source's ordering under the built-in
+	 * grouping's newest-first sort.
 	 */
 	lastUsedAt?: number;
 };
 /**
  * Pack a subset of {@link ProjectSelectorCustomDataShape} into a plain record ready to assign to
- * `ProjectSelectorProject.customData`. Keys with a wrong-typed value (or `undefined`) are
- * omitted so groupings see them as "missing" rather than as a bogus empty string / NaN.
+ * `ProjectSelectorProject.customData`. Keys with a wrong-typed value (or `undefined`) are omitted
+ * so groupings see them as "missing" rather than as a bogus empty string / NaN.
  *
  * Consumers with additional custom groupings can spread the returned record with their own keys:
  *
@@ -5007,8 +5007,8 @@ export declare function makeProjectSelectorCustomData(input: ProjectSelectorCust
  * `platformScripture.recentlyOpenedProjects.RecentProjects`) into a map of projectId → synthetic
  * `lastUsedAt` value suitable for feeding into `ProjectSelectorProject.customData`.
  *
- * The recently-opened-projects service exposes order without timestamps; this helper synthesizes
- * a monotonic descending value (higher = more recent) so the built-in `lastUsed` grouping's
+ * The recently-opened-projects service exposes order without timestamps; this helper synthesizes a
+ * monotonic descending value (higher = more recent) so the built-in `lastUsed` grouping's
  * newest-first sort inside "Recently used" preserves the source's ordering. Projects NOT in the
  * list get no entry, so they fall into the grouping's "Other" bucket per the built-in behavior.
  *

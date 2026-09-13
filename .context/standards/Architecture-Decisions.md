@@ -783,6 +783,97 @@ step, no automation. Just a record.
   open follow-up work.
 - **Source:** PR #2770.
 
+## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `scripture-editors` supplies `@eten-tech-foundation/platform-editor` and
+  `@eten-tech-foundation/scripture-utilities`. Every consumer declared them as registry ranges
+  (`~0.8.15` / `~0.1.6`) and then yalc-linked a locally built copy over the installed package. The
+  registry entry's real job was never the code — that is discarded seconds later — but the
+  *dependency closure*: 8 of the editor's 13 runtime dependencies (`@floating-ui/dom`, five
+  `@lexical/*`, `quill-delta`, plus the `yjs` peer) reach this repo's `node_modules` only as
+  transitive dependencies of the published package. That ties the editor's dependency set to
+  whatever was last published by an organization we do not control: a dependency the editor adds is
+  never installed, and one it bumps silently resolves to the older published version. The source had
+  already drifted to 0.8.16 against a published 0.8.15, and a fresh worktree resolving the registry
+  copy failed 36 tests against a symbol the published build lacked.
+- **Decision:** A `preinstall` step (`.erb/scripts/stage-dev-packages.ts`) builds each package listed
+  in `dev-packages.json` and copies exactly the files `npm pack` would publish into
+  `dev-packages/staging/<stagingFolder>`. Every `package.json` here depends on that folder with a
+  `file:` specifier. npm reads the staged manifest and installs the package's own dependencies into
+  this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
+  Staging must run in `preinstall` because the staged folders are the resolution targets; the script
+  is therefore plain Node importing only the standard library, since no devDependency exists yet.
+  pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
+  the whole graph on the build we just made. yalc is removed.
+- **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but
+  the sync obligation multiplies by consumer (paratext-bible-extensions is already a second one) and
+  every editor dependency change would require edits in each. **`file:` straight at the source
+  package** — rejected: the source sits in a pnpm workspace whose per-package `node_modules` holds
+  its own `react`, `react-dom`, and `lexical`; Node resolves a link through its real path, so the
+  editor would bind to those, giving duplicate React (invalid hook calls) and duplicate Lexical
+  (cross-boundary `instanceof` node checks fail). It also installs no closure, since npm only does
+  that for a target inside the project. **`file:` at a packed tarball** — rejected: npm never
+  re-reads a tarball at a stable path, so a rebuild silently installs the cached previous build.
+  **Publishing** (npm scope or GitHub Release assets) — deferred: both work and both give semver
+  ranges, but publishing needs a scope we own, which means renaming the packages.
+- **Consequences:** Nothing here resolves the editor from the npm registry, and `scripture-editors`
+  can change its dependencies freely. Install gets stricter: `preinstall` now needs git, pnpm, and
+  reachability of the dev repo, so a failure to stage fails the install rather than silently leaving
+  a stale published copy. `package-lock.json` records the staged packages' resolved dependencies, so
+  an editor dependency change produces a lockfile commit here. Honoring the editor's declared ranges
+  surfaced that it asks for `@sillsdev/scripture@^2.1.0` while this repo's lockfile pinned 2.0.5 —
+  previously masked, since the linked build just resolved whatever was in the tree. Only the staged
+  output must live inside this repo; the source checkout may stay a sibling.
+  **Revisit** if a third consumer appears that cannot build the editor or sit beside a built
+  `paranext-core`, which is the point at which publishing earns its cost.
+- **Source:** PT-4500, forking `scripture-editors` into the paranext organization.
+
+## adr-dev-packages-staging-shape-deferred: The staging mechanism keeps its branch pin, `.ts` install scripts, sibling fallback and self-heal re-run
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** Review of the staged-`file:`-dependency change (#2745) raised four alternatives to
+  the shape it landed in, each defensible on its own: pin an immutable `v<version>` tag instead of
+  the force-pushed `platform-yalc` branch, so an editor bump becomes one core commit and the
+  branch-sync machinery retires; write the two install-path scripts as `.mjs` with JSDoc types
+  instead of `.ts`, so consuming repos need no Node floor (native type stripping is unflagged only
+  from 22.18, and one consumer's Volta pin predates it); make the sibling-checkout fallback opt-in
+  rather than automatic, so an npm lifecycle hook never writes to a checkout it merely found next
+  door; and replace `postinstall`'s nested `npm install` with a message telling the developer to run
+  it again.
+- **Decision:** Keep all four as they are for now. Consumers call core's `stage-dev-packages` npm
+  script rather than a path inside core, which was the fifth suggestion and is taken — it removes
+  eight repos' dependency on an internal file location. It does not lift the Node floor: the npm
+  script runs a bare `node`, and the one consumer whose Volta pin predates 22.18 passes
+  `--experimental-strip-types` from its own workflow, where the flag can precede the script path.
+- **Alternatives:** Each of the four is a real improvement to some property, and none was rejected
+  on merit. The tag pin buys reproducibility, `.mjs` removes a floor that has already bitten a
+  consumer repo, opt-in sibling use removes a class of surprise entirely, and a non-nested install
+  is easier to reason about when it fails. They are deferred because they change the shape of a
+  mechanism that is about to be exercised across eleven repositories at once, and doing that before
+  it has run in anger trades a known state for an unknown one.
+- **Consequences:** The Node 22.18 floor is real for every caller, npm script or not; a consumer
+  below it passes the flag itself. Editor code can change under an unchanged core commit while
+  `platform-yalc` moves, which the consumer-lockfile check and the pre-commit provisional guard
+  exist to contain. A sibling checkout is used and moved by a plain `npm install`; it is protected
+  when dirty, on a branch of its own, or detached, and the README says so. Revisit whichever of
+  these the mechanism actually makes painful.
+
+  The branch pin is the one whose exposure is worth stating precisely, because it now spans eleven
+  repositories and the parts of it that ARE covered are easy to mistake for the whole. A change to
+  the staged packages' **dependencies or versions** is visible and gated: npm records the staged
+  manifest under `dev-packages/staging/<folder>` in `package-lock.json`, `diffStagedAgainstLock`
+  fails an install that disagrees with it, `verify:dev-packages` lets a consumer run that check
+  without core's `postinstall`, and `scripture-editors`' `verify-platform-yalc` workflow gates the
+  push that would cause it. Release provenance is covered too: `paratext-10-studio`'s
+  `snap-product-info` rewrites each dev repo's `branch` to the SHA actually built. What remains
+  uncovered is a **code-only push at an unchanged version** — it changes what core's `main` builds
+  with no commit anywhere in core — and that is the ordinary case, not an exotic one, since
+  `move-platform-yalc` rebases onto `main` rather than bumping versions. That residue is the price
+  of the branch pin, and it is accepted rather than overlooked.
+
 ## adr-disclosure-outside-package-graphs: What ships outside the npm and NuGet graphs is disclosed in prose, not by silence
 
 - **Date:** 2026-08-21
@@ -3610,15 +3701,24 @@ step, no automation. Just a record.
     nothing and is the right shape if a future editor makes slices addressable; do not read it as
     evidence that a write-back currently occurs.
 
-    Verified 2026-08-16 against `@eten-tech-foundation/platform-editor` **0.8.15**, in both places it
-    can be read: the published npm package, and `dev-packages/scripture-editors` `packages/platform`,
-    which `postinstall` → `link-dev-packages` builds and yalc-links over `node_modules`. They agree
-    on this mechanism (the vendored copy trails published 0.8.15 by one caret-placement line in
-    `$moveCaretToVerseStart`). **Verify against the linked build, not `package-lock.json`** — the lock
-    still named 0.8.14 when this was written, and reading that stale tarball is exactly how an earlier
-    draft of this ADR came to describe `$findAndSetChapterAndVerse` and its chapter-1 fallback as the
-    live mechanism. That was wrong; that plugin does not exist in 0.8.15. Corrected in review of
-    #2663.
+    Re-verified 2026-09-10 against the staged `@eten-tech-foundation/platform-editor` **0.8.16**
+    (`dev-packages/scripture-editors` `packages/platform`, which `preinstall` stages into
+    `dev-packages/staging/platform-editor`): `Editor.tsx` still mounts `ScriptureReferencePlugin`
+    gated on `scrRef && onScrRefChange` alone, and `$resolvePosition` still returns `undefined` when
+    the document has neither a `BookNode` nor a `ChapterNode`. Both statements above therefore still
+    hold. **There is now only one copy to read.** This repo no longer installs the editor from the
+    registry, so the earlier "check the published package and the local build agree" framing has no
+    second copy to compare against — the staged build is the only thing that runs. Do not read
+    `package-lock.json` for a version either: it records a `file:` link, and reading a stale tarball
+    is exactly how an earlier draft came to describe `$findAndSetChapterAndVerse` and its chapter-1
+    fallback as the live mechanism. That was wrong; that plugin does not exist. Corrected in review
+    of #2663.
+
+    **Not re-verified:** the behavior end to end. `$moveCaretToVerseStart` is no longer the
+    one-line-from-published function this paragraph used to describe — it is 57 lines against
+    0.8.15's 30, having gained chapter resolution in its "already here" guard — so if this ADR's
+    conclusions are ever load-bearing for a change, exercise the surfaces rather than trusting this
+    note.
 
     **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
     `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
@@ -3784,6 +3884,65 @@ step, no automation. Just a record.
   a coordinated studio merge was therefore unavoidable. Verification report, including the 12 renamed
   cycles against live controls and the `snap disconnect` repair for an already-broken install:
   https://claude.ai/code/artifact/cc4c4c08-2e75-4dd5-855a-312fc4a6a57e
+
+## adr-staged-closure-owned-by-core: paranext-core owns the editor's dependency closure; every other consumer resolves through it
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `adr-dev-packages-staged-file-deps` records *that* the staged copy has to live
+  inside this repo. It does not record *why* the same
+  `file:` specifier behaves differently one directory up, or what that means for the ten repos in
+  the organization that depend on `lib/platform-bible-react` and `lib/platform-bible-utils`. Both
+  questions came up again when a consumer's CI broke, and both were answered by measurement rather
+  than by reading npm's documentation, so the measurements belong here.
+
+  npm treats a `file:` dependency two entirely different ways depending on whether its target is
+  inside the depending project:
+
+  | Target | What npm does | `npm ci` when the target's manifest gains a dependency |
+  | --- | --- | --- |
+  | `file:dev-packages/staging/platform-editor` (inside) | real install: the target's whole dependency closure lands in this repo's `node_modules` | **fails**, `EUSAGE … Missing: <dep> from lock file` |
+  | `file:../scripture-editors/packages/platform` (outside) | bare symlink; the closure is never installed | **exits 0**, dependency silently absent |
+
+  Node and webpack resolve a symlinked package from its **real path**, so a package reached by
+  symlink looks for its own dependencies where it physically sits, not where the link is. Those two
+  facts together explain everything downstream.
+
+- **Decision:** Exactly one repository installs the editor's dependency closure, and that repository
+  is paranext-core, which is why the staged copy must sit inside it. Everything else reaches the
+  editor by symlink and resolves its dependencies out of core's `node_modules` through the real
+  path. No other repository declares, installs, or gates on that closure.
+
+  Concretely, an extension repo depends on `file:../paranext-core/lib/platform-bible-react`, which
+  npm links rather than installs. Its lockfile records PBR's dependency *declaration* — including
+  the editor — but resolves nothing from it and never validates it. When the extension's webpack
+  bundles PBR (PBR is not in the extension template's `externals`; `platform-bible-utils` is), the
+  editor import resolves from `paranext-core/lib/platform-bible-react/` upward into
+  `paranext-core/node_modules/`, which core's own install populated for real.
+
+- **Alternatives:** **Point core at the source checkout instead of copying** (`file:` one directory
+  up) — rejected, and this is the failure that motivated the copy: npm installs no closure for an
+  out-of-tree target, so the editor's dependencies stay in `scripture-editors/node_modules` under
+  pnpm's layout and nothing in core can resolve them. **Gate `platform-yalc` on every dependent
+  repo's lockfile** — rejected: it would enforce a constraint that does not exist. An editor
+  dependency change invalidates exactly one lockfile, core's, which
+  `verify-consumer-lockfile-sync.mjs` already checks on every push to `platform-yalc`. Scanning the
+  organization would turn each editor dependency bump into an N-way lockstep merge, growing with
+  every new consumer, to protect lockfiles that install nothing.
+
+- **Consequences:** Adding a consumer costs nothing: it needs no lockfile refresh when the editor's
+  dependencies change, and no entry in any list. What it does need is for core's `node_modules` to
+  be genuinely populated, which is why every consumer CI job that installs core with
+  `--ignore-scripts` must run core's `npm run stage-dev-packages` first — without it npm links
+  a target that does not exist, `npm ci` still exits 0, and
+  `node_modules/@eten-tech-foundation/platform-editor` is left a dangling symlink. That surfaces far
+  away, as an unresolved module during a consumer's lint or typecheck (PBR imports the editor in 28
+  files, PBU in 10), which is a long way from the cause.
+
+  The reasoning holds only while consumers reach core from **outside** it. A repo that vendored core
+  inside itself, or that added a staged package as an in-tree `file:` dependency of its own, would
+  join core in the hard-coupled class and would then need its lockfile kept in sync.
+- **Source:** PT-4500, review of #2745.
 
 ## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
@@ -4570,3 +4729,4 @@ step, no automation. Just a record.
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
+
