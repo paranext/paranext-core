@@ -60,11 +60,14 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.
 // wiring below for why this must always be empty.
 const NO_COMPARATIVE_OPEN_TABS: readonly ProjectSelectorOpenTab[] = Object.freeze([]);
 
-// Stable empty-array reference for the recently-opened-projects `useData` default, and the
-// fallback the recency map is built from when the subscription has no usable list. `useData`
-// resubscribes when the default identity changes, so keeping this at module scope avoids
-// per-render re-subscriptions. Never mutate it.
+// Stable empty-array reference serving two roles: the recently-opened-projects `useData` default,
+// and the fallback the recency map is built from when the subscription has no usable list.
+// `useData` resubscribes when the default identity changes, so keeping this at module scope avoids
+// per-render re-subscriptions. Declared as the mutable `string[]` that `useData`'s `defaultValue`
+// parameter requires, then frozen separately so the shared instance cannot be mutated out from
+// under either role.
 const EMPTY_RECENT_PROJECTS: string[] = [];
+Object.freeze(EMPTY_RECENT_PROJECTS);
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
