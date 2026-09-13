@@ -1,5 +1,14 @@
 # Find block-boundary whitespace tolerance — Implementation Plan
 
+> **Historical record — not the source of truth for the shipped code.** This plan was written before
+> implementation and its code blocks are illustrative sketches, not a mirror of what shipped. They
+> have since diverged in several places (the interior-run test is `hasEmittedContent`, not
+> `runStart > 0`; the boundary walk is additionally gated on `hasWhitespaceGroup` and suppresses
+> chapter transitions and filter-dropped joins; the rejected-match rewind advances by code point).
+> Read the source, `docs/specs/2026-09-09-find-block-boundary-whitespace-design.md`, and
+> `adr-find-block-boundary-whitespace` for current behavior; this file records how the work was
+> planned and sequenced.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make Find match a phrase copied out of the Scripture editor when that phrase spans a marker that renders as a line break.

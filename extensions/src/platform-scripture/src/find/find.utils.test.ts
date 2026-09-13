@@ -1282,4 +1282,24 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
     regex.lastIndex = 0;
     expect(regex.test('a \u0301 b')).toBe(false);
   });
+
+  it('tolerates a diacritic between two whitespace code points when whitespace is matched exactly', () => {
+    // With ignoreWhitespaceDifferences off, an interior run compiles as a literal sequence of its
+    // code points. The diacritic class has to follow *each* of them: one class after the whole run
+    // would require the two spaces to be adjacent, so text carrying a combining mark between them
+    // would stop matching.
+    const regex = buildSearchRegex(
+      {
+        ...baseOptions,
+        searchString: 'a  b',
+        ignoreDiacritics: true,
+        ignoreWhitespaceDifferences: false,
+      },
+      categorizer,
+    );
+    regex.lastIndex = 0;
+    expect(regex.test('a  b')).toBe(true);
+    regex.lastIndex = 0;
+    expect(regex.test('a \u0301 b')).toBe(true);
+  });
 });

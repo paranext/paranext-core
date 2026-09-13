@@ -29,7 +29,12 @@ import {
   ScriptureRangeUsjChapterOrUsfmVerseLocation,
 } from 'platform-scripture';
 import { buildSearchRegex, CharacterCategorizer } from '../find/find.utils';
-import { STRUCTURE_PROTECTED_ERROR, usfmChangesStructure } from '../find/structure-protection.util';
+import {
+  MARKER_DELETION_ERROR,
+  STRUCTURE_PROTECTED_ERROR,
+  usfmChangesStructure,
+  usfmDeletesMarkers,
+} from '../find/structure-protection.util';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
 
@@ -594,14 +599,21 @@ export class ScriptureFinderProjectDataProviderEngine
                 // `originalUsfm` is the unmodified book USFM, so substring(start,end) is exactly the
                 // text this range removes; reject if the replacement's structural-marker sequence
                 // differs from the removed span's (covers add, remove, change, and reorder).
+                const removed = originalUsfm.substring(
+                  rangeWithIndex.startIndex,
+                  rangeWithIndex.endIndex,
+                );
                 if (isStructureProtected) {
-                  const removed = originalUsfm.substring(
-                    rangeWithIndex.startIndex,
-                    rangeWithIndex.endIndex,
-                  );
                   if (usfmChangesStructure(removed, replacement)) {
                     throw new Error(STRUCTURE_PROTECTED_ERROR);
                   }
+                } else if (usfmDeletesMarkers(removed, replacement)) {
+                  // Structure protection proper is Simple-mode-only by design, and Replace is not
+                  // offered in Simple mode, so nothing above ever runs today. Marker *deletion* is
+                  // guarded separately and unconditionally: a match may span a block boundary, and
+                  // replacing across one would drop the `\p`/`\q1`/`\tc2` or footnote that sat in
+                  // the gap with no way to get it back.
+                  throw new Error(MARKER_DELETION_ERROR);
                 }
                 modifiedUsfm =
                   modifiedUsfm.substring(0, rangeWithIndex.startIndex) +

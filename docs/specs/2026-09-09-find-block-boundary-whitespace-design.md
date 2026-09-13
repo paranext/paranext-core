@@ -28,8 +28,8 @@ therefore cannot match.
 Paragraph-final whitespace is **stripped during the USFM→USX conversion**, so it never reaches the
 USJ that Find searches. The `.SFM` source does carry trailing spaces
 (`c-sharp/assets/WEB/41MATengWEBUS.SFM:11` ends `…the son of Abraham. ` before `\p` on line 12), but
-the USJ produced through the pipeline does not: in `web-matthew-1-and-2.usj`, **45 of 51** boundary
-joins have no whitespace on either side, and in `web-matthew-5-section-header.usj`, 41 of 63.
+the USJ produced through the pipeline does not: in `web-matthew-1-and-2.usj`, **all 35** boundary
+joins have no whitespace on either side, and in `web-matthew-5-section-header.usj`, 24 of 28.
 Mid-paragraph whitespace _is_ preserved (`usj-reader-writer.test.ts:1202` asserts a text node keeping
 its trailing space).
 
@@ -200,7 +200,8 @@ detected` (`platform-scripture-finder-pdpe.model.ts:578-585`).
   sides — as a uniquely-named group with the shared prefix, allowed to match zero characters. A
   leading, trailing, or whitespace-only run keeps its existing required (one-or-more) form instead;
   see [Matching semantics](#matching-semantics) for why. The group body keeps today's option-driven
-  meaning — the collapsing `+?` pattern when _Ignore whitespace differences_ is on, the literal
+  meaning — the collapsing lazy pattern when _Ignore whitespace differences_ is on (`*?` inside an
+  interior group, `+?` elsewhere), the literal
   escaped run when off — and the existing `~`-as-NBSP handling (`allowInvisibleCharacters`) moves
   inside the group unchanged.
 - Emit the `d` flag only when groups were emitted. The `useRegex` branch is not touched.
@@ -397,7 +398,17 @@ out of scope here.
 | Reverse-direction tolerance (query lacks whitespace, text has it) | Measured unreachable via paste; not built                                                                                                                                                                                                                                                                 |
 | Sanitizing newlines in `beginFindJob` / `openFind`                | Published API surfaces accepting arbitrary strings; unchanged here                                                                                                                                                                                                                                        |
 
-Follow-ups are recorded outside Jira in `~/Desktop/PT-3609-follow-ups.md`.
+The follow-ups above are not yet filed as Jira tickets. Two of them belong to this epic's problem
+space and should be raised on [PT-4336](https://paratextstudio.atlassian.net/browse/PT-4336) before
+this work is considered closed:
+
+- **A Replace spanning a footnote deletes it silently.** `isBlockMarker` returns `false` for `f`,
+  `fe`, and `x`, so structure protection never saw them. This PR's `usfmDeletesMarkers` guard now
+  refuses such a replacement in every interface mode, but `isBlockMarker` itself is still wrong and
+  every other consumer of it still has the gap.
+- **Whole-word Find is broken at block boundaries.** The concatenated text makes `Abraham.Abraham`
+  one word-run, so a word restriction cannot match either side. Same root cause as this work; not
+  addressed here.
 
 ## Open questions
 

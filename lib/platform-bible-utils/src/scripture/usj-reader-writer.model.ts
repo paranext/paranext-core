@@ -566,6 +566,15 @@ export type UsjSearchOptions = {
    *
    * This lets a phrase copied out of an editor match across a rendered line break: the clipboard
    * supplies a space where the concatenated text has nothing between the two words.
+   *
+   * A chapter transition never counts as a boundary, nor does a join that only became adjacent
+   * because `markerStylesToInclude` dropped the text between the two sides — in both cases the gap
+   * is not something the editor renders as a line break.
+   *
+   * The filter needs capture-group offsets, so when the pattern carries a whitespace group and
+   * lacks the `d` flag, `search` runs a **rebuilt copy** of it. The caller's own `RegExp` object is
+   * never modified — including its `lastIndex` — but that also means a rebuilt run does not advance
+   * the caller's `lastIndex` the way an unmodified run would.
    */
   flexibleWhitespaceAtBlockBoundaries?: boolean;
 };

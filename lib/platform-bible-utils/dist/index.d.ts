@@ -3681,6 +3681,15 @@ export type UsjSearchOptions = {
 	 *
 	 * This lets a phrase copied out of an editor match across a rendered line break: the clipboard
 	 * supplies a space where the concatenated text has nothing between the two words.
+	 *
+	 * A chapter transition never counts as a boundary, nor does a join that only became adjacent
+	 * because `markerStylesToInclude` dropped the text between the two sides — in both cases the gap
+	 * is not something the editor renders as a line break.
+	 *
+	 * The filter needs capture-group offsets, so when the pattern carries a whitespace group and
+	 * lacks the `d` flag, `search` runs a **rebuilt copy** of it. The caller's own `RegExp` object is
+	 * never modified — including its `lastIndex` — but that also means a rebuilt run does not advance
+	 * the caller's `lastIndex` the way an unmodified run would.
 	 */
 	flexibleWhitespaceAtBlockBoundaries?: boolean;
 };
@@ -6509,6 +6518,19 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 */
 	private static findNearestBlockAncestor;
 	/**
+	 * Returns the next position at or after `index` that a `u`-flag regex can actually resume from:
+	 * one whole code point past `index`.
+	 *
+	 * Advancing a single UTF-16 code unit is not enough. Under the `u` flag a `lastIndex` that lands
+	 * between a surrogate pair's two halves is snapped back to the pair's start by the engine, so the
+	 * next `exec` returns the identical match and the loop makes no progress — an unbounded hang on
+	 * any text in a supplementary-plane script such as Adlam.
+	 *
+	 * @param text Text being searched
+	 * @param index Position to advance from
+	 */
+	private static advancePastCodePoint;
+	/**
 	 * True when a match must be discarded because one of its whitespace groups matched zero
 	 * characters somewhere other than a block boundary. A group that matched real whitespace is
 	 * always acceptable, and so is a group that did not participate in the match.
@@ -6517,6 +6539,9 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * @param blockBoundaryOffsets Offsets into the original concatenated text that are block
 	 *   boundaries
 	 * @param nfdToOriginalMap Position map when the search text was NFD-normalized, else `undefined`
+	 * @throws If `match` carries no group offsets, which means the regex lacked the `d` flag. Failing
+	 *   closed matters: returning `false` here would accept every match, silently degrading Find to
+	 *   matching `into` for a query of `in to` across the whole Bible with no error anywhere.
 	 */
 	private static hasWhitespaceGapAwayFromBoundary;
 	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];

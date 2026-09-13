@@ -52,6 +52,7 @@
  * permanent, non-closable Column 3 tab.
  */
 
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Frame, FrameLocator, Locator, Page } from '@playwright/test';
 import {
   test,
@@ -63,6 +64,7 @@ import {
 } from '../../../fixtures/find.fixture';
 import {
   isPopoverTriggerExpanded,
+  sendPapiRequestOnce,
   waitForAppReady,
   PROCESS_READY_TIMEOUT,
 } from '../../../fixtures/helpers';
@@ -138,6 +140,21 @@ const BOUNDARY_SPANNING_TERM = 'of Abraham. Abraham became';
  */
 const NON_BOUNDARY_GAP_TERM = 'Bartholom ew';
 
+/**
+ * The book both boundary terms live in. Find's default scope is `'book'`, resolved from the scroll
+ * group's current reference, so a test that does not set the reference searches whatever book a
+ * previous test left behind — where the positive term is absent and the negative term returns zero
+ * for the wrong reason.
+ */
+const BOUNDARY_TERM_REF = { book: 'MAT', chapterNum: 1, verseNum: 1 };
+
+/**
+ * A term present in {@link BOUNDARY_TERM_REF}'s book with no whitespace subtlety to it. Used as a
+ * positive control so a "no results" assertion cannot pass merely because the wrong book is in
+ * scope.
+ */
+const BOUNDARY_TERM_BOOK_CONTROL = 'Bartholomew';
+
 /** History debounce delay (ms). Must match HISTORY_DEBOUNCE_DELAY_MS in find.web-view.tsx. */
 const HISTORY_DEBOUNCE_MS = 5_000;
 
@@ -166,6 +183,39 @@ const SEARCH_TIMEOUT_MS = 150_000;
  * change.
  */
 let openedProjectId: string | undefined;
+
+/**
+ * The scroll group's reference as the app came up, captured in `beforeAll` before any test
+ * navigates. `resetFindPanel` restores it so a test that navigates cannot change which book every
+ * later test searches — Find's default scope is `'book'`, resolved from this reference, and several
+ * tests assert exact match counts that only hold in the default book.
+ */
+let defaultScrRef: SerializedVerseRef | undefined;
+
+/** Point the scroll group at `scrRef`, so Find's book scope resolves to that book. */
+async function setScrollGroupRef(scrRef: SerializedVerseRef): Promise<void> {
+  await sendPapiRequestOnce(
+    'object:ScrollGroupService.setScrRef',
+    [0, scrRef, openedProjectId],
+    undefined,
+    15_000,
+  );
+}
+
+/**
+ * Point the scroll group at {@link BOUNDARY_TERM_REF} so Find's book scope resolves to the book the
+ * boundary terms live in, independent of what any earlier test navigated to. Call this AFTER
+ * `openFindPanel`, which restores the default reference as part of resetting the panel.
+ */
+async function navigateToBoundaryTermBook(frame: FrameLocator): Promise<void> {
+  await setScrollGroupRef(BOUNDARY_TERM_REF);
+  // The scope button renders the reference's book, so waiting for it confirms the panel has
+  // observed the navigation before a search is typed against the old scope. It renders the book id
+  // (`MAT`) rather than the localized name, so match either.
+  await expect(frame.getByRole('button', { name: /showing/i })).toContainText(/mat(thew)?/i, {
+    timeout: 15_000,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -324,6 +374,13 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   await matchCase.press('Escape');
   await expect(matchCase).not.toBeVisible({ timeout: 5_000 });
 
+  // Put the scroll group back on the reference the app started with. Find's default scope is
+  // `'book'`, resolved from this reference, so a test that navigates elsewhere silently changes
+  // which book every later test searches — and several of them assert exact match counts that only
+  // hold in the default book. Resetting the toggles below without resetting this would leave the
+  // most consequential piece of leaked state in place.
+  if (defaultScrRef) await setScrollGroupRef(defaultScrRef);
+
   // Reset the scope to the whole book. Same open/closed hazard as the filters popover above,
   // including the animate-out race and the aria-expanded-over-visibility fix — see the comment
   // there.
@@ -440,17 +497,16 @@ function firstResultCard(frame: FrameLocator): Locator {
 }
 
 /**
- * Every term this suite types into the search box. A selection equal to one of these would let the
- * pre-fill assertion in "Editor selection to Find" pass without the selection ever reaching Find,
- * because the panel restores the project's last search term into an empty box on mount.
+ * Every single-word term this suite types into the search box. A selection equal to one of these
+ * would let the pre-fill assertion in "Editor selection to Find" pass without the selection ever
+ * reaching Find, because the panel restores the project's last search term into an empty box on
+ * mount.
+ *
+ * Multi-word phrases are deliberately absent: the selector matches whole `\p{L}{6,}` words and
+ * compares them with `===`, so a phrase containing a space can never be selected and listing one
+ * here would exclude nothing.
  */
-const SEARCHED_TERMS = [
-  COMMON_SEARCH_TERM,
-  RARE_SEARCH_TERM,
-  NO_MATCH_TERM,
-  BOUNDARY_SPANNING_TERM,
-  NON_BOUNDARY_GAP_TERM,
-];
+const SEARCHED_TERMS = [COMMON_SEARCH_TERM, RARE_SEARCH_TERM, NO_MATCH_TERM];
 
 /**
  * Select the first word in the editor's text that is long enough to be distinctive and is not one
@@ -566,6 +622,15 @@ test.beforeAll(async ({ electronApp }) => {
 
   openedProjectId = scriptureProject.id;
   await openScriptureEditor(scriptureProject.id);
+
+  // Captured before any test navigates, so `resetFindPanel` can put every test back on the book
+  // the count-based assertions below were written against.
+  defaultScrRef = await sendPapiRequestOnce<SerializedVerseRef>(
+    'object:ScrollGroupService.getScrRef',
+    [0],
+    undefined,
+    15_000,
+  );
 
   // Wait for the editor's Project hamburger button to confirm the editor is ready.
   // We cannot use nth(0) here because other webviews (home page, helloRock3) may appear before
@@ -777,6 +842,7 @@ test.describe('Search Results', () => {
 
   test('finds a phrase copied across a paragraph boundary', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
+    await navigateToBoundaryTermBook(frame);
 
     await fillSearchAndWaitForResults(frame, BOUNDARY_SPANNING_TERM);
 
@@ -787,6 +853,14 @@ test.describe('Search Results', () => {
     mainPage,
   }) => {
     const frame = await openFindPanel(mainPage);
+    await navigateToBoundaryTermBook(frame);
+
+    // Positive control first: the negative assertion below is only meaningful if this book is
+    // actually being searched. Without it, "no results" would pass just as happily against a
+    // scope that contains neither term — which is what would happen if the reference were left
+    // wherever a previous test put it.
+    await fillSearchAndWaitForResults(frame, BOUNDARY_TERM_BOOK_CONTROL);
+    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
 
     await frame.locator('#search-term').fill(NON_BOUNDARY_GAP_TERM);
 

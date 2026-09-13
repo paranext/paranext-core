@@ -54,13 +54,39 @@ Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
 
 /**
  * USJ node types that render as their own block. A change of block ancestor between two adjacent
- * text nodes is where the editor renders a line break. `note` is absent on purpose: USJ nests a
- * note inside its paragraph, so entering and leaving one would report two boundaries at positions
- * the editor renders as continuous text. `chapter` is absent because chapter nodes carry no content
- * and can never be a text node's ancestor.
+ * text nodes is where the editor renders a line break.
+ *
+ * Absences are deliberate:
+ *
+ * - `note` — USJ nests a note inside its paragraph, so entering and leaving one would report two
+ *   boundaries at positions the editor renders as continuous text.
+ * - `chapter` — chapter nodes carry no content and can never be a text node's ancestor. Chapter
+ *   transitions are recorded separately, by sibling scan rather than by ancestor change, so a match
+ *   cannot span one.
+ * - `char` — inline formatting (`\it`, `\bd`, …) renders continuous with the surrounding text.
+ * - `optbreak` — `//` does render a line break, but it is a _sibling_ of the surrounding text rather
+ *   than an ancestor of it, so an ancestor comparison cannot see it. Bridging an `optbreak` needs a
+ *   sibling scan like the chapter one; not done here.
+ * - `periph` — a `periph` ancestor resolves to `undefined` on both sides of a `periph`→`periph` join,
+ *   which compares equal, so no boundary is recorded. Peripheral matter is out of scope for Find
+ *   today.
+ *
+ * Note the USJ spellings: a row is `table:row` and a cell is `table:cell`. The bare USX names `row`
+ * and `cell` never appear in USJ and would match nothing.
  */
-const BLOCK_LEVEL_NODE_TYPES = ['para', 'table', 'row', 'cell', 'sidebar'];
+const BLOCK_LEVEL_NODE_TYPES = ['para', 'table', 'table:row', 'table:cell', 'sidebar'];
 Object.freeze(BLOCK_LEVEL_NODE_TYPES);
+
+/** USJ node type for a chapter marker. Chapter transitions block a boundary-tolerant match. */
+const CHAPTER_NODE_TYPE = 'chapter';
+
+/**
+ * Matches exactly the capture-group names {@link IUsjReaderWriter.search} treats as whitespace
+ * groups. Anchored and digit-suffixed on purpose: a bare `startsWith('ws')` would claim the whole
+ * two-letter `ws` namespace on a published API, so a caller's own `wsBefore` or `wsl` group would
+ * silently cause matches to be discarded.
+ */
+const SEARCH_WHITESPACE_GROUP_NAME_REGEXP = new RegExp(`^${SEARCH_WHITESPACE_GROUP_PREFIX}\\d+$`);
 
 /** RegExp that matches all NBSP characters in a string. Used to convert NBSP in USJ to ~ in USFM */
 const TEXT_CONTENT_NBSP_REGEXP = /\u00A0/g;
@@ -1673,6 +1699,24 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   /**
+   * Returns the next position at or after `index` that a `u`-flag regex can actually resume from:
+   * one whole code point past `index`.
+   *
+   * Advancing a single UTF-16 code unit is not enough. Under the `u` flag a `lastIndex` that lands
+   * between a surrogate pair's two halves is snapped back to the pair's start by the engine, so the
+   * next `exec` returns the identical match and the loop makes no progress — an unbounded hang on
+   * any text in a supplementary-plane script such as Adlam.
+   *
+   * @param text Text being searched
+   * @param index Position to advance from
+   */
+  private static advancePastCodePoint(text: string, index: number): number {
+    const codePoint = text.codePointAt(index);
+    if (codePoint === undefined) return index + 1;
+    return index + (codePoint > 0xffff ? 2 : 1);
+  }
+
+  /**
    * True when a match must be discarded because one of its whitespace groups matched zero
    * characters somewhere other than a block boundary. A group that matched real whitespace is
    * always acceptable, and so is a group that did not participate in the match.
@@ -1681,6 +1725,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * @param blockBoundaryOffsets Offsets into the original concatenated text that are block
    *   boundaries
    * @param nfdToOriginalMap Position map when the search text was NFD-normalized, else `undefined`
+   * @throws If `match` carries no group offsets, which means the regex lacked the `d` flag. Failing
+   *   closed matters: returning `false` here would accept every match, silently degrading Find to
+   *   matching `into` for a query of `in to` across the whole Bible with no error anywhere.
    */
   private static hasWhitespaceGapAwayFromBoundary(
     match: RegExpExecArray,
@@ -1688,9 +1735,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     nfdToOriginalMap: number[] | undefined,
   ): boolean {
     const groupOffsets = match.indices?.groups;
-    if (!groupOffsets) return false;
+    if (!groupOffsets)
+      throw new Error(
+        'UsjReaderWriter.search: flexibleWhitespaceAtBlockBoundaries requires a regex with the `d` flag so capture-group offsets are available.',
+      );
     return Object.entries(groupOffsets).some(([groupName, offsets]) => {
-      if (!groupName.startsWith(SEARCH_WHITESPACE_GROUP_PREFIX) || !offsets) return false;
+      if (!SEARCH_WHITESPACE_GROUP_NAME_REGEXP.test(groupName) || !offsets) return false;
       const [groupStart, groupEnd] = offsets;
       // The group matched actual whitespace, so there is no gap to justify.
       if (groupEnd > groupStart) return false;
@@ -1734,10 +1784,24 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const fullTextIndexMap = new SortedNumberMap<
       UsjNodeAndDocumentLocation<UsjTextContentLocation>
     >();
+    // Group offsets require the `d` flag, but only a pattern that actually carries a whitespace
+    // group can ever be rejected by the boundary filter. Computed before the walk so the
+    // bookkeeping below is skipped for a pattern that could never benefit from it.
+    const hasWhitespaceGroup = regex.source.includes(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    const shouldRecordBoundaries = isBoundaryFilterOn && hasWhitespaceGroup;
+
     // Offsets in the concatenated text where the adjacent text nodes belong to different blocks.
     const blockBoundaryOffsets = new Set<number>();
     let previousBlockAncestor: MarkerObject | Usj | undefined;
     let hasPushedAChunk = false;
+    // Set when a chapter node is walked past. A chapter transition is a hard break: a match that
+    // spanned one would make `replace()` fall back to a whole-book write with the `\c` marker
+    // inside the removed span, deleting it.
+    let hasCrossedChapterSincePush = false;
+    // Set when a text node is dropped by `markerStylesToInclude`. Excluded content (a footnote,
+    // say) leaves a zero-character gap in the concatenated text that the editor does *not* render
+    // as a line break, so such a join must not be treated as a boundary.
+    let hasDroppedTextSincePush = false;
 
     // Variables to track our current position while walking through the USJ content tree
     let currentIndex = 0;
@@ -1750,7 +1814,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // We need to use variables from outside the function to keep track of our current position
         // eslint-disable-next-line no-loop-func
         (node, workingStack) => {
-          if (typeof node !== 'string') return false;
+          if (typeof node !== 'string') {
+            if (shouldRecordBoundaries && node && 'type' in node && node.type === CHAPTER_NODE_TYPE)
+              hasCrossedChapterSincePush = true;
+            return false;
+          }
 
           // If filtering by marker style, check if any para/note ancestor is NOT in the allowed set.
           // Only check 'para' and 'note' type ancestors — 'char' type ancestors (e.g., \it, \bd,
@@ -1776,18 +1844,32 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             });
 
             if (hasExcludedAncestor) {
+              // Record that text was removed here before skipping it. The bookkeeping below must
+              // see the drop: without it, two paragraphs separated only by a footnote look like
+              // adjacent chunks and their join reads as a zero-gap block boundary, so a match
+              // would be allowed to span the footnote in the underlying USFM.
+              if (shouldRecordBoundaries) hasDroppedTextSincePush = true;
               return false; // Skip this text node - an ancestor's style is not in the allowed set
             }
           }
 
           // Block-boundary bookkeeping is pure overhead for a caller that never asked for the
-          // filter, so skip it entirely when the option is off.
-          if (isBoundaryFilterOn) {
+          // filter, or whose pattern carries no whitespace group to relax, so skip it then.
+          if (shouldRecordBoundaries) {
             const blockAncestor = UsjReaderWriter.findNearestBlockAncestor(workingStack);
-            if (hasPushedAChunk && blockAncestor !== previousBlockAncestor)
+            // A boundary is tolerable only when the gap in the concatenated text is genuinely
+            // nothing: the block changed, no chapter was crossed, and no text was dropped.
+            if (
+              hasPushedAChunk &&
+              blockAncestor !== previousBlockAncestor &&
+              !hasCrossedChapterSincePush &&
+              !hasDroppedTextSincePush
+            )
               blockBoundaryOffsets.add(currentIndex);
             previousBlockAncestor = blockAncestor;
             hasPushedAChunk = true;
+            hasCrossedChapterSincePush = false;
+            hasDroppedTextSincePush = false;
           }
 
           textChunks.push(node);
@@ -1819,14 +1901,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         : undefined;
     const searchText = nfdToOriginalMap ? fullText.normalize('NFD') : fullText;
 
-    // Group offsets require the `d` flag, but only a pattern that actually carries a whitespace
-    // group can ever be rejected by the boundary filter — a plain pattern with no such group would
-    // pay for a rebuild (and the `d`-flag bookkeeping V8 does on every match) for nothing.
-    // Rebuilding also resets `lastIndex`, so it must not happen for a search that didn't ask for
-    // the filter — a caller's own regex must be left exactly as they compiled it.
-    const hasWhitespaceGroup = regex.source.includes(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
+    // A plain pattern with no whitespace group would pay for a rebuild (and the `d`-flag
+    // bookkeeping V8 does on every match) for nothing. Rebuilding also resets `lastIndex`, so it
+    // must not happen for a search that didn't ask for the filter — a caller's own regex must be
+    // left exactly as they compiled it.
     const searchRegex =
-      isBoundaryFilterOn && hasWhitespaceGroup && !regex.flags.includes('d')
+      shouldRecordBoundaries && !regex.flags.includes('d')
         ? new RegExp(regex.source, `${regex.flags}d`)
         : regex;
 
@@ -1836,22 +1916,34 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       // A zero-length match leaves `lastIndex` where it is, so stepping past it is the only way out
       // of this loop.
       if (match[0].length === 0) {
-        if (!searchRegex.global || searchRegex.lastIndex >= searchText.length) break;
-        searchRegex.lastIndex += 1;
+        if (!searchRegex.global || searchRegex.lastIndex >= searchText.length) {
+          searchRegex.lastIndex = 0;
+          break;
+        }
+        searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(
+          searchText,
+          searchRegex.lastIndex,
+        );
         match = searchRegex.exec(searchText);
       } else if (
-        isBoundaryFilterOn &&
+        // Same condition as the bookkeeping above: with no whitespace group there is nothing to
+        // filter, and `hasWhitespaceGapAwayFromBoundary` would demand a `d` flag that was
+        // deliberately not added.
+        shouldRecordBoundaries &&
         UsjReaderWriter.hasWhitespaceGapAwayFromBoundary(
           match,
           blockBoundaryOffsets,
           nfdToOriginalMap,
         )
       ) {
-        // Resume one character on rather than at `lastIndex`, so a legitimate match that overlaps
+        // Resume one code point on rather than at `lastIndex`, so a legitimate match that overlaps
         // this rejected one is still reachable. Only rejected matches rewind: doing this for accepted
         // matches would return overlapping duplicates, which Replace All refuses outright.
-        if (!searchRegex.global) break;
-        searchRegex.lastIndex = match.index + 1;
+        if (!searchRegex.global) {
+          searchRegex.lastIndex = 0;
+          break;
+        }
+        searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(searchText, match.index);
         match = searchRegex.exec(searchText);
       } else {
         // Convert NFD match positions back to original-string positions if normalization was applied

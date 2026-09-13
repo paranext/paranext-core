@@ -69,6 +69,7 @@ import {
 } from './find/find.utils';
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
 import {
+  MARKER_DELETION_ERROR,
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
 } from './find/structure-protection.util';
@@ -1978,10 +1979,13 @@ global.webViewComponent = function FindWebView({
           await handleStartSearchRef.current();
         }
       } catch (error) {
-        if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
+        const message = getErrorMessage(error);
+        if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
           sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+        } else if (message.includes(MARKER_DELETION_ERROR)) {
+          sonner(localizedStrings['%webView_find_replace_markerDeletionError%']);
         } else {
-          logger.error(`Error replacing result: ${getErrorMessage(error)}`);
+          logger.error(`Error replacing result: ${message}`);
         }
       } finally {
         setIsReplacing(false);
@@ -2181,10 +2185,13 @@ global.webViewComponent = function FindWebView({
         await handleStartSearchRef.current();
       }
     } catch (error) {
-      if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
+      const message = getErrorMessage(error);
+      if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
         sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+      } else if (message.includes(MARKER_DELETION_ERROR)) {
+        sonner(localizedStrings['%webView_find_replace_markerDeletionError%']);
       } else {
-        logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
+        logger.error(`Error replacing all results: ${message}`);
       }
     } finally {
       setIsReplacing(false);

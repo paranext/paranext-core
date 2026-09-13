@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, onTestFinished } from 'vitest';
 import { FindResult, ScriptureRangeUsjChapterOrUsfmVerseLocation } from 'platform-scripture';
 import { UsjReaderWriter } from 'platform-bible-utils';
 import papi from '@papi/backend';
@@ -6,7 +6,10 @@ import {
   ScriptureFinderProjectDataProviderEngine,
   ScriptureFinderOverlayPDPs,
 } from './platform-scripture-finder-pdpe.model';
-import { STRUCTURE_PROTECTED_ERROR } from '../find/structure-protection.util';
+import {
+  MARKER_DELETION_ERROR,
+  STRUCTURE_PROTECTED_ERROR,
+} from '../find/structure-protection.util';
 
 // Simple USFM test data for Matthew chapter 1
 const TEST_BOOK_USFM = String.raw`\id MAT
@@ -2057,6 +2060,38 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(getWrittenUsfm()).toContain('\\p new paragraph');
     });
 
+    it('rejects a marker-deleting replacement in power mode, where structure protection is off', async () => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      // Structure protection proper is simple-mode-only, and Replace is only offered in power
+      // mode, so it never runs for a real Replace. Deleting a marker is guarded separately and
+      // unconditionally: this range starts at offset 0, so the removed span includes `\v 1 `.
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 0 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      await expect(engine.replace(ranges, 'plain text')).rejects.toThrow(MARKER_DELETION_ERROR);
+      expect(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).not.toHaveBeenCalled();
+      expect(mockPdps['platformScripture.USFM_Book'].setBookUSFM).not.toHaveBeenCalled();
+    });
+
+    it('still allows a marker-adding replacement in power mode', async () => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      // The deletion guard is narrower than structure protection on purpose: adding and reordering
+      // stay a matter of editorial policy, and power mode opts out of that policy. Only losing a
+      // marker that was there is refused everywhere.
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+      await engine.replace(ranges, '\\p new paragraph');
+      await flushPromises();
+      expect(getWrittenUsfm()).toContain('\\p new paragraph');
+    });
+
     it('fails safe (rejects) when the project setting cannot be read in simple mode', async () => {
       vi.mocked(mockPdps['platform.base'].getSetting).mockImplementation((key: string) => {
         if (key === 'platformScripture.structureProtected')
@@ -2330,7 +2365,10 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
   });
 
   it('passes block-boundary whitespace tolerance for a plain search but not a regex search', async () => {
+    // Restored explicitly: this spy is on a shared prototype, and `restoreMocks` is not enabled
+    // anywhere in this repo, so leaving it in place would leak into every later test in the file.
     const searchSpy = vi.spyOn(UsjReaderWriter.prototype, 'search');
+    onTestFinished(() => searchSpy.mockRestore());
 
     await pollFindJob(engine, {
       searchString: 'of Abraham. Abraham',

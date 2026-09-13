@@ -39,6 +39,12 @@ export type FindUiState = {
  * `buildSearchRegex` ignores both flags in regex mode, where the pattern must mean exactly what the
  * user wrote, so no carve-out is needed here.
  *
+ * One tolerance is **not** togglable and is on for every non-regex search: a whitespace run in the
+ * query may match zero characters at a block boundary, where the editor renders a line break and
+ * the concatenated USJ has nothing. It carries no toggle because the position is what licenses it —
+ * it cannot fire mid-paragraph, so there is no exact-search case for a user to protect. See
+ * `adr-find-block-boundary-whitespace`.
+ *
  * @param input The current Find UI state
  * @returns The options describing the search to run
  */

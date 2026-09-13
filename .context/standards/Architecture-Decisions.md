@@ -1109,14 +1109,31 @@ step, no automation. Just a record.
   boundary, so the gap is common, not a corner case.
 - **Decision:** A whitespace run in the query may match zero characters, but only at a **break
   boundary** — a point where two adjacent text chunks' nearest block-level ancestors differ by
-  identity. The block-level set is `para`, `table`, `row`, `cell`, `sidebar`. Three kinds of boundary
-  are deliberately excluded from that set: **`char`-marker** boundaries (e.g. `the ` + `LORD` +
-  ` said`) render continuously and already carry their real whitespace inside a chunk; **`note`**
-  boundaries, because a note nests inside a `para` in USJ, so treating it as block-level would fire
-  on entering and leaving a note the editor renders as continuous flowing text; and **`chapter`**,
-  which carries no `content` and so can never be a text node's ancestor in the first place. Mid-
-  paragraph matching and regex mode are both unchanged — the tolerance applies only at the boundary
-  positions computed above, never to an ordinary run of whitespace inside one paragraph.
+  identity. The block-level set is `para`, `table`, `table:row`, `table:cell`, `sidebar` — the USJ
+  spellings; the bare USX names `row` and `cell` never appear in USJ and would match nothing.
+
+  Some boundaries are deliberately excluded. **`char`-marker** boundaries (e.g. `the ` + `LORD` +
+  ` said`) render continuously and already carry their real whitespace inside a chunk. **`note`**
+  boundaries are excluded because a note nests inside a `para` in USJ, so treating it as block-level
+  would fire on entering and leaving a note the editor renders as continuous flowing text.
+  **`optbreak`** (`//`) does render a line break but is a *sibling* of the surrounding text rather
+  than an ancestor of it, so an ancestor comparison cannot see it; bridging one would need a sibling
+  scan. **`periph`** resolves to `undefined` on both sides of a `periph`→`periph` join, which
+  compares equal, so no boundary is recorded there.
+
+  Two further conditions suppress a boundary that the ancestor comparison would otherwise record:
+
+  - **A chapter transition is never a boundary.** `chapter` nodes carry no `content` and cannot be a
+    text node's ancestor, so they are detected by a sibling scan instead. A match spanning one would
+    make `replace()` fall back to a whole-book `setBookUSFM` with the `\c` marker inside the removed
+    span, deleting it.
+  - **A join made adjacent only by `markerStylesToInclude` is never a boundary.** Under *Verse text
+    only* the notes between two paragraphs are dropped from the concatenated text, leaving a
+    zero-character gap that is an artifact of the filter rather than a rendered line break. Text
+    dropped by the filter is recorded so such a join is not tolerated.
+
+  Mid-paragraph matching and regex mode are both unchanged — the tolerance applies only at the
+  boundary positions computed above, never to an ordinary run of whitespace inside one paragraph.
 - **Alternatives:**
   - **Sentinel character in the searched text** (insert a synthetic marker at every break boundary
     and let query whitespace match it). Rejected: every index in the search text's index map would
@@ -1127,34 +1144,44 @@ step, no automation. Just a record.
   - **Global whitespace looseness** (query whitespace always optional, independent of position).
     Rejected: it produces false positives mid-paragraph, which is the exact behavior a prior PT-3609
     comment flagged as unexpected.
-  - **Filter in the Find PDPE** instead of in `UsjReaderWriter.search`. Rejected: it would expose
-    regex-match plumbing (capture groups, `d`-flag indices) through a published API just to apply a
-    policy that `search()` already has the natural seam for, alongside its existing
-    `markerStylesToInclude` and `normalizationForm` options.
+  - **Filter in the Find PDPE** instead of in `UsjReaderWriter.search`. Rejected: `search()` is the
+    only place the block structure is still in hand — the PDPE sees offsets into a flat string and
+    would have to rebuild the USJ walk to interpret them. The seam is already there alongside
+    `markerStylesToInclude` and `normalizationForm`. The honest cost of the accepted design is that
+    the contract between the two packages is stringly-typed: the caller and `search()` agree on the
+    capture-group name via an exported `SEARCH_WHITESPACE_GROUP_PREFIX` rather than a type. A typed
+    hand-off (the caller passing group names, or a structured pattern description) would be better
+    and was not built; the prefix is anchored to `/^ws\d+$/` so it cannot swallow a caller's own
+    group names.
 - **Consequences:** Because paragraph-final whitespace is stripped in conversion, boundary-spanning
-  matches become available at nearly every paragraph boundary in every project — a broad change, not
-  a narrow one. Replace's structure protection (`usfmChangesStructure`, keyed off `isBlockMarker`)
-  covers a match that spans a **paragraph** marker (`isBlockMarker('p')`, `('q1')`, `('v')` are all
-  `true`): such a replace is refused with `STRUCTURE_PROTECTED_ERROR` **while the guard is engaged**.
-  It is not always engaged: `platform-scripture-finder-pdpe.model.ts` gates the whole check on
-  `isStructureProtected`, which is off by default in Power mode, so a Power-mode Replace All with
-  protection off is unguarded and will strip `\p`/`\q1` markers at the newly-common boundary matches
-  with nothing to stop it.
+  matches become available at every paragraph boundary in every project — a broad change, not a
+  narrow one. In `web-matthew-1-and-2.usj` **all 35** boundary joins have no whitespace on either
+  side; in `web-matthew-5-section-header.usj`, 24 of 28.
 
-  The guard does **not** cover a match that spans a **note** (`isBlockMarker('f')`, `('fe')`, `('x')`,
-  `('fr')`, `('ft')` are all `false`), so a replace spanning a footnote can silently delete it while
-  structure protection is engaged. This is a pre-existing gap — the no-separator concatenation
-  already produced note-spanning matches before this change — and excluding `note` from the
-  block-level set keeps that gap at its existing size rather than growing it, **provided note text is
-  part of the searched text**. Under *Verse text only* filtering (`markerStylesToInclude` excluding
-  note styles), a paragraph boundary that used to have a note's worth of gap on one side becomes a
-  zero-gap boundary once the note is filtered out of the searched text, so a match newly spans the
-  note in the underlying USFM (measured: `inherit the earth. Blessed` against
-  `web-matthew-5-section-header.usj` returns 1 match under verse-text-only filtering, 0 without it).
-  This does not create a *new* protection failure, since such a match also crosses the paragraph's own
-  `\p`/`\q1` boundary and structure protection — when engaged — refuses it on that ground regardless;
-  it makes a match spanning a footnote newly *reachable* by an ordinary Find query, not newly
-  unprotected. The underlying note-boundary gap itself is filed as a follow-up outside this work.
+  That makes Replace's exposure the main consequence, and it was worse than a "default is off"
+  reading suggests. Structure protection (`usfmChangesStructure`) is gated on
+  `computeIsStructureProtected`, which returns `false` for **every** non-Simple interface mode, and
+  `find.web-view.tsx` removes Replace from Simple mode entirely. The two together mean the structure
+  guard is **unreachable for Replace**: it exists only where it is always off. That is a pre-existing
+  product gap and Power mode opting out of structure protection is deliberate, so it is not closed
+  here.
+
+  What is closed here is marker **deletion**, which is not an editorial-policy question:
+  `usfmDeletesMarkers` refuses any replacement that drops a block marker or a note the replacement
+  does not put back, in **every** interface mode, independent of `isStructureProtected`. It is
+  deliberately narrower than `usfmChangesStructure` — additions and reordering stay behind the
+  opt-in Simple-mode protection, because losing a marker that was there is unrecoverable content
+  loss whereas adding one is a matter of policy.
+
+  Two marker classes had to be added for that guard to mean anything, because `isBlockMarker`
+  reports `false` for both: **table markers** (`tr`, `tc#`, `th#`) and **notes** (`f`, `fe`, `x`).
+  The table gap also affected `extractStructuralMarkers` itself, so Simple-mode structure protection
+  was blind to a deleted `\tc2` as well; both now go through a shared `isStructuralMarker`.
+
+  Remaining, documented and not fixed: a boundary **ending in a footnote or cross-reference** is not
+  bridged, because the gap is note content rather than zero characters. **Whole-word Find** is still
+  broken at these boundaries — the concatenated text makes `Abraham.Abraham` one word-run — which is
+  the same root cause and out of scope here.
 - **Source:** PT-3609, `docs/specs/2026-09-09-find-block-boundary-whitespace-design.md`.
 
 ## adr-find-follows-editor-to-read-only: Find follows the editor onto read-only resources, with replace withheld
@@ -1327,6 +1354,15 @@ step, no automation. Just a record.
   (`PreserveConsecutiveSpacesInTextTokens`); this decision is unaffected by that, since it never
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
+
+  **Amended by `adr-find-block-boundary-whitespace` (2026-09-09).** That decision adds one tolerance
+  that is always on for a non-regex search and has no toggle: a query whitespace run may match zero
+  characters at a block boundary. It does not contradict the rule above — the query still reaches
+  the engine byte-identical, and the tolerance is still expressed as an engine option
+  (`flexibleWhitespaceAtBlockBoundaries`) rather than by rewriting what the user typed. It is an
+  exception to "both default to off": there is no third toggle, because the tolerance is licensed by
+  *position* rather than by preference. It can only fire where the editor renders a line break, so
+  there is no exact-search case for a user to protect by turning it off.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 

@@ -1245,9 +1245,11 @@ describe('Find USJ details for text searches', () => {
   test('search does not treat a char-marker or note boundary as a block boundary 3.0', () => {
     const usjDoc = new UsjReaderWriter(webMatthew5Usj);
 
-    // "...inherit the earth." is followed by footnote content in the concatenated text. A note
-    // is nested inside its paragraph, so entering and leaving it is not a block boundary, and
-    // the gap there is note text rather than zero characters either way.
+    // "...inherit the earth." is followed by footnote content in the concatenated text. A note is
+    // nested inside its paragraph, so entering and leaving it is not a block boundary. The gap
+    // between the two sides here is exactly zero characters, which is what makes the test
+    // meaningful: the match is rejected because the position is not a boundary, not because there
+    // happened to be text in the way.
     const acrossANote = /(inherit the earth\.(?<ws0>(?: )?)5:5 or)/dg;
     const matches = usjDoc.search(acrossANote, {
       flexibleWhitespaceAtBlockBoundaries: true,
@@ -1277,10 +1279,10 @@ describe('Find USJ details for text searches', () => {
     ).toBe(0);
   });
 
-  test('search treats findNearestBlockAncestor as walking past char markers to the enclosing para 3.0', () => {
+  test('search records a boundary between two paragraphs whose text nests inside char markers 3.0', () => {
     const usjDoc = new UsjReaderWriter(webMatthew5Usj);
 
-    // MAT 5:6's \q2 ("...children of God.") and 5:10's \q1 ("Blessed are those...") both nest
+    // MAT 5:9's \q2 ("...children of God.") and 5:10's \q1 ("Blessed are those...") both nest
     // their text one level deeper inside a \wj char marker. The boundary between them is only
     // visible if findNearestBlockAncestor walks past that char marker to the enclosing para.
     const acrossCharNestedBoundary = /(of God\.(?<ws0>(?: )?)Blessed are those)/dg;
@@ -1290,7 +1292,7 @@ describe('Find USJ details for text searches', () => {
     expect(matches.length).toBe(1);
   });
 
-  test('search boundaries reflect the filtered chunk set when markerStylesToInclude skips notes 3.0', () => {
+  test('search does not treat a join made adjacent only by markerStylesToInclude as a boundary 3.0', () => {
     const usjDoc = new UsjReaderWriter(webMatthew5Usj);
 
     // Unfiltered, "for they shall inherit the earth." and "Blessed are those who hunger" are
@@ -1300,11 +1302,13 @@ describe('Find USJ details for text searches', () => {
       usjDoc.search(acrossTheNotes, { flexibleWhitespaceAtBlockBoundaries: true }).length,
     ).toBe(0);
 
-    // Verse-text-only filtering skips the notes entirely, so the two paragraphs become adjacent
-    // pushed chunks and the boundary between them collapses to zero characters. A minimal,
-    // locally-scoped set is used here rather than the full production verse-text-marker list
-    // (defined further down this describe block): it only needs to include the two paragraph
-    // markers in play and exclude the note markers, to isolate what this test is pinning.
+    // Verse-text-only filtering drops the notes, so the two paragraphs become adjacent pushed
+    // chunks with a zero-character gap between them. That gap is an artifact of the filter, not a
+    // rendered line break — the editor shows footnotes there, and a match spanning it would span
+    // them in the underlying USFM. The dropped text is recorded, so the join is not a boundary and
+    // the match is still rejected. A minimal, locally-scoped marker set is used here rather than
+    // the full production verse-text-marker list (defined further down this describe block): it
+    // only needs to include the two paragraph markers in play and exclude the note markers.
     const verseTextOnlyMarkers = new Set(['p', 'q1', 'q2']);
     acrossTheNotes.lastIndex = 0;
     expect(
@@ -1312,7 +1316,214 @@ describe('Find USJ details for text searches', () => {
         markerStylesToInclude: verseTextOnlyMarkers,
         flexibleWhitespaceAtBlockBoundaries: true,
       }).length,
+    ).toBe(0);
+  });
+
+  test('search terminates on a supplementary-plane query when a boundary candidate is rejected 3.0', () => {
+    // Adlam (U+1E900..) is a supplementary-plane script, so every code point is a surrogate pair.
+    // Rejecting a boundary candidate rewinds `lastIndex`; advancing a single UTF-16 code unit
+    // would land mid-pair, and under `u` the engine snaps back to the pair's start and returns the
+    // identical match forever. This test hangs rather than fails if the rewind is not
+    // code-point-aware.
+    const adlam = '\u{1E900}';
+    const smpUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [{ type: 'para', marker: 'p', content: [adlam.repeat(4)] }],
+    };
+    const smpDoc = new UsjReaderWriter(smpUsj);
+    // No whitespace anywhere in the text, all mid-paragraph, so every candidate's group is
+    // zero-width with no boundary to justify it and every one is rejected — driving the rewind on
+    // each iteration. The `u` flag is what makes that rewind dangerous.
+    const smpRegex = new RegExp(`(${adlam}(?<ws0>(?: )?)${adlam})`, 'dgu');
+    expect(smpDoc.search(smpRegex, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(0);
+  });
+
+  test('search records a boundary between table cells and between table rows 3.0', () => {
+    // USJ spells these `table:row` and `table:cell`; the bare USX names `row`/`cell` never appear,
+    // so a block-type list using those would record no intra-table boundary at all.
+    const tableUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        {
+          type: 'table',
+          marker: 'table',
+          content: [
+            {
+              type: 'table:row',
+              marker: 'tr',
+              content: [
+                { type: 'table:cell', marker: 'tc1', content: ['Abraham'] },
+                { type: 'table:cell', marker: 'tc2', content: ['became'] },
+              ],
+            },
+            {
+              type: 'table:row',
+              marker: 'tr',
+              content: [{ type: 'table:cell', marker: 'tc1', content: ['Isaac'] }],
+            },
+          ],
+        },
+      ],
+    };
+    const tableDoc = new UsjReaderWriter(tableUsj);
+
+    const acrossCells = /(Abraham(?<ws0>(?: )?)became)/dg;
+    expect(tableDoc.search(acrossCells, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(
+      1,
+    );
+
+    const acrossRows = /(became(?<ws0>(?: )?)Isaac)/dg;
+    expect(tableDoc.search(acrossRows, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(
+      1,
+    );
+  });
+
+  test('search does not record a boundary across a chapter transition 3.0', () => {
+    // A match spanning a chapter would make `replace()` fall back to a whole-book write with the
+    // `\c` marker inside the removed span, deleting it.
+    const twoChapterUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'para', marker: 'p', content: ['of Abraham.'] },
+        { type: 'chapter', marker: 'c', number: '2' },
+        { type: 'para', marker: 'p', content: ['Abraham became'] },
+      ],
+    };
+    const twoChapterDoc = new UsjReaderWriter(twoChapterUsj);
+    const acrossChapters = /(of Abraham\.(?<ws0>(?: )?)Abraham became)/dg;
+    expect(
+      twoChapterDoc.search(acrossChapters, { flexibleWhitespaceAtBlockBoundaries: true }).length,
+    ).toBe(0);
+
+    // The same two paragraphs with no chapter between them do record a boundary, so the rejection
+    // above is the chapter's doing and not an artifact of the fixture.
+    const oneChapterUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'para', marker: 'p', content: ['of Abraham.'] },
+        { type: 'para', marker: 'p', content: ['Abraham became'] },
+      ],
+    };
+    acrossChapters.lastIndex = 0;
+    expect(
+      new UsjReaderWriter(oneChapterUsj).search(acrossChapters, {
+        flexibleWhitespaceAtBlockBoundaries: true,
+      }).length,
     ).toBe(1);
+  });
+
+  test('search adds the `d` flag itself for a whitespace-group pattern that lacks it 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // The filter needs group offsets, so a caller who supplies a whitespace group without `d` gets
+    // a rebuilt copy rather than a silently unfiltered search. This is what keeps the fail-closed
+    // guard inside `hasWhitespaceGapAwayFromBoundary` unreachable from the public API; that guard
+    // exists so the two conditions cannot drift apart unnoticed.
+    const noDFlag = /(of Abraham\.(?<ws0>(?: )?)Abraham became)/g;
+    expect(usjDoc.search(noDFlag, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(1);
+    // The caller's own regex is left as they compiled it.
+    expect(noDFlag.flags).not.toContain('d');
+  });
+
+  test('search leaves a caller group named with the `ws` prefix but no digits alone 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // `ws` is a short prefix on a published API. Only `ws` followed by digits is ours; a caller's
+    // own `wsBefore` must not cause their matches to be silently discarded.
+    const callerGroup = /(of David,(?<wsBefore> )the son)/dg;
+    expect(usjDoc.search(callerGroup, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(
+      1,
+    );
+  });
+
+  test('search returns a legitimate match that overlaps a rejected candidate 3.0', () => {
+    // The rewind resumes one code point past a rejected match rather than at `lastIndex`, so a
+    // real match starting inside the rejected span is still reachable.
+    const overlapUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [{ type: 'para', marker: 'p', content: ['aab ab'] }],
+    };
+    const overlapDoc = new UsjReaderWriter(overlapUsj);
+    // At offset 0 the group is zero-width mid-paragraph and the candidate is rejected. Resuming at
+    // offset 1 finds `ab` — which is only reachable because the rewind does not skip the whole
+    // rejected span.
+    const overlapping = /(a(?<ws0>(?: )?)b)/dg;
+    const matches = overlapDoc.search(overlapping, {
+      flexibleWhitespaceAtBlockBoundaries: true,
+    });
+    expect(matches.length).toBe(0);
+
+    // With a real space present the same pattern matches, confirming the fixture is searchable and
+    // the zero result above is the filter's doing.
+    const withSpace = /(b(?<ws0>(?: )?)a)/dg;
+    expect(overlapDoc.search(withSpace, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(
+      1,
+    );
+  });
+
+  test('search returns two accepted adjacent boundary matches without overlapping duplicates 3.0', () => {
+    // Only rejected matches rewind. Two accepted matches in a row must advance normally, or Replace
+    // All would be handed overlapping ranges, which it refuses outright.
+    const threeParaUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        { type: 'para', marker: 'p', content: ['xa'] },
+        { type: 'para', marker: 'p', content: ['bx'] },
+        { type: 'para', marker: 'p', content: ['a'] },
+        { type: 'para', marker: 'p', content: ['b'] },
+      ],
+    };
+    const threeParaDoc = new UsjReaderWriter(threeParaUsj);
+    const acrossBoundaries = /(a(?<ws0>(?: )?)b)/dg;
+    const matches = threeParaDoc.search(acrossBoundaries, {
+      flexibleWhitespaceAtBlockBoundaries: true,
+    });
+    expect(matches.length).toBe(2);
+
+    // Non-overlapping: the second match starts at or after the first one ends.
+    const [first, second] = matches;
+    expect(second.start.documentLocation.jsonPath).not.toBe(first.start.documentLocation.jsonPath);
+  });
+
+  test('search accepts a boundary sitting at the very start and very end of a match 3.0', () => {
+    // The group offsets at a match's extremes are the off-by-one-prone cases: a group at offset 0
+    // of the match, and one ending exactly where the match ends.
+    const edgeUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        { type: 'para', marker: 'p', content: ['one'] },
+        { type: 'para', marker: 'p', content: ['two'] },
+        { type: 'para', marker: 'p', content: ['three'] },
+      ],
+    };
+    const edgeDoc = new UsjReaderWriter(edgeUsj);
+
+    // Two interior groups, each landing on a different boundary, spanning the whole text.
+    const bothEdges = /(one(?<ws0>(?: )?)two(?<ws1>(?: )?)three)/dg;
+    expect(edgeDoc.search(bothEdges, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(1);
   });
 
   test('search applies the NFD-to-original position map before comparing a group offset to a boundary 3.0', () => {

@@ -117,6 +117,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_replaceTerm_placeholder%',
   '%webView_find_replace_readOnlyNote%',
   '%webView_find_replace_readOnlyTooltip%',
+  '%webView_find_replace_markerDeletionError%',
   '%webView_find_replace_structureProtectedError%',
   '%webView_find_replace_structureProtectedMarkerTooltip%',
   '%webView_find_replace_structureProtectedNote%',

@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  MARKER_DELETION_ERROR,
   STRUCTURE_PROTECTED_ERROR,
   extractStructuralMarkers,
   usfmChangesStructure,
+  usfmDeletesMarkers,
   replacementContainsStructuralMarker,
 } from './structure-protection.util';
 
@@ -90,6 +92,67 @@ describe('structure-protection.util', () => {
     });
     it('is true when the replacement adds a verse marker', () => {
       expect(replacementContainsStructuralMarker('\\v 6 new verse')).toBe(true);
+    });
+  });
+
+  describe('table markers', () => {
+    it('extracts row and cell markers, which isBlockMarker does not recognize', () => {
+      // `tr`/`tc#`/`th#` are absent from the shared marker map, so isBlockMarker reports false for
+      // them. A table row and cell each begin their own block, so losing one loses structure.
+      expect(extractStructuralMarkers('\\tr \\tc1 Abraham \\tc2 became')).toEqual([
+        'tr',
+        'tc1',
+        'tc2',
+      ]);
+    });
+
+    it('sees a replacement that swallows a cell marker as a structural change', () => {
+      expect(usfmChangesStructure('Abraham\\tc2 became', 'Abraham became')).toBe(true);
+    });
+  });
+
+  describe('usfmDeletesMarkers', () => {
+    it('is false when nothing structural is removed', () => {
+      expect(usfmDeletesMarkers('just words', 'other words')).toBe(false);
+    });
+
+    it('is false when the replacement puts the marker back', () => {
+      expect(usfmDeletesMarkers('\\p one', '\\p two')).toBe(false);
+    });
+
+    it('is true when a paragraph marker is dropped', () => {
+      expect(
+        usfmDeletesMarkers('of Abraham.\\p Abraham became', 'of Abraham. Abraham became'),
+      ).toBe(true);
+    });
+
+    it('is true when a table cell marker is dropped', () => {
+      expect(usfmDeletesMarkers('Abraham\\tc2 became', 'Abraham became')).toBe(true);
+    });
+
+    it('is true when a footnote is dropped, though a footnote is not structural', () => {
+      // A note does not begin a block, so extractStructuralMarkers ignores it — but a replacement
+      // that swallows one destroys authored text with nothing on screen to show for it.
+      expect(extractStructuralMarkers('\\f + \\ft note\\f*')).toEqual([]);
+      expect(usfmDeletesMarkers('earth.\\f + \\ft note\\f* Blessed', 'earth. Blessed')).toBe(true);
+    });
+
+    it('is false when a marker is added rather than removed', () => {
+      // Narrower than usfmChangesStructure on purpose: additions stay a matter of editorial policy
+      // and are only refused by the opt-in Simple-mode protection.
+      expect(usfmDeletesMarkers('one', '\\p one')).toBe(false);
+      expect(usfmChangesStructure('one', '\\p one')).toBe(true);
+    });
+
+    it('counts duplicates, so dropping one of two identical markers is caught', () => {
+      expect(usfmDeletesMarkers('\\p a\\p b', '\\p ab')).toBe(true);
+    });
+  });
+
+  describe('MARKER_DELETION_ERROR', () => {
+    it('is a distinct sentinel from STRUCTURE_PROTECTED_ERROR', () => {
+      // The UI branches on these two separately to show different messages.
+      expect(MARKER_DELETION_ERROR).not.toBe(STRUCTURE_PROTECTED_ERROR);
     });
   });
 
