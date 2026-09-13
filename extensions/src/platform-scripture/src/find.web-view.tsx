@@ -68,6 +68,7 @@ import {
   shouldClearResultsForInvalidQuery,
 } from './find/find.utils';
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
+import { isExtraMaterialBookId } from './find/extra-material.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -722,9 +723,11 @@ global.webViewComponent = function FindWebView({
   // pick a book the search never covers.
   //
   // These lists do NOT reach the `book`/`chapter` scopes, which build `findScope` from
-  // `verseRefSetting.book` rather than from them. The navigation control offers every book the
-  // project has (`getActiveBookIds` in the toolbar is unfiltered), so the current reference can sit
-  // in a book of extra material; `isFindQueryValid` gates those two scopes on it separately.
+  // `verseRefSetting.book` rather than from them, so the current reference can sit in a book of
+  // extra material and `isFindQueryValid` gates those two scopes on it separately. The reference
+  // gets there by several routes: `BookChapterControl` offers XXA–XXG directly, and FRT, BAK, OTH,
+  // INT, CNC, GLO, TDX and NDX arrive through a scroll-group navigation command, a persisted
+  // scroll-group reference, or a click on a resource.
   //
   // A book list is "not known" while the setting is still resolving AND when the read fails.
   // `useProjectSetting` reports a delivered `PlatformError` as loaded, so the error branch has to be
@@ -1092,7 +1095,12 @@ global.webViewComponent = function FindWebView({
       case 'book':
         return [{ bookId: verseRefSetting.book }];
       case 'selectedBooks':
-        return selectedBookIds.map((bookId) => ({ bookId }));
+        // Extra material is dropped here too, not only from the book picker. A selection restored
+        // from a persisted tab is pruned against the project's book list, and that list arrives
+        // asynchronously — this is the point the search cannot be built before.
+        return selectedBookIds
+          .filter((bookId) => !isExtraMaterialBookId(bookId))
+          .map((bookId) => ({ bookId }));
       default:
         throw new Error(`Unsupported scope: ${scope}`);
     }

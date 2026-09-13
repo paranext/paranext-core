@@ -480,10 +480,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   }, []);
 
   const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
-  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge —
-  // this exact divergence (the harness's own copy dropped the empty-term check) shipped once
-  // already (see PT-4343 review) and made the NoBooksSelected story pass despite testing the wrong
-  // rule.
+  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge: a
+  // harness with its own copy of the rule can make a story pass while testing a different rule.
   const isSearchQueryValid = isFindQueryValid({
     searchTerm,
     scope,

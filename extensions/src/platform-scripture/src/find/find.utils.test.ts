@@ -3,6 +3,7 @@ import { newPlatformError } from 'platform-bible-utils';
 import { FindJobStatusReport } from 'platform-scripture';
 import {
   CharacterCategorizer,
+  FIND_AVAILABLE_SCOPES,
   MAX_CONSECUTIVE_POLL_MISSES,
   OpenScrollGroupTab,
   applyPreserveCase,
@@ -595,17 +596,56 @@ describe('isFindQueryValid', () => {
     ).toBe(true);
   });
 
-  // The gate names `book`/`chapter` rather than "anything but selectedBooks", so the rest of the
-  // Scope union stays valid in extra material and adding one of them to Find's availableScopes
-  // cannot silently inherit a rule that was never meant for it.
+  // `find.web-view.tsx`'s `findScope` throws on any scope outside FIND_AVAILABLE_SCOPES, so a
+  // scope that passed the gate without being offered would fail during render instead of being
+  // refused as a query — a worse failure than the one it would be reporting.
   it.each(['verse', 'selectedText'] as const)(
-    'leaves the %s scope valid while the current reference is in extra material',
+    'is false for the %s scope, which Find does not offer',
     (scope) => {
       expect(
-        isFindQueryValid({ searchTerm: 'God', scope, selectedBookIds: [], currentBookId: 'XXB' }),
-      ).toBe(true);
+        isFindQueryValid({ searchTerm: 'God', scope, selectedBookIds: [], currentBookId: 'GEN' }),
+      ).toBe(false);
     },
   );
+
+  it('rejects exactly the scopes Find does not offer', () => {
+    const acceptedScopes = (['verse', 'chapter', 'book', 'selectedBooks', 'selectedText'] as const)
+      .filter((scope) =>
+        isFindQueryValid({
+          searchTerm: 'God',
+          scope,
+          selectedBookIds: ['GEN'],
+          currentBookId: 'GEN',
+        }),
+      )
+      .sort();
+    expect(acceptedScopes).toEqual([...FIND_AVAILABLE_SCOPES].sort());
+  });
+
+  // A selection restored from a persisted tab is pruned against the project's book list only once
+  // that list resolves. Until then it can still hold extra material, and the auto-search on the
+  // restore path would otherwise run against it — the reopened bug, by another route.
+  it('is false for the selectedBooks scope when every selected book is extra material', () => {
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: ['GLO', 'FRT'],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(false);
+  });
+
+  it('is true for the selectedBooks scope when a searchable book survives alongside extra material', () => {
+    expect(
+      isFindQueryValid({
+        searchTerm: 'God',
+        scope: 'selectedBooks',
+        selectedBookIds: ['GLO', 'GEN'],
+        currentBookId: 'GEN',
+      }),
+    ).toBe(true);
+  });
 });
 
 describe('isScopeBlockedByExtraMaterial', () => {

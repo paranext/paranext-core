@@ -1622,11 +1622,15 @@ interface ScopeSelectorProps {
 	disabledSectionExplanations?: Partial<Record<Section, string>>;
 	/**
 	 * Optional explanations, by scope, for why that scope cannot be chosen right now. A scope with an
-	 * entry renders disabled, with its explanation surfaced in the way that variant can reach every
-	 * user: the `'radio'` variant shows a tooltip on a focusable wrapper, and the `'dropdown'`
-	 * variant renders the text inline under the option's label, because a disabled Radix menu item is
-	 * not focusable and so cannot carry a tooltip. Keep explanations short enough to read in either
-	 * place.
+	 * entry renders disabled, with its explanation as muted text beneath the option's label. Both
+	 * variants render it inline rather than as a tooltip: a disabled control — a radio or a Radix
+	 * menu item — is out of the tab order, so hover- or focus-only affordances reach nobody. Keep
+	 * explanations short enough to read in a menu row.
+	 *
+	 * `'selectedBooks'` and `'range'` are honored in the `'radio'` variant only. In the `'dropdown'`
+	 * variant those two are menu items that open a dialog rather than scope options, and they ignore
+	 * an entry here — a consumer that must block them in a dropdown should drop them from
+	 * {@link ScopeSelectorProps.availableScopes} instead.
 	 *
 	 * Only for a scope that is genuinely unavailable in the CURRENT state — a scope the consumer
 	 * never offers at all belongs out of {@link ScopeSelectorProps.availableScopes} instead. Disabling

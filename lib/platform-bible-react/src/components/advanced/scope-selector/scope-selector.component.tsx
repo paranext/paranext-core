@@ -2,7 +2,6 @@ import { SelectBooks } from '@/components/advanced/scope-selector/select-books.c
 import { SELECT_BOOKS_STRING_KEYS } from '@/components/advanced/scope-selector/select-books.types';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { BookChapterControlLocalizedStrings } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
-import { DisabledActionTooltip } from '@/components/basics/disabled-action-tooltip.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Dialog,
@@ -139,11 +138,15 @@ interface ScopeSelectorProps {
   disabledSectionExplanations?: Partial<Record<Section, string>>;
   /**
    * Optional explanations, by scope, for why that scope cannot be chosen right now. A scope with an
-   * entry renders disabled, with its explanation surfaced in the way that variant can reach every
-   * user: the `'radio'` variant shows a tooltip on a focusable wrapper, and the `'dropdown'`
-   * variant renders the text inline under the option's label, because a disabled Radix menu item is
-   * not focusable and so cannot carry a tooltip. Keep explanations short enough to read in either
-   * place.
+   * entry renders disabled, with its explanation as muted text beneath the option's label. Both
+   * variants render it inline rather than as a tooltip: a disabled control — a radio or a Radix
+   * menu item — is out of the tab order, so hover- or focus-only affordances reach nobody. Keep
+   * explanations short enough to read in a menu row.
+   *
+   * `'selectedBooks'` and `'range'` are honored in the `'radio'` variant only. In the `'dropdown'`
+   * variant those two are menu items that open a dialog rather than scope options, and they ignore
+   * an entry here — a consumer that must block them in a dropdown should drop them from
+   * {@link ScopeSelectorProps.availableScopes} instead.
    *
    * Only for a scope that is genuinely unavailable in the CURRENT state — a scope the consumer
    * never offers at all belongs out of {@link ScopeSelectorProps.availableScopes} instead. Disabling
@@ -819,11 +822,25 @@ export function ScopeSelector({
                           keyboard and screen-reader users who need it, and a Tooltip inside
                           DropdownMenuContent competes with the menu for the same pointer. Inline
                           text needs neither. Only a disabled scope carries it, so the menu keeps
-                          its normal density whenever nothing is unavailable. */}
-                      <span className="tw:flex tw:flex-col tw:gap-0.5">
-                        {renderScopeLabel(dropdownLabel ?? label, scrRefSuffix, isDropdownNarrow)}
+                          its normal density whenever nothing is unavailable.
+
+                          The inner row matters: `renderScopeLabel` returns the label and the
+                          reference suffix as two siblings, which are laid out as flex items by
+                          whatever contains them. They are the menu item's own row items without
+                          this wrapper, so the column here has to re-establish a row around them or
+                          every reference-derived label in the menu stacks onto two lines.
+
+                          `tw:min-w-0` lets a long explanation wrap instead of widening the menu
+                          past `--radix-dropdown-menu-trigger-width`. It is `tw:text-foreground`
+                          rather than muted because `DropdownMenuItem` already renders a disabled
+                          item at half opacity, and a muted color under that veil falls below the
+                          contrast the explanation needs to be readable at all. */}
+                      <span className="tw:flex tw:min-w-0 tw:flex-col tw:gap-0.5">
+                        <span className="tw:flex tw:items-center tw:gap-1.5">
+                          {renderScopeLabel(dropdownLabel ?? label, scrRefSuffix, isDropdownNarrow)}
+                        </span>
                         {disabledExplanation && (
-                          <span className="tw:text-xs tw:whitespace-normal tw:text-muted-foreground">
+                          <span className="tw:text-xs tw:whitespace-normal tw:text-foreground">
                             {disabledExplanation}
                           </span>
                         )}
@@ -1003,32 +1020,36 @@ export function ScopeSelector({
           >
             {displayedScopes.map(({ value, label, scrRefSuffix, id: scopeId }) => {
               const disabledExplanation = disabledScopeExplanations?.[value];
-              const row = (
-                <div className="tw:flex tw:items-center">
-                  <RadioGroupItem
-                    className="tw:me-2"
-                    value={value}
-                    id={scopeId}
-                    disabled={!!disabledExplanation}
-                  />
-                  <Label htmlFor={scopeId}>{renderScopeLabel(label, scrRefSuffix)}</Label>
-                </div>
-              );
-              // Every row is wrapped unconditionally, not only the rows that currently have an
-              // explanation: a consumer supplies one exactly when the scope becomes unavailable, so
-              // wrapping only those rows would swap the element type at this position on that flip,
-              // remounting the radio and dropping keyboard focus. Wrapping only when the prop is
-              // supplied has the same defect one level up, since a consumer that has nothing to
-              // disable right now passes nothing at all. The wrapper is inert while `disabled` is
-              // false.
+              // The explanation renders inline rather than through a focusable tooltip wrapper.
+              // A disabled radio is not in the tab order, so a wrapper would have to take a tab
+              // stop of its own to host the tooltip — and that puts a `role="group"`, tabbable
+              // element between the `radiogroup` and its `radio` children, which is not an owned
+              // role the grouping allows and adds stops to a roving-focus group that specifies
+              // exactly one. Inline text needs neither focus nor hover, so it reaches every user
+              // without touching the group's semantics, and it matches what the dropdown variant
+              // renders for the same reason.
               return (
-                <DisabledActionTooltip
-                  key={scopeId}
-                  disabled={!!disabledExplanation}
-                  tooltipText={disabledExplanation ?? ''}
-                >
-                  {row}
-                </DisabledActionTooltip>
+                <div key={scopeId} className="tw:flex tw:flex-col tw:gap-0.5">
+                  <div className="tw:flex tw:items-center">
+                    <RadioGroupItem
+                      className="tw:me-2"
+                      value={value}
+                      id={scopeId}
+                      disabled={!!disabledExplanation}
+                      aria-describedby={disabledExplanation ? `${scopeId}-explanation` : undefined}
+                    />
+                    <Label htmlFor={scopeId}>{renderScopeLabel(label, scrRefSuffix)}</Label>
+                  </div>
+                  {disabledExplanation && (
+                    // Indented to clear the radio so it reads as belonging to this row's label.
+                    <span
+                      id={`${scopeId}-explanation`}
+                      className="tw:ms-6 tw:text-xs tw:whitespace-normal tw:text-muted-foreground"
+                    >
+                      {disabledExplanation}
+                    </span>
+                  )}
+                </div>
               );
             })}
           </RadioGroup>

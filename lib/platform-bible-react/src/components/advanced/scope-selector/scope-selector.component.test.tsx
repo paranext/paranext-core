@@ -324,9 +324,30 @@ describe('ScopeSelector — disabled scope explanations', () => {
   it('radio variant: surfaces the explanation to assistive technology on the disabled option', () => {
     renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
 
-    // The wrapper carries the name because a disabled control cannot host its own tooltip; see
-    // DisabledTooltipWrapper.
-    expect(screen.getByRole('group', { name: BOOK_UNAVAILABLE })).toBeInTheDocument();
+    // Rendered inline and pointed at by the radio's `aria-describedby`, rather than through a
+    // focusable tooltip wrapper: a disabled radio is out of the tab order, and a tabbable wrapper
+    // around it would put a non-owned role inside the radiogroup.
+    const explanation = screen.getByText(BOOK_UNAVAILABLE);
+    expect(getScopeOption(/scope_selector_book/i)).toHaveAttribute(
+      'aria-describedby',
+      explanation.id,
+    );
+  });
+
+  it('radio variant: does not put a tabbable wrapper inside the radiogroup', () => {
+    renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
+
+    // `radiogroup` owns `radio` children and runs a roving focus with exactly one tab stop; an
+    // intervening focusable group breaks both.
+    const radioGroup = screen.getByRole('radiogroup');
+    expect(radioGroup.querySelector('[role="group"]')).toBeNull();
+    expect(radioGroup.querySelector('[tabindex="0"]')).toBeNull();
+  });
+
+  it('radio variant: does not render an explanation on an enabled scope', () => {
+    renderRadio({ scope: 'chapter', disabledScopeExplanations: { book: BOOK_UNAVAILABLE } });
+
+    expect(getScopeOption(/scope_selector_chapter/i)).not.toHaveAttribute('aria-describedby');
   });
 
   it('radio variant: leaves every scope enabled when no explanations are supplied', () => {

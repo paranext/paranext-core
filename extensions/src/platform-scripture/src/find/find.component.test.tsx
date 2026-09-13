@@ -886,10 +886,9 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
   );
 });
 
-// The bug these cover: the book and chapter scopes resolve to the CURRENT reference's book rather
-// than to the (already extra-material-free) book list, so navigating into a glossary and searching
-// "Current book" returned matches labeled with the meaningless reference the exclusion exists to
-// hide.
+// The book and chapter scopes resolve to the CURRENT reference's book rather than to the (already
+// extra-material-free) book list, so nothing else keeps a search in a glossary from producing
+// matches labeled with the meaningless reference the exclusion exists to hide.
 describe('Find — current reference in extra material', () => {
   const GLOSSARY_VERSE_REF: SerializedVerseRef = { book: 'GLO', chapterNum: 1, verseNum: 1 };
   // The placeholder and the scope tooltip are separate strings: the placeholder has to name a way
@@ -938,6 +937,45 @@ describe('Find — current reference in extra material', () => {
       expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
     },
   );
+
+  // The rows are suppressed for an invalid query; a count and working arrows left behind read as a
+  // live search over an empty results area, and the arrows still drive the editor.
+  it('drops the result count and navigation along with the results', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('1 of 1')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next result' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Previous result' })).not.toBeInTheDocument();
+  });
+
+  // Before typing is where the reason is most useful, and it is the state a user lands in by
+  // navigating into extra material. The idle "enter search text" prompt would be false here — no
+  // term will run while the scope is blocked.
+  it('explains the block before a search term is entered, rather than prompting for one', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({ scope: 'book', verseRef: GLOSSARY_VERSE_REF, searchTerm: '' })}
+      />,
+    );
+
+    expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText('Enter search text to find results')).not.toBeInTheDocument();
+    // The trigger's de-emphasis and its description are one condition, so it never reads as
+    // unavailable while the reason is nowhere on screen.
+    expect(screen.getByRole('button', { name: /Showing/ })).toHaveAttribute('aria-describedby');
+  });
 
   // "Select at least one book" would send the user to a picker that cannot fix this: the picker
   // never offers extra material, and the fix is to move the reference or change scope.
@@ -1012,8 +1050,15 @@ describe('Find — current reference in extra material', () => {
   // worse than showing a raw key, so the explanation falls back to the key rather than vanishing.
   it('keeps the scopes disabled when the explanation string is missing', async () => {
     const user = setupUser();
-    const stringsWithoutExplanation = { ...STRINGS };
-    delete stringsWithoutExplanation['%webView_find_extraMaterialNotSearchedScope%'];
+    // Built by omission rather than by deleting from a copy: `STRINGS`'s inferred type has the key
+    // as required, so `delete` is a type error — one no check in this repo would report, since
+    // `platform-scripture`'s tsconfig excludes test files and the workspace has no typecheck
+    // script.
+    const stringsWithoutExplanation = Object.fromEntries(
+      Object.entries(STRINGS).filter(
+        ([key]) => key !== '%webView_find_extraMaterialNotSearchedScope%',
+      ),
+    );
     render(
       <Find
         {...buildProps({
@@ -1045,12 +1090,37 @@ describe('Find — current reference in extra material', () => {
       />,
     );
 
-    // The placeholder's own id, which the trigger points at. Spelled out here rather than read off
-    // the rendered node so the test fails if the two sides ever stop referring to the same element.
-    const placeholderId = 'find-extra-material-placeholder';
-    expect(document.getElementById(placeholderId)).toHaveTextContent(EXTRA_MATERIAL_MESSAGE);
-    expect(document.querySelector(`[aria-describedby="${placeholderId}"]`)).toHaveTextContent(
-      'GLO',
+    // Asserted from the trigger outwards: the description has to be on the BUTTON, since a button
+    // is atomic to assistive technology and a description on a span inside it is never announced.
+    // Following the id through to the element proves the two sides name the same node — reading the
+    // id off the placeholder instead would pass for any element that merely carries the attribute.
+    const trigger = screen.getByRole('button', { name: /Showing/ });
+    const describedById = trigger.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    expect(trigger).toHaveTextContent('GLO');
+    expect(document.getElementById(describedById ?? '')).toHaveTextContent(EXTRA_MATERIAL_MESSAGE);
+  });
+
+  // A fixed id would collide wherever two Find components share a document, e.g. a Storybook
+  // autodocs page, and aria-describedby would then resolve to whichever copy came first.
+  it('gives each Find its own placeholder id', () => {
+    const props = buildLifecycleProps({
+      scope: 'book',
+      verseRef: GLOSSARY_VERSE_REF,
+      searchTerm: 'God',
+    });
+    render(
+      <>
+        <Find {...props} />
+        <Find {...props} />
+      </>,
     );
+
+    const describedByIds = screen
+      .getAllByRole('button', { name: /Showing/ })
+      .map((trigger) => trigger.getAttribute('aria-describedby'));
+
+    expect(describedByIds).toHaveLength(2);
+    expect(new Set(describedByIds).size).toBe(2);
   });
 });
