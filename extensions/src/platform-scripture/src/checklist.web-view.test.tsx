@@ -284,6 +284,52 @@ describe('ChecklistWebView comparative-texts picker', () => {
     expect(comparativeTextsWrites[0]).toEqual([{ id: 'project-2', name: 'P2' }]);
   });
 
+  /**
+   * The group-by menu trigger inside the open picker popover, found by its menu-popup semantics
+   * rather than its accessible name — the name comes from the shared `%projectSelector_*%` block,
+   * and the role a dropdown trigger must expose does not move when that string is renamed. The
+   * length assertion keeps the query honest: it is the only menu-opening button in the picker.
+   */
+  function getGroupByTrigger(): HTMLElement {
+    const menuTriggers = within(screen.getByRole('dialog'))
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('aria-haspopup') === 'menu');
+    expect(menuTriggers).toHaveLength(1);
+    return menuTriggers[0];
+  }
+
+  it('buckets a project as recently used when the recents id differs only by case', async () => {
+    // The recents service stores whatever id its caller handed it, while project metadata carries
+    // the canonical (upper-cased) id. A lookup that normalizes only one side misses here and drops
+    // every project into "Other" — and no fixture with consistent casing can detect that.
+    mockRecentProjects.value = ['project-2'];
+    mockProjects.value = [
+      { id: 'project-1', shortName: 'P1', fullName: 'Project One' },
+      { id: 'PROJECT-2', shortName: 'P2', fullName: 'Project Two' },
+    ];
+    mockOpenTabs.value = [];
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    const { user } = await openComparativePicker();
+    await user.click(getGroupByTrigger());
+    await user.click(
+      await screen.findByRole('menuitemradio', {
+        name: '%projectSelector_grouping_lastUsed_label%',
+      }),
+    );
+
+    // PROJECT-2 is the only comparative row (the primary project is filtered out), so exactly one
+    // of these two headings can render: which one is the whole assertion.
+    expect(
+      await screen.findByText('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+    ).not.toBeInTheDocument();
+  });
+
   it('round-trips the stored ref so the selected row toggles back off', async () => {
     mockRecentProjects.value = [];
     mockProjects.value = PROJECT_OPEN_TWICE;

@@ -472,9 +472,9 @@ global.webViewComponent = function FindWebView({
     return ids;
   }, [allOpenProjectTabs]);
 
-  // Recency order for the picker's built-in `lastUsed` grouping. The service exposes an ordered id
-  // list (most-recent first) without timestamps, so `recencyMapFromOrderedIds` synthesizes
-  // monotonic values for the grouping's newest-first sort.
+  // Recency input for the picker's built-in `lastUsed` grouping. The service exposes an ordered id
+  // list (most-recent first) without timestamps, so `recencyMapFromOrderedIds` synthesizes the
+  // values the grouping reads as its "recently used" presence flag.
   const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
     undefined,
     EMPTY_RECENT_PROJECTS,
@@ -492,10 +492,17 @@ global.webViewComponent = function FindWebView({
       );
       orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
     }
-    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds);
+    // Normalize BOTH sides of the lookup: the recents service stores whatever id its caller handed
+    // it, while these keys are canonical project ids, so an un-normalized `get` can miss on casing
+    // alone and route every project into the "Other" bucket.
+    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds.map(normalizeProjectId));
     return Object.entries(projectIdsAndNames)
       .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
-      .map(([id, names]) => ({ id, ...names, lastUsedAt: recencyMap.get(id) }));
+      .map(([id, names]) => ({
+        id,
+        ...names,
+        lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+      }));
   }, [projectIdsAndNames, openProjectIds, recentProjectIds]);
 
   // An open editor tab whose project the metadata fetch never returned means the fetch predates the

@@ -44,7 +44,7 @@ describe('makeProjectSelectorCustomData', () => {
 });
 
 describe('recencyMapFromOrderedIds', () => {
-  it('scores most-recent-first input so a newest-first sort preserves source order', () => {
+  it('scores most-recent-first input descending, so the values rank the source order', () => {
     const map = recencyMapFromOrderedIds(['a', 'b', 'c']);
     expect(map.get('a')).toBeGreaterThan(map.get('b')!);
     expect(map.get('b')).toBeGreaterThan(map.get('c')!);

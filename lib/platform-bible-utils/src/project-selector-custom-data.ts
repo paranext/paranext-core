@@ -42,14 +42,17 @@ export type ProjectSelectorCustomDataShape = {
   typeName?: string;
   /**
    * Millisecond-epoch timestamp of the last time the caller-relevant "use" of this project
-   * happened. The built-in `lastUsed` grouping partitions rows into a "Recently used" bucket (any
-   * project with a timestamp) and an "Other" bucket (no timestamp), sorted newest-first within
-   * Recently used.
+   * happened.
+   *
+   * The built-in `lastUsed` grouping reads this as a PRESENCE FLAG, not as a sort key: any finite
+   * number routes the project into the "Recently used" bucket and its absence routes it into
+   * "Other". The magnitude is never compared. Rows WITHIN every bucket are ordered by the
+   * component's own stable sort — alphabetical by short name, tie-broken by scroll group — so a
+   * larger `lastUsedAt` does not move a project higher up the list.
    *
    * If your data source is an ordered recency list rather than per-project timestamps (as
-   * `platformScripture.recentlyOpenedProjects.RecentProjects` returns), synthesize timestamps via
-   * {@link recencyMapFromOrderedIds} — that preserves the source's ordering under the built-in
-   * grouping's newest-first sort.
+   * `platformScripture.recentlyOpenedProjects.RecentProjects` returns), synthesize values via
+   * {@link recencyMapFromOrderedIds}.
    */
   lastUsedAt?: number;
 };
@@ -93,9 +96,14 @@ export function makeProjectSelectorCustomData(
  * `lastUsedAt` value suitable for feeding into `ProjectSelectorProject.customData`.
  *
  * The recently-opened-projects service exposes order without timestamps; this helper synthesizes a
- * monotonic descending value (higher = more recent) so the built-in `lastUsed` grouping's
- * newest-first sort inside "Recently used" preserves the source's ordering. Projects NOT in the
- * list get no entry, so they fall into the grouping's "Other" bucket per the built-in behavior.
+ * monotonic descending value (higher = more recent). Projects NOT in the list get no entry, so they
+ * fall into the grouping's "Other" bucket per the built-in behavior.
+ *
+ * The synthesized ORDER is not consumed by the built-in `lastUsed` grouping, which reads
+ * `lastUsedAt` only as a presence flag and leaves each bucket in the component's stable
+ * alphabetical order. What this helper guarantees the grouping is that every listed id gets a
+ * strictly positive, unambiguously-present number. The descending values are still meaningful to a
+ * consumer-defined grouping that chooses to compare them.
  *
  * The synthesized values are DETERMINISTIC (do not call `Date.now()`), so calling this at render
  * time is safe — the returned map has stable content and consumers can memoize on the input list

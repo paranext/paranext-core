@@ -420,6 +420,10 @@ export type FindProps = {
  * Maps caller-supplied Find projects onto ProjectSelector rows: sorted by full name, with the
  * grouping inputs the picker's built-in groupings read packed into `customData`. Exported for
  * coverage tests.
+ *
+ * `lastUsedAt` is packed even though Find's grouping menu does not currently offer `lastUsed` (see
+ * `projectSelectorGroupings` below for why). It costs nothing, and a Find that ever lists projects
+ * beyond the open ones would want it without a second round of plumbing.
  */
 export function toFindSelectorRows(projects: readonly FindProject[]): ProjectSelectorProject[] {
   return [...projects]
@@ -824,12 +828,17 @@ export function Find({
     [localizedStrings],
   );
 
-  // Built-in groupings (openTabs / lastUsed / language) wired to the shared central
+  // Built-in groupings (openTabs / language) wired to the shared central
   // `%projectSelector_grouping_*%` keys. Both Find configurations offer the same options.
   //
-  // Find has no project-type source — `FindProject` carries no type and nothing upstream supplies
-  // one — so `type` is filtered out rather than offered as a menu item that can only ever produce a
-  // single "Unknown type" bucket.
+  // Two of the four built-ins are filtered out because Find cannot populate them into more than one
+  // bucket, and a menu item that always yields a single bucket is a dead option:
+  // - `type`: Find has no project-type source. `FindProject` carries no type and nothing upstream
+  //   supplies one, so every row would land under "Unknown type".
+  // - `lastUsed`: Find lists ONLY projects open in a searchable tab, and opening a project is what
+  //   records it as recently used. The recents list is capped at 5, so the "Other" bucket is
+  //   non-empty only when more than five projects are open at once. The grouping also cannot order
+  //   by recency — the picker sorts every bucket alphabetically by short name.
   const projectSelectorGroupings = useMemo(
     () =>
       makeBuiltInGroupings(
@@ -837,7 +846,7 @@ export function Find({
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           localizedStrings as ProjectSelectorResolvedStrings,
         ),
-      ).filter((grouping) => grouping.id !== 'type'),
+      ).filter((grouping) => grouping.id !== 'type' && grouping.id !== 'lastUsed'),
     [localizedStrings],
   );
 

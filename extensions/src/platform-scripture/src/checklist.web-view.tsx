@@ -637,9 +637,9 @@ global.webViewComponent = function ChecklistWebView({
     useMemo<Array<ProjectSelectorProject & { rawLanguage: string | undefined }>>(() => [], []),
   );
 
-  // Recency order for the built-in `lastUsed` grouping. The service exposes an ordered id list
-  // (most-recent first) without timestamps, so we synthesize monotonic values via
-  // `recencyMapFromOrderedIds` to feed the grouping's newest-first sort.
+  // Recency input for the built-in `lastUsed` grouping. The service exposes an ordered id list
+  // (most-recent first) without timestamps, so we synthesize values via `recencyMapFromOrderedIds`
+  // for the grouping to read as its "recently used" presence flag.
   const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
     undefined,
     EMPTY_RECENT_PROJECTS,
@@ -657,12 +657,15 @@ global.webViewComponent = function ChecklistWebView({
       );
       orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
     }
-    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds);
+    // Normalize BOTH sides of the lookup: the recents service stores whatever id its caller handed
+    // it, while these ids are canonical project ids, so an un-normalized `get` can miss on casing
+    // alone and route every project into the "Other" bucket.
+    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds.map(normalizeProjectId));
     return allProjectsRaw.map(({ rawLanguage, ...rest }) => ({
       ...rest,
       customData: makeProjectSelectorCustomData({
         language: rawLanguage,
-        lastUsedAt: recencyMap.get(rest.id),
+        lastUsedAt: recencyMap.get(normalizeProjectId(rest.id)),
       }),
     }));
   }, [allProjectsRaw, recentProjectIds]);

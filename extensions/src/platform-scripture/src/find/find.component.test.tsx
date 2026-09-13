@@ -363,6 +363,7 @@ describe('Find project selector — simple interface mode', () => {
  */
 const LANGUAGE_GROUPING_LABEL_KEY = '%projectSelector_grouping_language_label%';
 const TYPE_GROUPING_LABEL_KEY = '%projectSelector_grouping_type_label%';
+const LAST_USED_GROUPING_LABEL_KEY = '%projectSelector_grouping_lastUsed_label%';
 
 const PROJECTS_WITH_LANGUAGES: FindProject[] = [
   { id: 'WEB', shortName: 'WEB', fullName: 'World English Bible', language: 'English' },
@@ -412,7 +413,7 @@ describe('Find project selector — groupings', () => {
     expect(screen.getByText('Spanish')).toBeInTheDocument();
   });
 
-  it('does not offer Type, which Find has no source for', async () => {
+  it('offers neither Type nor Last used, which Find cannot split into real buckets', async () => {
     const user = setupUser();
     render(
       <Find
@@ -422,13 +423,16 @@ describe('Find project selector — groupings', () => {
 
     await openGroupByMenu(user);
 
-    // Falsifies the negative assertion below: the menu did open, and it offers the groupings Find
+    // Falsifies the negative assertions below: the menu did open, and it offers the groupings Find
     // can actually populate.
     expect(
       await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL_KEY }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL_KEY }),
     ).not.toBeInTheDocument();
   });
 });
