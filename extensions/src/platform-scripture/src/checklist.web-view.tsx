@@ -60,10 +60,11 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.
 // wiring below for why this must always be empty.
 const NO_COMPARATIVE_OPEN_TABS: readonly ProjectSelectorOpenTab[] = Object.freeze([]);
 
-// Stable empty-array reference for the recently-opened-projects `useData` default. `useData`
+// Stable empty-array reference for the recently-opened-projects `useData` default, and the
+// fallback the recency map is built from when the subscription has no usable list. `useData`
 // resubscribes when the default identity changes, so keeping this at module scope avoids
-// per-render re-subscriptions.
-const EMPTY_RECENT_PROJECTS: readonly string[] = Object.freeze([]);
+// per-render re-subscriptions. Never mutate it.
+const EMPTY_RECENT_PROJECTS: string[] = [];
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -645,7 +646,18 @@ global.webViewComponent = function ChecklistWebView({
   );
 
   const allProjects = useMemo<ProjectSelectorProject[]>(() => {
-    const recencyMap = recencyMapFromOrderedIds(recentProjectIds);
+    // Recency is optional to the checklist: it only orders the built-in `lastUsed` grouping. When
+    // the provider is unavailable the subscription yields a PlatformError instead of an id list,
+    // so narrow before handing the value to `recencyMapFromOrderedIds`, which needs an array. An
+    // empty list degrades the grouping to "no recency" rather than losing the whole web view.
+    let orderedRecentProjectIds = recentProjectIds;
+    if (isPlatformError(orderedRecentProjectIds)) {
+      logger.warn(
+        `ChecklistWebView: failed to load recently opened projects: ${orderedRecentProjectIds.message}`,
+      );
+      orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
+    }
+    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds);
     return allProjectsRaw.map(({ rawLanguage, ...rest }) => ({
       ...rest,
       customData: makeProjectSelectorCustomData({
