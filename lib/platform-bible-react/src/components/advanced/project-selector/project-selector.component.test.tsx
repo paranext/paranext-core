@@ -384,3 +384,20 @@ describe('group-by menu naming', () => {
     expect(screen.queryByRole('button', { name: /filter/i })).not.toBeInTheDocument();
   });
 });
+
+describe('first paint', () => {
+  it('renders a non-empty trigger label when no localized strings are supplied', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={[]}
+        openTabs={[]}
+        selection={{ projectId: '' }}
+        onChangeSelection={() => {}}
+      />,
+    );
+    const trigger = screen.getByRole('combobox');
+    expect(trigger).toHaveAccessibleName(expect.stringMatching(/\S/));
+    expect(trigger.textContent?.trim()).not.toBe('');
+  });
+});

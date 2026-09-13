@@ -161,9 +161,13 @@ export type ProjectSelectorLocalizedStrings = {
   clearAll?: string;
 };
 
+// `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
+// bare Storybook render), not production copy: every real consumer merges its own values for
+// these two fields on top via `localizedStrings`. They exist so the trigger never renders with an
+// empty accessible name or empty text before localized strings resolve.
 const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
-  ariaLabel: '',
-  buttonPlaceholder: '',
+  ariaLabel: 'Projects & resources',
+  buttonPlaceholder: 'Select a project',
   commandEmptyMessage: 'No projects found',
   searchPlaceholder: 'Search projects & resources',
   groupByAriaLabel: 'Group by',
