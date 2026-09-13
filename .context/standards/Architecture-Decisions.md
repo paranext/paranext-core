@@ -426,6 +426,274 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** PT-4434 diagnosed the renderer's Chromium `WebSocket` as the peer that dies on a
+  suspend, and left instrumentation but no user-visible reaction — NN-6 ("app never dies silently")
+  needs one. Every channel the app would normally reach for to report a failure travels over the
+  socket that just died: `notificationService` is a network object, so toasts are unavailable;
+  `sendCommand` needs the same connection to reach main; `useLocalizedStrings`
+  (`src/renderer/hooks/papi-hooks/use-localized-strings-hook.ts`) fetches over PAPI and, on
+  failure or before the first response, returns `defaultState`, whose values are the raw keys
+  themselves (`defaultState[key] = key`) — so an unfetched string renders as literal
+  `%overlay_connectionLost%`; and `useIsPowerMode`
+  (`src/renderer/hooks/use-is-power-mode.hook.ts`) reads the interface-mode setting over PAPI
+  and falls back to `false` (Simple) while loading or on failure. A state meant to tell the user the
+  backend is unreachable cannot itself depend on the backend to render.
+- **Decision:** Detect and render the connection-lost state entirely inside the renderer process,
+  using no PAPI round trip anywhere in the reaction path, from a component mounted unconditionally
+  at app startup rather than mounted in response to the disconnect.
+  - **Signal:** a new local event, `onDidLoseConnection: PlatformEvent<void>`, added to
+    `IRpcMethodRegistrar` (`src/shared/models/rpc.interface.ts`). It is real on `RpcClient`
+    (`src/client/services/rpc-client.ts`, emitted from `onWebSocketClose`'s unclean-close branch
+    via `connectionLostEmitter.emitIsolated(...)` with a logging handler, and guarded by that
+    method's own early return on `this.hasCompletedTeardown` so it cannot double-fire) and inert on
+    `RpcWebSocketListener` (`src/main/services/rpc-websocket-listener.ts`, documented as "never
+    fires here" because only a process holding a client connection can lose one). This deliberately
+    mirrors `onDidDisconnectClient`, which is the same seam in the opposite direction — real in
+    main, inert on the client — so the pair reads as one convention rather than two unrelated ones.
+    Both are marked platform-internal core plumbing rather than part of the `@papi/*` surface, even
+    though both are emitted verbatim into `papi.d.ts`. The event carries no payload on purpose:
+    PT-4434's instrumentation already logs the rich close detail where it is observed, and the UI
+    shows the same one message regardless of close code, so a payload would have no reader.
+    `network.service.ts` relays it through its own emitter, subscribed inside `initialize()`, using
+    the shared `relayWhileUp(...)` helper that both this relay and `onDidDisconnectClient`'s were
+    extracted into — so the `hasShutDown` guard (quit-time teardown isn't reported as a failure)
+    and `emitIsolated` with an error log (one throwing subscriber doesn't cost the others the news)
+    cannot be forgotten by the next event added to `IRpcMethodRegistrar`.
+
+    Line numbers are deliberately omitted throughout this entry: they went stale within one review
+    round of being written.
+  - **Scope: an ESTABLISHED connection only.** `RpcClient` emits the loss only while
+    `connectionStatus` is `Connected`. A socket that dies during the opening handshake is a failed
+    connection ATTEMPT, which `connect()` already reports through its return value, and how the app
+    surfaces a startup that never reached the network belongs to PT-4494 / PT-4495 rather than to
+    this state — the banner offers a reload, which is not the answer to a server that was never
+    there. The gate is also what makes the two shapes of a failed startup agree instead of the
+    feature depending on which events a failing peer happened to emit: a refused socket fires
+    `error` then `close`, and since `onError` settles the connection attempt through
+    `failConnectionAttempt` while `AsyncVariable` rejects SYNCHRONOUSLY, `connect()`'s catch runs on
+    the next microtask — before the browser dispatches the `close` task — and strips the listeners,
+    so `onWebSocketClose` never runs at all; a peer that accepts the TCP connection and then drops
+    it before the upgrade fires `close` with no `error`, and the handler does run. Both shapes are
+    pinned in `rpc-client-connection-lost.test.ts`.
+  - **Store:** `src/renderer/services/connection-lost-store.ts` is a one-way latch — `isConnectionLost`
+    starts `false`, flips to `true` on the first reported loss, and nothing in the module ever sets
+    it back (the `resetConnectionLost` export is explicitly test-only). State and wiring are split
+    across two modules, following the `workspace-updating-store.ts` / `workspace-updating-service.ts`
+    pair: the store has zero imports, and `connection-lost-service.ts` holds the network
+    subscription. That split is what lets a consumer's test drive the store directly instead of
+    mocking a service graph to reach it — the collapsed version forced `app.component.test.tsx` to
+    mock the store outright to keep the network service out of the suite.
+  - **Startup wiring:** `initConnectionLostService()` is called at module evaluation in
+    `src/renderer/index.tsx`, before the async service-startup IIFE, NOT from a React effect.
+    `onDidLoseConnection` is a module-level emitter on the network service, so it exists before
+    `initialize()` runs, and subscribing before any await closes the startup window entirely rather
+    than merely relocating it. This follows the `onDidChangeCurrentTheme` subscription in the same
+    file, which is placed at module evaluation for the same "no change can slip through the gap"
+    reason, and the three renderer-lifetime services (`initAutoSyncBlockingService`,
+    `initAutoSyncEditBlockDriver`, `initSyncActivityService`) started from that file. Like those
+    three, the call site itself is untested and the behaviour is pinned at the service level
+    (`connection-lost-service.test.ts`).
+  - **Component:** `ConnectionLostOverlay`
+    (`src/renderer/components/overlays/overlay-connection-lost.component.tsx`) is mounted
+    unconditionally in `Main`'s JSX (`app.component.tsx`) and returns `undefined` until the store
+    flips. This is load-bearing, not stylistic: mounted from startup, its `useLocalizedStrings` and
+    `useIsPowerMode` calls resolve while the connection is alive, and their resolved values persist
+    in the component's own React state afterwards because `useData`'s subscription state is not
+    re-fetched just because the underlying provider stops answering — it holds the last good value.
+    Mounted only on the disconnect, both hooks would be reading a PAPI that has already broken:
+    `useLocalizedStrings` would show the raw `%overlay_connectionLost%` key, and `useIsPowerMode`
+    would report `false`, misplacing the banner at the Simple-mode toolbar height even in Power mode.
+    This property cannot be honestly pinned at the component level — the persistence lives in
+    `useData`'s state caching, not in this component's own code — so it is pinned instead at the app
+    level: `src/renderer/app.component.test.tsx` mounts `<App />` and asserts the connection-lost
+    overlay is present in `Main`'s rendered tree ("mounts the connection-lost overlay so it is
+    listening from startup"), the same pattern already used to pin `<FirstRunOverlay />`'s presence
+    in the same file.
+  - **Scrim:** a blocking scrim, not a `pointer-events: none` dimming, covering the toolbar as well
+    as the dock (`overlay-connection-lost.component.tsx`, `tw:fixed tw:inset-0` at
+    `Z_INDEX_CONNECTION_LOST`). Every toolbar control — project selector, reference, sync, menus —
+    reaches the rest of the app over the same dead socket, so leaving the toolbar clickable would
+    leave the exact silent failure NN-6 exists to end: controls that look live but do nothing.
+  - **Keyboard gate:** a scrim stops pointers only, so the state is a Radix modal `Dialog` with
+    `role="alertdialog"`, following the `FirstRunOverlay` precedent. Radix's `FocusScope` supplies
+    the trap and focuses Reload on open. Without the gate, Tab off Reload reaches the toolbar and
+    dock, where every control is still focusable and Enter-activatable — the same silent failure by
+    keyboard. A hand-rolled document-level Tab handler was tried first and rejected: a `document`
+    listener cannot see keydowns raised inside a web view's iframe, which has its own document, so
+    focus starting inside a web view would not have been contained. `DialogContent`'s own backdrop
+    renders at `Z_INDEX_MODAL_BACKDROP` (450) and accepts no `style`, so it cannot be raised to
+    `Z_INDEX_CONNECTION_LOST` (800); the full-viewport content is therefore itself the scrim, which
+    is the same override `FirstRunOverlay` applies to that card for the same reason.
+    `DialogContent` always renders that backdrop, so this state passes `overlayClassName` to
+    neutralize it rather than letting a `bg-black/10` + blur layer compound with its own scrim, and
+    cancels the card's `zoom-in-95` open animation, which on a full-viewport layer would leave a
+    band of undimmed app around all four edges while it animated.
+
+    **The gate is not total, and that is a documented limit rather than a claim.** A `FocusScope`
+    constrains where DOM focus lands; it does not stop handlers bound above or outside the focused
+    element. Three categories escape it, and all of them still travel over the dead socket:
+    main-process `before-input-event` accelerators (F12, Ctrl+Tab, the Paratext 9 verse-navigation
+    set), which are seen by main before any renderer frame gets them; the `document`-level toaster
+    hotkeys (Sonner's own, plus `notification-display.tsx`'s Alt+T focus cycling), which bubble out
+    of the dialog regardless of the focus scope; and `PlatformMenubar`'s Alt, Alt+P, Alt+L, Alt+N
+    and Alt+H, which are `react-hotkeys-hook` bindings — also `document`-level — that call
+    `.focus()` on a menu trigger behind the scrim and so pull focus out of the scope as well as
+    opening a menu whose items dispatch over the dead socket.
+
+    The first two need main to be told this renderer has latched, which is exactly what this
+    renderer-local design does not do. The third does NOT: it is renderer-local and closable by
+    gating `PlatformMenubar`'s `useHotkeys` call behind a new prop. It is left open with the others
+    anyway, because closing one of three would leave the guarantee just as false while reading as
+    fixed. All three are recorded at the component, here, and in the keyboard-shortcuts catalog
+    entry rather than papered over. Escape is separately prevented (`onEscapeKeyDown`), making this the one dialog in the app
+    where Escape closes nothing; that is catalogued as its own entry.
+
+  - **Arbitration with the other app-gating modal:** `FirstRunOverlay` stands down entirely once
+    the connection-lost state has latched. `Z_INDEX_CONNECTION_LOST` (800) above `Z_INDEX_FIRST_RUN`
+    (700) decides only what is VISIBLE; Radix's `FocusScope` and `DismissableLayer` arbitrate
+    between two open modal `Dialog`s by MOUNT ORDER. A first-run gate raised after the
+    connection-lost state would therefore take the focus trap and leave the visible Reload button
+    unreachable, behind a scrim, in a wizard whose every step needs the connection that just died.
+    The gate genuinely can be raised late — a background registration re-check, or a registration
+    probe in flight when the socket dropped, both resolve into `applyStatus` long after startup — so
+    z-index alone was not enough to implement what this entry's ordering argument intended.
+  - **Banner composition:** the banner is the exported `Alert`/`AlertTitle`/`AlertDescription`
+    family with `variant="destructive"`, not hand-rolled utility classes, so the destructive tone
+    tokens and the icon size slot come from the design system. `DialogTitle` and `DialogDescription`
+    wrap the banner's own title and message with `asChild`, so the dialog's accessible name is the
+    visible text rather than a hidden second copy that could drift from it. Two consequences of
+    `asChild` are load-bearing: Radix's `Slot` merges as `{...slotProps, ...childProps}`, so
+    `data-slot="alert-description"` has to be restated on the child or the dialog's own slot name
+    replaces it and silently drops the destructive variant's description colour.
+
+    The reload button is placed in a third grid column in normal flow rather than in `Alert`'s
+    `AlertAction` slot. That slot positions its children absolutely and reserves 72px for them,
+    which suits a one-word action or an icon; this label is two words and this strip is as wide as
+    the window, so the button would overlap the message at narrow widths or in a locale with a
+    longer label. `AlertAction` is consequently NOT exported from `platform-bible-react` — an
+    earlier round of this work added it to the public index for a consumer that no longer uses it.
+
+    **Banner text takes `--diff-deleted`, and the strip carries no background tint.** Two separate
+    contrast problems, both of which the destructive variant walks into. First, the variant's
+    `text-destructive`: `--destructive` is background-grade in the Platform dark theme, which
+    `index.css` states where `--diff-deleted` is defined, and at `oklch(0.396 …)` on a slate-950
+    ground it reaches roughly 2:1 against the 4.5:1 AA needs. `--diff-deleted` is the text-grade red
+    the themes provision — red-600 light, red-400 dark. Second, a `bg-destructive/10` wash over the
+    banner's opaque `bg-background` costs about 0.6:1, which is the entire remaining margin in the
+    LIGHT themes: on the tint the title measures 4.18 (Platform light) and 3.99 (paratext-light),
+    both failing, and the description sits ~0.2 lower again. So the tint is dropped and the
+    destructive tone is carried by the border and the icon alone; the worst case across all four
+    themes is then 4.52. Darkening the light-theme `--diff-deleted` to red-700 would buy real
+    headroom rather than a thin pass and was the better fix on the merits, but `index.css` requires
+    UX approval for a theme-token change and this state cannot wait on one. This is the screen a
+    user reaches when nothing else in the app works, so reading it cannot depend on the theme.
+  - **Reload label:** "Reload anyway", not a bare "Reload". Reloading discards whatever the message
+    just warned may be unsaved, and the scrim means the user cannot select and copy that text out
+    first, so the label carries the consequence — the `Guidelines/Applying Changes` rule that a
+    control which discards work must state or confirm it. A confirmation step was rejected: a second
+    dialog in a state where nothing else works is one more thing to get stuck in.
+  - **English fallback:** `localizedOrEnglish`
+    (`overlay-connection-lost.component.tsx`) substitutes the `en.json` text when a value is
+    still the raw key. The unconditional mount is necessary but not sufficient: a socket that dies
+    before localization has answered leaves `useLocalizedStrings` returning `defaultState`, and
+    there is no live PAPI left to wait for.
+  - **Recovery:** the Reload button calls `window.location.reload()` directly
+    (`overlay-connection-lost.component.tsx`) — no command, no main-process round trip,
+    because both are unreachable by definition once the socket is dead. A page load also reruns
+    every method registration the renderer made, which is what makes reload a genuine recovery
+    rather than a cosmetic one; PT-4434 verified this empirically (a broken renderer's reload logged
+    `Websocket client 7 connected` and restored the UI). The store is never cleared by anything else
+    in this component or in the reload path, matching the one-way design above.
+- **Alternatives:**
+  - **A toast via `notificationService`** — rejected outright: it is a network object, so calling it
+    would itself be a PAPI call over the socket that just died.
+  - **A non-blocking banner with no scrim** — rejected: it would leave every toolbar and dock control
+    clickable and silently non-functional, which is the exact failure this feature exists to end.
+  - **A `pointer-events: none` dimming scrim** instead of a blocking one — rejected. It would keep
+    on-screen text selectable and copyable, which the chosen scrim does not, but it would let clicks
+    reach dead controls underneath, reintroducing the silent-failure problem to save a smaller,
+    unrelated one (text selection).
+  - **Reconnect instead of a one-way state** — deferred, not rejected on the merits: reconnecting
+    needs the socket re-established AND every method this renderer registered re-announced to main,
+    neither of which this branch implements. `connection-lost-store.ts` is deliberately kept simple
+    (no ref-counting, no safety leash) because a state that could flip back to `false` on its own
+    would be claiming a recovery that had not actually happened.
+- **Consequences:**
+  - Content behind the scrim is readable but not selectable — a user who was mid-sentence when the
+    socket died cannot copy out what they just typed. This is an accepted, explicit tradeoff for
+    blocking interaction with a single layer rather than layering a separate no-select-but-clickable
+    scrim on top.
+  - **Extension-host disconnect is not covered.** Main already learns of an extension-host
+    disconnect through `onDidDisconnectClient`
+    (`src/shared/services/network.service.ts`), but relaying that specific case to the
+    renderer needs a new main→renderer network event and different wording ("extensions have
+    stopped working" is a materially different claim than "you are disconnected," since the
+    renderer's own socket is still alive). Deferred to the follow-up ticket below.
+  - **The quit-time false positive is narrowed in code, but not closed.**
+    `adr-renderer-websocket-suspend-disconnect` records that `INTENTIONAL_CLOSE_CODE` (4000) is
+    currently unreachable from every peer, and that every socket dies with 1006 on the way down. The
+    gate here, `isCleanCloseEvent`, rejects 1006 the same as any other unclean close — it cannot
+    distinguish "the app is quitting" from "the network just broke." Main copes by asking
+    `isAppShuttingDown()` (`src/main/services/shutdown-latch.service.ts`) before deciding how loud
+    to log a handshake-less close; the renderer has no access to that latch, since it is main's.
+
+    So the renderer keeps its own equivalent: `markShuttingDown()` in the store, latched by
+    `connection-lost-service.ts` from the browser's `beforeunload` and `pagehide`, and consulted by
+    `reportConnectionLost()`. A loss reported after the latch is ignored; a loss already reported
+    before it survives, so a real disconnect the user is looking at is not erased by them starting
+    to close the window. `pagehide` as well as `beforeunload` because a reload from inside this
+    state leaves by that path.
+
+    **What that latch does and does not reach.** It fires on a window closing while the app stays
+    up, and on a reload. It does NOT fire on an app quit: main takes the `isAppShuttingDown()`
+    branch and calls `newWindow.destroy()` rather than `close()` (`src/main/main.ts`), and
+    `destroy()` raises neither `beforeunload` nor `pagehide` — main's own comment at that branch
+    says so, which is why it uses `close()` on the other one. So on a quit the store still latches
+    and the overlay is still asked to render, exactly as before, and the banner is still kept off
+    screen only by teardown outrunning paint.
+
+    Originally this entry left that question open — recording that the store may latch during an
+    ordinary quit, and that whether the user SEES a farewell error banner depended only on whether
+    the renderer painted before its `BrowserWindow` was destroyed, "an empirical question, being
+    checked against the running app." Live checking found no visible banner on quit. That
+    observation stands, and so does the objection to resting on it: a correct-by-paint-timing
+    invisible is not a correct one, since the same code on a slower machine is a coin flip. The
+    latch is therefore a narrowing, not a fix — the quit case needs main to tell the renderer it is
+    going down, the same main→renderer relay the keyboard gaps and the extension-host disconnect
+    want, and is deferred with them (see the follow-up ticket below). What the latch does cover
+    is pinned by
+    `connection-lost-store.test.ts` and `connection-lost-service.test.ts` rather than by the live
+    observation.
+  - **The startup window where a loss could be missed is closed.** An earlier revision wired the
+    subscription from a React effect in `Main`, which lost to `ConnectionLostOverlay`'s own subscribe
+    effect (React runs child effects before a parent's) — and since `PlatformEvent` does not replay
+    to a late subscriber, a loss landing in that window was seen by nothing. Subscribing at module
+    evaluation in `index.tsx` removes the window rather than documenting it; see **Startup wiring**
+    above. The component's own read of the store is a `useSyncExternalStore`, which re-reads on
+    subscribe, so the component cannot miss a flip that happened before it mounted either.
+  - **Reconnect stays entirely out of scope.** The three pre-existing `RpcClient` reconnect blockers
+    pinned by `test.fails` cases in
+    `src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts` (a premature `Connected`
+    status, a permanently-fatal timed-out first connect, and stacking `applyMiddleware` calls) are
+    untouched by this work and remain the reconnect branch's problem to resolve.
+  - `Z_INDEX_CONNECTION_LOST = 800` (`lib/platform-bible-react/src/components/z-index.ts`) sits
+    above `Z_INDEX_FIRST_RUN = 700` in the same module rather than below it. The first-run wizard is
+    itself entirely PAPI-driven, so a socket death mid-wizard would otherwise strand a brand-new user
+    in a form that can no longer submit, with no visible explanation why. Pinned by
+    `z-index.test.ts`.
+  - **One follow-up closes three of these consequences.** The extension-host disconnect, the
+    main-process half of the keyboard gaps, and the quit-time latch all want the same thing: a
+    main-to-renderer channel telling a renderer what main already knows. Until that ticket is
+    filed, all three sites carry the literal marker `TODO(main-renderer-shutdown-relay)` — a slug rather than
+    a `PT-XXXX`, because inventing an id that resolves to nothing is worse than admitting there
+    is not one yet. Grep the marker to find every site; replace it with the real id once it exists.
+- **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
+  (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
+
 ## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
 
 - **Date:** 2026-09-04
@@ -514,6 +782,97 @@ step, no automation. Just a record.
   hand-added entry can silently break it — no such check existed as of 2026-09-03, and adding one is
   open follow-up work.
 - **Source:** PR #2770.
+
+## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `scripture-editors` supplies `@eten-tech-foundation/platform-editor` and
+  `@eten-tech-foundation/scripture-utilities`. Every consumer declared them as registry ranges
+  (`~0.8.15` / `~0.1.6`) and then yalc-linked a locally built copy over the installed package. The
+  registry entry's real job was never the code — that is discarded seconds later — but the
+  *dependency closure*: 8 of the editor's 13 runtime dependencies (`@floating-ui/dom`, five
+  `@lexical/*`, `quill-delta`, plus the `yjs` peer) reach this repo's `node_modules` only as
+  transitive dependencies of the published package. That ties the editor's dependency set to
+  whatever was last published by an organization we do not control: a dependency the editor adds is
+  never installed, and one it bumps silently resolves to the older published version. The source had
+  already drifted to 0.8.16 against a published 0.8.15, and a fresh worktree resolving the registry
+  copy failed 36 tests against a symbol the published build lacked.
+- **Decision:** A `preinstall` step (`.erb/scripts/stage-dev-packages.ts`) builds each package listed
+  in `dev-packages.json` and copies exactly the files `npm pack` would publish into
+  `dev-packages/staging/<stagingFolder>`. Every `package.json` here depends on that folder with a
+  `file:` specifier. npm reads the staged manifest and installs the package's own dependencies into
+  this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
+  Staging must run in `preinstall` because the staged folders are the resolution targets; the script
+  is therefore plain Node importing only the standard library, since no devDependency exists yet.
+  pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
+  the whole graph on the build we just made. yalc is removed.
+- **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but
+  the sync obligation multiplies by consumer (paratext-bible-extensions is already a second one) and
+  every editor dependency change would require edits in each. **`file:` straight at the source
+  package** — rejected: the source sits in a pnpm workspace whose per-package `node_modules` holds
+  its own `react`, `react-dom`, and `lexical`; Node resolves a link through its real path, so the
+  editor would bind to those, giving duplicate React (invalid hook calls) and duplicate Lexical
+  (cross-boundary `instanceof` node checks fail). It also installs no closure, since npm only does
+  that for a target inside the project. **`file:` at a packed tarball** — rejected: npm never
+  re-reads a tarball at a stable path, so a rebuild silently installs the cached previous build.
+  **Publishing** (npm scope or GitHub Release assets) — deferred: both work and both give semver
+  ranges, but publishing needs a scope we own, which means renaming the packages.
+- **Consequences:** Nothing here resolves the editor from the npm registry, and `scripture-editors`
+  can change its dependencies freely. Install gets stricter: `preinstall` now needs git, pnpm, and
+  reachability of the dev repo, so a failure to stage fails the install rather than silently leaving
+  a stale published copy. `package-lock.json` records the staged packages' resolved dependencies, so
+  an editor dependency change produces a lockfile commit here. Honoring the editor's declared ranges
+  surfaced that it asks for `@sillsdev/scripture@^2.1.0` while this repo's lockfile pinned 2.0.5 —
+  previously masked, since the linked build just resolved whatever was in the tree. Only the staged
+  output must live inside this repo; the source checkout may stay a sibling.
+  **Revisit** if a third consumer appears that cannot build the editor or sit beside a built
+  `paranext-core`, which is the point at which publishing earns its cost.
+- **Source:** PT-4500, forking `scripture-editors` into the paranext organization.
+
+## adr-dev-packages-staging-shape-deferred: The staging mechanism keeps its branch pin, `.ts` install scripts, sibling fallback and self-heal re-run
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** Review of the staged-`file:`-dependency change (#2745) raised four alternatives to
+  the shape it landed in, each defensible on its own: pin an immutable `v<version>` tag instead of
+  the force-pushed `platform-yalc` branch, so an editor bump becomes one core commit and the
+  branch-sync machinery retires; write the two install-path scripts as `.mjs` with JSDoc types
+  instead of `.ts`, so consuming repos need no Node floor (native type stripping is unflagged only
+  from 22.18, and one consumer's Volta pin predates it); make the sibling-checkout fallback opt-in
+  rather than automatic, so an npm lifecycle hook never writes to a checkout it merely found next
+  door; and replace `postinstall`'s nested `npm install` with a message telling the developer to run
+  it again.
+- **Decision:** Keep all four as they are for now. Consumers call core's `stage-dev-packages` npm
+  script rather than a path inside core, which was the fifth suggestion and is taken — it removes
+  eight repos' dependency on an internal file location. It does not lift the Node floor: the npm
+  script runs a bare `node`, and the one consumer whose Volta pin predates 22.18 passes
+  `--experimental-strip-types` from its own workflow, where the flag can precede the script path.
+- **Alternatives:** Each of the four is a real improvement to some property, and none was rejected
+  on merit. The tag pin buys reproducibility, `.mjs` removes a floor that has already bitten a
+  consumer repo, opt-in sibling use removes a class of surprise entirely, and a non-nested install
+  is easier to reason about when it fails. They are deferred because they change the shape of a
+  mechanism that is about to be exercised across eleven repositories at once, and doing that before
+  it has run in anger trades a known state for an unknown one.
+- **Consequences:** The Node 22.18 floor is real for every caller, npm script or not; a consumer
+  below it passes the flag itself. Editor code can change under an unchanged core commit while
+  `platform-yalc` moves, which the consumer-lockfile check and the pre-commit provisional guard
+  exist to contain. A sibling checkout is used and moved by a plain `npm install`; it is protected
+  when dirty, on a branch of its own, or detached, and the README says so. Revisit whichever of
+  these the mechanism actually makes painful.
+
+  The branch pin is the one whose exposure is worth stating precisely, because it now spans eleven
+  repositories and the parts of it that ARE covered are easy to mistake for the whole. A change to
+  the staged packages' **dependencies or versions** is visible and gated: npm records the staged
+  manifest under `dev-packages/staging/<folder>` in `package-lock.json`, `diffStagedAgainstLock`
+  fails an install that disagrees with it, `verify:dev-packages` lets a consumer run that check
+  without core's `postinstall`, and `scripture-editors`' `verify-platform-yalc` workflow gates the
+  push that would cause it. Release provenance is covered too: `paratext-10-studio`'s
+  `snap-product-info` rewrites each dev repo's `branch` to the SHA actually built. What remains
+  uncovered is a **code-only push at an unchanged version** — it changes what core's `main` builds
+  with no commit anywhere in core — and that is the ordinary case, not an exotic one, since
+  `move-platform-yalc` rebases onto `main` rather than bumping versions. That residue is the price
+  of the branch pin, and it is accepted rather than overlooked.
 
 ## adr-disclosure-outside-package-graphs: What ships outside the npm and NuGet graphs is disclosed in prose, not by silence
 
@@ -3402,15 +3761,24 @@ step, no automation. Just a record.
     nothing and is the right shape if a future editor makes slices addressable; do not read it as
     evidence that a write-back currently occurs.
 
-    Verified 2026-08-16 against `@eten-tech-foundation/platform-editor` **0.8.15**, in both places it
-    can be read: the published npm package, and `dev-packages/scripture-editors` `packages/platform`,
-    which `postinstall` → `link-dev-packages` builds and yalc-links over `node_modules`. They agree
-    on this mechanism (the vendored copy trails published 0.8.15 by one caret-placement line in
-    `$moveCaretToVerseStart`). **Verify against the linked build, not `package-lock.json`** — the lock
-    still named 0.8.14 when this was written, and reading that stale tarball is exactly how an earlier
-    draft of this ADR came to describe `$findAndSetChapterAndVerse` and its chapter-1 fallback as the
-    live mechanism. That was wrong; that plugin does not exist in 0.8.15. Corrected in review of
-    #2663.
+    Re-verified 2026-09-10 against the staged `@eten-tech-foundation/platform-editor` **0.8.16**
+    (`dev-packages/scripture-editors` `packages/platform`, which `preinstall` stages into
+    `dev-packages/staging/platform-editor`): `Editor.tsx` still mounts `ScriptureReferencePlugin`
+    gated on `scrRef && onScrRefChange` alone, and `$resolvePosition` still returns `undefined` when
+    the document has neither a `BookNode` nor a `ChapterNode`. Both statements above therefore still
+    hold. **There is now only one copy to read.** This repo no longer installs the editor from the
+    registry, so the earlier "check the published package and the local build agree" framing has no
+    second copy to compare against — the staged build is the only thing that runs. Do not read
+    `package-lock.json` for a version either: it records a `file:` link, and reading a stale tarball
+    is exactly how an earlier draft came to describe `$findAndSetChapterAndVerse` and its chapter-1
+    fallback as the live mechanism. That was wrong; that plugin does not exist. Corrected in review
+    of #2663.
+
+    **Not re-verified:** the behavior end to end. `$moveCaretToVerseStart` is no longer the
+    one-line-from-published function this paragraph used to describe — it is 57 lines against
+    0.8.15's 30, having gained chapter resolution in its "already here" guard — so if this ADR's
+    conclusions are ever load-bearing for a change, exercise the surfaces rather than trusting this
+    note.
 
     **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
     `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
@@ -3576,6 +3944,65 @@ step, no automation. Just a record.
   a coordinated studio merge was therefore unavoidable. Verification report, including the 12 renamed
   cycles against live controls and the `snap disconnect` repair for an already-broken install:
   https://claude.ai/code/artifact/cc4c4c08-2e75-4dd5-855a-312fc4a6a57e
+
+## adr-staged-closure-owned-by-core: paranext-core owns the editor's dependency closure; every other consumer resolves through it
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `adr-dev-packages-staged-file-deps` records *that* the staged copy has to live
+  inside this repo. It does not record *why* the same
+  `file:` specifier behaves differently one directory up, or what that means for the ten repos in
+  the organization that depend on `lib/platform-bible-react` and `lib/platform-bible-utils`. Both
+  questions came up again when a consumer's CI broke, and both were answered by measurement rather
+  than by reading npm's documentation, so the measurements belong here.
+
+  npm treats a `file:` dependency two entirely different ways depending on whether its target is
+  inside the depending project:
+
+  | Target | What npm does | `npm ci` when the target's manifest gains a dependency |
+  | --- | --- | --- |
+  | `file:dev-packages/staging/platform-editor` (inside) | real install: the target's whole dependency closure lands in this repo's `node_modules` | **fails**, `EUSAGE … Missing: <dep> from lock file` |
+  | `file:../scripture-editors/packages/platform` (outside) | bare symlink; the closure is never installed | **exits 0**, dependency silently absent |
+
+  Node and webpack resolve a symlinked package from its **real path**, so a package reached by
+  symlink looks for its own dependencies where it physically sits, not where the link is. Those two
+  facts together explain everything downstream.
+
+- **Decision:** Exactly one repository installs the editor's dependency closure, and that repository
+  is paranext-core, which is why the staged copy must sit inside it. Everything else reaches the
+  editor by symlink and resolves its dependencies out of core's `node_modules` through the real
+  path. No other repository declares, installs, or gates on that closure.
+
+  Concretely, an extension repo depends on `file:../paranext-core/lib/platform-bible-react`, which
+  npm links rather than installs. Its lockfile records PBR's dependency *declaration* — including
+  the editor — but resolves nothing from it and never validates it. When the extension's webpack
+  bundles PBR (PBR is not in the extension template's `externals`; `platform-bible-utils` is), the
+  editor import resolves from `paranext-core/lib/platform-bible-react/` upward into
+  `paranext-core/node_modules/`, which core's own install populated for real.
+
+- **Alternatives:** **Point core at the source checkout instead of copying** (`file:` one directory
+  up) — rejected, and this is the failure that motivated the copy: npm installs no closure for an
+  out-of-tree target, so the editor's dependencies stay in `scripture-editors/node_modules` under
+  pnpm's layout and nothing in core can resolve them. **Gate `platform-yalc` on every dependent
+  repo's lockfile** — rejected: it would enforce a constraint that does not exist. An editor
+  dependency change invalidates exactly one lockfile, core's, which
+  `verify-consumer-lockfile-sync.mjs` already checks on every push to `platform-yalc`. Scanning the
+  organization would turn each editor dependency bump into an N-way lockstep merge, growing with
+  every new consumer, to protect lockfiles that install nothing.
+
+- **Consequences:** Adding a consumer costs nothing: it needs no lockfile refresh when the editor's
+  dependencies change, and no entry in any list. What it does need is for core's `node_modules` to
+  be genuinely populated, which is why every consumer CI job that installs core with
+  `--ignore-scripts` must run core's `npm run stage-dev-packages` first — without it npm links
+  a target that does not exist, `npm ci` still exits 0, and
+  `node_modules/@eten-tech-foundation/platform-editor` is left a dangling symlink. That surfaces far
+  away, as an unresolved module during a consumer's lint or typecheck (PBR imports the editor in 28
+  files, PBU in 10), which is a long way from the cause.
+
+  The reasoning holds only while consumers reach core from **outside** it. A repo that vendored core
+  inside itself, or that added a staged package as an in-tree `file:` dependency of its own, would
+  join core in the hard-coupled class and would then need its lockfile kept in sync.
+- **Source:** PT-4500, review of #2745.
 
 ## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
@@ -4362,3 +4789,4 @@ step, no automation. Just a record.
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
+
