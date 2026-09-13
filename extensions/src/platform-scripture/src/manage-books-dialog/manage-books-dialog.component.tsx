@@ -462,9 +462,7 @@ function PresenceFilterMenu({
         >
           {(['all', 'new', 'existing'] as const).map((s) => (
             // Default `onSelect` behavior closes the dropdown after a radio pick — that's what
-            // we want here (single-select). PS's `FilterMenu` uses `event.preventDefault()`
-            // because its checkboxes allow multi-toggle without re-opening; that doesn't apply
-            // to a radio group.
+            // we want here (single-select).
             <DropdownMenuRadioItem key={s} value={s} data-testid={`${testIdPrefix}-${s}`}>
               {presenceFilterLabel(s)}
             </DropdownMenuRadioItem>
@@ -2446,13 +2444,15 @@ export function ManageBooksDialog({
                   )}
                   {/* The View / Import presence-filter chip
                   rows were replaced with a single Filter-icon button that opens a popover
-                  containing the radio choices. Mirrors the pattern in
+                  containing the radio choices — the same icon-trigger-plus-radio-popover shape
+                  as `GroupByMenu` in
                   `lib/platform-bible-react/src/components/advanced/project-selector/
-                  project-selector.component.tsx` (`FilterMenu`). The trigger picks up an
-                  accent background when a filter is active so the affordance still reads as
-                  "filter applied" without dragging the user's eye to a chip row. The Copy-
-                  mode comparison-state filter (New/Newer/Older/Same/Undetermined) was
-                  removed entirely — see comment block on `ViewPresenceFilter` declaration. */}
+                  project-selector.component.tsx` (that trigger uses a Group icon instead of
+                  Filter). The trigger picks up an accent background when a filter is active so
+                  the affordance still reads as "filter applied" without dragging the user's eye
+                  to a chip row. The Copy-mode comparison-state filter
+                  (New/Newer/Older/Same/Undetermined) was removed entirely — see comment block
+                  on `ViewPresenceFilter` declaration. */}
                   {action === 'view' && (
                     <PresenceFilterMenu
                       testIdPrefix="presence-filter"

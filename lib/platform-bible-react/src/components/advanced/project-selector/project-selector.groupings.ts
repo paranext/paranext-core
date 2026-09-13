@@ -58,7 +58,8 @@ export type BuiltInGroupingStrings = {
   typeUnknownSectionHeading?: string;
 };
 
-// The two bucket keys the built-in `lastUsed` grouping partitions into.
+// Internal bucket keys — never rendered, so they are not localized. The user-visible strings are
+// `lastUsedRecentSectionHeading` and `lastUsedOtherSectionHeading`, which are.
 const RECENT = 'recent';
 const OTHER = 'other';
 
@@ -72,6 +73,13 @@ const OTHER = 'other';
  *
  * The built-in groupings read from `project.customData` under well-known keys — see
  * `ProjectSelectorProject.customData` for the contract.
+ *
+ * These built-ins are a convenience layer, not a privileged one. They return ordinary
+ * `ProjectSelectorGrouping` objects — exactly what a consumer-defined grouping is. A consumer that
+ * wants different labels, different bucketing, or a different axis entirely constructs its own
+ * descriptor and never calls this function. The central `%projectSelector_grouping_*%` keys exist
+ * so the common case does not re-translate "Language" in every extension; they are not a
+ * restriction on what a grouping can be.
  */
 export function makeBuiltInGroupings(strings?: BuiltInGroupingStrings): ProjectSelectorGrouping[] {
   const s = strings ?? {};

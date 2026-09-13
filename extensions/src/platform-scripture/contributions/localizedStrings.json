@@ -50,32 +50,6 @@
         "message": "Superseded by the platform-wide %projectSelector_clearAll% key."
       }
     },
-    "%manageBooks_projectSelector_filterAriaLabel%": {
-      "fallbackKey": "%projectSelector_groupByAriaLabel%",
-      "deprecationInfo": {
-        "date": "2026-09-11",
-        "message": "Superseded by the platform-wide %projectSelector_groupByAriaLabel% key."
-      }
-    },
-    "%manageBooks_projectSelector_filterGroupByOpenTabs%": {
-      "fallbackKey": "%projectSelector_grouping_openTabs_label%",
-      "deprecationInfo": {
-        "date": "2026-09-11",
-        "message": "Grouping labels now live on ProjectSelectorGrouping objects; see the platform-wide %projectSelector_grouping_openTabs_label% key."
-      }
-    },
-    "%manageBooks_projectSelector_filterSectionLabel%": {
-      "deprecationInfo": {
-        "date": "2026-09-11",
-        "message": "ProjectSelector no longer renders a filter subsection — the Show-selected-only toggle was replaced by a Selection grouping (%projectSelector_grouping_selection_label%)."
-      }
-    },
-    "%manageBooks_projectSelector_filterShowSelectedOnly%": {
-      "deprecationInfo": {
-        "date": "2026-09-11",
-        "message": "ProjectSelector no longer renders a Show-selected-only toggle. Use the Selection grouping (%projectSelector_grouping_selection_label%) to bucket rows into Selected / Unselected sections."
-      }
-    },
     "%manageBooks_projectSelector_groupSectionLabel%": {
       "fallbackKey": "%projectSelector_groupSectionLabel%",
       "deprecationInfo": {
@@ -335,10 +309,6 @@
       "%manageBooks_genericError%": "An unexpected error occurred.",
       "%manageBooks_projectSelector_boundButClosedTooltip%": "Bound to {group} · not currently open",
       "%manageBooks_projectSelector_clearAll%": "Clear all",
-      "%manageBooks_projectSelector_filterAriaLabel%": "Filter",
-      "%manageBooks_projectSelector_filterGroupByOpenTabs%": "By open tabs",
-      "%manageBooks_projectSelector_filterSectionLabel%": "Filter",
-      "%manageBooks_projectSelector_filterShowSelectedOnly%": "Show selected only",
       "%manageBooks_projectSelector_groupSectionLabel%": "Group",
       "%manageBooks_projectSelector_openButtonLabel%": "Open",
       "%manageBooks_projectSelector_openTabsSectionHeading%": "Opened project & resource tabs",
