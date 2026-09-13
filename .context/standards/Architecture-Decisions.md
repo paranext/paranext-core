@@ -3828,6 +3828,44 @@ step, no automation. Just a record.
   cycles against live controls and the `snap disconnect` repair for an already-broken install:
   https://claude.ai/code/artifact/cc4c4c08-2e75-4dd5-855a-312fc4a6a57e
 
+## adr-stale-value-survives-resubscription: A value held across a resubscription is not the current read's answer
+
+- **Date:** 2026-09-13
+- **Status:** Accepted
+- **Context:** `useData` (and everything built on it — `useProjectData`, `useProjectSetting`) resets
+  `isLoading` when the selector or data provider changes, but never resets `data`
+  (`create-use-data-hook.util.ts`). The last delivered value therefore survives every
+  resubscription: a reference change, a retry, a provider swap. Surfaces routinely render that value
+  as though it described the reference currently on screen. Two defects in the resource panels came
+  from exactly this. A failed chapter read left its `PlatformError` in hand, so re-driving the read
+  re-rendered the identical "text could not be loaded" message for the whole round trip — the retry
+  button the panel had just gained looked inert, and if the second attempt failed the same way the
+  screen never changed at all. The same staleness made a plain chapter navigation flash the previous
+  reference's failure over the new one.
+- **Decision:** A surface that renders a delivered value must decide whether that value belongs to
+  the read now in flight, and withhold it when it does not. Concretely: pair every value read
+  through these hooks with its `isLoading`, and treat a terminal state (a named failure, an "empty"
+  claim) as reportable only once the read has settled. `resolveResourceContentState` takes
+  `isUsjSettled` for precisely this and uses it in both directions — to escalate OUT of `loading`
+  when `undefined` is the delivered answer, and INTO `loading` when an error is the previous
+  attempt's.
+- **Alternatives:** **Reset `data` to the default on resubscribe, in the hook** — the real fix, and
+  still worth doing, but it changes behaviour for every consumer in the app at once (several rely on
+  the previous value persisting to avoid a flash of empty content between references) and so is not
+  a change to make from inside one panel's bug fix. **Track a retry-pending flag at each call site**
+  — rejected: it answers only the retry case, leaving the identical staleness on ordinary
+  navigation, and puts a second source of truth beside `isLoading`. **Compare value identity across
+  renders** — rejected: a provider free to re-deliver an equal object makes identity an unreliable
+  proxy for freshness.
+- **Consequences:** Terminal states arrive one render later than the value that triggers them, since
+  `isLoading` is re-armed from an effect. That window is invisible where the held value is USJ or
+  `undefined`, and shows the old failure for a single render where it is an error. Any new surface
+  reading these hooks inherits the same trap and needs the same pairing; a reviewer seeing a
+  rendered value without its `isLoading` nearby should ask which reference it belongs to. If the
+  hook is ever changed to reset `data`, these settled-checks become redundant rather than wrong.
+- **Source:** PT-4350, found in review — two independent analysis passes reached the same defect
+  from the retry affordance and from the `useLayoutEffect` change.
+
 ## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
 - **Date:** 2026-08-16

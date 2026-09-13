@@ -3256,6 +3256,22 @@ describe('resolveResourceContentState', () => {
       }),
     ).toBe('failed');
   });
+
+  it('withholds a failure while a read for it is still in flight', () => {
+    // The data layer holds the last delivered value across a resubscription — it resets `isLoading`,
+    // never `data` — so an error stays in hand while the next attempt runs. Naming it then would
+    // report a failure for a read that has not finished, and it is what makes the retry affordance
+    // look inert: re-driving the read would otherwise leave the identical message on screen for the
+    // whole round trip.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
+        currentBookNum: GENESIS,
+        isUsjSettled: false,
+      }),
+    ).toBe('loading');
+  });
 });
 
 describe('formatEditorTitle', () => {

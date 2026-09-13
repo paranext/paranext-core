@@ -367,6 +367,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
+
   // Re-drives a failed chapter read. `useData` keys its subscription on the selector by REFERENCE
   // (see `create-use-data-hook.util.ts`, whose runaway-loop guard exists precisely because a new
   // selector identity resubscribes), so handing it an equal-but-new selector object tears the
@@ -388,11 +389,10 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
         versificationStr: scrRef.versificationStr,
       }),
       // `chapterRetryNonce` is intentionally a dependency the returned value does not read: it is
-      // here to change this memo's IDENTITY, which is the whole retry mechanism, since `useData`
-      // keys its subscription on the selector by reference. The rule cannot express "same value,
-      // new identity", and every way of satisfying it is worse — putting the nonce INTO the
-      // selector changes what is sent to the PDP over IPC, and reading it in the factory body
-      // trips `no-void` or `no-unused-expressions`.
+      // here to change this memo's IDENTITY, which is the retry mechanism described above. The rule
+      // cannot express "same value, new identity", and every way of satisfying it is worse —
+      // putting the nonce INTO the selector changes what is sent to the PDP over IPC, and reading
+      // it in the factory body trips `no-void` or `no-unused-expressions`.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [scrRef.book, scrRef.chapterNum, scrRef.versificationStr, chapterRetryNonce],
     ),

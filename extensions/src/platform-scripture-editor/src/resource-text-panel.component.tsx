@@ -323,9 +323,25 @@ export function ResourceTextPanel({
   // reference the reader just left.
   //
   // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
+  //
+  // A settled read that delivered nothing counts too, and is decided HERE rather than inside
+  // `isBlankChapterOnScreen` because only this panel seeds its subscription with `undefined` — the
+  // model text panel seeds a blank USJ, so `undefined` does not carry this meaning there and the
+  // shared helper must keep answering `false` for it.
+  //
+  // It is a real delivered answer rather than a fault: the extender PDP returns `undefined` for a
+  // falsy USX (`platform-scripture-extender-pdpe.model.ts`), deterministically, so re-reading
+  // produces `undefined` again. Naming it a failure would offer a retry that cannot change the
+  // outcome, which is the inert control the failure state exists to avoid.
+  //
+  // Keyed on `usjPossiblyError`, NOT on `usjFromPdp`: the latter is also `undefined` when the read
+  // failed, so using it would report a genuine error as an empty chapter and swallow the failure.
   const isBlankChapter = useMemo(
-    () => !isUsjLoading && isBlankChapterOnScreen(usjFromPdp, scrRef.chapterNum),
-    [usjFromPdp, isUsjLoading, scrRef.chapterNum],
+    () =>
+      !isUsjLoading &&
+      (isBlankChapterOnScreen(usjFromPdp, scrRef.chapterNum) ||
+        (usjPossiblyError === undefined && scrRef.chapterNum > 0)),
+    [usjFromPdp, usjPossiblyError, isUsjLoading, scrRef.chapterNum],
   );
 
   // The book-not-available message is withheld unless the failure names the book AND project on
@@ -424,14 +440,28 @@ export function ResourceTextPanel({
   // child's `useImperativeHandle` handle is installed before this parent effect runs, so the feed
   // lands in the same frame the editor appears in.
   //
-  // The cost is that `setUsj` runs before paint, with a whole chapter's USJ, on a path that
-  // previously did not block. That is accepted rather than overlooked: the work is the same work
-  // either way — the editor is useless until it is fed — and deferring it past paint does not
-  // remove the cost, it only guarantees that the frame the reader sees first is the wrong one.
-  // Chapters are bounded by the largest chapter in scripture, not by anything that grows.
+  // The cost is that `setUsj` runs before paint with a whole chapter's USJ. That is accepted: the
+  // work is the same work either way — the editor is useless until it is fed — and deferring it
+  // past paint does not remove the cost, it only guarantees that the frame the reader sees first is
+  // the wrong one. Chapters are bounded by the largest chapter in scripture, not by anything that
+  // grows.
+  //
+  // HIDDEN CASE (see `.claude/rules/cross-view-sync-hidden-views.md`). rc-dock keeps an inactive
+  // tab's pane mounted under `display: none`, so this panel keeps receiving chapters at full rate
+  // for a view nobody can see. Blocking a paint that will not happen buys nothing, so the feed is
+  // skipped entirely while hidden and `isViewVisible` is a dependency: the flip back to visible
+  // re-runs this effect, feeding whatever chapter is current by then. Repeats collapse for free —
+  // only the latest `usjFromPdp` is ever fed — which is why this does not need `useRunWhenVisible`.
+  // That hook's catch-up runs from a PASSIVE effect, which would reintroduce the post-paint
+  // placeholder frame above at every tab activation, the precise thing this effect exists to avoid.
+  //
+  // `useViewVisibility` resolves through an `IntersectionObserver`, which reports asynchronously, so
+  // between the pane being unhidden and the observer firing the reader sees the editor's previous
+  // contents rather than the current chapter. That window is bounded by one observer callback and
+  // shows stale scripture, not an edit invitation.
   useLayoutEffect(() => {
-    if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
-  }, [usjFromPdp, contentState, isBlankChapter]);
+    if (isViewVisible && usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
+  }, [isViewVisible, usjFromPdp, contentState, isBlankChapter]);
 
   // Scroll to the current verse when this tab is shown, and again once a chapter's content lands.
   //
@@ -705,9 +735,9 @@ export function ResourceTextPanel({
         </div>
       );
 
-    // A failure that is not a missing book in the text on screen. Terminal, because the value in
-    // hand is an error rather than USJ and nothing re-emits until the data provider does — so a
-    // spinner here would claim progress that never arrives.
+    // A failure that is not a missing book in the text on screen. Nothing re-emits on its own, so
+    // this names the failure instead of showing a spinner that would claim progress that never
+    // arrives — and offers the reader the one thing that CAN re-emit, a fresh read.
     if (contentState === 'failed')
       return (
         <div className="tw:flex-1 tw:overflow-auto">
@@ -765,7 +795,7 @@ export function ResourceTextPanel({
           localizedStrings,
           '%webView_resourcePanel_downloadResources%',
         )}
-        noSelectionLabel={localize(localizedStrings, '%webView_resourcePanel_loading%')}
+        noSelectionLabel={localize(localizedStrings, '%webView_resourcePanel_loadingResources%')}
       />
 
       {renderContent()}

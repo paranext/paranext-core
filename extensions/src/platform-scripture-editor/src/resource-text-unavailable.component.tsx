@@ -1,15 +1,15 @@
-import { Button } from 'platform-bible-react';
-import { ResourceMessageView } from './resource-message-view.component';
+import { RetryableErrorView } from 'platform-bible-react';
+import { ResourceMessageFrame } from './resource-message-view.component';
 
 /** Identifies the focusable wrapper. See {@link RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID}. */
 export const RESOURCE_TEXT_UNAVAILABLE_TEST_ID = 'resource-text-unavailable';
 
 export type ResourceTextUnavailableProps = {
-  /** The already-localized message to show. See {@link ResourceMessageView}'s `message`. */
+  /** The already-localized message to show. */
   message: string;
   /**
    * Identifies WHICH text this message is about — typically the project id and the reference. See
-   * {@link ResourceMessageView}'s `announcementKey`.
+   * {@link ResourceMessageFrame}'s `announcementKey`.
    */
   announcementKey?: string;
   /** Already-localized label for the retry control. Required to render one. */
@@ -36,9 +36,21 @@ export type ResourceTextUnavailableProps = {
  * passes {@link ResourceTextUnavailableProps.onRetry} and the reader gets a way out; one that cannot
  * omits it rather than offering an inert control.
  *
- * Shares {@link ResourceMessageView} with {@link ResourceBookNotAvailable} and
- * {@link ResourceBlankChapter} so all three reasons a panel shows no text get the same focus repair
- * and the same re-announcement on navigation.
+ * Renders through the library's `RetryableErrorView` rather than the plain message body its
+ * siblings use, for two reasons its own doc gives: one retry button for every surface reporting the
+ * same condition — this panel already shows two more of them, for a failed install and a failed
+ * catalog fetch — and the warning glyph as the state's visual signature. Without the glyph this
+ * would be the same centred sentence as {@link ResourceBookNotAvailable} and
+ * {@link ResourceBlankChapter}, which are ordinary navigation rather than faults, distinguishable
+ * only by a button.
+ *
+ * `role="status"` rather than the view's assertive default: {@link ResourceMessageFrame} moves focus
+ * here, which is what actually announces the message, so an `alert` on top of that interrupts to
+ * repeat what the reader is already being told. The install and catalog failures keep the default —
+ * nothing moves focus to those.
+ *
+ * The focus repair and the re-announcement on navigation are {@link ResourceMessageFrame}'s, shared
+ * with {@link ResourceBookNotAvailable} and {@link ResourceBlankChapter}.
  */
 export function ResourceTextUnavailable({
   message,
@@ -47,17 +59,20 @@ export function ResourceTextUnavailable({
   onRetry,
 }: ResourceTextUnavailableProps) {
   return (
-    <ResourceMessageView
-      message={message}
+    <ResourceMessageFrame
       testId={RESOURCE_TEXT_UNAVAILABLE_TEST_ID}
       announcementKey={announcementKey}
-      action={
-        onRetry && retryLabel ? (
-          <Button variant="outline" size="sm" onClick={onRetry}>
-            {retryLabel}
-          </Button>
-        ) : undefined
-      }
-    />
+      label={message}
+    >
+      <RetryableErrorView
+        message={message}
+        role="status"
+        retryLabel={retryLabel}
+        // Both or neither. `RetryableErrorView` gates the button on `onRetry` alone, so a handler
+        // arriving without a label would render a button with no accessible name at all — worse
+        // than the inert control the optional props exist to avoid.
+        onRetry={retryLabel ? onRetry : undefined}
+      />
+    </ResourceMessageFrame>
   );
 }
