@@ -164,38 +164,51 @@ describe('checkGeneratedSnapMetadata', () => {
     expect(problems[0]).toContain(GNOME_PLATFORM_TARGET);
   });
 
-  it('reports an unknown base rather than silently passing', () => {
-    // A `base` this repo has no pairing for cannot be checked, and must not be read as success.
-    const problems = checkGeneratedSnapMetadata(metadata('core99', CORRECT_CORE22_PLUG));
+  describe('early returns, each asserting wording unique to its own branch', () => {
+    // Every case here returns before the plug checks, and each can be imitated by a later branch:
+    // a non-mapping falls through to missing-base, and an unknown base reaches the name comparison
+    // and yields one problem still naming it. So a problem count plus a substring the later
+    // branches also produce leaves a case green with its own branch deleted -- which reads as
+    // rigorous while proving nothing. Assert on wording only that branch emits, and when adding a
+    // case here, check it reddens with its branch removed rather than trusting the shape.
 
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain('core99');
-  });
+    it('reports an unknown base rather than silently passing', () => {
+      // A `base` this repo has no pairing for cannot be checked, and must not be read as success.
+      const problems = checkGeneratedSnapMetadata(metadata('core99', CORRECT_CORE22_PLUG));
 
-  it('reports missing base rather than comparing against undefined', () => {
-    const noBase = ['name: platform-bible', 'plugs:', CORRECT_CORE22_PLUG].join('\n');
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain('core99');
+      expect(problems[0]).toContain('no known GNOME platform');
+    });
 
-    const problems = checkGeneratedSnapMetadata(noBase);
+    it('reports missing base rather than comparing against undefined', () => {
+      const noBase = ['name: platform-bible', 'plugs:', CORRECT_CORE22_PLUG].join('\n');
 
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain('base');
-  });
+      const problems = checkGeneratedSnapMetadata(noBase);
 
-  it('reports metadata that parses but is not a mapping', () => {
-    // A reshaped artifact should fail as a checked problem naming the file, not as a bare TypeError
-    // from somewhere downstream. `just a string` is a valid YAML scalar, so this exercises the
-    // not-a-mapping branch rather than the parser.
-    expect(checkGeneratedSnapMetadata('just a string')).toHaveLength(1);
-  });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain('declares no string');
+    });
 
-  it('reports metadata that does not parse as YAML at all', () => {
-    // Malformed YAML throws out of the parser rather than returning a value, so without this the
-    // branch above is the only one covered and the failure reaches the user as a bare
-    // YAMLParseError naming no snap and no file.
-    const problems = checkGeneratedSnapMetadata('plugs:\n\tgnome-42-2204: {}\n');
+    it('reports metadata that parses but is not a mapping', () => {
+      // A reshaped artifact should fail as a checked problem naming the file, not as a bare
+      // TypeError from somewhere downstream. `just a string` is a valid YAML scalar, so this
+      // exercises the not-a-mapping branch rather than the parser.
+      const problems = checkGeneratedSnapMetadata('just a string');
 
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain('could not be parsed');
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain('not a YAML mapping');
+    });
+
+    it('reports metadata that does not parse as YAML at all', () => {
+      // Malformed YAML throws out of the parser rather than returning a value, so without this the
+      // branch above is the only one covered and the failure reaches the user as a bare
+      // YAMLParseError naming no snap and no file.
+      const problems = checkGeneratedSnapMetadata('plugs:\n\tgnome-42-2204: {}\n');
+
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain('could not be parsed');
+    });
   });
 });
 

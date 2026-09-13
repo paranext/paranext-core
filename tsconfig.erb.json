@@ -13,13 +13,13 @@
   // the omission: type-aware ESLint does not report compiler diagnostics, so `npm run lint` passes
   // over an uncovered file in silence.
   //
-  // The two exclusions are not badly-typed scripts. Both import `../configs/webpack.paths`, which
-  // reaches dependency .d.ts files that fail under this project's settings - five errors inside
-  // `path-scurry`'s bundled `lru-cache`, one inside `tinyglobby`'s `fdir` - because `skipLibCheck`
-  // is off. Turning that on would cover them at the cost of weakening the gate for the notices
-  // pipeline it mainly exists to protect, which is the wrong trade. A new script importing
-  // `webpack.paths` will fail here with those same node_modules errors; exclude it too, or give it
-  // what it needs from `webpack.paths` without the import.
+  // The excluded scripts are not badly typed. Each imports `../configs/webpack.paths`, which
+  // reaches dependency .d.ts files that fail under this project's settings - inside `path-scurry`'s
+  // bundled `lru-cache` and `tinyglobby`'s `fdir` - because `skipLibCheck` is off. Turning that on
+  // would cover them at the cost of weakening the gate for the notices pipeline it mainly exists to
+  // protect, which is the wrong trade. A new script importing `webpack.paths` will fail here with
+  // those same node_modules errors; exclude it too, or give it what it needs from `webpack.paths`
+  // without the import.
   //
   // Test files are excluded for the same reason the root config excludes all `*.test.ts`: they rely
   // on Vitest's runtime rather than on tsc. Referenced by `npm run typecheck` via `typecheck:erb`.

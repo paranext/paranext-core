@@ -335,6 +335,7 @@ jobs:
       # .erb/scripts/assert-generated-snap-metadata.ts for why that is checked separately from the
       # config. Linux-only because that is the leg that builds a snap.
       - name: check generated snap metadata
+        id: snap-metadata
         if: ${{ matrix.os == env.OS_LINUX }}
         run: npm run assert:snap-metadata
 
@@ -401,20 +402,29 @@ jobs:
       # `!cancelled()` rather than the implicit `success()`, matching the Playwright upload above: a
       # snap that fails the metadata check is the one someone needs to unsquash to see what shipped,
       # and the default gate would discard exactly that build while keeping every passing one.
+      #
+      # `nullglob` because that gate also lets this run when there is no snap at all — a lint or
+      # format failure above skips packaging entirely. Without it the unmatched glob survives as a
+      # literal, `mv` fails on it, and a lint break reports a second red step blaming packaging.
       - name: Rename Linux snap to include GitHub Action Run ID
         if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
         run: |
+          shopt -s nullglob
           for file in ./release/build/*.snap; do
             newName="${file%.snap}-${{ github.run_id }}.snap"
             mv "$file" "$newName"
             echo "Renamed $file to $newName"
           done
 
+      # `!cancelled()` means this uploads snaps that failed the metadata check as well as passing
+      # ones, so the name states which it is: `app-linux-test` passed, `app-linux-test-failed-check`
+      # did not. Download the plain name when you want a working snap, the suffixed one when you
+      # want to unsquash the build that failed.
       - name: Upload Linux artifacts
         if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
         uses: actions/upload-artifact@v4
         with:
-          name: app-linux-test
+          name: app-linux-test${{ steps.snap-metadata.outcome == 'failure' && '-failed-check' || '' }}
           retention-days: 14
           path: |
             ./release/build/*.snap
