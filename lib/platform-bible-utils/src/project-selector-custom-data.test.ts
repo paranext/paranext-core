@@ -14,7 +14,12 @@ describe('makeProjectSelectorCustomData', () => {
         typeName: 'Standard project',
         lastUsedAt: 5,
       }),
-    ).toEqual({ language: 'English', type: 'Standard', typeName: 'Standard project', lastUsedAt: 5 });
+    ).toEqual({
+      language: 'English',
+      type: 'Standard',
+      typeName: 'Standard project',
+      lastUsedAt: 5,
+    });
   });
 
   it('omits empty strings so a grouping reads them as missing, not as an empty bucket', () => {
@@ -46,14 +51,18 @@ describe('makeProjectSelectorCustomData', () => {
 describe('recencyMapFromOrderedIds', () => {
   it('scores most-recent-first input descending, so the values rank the source order', () => {
     const map = recencyMapFromOrderedIds(['a', 'b', 'c']);
-    expect(map.get('a')).toBeGreaterThan(map.get('b')!);
-    expect(map.get('b')).toBeGreaterThan(map.get('c')!);
+    // Read back in source order. `NaN` stands in for an id the map failed to score, so a missing
+    // entry fails the comparisons below rather than being skipped.
+    const [first, second, third] = ['a', 'b', 'c'].map((id) => map.get(id) ?? Number.NaN);
+    expect(first).toBeGreaterThan(second);
+    expect(second).toBeGreaterThan(third);
   });
 
   it('emits strictly positive scores so every entry passes a typeof-number presence check', () => {
-    for (const score of recencyMapFromOrderedIds(['a', 'b', 'c']).values()) {
-      expect(score).toBeGreaterThan(0);
-    }
+    const scores = [...recencyMapFromOrderedIds(['a', 'b', 'c']).values()];
+    // Without the count, an empty map would satisfy the per-score assertion vacuously.
+    expect(scores).toHaveLength(3);
+    scores.forEach((score) => expect(score).toBeGreaterThan(0));
   });
 
   it('omits ids not in the list so they fall into the Other bucket', () => {
@@ -61,7 +70,9 @@ describe('recencyMapFromOrderedIds', () => {
   });
 
   it('is deterministic, so calling it at render time is safe', () => {
-    expect([...recencyMapFromOrderedIds(['a', 'b'])]).toEqual([...recencyMapFromOrderedIds(['a', 'b'])]);
+    expect([...recencyMapFromOrderedIds(['a', 'b'])]).toEqual([
+      ...recencyMapFromOrderedIds(['a', 'b']),
+    ]);
   });
 
   it('handles an empty list', () => {
