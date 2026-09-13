@@ -122,10 +122,17 @@ const MINIMUM_STRING_KEY_ARRAYS = 20;
 // shared-library string (see adr-library-string-keys-ship-in-shell-assets), but that preference is
 // a convention for reviewers; this guard enforces only the floor of "defined in some English
 // source", so it will not flag a library key served from one extension's contribution.
-const shippingKeys = new Set([
+//
+// A redirect counts only when it lands on one of the two direct sources, which is why those are
+// gathered first: the runtime follows a single `fallbackKey` hop, so a redirect onto a missing key
+// or onto another redirect resolves to nothing.
+const directEnglishKeys = new Set([
   ...Object.keys(readShippedLocale('en')),
   ...getExtensionContributedKeys('en'),
-  ...getFallbackRedirectedKeys(),
+]);
+const shippingKeys = new Set([
+  ...directEnglishKeys,
+  ...getFallbackRedirectedKeys(directEnglishKeys),
 ]);
 
 describe('every platform-bible-react string key ships somewhere', () => {

@@ -76,20 +76,32 @@ export function readShippedLocale(locale: string): LanguageStrings {
 }
 
 /**
- * Reads the keys the shell's `metadata.json` sidecar redirects elsewhere via `fallbackKey`. The
- * runtime resolves one level of `fallbackKey` before falling back to English, so a key served
- * entirely through a redirect localizes correctly while holding no value of its own in any locale
- * file — the documented way to retire a string without deleting its key.
+ * Reads the keys the shell's `metadata.json` sidecar redirects to an English value they can
+ * actually resolve to, via `fallbackKey`. A key served entirely through a working redirect
+ * localizes correctly while holding no value of its own in any locale file — the documented way to
+ * retire a string without deleting its key.
  *
- * @returns Every key that carries a `fallbackKey` redirect.
+ * A redirect only counts when its target holds an English value of its own, because
+ * `findLocalizationForFallbackLanguageAndOrKey` in
+ * `src/extension-host/services/localization.service-host.ts` follows exactly one `fallbackKey` hop:
+ * it looks the target up in the language data and stops, never consulting the target's own
+ * metadata. So a redirect pointing at a missing key, or at another redirect, resolves to nothing
+ * and the user sees the raw `%key%`. Chains and dangling targets both exist in `metadata.json`
+ * today (`%submit%` → `%yes%` → `%confirm%`, where none of the three holds a value; and the
+ * `%Paratext.*%` legacy-import targets, which exist nowhere in the repo), so counting a redirect by
+ * its mere presence would let a missing English string pass as shipped.
+ *
+ * @param englishKeys Keys that hold an English value directly — `en.json` plus the `en` block of
+ *   each production-loaded extension contribution.
+ * @returns Every key whose `fallbackKey` redirect resolves to one of `englishKeys`.
  */
-export function getFallbackRedirectedKeys(): Set<string> {
+export function getFallbackRedirectedKeys(englishKeys: ReadonlySet<string>): Set<string> {
   const metadata = readJsonFile<Record<string, { fallbackKey?: string } | undefined>>(
     resolve(LOCALIZATION_DIR, 'metadata.json'),
   );
   const keys = new Set<string>();
   Object.entries(metadata).forEach(([key, entry]) => {
-    if (entry?.fallbackKey) keys.add(key);
+    if (entry?.fallbackKey && englishKeys.has(entry.fallbackKey)) keys.add(key);
   });
   return keys;
 }

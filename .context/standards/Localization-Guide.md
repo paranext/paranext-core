@@ -76,7 +76,7 @@ Resolution order for any localize key lookup (see `findFirstLocalization` / `fin
 
 1. **User's preferred languages** — from the `platform.interfaceLanguage` setting (ordered array)
 2. **English** — `BACKUP_LANGUAGE = 'en'` is hardcoded and always appended to the fallback list
-3. **`fallbackKey` metadata** — if a key declares `fallbackKey` in the `metadata` section (e.g. `%inventoryName_Character%` → `%CheckType_3%`), that sibling key is tried across all languages
+3. **`fallbackKey` metadata** — if a key declares `fallbackKey` in the `metadata` section (e.g. `%inventoryName_Character%` → `%CheckType_3%`), that sibling key is tried across all languages. Exactly **one** hop is followed: the target is looked up in the language data only, so it must hold a value of its own. A `fallbackKey` pointing at a missing key, or at another key that is itself only a `fallbackKey` redirect, resolves to nothing and the user gets the bare key at step 4
 4. **Bare key** — if everything fails, the localize key (`%foo%`) itself is returned as a debug safety net
 
 **Practical implication**: if you add an English entry for a key, users in languages without that key automatically fall back to English. You do **not** need custom fallback logic in the consumer.
