@@ -937,7 +937,10 @@ test.describe('Search Filters', () => {
     const counterBefore = await frame.locator('.tw\\:tabular-nums').textContent();
 
     await openFiltersPanel(frame);
-    const filtersButton = frame.getByRole('button', { name: /toggle filters/i });
+    // By attribute, not by role: the panel is modal, so while it is open everything outside it is
+    // aria-hidden, and role-based locators skip aria-hidden elements. Every other locator below
+    // reaches a control inside the panel, which is unaffected.
+    const filtersButton = frame.locator('button[aria-label="Toggle filters"]');
     const positionsDuringReRun = filtersButton.evaluate(
       (button, { previousCount, settleMs, timeoutMs }) =>
         new Promise<number[]>((resolve) => {
@@ -970,7 +973,12 @@ test.describe('Search Filters', () => {
     await frame.locator('#wordRestriction-wholeWord').click();
     await waitForCounterToChangeFrom(frame, counterBefore);
 
-    expect(new Set(await positionsDuringReRun).size).toBe(1);
+    const positions = await positionsDuringReRun;
+    // Closed before asserting, not after: the panel is modal, so leaving it open on a failure makes
+    // everything outside it inert and the next test's reset cannot clear the search box.
+    await frame.locator('#wordRestriction-wholeWord').press('Escape');
+
+    expect(new Set(positions).size).toBe(1);
   });
 });
 
