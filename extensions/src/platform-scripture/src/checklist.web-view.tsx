@@ -29,6 +29,7 @@ import {
   getErrorMessage,
   isPlatformError,
   makeProjectSelectorCustomData,
+  normalizeProjectId,
   recencyMapFromOrderedIds,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
@@ -55,10 +56,6 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
-
-// Stable empty-array reference for the comparative-texts picker's openTabs prop — see the picker
-// wiring below for why this must always be empty.
-const NO_COMPARATIVE_OPEN_TABS: readonly ProjectSelectorOpenTab[] = Object.freeze([]);
 
 // Stable empty-array reference serving two roles: the recently-opened-projects `useData` default,
 // and the fallback the recency map is built from when the subscription has no usable list.
@@ -697,18 +694,55 @@ global.webViewComponent = function ChecklistWebView({
     [editorTabs],
   );
 
+  // `project-multi` renders one row per (project, scroll group) open tab, but a comparative-text
+  // ref names a project and carries no scroll group. Feed the picker one open tab per project —
+  // the lowest scroll group it is open in — so a project open in several groups is a single
+  // selectable row whose identity matches what gets stored. That keeps the "Open tabs" grouping
+  // usable without ever offering two rows that would store the same project twice.
+  const comparativeOpenTabByProject = useMemo(() => {
+    const lowestTabByProject = new Map<string, ProjectSelectorOpenTab>();
+    comparativeOpenTabs.forEach((tab) => {
+      const key = normalizeProjectId(tab.projectId);
+      const existing = lowestTabByProject.get(key);
+      if (!existing || tab.scrollGroupId < existing.scrollGroupId) lowestTabByProject.set(key, tab);
+    });
+    return lowestTabByProject;
+  }, [comparativeOpenTabs]);
+
+  const collapsedComparativeOpenTabs = useMemo(
+    () => [...comparativeOpenTabByProject.values()],
+    [comparativeOpenTabByProject],
+  );
+
+  // A row for an open project is keyed by (projectId, scrollGroupId), so pair each stored ref with
+  // the scroll group of the row it belongs to. Without it the stored selection would never light
+  // up its row, and clicking that row would add a second copy instead of toggling the ref off.
   const comparativeSelection = useMemo(
-    () => ({ pairs: comparativeTexts.map((ref) => ({ projectId: ref.id })) }),
-    [comparativeTexts],
+    () => ({
+      pairs: comparativeTexts.map((ref) => ({
+        projectId: ref.id,
+        scrollGroupId: comparativeOpenTabByProject.get(normalizeProjectId(ref.id))?.scrollGroupId,
+      })),
+    }),
+    [comparativeTexts, comparativeOpenTabByProject],
   );
 
   const handleComparativeTextsChange = useCallback(
     (selection: { pairs: ProjectSelectorProjectPair[] }) => {
       const projectIdToName = new Map(allProjects.map((p) => [p.id, p.shortName]));
-      const nextRefs: ChecklistComparativeTextRef[] = selection.pairs.map((pair) => ({
-        id: pair.projectId,
-        name: projectIdToName.get(pair.projectId) ?? pair.projectId,
-      }));
+      // Comparative texts are stored per project, so collapse the incoming pairs to one ref per
+      // project id: whatever rows a project is reachable through, it is stored exactly once.
+      const seenProjectIds = new Set<string>();
+      const nextRefs: ChecklistComparativeTextRef[] = [];
+      selection.pairs.forEach((pair) => {
+        const key = normalizeProjectId(pair.projectId);
+        if (seenProjectIds.has(key)) return;
+        seenProjectIds.add(key);
+        nextRefs.push({
+          id: pair.projectId,
+          name: projectIdToName.get(pair.projectId) ?? pair.projectId,
+        });
+      });
       setComparativeTexts(nextRefs);
     },
     [allProjects, setComparativeTexts],
@@ -759,19 +793,13 @@ global.webViewComponent = function ChecklistWebView({
     [projectSelectorResolvedStrings],
   );
 
-  // Selection grouping is auto-added by ProjectSelector for `project-multi` mode. We pass
-  // `openTabs={[]}` here on purpose: comparative-texts selection is stored per-project (no
-  // scrollGroupId), and passing real openTabs would produce per-scroll-group rows that never
-  // match the stored per-project pairs — clicks would always land in the ADD path and duplicate
-  // the same project. Empty openTabs collapses rows to one-per-project, matching the storage
-  // shape. Auto-openTabs grouping is skipped for the same reason (nothing open to bucket).
   const comparativeTextsSelectorNode = useMemo(
     () => (
       <div data-testid="checklist-comparative-texts-trigger" className="tw:min-w-32">
         <ProjectSelector
           mode="project-multi"
           projects={comparativeProjects}
-          openTabs={NO_COMPARATIVE_OPEN_TABS}
+          openTabs={collapsedComparativeOpenTabs}
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
           localizedStrings={{
@@ -786,6 +814,7 @@ global.webViewComponent = function ChecklistWebView({
       </div>
     ),
     [
+      collapsedComparativeOpenTabs,
       comparativeProjects,
       comparativeSelection,
       handleComparativeTextsChange,
