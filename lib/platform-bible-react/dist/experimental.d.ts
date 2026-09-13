@@ -340,6 +340,8 @@ type CommonProps = {
 	 * (call-to-action) when the picker is empty and the user is expected to make a choice.
 	 */
 	buttonVariant?: ButtonProps["variant"];
+	/** Additional classes merged onto the trigger button, after the component's own trigger classes. */
+	buttonClassName?: string;
 	isDisabled?: boolean;
 	/**
 	 * When true, the trigger shows a spinner (instead of the chevron) and is disabled, signalling

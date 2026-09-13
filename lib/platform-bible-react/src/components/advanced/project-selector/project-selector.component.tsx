@@ -318,6 +318,8 @@ type CommonProps = {
    * (call-to-action) when the picker is empty and the user is expected to make a choice.
    */
   buttonVariant?: ButtonProps['variant'];
+  /** Additional classes merged onto the trigger button, after the component's own trigger classes. */
+  buttonClassName?: string;
   isDisabled?: boolean;
   /**
    * When true, the trigger shows a spinner (instead of the chevron) and is disabled, signalling
@@ -1048,6 +1050,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         // of the shortName stay visible in an icon-rail sidebar (~56px). Layout unchanged in the
         // wide case.
         isTriggerNarrow && 'tw:px-0.5 tw:text-xs',
+        props.buttonClassName,
       )}
     >
       <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2 tw:overflow-hidden tw:whitespace-nowrap tw:text-start">

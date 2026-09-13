@@ -245,6 +245,30 @@ describe('ProjectSelector — trigger label format', () => {
   });
 });
 
+describe('ProjectSelector — buttonClassName', () => {
+  it('merges a passed buttonClassName onto the trigger button', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ projectId: 'esvus16' }}
+        onChangeSelection={() => {}}
+        localizedStrings={HARNESS_STRINGS}
+        buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveClass(
+      'tw:h-8',
+      'tw:w-full',
+      'tw:flex-1',
+      'tw:justify-start',
+      'tw:font-normal',
+    );
+  });
+});
+
 describe('ProjectSelector — search-clear-on-close', () => {
   it('resets the search query when the popover is closed and reopened', async () => {
     const user = setupUser();

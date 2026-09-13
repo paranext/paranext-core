@@ -168,6 +168,7 @@ export function SettingsSidebar({
                   handleSelectItem(selectedProjectName, nextId);
                 }}
                 buttonVariant="ghost"
+                buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
                 localizedStrings={{
                   buttonPlaceholder: buttonPlaceholderText,
                   ariaLabel: projectsSidebarGroupLabel,
