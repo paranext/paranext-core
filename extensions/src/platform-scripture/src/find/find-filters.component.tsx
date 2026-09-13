@@ -58,12 +58,13 @@ type FindFiltersProps = {
 };
 
 /**
- * The explanation icons beside some filters open tooltips holding text that appears nowhere else,
- * so each icon sits inside a real button: a bare icon never receives focus, which would leave that
- * text out of reach for anyone using the keyboard.
+ * Ids for the visually hidden copies of the explanations. The control each one explains points at
+ * it with `aria-describedby`, so the text reaches a screen reader on the control itself rather than
+ * through the icon beside it: the icon sits inside a radio group, where a tab stop of its own is
+ * unreachable whenever the other radio is the selected one.
  */
-const EXPLANATION_BUTTON_CLASS_NAME =
-  'tw:inline-flex tw:cursor-help tw:rounded-sm tw:border-0 tw:bg-transparent tw:p-0 tw:outline-none tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50';
+const ANY_TEXT_DESCRIPTION_ID = 'searchTextType-all-description';
+const IGNORE_WHITESPACE_DESCRIPTION_ID = 'ignoreWhitespaceDifferences-description';
 
 /**
  * The panel is portalled with a z-index above the tooltip layer, and each tooltip is portalled
@@ -94,10 +95,14 @@ export function FindFilters({
   // These filters are a form of grouped settings, not a menu of commands. A menu container would
   // give them `role="menu"`, whose keyboard model only navigates registered menu items and calls
   // preventDefault on Tab — leaving these plain form controls unreachable by keyboard. A popover
-  // is an inert container, so the controls keep their native keyboard behavior: Tab moves between
-  // groups and arrow keys move within a radio group.
+  // leaves the controls their native keyboard behavior: Tab moves between groups and arrow keys move
+  // within a radio group.
+  //
+  // `modal` traps focus inside the panel. The panel is portalled after everything else in the web
+  // view, so without the trap Shift+Tab from the first control leaves for the bottom of the Find
+  // panel, which dismisses the popover without returning focus to its trigger.
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <Popover open={open} onOpenChange={onOpenChange} modal>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -136,10 +141,7 @@ export function FindFilters({
           <legend className="tw:px-2 tw:py-1.5 tw:text-sm tw:font-semibold">
             {localizedStrings.matchContentIn}
           </legend>
-          {/* A legend names its fieldset, not the radio group nested inside it, so each group is
-              named explicitly. */}
           <RadioGroup
-            aria-label={localizedStrings.matchContentIn}
             value={searchTextType}
             // RadioGroup onValueChange provides a plain string, but we know it will always be one
             // of the SearchTextType values since only the RadioGroupItem children use those values
@@ -154,7 +156,11 @@ export function FindFilters({
               ] as const
             ).map(([value, label]) => (
               <div key={value} className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
-                <RadioGroupItem value={value} id={`searchTextType-${value}`} />
+                <RadioGroupItem
+                  value={value}
+                  id={`searchTextType-${value}`}
+                  aria-describedby={value === 'all' ? ANY_TEXT_DESCRIPTION_ID : undefined}
+                />
                 <Label
                   htmlFor={`searchTextType-${value}`}
                   className="tw:cursor-pointer tw:text-sm tw:font-normal"
@@ -165,19 +171,21 @@ export function FindFilters({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={localizedStrings.allTextTooltip}
-                          className={EXPLANATION_BUTTON_CLASS_NAME}
-                        >
-                          <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
-                        </button>
+                        <Info
+                          data-testid="any-text-explanation"
+                          className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground"
+                        />
                       </TooltipTrigger>
                       <TooltipContent style={EXPLANATION_TOOLTIP_STYLE}>
                         <p className="tw:max-w-xs">{localizedStrings.allTextTooltip}</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                )}
+                {value === 'all' && (
+                  <span id={ANY_TEXT_DESCRIPTION_ID} className="tw:sr-only">
+                    {localizedStrings.allTextTooltip}
+                  </span>
                 )}
               </div>
             ))}
@@ -190,10 +198,9 @@ export function FindFilters({
             {localizedStrings.restrictions}
           </legend>
           <RadioGroup
-            aria-label={localizedStrings.restrictions}
             value={wordRestriction}
             // RadioGroup onValueChange provides a plain string, but we know it will always be one
-            // of the SearchTextType values since only the RadioGroupItem children use those values
+            // of the WordRestriction values since only the RadioGroupItem children use those values
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             onValueChange={(value) => setWordRestriction(value as WordRestriction)}
             className="tw:gap-1"
@@ -246,6 +253,7 @@ export function FindFilters({
           <div className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
             <Checkbox
               id="ignoreWhitespaceDifferences"
+              aria-describedby={IGNORE_WHITESPACE_DESCRIPTION_ID}
               checked={ignoreWhitespaceDifferences}
               onCheckedChange={(checked) => setIgnoreWhitespaceDifferences(checked === true)}
             />
@@ -258,13 +266,7 @@ export function FindFilters({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={localizedStrings.ignoreWhitespaceDifferencesTooltip}
-                    className={EXPLANATION_BUTTON_CLASS_NAME}
-                  >
-                    <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
-                  </button>
+                  <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
                 </TooltipTrigger>
                 <TooltipContent style={EXPLANATION_TOOLTIP_STYLE}>
                   <p className="tw:max-w-xs">
@@ -273,6 +275,9 @@ export function FindFilters({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            <span id={IGNORE_WHITESPACE_DESCRIPTION_ID} className="tw:sr-only">
+              {localizedStrings.ignoreWhitespaceDifferencesTooltip}
+            </span>
           </div>
           <div className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
             <Checkbox

@@ -838,9 +838,10 @@ export function Find({
     // scrolled, the search re-run that follows every filter change would move the results across the
     // viewport boundary and toggle its scrollbar, and each toggle narrows the viewport by the
     // scrollbar's width — shifting this right-aligned toolbar, and the filters popover anchored to it,
-    // sideways. At normal panel heights the results list below absorbs all of the shrinking, so this
-    // container only scrolls once that list is down to nothing; that is what keeps the loading
-    // skeleton and the status bar's Cancel button reachable in a short panel.
+    // sideways. The results list and the loading skeleton below both give way first, so at normal
+    // panel heights nothing reaches this container and it never shows a scrollbar of its own; when a
+    // panel is short enough that it does, scrolling here is what keeps the status bar's Cancel button
+    // reachable.
     <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
@@ -1178,11 +1179,11 @@ export function Find({
           is about to auto-search (debounce pending, or waiting on the data provider) — otherwise a
           restored/carried-over term would flash the idle prompt below before the search starts. */}
       {resultsAreaState === 'skeleton' && (
-        // `min-h-0` and `overflow-hidden` let these placeholder cards give way in a short panel
-        // instead of pushing the root past its height cap. Overflowing would grow the root its own
-        // scrollbar for the length of the search, narrowing the toolbar and sliding the filters
-        // popover anchored to it sideways.
-        <div className="tw:min-h-0 tw:space-y-2 tw:overflow-hidden">
+        // `overflow-hidden` lets these placeholder cards give way in a short panel instead of pushing
+        // the root past its height cap, where the root would grow its own scrollbar for the length of
+        // the search and narrow the toolbar, sliding the filters popover anchored to it sideways.
+        // `p-px` keeps that clip from cutting off each card's 1px ring outline.
+        <div className="tw:space-y-2 tw:overflow-hidden tw:p-px">
           {Array.from({ length: 5 }).map((_value, index) => (
             // As this is a placeholder, it is safe to use the index as a key
             // eslint-disable-next-line react/no-array-index-key
@@ -1206,11 +1207,12 @@ export function Find({
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={resultsContainerRef}
-        // `min-h-0` rather than a fixed floor so this list can shrink below its content when the
-        // panel is short. A floor here would refuse to give way and push the root past its height
-        // cap. The empty-state placeholder carries its own minimum height, so the idle view keeps its
-        // size.
-        className="tw:min-h-0 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
+        // A floor of roughly one and a half result cards, rather than this list's natural minimum
+        // (zero, since a scroll container can always shrink). Without it a short panel squeezes the
+        // list away entirely and its results become unreachable; much more than this and the header,
+        // floor and status bar together outgrow the root, which then scrolls and shifts the toolbar.
+        // The empty-state placeholder carries its own minimum height, so the idle view keeps its size.
+        className="tw:min-h-24 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}

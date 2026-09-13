@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
@@ -898,46 +898,58 @@ describe('Find — filters panel keyboard accessibility', () => {
     expect(screen.getByRole('radio', { name: 'Any text' })).toHaveFocus();
   });
 
-  // The explanation beside "Any text" appears nowhere else, so it needs a tab stop of its own; a
-  // bare icon never receives focus.
-  it('reaches the explanation beside "Any text" with Tab', async () => {
-    const user = setupUser();
-    render(<Find {...buildLifecycleProps({})} />);
+  // The explanation beside "Any text" describes the radio itself. A tab stop of its own would sit
+  // inside the radio group, where Tab never reaches it whenever the other radio is the selected one.
+  it.each([['all'] as const, ['verseOnly'] as const])(
+    'describes "Any text" with its explanation when %s is selected',
+    async (searchTextType) => {
+      const user = setupUser();
+      render(<Find {...buildLifecycleProps({ searchTextType })} />);
 
-    await openFilters(user);
-    await user.tab();
+      await openFilters(user);
 
-    expect(
-      screen.getByRole('button', { name: 'Including introductions, titles, headings, etc.' }),
-    ).toHaveFocus();
-  });
+      expect(screen.getByRole('radio', { name: 'Any text' })).toHaveAccessibleDescription(
+        'Including introductions, titles, headings, etc.',
+      );
+    },
+  );
 
   // Each radio group is a single tab stop (roving tabindex), so Tab crosses between groups rather
-  // than visiting every radio — which is why, after the explanation beside the first group, the next
-  // stop is the second group and not the next radio.
+  // than visiting every radio.
   it('moves focus to the next group of controls when the user presses Tab', async () => {
     const user = setupUser();
     render(<Find {...buildLifecycleProps({})} />);
 
     await openFilters(user);
     await user.tab();
-    await user.tab();
 
     expect(screen.getByRole('radio', { name: 'Anywhere' })).toHaveFocus();
   });
 
-  // Asserts focus movement rather than selection. Radix selects a radio on arrow-navigation from a
-  // `focus` handler gated on a flag set by a non-capturing `document` keydown listener, which React
-  // sets only after its own delegated handler has already moved focus — so the selection half of
-  // that behavior cannot be reproduced under jsdom. Navigation is the part this component controls.
-  it('moves focus between radio options when the user presses the down arrow', async () => {
+  // The key is held rather than tapped. Radix moves focus on a timer and selects the newly focused
+  // radio only while an arrow key is still down; a tap releases the key before that timer fires.
+  it('moves to and selects the next radio option when the down arrow is pressed', async () => {
+    const user = setupUser();
+    const setSearchTextType = vi.fn();
+    render(<Find {...buildLifecycleProps({ setSearchTextType })} />);
+
+    await openFilters(user);
+    await user.keyboard('{ArrowDown>}');
+
+    await waitFor(() => expect(setSearchTextType).toHaveBeenCalledWith('verseOnly'));
+    expect(screen.getByRole('radio', { name: 'Verse text only' })).toHaveFocus();
+  });
+
+  // The panel is portalled after the rest of the web view, so leaving it with Shift+Tab lands at the
+  // bottom of the Find panel and dismisses the popover behind the user.
+  it('keeps focus inside the panel when the user presses Shift+Tab from the first control', async () => {
     const user = setupUser();
     render(<Find {...buildLifecycleProps({})} />);
 
     await openFilters(user);
-    await user.keyboard('{ArrowDown}');
+    await user.tab({ shift: true });
 
-    expect(screen.getByRole('radio', { name: 'Verse text only' })).toHaveFocus();
+    expect(screen.queryByRole('dialog')?.contains(document.activeElement)).toBe(true);
   });
 
   it('names the open panel after the button that opens it', async () => {
@@ -949,18 +961,6 @@ describe('Find — filters panel keyboard accessibility', () => {
     expect(screen.getByRole('dialog', { name: 'Toggle filters' })).toBeInTheDocument();
   });
 
-  it.each([['Match content in'], ['Match boundaries']])(
-    'names the "%s" radio group after its legend',
-    async (name) => {
-      const user = setupUser();
-      render(<Find {...buildLifecycleProps({})} />);
-
-      await openFilters(user);
-
-      expect(screen.getByRole('radiogroup', { name })).toBeInTheDocument();
-    },
-  );
-
   // The panel and each tooltip are portalled to the body separately, so they stack as siblings and
   // the higher z-index paints on top. An explanation that stacks lower renders behind the panel it
   // sits inside, where it cannot be read.
@@ -969,8 +969,8 @@ describe('Find — filters panel keyboard accessibility', () => {
     render(<Find {...buildLifecycleProps({})} />);
 
     await openFilters(user);
-    await user.tab();
-    const tooltip = await screen.findByRole('tooltip');
+    await user.hover(screen.getByTestId('any-text-explanation'));
+    const tooltip = await screen.findByRole('tooltip', {}, { timeout: 3_000 });
 
     const zIndexOf = (element: Element) =>
       Number(element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex);

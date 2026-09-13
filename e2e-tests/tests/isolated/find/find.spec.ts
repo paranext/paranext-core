@@ -948,7 +948,12 @@ test.describe('Search Filters', () => {
             positions.push(button.getBoundingClientRect().x);
             const now = performance.now();
             const count = button.ownerDocument.querySelector('.tw\\:tabular-nums')?.textContent;
-            if (countChangedAt === undefined && count !== previousCount) countChangedAt = now;
+            if (
+              countChangedAt === undefined &&
+              typeof count === 'string' &&
+              count !== previousCount
+            )
+              countChangedAt = now;
             const isDone =
               countChangedAt === undefined
                 ? now - startedAt >= timeoutMs
