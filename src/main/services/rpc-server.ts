@@ -150,6 +150,9 @@ export class RpcServer implements IRpcHandler {
   }
 
   async connect(): Promise<boolean> {
+    // TODO(PT-4495): `false` here means "already connected", while `RpcClient` returns `true` for
+    // the same condition. The `true` below carries no readiness meaning either — this connect binds
+    // nothing, it attaches listeners to a socket the listener already accepted.
     if (this.connectionStatus === ConnectionStatus.Connected) return false;
     this.hasCompletedTeardown = false;
     this.addEventListenersToWebSocket();

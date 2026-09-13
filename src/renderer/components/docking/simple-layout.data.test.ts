@@ -1,7 +1,14 @@
 import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
-import { RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX, simpleLayout } from './simple-layout.data';
+import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
+import {
+  RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX,
+  simpleLayout,
+  SIMPLE_PANEL_ID_MODEL_TEXT,
+  SIMPLE_PANEL_ID_PROJECT,
+  SIMPLE_PANEL_ID_RESOURCES,
+} from './simple-layout.data';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
@@ -113,6 +120,23 @@ describe('simple-layout.data', () => {
       });
     });
 
+    it('each column panel has the expected onboarding-tour panel ID', () => {
+      // The onboarding tour targets [data-dockid="<id>"] to spotlight each column.
+      // rc-dock propagates PanelData.id to the DOM as data-dockid, so these IDs must stay in sync
+      // with SIMPLE_PANEL_ID_* exports — if they drift the tour's querySelector finds nothing.
+      const expectedIds = [
+        SIMPLE_PANEL_ID_MODEL_TEXT,
+        SIMPLE_PANEL_ID_PROJECT,
+        SIMPLE_PANEL_ID_RESOURCES,
+      ];
+      columns.forEach((col, index) => {
+        // Narrowing column to BoxData and its first child to PanelData to read its id.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const panel = (col as BoxData).children[0] as PanelData;
+        expect(panel.id).toBe(expectedIds[index]);
+      });
+    });
+
     // Narrowing column to BoxData and its first child to PanelData to read panelLock.
     // rc-dock's Algorithm.fixPanelOrBox unconditionally resets box/panel minWidth to 0,
     // but then respects panelLock.minWidth as an override (Algorithm.js lines 566-569).
@@ -134,10 +158,8 @@ describe('simple-layout.data', () => {
     });
 
     it('leaves the three columns plus their dividers narrower than the smallest window the app allows, so narrowing to the minimum cannot force a horizontal scrollbar', () => {
-      // Mirrors `minWidth` on the BrowserWindow in src/main/main.ts. It cannot be imported —
-      // main.ts pulls in Electron — so lowering that number will NOT fail this test. Change both.
-      const WINDOW_MIN_WIDTH_PX = 900;
-
+      // Bound to the same constant `main.ts` applies as the BrowserWindow `minWidth`, so lowering
+      // the window minimum fails this test rather than silently overflowing the dock.
       // The reserve rc-dock actually budgets per divider, which is what decides whether the dock
       // overflows. Deliberately NOT the 2px the Simple-mode stylesheet paints: rc-dock hard-codes 4
       // in its own arithmetic, so using the visual width here makes 3 x 300 look like it fits (898)

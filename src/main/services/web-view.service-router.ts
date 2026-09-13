@@ -352,6 +352,29 @@ async function findOwner(
 }
 
 /**
+ * The window that owns a given web view, for callers outside this router that only need to know
+ * which window to act in — not the shard or the definition {@link findOwner} also resolves.
+ *
+ * Used by `notification.service-router.ts` to route a notification or prompt that names a
+ * `webViewId` to the window showing it, instead of the focused window.
+ *
+ * See {@link findOwner} for what `hadUnreachableWindows` means. In the defensive case where more
+ * than one window claims the id, it prefers the routing-target window and otherwise the oldest.
+ *
+ * @param webViewId The web view whose owning window to find
+ * @param operation Named in the warnings {@link findOwner} logs when a window could not be asked
+ * @returns The owning window's id, or `undefined` both when no window owns the web view and when a
+ *   window that might own it could not be asked — `hadUnreachableWindows` tells those apart
+ */
+export async function findWindowIdOwningWebView(
+  webViewId: WebViewId,
+  operation: string,
+): Promise<{ windowId: string | undefined; hadUnreachableWindows: boolean }> {
+  const { owner, hadUnreachableWindows } = await findOwner({ kind: 'id', webViewId }, operation);
+  return { windowId: owner?.windowId, hadUnreachableWindows };
+}
+
+/**
  * The tab or tab group a layout says to open next to, over or inside, which names the window that
  * tab or tab group is in.
  *

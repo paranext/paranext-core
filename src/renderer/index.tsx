@@ -4,9 +4,14 @@ import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
+import {
+  hasRendererCrashed,
+  RendererErrorBoundary,
+} from '@renderer/components/renderer-error-boundary.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
+import { initConnectionLostService } from '@renderer/services/connection-lost-service';
 import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
@@ -20,6 +25,7 @@ import {
 } from '@renderer/services/theme.service';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
+import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
 import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
 import { initialize as initializeWindowService } from '@renderer/services/window.service-shard';
@@ -88,6 +94,14 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   throw new Error(`${reasons}`);
 }
 
+// Subscribed here, at module evaluation, rather than inside the async startup below or from a React
+// effect: `onDidLoseConnection` is a module-level emitter on the network service, so it exists
+// before `initialize()` runs, and subscribing before any await means a loss cannot land in a window
+// where nothing is listening. `PlatformEvent` does not replay to a late subscriber, so a missed loss
+// is missed for good — and this store is the one thing that tells the user the app has stopped
+// working. Returns an unsubscriber we intentionally never call; it runs for the renderer's lifetime.
+initConnectionLostService();
+
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
 // - They internally await other services when they need others in order to start
@@ -116,6 +130,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startNotificationServiceShard(),
       startUsersnapServiceShard(),
       startBookChapterControlServiceShard(),
+      startOnboardingTourServiceShard(),
       startOverlayService(),
       startThemeService(),
       initializeWindowService(),
@@ -151,7 +166,11 @@ if (!container) {
 }
 
 const root = createRoot(container);
-root.render(<App />);
+root.render(
+  <RendererErrorBoundary>
+    <App />
+  </RendererErrorBoundary>,
+);
 markStartup('root-render');
 
 // #endregion
@@ -181,6 +200,10 @@ applyThemeSafe(getCurrentThemeSync(), 'first load');
 
 // This doesn't run if the renderer has an uncaught exception (which is a good thing)
 window.addEventListener('beforeunload', () => {
+  // `cleanupOldWebViewState` deletes the saved state of every web view it did not see load, so it
+  // is only correct once they all have — which a crashed tree never reached. See
+  // `hasRendererCrashed` for why the crash screen's reload button makes this path reachable.
+  if (hasRendererCrashed()) return;
   cleanupOldWebViewState();
 });
 

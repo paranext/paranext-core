@@ -1,0 +1,366 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import type { FirstRunStatus } from '@renderer/services/first-run-store';
+import { SIMPLE_PANEL_ID_PROJECT } from '@renderer/components/docking/simple-layout.data';
+import type { TourProps, TourStep } from './tour.component';
+import { readTourDone, requestTourReplay, writeTourDone } from './onboarding-tour.store';
+import { OnboardingTour } from './onboarding-tour.component';
+
+// window.matchMedia — which theme.service-host.ts calls at module init, reached here via
+// papi-frontend.service.ts — is stubbed for every jsdom test in vitest.setup.ts.
+
+// Mutable knobs the mocks read, so each test can set the scenario before rendering.
+let mockStatus: FirstRunStatus = { kind: 'app' };
+let mockIsPowerMode = false;
+let mockIsLocalizationLoading = false;
+
+let mockTourDone = false;
+// Mirrors the real store's done-flag subscription, which exists so a write in another window
+// reaches this one. Tests drive it through `recordTourDoneElsewhere`.
+const mockTourDoneListeners = new Set<() => void>();
+
+/** Another window finished the tour: the shared flag flips and every window is notified. */
+function recordTourDoneElsewhere() {
+  mockTourDone = true;
+  mockTourDoneListeners.forEach((listener) => listener());
+}
+
+// Stands in for the store's replay channel — a count plus its listeners, exactly as the real one.
+let mockReplayCount = 0;
+const mockReplayListeners = new Set<() => void>();
+
+vi.mock('@renderer/services/first-run-store', () => ({
+  getFirstRunStatus: () => mockStatus,
+  subscribeToFirstRun: () => () => {},
+}));
+
+vi.mock('./onboarding-tour.store', () => ({
+  readTourDone: () => mockTourDone,
+  writeTourDone: () => {
+    mockTourDone = true;
+    mockTourDoneListeners.forEach((listener) => listener());
+  },
+  subscribeToTourDone: (listener: () => void) => {
+    mockTourDoneListeners.add(listener);
+    return () => {
+      mockTourDoneListeners.delete(listener);
+    };
+  },
+  getTourReplayCount: () => mockReplayCount,
+  subscribeToTourReplay: (listener: () => void) => {
+    mockReplayListeners.add(listener);
+    return () => {
+      mockReplayListeners.delete(listener);
+    };
+  },
+  requestTourReplay: () => {
+    mockReplayCount += 1;
+    mockReplayListeners.forEach((listener) => listener());
+  },
+}));
+
+vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
+  useIsPowerMode: () => mockIsPowerMode,
+}));
+
+// useLocalizedStrings returns [strings, isLoading] — mirror that shape; echo keys as values.
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useLocalizedStrings: (keys: string[]) => [
+    Object.fromEntries(keys.map((k) => [k, k])),
+    mockIsLocalizationLoading,
+  ],
+}));
+
+// Mock Tour so we can assert what OnboardingTour hands it without a real DOM/spotlight.
+// Spread the real module so TOUR_LOCALIZE_KEYS (which the component composes into its key list)
+// keeps its real value.
+// NOTE: MockTour is defined inside the factory to avoid the vi.mock hoisting TDZ issue —
+// vi.mock() calls are hoisted before const declarations, so a top-level MockTour const would
+// be uninitialized when the factory runs.
+vi.mock('./tour.component', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./tour.component')>();
+  // Report only the keys Tour itself declares. Selecting them by identity rather than by name
+  // prefix keeps the assertion honest now that one step key (`%toolbar_sync%`) is borrowed from
+  // another feature and so shares no prefix with the rest.
+  const chromeKeys = new Set<string>(original.TOUR_LOCALIZE_KEYS);
+  // Function declaration required by react/function-component-definition; defined inside the
+  // factory to avoid the vi.mock hoisting TDZ issue (top-level const would be uninitialized).
+  function MockTourComponent({ open, steps, onDone, onSkip, localizedStrings }: TourProps) {
+    if (!open) return undefined;
+    return (
+      <div data-testid="mock-tour">
+        <span data-testid="step-count">{steps.length}</span>
+        <span data-testid="step-sides">{steps.map((s: TourStep) => s.side).join(',')}</span>
+        <span data-testid="step-padding">
+          {steps.map((s: TourStep) => s.spotlightPadding ?? '').join(',')}
+        </span>
+        <span data-testid="chrome-strings">
+          {Object.keys(localizedStrings ?? {})
+            .filter((k) => chromeKeys.has(k))
+            .sort()
+            .join(',')}
+        </span>
+        <button type="button" onClick={onDone}>
+          done
+        </button>
+        <button type="button" onClick={onSkip}>
+          skip
+        </button>
+      </div>
+    );
+  }
+  return {
+    ...original,
+    Tour: MockTourComponent,
+  };
+});
+
+// OnboardingTour polls for this element before it opens (the dock layout loads async, so the
+// panel divs are not present at startup; we add a stand-in so the layoutReady gate clears).
+let layoutPanelEl: HTMLElement;
+// The toolbar's Profile button — the one stop that survives Tour's filter in Power mode, and so
+// what the readiness gate waits for there. `platform-bible-toolbar` renders it in both modes.
+let profileTriggerEl: HTMLElement;
+
+beforeEach(() => {
+  mockStatus = { kind: 'app' };
+  mockIsPowerMode = false;
+  mockIsLocalizationLoading = false;
+  mockTourDone = false;
+  mockReplayCount = 0;
+  mockTourDoneListeners.clear();
+
+  layoutPanelEl = document.createElement('div');
+  layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
+  document.body.appendChild(layoutPanelEl);
+
+  profileTriggerEl = document.createElement('button');
+  profileTriggerEl.setAttribute('data-testid', 'user-profile-popover-trigger');
+  document.body.appendChild(profileTriggerEl);
+});
+
+afterEach(() => {
+  cleanup();
+  mockTourDone = false;
+  layoutPanelEl?.remove();
+  profileTriggerEl?.remove();
+});
+
+describe('OnboardingTour', () => {
+  it('renders the tour in simple mode when app is unlocked and the flag is unset', () => {
+    render(<OnboardingTour />);
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('passes 5 steps with logical sides (no left/right)', () => {
+    render(<OnboardingTour />);
+    expect(screen.getByTestId('step-count').textContent).toBe('5');
+    // Logical sides only — never physical left/right (Tour resolves those via readDirection).
+    expect(screen.getByTestId('step-sides').textContent).toBe('start,end,start,bottom,bottom');
+  });
+
+  it('resolves the tour chrome keys Tour declares, alongside its own step keys', () => {
+    // The button and counter keys come from TOUR_STRING_KEYS rather than being restated here, so
+    // this asserts the composed list actually reaches Tour — a key dropped from the request would
+    // otherwise surface only as a raw `%key%` on screen.
+    render(<OnboardingTour />);
+    expect(screen.getByTestId('chrome-strings').textContent).toBe(
+      [
+        '%firstRun_button_back%',
+        '%firstRun_button_next%',
+        '%general_countOfTotal%',
+        '%onboardingTour_button_done%',
+        '%onboardingTour_button_skip%',
+      ].join(','),
+    );
+  });
+
+  it('passes spotlightPadding:1 for the three column panel steps, none for toolbar steps', () => {
+    render(<OnboardingTour />);
+    // Column panels use padding 1 so the spotlight edge sits at the rc-dock divider visual center.
+    // Toolbar steps use the Tour default (omitted).
+    expect(screen.getByTestId('step-padding').textContent).toBe('1,1,1,,');
+  });
+
+  it('sets the done flag and hides the tour when Done is clicked', () => {
+    render(<OnboardingTour />);
+    fireEvent.click(screen.getByRole('button', { name: 'done' }));
+    expect(readTourDone()).toBe(true);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('sets the done flag and hides the tour when Skip is clicked', () => {
+    render(<OnboardingTour />);
+    fireEvent.click(screen.getByRole('button', { name: 'skip' }));
+    expect(readTourDone()).toBe(true);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('does not render while strings are still loading (prevents raw-key flash)', () => {
+    mockIsLocalizationLoading = true;
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('does not render while the app is still gated (wizard/loading)', () => {
+    mockStatus = { kind: 'wizard', step: 'language' };
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('does not render while first-run status is still loading', () => {
+    mockStatus = { kind: 'loading' };
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('does not render when first-run status is error', () => {
+    mockStatus = { kind: 'error' };
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('does not auto-show in Power mode', () => {
+    mockIsPowerMode = true;
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('does not render when the tour has already been completed', () => {
+    writeTourDone();
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('opens once the layout panel appears (MutationObserver path)', async () => {
+    // Panel absent at mount → the layoutReady gate holds the tour closed and observes the DOM.
+    layoutPanelEl.remove();
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    // Panel mounts later (the real dock layout loads via an async PAPI round-trip).
+    await act(async () => {
+      document.body.appendChild(layoutPanelEl);
+      // MutationObserver callbacks deliver as a microtask; yield once so the gate can clear.
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('honors a done flag written externally between mount and open (e2e suppression path)', async () => {
+    // Panel absent at mount → the tour is waiting on the layoutReady gate.
+    layoutPanelEl.remove();
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    // An external writer (e.g. the e2e harness) persists the done flag while the tour waits.
+    mockTourDone = true;
+
+    // Layout becomes ready — the tour must re-read the flag at open time and stay closed.
+    await act(async () => {
+      document.body.appendChild(layoutPanelEl);
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('reopens a completed tour when a replay is requested (Help > Show the tour)', () => {
+    writeTourDone();
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    act(() => {
+      requestTourReplay();
+    });
+
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('reopens on a second replay request after the first replay was finished', () => {
+    // Each request has to start a fresh showing. Without the remount, the state that closed the
+    // first replay would still be set and the tour would never come back.
+    writeTourDone();
+    render(<OnboardingTour />);
+
+    act(() => {
+      requestTourReplay();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'done' }));
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    act(() => {
+      requestTourReplay();
+    });
+
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('shows a replay in Power mode, where the shared Profile stop still applies', () => {
+    // Power has no Simple columns and no Sync button, so Tour's open-time filter drops those stops.
+    // The Profile stop survives — the toolbar renders `UserProfilePopover` in both modes — and it
+    // is the one thing Help > Show the tour can still teach a Power user.
+    mockIsPowerMode = true;
+    writeTourDone();
+    render(<OnboardingTour />);
+
+    act(() => {
+      requestTourReplay();
+    });
+
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('opens a Power replay without waiting for the Simple layout panel', () => {
+    // The readiness gate exists so the column stops are in the DOM before Tour snapshots its step
+    // list. Power never mounts those panels, so waiting on them would stall the replay until the
+    // 10s safety timeout — a Help menu item that appears to do nothing for ten seconds.
+    layoutPanelEl.remove();
+    mockIsPowerMode = true;
+    writeTourDone();
+    render(<OnboardingTour />);
+
+    act(() => {
+      requestTourReplay();
+    });
+
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('waits for the toolbar Profile button before opening a Power replay', async () => {
+    // The gate is what stops Tour snapshotting an empty step list. If every stop filters out, Tour
+    // treats that as a skip and persists the done flag — so opening before the one Power anchor
+    // exists would silently consume the tour rather than show it.
+    profileTriggerEl.remove();
+    mockIsPowerMode = true;
+    writeTourDone();
+    render(<OnboardingTour />);
+
+    act(() => {
+      requestTourReplay();
+    });
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    await act(async () => {
+      document.body.appendChild(profileTriggerEl);
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('closes when another window records the tour as done', () => {
+    // Simple mode is single-window by design, but nothing collapses a Power user's extra windows
+    // when they switch to Simple, and the completion flag is shared across renderers. Each window
+    // would otherwise keep its own overlay up, at its own step, until something unrelated
+    // re-rendered it.
+    render(<OnboardingTour />);
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+
+    act(() => {
+      recordTourDoneElsewhere();
+    });
+
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+});

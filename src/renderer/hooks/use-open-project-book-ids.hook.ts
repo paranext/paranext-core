@@ -15,12 +15,19 @@ import {
   NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
 } from 'platform-bible-utils/experimental';
 import { Canon } from '@sillsdev/scripture';
+import { useDeferredDockLayoutRead } from '@renderer/hooks/use-deferred-dock-layout-read.hook';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 /** Canon order for the returned union, so consumers can group by section without re-sorting. */
 const CANON_BOOK_IDS = Canon.allBookIds;
 
 const EMPTY_IDS: string[] = [];
+
+/**
+ * Joins the open project ids into one comparable key. NUL, so no pair of distinct id sets can
+ * collide into the same key — a space would let {'A B'} and {'A', 'B'} agree.
+ */
+const SEPARATOR = '\u0000';
 
 /**
  * Project ids reachable from this window's open web views: each view's own `projectId`, plus any it
@@ -32,15 +39,24 @@ const EMPTY_IDS: string[] = [];
  * open anywhere in the window is one they are working with, and the books it reports are the same
  * books either way.
  *
- * `activeProjectId` is excluded — its books are already the control's baseline, so subscribing
- * again would be pure cost.
+ * The navigation target's own project is NOT excluded here, and must not be. Subtracting it would
+ * make this set — and the subscription fingerprint derived from it — change every time the resolved
+ * navigation target changes, including the brief `undefined` a dock rebuild produces while the
+ * editor slot has no project yet. In Simple mode every open panel carries the same project id, so
+ * such a set swings between "one project" and "none" on each navigation, and every subscription is
+ * torn down and rebuilt at that cadence. The active project is filtered out at READ time instead,
+ * where changing its mind costs nothing.
  */
-function getOpenProjectIds(activeProjectId: string | undefined): string[] {
+function getOpenProjectIds(): string[] {
   let definitions;
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
   } catch (e) {
-    logger.debug(`Open project books could not enumerate open web views: ${getErrorMessage(e)}`);
+    // Loud rather than quiet: this read runs deferred, after the dock has adopted its new layout
+    // (see `useDeferredDockLayoutRead`), so by this point this window's dock layout is registered.
+    // A throw here means it never was, which is an anomaly worth finding in a log rather than the
+    // ordinary timing of a first render.
+    logger.warn(`Open project books could not enumerate open web views: ${getErrorMessage(e)}`);
     return EMPTY_IDS;
   }
 
@@ -55,8 +71,15 @@ function getOpenProjectIds(activeProjectId: string | undefined): string[] {
         if (projectId) projectIds.add(projectId);
       });
   });
-  if (activeProjectId) projectIds.delete(activeProjectId);
   return [...projectIds];
+}
+
+/**
+ * The open project ids as a single comparable value. Sorted, because set equality rather than order
+ * is what matters.
+ */
+function readOpenProjectIdsKey(): string {
+  return getOpenProjectIds().sort().join(SEPARATOR);
 }
 
 /**
@@ -72,7 +95,15 @@ function getOpenProjectIds(activeProjectId: string | undefined): string[] {
  * the full canon the way navigation-command book lookup does — there, the fallback keeps navigation
  * permissive; here, it would advertise every book in the canon as reachable.
  *
- * @param activeProjectId The project whose books are already offered, excluded from the result
+ * The flow, so the stages below can be checked against a whole: a web view event requests a
+ * DEFERRED read of the dock layout (deferred because the close event is emitted before the dock has
+ * adopted the new layout) → the read lands in state as a membership KEY covering every open project
+ * → a change in membership rebuilds the per-project `booksPresent` subscriptions → their values are
+ * unioned in canon order, with the active project's books left out of the union during RENDER, so a
+ * prop change lands in the same commit. Each stage has its own note where it is declared.
+ *
+ * @param activeProjectId The project whose books are already offered, excluded from the result. It
+ *   may still be subscribed to — only the result excludes it (see {@link getOpenProjectIds}).
  * @param isEnabled Whether to do the work at all. When false the hook subscribes to nothing and
  *   returns an empty list, so a caller that discards the result pays none of its cost. Defaults to
  *   true.
@@ -82,8 +113,22 @@ export function useOpenProjectBookIds(
   activeProjectId: string | undefined,
   isEnabled: boolean = true,
 ): string[] {
-  const [webViewRefreshCounter, setWebViewRefreshCounter] = useState(0);
-  const refreshOpenWebViews = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
+  // The membership fingerprint is held IN STATE rather than derived from a refresh counter. A web
+  // view event that leaves the set of open projects unchanged produces the same string, and
+  // `useState` bails out on an unchanged value — so the burst of web view events a project switch
+  // fires cannot re-render this hook's consumer. A counter would re-render on every event by
+  // construction, because its value changes even when nothing it is standing in for did.
+  //
+  // The key covers EVERY open project, with the active one still in it. Deriving the exclusion here
+  // would put a value that changes with a prop behind a read that only web view events trigger, so
+  // an `activeProjectId` change would not reach the returned list until a commit later — one
+  // committed frame in which the newly active project's own books are offered as "books outside
+  // this project", the exact set this hook exists to exclude. The exclusion is applied during
+  // render instead, where the books are unioned below.
+  const [allOpenProjectIdsKey, setAllOpenProjectIdsKey] = useState('');
+  const { requestRead: refreshOpenWebViews, cancelPendingRead } = useDeferredDockLayoutRead(
+    useCallback(() => setAllOpenProjectIdsKey(readOpenProjectIdsKey()), []),
+  );
 
   // Undefined while disabled: `useEvent` subscribes to nothing when its event is undefined, so a
   // disabled hook does not even listen for the web view changes it would have reacted to.
@@ -91,22 +136,36 @@ export function useOpenProjectBookIds(
   useEvent(isEnabled ? onDidUpdateWebView : undefined, refreshOpenWebViews);
   useEvent(isEnabled ? onDidCloseWebView : undefined, refreshOpenWebViews);
 
-  const openProjectIds = useMemo(
-    () => (isEnabled ? getOpenProjectIds(activeProjectId) : EMPTY_IDS),
-    // webViewRefreshCounter is a refresh trigger: its value is unused, but each bump re-enumerates
-    // this window's open web views.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isEnabled, activeProjectId, webViewRefreshCounter],
-  );
+  // The first read. Declared AFTER the `useEvent` calls so it is requested once the subscriptions
+  // are attached and an event fired in the gap cannot be missed. There is no read during render:
+  // enumerating open web views deliberately touches the WebViewState keep-alive set, which a
+  // discarded or double-invoked render must not do, and by the time this deferred read runs this
+  // window's dock layout has registered — which on a first render it typically has not. This is a
+  // fast path, not a synchronization point: if the layout registers later still, correctness comes
+  // from the open event above, at the cost of reporting no open projects for an extra render.
+  //
+  // Re-requested when `isEnabled` turns on, since nothing was listening while it was off. Turning
+  // off drops the key so re-enabling cannot briefly report a set that went stale while disabled —
+  // which is why it must also revoke a read requested while still enabled. That read would
+  // otherwise run after the key was cleared and repopulate it, and with the subscriptions already
+  // gone nothing would ever correct it.
+  useEffect(() => {
+    if (isEnabled) refreshOpenWebViews();
+    else {
+      cancelPendingRead();
+      setAllOpenProjectIdsKey('');
+    }
+  }, [isEnabled, refreshOpenWebViews, cancelPendingRead]);
 
-  // A membership fingerprint, so an unchanged set of ids is a stable dependency and an unrelated web
-  // view event does not tear down and rebuild every subscription. Sorted because set equality, not
-  // order, is what matters. NUL-separated so no pair of distinct id sets can collide into the same
-  // key — a space would let {'A B'} and {'A', 'B'} agree, silently suppressing a real change.
-  const openProjectIdsKey = useMemo(
-    () => [...openProjectIds].sort().join('\u0000'),
-    [openProjectIds],
-  );
+  // The set to subscribe to: every open project, the active one included. Identity tracks
+  // membership rather than event count — the memo's inputs are the key and `isEnabled`, neither of
+  // which a no-op web view event or a change of navigation target moves — so the subscription
+  // effect, the returned book list, and the consumers that memoize on it all stay stable across an
+  // unchanged set. The empty key must short-circuit: splitting it yields `['']`, not `[]`.
+  const openProjectIds = useMemo(() => {
+    if (!isEnabled) return EMPTY_IDS;
+    return allOpenProjectIdsKey ? allOpenProjectIdsKey.split(SEPARATOR) : EMPTY_IDS;
+  }, [allOpenProjectIdsKey, isEnabled]);
 
   // Entries persist for projects that have since closed rather than being pruned as each project
   // closes; the final useMemo below filters them out by membership at read time. This is fine
@@ -161,11 +220,9 @@ export function useOpenProjectBookIds(
       disposed = true;
       unsubscribers.runAllUnsubscribers();
     };
-    // openProjectIdsKey is the real dependency: it is openProjectIds' membership fingerprint, so
-    // depending on the array itself would rebuild every subscription whenever an unrelated web view
-    // event produced an equal-but-new array.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openProjectIdsKey]);
+    // `openProjectIds` is membership-stable (see its definition), so an unrelated web view event
+    // cannot rebuild every subscription here.
+  }, [openProjectIds]);
 
   return useMemo(() => {
     const openIds = new Set(openProjectIds);
@@ -173,11 +230,21 @@ export function useOpenProjectBookIds(
     Object.entries(bookIdsByProjectId).forEach(([projectId, bookIds]) => {
       // A project that has since closed may still have an entry from a settled subscription.
       if (!openIds.has(projectId)) return;
+      // The navigation target's books are the control's baseline, so this hook never offers them.
+      // Filtered here rather than out of the subscribed set — see `getOpenProjectIds` for why.
+      //
+      // While `activeProjectId` is `undefined` nothing matches, so through the brief gap a dock
+      // rebuild produces this deliberately offers the navigation target's own books, and a caller's
+      // "show more books" affordance may appear for that gap. Tolerated rather than guarded: holding
+      // the last non-`undefined` target in a ref would also suppress those books when `undefined` is
+      // the settled answer — no editor open, so the project really is just another open project —
+      // and that failure is silent and persistent, where this one is visible and sub-frame.
+      if (projectId === activeProjectId) return;
       bookIds.forEach((bookId) => books.add(bookId));
     });
     if (books.size === 0) return EMPTY_IDS;
     return CANON_BOOK_IDS.filter((bookId) => books.has(bookId));
-  }, [bookIdsByProjectId, openProjectIds]);
+  }, [bookIdsByProjectId, openProjectIds, activeProjectId]);
 }
 
 export default useOpenProjectBookIds;

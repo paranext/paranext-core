@@ -1219,6 +1219,11 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
+	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
+	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
+	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
 	add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;

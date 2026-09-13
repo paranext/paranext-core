@@ -88,12 +88,10 @@ export function BookChapterControl({
   align = 'center',
   ref,
   disabled,
-  shrinkStep: shrinkStepOverride,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
-  const contextShrinkStep = useShrinkStepValue();
-  const shrinkStep = shrinkStepOverride ?? contextShrinkStep;
+  const shrinkStep = useShrinkStepValue();
 
   // Indicates if the Command popover is open or not
   const [isCommandOpen, setIsCommandOpen] = useState(false);

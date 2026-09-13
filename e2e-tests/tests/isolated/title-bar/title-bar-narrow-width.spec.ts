@@ -11,9 +11,9 @@
  * `navigator.windowControlsOverlay`), this runs everywhere: it compares against the toolbar's own
  * client rect rather than any OS-specific overlay.
  */
-import { ElectronApplication, Page } from '@playwright/test';
+import { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { waitForAppReady } from '../../../fixtures/helpers';
+import { setWindowWidth, waitForAppReady } from '../../../fixtures/helpers';
 
 /**
  * A width no window can honor, so Electron clamps to the `minWidth` enforced in `main.ts`. Asking
@@ -34,22 +34,6 @@ test.use({
   interfaceMode: 'simple',
   seedSettings: { 'platform.firstRunComplete': true },
 });
-
-/**
- * Closes the docked DevTools the dev-mode launch opens.
- *
- * Not cosmetic — this test is entirely geometric. Docked DevTools takes its width out of the
- * renderer's layout viewport (measured: a constant 555px), so an 800px window lays the title bar
- * out in 245px. Every control then genuinely overflows, and the test reports "clipped" for a bar
- * that is fine at the width a user would actually see.
- */
-async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().forEach((win) => {
-      if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
-    });
-  });
-}
 
 /**
  * Waits until the title bar's localized strings have resolved.
@@ -78,49 +62,6 @@ async function waitForLocalizedTitleBar(mainPage: Page): Promise<void> {
       },
     )
     .toBe(false);
-}
-
-/**
- * Resizes the window and waits until the renderer has actually laid out at the new width.
- *
- * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
- * request to `minWidth`, so the settled width is read back from the window rather than assumed, and
- * the poll compares against THAT. Polling for something already true before the resize — "content
- * row narrower than the roomy width" — waits for nothing, and the test then samples the row's box
- * and the controls' boxes from two different layout passes and reports phantom clipping.
- */
-async function setWindowWidth(
-  electronApp: ElectronApplication,
-  mainPage: Page,
-  width: number,
-): Promise<void> {
-  await closeDevTools(electronApp);
-
-  const settledWidth = await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
-    // 20-second timeout and then fail with a width mismatch, hiding the actual cause.
-    if (!win) throw new Error('No Electron window to resize');
-    if (win.isMaximized()) win.unmaximize();
-
-    const [outerWidth, height] = win.getSize();
-    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
-    // reading the size back immediately after it returns the width the window still has, not the
-    // one it is moving to. The target is derived instead — the request clamped by the window's own
-    // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
-    // renderer's `innerWidth` measures the content box.
-    const frameDelta = outerWidth - win.getContentSize()[0];
-    const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
-
-    win.setSize(requestedWidth, height);
-    return target;
-  }, width);
-
-  await expect
-    .poll(async () => Math.abs((await mainPage.evaluate(() => window.innerWidth)) - settledWidth), {
-      timeout: 20_000,
-    })
-    .toBeLessThanOrEqual(ROUNDING_TOLERANCE_PX);
 }
 
 /**

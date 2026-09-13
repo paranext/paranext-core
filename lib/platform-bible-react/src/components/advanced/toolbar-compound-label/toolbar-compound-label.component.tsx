@@ -229,11 +229,11 @@ export function ToolbarCompoundLabel({
             onPointerLeave={closeTooltip}
             onPointerDown={closeTooltip}
             // Centred, not baseline-aligned. A field whose content is an `inline-block` with
-            // `overflow: hidden` — which the paragraph label's fixed marker slot is — takes its
-            // bottom margin edge as its baseline rather than its text baseline, so baseline
-            // alignment hangs the marker off the wrong edge and it sits visibly high next to the
-            // style name. How far off depends on the font's metrics, so it shows on some platforms
-            // and not others. Both fields here are the same size, so centring costs nothing.
+            // `overflow: hidden` takes its bottom margin edge as its baseline rather than its text
+            // baseline, so baseline alignment hangs that field off the wrong edge and it sits
+            // visibly high next to its neighbour. How far off depends on the font's metrics, so it
+            // shows on some platforms and not others. Both fields here are the same size, so
+            // centring costs nothing.
             className={cn('tw:flex tw:min-w-0 tw:items-center', className)}
           >
             {first}

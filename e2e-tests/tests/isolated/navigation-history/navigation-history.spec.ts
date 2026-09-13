@@ -134,7 +134,7 @@ test.describe('Reference history', () => {
   // view (`useNavigationTargetWebView` in platform-bible-toolbar.tsx), and a fresh profile opens
   // none on its own.
   test.beforeEach(async ({ mainPage }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForProjectMetadata(
       (project) => project.id?.toLowerCase() === SAMPLE_WEB_PROJECT_ID,
       'the bundled sample WEB project',

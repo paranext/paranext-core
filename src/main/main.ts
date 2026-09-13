@@ -36,6 +36,7 @@ import {
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
 import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
 import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
+import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
@@ -164,6 +165,7 @@ import {
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
@@ -330,6 +332,38 @@ async function openExternal(url: string) {
   return true;
 }
 
+/**
+ * Name of the Terms of Service document `electron-builder.json5` lists in `extraResources`.
+ *
+ * `globalThis.resourcesPath` is the repository root in development and the install directory's
+ * `resources` folder when packaged, so the same relative name finds the document in both.
+ */
+const TERMS_OF_SERVICE_FILE_NAME = 'TERMS-OF-SERVICE.md';
+
+/**
+ * Open the Terms of Service document that ships beside the application.
+ *
+ * `shell.openPath` hands the file to whatever the operating system opens Markdown with, which is
+ * not guaranteed to be anything: a stock Windows machine registers no handler for `.md`. When
+ * nothing does, reveal the document in the file manager so the user can still reach it.
+ *
+ * THROWS when the open failed, even though the reveal was attempted. `shell.openPath` RESOLVES with
+ * an error string rather than rejecting and `shell.showItemInFolder` returns `void`, so a function
+ * that only logged could not report either failure - and both can fail together inside the snap,
+ * whose confinement does not reach `org.freedesktop.FileManager1`. The caller is a dialog the user
+ * clicked a license link in; it needs to be able to say the document did not open.
+ */
+async function openTermsOfService() {
+  const termsOfServicePath = path.join(globalThis.resourcesPath, TERMS_OF_SERVICE_FILE_NAME);
+  const openError = await shell.openPath(termsOfServicePath);
+  if (!openError) return;
+  logger.warn(
+    `Could not open ${termsOfServicePath}: ${openError}. Revealing it in the file manager instead.`,
+  );
+  shell.showItemInFolder(termsOfServicePath);
+  throw new Error(`Could not open the Terms of Service at ${termsOfServicePath}: ${openError}`);
+}
+
 async function main() {
   // This is the run boundary the startup-waterfall parser keys on (main + process-start).
   markStartup(STARTUP_MARK_PROCESS_START);
@@ -339,7 +373,19 @@ async function main() {
   setAppShutdownSignal(isAppShuttingDown);
 
   // The network service has to start first, and it uses the shared store after initialization
-  await networkService.initialize();
+  try {
+    await networkService.initialize();
+  } catch (error) {
+    // Everything below — including the `app.whenReady()` that creates windows and the quit
+    // handlers — is registered further down in this function, so letting this reject would leave a
+    // live process with no window, no way to quit, and the single-instance lock still held, which
+    // blocks every later launch too. Exit instead, so the failure is visible and relaunch works.
+    logger.error(
+      `Could not start the PAPI network service, so the app cannot run: ${getErrorMessage(error)}`,
+    );
+    app.exit(1);
+    return;
+  }
   markStartup('network-service-up');
   await initializeSharedStoreService(networkService);
 
@@ -373,6 +419,7 @@ async function main() {
       name: 'BookChapterControl service router',
       started: startBookChapterControlServiceRouter(),
     },
+    { name: 'onboarding tour service router', started: startOnboardingTourServiceRouter() },
     { name: 'scripture navigation commands', started: startScrollGroupNavigationCommands() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
@@ -622,10 +669,9 @@ async function main() {
   // Note that this condition (`process.defaultApp`) is not quite the same as whether we're
   // packaged, so we're not using `globalThis.isPackaged` here.
   if (process.defaultApp && args.length > 2) args[2] = path.resolve(args[2]);
-  const uriSchemeHandlerWasSet = app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args);
-  if (!uriSchemeHandlerWasSet) {
+  if (!app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args)) {
     logger.error(
-      `Failed to set myself (${launchPath} with arguments ${args}) as handler for ${APP_URI_SCHEME}://... URIs, reason unknown`,
+      `Could not register ${launchPath} (arguments: ${args}) as the ${APP_URI_SCHEME}:// URI handler. Electron reported the failure without a cause, so links using this scheme will not open the app.`,
     );
   }
   if (process.platform === 'darwin') {
@@ -771,14 +817,7 @@ async function main() {
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
       width: windowWidth,
       height: windowHeight,
-      // Floor set by UX (2026-08-18): 2025 analytics show 99.83% of 11,587 users on a screen 900px
-      // or wider, so nothing narrower has to be supported. It buys Simple mode three ~300px columns
-      // that fit without a horizontal scrollbar — SIMPLE_COLUMN_MIN_WIDTH_PX in
-      // simple-layout.data.ts is derived from this number. That file cannot import this one (main.ts
-      // pulls in Electron), so simple-layout.data.test.ts mirrors the 900 as a local constant:
-      // lowering the number here will NOT fail that test by itself. Change both together.
-      // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
-      minWidth: 900,
+      minWidth: WINDOW_MIN_WIDTH_PX,
       icon: getAssetPath('icon.png'),
       titleBarStyle: 'hidden',
       // re-add window controls
@@ -2081,6 +2120,23 @@ async function main() {
             schema: { type: 'string' },
           },
         ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.openTermsOfService',
+    async () => {
+      await openTermsOfService();
+    },
+    {
+      method: {
+        summary: 'Open the Terms of Service document that ships with the application',
+        params: [],
         result: {
           name: 'return value',
           schema: { type: 'null' },

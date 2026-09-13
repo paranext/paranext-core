@@ -117,16 +117,30 @@ vi.mock('@shared/services/settings.service', () => ({
   },
 }));
 
-function emitCloseWebView(id: string) {
+/**
+ * Lets the shard's deferred navigation-target recompute run. The shard requests the recompute on a
+ * microtask rather than inside the event handler, because a web view close is emitted from inside
+ * rc-dock's `onLayoutChange`, before the dock has adopted the layout the event describes — so a
+ * synchronous recompute would resolve the target against the closing tab. The emit helpers below
+ * await this, so each models the whole event: it happened, and its consequences have settled.
+ */
+async function settleNavigationTarget() {
+  await Promise.resolve();
+}
+
+async function emitCloseWebView(id: string) {
   closeWebViewCallbacks.forEach((callback) => callback({ webView: { id } }));
+  await settleNavigationTarget();
 }
 
-function emitOpenWebView() {
+async function emitOpenWebView() {
   openWebViewCallbacks.forEach((callback) => callback());
+  await settleNavigationTarget();
 }
 
-function emitUpdateWebView(webView: { id: string; webViewType?: string }) {
+async function emitUpdateWebView(webView: { id: string; webViewType?: string }) {
   updateWebViewCallbacks.forEach((callback) => callback({ webView }));
+  await settleNavigationTarget();
 }
 
 /**
@@ -150,7 +164,7 @@ afterEach(async () => {
 });
 
 describe('last selected scripture-navigable web view tracking', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
     readDirectionMock.mockReturnValue('ltr');
@@ -165,7 +179,7 @@ describe('last selected scripture-navigable web view tracking', () => {
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
     // Reset tracker state between tests by "closing" whatever is tracked
     const tracked = getLastSelectedScriptureNavigableWebViewId();
-    if (tracked) emitCloseWebView(tracked);
+    if (tracked) await emitCloseWebView(tracked);
   });
 
   test('remembers the most recently focused web view', async () => {
@@ -188,10 +202,10 @@ describe('last selected scripture-navigable web view tracking', () => {
     const engine = createTestEngine();
     await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
 
-    emitCloseWebView('some-other-web-view');
+    await emitCloseWebView('some-other-web-view');
     expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
 
-    emitCloseWebView('web-view-1');
+    await emitCloseWebView('web-view-1');
     expect(getLastSelectedScriptureNavigableWebViewId()).toBeUndefined();
   });
 
@@ -371,7 +385,7 @@ describe('navigation target web view', () => {
     projectId: 'project-1',
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
     readDirectionMock.mockReturnValue('ltr');
@@ -386,10 +400,10 @@ describe('navigation target web view', () => {
     // Reset tracker state between tests by "closing" whatever is tracked (the setter recomputes
     // the cached target)...
     const tracked = getLastSelectedScriptureNavigableWebViewId();
-    if (tracked) emitCloseWebView(tracked);
+    if (tracked) await emitCloseWebView(tracked);
     // ...and force a recompute regardless (an open event always recomputes), since the cached
     // target can be a fallback editor from a previous test even when nothing is tracked
-    emitOpenWebView();
+    await emitOpenWebView();
   });
 
   test('resolves the tracked web view with its saved definition once one is focused', async () => {
@@ -404,11 +418,11 @@ describe('navigation target web view', () => {
     });
   });
 
-  test('falls back to the first open scripture editor with a project when nothing is tracked', () => {
+  test('falls back to the first open scripture editor with a project when nothing is tracked', async () => {
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
     // A web view opening is what makes the editor discoverable — the open event drives the
     // recompute
-    emitOpenWebView();
+    await emitOpenWebView();
 
     expect(getLastSelectedScriptureNavigableWebViewId()).toBeUndefined();
     expect(getNavigationTargetWebView()).toEqual({
@@ -427,7 +441,7 @@ describe('navigation target web view', () => {
     getSavedWebViewDefinitionSyncMock.mockReturnValue({ id: 'web-view-nav-2' });
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
     // The updated web view is the tracked one, so the guarded update handler recomputes
-    emitUpdateWebView({ id: 'web-view-nav-2' });
+    await emitUpdateWebView({ id: 'web-view-nav-2' });
 
     // The tracked id is retained, but resolution falls through to the main editor
     expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-nav-2');
@@ -437,7 +451,7 @@ describe('navigation target web view', () => {
     });
   });
 
-  test('emits onDidChangeNavigationTargetWebView only when the resolved target actually changes', () => {
+  test('emits onDidChangeNavigationTargetWebView only when the resolved target actually changes', async () => {
     const received: (ResolvedWebView | undefined)[] = [];
     const unsubscribe = onDidChangeNavigationTargetWebView((target) => {
       received.push(target);
@@ -445,22 +459,41 @@ describe('navigation target web view', () => {
 
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
     // An editor update passes the recompute gate both times; the deepEqual gate dedupes the emit
-    emitUpdateWebView(EDITOR_DEFINITION);
+    await emitUpdateWebView(EDITOR_DEFINITION);
     // Same open web views, same resolved target — must not re-emit
-    emitUpdateWebView(EDITOR_DEFINITION);
+    await emitUpdateWebView(EDITOR_DEFINITION);
 
     expect(received).toEqual([{ id: 'editor-1', definition: EDITOR_DEFINITION }]);
     unsubscribe();
   });
 
-  test('recomputes to undefined when a non-tracked fallback editor closes', () => {
+  test('resolves against the post-close layout when the close is emitted before the dock adopts it', async () => {
+    // rc-dock calls `onLayoutChange` BEFORE it adopts the new layout, and the web view service
+    // emits the close event as that callback's first statement, so at handler time the layout still
+    // reports the tab that is going away. A recompute taken there resolves the closing editor as
+    // the target and latches it, because nothing fires again to correct it. This models that
+    // ordering: the mock keeps reporting the closing tab throughout the handler, and only flips
+    // once the handler has returned.
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
-    emitOpenWebView();
+    await emitOpenWebView();
+    expect(getNavigationTargetWebView()?.id).toBe('editor-1');
+
+    closeWebViewCallbacks.forEach((callback) => callback({ webView: { id: 'editor-1' } }));
+    // The dock adopts the new layout after the handler returns, exactly as rc-dock does
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
+    await settleNavigationTarget();
+
+    expect(getNavigationTargetWebView()).toBeUndefined();
+  });
+
+  test('recomputes to undefined when a non-tracked fallback editor closes', async () => {
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
+    await emitOpenWebView();
     expect(getNavigationTargetWebView()?.id).toBe('editor-1');
 
     // The editor was never tracked, so its close skips the tracker but must still recompute
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
-    emitCloseWebView('editor-1');
+    await emitCloseWebView('editor-1');
 
     expect(getNavigationTargetWebView()).toBeUndefined();
   });

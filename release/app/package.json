@@ -1,10 +1,10 @@
 {
   "name": "platform-bible",
-  "version": "0.6.0-alpha.0",
+  "version": "0.6.0-alpha.1",
   "marketingVersion": "",
   "marketingVersionMoniker": "",
   "description": "Extensible Bible translation software",
-  "license": "MIT",
+  "license": "SEE LICENSE IN TERMS-OF-SERVICE.md",
   "author": {
     "name": "Platform",
     "url": "https://github.com/paranext/"

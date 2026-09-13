@@ -260,8 +260,11 @@ export const Active: Story = {
 };
 
 /**
- * No model text configured. Click "pick model text" to open the REAL resource picker; choosing the
- * uninstalled ASV installs it and then renders it — fully interactive.
+ * No model text configured. Click "More info" to expand the explanatory body (and "Less info" to
+ * collapse it), then click "pick model text" to open the REAL resource picker; choosing the
+ * uninstalled ASV installs it and then renders it — fully interactive. The three empty-state
+ * strings (`_moreInfo%`, `_lessInfo%`, `_moreInfo_body%`) resolve from this extension's
+ * `localizedStrings.json` via `MODEL_TEXT_PANEL_STRING_KEYS`, so the toggle shows real copy.
  */
 export const NoModelText: Story = {
   decorators: [createDecorator({})],

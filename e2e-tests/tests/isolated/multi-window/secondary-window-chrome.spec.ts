@@ -74,7 +74,7 @@ test.describe('secondary window chrome', () => {
     mainPage,
   }) => {
     const logStep = createStepLogger('secondary-window-chrome');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const window1Id = getWindowIdOfPage(mainPage);
 
     // ── The main window is the control ────────────────────────────────────────────────────────
