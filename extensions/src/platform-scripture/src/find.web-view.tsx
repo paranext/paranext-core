@@ -33,6 +33,7 @@ import {
   LocalizeKey,
   Mutex,
   normalizeProjectId,
+  recencyMapFromOrderedIds,
   ScrollGroupId,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
@@ -114,20 +115,42 @@ const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
 
-/** Short and full names for every scripture project/resource, keyed by canonical project id. */
-type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
+/**
+ * Stable empty-array reference so the recently-opened-projects subscription's default doesn't
+ * change identity. Frozen on its own statement so the declared type stays the mutable `string[]`
+ * that `useData` requires while the value itself can't be mutated at runtime.
+ */
+const EMPTY_RECENT_PROJECTS: string[] = [];
+Object.freeze(EMPTY_RECENT_PROJECTS);
+
+/** Display names and language for every scripture project/resource, keyed by canonical project id. */
+type ProjectNamesById = {
+  [id: string]: Pick<FindProject, 'shortName' | 'fullName' | 'language'>;
+};
 
 /**
- * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
- * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
+ * Gets the short name, full name, and language of a project from its ID. Kept in the webview (not
+ * the shared, `@papi`-free utils) so the utils stay importable by the presentational component and
+ * its story.
+ *
+ * `platform.language` feeds the picker's Language grouping; it degrades to `undefined` (an "unknown
+ * language" bucket) rather than failing the whole lookup, since a project without it is still
+ * perfectly searchable.
  */
 async function getProjectNames(
   projectId: string,
-): Promise<Pick<FindProject, 'shortName' | 'fullName'>> {
+): Promise<Pick<FindProject, 'shortName' | 'fullName' | 'language'>> {
   const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const projectShortName = await pdp.getSetting('platform.name');
-  const projectFullName = await pdp.getSetting('platform.fullName');
-  return { shortName: projectShortName, fullName: projectFullName };
+  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
+    pdp.getSetting('platform.name'),
+    pdp.getSetting('platform.fullName'),
+    pdp.getSetting('platform.language').catch(() => undefined),
+  ]);
+  return {
+    shortName: projectShortName,
+    fullName: projectFullName,
+    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
+  };
 }
 
 /**
@@ -449,13 +472,31 @@ global.webViewComponent = function FindWebView({
     return ids;
   }, [allOpenProjectTabs]);
 
-  const projects = useMemo<FindProject[]>(
-    () =>
-      Object.entries(projectIdsAndNames)
-        .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
-        .map(([id, names]) => ({ id, ...names })),
-    [projectIdsAndNames, openProjectIds],
+  // Recency order for the picker's built-in `lastUsed` grouping. The service exposes an ordered id
+  // list (most-recent first) without timestamps, so `recencyMapFromOrderedIds` synthesizes
+  // monotonic values for the grouping's newest-first sort.
+  const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
+    undefined,
+    EMPTY_RECENT_PROJECTS,
   );
+
+  const projects = useMemo<FindProject[]>(() => {
+    // Recency is optional to Find: it only orders the `lastUsed` grouping. When the provider is
+    // unavailable the subscription yields a PlatformError instead of an id list, so narrow before
+    // handing the value to `recencyMapFromOrderedIds`, which needs an array. An empty list degrades
+    // the grouping to "no recency" rather than losing the whole picker.
+    let orderedRecentProjectIds = recentProjectIds;
+    if (isPlatformError(orderedRecentProjectIds)) {
+      logger.warn(
+        `FindWebView: failed to load recently opened projects: ${orderedRecentProjectIds.message}`,
+      );
+      orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
+    }
+    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds);
+    return Object.entries(projectIdsAndNames)
+      .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
+      .map(([id, names]) => ({ id, ...names, lastUsedAt: recencyMap.get(id) }));
+  }, [projectIdsAndNames, openProjectIds, recentProjectIds]);
 
   // An open editor tab whose project the metadata fetch never returned means the fetch predates the
   // project (created/cloned/downloaded after Find mounted). Re-fetch so it can appear in the picker.

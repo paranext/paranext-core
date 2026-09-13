@@ -54,6 +54,7 @@ import {
   formatReplacementString,
   LanguageStrings,
   LocalizedStringValue,
+  makeProjectSelectorCustomData,
   ScrollGroupId,
   Section,
 } from 'platform-bible-utils';
@@ -171,6 +172,14 @@ export type FindProject = {
   shortName: string;
   /** Full display name. */
   fullName: string;
+  /** Language name, used by the picker's Language grouping. Omitted when unknown. */
+  language?: string;
+  /**
+   * Recency score, higher = more recent, used by the picker's Last-used grouping. Build it with
+   * `recencyMapFromOrderedIds` over the recently-opened-projects list. Omitted when the project has
+   * not been opened.
+   */
+  lastUsedAt?: number;
 };
 
 /** Props for the {@link Find} presentational component. */
@@ -406,6 +415,25 @@ export type FindProps = {
   /** Whether the project has AllowInvisibleChars enabled. Forwarded to the result cards. */
   allowInvisibleCharacters?: boolean;
 };
+
+/**
+ * Maps caller-supplied Find projects onto ProjectSelector rows: sorted by full name, with the
+ * grouping inputs the picker's built-in groupings read packed into `customData`. Exported for
+ * coverage tests.
+ */
+export function toFindSelectorRows(projects: readonly FindProject[]): ProjectSelectorProject[] {
+  return [...projects]
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
+    .map((project) => ({
+      id: project.id,
+      shortName: project.shortName,
+      fullName: project.fullName,
+      customData: makeProjectSelectorCustomData({
+        language: project.language,
+        lastUsedAt: project.lastUsedAt,
+      }),
+    }));
+}
 
 /**
  * A centered, screen-reader-announced message shown in the results area in place of the results
@@ -779,21 +807,12 @@ export function Find({
   };
 
   const sortedProjects = useMemo<ProjectSelectorProject[]>(
-    () =>
-      [...projects]
-        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-        .map((project) => ({
-          id: project.id,
-          shortName: project.shortName,
-          fullName: project.fullName,
-        })),
+    () => toFindSelectorRows(projects),
     [projects],
   );
 
   // Every ProjectSelector across the app resolves the shared `%projectSelector_*%` keys, then
-  // merges Find-specific overrides (placeholder, empty message, aria-label) on top. Find does NOT
-  // supply `availableGroupings`, so no grouping section renders and the whole filter menu is
-  // absent for the single-select configurations.
+  // merges Find-specific overrides (placeholder, empty message, aria-label) on top.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -805,8 +824,12 @@ export function Find({
     [localizedStrings],
   );
 
-  // Built-in groupings (openTabs / lastUsed / language / type) wired to the shared central
+  // Built-in groupings (openTabs / lastUsed / language) wired to the shared central
   // `%projectSelector_grouping_*%` keys. Both Find configurations offer the same options.
+  //
+  // Find has no project-type source — `FindProject` carries no type and nothing upstream supplies
+  // one — so `type` is filtered out rather than offered as a menu item that can only ever produce a
+  // single "Unknown type" bucket.
   const projectSelectorGroupings = useMemo(
     () =>
       makeBuiltInGroupings(
@@ -814,7 +837,7 @@ export function Find({
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           localizedStrings as ProjectSelectorResolvedStrings,
         ),
-      ),
+      ).filter((grouping) => grouping.id !== 'type'),
     [localizedStrings],
   );
 
