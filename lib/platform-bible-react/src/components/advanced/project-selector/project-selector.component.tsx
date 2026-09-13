@@ -722,7 +722,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // - When the caller passes `availableGroupings` (even `[]`), it is taken LITERALLY. This is the
   //   contract for "I know exactly what groupings this picker should offer" cases like the
   //   manage-books Create "Based on" picker, which passes `[versificationGrouping]` and expects
-  //   to be locked into that single option with no filter menu.
+  //   to be locked into that single option with no group-by menu.
   // - When the caller OMITS `availableGroupings`, the component auto-derives a sensible default
   //   from the runtime state:
   //     - `openTabs` when any tab is open (so pickers that show scroll-group chips also expose
