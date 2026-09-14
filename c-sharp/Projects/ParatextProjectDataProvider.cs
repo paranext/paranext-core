@@ -2552,7 +2552,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
-                    scrText.PutText(verseRef.BookNum, verseRef.ChapterNum, false, data, writeLock);
+                    var correctedData = ChapterMarkerCorrection.FixChapterMarkers(
+                        data,
+                        verseRef.ChapterNum,
+                        out var wasCorrected
+                    );
+                    if (wasCorrected)
+                        Console.WriteLine(
+                            $"Chapter markers in {verseRef.Book} {verseRef.ChapterNum} did not match the chapter being written; they were corrected before saving."
+                        );
+                    scrText.PutText(
+                        verseRef.BookNum,
+                        verseRef.ChapterNum,
+                        false,
+                        correctedData,
+                        writeLock
+                    );
                 }
             );
         }
@@ -2831,7 +2846,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
-                    var usfm = ConvertUsxToUsfm(scrText, verseRef, data);
+                    var convertedUsfm = ConvertUsxToUsfm(scrText, verseRef, data);
+                    // Correct the chapter markers before the comparison below so it sees what would
+                    // actually be written: content that differs from disk only by a bad marker must
+                    // still be written, and content that matches disk once corrected need not be.
+                    var usfm = ChapterMarkerCorrection.FixChapterMarkers(
+                        convertedUsfm,
+                        verseRef.ChapterNum,
+                        out var wasCorrected
+                    );
+                    if (wasCorrected)
+                        Console.WriteLine(
+                            $"Chapter markers in {verseRef.Book} {verseRef.ChapterNum} did not match the chapter being written; they were corrected before saving."
+                        );
 
                     // Compare the current USFM to the normalized input USFM to see if anything changed
                     // This may happen if someone makes a whitespace change that gets normalized
