@@ -34,6 +34,18 @@ describe('content-zoom.util', () => {
     expect(adjustZoomFactor(0.5, -1)).toBe(0.5);
   });
 
+  it('avoids accumulated float drift across many repeated steps', () => {
+    let factor = 1;
+    for (let i = 0; i < 20; i += 1) factor = adjustZoomFactor(factor, 1);
+    expect(factor).toBe(3);
+
+    let factorDown = 1;
+    for (let i = 0; i < 5; i += 1) factorDown = adjustZoomFactor(factorDown, -1);
+    expect(factorDown).toBe(0.5);
+
+    expect(adjustZoomFactor(2.9000000000000004, 1)).toBe(3);
+  });
+
   it('rounds to one decimal', () => {
     expect(roundZoom(1.2000000000000002)).toBe(1.2);
     expect(roundZoom(0.75)).toBe(0.8);
