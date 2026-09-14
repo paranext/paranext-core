@@ -15,7 +15,6 @@ import {
 } from '@shared/models/web-view.model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
-import { projectLookupService } from '@shared/services/project-lookup.service';
 import { settingsService } from '@shared/services/settings.service';
 import {
   adjustZoomFactor,
@@ -62,7 +61,6 @@ type ContentZoomDeps = {
     ) => Promise<() => Promise<unknown> | unknown>;
   };
   localize: (localizeKey: `%${string}%`) => Promise<string>;
-  listProjects: () => Promise<{ id: string }[]>;
 };
 
 /**
@@ -116,7 +114,6 @@ const productionDeps: ContentZoomDeps = {
     subscribe: (key, callback) => settingsService.subscribe(key, callback),
   },
   localize: (localizeKey) => localizationService.getLocalizedString({ localizeKey }),
-  listProjects: () => projectLookupService.getMetadataForAllProjects(),
 };
 
 let deps: ContentZoomDeps = productionDeps;
@@ -503,7 +500,16 @@ export function applyContentZoomForWebView(webViewId: WebViewId): void {
   pushContentZoom(webViewId);
 }
 
-/** `undefined` marks a failed read, distinct from a genuinely empty record. */
+/**
+ * `undefined` marks a failed read, distinct from a genuinely empty record.
+ *
+ * Entries naming a project that no longer exists are kept. They are inert — a pane is matched to
+ * its levels by an exact kind and identity — and bounded at one entry per project, kind and area.
+ * Removing them needs a project list known to be COMPLETE, and nothing available to the renderer
+ * says that a list is: the lookup answers with the first non-empty snapshot it gets while the data
+ * providers are still registering, so a short list would take live projects' levels with it. Open
+ * work on PT-4585.
+ */
 async function readMemory(): Promise<MemoryRecord | undefined> {
   try {
     const memory = asMemory(await deps.settings.get('platform.webViewContentZoomMemory'));
@@ -777,31 +783,8 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
 }
 
 /**
- * Drops `editor:`/`notes:` memory whose identity no longer names an open project — those two kinds
- * key on a project id, so a project that no longer exists leaves memory nothing can ever read back.
- * `resource:` memory keys on a different, non-project identity and is left alone here.
- */
-async function pruneMemoryOfRemovedProjects(): Promise<void> {
-  const projects = await deps.listProjects();
-  // An empty list is never evidence that every project is gone: the project lookup answers with one
-  // while no provider has registered yet, and again once its startup grace period has passed.
-  if (projects.length === 0) return;
-  const projectIds = new Set(projects.map((project) => normalizeProjectId(project.id)));
-  await enqueueMemoryTransaction((memory) => {
-    let changed = false;
-    Object.keys(memory).forEach((key) => {
-      const parsed = parseContentZoomMemoryKey(key);
-      if (!parsed || parsed.kind === 'resource') return;
-      if (projectIds.has(normalizeProjectId(parsed.identity))) return;
-      delete memory[key];
-      changed = true;
-    });
-    return changed ? memory : undefined;
-  });
-}
-
-/**
- * Idempotent. Subscribes to the default, the memory and web-view updates; prunes stale memory.
+ * Idempotent. Reads the default and the remembered levels, then subscribes to both and to web-view
+ * updates.
  *
  * @param shardDeps The renderer's composition root supplies the web-view and window shards'
  *   `getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView` and
@@ -877,9 +860,6 @@ export function initializeContentZoomService(
       };
       window.addEventListener('beforeunload', beforeUnloadListener);
     }
-    await pruneMemoryOfRemovedProjects().catch((e) =>
-      logger.warn(`Content zoom: memory prune failed. ${getErrorMessage(e)}`),
-    );
   })();
   return initialized;
 }

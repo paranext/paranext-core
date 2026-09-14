@@ -5,7 +5,6 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 vi.mock('@shared/services/settings.service', () => ({ settingsService: {} }));
 vi.mock('@shared/services/localization.service', () => ({ localizationService: {} }));
-vi.mock('@shared/services/project-lookup.service', () => ({ projectLookupService: {} }));
 vi.mock('@renderer/services/overlays/overlay-coordinates', () => ({ getWebViewIframe: vi.fn() }));
 
 // Import types and the service under test after the mocks above are established.
@@ -138,7 +137,6 @@ describe('web-view-content-zoom.service', () => {
         },
       },
       localize: async () => 'Default',
-      listProjects: async () => [{ id: 'proj-A' }],
     });
     await initializeContentZoomService();
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
@@ -304,8 +302,6 @@ describe('web-view-content-zoom.service', () => {
   it('reads memory once at initialization, so panes opening together never read it again', async () => {
     const memoryGets = vi.fn();
     __setContentZoomDepsForTesting({
-      // Keeps the startup prune from reading memory, so the count below is only about the panes.
-      listProjects: async () => [],
       settings: {
         get: async (key: string) => {
           if (key === MEMORY) memoryGets();
@@ -750,31 +746,12 @@ describe('web-view-content-zoom.service', () => {
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
   });
 
-  it('prunes editor/notes memory whose project no longer exists, leaving resource memory alone', async () => {
-    settings[MEMORY] = {
-      'editor:PROJ-Z:main': 1.2,
-      'notes:PROJ-A:footnotes': 1.1,
-      'resource:res-X:main': 1.4,
-    };
-    __setContentZoomDepsForTesting({});
-    await initializeContentZoomService();
-    expect(settings[MEMORY]).toEqual({ 'notes:PROJ-A:footnotes': 1.1, 'resource:res-X:main': 1.4 });
-  });
-
-  it('does not write the memory setting when nothing needs pruning', async () => {
-    settings[MEMORY] = { 'notes:PROJ-A:footnotes': 1.1, 'resource:res-X:main': 1.4 };
+  it('leaves a remembered level whose project is not open alone', async () => {
+    settings[MEMORY] = { 'editor:PROJ-Z:main': 1.2, 'notes:PROJ-A:footnotes': 1.1 };
     __setContentZoomDepsForTesting({});
     settingsSet.mockClear();
     await initializeContentZoomService();
     expect(settingsSet).not.toHaveBeenCalled();
-  });
-
-  it('prunes nothing when the project lookup answers with no projects at all', async () => {
-    settings[MEMORY] = { 'editor:PROJ-Z:main': 1.2, 'notes:PROJ-A:footnotes': 1.1 };
-    __setContentZoomDepsForTesting({ listProjects: async () => [] });
-    settingsSet.mockClear();
-    await initializeContentZoomService();
-    expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
     expect(settings[MEMORY]).toEqual({
       'editor:PROJ-Z:main': 1.2,
       'notes:PROJ-A:footnotes': 1.1,
