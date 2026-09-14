@@ -103,18 +103,20 @@ const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
 /**
  * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
  *
- * The wait is what makes a newly-installed resource visible: a read that resolves before the
- * factory registers returns only the TypeScript PDPFs, and a caller that trusts it concludes
- * nothing is installed. It is spent at most once per session — once a resource project has been
- * seen the factory is up and no wait is needed, and if the full budget passes with none seen the
- * machine has none to find, so later calls return the first read immediately.
+ * The wait is what lets a locally-installed non-DBL resource appear in the picker: a read that
+ * resolves before the factory registers returns only the TypeScript PDPFs, and a caller that trusts
+ * it concludes there are none. It is spent at most once per session — once a resource project has
+ * been seen the factory is up and no wait is needed, and if the full budget passes with none seen
+ * the machine has none to find, so later calls return the first read immediately.
  *
- * @returns The project metadata, and whether any read-only (resource) project was in it
+ * Because the budget is one-shot, a resource project that registers after it expires is not waited
+ * for again; that session's reads return whatever is registered at the time.
+ *
+ * @returns The project metadata
  */
-async function getLocalProjectMetadata(): Promise<{
-  metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>;
-  hasResourceProjects: boolean;
-}> {
+async function getLocalProjectMetadata(): Promise<
+  Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>
+> {
   const readMetadata = () =>
     papi.projectLookup.getMetadataForAllProjects({ includeProjectInterfaces: ['platform.base'] });
   const hasResourceProject = (
@@ -129,11 +131,10 @@ async function getLocalProjectMetadata(): Promise<{
       })
     : await readMetadata();
 
-  const hasResourceProjects = hasResourceProject(metadata);
-  if (hasResourceProjects) haveLocalResourceProjectsAppeared = true;
+  if (hasResourceProject(metadata)) haveLocalResourceProjectsAppeared = true;
   else if (shouldWait) hasWaitedForLocalResourceProjects = true;
 
-  return { metadata, hasResourceProjects };
+  return metadata;
 }
 
 /**
@@ -320,7 +321,7 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     // exactly the offline, never-connected users most likely to have them.
     const dblCatalog = cachedResources ?? [];
 
-    const { metadata: allMetadata } = await getLocalProjectMetadata();
+    const allMetadata = await getLocalProjectMetadata();
     return buildLocalNonDblResources(allMetadata, dblCatalog);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
