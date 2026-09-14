@@ -52,6 +52,7 @@ type ContentZoomDeps = {
     callback: (event: { webView: SavedWebViewDefinition }) => void,
   ) => Unsubscriber;
   getLastFocusedTabId: () => string | undefined;
+  isAnyDialogOpen: () => boolean;
   settings: {
     get: (key: SettingKey) => Promise<unknown>;
     set: (key: SettingKey, value: unknown) => Promise<unknown>;
@@ -64,10 +65,11 @@ type ContentZoomDeps = {
 };
 
 /**
- * Whether {@link warnShardDepsNotConfigured} has already logged. These five functions come from the
- * renderer's two window-scoped shards and only exist once the composition root
- * (`src/renderer/index.tsx`) calls {@link initializeContentZoomService} with them; a call routed
- * through one of the stubs below before that happens is worth one warning, not one per call.
+ * Whether {@link warnShardDepsNotConfigured} has already logged. These six functions — five from the
+ * renderer's two window-scoped shards, plus `isAnyDialogOpen` from the dialog-open util — only
+ * exist once the composition root (`src/renderer/index.tsx`) calls
+ * {@link initializeContentZoomService} with them; a call routed through one of the stubs below
+ * before that happens is worth one warning, not one per call.
  */
 let hasWarnedShardDepsNotConfigured = false;
 
@@ -81,10 +83,12 @@ function warnShardDepsNotConfigured(): void {
 
 const productionDeps: ContentZoomDeps = {
   getIframe: getWebViewIframe,
-  // The five functions below come from the renderer's web-view and window shards. Importing them
-  // here directly would create an import cycle (both shards import from this module), so the
-  // renderer's composition root injects its own functions through `initializeContentZoomService`
-  // instead; these stubs cover the window between module load and that call.
+  // The six functions below come from the renderer's web-view and window shards, plus the
+  // dialog-open util. Importing any of them here directly would create an import cycle (the
+  // dialog-open util's own dependency, `dialog.service-shard`, imports the web-view shard, which
+  // imports this module), so the renderer's composition root injects its own functions through
+  // `initializeContentZoomService` instead; these stubs cover the window between module load and
+  // that call.
   getDefinition: () => {
     warnShardDepsNotConfigured();
     return undefined;
@@ -104,6 +108,10 @@ const productionDeps: ContentZoomDeps = {
   getLastFocusedTabId: () => {
     warnShardDepsNotConfigured();
     return undefined;
+  },
+  isAnyDialogOpen: () => {
+    warnShardDepsNotConfigured();
+    return false;
   },
   settings: {
     get: (key) => settingsService.get(key),
@@ -293,10 +301,14 @@ function effectiveOwnLevels(
   return pendingOwnLevels.get(definition.id) ?? getOwnLevels(definition);
 }
 
-/** Explicit id → the window's last focused tab → nothing. Exported for tests. */
+/**
+ * Explicit id → the window's last focused tab → nothing, or nothing while a dialog is open.
+ * Exported for tests.
+ */
 export function resolveContentZoomTarget(
   explicitWebViewId: string | undefined,
 ): WebViewId | undefined {
+  if (deps.isAnyDialogOpen()) return undefined;
   if (explicitWebViewId) return explicitWebViewId;
   return deps.getLastFocusedTabId();
 }
@@ -1012,9 +1024,10 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
  *
  * @param shardDeps The renderer's composition root supplies the web-view and window shards'
  *   `getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView` and
- *   `getLastFocusedTabId` here rather than this module importing them directly — both shards import
- *   from this module, so a direct import back would create a cycle. Merged into the deps in use
- *   whenever provided, even on a later call after the first initialization already ran.
+ *   `getLastFocusedTabId` here, plus `isAnyDialogOpen` from the dialog-open util, rather than this
+ *   module importing any of them directly — each would create an import cycle back through the
+ *   shards. Merged into the deps in use whenever provided, even on a later call after the first
+ *   initialization already ran.
  */
 export function initializeContentZoomService(
   shardDeps?: Pick<
@@ -1024,6 +1037,7 @@ export function initializeContentZoomService(
     | 'getAllOpenDefinitions'
     | 'onDidUpdateWebView'
     | 'getLastFocusedTabId'
+    | 'isAnyDialogOpen'
   >,
 ): Promise<void> {
   if (shardDeps) deps = { ...deps, ...shardDeps };
