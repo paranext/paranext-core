@@ -658,6 +658,7 @@ export function ModelTextPanel({
           to read and this panel is read-only, so there is nothing in the editor to reach.
         */}
         <div
+          data-platform-content-zoom-root=""
           data-testid={MODEL_TEXT_EDITOR_CONTAINER_TEST_ID}
           className={message || isWaiting ? 'tw:hidden' : 'tw:flex-1 tw:overflow-auto'}
           dir={options.textDirection}

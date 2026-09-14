@@ -268,7 +268,12 @@ export function FootnotesLayout({
         {children && (
           <>
             <ResizablePanel className="tw:flex tw:flex-col tw:min-h-0">
-              <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{children}</div>
+              <div
+                data-platform-content-zoom-root=""
+                className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+              >
+                {children}
+              </div>
             </ResizablePanel>
             <ResizableHandle />
           </>
@@ -279,7 +284,10 @@ export function FootnotesLayout({
           minSize={footnotesPaneMinPercent}
           maxSize={footnotesPaneMaxPercent}
         >
-          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+          <div
+            data-platform-content-zoom-root="footnotes"
+            className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+          >
             <FootnoteList
               classNameForItems="scripture-font"
               listId={footnoteListKey}

@@ -3889,10 +3889,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   <OutPortal node={editorPortalNode} />
                 </FootnotesLayout>
               ) : (
-                <>
+                <div
+                  data-platform-content-zoom-root=""
+                  className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+                >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />
-                </>
+                </div>
               )}
             </div>
           </div>,

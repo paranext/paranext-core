@@ -667,6 +667,7 @@ export function ResourceTextPanel({
 
     return (
       <div
+        data-platform-content-zoom-root=""
         className="tw:flex-1 tw:overflow-auto"
         dir={options.textDirection}
         data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID}
