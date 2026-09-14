@@ -539,6 +539,126 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
+  Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
+  project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
+  `openResourceText` calls and `openCommentListPanel`; its fourth command, `openModelText`, targets
+  the **Column 1** Model Text panel, not Column 3 — see `simple-layout.data.ts`) plus Find
+  separately (`updateRelatedFindPanel`, which waits for the new editor's web view id). The Text Collection was the one panel left to work its project out for
+  itself: opened by the shipped layout with no `projectId`, it fell back to the 5th tuple member of
+  `useWebViewScrollGroupScrRef` — which is the scroll group's **source** project, "whichever project
+  last SET the group's reference", a signal that exists for versification conversion
+  (`use-scroll-group-scr-ref.hook.ts`, `extractSourceProjectId`). The local name at the call site,
+  `activeEditorProjectId`, invited reading it as "the active editor's project", which it is not. A
+  project switch does not change the reference — the incoming editor stamps the group only when the
+  caret moves (`setScrRefNoScroll`) — so the value keeps naming the *outgoing* project, and the panel
+  kept rendering the outgoing project's texts until the user next navigated, at which point it
+  silently corrected itself.
+- **Decision:** Every Column 3 panel is **told** its project by the switch; none infers one. The Text
+  Collection is re-pointed by `updateRelatedTextCollectionPanel`, called directly from
+  `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the four
+  command-driven panels, whose handlers live in `main.ts` for Model Text and the two resource
+  panels, in `legacy-comment-manager` for Comments, and in `platform-scripture` for Find). There are **two** switch paths and both must call it:
+  the editor-column switch via `openOrUpdateRelatedPanels`, and the Power→Simple mode switch via
+  `finalizeProjectSwitch`. The mode switch needs its own call because `buildSimpleLayoutForProject`
+  stamps `projectId` only onto the static layout's tabs, while the Text Collection is merged in
+  afterwards from the default-layout supplement, which carries none — so it is the one panel that
+  arrives unbound from a mode switch. Its *shape* — `getAllOpenWebViewDefinitions()` → `.find(webViewType)` →
+  `reloadWebView` — is the one `openResourceText` already uses (`main.ts`), not something novel. What
+  it takes from **Find** is the *policy*: never open a panel that is not already there, skip the
+  reload when the panel already shows the project, and never bring the tab to front. Find's own
+  distinguishing feature — the `openWebView(…, { existingId: '?', createNewIfNotFound: false })`
+  probe, which routes through `findOwner` and so reaches the panel in whichever window holds it — is
+  deliberately **not** adopted here; see the multi-window note in Consequences. Reload rather
+  than an in-place `projectId` update for two reasons — `papi.webViews` exposes no
+  definition-updating call at all (only a web view can update its *own* definition, so from the
+  service side a reload is the only route), and, more bindingly, the grid reads admin layout settings
+  through `useBufferedLayoutSetting`, which documents itself as built for consumers that switch
+  projects via `reloadWebView` and NOT safe for ones that change `projectId` in place, with a
+  `logger.warn` tripwire for exactly that. (`projectId` *is* in
+  `WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS` — the constraint is the absent service-side updater
+  and the hook's remount requirement, not the property list.) The scroll-group source project survives only as the fallback for a grid opened with
+  no explicit project, and its call-site name now says what it is.
+- **Alternatives:** **Fix the inferred signal instead** — track the live Scripture editor's web view
+  from inside the panel and follow that rather than the scroll group. Rejected: it re-derives, inside
+  a web view, something the switch already knows and can simply hand over; and because Simple mode
+  shows one Column 3 tab at a time, the panel is usually hidden exactly when the switch happens, so a
+  panel-side solution has to be designed around having no layout (see
+  `.claude/rules/cross-view-sync-hidden-views.md`). A main-driven reload feeding a data-driven render
+  has no such constraint. **Copy the older sibling variant** (open-if-absent, `bringToFront: true`,
+  projectId smuggled through a module-level pending variable) — rejected: fronting fights
+  `sharedLayoutReceiver.applyForProject`, which picks the front tab moments later, so every switch
+  would flash the Text Collection forward and then away; and the module-level pending slot adds
+  hidden coupling with a forgot-to-clear failure mode. **Register a public command** like the other
+  four — rejected as surface area for nobody: the Text Collection has no menu entry and no external
+  caller.
+- **Consequences:** The scroll group's source project is now documented at its call site as *not* an
+  active-editor signal, which is the trap that produced this bug; any future panel that reaches for
+  it should be re-pointed explicitly instead. `adr-find-follows-editor-to-read-only` records Find as "the only
+  Column 3 panel that command re-points without also being able to open it"; that stays true, since
+  the Text Collection is re-pointed by a direct call rather than a command. What changed is the
+  narrower fact that Find is no longer the only panel re-pointed *without being openable*. Reloading the grid drops its in-memory React state (for example an
+  open chapter-context split); state held through `useWebViewState` — `viewMode`, per-cell zoom —
+  survives, because a reload reuses the same web view id. That loss is accepted, because the
+  collection's contents legitimately change on a project switch anyway, and the skip-if-unchanged
+  guard keeps it from happening when the project did not change. **One part of it is not cosmetic:**
+  the reload destroys the iframe's JS realm, so a DBL install in flight in the grid is abandoned —
+  `installDblResource` proxies to .NET and finishes, but the continuation that calls
+  `persistUserAddition` never runs, leaving the resource installed on disk and absent from the
+  collection with no notification and no log. The Text Collection is the only Column 3 panel hosting
+  an install flow, so it is the only one where a re-point can lose work rather than just view state.
+  Accepted for now as a narrow window with a recoverable outcome (re-adding the resource succeeds
+  immediately); the real fix belongs in the install path, which should persist the addition somewhere
+  that survives a reload — tracked as PT-4510. The reload also
+  reopens the panel's load window on every switch rather than only at first mount; the body's own
+  state machine (`getGridBodyState`) treats an unresolved read as "show the grid", so that window
+  needs no separate treatment. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
+  `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
+  rather than giving it a signal to infer from. Five limits of this decision are recorded
+  deliberately rather than left to be re-derived:
+  - **Read-only resources are not followed.** `openOrUpdateRelatedPanels` takes
+    `isProjectEditable` and skips the Text Collection re-point when it is false, so a published
+    resource opened in the editor column does not re-point the grid at itself — a project with no
+    collection of its own. Everything else the function drives (Bible Texts, Commentaries and
+    Comments in Column 3, plus Model Text in Column 1) follows the editor either way. This upholds
+    `adr-find-follows-editor-to-read-only`'s Context rather than changing it; the gate lives one
+    level in from the call site that entry describes, which is the only detail that has shifted.
+  - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
+    window, so `.find()` returns whichever Text Collection comes first, not the one in the window
+    that switched. If that panel already shows the target project the skip guard returns early and a
+    second window's panel is never re-pointed. `openResourceText` has the same limitation, so this
+    is consistent with the siblings rather than newly broken; Find avoids it via the `findOwner`
+    probe noted in the Decision.
+  - **A failed re-point no longer self-corrects.** `projectId` is not in
+    `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any re-point succeeds the panel's saved
+    definition carries a project and `explicitProjectId` wins from then on — the scroll-group
+    fallback that used to fix a stale panel on the next navigation stops running. Because of that,
+    `updateRelatedTextCollectionPanel` checks `reloadWebView`'s return (it resolves `undefined`
+    rather than throwing when the definition has gone or the provider declines) and logs failures at
+    **error**, naming the project left on screen. It still does not recover; it just stops failing
+    silently.
+  - **The re-point runs on both switch paths, and each costs a probe and a reload.** Every switch
+    now performs a `getAllOpenWebViewDefinitions()` (which the router rejects outright if any window
+    is unreachable) and a `reloadWebView` → `addWebViewToDock` → rc-dock `updateTab`. On the
+    `openOrUpdateRelatedPanels` path it is awaited *ahead of* the editor's replace-tab `openWebView`
+    — deliberately, because re-pointing afterwards would flash the outgoing project's texts — and two
+    E2E suites already retry around the "Replacing tab failed" rejection that window produces. The
+    `finalizeProjectSwitch` path is the Power→Simple switch #2425 optimized. It already enumerated
+    web views there — in Simple mode it calls `applyForProject` → `focusSharedLayoutDefaultTab`,
+    which issues an `existingId: '?'` probe — so this adds a second enumeration and a reload to a
+    path that had one probe. If both run for one switch the case-normalized skip guard makes the
+    second a no-op.
+  - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
+    continues to change `projectId` in place through its latch effect, which is exactly the usage
+    `useBufferedLayoutSetting` warns about: `shouldApply` is already `false` after the first apply,
+    so the held admin list can stay on the outgoing project while the per-user list and overlay
+    resubscribe to the incoming one.
+- **Source:** PT-4423, which fixes PT-4238.
+
 ## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
 
 - **Date:** 2026-08-31
@@ -858,6 +978,96 @@ step, no automation. Just a record.
   the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
   public audience.
 - **Source:** the multi-agent review of #2654, finding 1.
+## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
+
+- **Date:** 2026-09-01
+- **Status:** Accepted
+- **Context:** `platformGetResources.getCachedResources` is the only source the Get Resources page,
+  Home, the resource picker, Share Layout, the scripture text grid and
+  `use-dbl-resource-catalog.hook` read — six consumers. Its background sync reconciled `installed`
+  against local project metadata on every call but never recomputed `updateAvailable`, and its one
+  rewrite branch fired only when `installed` flipped — so updating an already-installed resource
+  left the row reading "Update" for the rest of the session. The C# provider does fire
+  `SendDataUpdateEvent(DBL_RESOURCES, …)` after an install, but nothing has subscribed to that data
+  type since the cache replaced the front end's `useData` subscription (zero `.DblResources(` call
+  sites repo-wide), so the event refreshes nothing. `updateAvailable` cannot be derived in
+  TypeScript: it compares the installed resource's DBL revision against the catalog's, and neither
+  number is reachable there. The DBL side is dropped when C# projects `InstallableResource` into
+  `DblResourceData`; the installed side is an entry name under `.dbl/revision/` inside the
+  password-protected `.p8z` bundle, read through ParatextData's zip file manager — no project
+  setting or metadata field exposes it, and `Revision` appears nowhere in `c-sharp/`.
+- **Decision:** Extend the read-path reconciliation rather than adding a write-path invalidation. A
+  new no-network provider function, `recomputeDblResourcesUpdateStatus`, re-evaluates
+  `InstallableResource.IsNewerThanCurrentlyInstalled()` over the already-loaded catalog snapshot,
+  and the front end's flag sync applies it alongside the `installed` check. The sync is
+  single-flighted by `ensureInstalledFlagsSynced`, so the recompute happens at most once at a time
+  however many views refresh together. Reads do not wait for it — `getCachedResources` answers from
+  the array it already has — which makes a read one refresh behind. That is invisible for
+  `installed`, whose caller already knows what it just did, but it is the whole defect for
+  `updateAvailable`: nothing else about an updated row changes, and there is no data-update event,
+  so the row keeps offering "Update" until the catalog is read a second time.
+
+  Two consequences shape the wiring. The backend round trip is **opt-in** rather than part of every
+  sync, because exactly one surface renders `updateAvailable` — the Get Resources list — and the
+  other five consumers of the catalog would otherwise wait on a value they discard; the resource
+  picker's whole list spun on it. And a caller that needs the flag current awaits
+  `refreshResourceFlags`, which asks for the recompute and, rather than joining a sync already in
+  flight, lets that one finish before starting its own: an in-flight sync may have read its project
+  metadata before the caller's change, and a background sync does not recompute the flag at all.
+  The Get Resources view is therefore the only caller — once when its list settles, so a resource
+  updated from another surface loses its stale badge, and again after any install or removal the
+  user performs there. Resources absent from the result keep their cached value, so a
+  not-yet-loaded catalog or a busy provider gate degrades to the previous behavior instead of
+  guessing — including on the awaited path, where a contended gate leaves the stale flag in place
+  rather than blocking the user. Skipping the
+  catalog fetch is sound because the DBL-side revision is the half that should stay fixed;
+  ParatextData re-reads the *installed* revision on each call (`ExistingScrText` is a live
+  `ScrTextCollection` lookup, and `InternalInstall` nulls the ScrText's FileManager before
+  overwriting the `.p8z`, so `DBLResourceSettings` is rebuilt from the new file). Verified against
+  the pinned ParatextData 9.5.0.24 assembly (ILSpy, 2026-09-04); source is not available locally,
+  so re-probe when that pin moves.
+- **Alternatives:**
+  - **Patch the cache entry after a successful install** — rejected, but not because the install is
+    unverified: `InstallDblResourceCore`'s `ScrTextCollection.IsPresent(InstalledScrText)` guard
+    inspects `InstalledScrText`, which `InstallableResource.InternalInstall` assigns only as its last
+    statement, so a failed install leaves it null and the guard throws rather than reporting success.
+    Rejected instead because the patch would have to be applied by every caller that installs — the
+    Get Resources web view, `platform-scripture-editor`'s install util, and the Send/Receive path
+    that PT-4268 describes, which cannot reach the provider at all — and because it only corrects
+    the one resource this client just installed, leaving flags that changed for any other reason
+    stale. Recomputing on read asks the source of truth instead of inferring from an action.
+  - **Re-fetch the catalog on install** — rejected: `FetchResourcesCore` is an unbounded network
+    download and would stall the list refresh. Subscribing to `DBL_RESOURCES` from the extension is
+    the same alternative in disguise, because `subscribe<data_type>` calls `get<data_type>` and
+    `getDblResources` fetches unconditionally.
+  - **Clear the flag optimistically in the web view** — rejected: leaves the cache wrong for Home and
+    the resource picker, and adds a second "caller must remember to notify" seam of exactly the kind
+    PT-4268 documents.
+  - **Send both revisions to TypeScript and compare there** — rejected: the installed half still
+    requires a C# call to read it out of the encrypted bundle, so it removes no round trip while
+    adding ~10 fields to the contract and a TypeScript copy of
+    `IsNewerThanCurrentlyInstalled`'s five-branch precedence chain (name, language,
+    `IsResourceProject`, `RequiresDBLCheck`, then revision / permissions checksum / manifest checksum
+    plus timestamp). That copy would drift silently when the ParatextData pin moves.
+- **Consequences:** Reads are authoritative for both derived flags, which makes the `DBL_RESOURCES`
+  data-update event dead weight rather than a missing link — PT-4268's stated premise ("the provider's
+  install path fires the event so the Get Resources UI refreshes") is already false, and whoever picks
+  it up should re-scope it against this decision. Cost is bounded by gathering the installed DBL uids
+  in ONE pass over the project collection and consulting ParatextData only for entries in that set:
+  `InstallableResource.ExistingScrText` is a computed property with no backing field that enumerates
+  the whole collection on every access, so asking each of the ~1850 catalog entries whether it is
+  installed would cost ~1850 full scans, and an installed entry pays it twice (once for `Installed`,
+  once inside `IsNewerThanCurrentlyInstalled`). Gating on `Installed` does not help, because that
+  property is the same lookup. The provider gate is taken with a non-waiting `Monitor.TryEnter`, so a
+  recheck never queues behind a catalog download or an install: everything holding that gate runs for
+  seconds, far longer than a refresh should block, so waiting could only delay the same empty answer,
+  and two rechecks cannot contend with each other because the only caller is single-flighted.
+  `IsNewerThanCurrentlyInstalled()` returns `true` for every *uninstalled* resource — nothing
+  installed trivially fails its "is the installed copy the newest" test — so the front end clears
+  `updateAvailable` for any row it reconciles as not installed rather than persisting a flag that
+  describes nothing. That keeps the cached flag meaning what the list renders it as: "the copy on
+  disk is out of date".
+- **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
@@ -1393,11 +1603,12 @@ step, no automation. Just a record.
   with PT-4343's `platform.isEditable` read (`adr-per-web-view-ctrl-f-for-find`'s sibling work) when
   the branch rebased.
 
-## adr-find-narrows-book-lists: Find excludes extra material by narrowing its book lists, not by gating its scopes
+## adr-find-narrows-book-lists: Find excludes extra material by narrowing its book lists and by gating its scopes
 
 - **Formerly:** ADR-0025
 - **Date:** 2026-08-24
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-14 — the deferral of the scope gate recorded in the Decision
+  below no longer holds, and PT-4415 is closed. Read the Decision together with the amendment.
 - **Context:** Find reports a result's location by walking the `\c` and `\v` markers of the book it
   matched in. Extra material (GLO, FRT, INT, XXA, … — `Canon.nonCanonicalIds`) is organized by
   paragraph markers rather than verses, so every match in one resolves to the same useless reference
@@ -1410,11 +1621,14 @@ step, no automation. Just a record.
   Flags are cleared **in place** rather than removed, because consumers index into the string by
   book number and reject a length that does not match the canon. The `book`/`chapter` scopes are
   **deliberately not gated** in this change; PT-4415 covers them, and PT-4414 covers dropping the
-  whole exclusion once extra material can be opened and addressed.
+  whole exclusion once extra material can be opened and addressed. *(Superseded by the 2026-09-14
+  amendment: every scope Find offers is now gated, and PT-4415 is closed. PT-4414 still stands.)*
 - **Alternatives considered:**
   - **Filter `findScope` before the search runs**, as a second line of defence behind the prune.
     Rejected here: it half-solves the `book`/`chapter` bypass, which would make PT-4415's real fix
     harder to reason about — two partial filters in different layers rather than one gate.
+    *(Adopted by the 2026-09-14 amendment for the `selectedBooks` scope only, once that scope turned
+    out to need it for a reason this entry did not anticipate — see the amendment.)*
   - **Drop the excluded positions from the flag string.** Rejected: it breaks the canon-length
     invariant every downstream decoder relies on.
   - **Filter at each consumer.** Rejected: filtering the search but not the picker (or the reverse)
@@ -1430,6 +1644,55 @@ step, no automation. Just a record.
   answer would have wiped that selection permanently — `useProjectSetting` reports an error as
   loaded, so the error branch has to be recognized on its own.
 - **Source:** PT-3299, review of #2708.
+- **Amended 2026-09-14 (PT-3299 reopened; review of #2792):** The deferred gate landed, and covers
+  every scope Find offers rather than only the reference-derived two.
+
+  **The query gate is the enforcement point, not the disabled scope option.** `isFindQueryValid`
+  rejects a query whose scope cannot resolve to a searchable book; `ScopeSelector` disabling the
+  option is an affordance layered on top. `scope` is persisted per web view while the scripture
+  reference moves independently, so a user already in the `book` scope who then navigates into extra
+  material arrives in the blocked state without ever touching the scope selector — a UI-only
+  restriction would never see them.
+
+  The rule is one exported constant and one predicate, so the gate and the picker cannot disagree.
+  `FIND_AVAILABLE_SCOPES` is both the picker's `availableScopes` and the set `isFindQueryValid`
+  accepts, because `findScope` can map exactly those to a `FindScope` and throws on anything else —
+  a scope that passed the gate without being in the list would fail during render rather than be
+  refused as a query. `isScopeBlockedByExtraMaterial` then answers for the reference-derived
+  `book`/`chapter` scopes, and both the gate and the disabled-explanation map call it rather than
+  restating it.
+
+  `selectedBooks` needed a different shape, and it is the one place this entry's rejected
+  "filter `findScope`" alternative was adopted. A selection persisted with `useWebViewState`
+  outlives the picker that produced it and is pruned against the project's book list only once that
+  list resolves, so a restored tab can still name a glossary when the restore-path auto-search
+  fires. The gate therefore asks whether the selection still contains a searchable book (it does not
+  modify the selection), and `findScope` drops extra material from the books it actually searches.
+  Neither waits on `availableBookIds`, which is what closes the window. Two filters in two layers is
+  exactly what the alternative was rejected for; it is accepted here because the two answer
+  different questions — may this query run, and which books does it run over — and because the
+  persisted-selection race has no single-layer answer.
+
+  The predicate lives in `find/extra-material.utils.ts`, which imports only `@sillsdev/scripture`.
+  `find.utils.ts` is reached from the extension host's entry point and the host's `require` shim
+  supplies no UI package, so importing the predicate from the book-lists module pulled
+  `platform-bible-react` and a bare react require into the host bundle and would have failed
+  activation. `platform-scripture` now carries the `extension-host-import-boundary.test.ts` guard
+  `platform-scripture-editor` already had; **any extension whose entry point reaches shared utility
+  modules wants that guard**, since nothing in the build, lint, or test output reports the violation
+  otherwise.
+
+  **A disabled control is out of the tab order, so an explanation carried on hover or focus reaches
+  nobody.** Both `ScopeSelector` variants render a disabled scope's explanation as inline text under
+  the option, which is the form that works for every user and does not touch the surrounding
+  semantics. The alternative — a focusable wrapper carrying a tooltip — was tried and rejected: in
+  the `radio` variant it puts a tabbable `role="group"` element between the `radiogroup` and its
+  `radio` children, which is not an owned role the grouping allows and adds stops to a roving-focus
+  group that specifies exactly one. In the `dropdown` variant Radix drops a disabled item out of the
+  menu's roving focus entirely. The generalized rule is recorded in
+  [Component-Builder-Patterns.md](Component-Builder-Patterns.md#explaining-why-a-control-is-disabled).
+
+  PT-4414 still covers removing every half of the exclusion together.
 
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 
@@ -1903,6 +2166,53 @@ step, no automation. Just a record.
   content-based-guard test exercises, then delete the content-based branch and that guard's
   now-redundant test in one deliberate commit.
 - **Source:** PR #2425
+
+## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets by default
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** A `lib/platform-bible-react/` component declares the localize keys it needs in an
+  exported `*_STRING_KEYS` array, but nothing about declaring a key produces a value, and the
+  Localization Guide's routing rule ("built-in shell UI" vs "extension features") does not say where
+  a *shared library* component's values belong. The library also carries
+  `src/localizedStrings.json`, a hand-maintained Storybook pseudo-localization fixture with the same
+  filename and shape as a real extension contribution, which never ships. That collision is a
+  silent trap: `%markerMenu_searchPlaceholder_character%` was defined only in the fixture, rendered
+  correctly in Storybook, and rendered as raw `%key%` text in the running app.
+- **Decision:** A `platform-bible-react` component's string values must be defined in *some*
+  English shipping source. The platform shell's own assets — `assets/localization/en.json`, plus
+  `es.json` — are the **default** home for a shared-library string, because the count of consuming
+  extensions is not a stable property. An extension's
+  `contributions/localizedStrings.json` is nevertheless a legitimate English shipping source — as of
+  this decision, most library-declared keys are routed that way, including whole arrays for
+  `COMMENT_LIST`, `CONFLICT_NOTE`, `INVENTORY`, `SCOPE_SELECTOR`, `BOOK_SELECTOR` and
+  `DEVELOPER_SECTION`. This decision does not ask for them to move.
+  `src/node/data/shipped-locale-assets.test.ts` enforces the floor, not the default: every key in
+  every `*_STRING_KEYS` array exported from the `.` or `./experimental` package entry must resolve
+  in an English shipping source, and every key in the Storybook fixture must ship too. Arrays
+  exported from neither entry stay invisible to it — the known case is
+  `UI_LANGUAGE_SELECTOR_STRING_KEYS`.
+- **Alternatives:** (a) Route by consumer — a library string used by exactly one extension lives in
+  that extension's contribution. Rejected *as the default* for a new key: the count of consumers is
+  not a stable property, so the string would have to move the first time a second extension adopted
+  the component, and nothing would notice it had not. Not rejected outright, and not made a `never`:
+  it is where most library keys live today, and a rule the codebase overwhelmingly contradicts would
+  produce false findings against existing code and imply a cross-extension migration nothing here
+  scopes. (b) Leave the convention unwritten and rely on review. Rejected: the
+  failure is invisible in Storybook and in every test, which is precisely why it reached main.
+  (c) Generate the Storybook fixture from `assets/localization/en.json` the way
+  `.storybook/localization.utils.ts` already does, so the two files cannot diverge. Deferred, not
+  rejected — it removes the trap structurally rather than guarding it, and is the better long-term
+  answer; it is out of scope for the branch that introduced the guard.
+- **Consequences:** Adding a key to a library component now has a fourth required step (ship a
+  value) documented in `Localization-Guide.md`. CI fails when a key ships in no English source at
+  all; it does not, and is not meant to, flag a key that ships from an extension contribution rather
+  than from the shell assets — the default is a convention for reviewers, not a gate. The guard also
+  reads the committed `lib/platform-bible-react/dist/`, which no CI step rebuilds, so a newly
+  exported array is covered only once the library is rebuilt and the rebuilt bundle committed —
+  meaning a skipped fourth step can still reach main until that rebuild lands. Revisit if the
+  fixture becomes generated (alternative c), which would make most of the guard redundant.
+- **Source:** PR #2664
 
 ## adr-licensing-boundary: Platform.Bible is AGPL-3.0-or-later, with an MIT carve-out drawn by runtime linking
 

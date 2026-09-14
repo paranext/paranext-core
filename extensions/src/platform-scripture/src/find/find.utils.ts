@@ -1,4 +1,4 @@
-import { Scope } from 'platform-bible-react';
+import type { Scope } from 'platform-bible-react';
 import {
   escapeStringRegexp,
   isPlatformError,
@@ -11,6 +11,7 @@ import {
 } from 'platform-bible-utils';
 import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
+import { isExtraMaterialBookId } from './extra-material.utils';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -174,20 +175,62 @@ export async function classifyPollAttempt(params: {
 }
 
 /**
+ * The scopes Find offers, in the order its scope picker lists them.
+ *
+ * The single list behind the picker's `availableScopes`, the disabled-explanation map, and
+ * {@link isFindQueryValid}'s rejection of everything else. `find.web-view.tsx`'s `findScope` can map
+ * exactly these three to a `FindScope` and throws on any other, so a scope that passed the gate
+ * without being here would fail during render rather than being refused as a query.
+ */
+export const FIND_AVAILABLE_SCOPES: Scope[] = ['chapter', 'book', 'selectedBooks'];
+
+/**
+ * Whether `scope` searches a book that Find cannot address — the `book` and `chapter` scopes
+ * resolve to the current scripture reference's book, and that book being extra material is what
+ * makes them unsearchable. Only those two scopes are gated: `selectedBooks` searches an explicit
+ * list, which {@link isFindQueryValid} checks for searchable books directly rather than through this
+ * rule, and `verse`/`selectedText` are not among {@link FIND_AVAILABLE_SCOPES}.
+ *
+ * Exported so the query gate ({@link isFindQueryValid}) and the results-area placeholder that
+ * explains it decide from one rule rather than two copies of it.
+ *
+ * TODO(PT-4414): Drop this rule once extra material can be opened and addressed.
+ */
+export function isScopeBlockedByExtraMaterial(scope: Scope, currentBookId: string): boolean {
+  if (scope !== 'book' && scope !== 'chapter') return false;
+  return isExtraMaterialBookId(currentBookId);
+}
+
+/**
  * Whether the current search term + scope/filters combination would actually run a search: false
- * for an empty term, and false for the `selectedBooks` scope with no books selected. Shared between
- * `find.web-view.tsx` (the source of truth) and `find.stories.tsx`'s harness so the two can't
- * silently diverge — they previously each hand-rolled this rule, and the harness's copy dropped the
- * empty-term check.
+ * for an empty term, false for a scope outside {@link FIND_AVAILABLE_SCOPES}, false for the
+ * `selectedBooks` scope with no SEARCHABLE book selected, and false for the `book`/`chapter` scopes
+ * while the current reference sits in extra material. Shared between `find.web-view.tsx` (the
+ * source of truth) and `find.stories.tsx`'s harness so the two can't silently diverge: a harness
+ * that hand-rolls the rule can pass a story while testing a different one.
+ *
+ * The extra-material rule (see {@link isScopeBlockedByExtraMaterial}) is the enforcement point for
+ * the `book`/`chapter` scopes, not merely a mirror of the disabled scope options in the UI. `scope`
+ * is persisted per web view and the current reference moves independently of it, so a user who
+ * chose `book` in a scripture book and then navigated into extra material never touches a disabled
+ * control on the way into this state.
  */
 export function isFindQueryValid(params: {
   searchTerm: string;
   scope: Scope;
   selectedBookIds: string[];
+  /** Book id of the current scripture reference — what the `book`/`chapter` scopes resolve to. */
+  currentBookId: string;
 }): boolean {
   if (params.searchTerm.trim() === '') return false;
-  if (params.scope === 'selectedBooks' && params.selectedBookIds.length === 0) return false;
-  return true;
+  if (!FIND_AVAILABLE_SCOPES.includes(params.scope)) return false;
+  // Not "any book selected": a selection restored from a persisted tab is checked against the
+  // project's book list only once that list resolves, so until then it can still hold extra
+  // material. Asking whether anything searchable remains closes that window here, where the answer
+  // cannot arrive late.
+  if (params.scope === 'selectedBooks')
+    return params.selectedBookIds.some((bookId) => !isExtraMaterialBookId(bookId));
+  return !isScopeBlockedByExtraMaterial(params.scope, params.currentBookId);
 }
 
 /** The decision {@link gateStartSearch} makes for a given attempt to start a search. */
