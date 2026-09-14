@@ -13,6 +13,9 @@ import {
   isTypeFilter,
   resolveEffectiveScopeFilter,
   SCOPE_FILTER_CURRENT_CHAPTER,
+  TEAM_ASSIGNED_USER,
+  toAuthorOptions,
+  UNASSIGNED_USER,
   UNFILTERED,
 } from './comment-list-filters.model';
 
@@ -155,6 +158,7 @@ describe('applyFilterOverrides', () => {
       type: 'conflicts',
       assignment: 'all',
       date: 'all',
+      author: 'all',
     });
   });
 
@@ -167,6 +171,7 @@ describe('applyFilterOverrides', () => {
       type: 'all',
       assignment: 'all',
       date: 'all',
+      author: 'all',
     });
   });
 
@@ -221,5 +226,28 @@ describe('date filter', () => {
   it('treats an unknown string as not a date preset', () => {
     expect(isDatePresetFilter('last-year')).toBe(false);
     expect(isDatePresetFilter('today')).toBe(true);
+  });
+});
+
+describe('author filter', () => {
+  it('contributes nothing when the axis is at its "all" default', () => {
+    expect(build({ author: 'all' })).toEqual({});
+  });
+
+  it('maps a chosen author to the selector author field', () => {
+    expect(build({ author: 'Ana Kuznetsova' })).toEqual({ author: 'Ana Kuznetsova' });
+  });
+
+  it('offers project users as options, never the Team or unassigned sentinels', () => {
+    // findAssignableUsers returns assignment targets, which include "Team" and "". Neither is ever
+    // the author of a comment.
+    expect(toAuthorOptions(['Ana', TEAM_ASSIGNED_USER, 'Ian', UNASSIGNED_USER])).toEqual([
+      'Ana',
+      'Ian',
+    ]);
+  });
+
+  it('returns no options rather than throwing when the user list has not loaded', () => {
+    expect(toAuthorOptions(undefined)).toEqual([]);
   });
 });
