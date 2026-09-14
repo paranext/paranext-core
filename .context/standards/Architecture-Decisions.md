@@ -5428,8 +5428,8 @@ step, no automation. Just a record.
   asked by following the link. Those guards answer "is this app in front?", which focus state
   does know. Nothing here argues against them.
 - **Amended 2026-09-09:** The move raise picked up a second, inferred guard that this Scope note
-  did not cover: `raiseMoveTarget` (`web-view.service-router.ts`) started leaving a target window
-  alone whenever the platform was withholding it from activation, on the theory that a move landing
+  did not cover: `raiseMoveTarget` (`web-view-move.util.ts`) started leaving a target window alone
+  whenever the platform was withholding it from activation, on the theory that a move landing
   content there is never the user asking to go there. That theory is wrong for
   `platform.moveWebViewToWindow`'s only production caller — the tab context menu's "Move to window",
   which names a background window on purpose — so it reintroduced exactly the inference this entry
