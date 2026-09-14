@@ -472,7 +472,7 @@ export function CommentThread({
       className={cn(
         // `border-s-4` is always present so the bar's width is reserved on every card and
         // selecting one does not shift its content sideways. Logical property, so it follows RTL.
-        'tw:group tw:w-full tw:rounded-none tw:border-s-4 tw:p-4 tw:outline-hidden tw:transition-all tw:duration-200 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
+        'tw:group tw:w-full tw:rounded-none tw:border-s-4 tw:p-3 tw:outline-hidden tw:transition-all tw:duration-200 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
         { 'tw:cursor-pointer tw:hover:shadow-md': !isSelected },
         // Selection rides the leading bar and elevation, never the background. The background
         // channel already carries three meanings (unread, resolved, read) and cannot express a
@@ -497,7 +497,7 @@ export function CommentThread({
       tabIndex={-1}
     >
       <CardContent className="tw:flex tw:flex-col tw:gap-2 tw:p-0">
-        <div className="tw:flex tw:flex-col tw:content-center tw:items-start tw:gap-4">
+        <div className="tw:flex tw:flex-col tw:content-center tw:items-start tw:gap-2">
           <div className="tw:flex tw:items-center tw:gap-2">
             {localizedAssignedToText && (
               <Badge className="tw:rounded-sm tw:bg-input tw:text-sm tw:font-normal tw:text-primary tw:hover:bg-input">

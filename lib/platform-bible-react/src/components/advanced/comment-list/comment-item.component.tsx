@@ -189,14 +189,14 @@ export function CommentItem({
 
   return (
     <div
-      className={cn('tw:flex tw:w-full tw:flex-row tw:items-baseline tw:gap-3 tw:space-y-3', {
+      className={cn('tw:flex tw:w-full tw:flex-row tw:items-baseline tw:gap-2', {
         'tw:text-sm': isReply,
       })}
     >
       <Avatar className="tw:h-8 tw:w-8">
         <AvatarFallback className="tw:text-xs tw:font-medium">{initials}</AvatarFallback>
       </Avatar>
-      <div className="tw:flex tw:flex-1 tw:flex-col tw:gap-2">
+      <div className="tw:flex tw:flex-1 tw:flex-col tw:gap-1">
         <div className="tw:flex tw:w-full tw:flex-row tw:flex-wrap tw:items-baseline tw:gap-x-2">
           <p className="tw:text-sm tw:font-medium">{userLabel}</p>
           <p className="tw:text-xs tw:font-normal tw:text-muted-foreground">{displayDate}</p>
