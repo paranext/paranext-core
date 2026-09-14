@@ -301,6 +301,43 @@ describe('web-view-content-zoom.service', () => {
     });
   });
 
+  it('reads memory once at initialization, so panes opening together never read it again', async () => {
+    const memoryGets = vi.fn();
+    __setContentZoomDepsForTesting({
+      // Keeps the startup prune from reading memory, so the count below is only about the panes.
+      listProjects: async () => [],
+      settings: {
+        get: async (key: string) => {
+          if (key === MEMORY) memoryGets();
+          return settings[key];
+        },
+        set: settingsSet,
+        // Without a subscription nothing else can prime the cache, which is the state a failed
+        // subscription leaves the service in.
+        subscribe: async (key: string) => {
+          if (key === MEMORY) throw new Error('subscription unavailable');
+          return async () => {};
+        },
+      },
+    });
+    await initializeContentZoomService();
+    // The dock opens a restored layout's panes in one synchronous pass, so the reads overlap; no
+    // in-flight read is shared, and only a cache already filled keeps them off the setting.
+    await Promise.all([
+      getInitialContentZoomForWebView({
+        id: 'a',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj-A',
+      }),
+      getInitialContentZoomForWebView({
+        id: 'b',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj-B',
+      }),
+    ]);
+    expect(memoryGets).toHaveBeenCalledTimes(1);
+  });
+
   it('seeds a new pane per area from state, else memory, else the default', async () => {
     settings[MEMORY] = {
       'editor:proj-A:main': 1.3,
