@@ -122,7 +122,7 @@ const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
     },
   );
 
-  if (typeof newValue !== 'number') return false;
+  if (typeof newValue !== 'number' || Number.isNaN(newValue)) return false;
   if (newValue < MIN_ZOOM_FACTOR || newValue > MAX_ZOOM_FACTOR) {
     throw new Error(errorMessage);
   }
