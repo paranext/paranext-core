@@ -1302,13 +1302,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             { projectName },
           ),
           severity: 'warning',
+          // This is about this editor's chapter, not a generic notice, so it belongs in the window
+          // holding the editor. Routing is also what makes the shared `notificationId` coalesce: an
+          // update that lands in a different window has never seen the id and opens a SECOND toast
+          // instead of merging. The save that raises this can fire from the window-blur flush —
+          // i.e. precisely when this window is no longer the focused one.
+          webViewId,
         })
         .catch((error) => {
           logger.warn(
             `Error notifying about a corrected chapter marker: ${getErrorMessage(error)}`,
           );
         }),
-    [localizedStrings, projectName],
+    [localizedStrings, projectName, webViewId],
   );
 
   /**
@@ -2748,8 +2754,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // chapter still on screen: a cross-chapter flush runs through the CAPTURED chapter's
         // closure, and the editor has already moved on to different content.
         if (savedChapterKey === chapterKeyRef.current) {
-          usjSentToPdp.current = repairedUsj;
-          setEditorUsj.current(repairedUsj);
+          try {
+            usjSentToPdp.current = repairedUsj;
+            setEditorUsj.current(repairedUsj);
+          } catch (error) {
+            // The write below must still run even when the editor refuses the repaired document:
+            // it is the write that un-poisons the chapter, and skipping it would leave the PDP
+            // holding the document Paratext rejects, so every later save is rejected too.
+            logger.error(
+              `Error putting the repaired chapter marker back into the editor: ${getErrorMessage(error)}`,
+            );
+          }
         }
         notifyChapterMarkerCorrected();
       }
