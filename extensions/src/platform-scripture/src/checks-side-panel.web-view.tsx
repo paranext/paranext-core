@@ -16,6 +16,8 @@ import {
   isPlatformError,
   LAST_SCR_BOOK_NUM,
   Mutex,
+  normalizeProjectId,
+  recencyMapFromOrderedIds,
 } from 'platform-bible-utils';
 import {
   CheckInputRange,
@@ -43,9 +45,19 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.
  */
 async function getProjectNames(projectId: string): Promise<ProjectOption> {
   const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const projectShortName = await pdp.getSetting('platform.name');
-  const projectFullName = await pdp.getSetting('platform.fullName');
-  return { shortName: projectShortName, fullName: projectFullName };
+  // Fetched together so adding language costs no extra serial round trip per project.
+  // `platform.language` is optional: a project that does not define it degrades to an unknown
+  // language bucket rather than failing the whole lookup.
+  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
+    pdp.getSetting('platform.name'),
+    pdp.getSetting('platform.fullName'),
+    pdp.getSetting('platform.language').catch(() => undefined),
+  ]);
+  return {
+    shortName: projectShortName,
+    fullName: projectFullName,
+    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
+  };
 }
 
 /**
@@ -55,6 +67,15 @@ async function getProjectNames(projectId: string): Promise<ProjectOption> {
  * side panel itself) would falsely mark a project as open.
  */
 const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
+
+// Stable empty-array reference serving two roles: the recently-opened-projects `useData` default,
+// and the fallback the recency map is built from when the subscription has no usable list.
+// `useData` resubscribes when the default identity changes, so keeping this at module scope avoids
+// per-render re-subscriptions. Declared as the mutable `string[]` that `useData`'s `defaultValue`
+// parameter requires, then frozen separately so the shared instance cannot be mutated out from
+// under either role.
+const EMPTY_RECENT_PROJECTS: string[] = [];
+Object.freeze(EMPTY_RECENT_PROJECTS);
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -109,6 +130,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useMemo(() => [defaultCheckRunnerCheckDetails], []),
   );
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+  // Recency input for the built-in `lastUsed` grouping. The service exposes an ordered id list
+  // (most-recent first) without timestamps, so we synthesize values via `recencyMapFromOrderedIds`.
+  const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
+    undefined,
+    EMPTY_RECENT_PROJECTS,
+  );
 
   // Project data loading
   const [projectIdsAndNames]: [{ [projectId: string]: ProjectOption }, boolean] = usePromise(
@@ -726,15 +753,30 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   // Shape the loaded project metadata into the list the panel renders in the project filter.
-  const projects = useMemo<ChecksSidePanelProject[]>(
-    () =>
-      Object.entries(projectIdsAndNames).map(([id, project]) => ({
-        id,
-        fullName: project.fullName,
-        shortName: project.shortName,
-      })),
-    [projectIdsAndNames],
-  );
+  const projects = useMemo<ChecksSidePanelProject[]>(() => {
+    // Recency only orders the picker's built-in `lastUsed` grouping. When the provider is
+    // unavailable the subscription yields a PlatformError instead of an id list, so narrow before
+    // handing the value to `recencyMapFromOrderedIds`, which needs an array. An empty list degrades
+    // the grouping to "no recency" rather than losing the whole web view.
+    let orderedRecentProjectIds = recentProjectIds;
+    if (isPlatformError(orderedRecentProjectIds)) {
+      logger.warn(
+        `ChecksSidePanelWebView: failed to load recently opened projects: ${orderedRecentProjectIds.message}`,
+      );
+      orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
+    }
+    // Normalize BOTH sides of the lookup: the recents service stores whatever id its caller handed
+    // it, while these ids are canonical project ids, so an un-normalized `get` can miss on casing
+    // alone and route every project into the "Other" bucket.
+    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds.map(normalizeProjectId));
+    return Object.entries(projectIdsAndNames).map(([id, project]) => ({
+      id,
+      fullName: project.fullName,
+      shortName: project.shortName,
+      language: project.language,
+      lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+    }));
+  }, [projectIdsAndNames, recentProjectIds]);
 
   // #endregion
 

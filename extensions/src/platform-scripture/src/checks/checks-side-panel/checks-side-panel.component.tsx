@@ -14,9 +14,16 @@ import {
   ProjectSelector,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
+  PROJECT_SELECTOR_STRING_KEYS,
+  ProjectSelectorResolvedStrings,
+  buildBuiltInGroupingStrings,
   makeBuiltInGroupings,
 } from 'platform-bible-react/experimental';
-import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  LanguageStrings,
+  makeProjectSelectorCustomData,
+} from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -36,6 +43,9 @@ import { CHECK_CARD_STRING_KEYS, CheckCard, CheckStates } from './check-card.com
 export const CHECKS_SIDE_PANEL_STRING_KEYS = Object.freeze([
   ...LOCALIZED_STRINGS,
   ...CHECK_CARD_STRING_KEYS,
+  // Shared ProjectSelector keys — every ProjectSelector in the app resolves the same block, then
+  // the caller merges its own placeholder/ariaLabel on top.
+  ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const);
 
 /** A project (or resource) the user can select to run checks against. */
@@ -43,6 +53,27 @@ export type ChecksSidePanelProject = ProjectOption & {
   /** Unique id of the project. */
   id: string;
 };
+
+/**
+ * Maps caller-supplied checks-side-panel projects onto ProjectSelector rows, sorted by full name
+ * and carrying the grouping inputs (language, recency) in the picker's `customData` envelope.
+ * Exported for coverage tests.
+ */
+export function toChecksSelectorRows(
+  projects: readonly ChecksSidePanelProject[],
+): ProjectSelectorProject[] {
+  return [...projects]
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
+    .map((project) => ({
+      id: project.id,
+      shortName: project.shortName,
+      fullName: project.fullName,
+      customData: makeProjectSelectorCustomData({
+        language: project.language,
+        lastUsedAt: project.lastUsedAt,
+      }),
+    }));
+}
 
 /** Props for the {@link ChecksSidePanel} presentational component. */
 export type ChecksSidePanelProps = {
@@ -159,15 +190,30 @@ export function ChecksSidePanel({
   );
 
   const sortedProjects = useMemo<ProjectSelectorProject[]>(
-    () =>
-      [...projects]
-        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-        .map((project) => ({
-          id: project.id,
-          shortName: project.shortName,
-          fullName: project.fullName,
-        })),
+    () => toChecksSelectorRows(projects),
     [projects],
+  );
+
+  // `localizedStrings` is a loose `LanguageStrings` record, while the ProjectSelector string
+  // builders published in the `platform-bible-react` dist still take the fully-resolved record, and
+  // TypeScript cannot build a required-key record from a runtime loop without an assertion. The
+  // builders in source now accept the loose record directly, so this single narrowing goes away
+  // with the next `platform-bible-react` dist regeneration.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const projectSelectorStrings = localizedStrings as ProjectSelectorResolvedStrings;
+
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys.
+  //
+  // `type` is filtered out because this panel has no project-type source: `ChecksSidePanelProject`
+  // carries no type and nothing upstream supplies one, so the grouping would put every row under a
+  // single "Unknown type" bucket. `lastUsed` stays — the panel lists ALL scripture projects, so the
+  // recent/other split is a real partition here.
+  const projectSelectorGroupings = useMemo(
+    () =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter(
+        (grouping) => grouping.id !== 'type',
+      ),
+    [projectSelectorStrings],
   );
 
   const getScopeLabel = useCallback(
@@ -235,10 +281,7 @@ export function ChecksSidePanel({
               ariaLabel:
                 localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
             }}
-            // English-only labels for now — this panel doesn't currently pull the shared
-            // `%projectSelector_grouping_*_label%` keys via `useLocalizedStrings`. Wire those into
-            // the panel's key list to localize.
-            availableGroupings={makeBuiltInGroupings()}
+            availableGroupings={projectSelectorGroupings}
           />
         </div>
 
