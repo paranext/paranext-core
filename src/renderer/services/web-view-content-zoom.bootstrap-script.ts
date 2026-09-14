@@ -201,8 +201,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
 
     // Capture phase: the active area must update even when a descendant stops propagation before
     // the bubble phase (the same rule the wheel listener below is deliberately the exception to).
-    window.addEventListener('pointerdown', (e) => setActive(areaOf(e.target)), true);
-    window.addEventListener('focusin', (e) => setActive(areaOf(e.target)), true);
+    // Every listener here is a named function so destroy() can take it off again.
+    const onPointerDown = (e) => setActive(areaOf(e.target));
+    const onFocusIn = (e) => setActive(areaOf(e.target));
+    window.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('focusin', onFocusIn, true);
 
     const targetFor = (node) => {
       if (areas.length === 0) return undefined;
@@ -241,7 +244,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     };
     const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
 
-    window.addEventListener('keydown', (e) => {
+    const onKeyDown = (e) => {
       if (!hasModifier(e)) return;
       const areaId = targetFor(document.activeElement);
       if (!areaId) return;
@@ -252,18 +255,21 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (!command) return;
       e.preventDefault();
       act(command, areaId);
-    });
+    };
+    window.addEventListener('keydown', onKeyDown);
 
     // Same modifier rule as the chords: Ctrl or the meta key, and neither Shift nor Alt. Chromium
     // and the OS give Ctrl+Shift+wheel and Ctrl+Alt+wheel their own meanings, so those pass through.
-    window.addEventListener('wheel', (e) => {
+    const onWheel = (e) => {
       if (!hasModifier(e)) return;
       const areaId = targetFor(e.target);
       if (!areaId) return;
       e.preventDefault();
       if (e.deltaY === 0) return;
       act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
-    }, { passive: false });
+    };
+    const WHEEL_OPTIONS = { passive: false };
+    window.addEventListener('wheel', onWheel, WHEEL_OPTIONS);
 
     // An area's own text direction, read off one of its marked elements (falling back to the
     // document's when the area currently has no elements) so a marker inside an otherwise-LTR
@@ -327,7 +333,23 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         badge.style.opacity = '0';
       }, ${INDICATOR_VISIBLE_MS});
     };
-    window.__platformContentZoom = { showIndicator, get activeArea() { return activeArea; } };
+    // Unwinds everything this bootstrap put outside its own closure, so a host that replaces the
+    // pane's content (or a test that installs a second bootstrap) leaves no observer, listener or
+    // node of the old one behind.
+    const destroy = () => {
+      document.removeEventListener('DOMContentLoaded', start);
+      window.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('focusin', onFocusIn, true);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS);
+      if (observer) { observer.disconnect(); observer = undefined; }
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = undefined; }
+      const badge = document.getElementById('${INDICATOR_ID}');
+      if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
+      if (window.__platformContentZoom === api) window.__platformContentZoom = undefined;
+    };
+    const api = { showIndicator, destroy, get activeArea() { return activeArea; } };
+    window.__platformContentZoom = api;
 
     // Last in the IIFE on purpose: the scan start() runs reaches the parent, and a throw there must
     // not cost the view its listeners or its api. Everything start() touches is initialised by now.

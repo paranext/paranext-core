@@ -111,6 +111,10 @@ describe('content-zoom bootstrap script', () => {
   });
 
   afterEach(() => {
+    // Unwinds the bootstrap this test installed: without it the mutation observer it started
+    // outlives the test environment and fires against a torn-down `document`.
+    // eslint-disable-next-line no-underscore-dangle
+    window.__platformContentZoom?.destroy();
     window.matchMedia = originalMatchMedia;
   });
 
@@ -287,6 +291,36 @@ describe('content-zoom bootstrap script', () => {
 
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
     expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-retry', 1, 'main');
+  });
+
+  it('stops observing, listening and publishing itself once it is destroyed', async () => {
+    const { bound } = install('wv-destroy', TWO_AREAS);
+    await nextFrame();
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    // Positive controls: both paths work before the teardown, so the negatives below are real.
+    expect(bound.reportContentZoomAreasById).toHaveBeenCalled();
+    byId('verse').focus();
+    expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true);
+
+    api.destroy();
+    bound.reportContentZoomAreasById.mockClear();
+    bound.adjustContentZoomById.mockClear();
+
+    const late = document.createElement('aside');
+    late.setAttribute('data-platform-content-zoom-root', 'sidebar');
+    document.body.appendChild(late);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).not.toHaveBeenCalled();
+    expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+    expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(false);
+    expect(document.getElementById('platform-content-zoom-indicator')).toBeNull();
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom).toBeUndefined();
   });
 
   it('inserts, for an area discovered after the pane loaded, a rule identical to the head-splice helper’s rule for the same area', async () => {
@@ -499,6 +533,7 @@ declare global {
   interface Window {
     __platformContentZoom?: {
       showIndicator: (areaId: string, text: string) => void;
+      destroy: () => void;
       activeArea?: string;
     };
   }
