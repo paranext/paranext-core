@@ -17,7 +17,7 @@ import {
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { compareProjectsByName, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
@@ -430,7 +430,7 @@ export function useProjectPickerData(): ProjectPickerData {
     () =>
       allProjectsWithRecent
         .filter((p) => !recentIdSet.has(normalizeProjectId(p.id)))
-        .sort((a, b) => a.fullName.localeCompare(b.fullName)),
+        .sort(compareProjectsByName),
     [allProjectsWithRecent, recentIdSet],
   );
 

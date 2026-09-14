@@ -455,6 +455,23 @@ describe('useProjectPickerData', () => {
     expect(result.current.recentProjects[0].id).toBe('proj-r1');
   });
 
+  it('orders all projects by short name, not full name', async () => {
+    const { projectLookupService } = await importMocks();
+    // `fullName` order is the exact reverse of `shortName` order here, so a comparator reading the
+    // wrong field returns the reversed list rather than a coincidentally-equal one.
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'proj-z', name: 'AAA', fullName: 'Zulu Last' },
+        { id: 'proj-a', name: 'ZZZ', fullName: 'Alpha First' },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.allProjects.map((project) => project.shortName)).toEqual(['AAA', 'ZZZ']);
+  });
+
   it('refreshes currentSimpleProject when onDidUpdateWebView fires', async () => {
     const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
       await importMocks();
