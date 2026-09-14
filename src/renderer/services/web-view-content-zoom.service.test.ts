@@ -83,6 +83,7 @@ describe('web-view-content-zoom.service', () => {
   let iframe: HTMLIFrameElement;
   const showIndicator = vi.fn();
   let lastFocused: string | undefined;
+  let dialogOpen = false;
   /** One iframe per pane, since the production `getIframe` is keyed by web view id. */
   const iframes = new Map<string, HTMLIFrameElement>();
   function iframeFor(webViewId: string): HTMLIFrameElement {
@@ -107,6 +108,7 @@ describe('web-view-content-zoom.service', () => {
     showIndicator.mockClear();
     vi.mocked(logger.warn).mockClear();
     lastFocused = undefined;
+    dialogOpen = false;
     document.body.innerHTML = '';
     iframes.clear();
     iframe = iframeFor('editor-1');
@@ -126,6 +128,7 @@ describe('web-view-content-zoom.service', () => {
         return () => false;
       },
       getLastFocusedTabId: () => lastFocused,
+      isAnyDialogOpen: () => dialogOpen,
       settings: {
         get: async (key: string) => settings[key],
         set: settingsSet,
@@ -151,6 +154,13 @@ describe('web-view-content-zoom.service', () => {
     lastFocused = 'editor-1';
     expect(resolveContentZoomTarget(undefined)).toBe('editor-1');
     lastFocused = undefined;
+    expect(resolveContentZoomTarget(undefined)).toBeUndefined();
+  });
+
+  it('resolves nothing while a dialog is open, whether or not an explicit id or a last-focused tab exists', () => {
+    lastFocused = 'editor-1';
+    dialogOpen = true;
+    expect(resolveContentZoomTarget('editor-1')).toBeUndefined();
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
 
@@ -823,6 +833,13 @@ describe('web-view-content-zoom.service', () => {
 
   it('does nothing for an unknown web view', async () => {
     await adjustContentZoom('nope', 1);
+    expect(updateDefinition).not.toHaveBeenCalled();
+    expect(showIndicator).not.toHaveBeenCalled();
+  });
+
+  it('does nothing while a dialog is open', async () => {
+    dialogOpen = true;
+    await adjustContentZoom('editor-1', 1);
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(showIndicator).not.toHaveBeenCalled();
   });

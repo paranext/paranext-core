@@ -149,6 +149,7 @@ initConnectionLostService();
       getAllOpenDefinitions: getAllOpenWebViewDefinitionsSync,
       onDidUpdateWebView,
       getLastFocusedTabId,
+      isAnyDialogOpen,
     }).catch((e) =>
       logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
     );
