@@ -34,10 +34,11 @@ export type ScopeWithRange = Scope | "range";
 /** Visual layout variant for the scope options. */
 export type ScopeSelectorVariant = "radio" | "dropdown";
 /**
- * Z-index for tooltips — must render above modal dialogs since tooltips can be triggered from
- * elements inside a modal (e.g. help icons in form fields).
+ * Z-index for tooltips. Must sit above every layer that can contain a tooltip trigger — modal
+ * dialogs, the popover layer, and content portalled out of a popover ({@link Z_INDEX_ABOVE_POPOVER})
+ * — or a tooltip on a control inside one of them renders behind it.
  */
-export declare const Z_INDEX_TOOLTIP = 550;
+export declare const Z_INDEX_TOOLTIP = 675;
 /**
  * Minimal project metadata fed to the selector.
  *
@@ -208,9 +209,9 @@ export type ProjectSelectorLocalizedStringKey = (typeof PROJECT_SELECTOR_STRING_
  * key at a time and used only when they are strings, so consumers pass their localized-strings bag
  * straight through with no narrowing.
  *
- * The one narrowing it does impose: a FRESH OBJECT LITERAL passed directly here fails excess-property
- * checking on any key that is not `%`-delimited, where a plain `Record<string, unknown>` accepted it.
- * Named types and variables are unaffected.
+ * The one narrowing it does impose: a FRESH OBJECT LITERAL passed directly here fails
+ * excess-property checking on any key that is not `%`-delimited, where a plain `Record<string,
+ * unknown>` accepted it. Named types and variables are unaffected.
  */
 export type ProjectSelectorStringLookup = Readonly<Record<`%${string}%`, unknown>>;
 /**
