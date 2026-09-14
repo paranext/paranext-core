@@ -739,6 +739,26 @@ describe('web-view-content-zoom.service', () => {
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
   });
 
+  it('writes the newest pending level when a further edit lands while the flush is reading', async () => {
+    const reads = useControllableMemoryReads();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main'); // 1.1
+    const parked = reads.parkNextRead();
+    const flushing = __flushContentZoomWritesForTesting();
+    const release = await parked;
+    // The next step of the same gesture, made while the flush's read is still in flight.
+    await adjustContentZoom('editor-1', 1, 'main'); // 1.2
+    release();
+    await flushing;
+    expect(settingsSet).toHaveBeenCalledTimes(1);
+    expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:PROJ-A:main': 1.2 });
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.2 });
+    settingsSet.mockClear();
+    await __flushContentZoomWritesForTesting();
+    expect(settingsSet).not.toHaveBeenCalled();
+  });
+
   it('retries a memory write whose read failed, storing the level on the retry', async () => {
     const reads = useControllableMemoryReads();
     await initializeContentZoomService();
