@@ -2954,6 +2954,45 @@ step, no automation. Just a record.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
 
+## adr-project-selector-consumer-driven-groupings: ProjectSelector groupings are consumer-supplied descriptors over an untyped `customData` bag
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ProjectSelector` owned its grouping options as a fixed prop set
+  (`groupByOpenTabs`, `groupByVersification` + `priorityVersificationId`, `showSelectedOnly`, and
+  their `filter*`/`onChange*` companions). Every new axis a picker wanted meant new props on a
+  shared component, and every picker was offered every axis whether or not its rows carried the
+  data — the manage-books picker showed a "Versification" option only because the component had
+  been taught about versification. `platform-bible-react` is PAPI-free, so the component cannot
+  fetch the data an axis needs; only the consumer can.
+- **Decision:** A consumer passes `availableGroupings` — an array of `ProjectSelectorGrouping`
+  descriptor objects, each saying how to bucket a row, what to call the bucket, how to order
+  buckets, and what to do with rows it cannot classify. Row data travels in an untyped
+  `customData` bag on `ProjectSelectorProject`, packed by `makeProjectSelectorCustomData`
+  (`platform-bible-utils`). The component never interprets `customData`; only the descriptor the
+  same consumer supplied reads it. `makeBuiltInGroupings` / `makeSelectionGrouping` build the stock
+  descriptors from the shared `%projectSelector_*%` block so the common case is one line, but they
+  are a convenience layer, not a privileged one — they return exactly what a consumer-defined
+  descriptor is.
+- **Alternatives:** (a) Keep growing the typed prop set — rejected: every axis is a change to a
+  shared component, and pickers keep being offered axes their rows cannot populate. (b) A typed
+  union of known grouping kinds — rejected: it still centralizes knowledge of every axis in the
+  component, and an extension outside this repo could not add one. (c) A typed `customData`
+  interface instead of an open record — rejected for the same reason; the open bag is what lets a
+  surface offer "Language" without the component having a language field.
+- **Consequences:** The type system no longer connects "this picker offers Language" to "this
+  picker packs a language", so a picker can offer a grouping that silently buckets every row as
+  unknown. That hole is covered by convention rather than types: each surface exports a
+  `*_PROJECT_SELECTOR_GROUPING_IDS` allow-list, and
+  `extensions/src/platform-scripture/src/project-selector-grouping-coverage.test.ts` drives each
+  list through that surface's own row builder and fails when an offered id is not backed by packed
+  data. That test is extension-scoped, so the same defect introduced inside `platform-bible-react`
+  would not be caught — a check inside `ProjectSelector` is the durable fix. The rework also
+  removed ~16 public `ProjectSelectorProps` members and renamed two localization keys with no
+  deprecation cycle, which `experimental.ts` sanctions by its own contract but which any
+  out-of-repo consumer (e.g. Paratext 10 Studio) must absorb at once.
+- **Source:** PR #2673 (project-selector groupings).
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25

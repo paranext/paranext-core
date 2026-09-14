@@ -126,7 +126,7 @@ describe('ProjectSelector — trigger chevron', () => {
   });
 });
 
-describe('ProjectSelector — loading state (I1)', () => {
+describe('ProjectSelector — loading state', () => {
   it('disables the trigger and shows a spinner when isLoading', () => {
     render(
       <ProjectSelector
@@ -382,6 +382,83 @@ describe('group-by menu naming', () => {
     await user.click(screen.getByRole('combobox'));
     expect(screen.getByRole('button', { name: 'Group by' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /filter/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('ProjectSelector — default grouping with async inputs', () => {
+  it('applies the auto-derived openTabs grouping when openTabs arrive after mount', async () => {
+    const user = setupUser();
+    // `openTabs` over the wire is empty on first render, so the auto-derived grouping list is
+    // empty and the picker opens flat. It has to pick the grouping up once the tabs land.
+    const { rerender } = render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: 'esvus16' }}
+        onChangeSelection={() => {}}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+
+    rerender(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[{ projectId: 'esvus16', scrollGroupId: 0 }]}
+        selection={{ projectId: 'esvus16' }}
+        onChangeSelection={() => {}}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(await screen.findByText('Opened project & resource tabs')).toBeInTheDocument();
+  });
+
+  it('keeps the grouping the user picked when props change afterwards', async () => {
+    const user = setupUser();
+    // Two entries so the group-by menu actually renders — a single-entry list locks the picker
+    // into that grouping and hides the menu, leaving nothing for the user to choose.
+    const groupings = [
+      { id: 'openTabs', label: 'Open tabs' },
+      { id: 'language', label: 'Language', getGroupKey: () => 'en' },
+    ];
+    const props = {
+      mode: 'project',
+      projects: SAMPLE_PROJECTS,
+      selection: { projectId: 'esvus16' },
+      onChangeSelection: () => {},
+      localizedStrings: HARNESS_STRINGS,
+      availableGroupings: groupings,
+    } as const;
+
+    const { rerender } = render(
+      <ProjectSelector {...props} openTabs={[{ projectId: 'esvus16', scrollGroupId: 0 }]} />,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(await screen.findByText('Opened project & resource tabs')).toBeInTheDocument();
+
+    // Explicitly go flat, then change the props the default resolves from. The user's choice has
+    // to survive — re-resolving on every prop change is exactly what this must not do.
+    await user.click(screen.getByRole('button', { name: 'Group by' }));
+    await user.click(await screen.findByRole('menuitemradio', { name: 'None' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Opened project & resource tabs')).not.toBeInTheDocument();
+    });
+
+    rerender(
+      <ProjectSelector
+        {...props}
+        openTabs={[
+          { projectId: 'esvus16', scrollGroupId: 0 },
+          { projectId: 'web', scrollGroupId: 1 },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText('Opened project & resource tabs')).not.toBeInTheDocument();
   });
 });
 

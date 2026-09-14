@@ -5023,6 +5023,12 @@ export declare function makeProjectSelectorCustomData(input: ProjectSelectorCust
  * The synthesized values are DETERMINISTIC (do not call `Date.now()`), so calling this at render
  * time is safe — the returned map has stable content and consumers can memoize on the input list
  * identity.
+ *
+ * DUPLICATE IDS: the FIRST occurrence wins. The input is most-recent-first, so the earliest
+ * position is the most recent use and is the score the id keeps; later occurrences are ignored.
+ * Duplicates are reachable in practice because callers normalize ids on the way in (e.g.
+ * `orderedProjectIds.map(normalizeProjectId)`), which can collapse two differently-cased raw ids
+ * into one.
  */
 export declare function recencyMapFromOrderedIds(orderedProjectIds: readonly string[]): ReadonlyMap<string, number>;
 export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";

@@ -17,7 +17,6 @@ import {
   LAST_SCR_BOOK_NUM,
   Mutex,
   normalizeProjectId,
-  recencyMapFromOrderedIds,
 } from 'platform-bible-utils';
 import {
   CheckInputRange,
@@ -36,6 +35,7 @@ import {
   CHECKS_SIDE_PANEL_STRING_KEYS,
 } from './checks/checks-side-panel/checks-side-panel.component';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
@@ -67,15 +67,6 @@ async function getProjectNames(projectId: string): Promise<ProjectOption> {
  * side panel itself) would falsely mark a project as open.
  */
 const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
-
-// Stable empty-array reference serving two roles: the recently-opened-projects `useData` default,
-// and the fallback the recency map is built from when the subscription has no usable list.
-// `useData` resubscribes when the default identity changes, so keeping this at module scope avoids
-// per-render re-subscriptions. Declared as the mutable `string[]` that `useData`'s `defaultValue`
-// parameter requires, then frozen separately so the shared instance cannot be mutated out from
-// under either role.
-const EMPTY_RECENT_PROJECTS: string[] = [];
-Object.freeze(EMPTY_RECENT_PROJECTS);
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -130,12 +121,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useMemo(() => [defaultCheckRunnerCheckDetails], []),
   );
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
-  // Recency input for the built-in `lastUsed` grouping. The service exposes an ordered id list
-  // (most-recent first) without timestamps, so we synthesize values via `recencyMapFromOrderedIds`.
-  const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
-    undefined,
-    EMPTY_RECENT_PROJECTS,
-  );
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('ChecksSidePanelWebView');
 
   // Project data loading
   const [projectIdsAndNames]: [{ [projectId: string]: ProjectOption }, boolean] = usePromise(
@@ -754,21 +741,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   // Shape the loaded project metadata into the list the panel renders in the project filter.
   const projects = useMemo<ChecksSidePanelProject[]>(() => {
-    // Recency only orders the picker's built-in `lastUsed` grouping. When the provider is
-    // unavailable the subscription yields a PlatformError instead of an id list, so narrow before
-    // handing the value to `recencyMapFromOrderedIds`, which needs an array. An empty list degrades
-    // the grouping to "no recency" rather than losing the whole web view.
-    let orderedRecentProjectIds = recentProjectIds;
-    if (isPlatformError(orderedRecentProjectIds)) {
-      logger.warn(
-        `ChecksSidePanelWebView: failed to load recently opened projects: ${orderedRecentProjectIds.message}`,
-      );
-      orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
-    }
-    // Normalize BOTH sides of the lookup: the recents service stores whatever id its caller handed
-    // it, while these ids are canonical project ids, so an un-normalized `get` can miss on casing
-    // alone and route every project into the "Other" bucket.
-    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds.map(normalizeProjectId));
     return Object.entries(projectIdsAndNames).map(([id, project]) => ({
       id,
       fullName: project.fullName,
@@ -776,7 +748,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
       language: project.language,
       lastUsedAt: recencyMap.get(normalizeProjectId(id)),
     }));
-  }, [projectIdsAndNames, recentProjectIds]);
+  }, [projectIdsAndNames, recencyMap]);
 
   // #endregion
 

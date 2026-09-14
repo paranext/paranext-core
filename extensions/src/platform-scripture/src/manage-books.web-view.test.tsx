@@ -188,8 +188,11 @@ describe('ManageBooksWebView sidebar project grouping', () => {
       await screen.findByRole('menuitemradio', { name: '%projectSelector_grouping_type_label%' }),
     );
 
-    expect(await screen.findByText('Standard')).toBeInTheDocument();
-    expect(screen.getByText('BackTranslation')).toBeInTheDocument();
+    // Headings are the localized type names, not the raw PT9 `ProjectType` enum values the wire
+    // carries (the mock echoes each requested localize key back as its own value).
+    expect(await screen.findByText('%manageBooks_projectType_Standard%')).toBeInTheDocument();
+    expect(screen.getByText('%manageBooks_projectType_BackTranslation%')).toBeInTheDocument();
+    expect(screen.queryByText('BackTranslation')).not.toBeInTheDocument();
   });
 
   it('buckets a project as recently used when the recents id differs only by case', async () => {
@@ -219,8 +222,9 @@ describe('ManageBooksWebView sidebar project grouping', () => {
   });
 
   it('renders when the recently-opened-projects subscription yields a PlatformError', async () => {
-    // Recency is optional here: it only orders the built-in `lastUsed` grouping. An unavailable
-    // provider must degrade to "no recency", never take the whole web view down.
+    // Recency is optional here: it only supplies the built-in `lastUsed` grouping's "recently
+    // used" presence flag. An unavailable provider must degrade to "no recency", never take the
+    // whole web view down.
     mockRecentProjects.value = newPlatformError('recently-opened-projects unavailable');
     mockWireProjects.value = [wireProject({})];
 

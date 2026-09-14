@@ -33,7 +33,6 @@ import {
   LocalizeKey,
   Mutex,
   normalizeProjectId,
-  recencyMapFromOrderedIds,
   ScrollGroupId,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
@@ -81,6 +80,7 @@ import {
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import {
   FIND_SEARCHABLE_WEB_VIEW_TYPES,
   REFERENCE_PANEL_WEB_VIEW_TYPES,
@@ -114,14 +114,6 @@ const SEARCH_DEBOUNCE_DELAY_MS = 500;
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
-
-/**
- * Stable empty-array reference so the recently-opened-projects subscription's default doesn't
- * change identity. Frozen on its own statement so the declared type stays the mutable `string[]`
- * that `useData` requires while the value itself can't be mutated at runtime.
- */
-const EMPTY_RECENT_PROJECTS: string[] = [];
-Object.freeze(EMPTY_RECENT_PROJECTS);
 
 /** Display names and language for every scripture project/resource, keyed by canonical project id. */
 type ProjectNamesById = {
@@ -472,38 +464,20 @@ global.webViewComponent = function FindWebView({
     return ids;
   }, [allOpenProjectTabs]);
 
-  // Recency input for the picker's built-in `lastUsed` grouping. The service exposes an ordered id
-  // list (most-recent first) without timestamps, so `recencyMapFromOrderedIds` synthesizes the
-  // values the grouping reads as its "recently used" presence flag.
-  const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
-    undefined,
-    EMPTY_RECENT_PROJECTS,
-  );
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('FindWebView');
 
-  const projects = useMemo<FindProject[]>(() => {
-    // Recency is optional to Find: it only orders the `lastUsed` grouping. When the provider is
-    // unavailable the subscription yields a PlatformError instead of an id list, so narrow before
-    // handing the value to `recencyMapFromOrderedIds`, which needs an array. An empty list degrades
-    // the grouping to "no recency" rather than losing the whole picker.
-    let orderedRecentProjectIds = recentProjectIds;
-    if (isPlatformError(orderedRecentProjectIds)) {
-      logger.warn(
-        `FindWebView: failed to load recently opened projects: ${orderedRecentProjectIds.message}`,
-      );
-      orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
-    }
-    // Normalize BOTH sides of the lookup: the recents service stores whatever id its caller handed
-    // it, while these keys are canonical project ids, so an un-normalized `get` can miss on casing
-    // alone and route every project into the "Other" bucket.
-    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds.map(normalizeProjectId));
-    return Object.entries(projectIdsAndNames)
-      .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
-      .map(([id, names]) => ({
-        id,
-        ...names,
-        lastUsedAt: recencyMap.get(normalizeProjectId(id)),
-      }));
-  }, [projectIdsAndNames, openProjectIds, recentProjectIds]);
+  const projects = useMemo<FindProject[]>(
+    () =>
+      Object.entries(projectIdsAndNames)
+        .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
+        .map(([id, names]) => ({
+          id,
+          ...names,
+          lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+        })),
+    [projectIdsAndNames, openProjectIds, recencyMap],
+  );
 
   // An open editor tab whose project the metadata fetch never returned means the fetch predates the
   // project (created/cloned/downloaded after Find mounted). Re-fetch so it can appear in the picker.

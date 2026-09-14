@@ -39,13 +39,20 @@ import {
  * catch.
  *
  * Each surface's `groupingIds` is the SAME exported constant its component filters
- * `makeBuiltInGroupings` against, not a copy of it — so offering a new grouping is what puts it in
- * front of this suite, and there is no list to forget to update.
+ * `makeBuiltInGroupings` against, not a copy of it — so a built-in opted into one of those lists is
+ * automatically put in front of this suite. That is the whole of the guarantee: a grouping a picker
+ * offers by some OTHER route still has to be added here by hand.
  *
  * WHAT THIS SUITE DOES NOT COVER: the fixture stands in for the production feed, so the suite
  * proves `builder input -> customData -> group key` and nothing upstream of the builder. Deleting
  * the `platform.language` fetch that feeds `toFindSelectorRows` would kill Find's Language grouping
  * and leave this suite green. Each web view's own tests cover that the feed supplies the field.
+ *
+ * Nor does it see a grouping a picker supplies OUTSIDE its `*_GROUPING_IDS` list:
+ * `checklist.web-view` appends `makeSelectionGrouping(...)` to the filtered built-ins, and the
+ * manage-books Create "Based on" picker passes a bespoke `versification` grouping as its sole
+ * `availableGroupings` entry. Both are backed by data today, but a consumer-defined grouping added
+ * the same way is invisible here — extend `SURFACES` when you add one.
  */
 
 /**

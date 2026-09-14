@@ -94,9 +94,15 @@ export type ProjectSelectorGrouping = {
    * Unique id — used as the radio value in the filter menu and to persist the "active grouping"
    * choice within a single mount. Must be unique within an `availableGroupings` array.
    *
-   * The id `'openTabs'` is reserved: when present, partitioning derives from the separate
-   * `openTabs` prop (see {@link partitionByOpenTabs}) rather than any row data, and `getGroupKey` is
-   * ignored.
+   * Three ids are RESERVED and must not be used by a consumer-defined grouping:
+   *
+   * - `'openTabs'` — partitioning derives from the separate `openTabs` prop (see
+   *   {@link partitionByOpenTabs}) rather than any row data, and `getGroupKey` is ignored.
+   * - `'selection'` — partitioning derives from `row.isSelected` (see {@link partitionByGrouping}),
+   *   and `getGroupKey` is ignored.
+   * - `'none'` — the "no grouping" sentinel backing the group-by menu's None radio item, exported as
+   *   `NO_GROUPING`. A grouping carrying this id would collide with that radio item and could never
+   *   be activated.
    */
   id: string;
   /**
@@ -373,6 +379,19 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 
 // #region Section partitioning
 
+/**
+ * English fallback heading for the built-in `'selection'` grouping's "selected" bucket. The single
+ * definition of this default — the component's `DEFAULT_STRINGS`, `makeSelectionGrouping`, and
+ * {@link partitionByGrouping}'s own last-resort fallback all read it from here.
+ */
+export const DEFAULT_SELECTED_SECTION_HEADING = 'Selected';
+
+/**
+ * English fallback heading for the built-in `'selection'` grouping's "unselected" bucket. See
+ * {@link DEFAULT_SELECTED_SECTION_HEADING}.
+ */
+export const DEFAULT_UNSELECTED_SECTION_HEADING = 'Unselected';
+
 export type RowSection = {
   /**
    * - `'flat'` — single unheaded list (grouping = none).
@@ -460,7 +479,9 @@ function partitionBySelection(
       bucket.map((r) => r.project),
     );
     if (typeof resolved === 'string' && resolved.length > 0) return resolved;
-    return key === 'selected' ? 'Selected' : 'Unselected';
+    return key === 'selected'
+      ? DEFAULT_SELECTED_SECTION_HEADING
+      : DEFAULT_UNSELECTED_SECTION_HEADING;
   };
   const sections: RowSection[] = [];
   if (selected.length > 0) {

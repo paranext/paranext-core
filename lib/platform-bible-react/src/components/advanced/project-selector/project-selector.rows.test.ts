@@ -31,7 +31,7 @@ const openTabs: ProjectSelectorOpenTab[] = [
   { projectId: 'b', scrollGroupId: A },
 ];
 
-describe('computeRows — case-insensitive open-tab join (I12 regression)', () => {
+describe('computeRows — case-insensitive open-tab join', () => {
   // Real-world casing mismatch: canonical project ids are UPPERCASE (C# ProjectSummary →
   // Guid.ToUpperInvariant), but the open-tabs hook lowercases projectId. The join must still match
   // so the "Open Tabs" section renders. All-lowercase fixtures above never exercise this path.

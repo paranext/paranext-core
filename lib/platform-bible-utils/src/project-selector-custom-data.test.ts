@@ -65,6 +65,16 @@ describe('recencyMapFromOrderedIds', () => {
     scores.forEach((score) => expect(score).toBeGreaterThan(0));
   });
 
+  it('keeps the first occurrence of a duplicate id, so the most recent position wins', () => {
+    // Callers normalize ids on the way in (`orderedProjectIds.map(normalizeProjectId)`), which can
+    // collapse two differently-cased raw ids into one entry.
+    const map = recencyMapFromOrderedIds(['a', 'b', 'a']);
+    expect(map.size).toBe(2);
+    // 'a' keeps index 0's score (3), not the trailing index 2's score (1), so it still outranks
+    // 'b' — the entry it genuinely preceded.
+    expect(map.get('a') ?? Number.NaN).toBeGreaterThan(map.get('b') ?? Number.NaN);
+  });
+
   it('omits ids not in the list so they fall into the Other bucket', () => {
     expect(recencyMapFromOrderedIds(['a']).has('z')).toBe(false);
   });

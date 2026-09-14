@@ -1,4 +1,9 @@
-import type { ProjectSelectorGrouping } from './project-selector.rows';
+import { PROJECT_SELECTOR_CUSTOM_DATA_KEYS } from 'platform-bible-utils';
+import {
+  DEFAULT_SELECTED_SECTION_HEADING,
+  DEFAULT_UNSELECTED_SECTION_HEADING,
+  type ProjectSelectorGrouping,
+} from './project-selector.rows';
 
 /**
  * The platform-level localization keys that back every shared ProjectSelector string. Consumers
@@ -83,6 +88,21 @@ const RECENT = 'recent';
 const OTHER = 'other';
 
 /**
+ * Build the built-in `'openTabs'` grouping. `partitionByGrouping` recognizes the reserved id
+ * `'openTabs'` and splits off whether a row has an open tab, so this descriptor carries no
+ * `getGroupKey` of its own.
+ *
+ * Exported so the ProjectSelector's own auto-derived grouping list and {@link makeBuiltInGroupings}
+ * share one definition rather than each spelling the descriptor out.
+ */
+export function makeOpenTabsGrouping(label?: string): ProjectSelectorGrouping {
+  return {
+    id: 'openTabs',
+    label: label ?? 'Open tabs',
+  };
+}
+
+/**
  * Build the four built-in groupings (`openTabs`, `lastUsed`, `language`, `type`) with the supplied
  * (or English default) labels and section headings.
  *
@@ -103,15 +123,14 @@ const OTHER = 'other';
 export function makeBuiltInGroupings(strings?: BuiltInGroupingStrings): ProjectSelectorGrouping[] {
   const s = strings ?? {};
   return [
-    {
-      id: 'openTabs',
-      label: s.openTabsLabel ?? 'Open tabs',
-    },
+    makeOpenTabsGrouping(s.openTabsLabel),
     {
       id: 'lastUsed',
       label: s.lastUsedLabel ?? 'Last used',
       getGroupKey: (project) =>
-        typeof project.customData?.lastUsedAt === 'number' ? RECENT : OTHER,
+        typeof project.customData?.[PROJECT_SELECTOR_CUSTOM_DATA_KEYS.lastUsedAt] === 'number'
+          ? RECENT
+          : OTHER,
       getSectionHeading: (key) =>
         key === RECENT
           ? (s.lastUsedRecentSectionHeading ?? 'Recently used')
@@ -127,20 +146,26 @@ export function makeBuiltInGroupings(strings?: BuiltInGroupingStrings): ProjectS
     {
       id: 'language',
       label: s.languageLabel ?? 'Language',
-      getGroupKey: (project) =>
-        typeof project.customData?.language === 'string' ? project.customData.language : undefined,
+      getGroupKey: (project) => {
+        const language = project.customData?.[PROJECT_SELECTOR_CUSTOM_DATA_KEYS.language];
+        return typeof language === 'string' ? language : undefined;
+      },
       unknownSectionHeading: s.languageUnknownSectionHeading ?? 'Unknown language',
     },
     {
       id: 'type',
       label: s.typeLabel ?? 'Type',
-      getGroupKey: (project) =>
-        typeof project.customData?.type === 'string' ? project.customData.type : undefined,
+      getGroupKey: (project) => {
+        const type = project.customData?.[PROJECT_SELECTOR_CUSTOM_DATA_KEYS.type];
+        return typeof type === 'string' ? type : undefined;
+      },
       // First non-empty `typeName` wins as the section heading — protects against a project row
       // missing `typeName` while a sibling in the same type key has it.
       getSectionHeading: (key, projects) => {
-        const first = projects.find((p) => typeof p.customData?.typeName === 'string');
-        const heading = first?.customData?.typeName;
+        const first = projects.find(
+          (p) => typeof p.customData?.[PROJECT_SELECTOR_CUSTOM_DATA_KEYS.typeName] === 'string',
+        );
+        const heading = first?.customData?.[PROJECT_SELECTOR_CUSTOM_DATA_KEYS.typeName];
         return typeof heading === 'string' && heading.length > 0 ? heading : key;
       },
       unknownSectionHeading: s.typeUnknownSectionHeading ?? 'Unknown type',
@@ -185,8 +210,8 @@ export function makeSelectionGrouping(strings?: SelectionGroupingStrings): Proje
     label: s.label ?? 'Selection',
     getSectionHeading: (key) =>
       key === 'selected'
-        ? (s.selectedSectionHeading ?? 'Selected')
-        : (s.unselectedSectionHeading ?? 'Unselected'),
+        ? (s.selectedSectionHeading ?? DEFAULT_SELECTED_SECTION_HEADING)
+        : (s.unselectedSectionHeading ?? DEFAULT_UNSELECTED_SECTION_HEADING),
   };
 }
 

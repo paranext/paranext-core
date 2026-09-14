@@ -29,7 +29,6 @@ import {
   isPlatformError,
   makeProjectSelectorCustomData,
   normalizeProjectId,
-  recencyMapFromOrderedIds,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
@@ -52,18 +51,10 @@ import {
 } from './components/marker-settings-dialog.component';
 import { useChecklistService } from './hooks/use-checklist';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
-
-// Stable empty-array reference serving two roles: the recently-opened-projects `useData` default,
-// and the fallback the recency map is built from when the subscription has no usable list.
-// `useData` resubscribes when the default identity changes, so keeping this at module scope avoids
-// per-render re-subscriptions. Declared as the mutable `string[]` that `useData`'s `defaultValue`
-// parameter requires, then frozen separately so the shared instance cannot be mutated out from
-// under either role.
-const EMPTY_RECENT_PROJECTS: string[] = [];
-Object.freeze(EMPTY_RECENT_PROJECTS);
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -688,32 +679,13 @@ global.webViewComponent = function ChecklistWebView({
     useMemo<ChecklistRawProject[]>(() => [], []),
   );
 
-  // Recency input for the built-in `lastUsed` grouping. The service exposes an ordered id list
-  // (most-recent first) without timestamps, so we synthesize values via `recencyMapFromOrderedIds`
-  // for the grouping to read as its "recently used" presence flag.
-  const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
-    undefined,
-    EMPTY_RECENT_PROJECTS,
-  );
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('ChecklistWebView');
 
-  const allProjects = useMemo<ProjectSelectorProject[]>(() => {
-    // Recency is optional to the checklist: it only orders the built-in `lastUsed` grouping. When
-    // the provider is unavailable the subscription yields a PlatformError instead of an id list,
-    // so narrow before handing the value to `recencyMapFromOrderedIds`, which needs an array. An
-    // empty list degrades the grouping to "no recency" rather than losing the whole web view.
-    let orderedRecentProjectIds = recentProjectIds;
-    if (isPlatformError(orderedRecentProjectIds)) {
-      logger.warn(
-        `ChecklistWebView: failed to load recently opened projects: ${orderedRecentProjectIds.message}`,
-      );
-      orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
-    }
-    // Normalize BOTH sides of the lookup: the recents service stores whatever id its caller handed
-    // it, while these ids are canonical project ids, so an un-normalized `get` can miss on casing
-    // alone and route every project into the "Other" bucket.
-    const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds.map(normalizeProjectId));
-    return toChecklistSelectorRows(allProjectsRaw, recencyMap);
-  }, [allProjectsRaw, recentProjectIds]);
+  const allProjects = useMemo<ProjectSelectorProject[]>(
+    () => toChecklistSelectorRows(allProjectsRaw, recencyMap),
+    [allProjectsRaw, recencyMap],
+  );
 
   const comparativeProjects = useMemo<ProjectSelectorProject[]>(
     () => allProjects.filter((p) => p.id !== projectId),

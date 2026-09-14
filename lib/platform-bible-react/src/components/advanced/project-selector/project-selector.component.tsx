@@ -54,6 +54,8 @@ import {
 import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
 import {
   computeRows,
+  DEFAULT_SELECTED_SECTION_HEADING,
+  DEFAULT_UNSELECTED_SECTION_HEADING,
   partitionByGrouping,
   partitionFlat,
   type ProjectSelectorOpenTab,
@@ -69,6 +71,8 @@ import {
 } from './project-selector.rows';
 
 import {
+  makeOpenTabsGrouping,
+  makeSelectionGrouping,
   readProjectSelectorString,
   type ProjectSelectorStringLookup,
 } from './project-selector.groupings';
@@ -176,8 +180,8 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   otherProjectsSectionHeading: 'Your projects & resources',
   autoOpenTabsGroupingLabel: 'Open tabs',
   autoSelectionGroupingLabel: 'Selection',
-  autoSelectionSelectedSectionHeading: 'Selected',
-  autoSelectionUnselectedSectionHeading: 'Unselected',
+  autoSelectionSelectedSectionHeading: DEFAULT_SELECTED_SECTION_HEADING,
+  autoSelectionUnselectedSectionHeading: DEFAULT_UNSELECTED_SECTION_HEADING,
   boundButClosedTooltip: 'Bound to {group} · not currently open',
   openButtonLabel: 'Open',
   clearAll: 'Clear all',
@@ -311,7 +315,8 @@ type CommonProps = {
    * - `'openTabs'` when it's in the array,
    * - `'none'` (flat) otherwise.
    *
-   * Pass `'none'` to explicitly open flat even when groupings are available.
+   * Pass `'none'` — exported as {@link NO_GROUPING} — to explicitly open flat even when groupings
+   * are available.
    */
   defaultGrouping?: string | 'none';
 };
@@ -477,7 +482,6 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
             }}
             onMouseDown={(event: MouseEvent) => event.stopPropagation()}
             aria-label={strings.openButtonLabel}
-            title={strings.openButtonLabel}
           >
             <ArrowRight className="tw:h-3 tw:w-3" />
             {strings.openButtonLabel}
@@ -570,8 +574,12 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
 
 // #region Group-by menu
 
-/** Sentinel used for the "no grouping" radio value. Kept module-local (not exported). */
-const NO_GROUPING = 'none';
+/**
+ * Sentinel `defaultGrouping` / active-grouping value meaning "no grouping" (a flat list). Backs the
+ * group-by menu's None radio item, so it is a RESERVED {@link ProjectSelectorGrouping.id} that no
+ * consumer-defined grouping may use.
+ */
+export const NO_GROUPING = 'none';
 
 type ActiveGroupingId = string;
 
@@ -588,20 +596,40 @@ function GroupByMenu({
   onChangeGrouping,
   strings,
 }: GroupByMenuProps) {
+  // The button reads as a toggle that is "on" whenever a grouping is applied, so the active state
+  // is conveyed by the control itself rather than only by the section headings in the list.
+  const isGroupingActive = activeGrouping !== NO_GROUPING;
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="tw:h-8 tw:w-8 tw:shrink-0 tw:p-0"
-          aria-label={strings.groupByAriaLabel}
-          title={strings.groupByAriaLabel}
-          onMouseDown={(event: MouseEvent) => event.preventDefault()}
-        >
-          <Group className="tw:h-4 tw:w-4" />
-        </Button>
-      </DropdownMenuTrigger>
+      {/* The tooltip comes from the shadcn `Tooltip`, never a native `title` attribute, which would
+          render the browser-default yellow tooltip alongside the app's own styling. The enclosing
+          `TooltipProvider` lives on the selector's `PopoverContent`. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'tw:h-8 tw:w-8 tw:shrink-0 tw:p-0',
+                // Match shadcn Toggle's "on" styling so the icon reads as a toggle-group button
+                // that's currently pressed while a grouping is active.
+                isGroupingActive &&
+                  'tw:bg-accent tw:text-accent-foreground tw:hover:bg-accent/80 tw:data-[state=open]:bg-accent',
+              )}
+              aria-label={strings.groupByAriaLabel}
+              aria-pressed={isGroupingActive}
+              onMouseDown={(event: MouseEvent) => event.preventDefault()}
+            >
+              <Group className="tw:h-4 tw:w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        {/* No `zIndex` override: `TooltipContent` sets the tooltip tier itself, which is above both
+            the host popover and this menu. */}
+        <TooltipContent>{strings.groupByAriaLabel}</TooltipContent>
+      </Tooltip>
       {/* One of the few places a consumer legitimately overrides an overlay's own tier, so the
           reason is recorded here: this menu opens from inside this component's own
           `PopoverContent`. `DropdownMenuContent`'s own tier is `Z_INDEX_ABOVE_DOCK`, the same tier
@@ -638,7 +666,7 @@ function GroupByMenu({
 
 // #region Main component
 
-function resolveInitialActiveGrouping(
+function resolveDefaultActiveGrouping(
   availableGroupings: readonly ProjectSelectorGrouping[],
   defaultGrouping: string | undefined,
 ): ActiveGroupingId {
@@ -690,18 +718,20 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const availableGroupings = useMemo<readonly ProjectSelectorGrouping[]>(() => {
     if (props.availableGroupings !== undefined) return props.availableGroupings;
     const auto: ProjectSelectorGrouping[] = [];
+    // Built through the same factories `makeBuiltInGroupings` uses, so a descriptor's shape is
+    // defined once. The labels come from the resolved strings bag rather than the raw
+    // `%projectSelector_*%` lookup, which is why these have their own `auto*` string fields.
     if (props.openTabs.length > 0) {
-      auto.push({ id: 'openTabs', label: strings.autoOpenTabsGroupingLabel });
+      auto.push(makeOpenTabsGrouping(strings.autoOpenTabsGroupingLabel));
     }
     if (props.mode === 'project-multi') {
-      auto.push({
-        id: 'selection',
-        label: strings.autoSelectionGroupingLabel,
-        getSectionHeading: (key) =>
-          key === 'selected'
-            ? strings.autoSelectionSelectedSectionHeading
-            : strings.autoSelectionUnselectedSectionHeading,
-      });
+      auto.push(
+        makeSelectionGrouping({
+          label: strings.autoSelectionGroupingLabel,
+          selectedSectionHeading: strings.autoSelectionSelectedSectionHeading,
+          unselectedSectionHeading: strings.autoSelectionUnselectedSectionHeading,
+        }),
+      );
     }
     return auto;
   }, [
@@ -713,12 +743,21 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     strings.autoSelectionSelectedSectionHeading,
     strings.autoSelectionUnselectedSectionHeading,
   ]);
-  // Mount-time initializer only — we do NOT re-derive when props change, since that would fight a
-  // user who has since picked a different grouping. Callers control the initial value; the
-  // component owns the interactive one.
-  const [activeGrouping, setActiveGrouping] = useState<ActiveGroupingId>(() =>
-    resolveInitialActiveGrouping(availableGroupings, props.defaultGrouping),
+  // The grouping the user picked from the menu, or `undefined` while they have not picked one.
+  // Tracking "has the user chosen?" separately from "which grouping is active?" is what lets the
+  // resolved default below keep following its inputs without ever overriding a real choice.
+  const [pickedGrouping, setPickedGrouping] = useState<ActiveGroupingId | undefined>(undefined);
+  // Re-resolves whenever its inputs change, which matters because those inputs are commonly async:
+  // a caller that omits `availableGroupings` and loads `openTabs` over the wire has an empty list
+  // on first render, so a mount-only resolution would latch 'none' and leave the list flat even
+  // after the `openTabs` radio appeared in the menu.
+  const resolvedGrouping = useMemo<ActiveGroupingId>(
+    () => resolveDefaultActiveGrouping(availableGroupings, props.defaultGrouping),
+    [availableGroupings, props.defaultGrouping],
   );
+  // The user's choice wins permanently once made; until then the resolved default tracks the props.
+  // A picked id that later leaves `availableGroupings` degrades to flat (see `sections` below).
+  const activeGrouping = pickedGrouping ?? resolvedGrouping;
 
   // Clear the search filter when the popover closes so the next open starts
   // fresh — a persisted query across open/close confuses users who typed a
@@ -809,7 +848,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       case 'project-multi': {
         const current = props.selection.pairs;
         // Case-insensitive projectId match (canonical ids are UPPERCASE, but callers may pass
-        // lowercased tab-derived ids; see normalizeProjectId / I12). Guarantees that clicking a
+        // lowercased tab-derived ids; see normalizeProjectId). Guarantees that clicking a
         // row toggles the SAME pair regardless of casing on either side.
         const normalizedRowId = normalizeProjectId(row.projectId);
         const match = (p: ProjectSelectorProjectPair) =>
@@ -969,7 +1008,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
 
   let triggerIcon;
   // While the project list is loading, show a spinner in place of the chevron (even in narrow
-  // mode) so the user sees the selector is not ready yet. See I1.
+  // mode) so the user sees the selector is not ready yet.
   if (props.isLoading)
     triggerIcon = (
       <Loader2 className="tw:ms-2 tw:h-4 tw:w-4 tw:shrink-0 tw:animate-spin tw:opacity-50" />
@@ -1070,7 +1109,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                 <GroupByMenu
                   availableGroupings={availableGroupings}
                   activeGrouping={activeGrouping}
-                  onChangeGrouping={setActiveGrouping}
+                  onChangeGrouping={setPickedGrouping}
                   strings={strings}
                 />
               )}

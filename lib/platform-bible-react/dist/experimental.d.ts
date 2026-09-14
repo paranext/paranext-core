@@ -119,9 +119,15 @@ export type ProjectSelectorGrouping = {
 	 * Unique id — used as the radio value in the filter menu and to persist the "active grouping"
 	 * choice within a single mount. Must be unique within an `availableGroupings` array.
 	 *
-	 * The id `'openTabs'` is reserved: when present, partitioning derives from the separate
-	 * `openTabs` prop (see {@link partitionByOpenTabs}) rather than any row data, and `getGroupKey` is
-	 * ignored.
+	 * Three ids are RESERVED and must not be used by a consumer-defined grouping:
+	 *
+	 * - `'openTabs'` — partitioning derives from the separate `openTabs` prop (see
+	 *   {@link partitionByOpenTabs}) rather than any row data, and `getGroupKey` is ignored.
+	 * - `'selection'` — partitioning derives from `row.isSelected` (see {@link partitionByGrouping}),
+	 *   and `getGroupKey` is ignored.
+	 * - `'none'` — the "no grouping" sentinel backing the group-by menu's None radio item, exported as
+	 *   `NO_GROUPING`. A grouping carrying this id would collide with that radio item and could never
+	 *   be activated.
 	 */
 	id: string;
 	/**
@@ -404,7 +410,8 @@ type CommonProps = {
 	 * - `'openTabs'` when it's in the array,
 	 * - `'none'` (flat) otherwise.
 	 *
-	 * Pass `'none'` to explicitly open flat even when groupings are available.
+	 * Pass `'none'` — exported as {@link NO_GROUPING} — to explicitly open flat even when groupings
+	 * are available.
 	 */
 	defaultGrouping?: string | "none";
 };
@@ -448,6 +455,12 @@ type ProjectSelectorProps = (CommonProps & {
 	 */
 	onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
 });
+/**
+ * Sentinel `defaultGrouping` / active-grouping value meaning "no grouping" (a flat list). Backs the
+ * group-by menu's None radio item, so it is a RESERVED {@link ProjectSelectorGrouping.id} that no
+ * consumer-defined grouping may use.
+ */
+export declare const NO_GROUPING = "none";
 /**
  * Combo-box project picker with three modes:
  *

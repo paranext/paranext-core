@@ -15,7 +15,9 @@ import {
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
   PROJECT_SELECTOR_STRING_KEYS,
+  ProjectSelectorLocalizedStrings,
   buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
   makeBuiltInGroupings,
 } from 'platform-bible-react/experimental';
 import {
@@ -216,6 +218,20 @@ export function ChecksSidePanel({
     [projects],
   );
 
+  // Every ProjectSelector across the app resolves the shared `%projectSelector_*%` keys, then
+  // merges panel-specific overrides (placeholder, empty message, aria-label) on top.
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
+    () => ({
+      ...buildProjectSelectorLocalizedStrings(localizedStrings),
+      buttonPlaceholder:
+        localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%'],
+      commandEmptyMessage:
+        localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%'],
+      ariaLabel: localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
+    }),
+    [localizedStrings],
+  );
+
   // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys, narrowed to
   // the ids this panel offers. See CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS for which ones
   // and why.
@@ -284,14 +300,7 @@ export function ChecksSidePanel({
             onChangeSelection={({ projectId: nextId }) => {
               if (nextId) onSelectProject(nextId);
             }}
-            localizedStrings={{
-              buttonPlaceholder:
-                localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%'],
-              commandEmptyMessage:
-                localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%'],
-              ariaLabel:
-                localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
-            }}
+            localizedStrings={projectSelectorLocalizedStrings}
             availableGroupings={projectSelectorGroupings}
           />
         </div>

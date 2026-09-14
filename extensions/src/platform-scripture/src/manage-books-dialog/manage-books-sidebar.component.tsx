@@ -149,7 +149,7 @@ export type ManageBooksSidebarProps = {
 
   /**
    * Whether the project list is still loading. When true, the ProjectSelector trigger shows a
-   * spinner (and stays disabled) so the user sees the picker is not ready yet. See I1.
+   * spinner (and stays disabled) so the user sees the picker is not ready yet.
    */
   isLoadingProjects?: boolean;
 

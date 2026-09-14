@@ -24,6 +24,7 @@ export {
   type BuiltInGroupingStrings,
   type SelectionGroupingStrings,
   PROJECT_SELECTOR_STRING_KEYS,
+  NO_GROUPING,
   buildProjectSelectorLocalizedStrings,
   buildBuiltInGroupingStrings,
   buildSelectionGroupingStrings,

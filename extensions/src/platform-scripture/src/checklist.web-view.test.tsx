@@ -217,9 +217,9 @@ describe('ChecklistWebView recently-opened-projects wiring', () => {
   });
 
   it('renders when the recently-opened-projects subscription yields a PlatformError', async () => {
-    // The data provider is optional to the checklist: recency only orders the `lastUsed`
-    // grouping. An unavailable or failing provider must degrade to "no recency", never take the
-    // whole web view down.
+    // The data provider is optional to the checklist: recency only supplies the `lastUsed`
+    // grouping's "recently used" presence flag. An unavailable or failing provider must degrade to
+    // "no recency", never take the whole web view down.
     mockRecentProjects.value = newPlatformError('recently-opened-projects unavailable');
 
     const ChecklistWebView = getChecklistWebView();

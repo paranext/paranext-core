@@ -72,8 +72,9 @@ export type ProjectOption = {
   /** Language name, used by the picker's Language grouping. Omitted when unknown. */
   language?: string;
   /**
-   * Recency score, higher = more recent, used by the picker's Last-used grouping. Omitted when the
-   * project has not been opened.
+   * Presence flag the picker's Last-used grouping reads: any number puts the project in the
+   * "recently used" bucket. The magnitude is never compared, so it does not order anything. Omitted
+   * when the project has not been opened.
    */
   lastUsedAt?: number;
 };
