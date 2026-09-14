@@ -415,6 +415,8 @@ function mayScaleWholeIframe(webViewId: WebViewId): boolean {
 function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
   const definition = deps.getDefinition(webViewId);
   if (!definition) return;
+  // TODO(PT-4582): a pane re-pointed to another project keeps these levels; stamp the seeded
+  // identity and re-seed on mismatch.
   if (definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state) return;
   if (pendingOwnLevels.has(webViewId)) return;
   const id = memoryIdentityFor(definition);
