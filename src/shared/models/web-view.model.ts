@@ -314,6 +314,10 @@ export type SavedWebViewDefinition = (
  * view's primary content; a view that has several independently zoomable parts gives each its own
  * id).
  *
+ * `default` is reserved: its CSS custom property is the pane-wide default every other area falls
+ * back to, so an area of that name would set the default for the whole pane. The platform ignores
+ * an area marked with it — pick any other id.
+ *
  * @experimental This type is unstable and may change or disappear without notice
  */
 export type ContentZoomAreaId = string;
