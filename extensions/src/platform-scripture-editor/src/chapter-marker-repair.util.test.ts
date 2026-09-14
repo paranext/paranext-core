@@ -127,10 +127,13 @@ describe('repairChapterMarkers — USJ specifics', () => {
     });
   });
 
-  it('keeps a leading id marker ahead of a restored chapter marker', () => {
+  it('puts a restored chapter marker ahead of a stray leading id marker', () => {
+    // Paratext refuses a chapter after the first that holds anything at all before its chapter
+    // marker ("Text present before chapter marker."), so an `\id` typed into the chapter has to
+    // end up behind the marker, not in front of it.
     const { usj, didRepair } = repairChapterMarkers(usjOf(ID_GEN, para('p', 'body')), 2);
     expect(didRepair).toBe(true);
-    expect(usj.content).toEqual([ID_GEN, chapter('2'), para('p', 'body')]);
+    expect(usj.content).toEqual([chapter('2'), ID_GEN, para('p', 'body')]);
   });
 
   it('removes a chapter marker nested inside a paragraph', () => {

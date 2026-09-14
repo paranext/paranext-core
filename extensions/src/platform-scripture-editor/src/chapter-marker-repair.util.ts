@@ -20,8 +20,6 @@ import { resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 
 /** USJ `type` of a `\c` chapter marker node. */
 const CHAPTER_TYPE = 'chapter';
-/** USJ `type` of the `\id` book node, which is the one thing allowed ahead of a chapter marker. */
-const BOOK_TYPE = 'book';
 /** USJ `type` of a paragraph node. */
 const PARA_TYPE = 'para';
 /**
@@ -53,11 +51,6 @@ function isMarkerObject(item: MarkerContent | undefined): item is MarkerObject {
 /** Whether `item` is a chapter marker node. */
 function isChapterObject(item: MarkerContent): item is MarkerObject {
   return isMarkerObject(item) && item.type === CHAPTER_TYPE;
-}
-
-/** Whether `item` is the `\id` book marker node. */
-function isBookObject(item: MarkerContent): boolean {
-  return isMarkerObject(item) && item.type === BOOK_TYPE;
 }
 
 /**
@@ -116,15 +109,6 @@ function chooseAnchor(
 }
 
 /**
- * Where the chapter marker belongs in `content` for a chapter after the first: at the very start,
- * except that a leading `\id` book marker stays ahead of it.
- */
-function findChapterStartIndex(content: MarkerContent[]): number {
-  const index = content.findIndex((item) => !isBookObject(item));
-  return index === -1 ? content.length : index;
-}
-
-/**
  * A result carrying `repairedContent`, reporting a repair only when that content actually differs
  * from what the document already holds.
  */
@@ -177,11 +161,15 @@ export function repairChapterMarkers(
 
   const survivors = strippedContent.filter((item) => !isChapterObject(item));
   // Chapter 1 keeps its marker where the user has it, since the introduction ahead of it is the
-  // author's; every other chapter puts its marker at the start of the document.
+  // author's; every other chapter puts its marker at the very start of the document. Nothing may
+  // precede it there, not even an `\id` book node typed into the chapter: Paratext refuses a
+  // chapter after the first that holds any content ahead of its chapter marker ("Text present
+  // before chapter marker."), so a marker placed behind one would produce another document the
+  // writer will not take.
   const insertIndex =
     expectedChapterNum === 1 && anchor
       ? strippedContent.slice(0, anchor.index).filter((item) => !isChapterObject(item)).length
-      : findChapterStartIndex(survivors);
+      : 0;
 
   return toRepairResult(usj, [
     ...survivors.slice(0, insertIndex),
