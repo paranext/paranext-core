@@ -58,6 +58,8 @@ describe('SettingsSidebar — project full name adapter', () => {
 
     const projectSelectorMock = vi.mocked(ProjectSelector);
     const { projects } = projectSelectorMock.mock.calls[0][0];
-    expect(projects).toEqual([{ id: 'p1', shortName: 'ESV', fullName: 'English Standard Version' }]);
+    expect(projects).toEqual([
+      { id: 'p1', shortName: 'ESV', fullName: 'English Standard Version' },
+    ]);
   });
 });
