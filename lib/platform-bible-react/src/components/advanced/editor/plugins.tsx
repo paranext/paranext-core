@@ -56,7 +56,14 @@ export function Plugins({
       {/* toolbar plugins */}
       <ToolbarPlugin>
         {() => (
-          <div className="tw:sticky tw:top-0 tw:z-10 tw:flex tw:gap-2 tw:overflow-auto tw:border-b tw:p-1">
+          // Deliberately not sticky. This toolbar shares no scroll container with the comment
+          // panel's filter toolbar, so a z-index here competes with that toolbar for paint order
+          // and wins on DOM position. The editor box never scrolls internally, so there is nothing
+          // for the toolbar to stick to in any current consumer.
+          <div
+            data-testid="editor-format-toolbar"
+            className="tw:flex tw:gap-2 tw:overflow-auto tw:border-b tw:p-1"
+          >
             <FontFormatToolbarPlugin />
           </div>
         )}
