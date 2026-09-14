@@ -170,6 +170,29 @@ describe('content-zoom bootstrap script', () => {
     expect(api?.activeArea).toBe('footnotes');
   });
 
+  it('refuses to make an area the pane never reported the active one', async () => {
+    const html =
+      '<div id="toolbar">bar</div>' +
+      '<div data-platform-content-zoom-root id="main">' +
+      '<div data-platform-content-zoom-root="footnotes" id="nested"><p id="note">note</p></div>' +
+      '</div>' +
+      '<div data-platform-content-zoom-root="Bad Id!" id="malformed"><p id="bad">bad</p></div>';
+    const { bound } = install('wv-unreported', html);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-unreported', ['main']);
+
+    // Both markers resolve to an area id the pane rejected: one nested inside another area, one
+    // ill-formed. Neither may displace the area the pane did report.
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('bad').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-unreported', 1, 'main');
+  });
+
   it('accepts the meta key as the modifier and ignores Shift/Alt combinations and plain keys', () => {
     const { bound } = install('wv-3', TWO_AREAS);
     expect(key({ key: '=', metaKey: true }).defaultPrevented).toBe(true);
