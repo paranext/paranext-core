@@ -114,8 +114,6 @@ describe('web-view-content-zoom.service', () => {
       projectId: 'proj-A',
       state: {},
     });
-    forgetContentZoom('editor-1');
-    forgetContentZoom('editor-2');
     __setContentZoomDepsForTesting({
       getIframe: (id: string) => iframeFor(id),
       getDefinition: (id: string) => definitions.get(id),
@@ -198,6 +196,7 @@ describe('web-view-content-zoom.service', () => {
     settings['platform.webViewContentZoom'] = 1.5;
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main'); // 1.6
     await __flushContentZoomMemoryForTesting(); // persist 1.6 so the reset below deletes a real entry
     await resetContentZoom('editor-1', 'main');
@@ -259,6 +258,7 @@ describe('web-view-content-zoom.service', () => {
         },
       },
     });
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main');
     await __flushContentZoomMemoryForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
@@ -678,6 +678,7 @@ describe('web-view-content-zoom.service', () => {
       },
     });
     await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
     requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4 } };
     await resetContentZoom('editor-1', 'main');
     expect(definitions.get('editor-1')?.state).toEqual({});
