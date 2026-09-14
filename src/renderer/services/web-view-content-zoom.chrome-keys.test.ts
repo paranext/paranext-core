@@ -94,6 +94,18 @@ describe('registerContentZoomChromeKeys', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  it('does nothing on Ctrl+Shift+-, leaving it free for other uses', () => {
+    const event = dispatchKeyDown(document.body, { key: '-', ctrlKey: true, shiftKey: true });
+    expect(adjustContentZoom).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('does nothing on Ctrl+Shift+0, leaving it free for other uses', () => {
+    const event = dispatchKeyDown(document.body, { key: '0', ctrlKey: true, shiftKey: true });
+    expect(resetContentZoom).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it('does not act when Alt is held, since Ctrl+Alt chords have their own meanings', () => {
     const event = dispatchKeyDown(document.body, { key: '=', ctrlKey: true, altKey: true });
     expect(adjustContentZoom).not.toHaveBeenCalled();
