@@ -983,7 +983,13 @@ export function initializeContentZoomService(
     } catch (e) {
       logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
     }
-    // A pane adopted from another window arrives with its state; push its levels once it exists.
+    // This event carries every update to a web-view definition in this window: a pane adopted from
+    // another window arriving with its state, every `useWebViewState` write an extension makes,
+    // every per-pane scroll-group reference write. Most of them leave zoom alone, and the push is
+    // deliberately run for them anyway rather than kept behind a dirty check: it writes the same
+    // CSS variables the pane already has, reads no geometry and makes no request, and a check that
+    // compared the levels would have to be right about every other way a pane's variables can go
+    // stale to avoid suppressing a push the pane needed.
     deps.onDidUpdateWebView(({ webView }) => {
       if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
     });
