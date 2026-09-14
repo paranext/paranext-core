@@ -109,16 +109,16 @@ const RESOURCE_PROJECT_WAIT_ATTEMPTS = 5;
 const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
 
 /**
- * How long `getCachedResources` will wait for the installed-flag sync when a caller opts in. Well
- * under the 30-second network request timeout, because a caller that blocks past that gets a
- * rejection — and a panel paints a catalog-load failure over a catalog it could have shown.
+ * How long an opted-in `getCachedResources` waits for the flag sync. Well under the 30-second
+ * network request timeout, past which the caller would get a rejection instead of a usable
+ * catalog.
  */
 const INSTALLED_FLAGS_SYNC_WAIT_MS = 5000;
 
 /**
- * How long after this process started a project still missing from the metadata might simply not
- * have registered yet. Mirrors the platform's own grace period for exactly this question
- * (`LOAD_TIME_GRACE_PERIOD_MS` in `project-lookup.service-model.ts`, which is not exported).
+ * Process uptime before a project missing from the metadata is taken as absent rather than not yet
+ * registered. Mirrors `LOAD_TIME_GRACE_PERIOD_MS` in `project-lookup.service-model.ts`, which is
+ * not exported.
  */
 const PROJECT_REGISTRATION_GRACE_PERIOD_MS = 30 * 1000;
 
@@ -267,8 +267,7 @@ async function syncAfterInFlight(shouldRecomputeUpdateStatus: boolean): Promise<
 
 /**
  * Brings the derived flags up to date, `updateAvailable` included, and resolves once they are. A
- * caller that has just changed local state awaits this and then re-reads the catalog: nothing else
- * about an updated row changes, and no data-update event exists to announce the correction.
+ * caller that has just changed local state awaits this, then re-reads the catalog.
  */
 async function refreshResourceFlags(): Promise<void> {
   await syncAfterInFlight(true);
@@ -277,9 +276,8 @@ async function refreshResourceFlags(): Promise<void> {
 /**
  * The catalog as it currently stands, and whether it came from the cache.
  *
- * The distinction decides whether reconciling is even appropriate: a catalog just fetched from C#
- * carries `installed` flags read live from `ScrTextCollection`, so it is the authority the local
- * reconciliation approximates — never something to correct. Only a cached snapshot can be stale.
+ * Only a cached snapshot can be stale. A fresh fetch carries the flags C# read live, so reconciling
+ * it would correct the authority with its own approximation.
  */
 async function getCatalogFromCacheOrFetch(): Promise<{
   catalog: DblResourceCatalog;
@@ -309,10 +307,8 @@ async function getCachedResources(
   options?: GetCachedResourcesOptions,
 ): Promise<DblResourceCatalog> {
   const { catalog, isFromCache } = await getCatalogFromCacheOrFetch();
-  // A fresh fetch is already authoritative, and reconciling it would be actively harmful: the
-  // project list it would be checked against can be mid-registration, so rows C# just confirmed
-  // installed would be rewritten to not-installed AND persisted — manufacturing the stale flag this
-  // whole mechanism exists to survive.
+  // Reconciling a fresh fetch against a project list still being registered would downgrade, and
+  // persist, rows C# just confirmed installed.
   if (catalog.status !== 'available' || !isFromCache) return catalog;
 
   if (!options?.waitForInstalledFlagsSync) {
@@ -323,10 +319,9 @@ async function getCachedResources(
     return catalog;
   }
 
-  // A caller that acts on the flags waits for a sync that starts after its request, so a change it
-  // just made — a completed install — is observed. Bounded, and giving up is not an error: waiting
-  // past the network timeout would fail the command and paint a load failure over a usable catalog.
-  // `syncAfterInFlight` never rejects, which `waitForDuration` needs in order to time out promptly.
+  // Wait for a sync that starts after this request, so a just-completed install is observed. Timing
+  // out returns the snapshot instead of failing; `syncAfterInFlight` never rejects, which
+  // `waitForDuration` needs in order to time out promptly.
   await waitForDuration(() => syncAfterInFlight(false), INSTALLED_FLAGS_SYNC_WAIT_MS);
   // Re-read: the sync reassigns `cachedResources` rather than mutating it, so the catalog captured
   // above is the pre-sync array.
@@ -345,10 +340,8 @@ async function getCachedResources(
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
     await getCachedResources();
-    // Awaited without a bound, unlike `getCachedResources`' opt-in wait. The exclusion below is
-    // only as good as the `installed`/`projectId` flags, and giving up early does not degrade it —
-    // it duplicates rows, emitting a resource already on disk as a synthetic non-DBL entry
-    // alongside its real DBL one. Returning late beats returning double.
+    // Unbounded on purpose: giving up early would list a resource already on disk twice — as its
+    // real DBL row and as a synthetic non-DBL entry.
     await ensureInstalledFlagsSynced();
     // An absent catalog means one has never been fetched on this profile (a fetched catalog is
     // persisted and reloaded on activation), so there is nothing for these projects to duplicate

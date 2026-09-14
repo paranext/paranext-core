@@ -85,16 +85,11 @@ declare module 'platform-get-resources' {
   /** Options for the `platformGetResources.getCachedResources` command. */
   export type GetCachedResourcesOptions = {
     /**
-     * Wait for the catalog's `installed` flags to be reconciled against the local project list,
-     * instead of returning the current snapshot and reconciling in the background.
-     *
-     * Opt in when the next decision turns on those flags: a panel reading a pre-reconciliation
-     * snapshot sees "not installed" and downloads a resource already on disk. Leave it off for a
-     * listing, which would rather show a slightly stale catalog than wait. The wait is bounded and
-     * gives up quietly, so it never turns a slow reconciliation into a failed command.
-     *
-     * Does not refresh `updateAvailable`, which needs a backend round trip; a caller that needs it
-     * awaits `platformGetResources.refreshResourceFlags` instead.
+     * Wait, briefly, for the `installed` flags to be reconciled against the local project list
+     * rather than getting the current snapshot. For callers that act on the flags, such as a panel
+     * deciding whether to install a resource; a listing should not wait. Gives up quietly instead
+     * of failing the command, and does not refresh `updateAvailable` (see
+     * `platformGetResources.refreshResourceFlags`).
      */
     waitForInstalledFlagsSync?: boolean;
   };

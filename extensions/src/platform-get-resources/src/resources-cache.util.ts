@@ -13,9 +13,8 @@ export type ReconciledCachedResources = {
 export type ReconcileCachedResourcesOptions = {
   /**
    * Whether a project missing from `localProjectIds` means its resource is gone. Required, because
-   * the unsafe answer is the easy one: while project factories are still registering, absence
-   * proves nothing, and treating it as proof rewrites installed resources as uninstalled — the
-   * stale flag the caller then persists. See `adr-dbl-install-is-idempotent`.
+   * `true` is unsafe while project factories are still registering; see
+   * `adr-dbl-install-is-idempotent`.
    */
   canTrustAbsence: boolean;
 };

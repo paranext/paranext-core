@@ -435,19 +435,16 @@ internal class DblResourcesDataProvider(
             out var installableResource
         );
 
-        // Already having the resource is the outcome the caller asked for, so this is a no-op
-        // success, not a failure. Reporting it as an error strands a caller whose catalog snapshot
-        // says the resource is missing when it is in fact on disk: the install it fires can only
-        // ever come back as the same error, so the panel it feeds shows an install-failed state
-        // that no retry can leave.
+        // Already installed and up to date is what the caller asked for, so succeed without doing
+        // anything. Throwing would strand a caller whose stale catalog says the resource is
+        // missing: every retry would get the same error.
         if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
         {
             Console.WriteLine(
                 $"DBL resource {DBLEntryUid} is already installed and up to date. Installation skipped."
             );
-            // Nothing changed on disk, but the caller asked because its own view disagrees. Nudging
-            // the project-list consumers is what lets that view catch up; staying silent leaves it
-            // to guess when to look again.
+            // Nothing changed on disk, but the caller's view disagrees; a project-list notification
+            // lets it catch up.
             paratextProjects.NotifyProjectsChanged();
             return;
         }

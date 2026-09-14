@@ -15,12 +15,9 @@ export type DblResourceAutoInstallOptions = {
 };
 
 /**
- * Why the resource still is not usable.
- *
- * - `installRejected` — the install itself failed. Connectivity is a plausible cause.
- * - `listNotConverging` — the install SUCCEEDED (possibly as a no-op, because the resource was
- *   already on disk) and the caller's list still reports it uninstalled. Nothing is wrong with the
- *   download, so advice about the network would be actively misleading.
+ * Why the resource is still not usable: `installRejected` means the install failed;
+ * `listNotConverging` means it succeeded, perhaps as a no-op, but the caller's list still reports
+ * the resource uninstalled, so advice about the network would be wrong.
  */
 export type DblResourceInstallFailureReason = 'installRejected' | 'listNotConverging';
 
@@ -37,8 +34,8 @@ export type DblResourceAutoInstallState = {
   /** Drops the failed state without retrying, for a caller starting its own fresh attempt. */
   clearInstallFailure: () => void;
   /**
-   * Records a uid the caller installed and saw fail itself — e.g. a manual pick — so the failed
-   * state surfaces immediately and the auto-install effect does not fire a duplicate attempt.
+   * Records a uid the caller installed and saw fail itself, such as a manual pick, so the failed
+   * state shows at once and no duplicate auto-install fires.
    */
   markInstallFailed: (dblEntryUid: string) => void;
 };
@@ -52,9 +49,8 @@ export type DblResourceAutoInstallState = {
  *
  * The install is fire-and-forget; the caller re-resolves its resource list once it completes.
  *
- * An install that RESOLVES is never fired again for the same uid. Installing a resource already on
- * disk succeeds as a no-op, so a uid still uninstalled afterwards means the caller's list is not
- * converging — and since every success asks for a re-read, re-firing would loop. That uid gets the
+ * An install that resolves is not fired again for the same uid. Installing a resource already on
+ * disk succeeds as a no-op, so a uid still uninstalled afterwards would otherwise loop; it gets the
  * failed state instead, whose retry re-reads the list. See `adr-dbl-install-is-idempotent`.
  *
  * @param dblEntryUidToInstall Uid of the matched-but-uninstalled resource, or `undefined` when
