@@ -33,43 +33,79 @@ const downloaded = (over: Partial<DownloadedResource> = {}): DownloadedResource 
 });
 
 describe('matchesDownloaded', () => {
+  /** A catalog row for `uid`, reconciled against disk to `projectId`. */
+  const catalogRow = (uid: string, projectId: string): DblResourceData => ({
+    dblEntryUid: uid,
+    displayName: uid,
+    fullName: uid,
+    bestLanguageName: '',
+    type: 'ScriptureResource',
+    size: 0,
+    installed: true,
+    updateAvailable: false,
+    projectId,
+  });
+
   it('matches a ProjectReference by exact project id', () => {
     expect(
-      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
-        type: 'project',
-        name: 'WEB',
-        id: 'proj-web',
-      }),
+      matchesDownloaded(
+        downloaded({ projectId: 'proj-web' }),
+        { type: 'project', name: 'WEB', id: 'proj-web' },
+        [],
+      ),
     ).toBe(true);
   });
 
-  it('matches a DblResourceReference when the project id starts with the dblEntryUid', () => {
+  it('matches a DblResourceReference whose catalog row names this project', () => {
     expect(
-      matchesDownloaded(downloaded({ projectId: 'abc123def-extra' }), {
-        type: 'dblResource',
-        name: 'X',
-        id: 'abc123def',
-      }),
+      matchesDownloaded(
+        downloaded({ projectId: 'abc123def-extra' }),
+        { type: 'dblResource', name: 'X', id: 'abc123def' },
+        [catalogRow('abc123def', 'abc123def-extra')],
+      ),
     ).toBe(true);
+  });
+
+  // The case the prefix comparison could not see: a resource project's id is unrelated to the DBL
+  // entry it was installed from, so nothing about `9D60FD8F…` suggests `07ff1d5c…`. Listing it as
+  // unmatched put the same resource in the picker twice, under one id.
+  it('matches a DblResourceReference whose project id shares nothing with its uid', () => {
+    expect(
+      matchesDownloaded(
+        downloaded({ projectId: '9D60FD8F4A6E03BE' }),
+        { type: 'dblResource', name: 'TNCV', id: '07ff1d5c6a53cb05' },
+        [catalogRow('07ff1d5c6a53cb05', '9D60FD8F4A6E03BE')],
+      ),
+    ).toBe(true);
+  });
+
+  it('does not match a DblResourceReference with no catalog row', () => {
+    expect(
+      matchesDownloaded(
+        downloaded({ projectId: 'abc123def-extra' }),
+        { type: 'dblResource', name: 'X', id: 'abc123def' },
+        [],
+      ),
+    ).toBe(false);
   });
 
   it('does not match unrelated ids', () => {
     expect(
-      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
-        type: 'project',
-        name: 'KJN',
-        id: 'proj-kjn',
-      }),
+      matchesDownloaded(
+        downloaded({ projectId: 'proj-web' }),
+        { type: 'project', name: 'KJN', id: 'proj-kjn' },
+        [],
+      ),
     ).toBe(false);
   });
 
   it('does not match any project when the DblResourceReference id is empty', () => {
     expect(
-      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
-        type: 'dblResource',
-        name: 'X',
-        id: '',
-      }),
+      matchesDownloaded(
+        downloaded({ projectId: 'proj-web' }),
+        { type: 'dblResource', name: 'X', id: '' },
+        [],
+      ),
     ).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   ProjectReference,
@@ -451,7 +452,7 @@ describe('getViewOptionsTexts', () => {
     expect(allForWeb).toHaveLength(1);
   });
 
-  it('does not append a downloaded project whose ID starts with an existing DblResourceReference ID', () => {
+  it('does not append a downloaded project a listed DblResourceReference already covers', () => {
     const sources = makeSources({
       adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
     });
@@ -463,9 +464,45 @@ describe('getViewOptionsTexts', () => {
         language: 'English',
       },
     ];
-    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const dblResources: DblResourceData[] = [
+      {
+        dblEntryUid: 'dbl-uid-123',
+        displayName: 'DBL Resource',
+        fullName: 'DBL Resource Full',
+        bestLanguageName: 'English',
+        type: 'ScriptureResource',
+        size: 0,
+        installed: true,
+        updateAvailable: false,
+        projectId: 'dbl-uid-123extra',
+      },
+    ];
+
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded, dblResources });
+
     const duplicate = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
     expect(duplicate).toHaveLength(0);
+  });
+
+  // Without the catalog there is nothing to resolve the reference against, so the project cannot be
+  // recognised as already listed. The caller owes the rows; this pins that it is not silently fine.
+  it('appends a downloaded project when no catalog rows are supplied to match against', () => {
+    const sources = makeSources({
+      adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
+    });
+    const downloaded: DownloadedResource[] = [
+      {
+        projectId: 'dbl-uid-123extra',
+        name: 'DBL Resource',
+        fullName: 'DBL Resource Full',
+        language: 'English',
+      },
+    ];
+
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+
+    const rows = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
+    expect(rows).toHaveLength(1);
   });
 });
 
