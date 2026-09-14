@@ -305,6 +305,30 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it("keeps a burst's levels pending when its trailing write fails, and writes them with the next edit", async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.1, written immediately
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.2, deferred into the open window
+      updateDefinition.mockImplementation(() => {
+        throw new Error('local storage quota exceeded');
+      });
+      vi.advanceTimersByTime(250); // the trailing write of the burst fails
+      updateDefinition.mockImplementation(applyDefinitionUpdate);
+      updateDefinition.mockClear();
+      // The next step of the same gesture starts from the level the failed write was carrying, and
+      // its own write carries that level with it rather than leaving it behind.
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.3
+      expect(updateDefinition).toHaveBeenCalledWith('editor-1', {
+        state: { [LEVELS]: { main: 1.3 } },
+      });
+      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.3 } });
+      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('still flushes the memory write on beforeunload when a definition write fails', async () => {
     vi.useFakeTimers();
     try {
