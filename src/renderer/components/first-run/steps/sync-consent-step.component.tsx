@@ -21,14 +21,14 @@ const defaultSyncFn = (): Promise<void> =>
     : sendCommand('paratextBibleSendReceive.syncProjects', undefined);
 
 /**
- * Sync consent wizard step. Presents "Sync" as the primary action; skip is surfaced by the shell
- * footer (signalled via `setCanSkip(true)`). Advancing via "Sync" runs
+ * Sync consent wizard step. Presents "Sync" as the primary action; the decline button is surfaced
+ * by the shell footer (signalled via `setCanSkip(true)`). Advancing via "Sync" runs
  * `paratextBibleSendReceive.syncProjects` then calls `onNext`.
  *
  * `setCanProceed(undefined)` hides the shell's generic Next/Finish button — this step owns its
- * primary action (Sync). `setCanSkip(true)` tells the shell to show a Skip button in its footer,
- * which calls `completeFirstRun({ skippedStep: 'syncConsent' })`. The shell's `isBusy` guard
- * disables Skip while any async action (including the skip itself) is in flight.
+ * primary action (Sync). `setCanSkip(true)` tells the shell to show its "Don't sync yet" button,
+ * which calls `completeFirstRun()` — a wizard-scoped deferral that leaves startup auto-sync on for
+ * later launches. The shell's `isBusy` guard disables it while any async action is in flight.
  *
  * `onSync` is injectable for Storybook and unit-test isolation.
  */
@@ -42,28 +42,28 @@ function SyncConsentStep({
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState('');
 
-  // Tell the shell to show a Skip button. useEffect (async) is fine — a brief delay before Skip
+  // Tell the shell to show its "Don't sync yet" button. useEffect (async) is fine — a brief delay
   // appears is harmless.
   useEffect(() => {
     setCanSkip?.(true);
   }, [setCanSkip]);
   // Hide the shell's generic Next/Finish button — this step owns its primary action (Sync).
-  // The shell footer still renders, showing the Skip button (and Back if applicable) — the shell's
-  // isBusy guard is responsible for disabling Skip while an async action is in flight.
+  // The shell footer still renders "Don't sync yet" (and Back if applicable) — the shell's isBusy
+  // guard is responsible for disabling it while an async action is in flight.
   useLayoutEffect(() => {
     setCanProceed?.(undefined);
   }, [setCanProceed]);
 
   const handleSync = async () => {
     setError('');
-    setCanSkip?.(false); // prevent Skip while sync is in-flight
+    setCanSkip?.(false); // hide the decline button while the sync is in flight
     setIsSyncing(true);
     try {
       await onSync();
       onNext();
     } catch (e) {
       setError(getErrorMessage(e));
-      setCanSkip?.(true); // re-enable Skip so the user can still bail after a failed sync
+      setCanSkip?.(true); // restore it so the user can still decline after a failed sync
     } finally {
       setIsSyncing(false);
     }

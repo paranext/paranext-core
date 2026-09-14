@@ -44,6 +44,13 @@
       "message": "Replaced by %firstRun_button_skipSync% when the real sync-consent step was implemented in PT-4178."
     }
   },
+  "%firstRun_button_skipSync%": {
+    "fallbackKey": "%firstRun_button_dontSyncYet%",
+    "deprecationInfo": {
+      "date": "2026-08-16",
+      "message": "Reworded to the wizard-scoped \"Don't sync yet\" per PT-4178's approved labelling: the choice defers only the wizard's own sync rather than setting a standing preference. The new key is %firstRun_button_dontSyncYet%."
+    }
+  },
   "%firstRun_error_body%": {
     "deprecationInfo": {
       "date": "2026-07-30",
