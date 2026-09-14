@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import menuDataObject from '@extension-host/data/menu.data.json';
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
@@ -13,28 +13,57 @@ vi.mock('@shared/services/settings.service', () => ({
   },
 }));
 
+// Note: using resolve(__dirname, ...) instead of fileURLToPath(new URL(..., import.meta.url))
+// because this test runs under jsdom where import.meta.url does not have a file: scheme.
+const EXTENSIONS_DIR = resolve(__dirname, '../../../extensions/src');
+
+/** How many application main menu items a shipped `menus.json` contributes. */
+function countMainMenuItems(menus: JsonDocumentLike): number {
+  if (Array.isArray(menus)) return 0;
+  const { mainMenu } = menus;
+  if (!mainMenu || typeof mainMenu !== 'object' || Array.isArray(mainMenu)) return 0;
+  if (!('items' in mainMenu)) return 0;
+  const { items } = mainMenu;
+  return Array.isArray(items) ? items.length : 0;
+}
+
+/** An extension's manifest `name`, which is how `contribution.service` keys its contributions. */
+function readManifestName(directory: string): string {
+  const manifest: unknown = JSON.parse(
+    readFileSync(resolve(EXTENSIONS_DIR, directory, 'manifest.json'), 'utf8'),
+  );
+  if (manifest && typeof manifest === 'object' && 'name' in manifest) {
+    const { name } = manifest;
+    if (typeof name === 'string') return name;
+  }
+  throw new Error(`Extension ${directory} contributes main menu items but has no manifest name`);
+}
+
 /**
- * Extensions that contribute application main menu items, by manifest `name` — the same key
- * `contribution.service` uses when it registers each extension's menu document.
+ * Every shipped extension contributing application main menu items, as `[manifest name, menu
+ * document]` pairs.
+ *
+ * Discovered by scanning `extensions/src` rather than listed by hand, so an extension that starts
+ * contributing main menu items is covered without anyone having to remember this file — which
+ * matters because the empty-group expectations below are only true of the menu as a whole.
  *
  * `contribution.service`'s combiner only ever sees `menu.data.json` under test, because extension
  * contributions are added inside the extension-load path, which does not run here. So these tests
- * read the shipped manifests off disk and combine them explicitly. Reading the real files (rather
- * than inlining fixtures) is what makes this track the shipped menus, and it borrows the combiner's
+ * read the shipped files off disk and combine them explicitly. Reading the real files (rather than
+ * inlining fixtures) is what makes this track the shipped menus, and it borrows the combiner's
  * schema validation for free: a mistyped flag rejects the whole document.
  */
-const MENU_CONTRIBUTING_EXTENSIONS: Record<string, string> = {
-  platformGetResources: 'platform-get-resources',
-  platformLexicalTools: 'platform-lexical-tools',
-  platformEnhancedResources: 'platform-enhanced-resources',
-  paratextRegistration: 'paratext-registration',
-};
-
-// Note: using resolve(__dirname, ...) instead of fileURLToPath(new URL(..., import.meta.url))
-// because this test runs under jsdom where import.meta.url does not have a file: scheme.
-function readShippedMenuContribution(directory: string): JsonDocumentLike {
-  const path = resolve(__dirname, `../../../extensions/src/${directory}/contributions/menus.json`);
-  return JSON.parse(readFileSync(path, 'utf8'));
+function getMenuContributingExtensions(): [string, JsonDocumentLike][] {
+  return readdirSync(EXTENSIONS_DIR, { withFileTypes: true }).flatMap(
+    (entry): [string, JsonDocumentLike][] => {
+      if (!entry.isDirectory()) return [];
+      const menusPath = resolve(EXTENSIONS_DIR, entry.name, 'contributions/menus.json');
+      if (!existsSync(menusPath)) return [];
+      const menus: JsonDocumentLike = JSON.parse(readFileSync(menusPath, 'utf8'));
+      if (countMainMenuItems(menus) === 0) return [];
+      return [[readManifestName(entry.name), menus]];
+    },
+  );
 }
 
 /**
@@ -46,8 +75,8 @@ function readShippedMenuContribution(directory: string): JsonDocumentLike {
  */
 function getRealCombinedMenus(): PlatformMenus {
   const combiner = new MenuDocumentCombiner(menuDataObject);
-  Object.entries(MENU_CONTRIBUTING_EXTENSIONS).forEach(([extensionName, directory]) => {
-    combiner.addOrUpdateContribution(extensionName, readShippedMenuContribution(directory));
+  getMenuContributingExtensions().forEach(([extensionName, menus]) => {
+    combiner.addOrUpdateContribution(extensionName, menus);
   });
   const combined = combiner.rawOutput;
   if (!combined) throw new Error('Platform menu document failed to combine with contributions');
@@ -67,6 +96,22 @@ async function getMainMenuInMode(mode: 'simple' | 'power') {
 function hasCommand(menu: Awaited<ReturnType<typeof getMainMenuInMode>>, command: string): boolean {
   return menu.items.some((item) => 'command' in item && item.command === command);
 }
+
+describe('Shipped menu contributions are discovered', () => {
+  /**
+   * Every assertion below reasons about the combined menu, so a scan that silently found nothing
+   * would make each "absent in Simple" case trivially true. These name the contributors the rest of
+   * the suite depends on without making the scan itself a hand-maintained list.
+   */
+  test.each([
+    'platformGetResources',
+    'platformLexicalTools',
+    'platformEnhancedResources',
+    'paratextRegistration',
+  ])('%s is picked up from the shipped extensions', (extensionName) => {
+    expect(getMenuContributingExtensions().map(([name]) => name)).toContain(extensionName);
+  });
+});
 
 describe('Extension-contributed main menu items are gated for Simple mode', () => {
   /**

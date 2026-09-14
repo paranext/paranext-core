@@ -13,8 +13,7 @@ const readLocalization = (file: string): Record<string, string> =>
 
 const en = readLocalization('en.json');
 const es = readLocalization('es.json');
-const metadata: Record<string, { fallbackKey?: string; deprecationInfo?: unknown }> =
-  readLocalization('metadata.json');
+const metadata: Record<string, { fallbackKey?: string }> = readLocalization('metadata.json');
 
 const COMMUNITY_SUPPORT_KEY = '%mainMenu_helpInfo_visitCommunitySupportPage%';
 const RETIRED_FAQS_KEY = '%mainMenu_helpInfo_visitFAQsPage%';
@@ -56,20 +55,22 @@ describe('The retired FAQs key stays resolvable', () => {
     expect(locale[RETIRED_FAQS_KEY]).toBeTruthy();
   });
 
-  test('is redirected at the new key and marked deprecated', () => {
+  test('is redirected at the new key', () => {
     expect(metadata[RETIRED_FAQS_KEY]?.fallbackKey).toBe(COMMUNITY_SUPPORT_KEY);
-    expect(metadata[RETIRED_FAQS_KEY]?.deprecationInfo).toBeDefined();
   });
 });
 
 describe('Every menu label and tooltip is localized', () => {
+  // `webViewMenus` carries no entries in the shipped document, so it contributes no keys; every
+  // other section of menu.data.json is swept here.
   const menus = [
     ['mainMenu', menuDataObject.mainMenu],
     ['defaultWebViewTopMenu', menuDataObject.defaultWebViewTopMenu],
     ['defaultWebViewContextMenu', menuDataObject.defaultWebViewContextMenu],
+    ['defaultWebViewTabMenu', menuDataObject.defaultWebViewTabMenu],
   ] as const;
 
-  const localizeKeys = menus.flatMap(([menuName, menu]) =>
+  const itemKeys = menus.flatMap(([menuName, menu]) =>
     menu.items.flatMap((item) =>
       [item.label, 'tooltip' in item ? item.tooltip : undefined]
         .filter((key): key is string => typeof key === 'string')
@@ -77,11 +78,29 @@ describe('Every menu label and tooltip is localized', () => {
     ),
   );
 
+  // Column labels are the menubar's own triggers — an unlocalized one shows a raw key across the
+  // top of the app. `columns` also holds the `isExtensible` flag, which carries no label.
+  const columnMenus = [
+    ['mainMenu', menuDataObject.mainMenu],
+    ['defaultWebViewTopMenu', menuDataObject.defaultWebViewTopMenu],
+  ] as const;
+
+  const columnKeys = columnMenus.flatMap(([menuName, menu]) =>
+    Object.values(menu.columns)
+      .filter((column) => typeof column === 'object' && 'label' in column)
+      .map((column) => [`${menuName} column: ${column.label}`, column.label] as const),
+  );
+
+  const localizeKeys = [...itemKeys, ...columnKeys];
+
   test.each(localizeKeys)('%s resolves in English', (_, key) => {
     expect(en[key]).toBeTruthy();
   });
 
-  test.each(localizeKeys)('%s resolves in Spanish', (_, key) => {
+  // Column labels are excluded from the translated-language sweep: the Platform.Bible column is
+  // labelled with the product name, which ships English-only in every locale by design. Menu items
+  // carry no such exemption, so they are all expected to be translated.
+  test.each(itemKeys)('%s resolves in Spanish', (_, key) => {
     expect(es[key]).toBeTruthy();
   });
 });

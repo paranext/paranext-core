@@ -49,16 +49,18 @@ Registered as a project in `playwright.config.ts` (`name: 'enhanced-resources'`)
 by `playwright-cdp.config.ts`, which testIgnores `smoke`, `isolated`, `_example`, and
 `manage-books` but not this directory. There is no dedicated npm script.
 
-Registered is not the same as runnable. These specs use `er.fixture.ts` (a thin wrapper over
-`fixtures/cdp.fixture.ts`), so they attach to an already-running app and must go through the CDP
+Registered is not the same as runnable. These specs attach through `fixtures/cdp.fixture.ts` — most
+via the `enhanced-resources.fixture.ts` wrapper — so they attach to an already-running app and must go through the CDP
 config — `playwright.config.ts`'s `globalSetup` rejects the very app they need. They also need real
 Marble resources (e.g. `ESV16UK+`) that are not available in CI. Two specs are additionally
 quarantined from type-checking in `e2e-tests/tsconfig.json`.
 
-**Start the app in Power mode.** "Open enhanced resource" is hidden in Simple mode, so this whole
-suite requires it: `er.fixture.ts` declares `requiredInterfaceMode: 'power'`, and attaching to a
-Simple-mode app fails fast with that message rather than timing out on the menu. Set
+**Start the app in Power mode.** "Open enhanced resource" is hidden in Simple mode, so every spec
+that opens it requires Power: `enhanced-resources.fixture.ts` declares `requiredInterfaceMode: 'power'`, and
+attaching to a Simple-mode app fails fast with that message rather than timing out on the menu. Set
 `'platform.interfaceMode': 'power'` in `dev-appdata/data/settings.json` before starting the app.
+`text-collection-schema.spec.ts` is the exception — it drives the project data provider directly,
+works in either mode, and stays on `cdp.fixture`.
 
 **Size:** 15 spec files — 113 `test(...)` declarations and 45 `test.fixme(...)`. The `fixme` ones
 cannot run even in principle; they are disabled by their own authors.
