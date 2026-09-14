@@ -566,6 +566,20 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'scripture-text-grid-zoom-wheel',
+    purpose:
+      'Zoom one resource column of the Text Collection grid in or out one step per wheel notch',
+    category: 'Zoom',
+    context:
+      'Inside the Text Collection grid — the resource column under the pointer. Registered capture-phase on the grid container and stops propagation, so it takes precedence over the pane-level content zoom (see content-zoom-wheel)',
+    // Accepts Ctrl or ⌘ and still acts when Shift or Alt is held as well, unlike the pane-level
+    // handler. Keyboard zoom for this grid is deferred pending PT-4143.
+    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts',
+    ],
+  },
+  {
     id: 'enhanced-resources-toggle-footnotes',
     purpose: 'Toggle the footnotes panel',
     category: 'View',
