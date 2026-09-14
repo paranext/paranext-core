@@ -542,10 +542,11 @@ internal static class Pt9InterlinearReader
 
     /// <summary>
     /// Maps one setup to its served shape. A model name that is empty or PT9's no-model sentinel
-    /// means the setup has no model text, so the name is absent; the model id passes through
-    /// whenever present, since a model-less setup mints one as its settings key. An empty font
-    /// name or export text name is likewise absent; every other string passes through, so an
-    /// empty one stays empty.
+    /// means the setup has no model text, so the name is absent; the model id serves whenever
+    /// present, since a model-less setup mints one as its settings key. The only strings this
+    /// normalizes are the font name and the export text name, both absent when empty; the two id
+    /// fields serve <c>HexId.ToString()</c> and the language fields serve verbatim. See
+    /// <see cref="Pt9InterlinearSetup"/> for what that leaves a consumer.
     /// </summary>
     private static Pt9InterlinearSetup ConvertPt9InterlinearSetup(InterlinearSetup setup)
     {

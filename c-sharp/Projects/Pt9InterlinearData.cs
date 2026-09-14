@@ -144,14 +144,25 @@ public sealed record Pt9Lexicon(
 /// (e.g. <c>Glossing</c>, <c>BackTranslation</c>), the gloss language id, the display fields the
 /// user gave the language for setups created without a model text (name, font, size, direction),
 /// the model text the interlinearization reads from, and the export half: whether and where
-/// approved verses export. The model name is absent for a setup with no model text; the model id
-/// serves whenever PT9 stored one, since a model-less setup mints an id as its settings key.
-/// Emptiness is not normalized uniformly. A <c>FontName</c>, <c>ModelScrTextName</c>, or
-/// <c>ExportScrTextName</c> that is empty in the project is absent here; <c>LanguageId</c>,
-/// <c>LanguageName</c>, <c>ModelScrTextId</c>, and <c>ExportScrTextId</c> serve as the project
-/// stored them, so an empty one serves as an empty string and only a field the project omits is
-/// absent. That split is incidental to how each field is read rather than a guarantee of this
-/// payload, so treat an empty string and an absent field alike.
+/// approved verses export.
+///
+/// The model name is absent for a setup with no model text; the model id serves whenever PT9
+/// stored one, since a model-less setup mints an id as its settings key.
+///
+/// Emptiness is not normalized uniformly. A <c>FontName</c> or <c>ExportScrTextName</c> that is
+/// empty in the project is absent here, as is an empty <c>ModelScrTextName</c>, which the
+/// no-model rule above already covers. <c>LanguageId</c> and <c>LanguageName</c> serve the
+/// project's text verbatim, while <c>ModelScrTextId</c> and <c>ExportScrTextId</c> serve PT9's
+/// own re-formatting of the id rather than the characters the project stored: hex digits fold to
+/// lowercase, and a legacy resource id is re-encoded (<c>1234567890abcdefres</c> serves as
+/// <c>1234567890abcdefabcdefff</c>). An empty one of those four serves as an empty string, and
+/// only a field the project omits is absent.
+///
+/// That split is incidental to how each field is read rather than a guarantee of this payload, so
+/// treat an empty string and an absent field alike.
+///
+/// An id that is neither empty nor valid hex is not degraded to absent: it fails the whole read
+/// with the setups file named, taking books, lexicon, and word analyses down with it.
 /// </summary>
 public sealed record Pt9InterlinearSetup(
     [property: JsonPropertyName("type")] string Type,

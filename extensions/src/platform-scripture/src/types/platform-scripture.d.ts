@@ -1465,6 +1465,12 @@ declare module 'platform-scripture' {
    * locally installed projects, as PT9 itself does, so a setup whose model text is not installed is
    * absent.
    *
+   * Treat an empty string and an absent field alike: which of the two an optional string field
+   * carries is an accident of how Paratext 9 happened to store and read it, not a promise. Note
+   * also that an optional field here is not necessarily an absent JSON key - the payload serializes
+   * nulls rather than omitting them, so a field this type declares `?: string` can arrive as
+   * `null`. Check for a falsy value rather than for the key.
+   *
    * @experimental
    */
   export type Pt9InterlinearSetup = {
