@@ -89,9 +89,9 @@ export const CONTENT_ZOOM_STYLE_ELEMENT_ID = 'platform-content-zoom-styles';
  * stored factor (`scripturePaneZoom` web-view state; `use-resource-zoom-input.hook.ts`) — and
  * neither marks a platform zoom area, so the platform only scales their whole iframe at the
  * Settings default and that scaling multiplies with the view's own factor. When either view adopts
- * the platform mechanism it should mark its areas, drop its own handler and stored factor, and
- * migrate that factor into the memory key this map selects; only then does its entry here start to
- * matter.
+ * the platform mechanism (the grid in PT-4582, Enhanced Resources in PT-4583) it should mark its
+ * areas, drop its own handler and stored factor, and migrate that factor into the memory key this
+ * map selects; only then does its entry here start to matter.
  */
 export const CONTENT_ZOOM_KIND_BY_WEB_VIEW_TYPE: ReadonlyMap<string, ContentZoomKind> = new Map<
   string,
