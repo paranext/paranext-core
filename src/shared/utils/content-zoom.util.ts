@@ -7,6 +7,15 @@ import {
   ZOOM_STEP,
 } from '@shared/models/content-zoom.model';
 
+/*
+ * `clampZoom`, `roundZoom` and `adjustZoomFactor` below are mirrored, with the same bounds and the
+ * same step, in `extensions/src/platform-scripture-editor/src/scripture-text-grid/
+ * resource-zoom.utils.ts`, which the Scripture text grid's own pane zoom uses. Core cannot import
+ * extension source and an extension cannot import `@shared`, so the two copies can only be shared
+ * by promoting them into `platform-bible-utils`; that move is deferred to a later work item. Until
+ * then, change both copies together.
+ */
+
 /** Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`. */
 export function clampZoom(factor: number): number {
   if (factor < MIN_ZOOM_FACTOR) return MIN_ZOOM_FACTOR;
