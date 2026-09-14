@@ -427,9 +427,11 @@ onDidCloseWebView(({ webView }) => {
   }
 })();
 
-// A gesture, not a focus event: a window held back from the foreground takes focus by itself when
-// its page first paints, so treating focus as activation would end the withholding before the user
-// had done anything. Pointer and key are the first things a person actually does in a window.
+// A gesture, not this window's own `focus` event: a window held back from the foreground takes
+// focus by itself when its page first paints, so treating that self-focus as activation would end
+// the withholding before the user had done anything. Pointer and key are the first things a person
+// actually does in a window. Main naming this window focused is different: that IS activation, and
+// is handled in `setIsThisWindowFocused` below.
 window.addEventListener('pointerdown', () => {
   endWithholdingAndCatchUp();
 });
@@ -477,14 +479,15 @@ function endWithholdingAndCatchUp(): void {
  * has actually become the one the main process considers focused. Called from
  * {@link setIsThisWindowFocused} on every transition into "focused".
  *
- * Distinct from {@link endWithholdingAndCatchUp} above: that one is gesture-gated (a click or
- * keystroke INSIDE a window still awaiting its first activation) and reads the unbounded
- * `takeTabAwaitingDocumentFocus`, because a click IS the arrival it is catching up on. This one
- * fires on an OS focus change, which — unlike a gesture — can arrive long after the raise it was
- * meant to complete (an unrelated later alt-tab back into this window, once the window has moved on
- * to something else entirely), so it reads the bounded `takeTabAwaitingDocumentFocusIfFresh`
- * instead: a stale note is left alone rather than stealing focus into a tab the user never asked to
- * see.
+ * Distinct from {@link endWithholdingAndCatchUp} above: the two differ in what triggers them, not —
+ * after a window's first activation — in what they read. That one triggers on a gesture inside this
+ * window and reads the unbounded `takeTabAwaitingDocumentFocus`, but only for the window's first
+ * activation; every gesture after that falls back to the same bounded read this one always uses.
+ * This one triggers on main naming this window focused, which — unlike a gesture — can arrive long
+ * after the raise it was meant to complete (an unrelated later alt-tab back into this window, once
+ * the window has moved on to something else entirely), so it always reads the bounded
+ * `takeTabAwaitingDocumentFocusIfFresh` instead: a stale note is left alone rather than stealing
+ * focus into a tab the user never asked to see.
  *
  * Reached only for a genuine activation, so it needs no withholding check of its own: a window's
  * own first-paint self-focus is handed back by main without ever being recorded as focus, and
