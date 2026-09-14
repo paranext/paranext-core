@@ -43,7 +43,13 @@ function isInsideIframe(target: EventTarget | null): boolean {
   return !!target.closest('iframe');
 }
 
-/** Keys exactly as the in-view bootstrap recognizes them. */
+/**
+ * Keys exactly as the in-view bootstrap script's own keydown handler recognizes them (`onKeyDown`
+ * inside `getContentZoomBootstrapScript` in `web-view-content-zoom.bootstrap-script.ts`). That
+ * script is serialized to a string and cannot import this module, so the two copies are
+ * independently maintained — change both together. `web-view-content-zoom.chord-parity.test.ts` is
+ * the guard that keeps them in sync.
+ */
 function actionFor(e: KeyboardEvent): ChordAction | undefined {
   if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd') return 'in';
   if (e.key === '-' || e.code === 'NumpadSubtract') return 'out';

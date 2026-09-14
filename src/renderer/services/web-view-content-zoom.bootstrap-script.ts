@@ -274,6 +274,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         warnPapi('Content zoom command ' + command + ' threw: ' + (e && e.message ? e.message : e));
       }
     };
+    // The keydown chord rule below mirrors web-view-content-zoom.chrome-keys.ts's
+    // isChordModifier / isAllowedShiftState / actionFor. This script is serialized to a string
+    // and cannot import that module, so the two copies are independently maintained - change
+    // both together. web-view-content-zoom.chord-parity.test.ts is the guard that keeps them
+    // in sync.
     const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey;
 
     const onKeyDown = (e) => {
