@@ -1799,6 +1799,11 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | '
  *   A data hook preserves its value across a source change, so on a resource switch the previous
  *   resource's chapter is still in hand with nothing about the value itself to reveal that. The
  *   caller tracks which resource its held value arrived for and says so here.
+ *
+ *   `isUsjSettled` cannot stand in for this. It is re-armed when the data PROVIDER changes, but a
+ *   resource switch resolves the new provider asynchronously and the old one is handed back for the
+ *   whole lookup — so across the window this parameter exists to cover, the subscription still
+ *   reads settled.
  * @returns Which of the four content states to render.
  */
 export function resolveResourceContentState({
@@ -1822,9 +1827,17 @@ export function resolveResourceContentState({
   // Ahead of the currency check below, and that order is load-bearing. `isAnswerCurrent` is
   // derived from a change of value IDENTITY, which a delivered `undefined` does not produce when
   // the held value is already `undefined` — so it reads stale here and would pin this case on
-  // `'loading'` forever, which is the symptom this branch exists to remove. Safe to decide first
-  // because a stale held value is a previous chapter's USJ, never `undefined`: a resource switch
-  // changes the data provider, which re-arms loading.
+  // `'loading'` forever, which is the symptom this branch exists to remove.
+  //
+  // That precedence leaves one stale case uncovered, rather than none. A resource whose chapter
+  // delivered `undefined` puts `undefined` in hand, and it survives a switch to another resource:
+  // this branch answers before the currency check is consulted, so the panel reports the OUTGOING
+  // resource's blank chapter under the incoming one's name until the new data provider resolves and
+  // re-arms loading. Gating the caller's blank-chapter branch on `isAnswerCurrent` does not fix it —
+  // a held `undefined` never changed identity, so nothing was ever recorded for it and the flag
+  // reads stale even for the resource that really did deliver it. Closing the gap needs a signal
+  // this function is not given; it is left open deliberately, because the orderings available here
+  // trade this narrow case against a spinner that can never resolve.
   if (usjPossiblyError === undefined) return isUsjSettled ? 'failed' : 'loading';
 
   // Whose answer this is outranks what it says. A resource switch leaves the PREVIOUS resource's

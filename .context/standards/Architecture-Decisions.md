@@ -4396,6 +4396,60 @@ step, no automation. Just a record.
   join core in the hard-coupled class and would then need its lockfile kept in sync.
 - **Source:** PT-4500, review of #2745.
 
+## adr-stale-value-ownership-by-identity: A panel learns whose answer it holds by recording the resource at each change of value identity
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `adr-stale-value-survives-resubscription` established that a held value must be
+  checked against the read now in flight, and gave `resolveResourceContentState` `isUsjSettled` to do
+  it. That covers a reference change and a retry, but not a **resource** change. Switching the
+  resource in the Bible texts / Commentaries panel leaves no signal at all: the data layer preserves
+  its value across a source change; the `ChapterUSJ` selector is memoized on book/chapter/
+  versification, so it does not change when only the resource does; and `useProjectDataProvider`
+  resolves the new provider asynchronously while `usePromise` (`preserveValue` defaults to `true`)
+  hands back the OLD provider for the whole lookup — so the subscription memo in
+  `create-use-data-hook.util.ts` never re-runs and `isLoading` never re-arms. A valid USJ also
+  carries no book or project of its own, which is why the missing-book ERROR path was already immune:
+  the error names both, and the identity comparison already in the function catches it. The defect
+  lived precisely where there was no identity to compare, and showed one resource's scripture under
+  another resource's name for ~150ms.
+- **Decision:** The panel records which resource was in effect at each change of the held value's
+  IDENTITY, and `resolveResourceContentState` takes that as `isAnswerCurrent`, reporting `'loading'`
+  when the value in hand belongs to another resource. Ordered ahead of the error branches — whose
+  answer it is outranks what it says — but behind the `undefined` branch, because a delivered
+  `undefined` produces no identity change when the held value is already `undefined` and would
+  otherwise pin the panel on a spinner forever. The record is only written once the picker row has
+  resolved to a project, and is adjusted during render (state adjusted during render, not a ref
+  written during render) so no stale frame is committed.
+- **Alternatives:** **Feed the hook's loading flag into the content state** — rejected by
+  measurement: the flag does not rise on a resource switch, for the reasons above. **A keyed
+  data-host component that remounts per resource** — worked, but considerably larger than the
+  problem. **A per-delivery sequence number from the data layer** — the general fix, and the one
+  that would close both residual cases below; deferred because it is a change to the data hook's
+  contract for every consumer, not something to introduce from inside one panel's bug fix (the same
+  reasoning that deferred resetting `data` on resubscribe in the sibling entry).
+- **Relationship to `adr-stale-value-survives-resubscription`:** that entry rejected "compare value
+  identity across renders" on the grounds that a provider free to re-deliver an equal object makes
+  identity unreliable. This entry narrows rather than overturns it. Identity is trusted here only
+  because every value reaching this panel crosses the network-object RPC boundary and is
+  deserialized per delivery, so a fresh object arrives even when the bytes match. That is a property
+  of the delivery contract, not a general one — the original objection still stands for any consumer
+  not behind that boundary.
+- **Consequences:** The mechanism breaks silently, in one direction, if anything ever hands back the
+  same object identity on repeated reads — a cache between provider and panel, or a provider
+  mutating a live object in place. The failure mode is a spinner that never clears, so such a layer
+  must either copy before delivering or this check must be replaced with a delivery counter. Two
+  residual stale cases are accepted and documented at their sites: a resource whose chapter delivered
+  `undefined` keeps its empty-chapter message under the incoming resource's name across a switch
+  (the `undefined` branch answers before currency is consulted); and attribution uses the resource of
+  the current render rather than the provider that delivered the value, so an emission from the still-
+  live outgoing subscription inside the lookup window would be misattributed. Both need the deferred
+  sequence number to close. Platform.Bible now has two mechanisms for this question — `ModelTextPanel`
+  keys on its own `requestKey`/`loadedRequestKey` because it issues the fetch, and this panel compares
+  identity because it does not; a surface that owns its request should prefer the former.
+- **Source:** PT-4350, epic PT-4336 non-negotiable 5B. Two earlier AI-authored designs for this fix
+  were wrong before this one landed; both wrong turns are recorded in the design notes.
+
 ## adr-stale-value-survives-resubscription: A value held across a resubscription is not the current read's answer
 
 - **Date:** 2026-09-13
@@ -4424,7 +4478,10 @@ step, no automation. Just a record.
   — rejected: it answers only the retry case, leaving the identical staleness on ordinary
   navigation, and puts a second source of truth beside `isLoading`. **Compare value identity across
   renders** — rejected: a provider free to re-deliver an equal object makes identity an unreliable
-  proxy for freshness.
+  proxy for freshness. **Amended 2026-09-14:** narrowed, not overturned, by
+  `adr-stale-value-ownership-by-identity` — identity is a sound freshness proxy for a consumer behind
+  the network-object RPC boundary, which deserializes every delivery; the objection still holds
+  elsewhere.
 - **Consequences:** Terminal states arrive one render later than the value that triggers them, since
   `isLoading` is re-armed from an effect. That window is invisible where the held value is USJ or
   `undefined`, and shows the old failure for a single render where it is an error. Any new surface

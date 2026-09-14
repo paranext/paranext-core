@@ -3203,6 +3203,24 @@ describe('resolveResourceContentState', () => {
     ).toBe('failed');
   });
 
+  it('still settles on "failed" when nothing arrived and the answer reads stale', () => {
+    // Pins the order of the two escalations: the `undefined` branch has to be decided BEFORE the
+    // currency check. Currency is derived from a change of value IDENTITY, and a delivered
+    // `undefined` produces none when the held value is already `undefined` — so it reads stale here
+    // forever, and a currency check consulted first would hold the panel on a spinner that can
+    // never resolve. That is the very symptom the settled-`undefined` branch above exists to
+    // remove, so the two orderings are not interchangeable.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: undefined,
+        currentBookNum: GENESIS,
+        isUsjSettled: true,
+        isAnswerCurrent: false,
+      }),
+    ).toBe('failed');
+  });
+
   it('returns "ready" once chapter data has arrived', () => {
     expect(
       resolveResourceContentState({
@@ -3348,10 +3366,11 @@ describe('resolveResourceContentState', () => {
     ).toBe('loading');
   });
 
-  // A resource switch hands the panel the PREVIOUS resource's chapter: `useData` preserves its value
-  // across a source change, and the `ChapterUSJ` selector does not change on a switch, so the
-  // loading flag never rises. A valid USJ carries no provenance of its own, so the panel has to say
-  // whose answer it is holding.
+  // A resource switch hands the panel the PREVIOUS resource's chapter: the data layer preserves its
+  // value across a source change, and the `ChapterUSJ` selector does not change on a switch. The
+  // loading flag does not mark the window either — it is re-armed on a provider change, but the old
+  // provider is handed back for the whole async lookup of the new one. A valid USJ carries no
+  // provenance of its own, so the panel has to say whose answer it is holding.
   it('returns "loading" when the chapter in hand answers for a different resource', () => {
     expect(
       resolveResourceContentState({
