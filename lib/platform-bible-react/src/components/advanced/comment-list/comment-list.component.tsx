@@ -136,7 +136,7 @@ export default function CommentList({
       aria-activedescendant={activeId ?? undefined}
       aria-label="Comments"
       className={cn(
-        'tw:flex tw:w-full tw:flex-col tw:space-y-3 tw:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
+        'tw:flex tw:w-full tw:flex-col tw:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
 
         className,
       )}
@@ -175,7 +175,10 @@ export default function CommentList({
         return (
           <div
             key={thread.id}
-            className={cn({
+            // A 1px divider rather than a gap: every card is now `bg-card`, and `--card` equals
+            // `--background` in every theme except paratext-dark, so a gap would be invisible.
+            // `last:border-b-0` keeps the list from ending on a dangling rule.
+            className={cn('tw:border-b tw:border-border tw:last:border-b-0', {
               'tw:opacity-60': thread.status === 'Resolved',
             })}
           >
