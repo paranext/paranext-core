@@ -587,8 +587,10 @@ describe('BookChapterControl additional books', () => {
     expect(revelation).toHaveClass('tw:bg-muted/50');
   });
 
-  // The toggle governs the book list, so it has nothing to act on once quick navigation hides it
-  test('the toggle is not offered while the book list is hidden', async () => {
+  // Quick navigation steps the reference with the picker still open, so the list stays on screen
+  // and re-renders around the new reference — the search box and the arrows are never left
+  // floating over an empty popover.
+  test('the book list stays on screen through quick navigation', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
       <BookChapterControl
@@ -601,13 +603,13 @@ describe('BookChapterControl additional books', () => {
     );
 
     await user.click(getTrigger());
-    expect(await screen.findByRole('button', { name: 'Show more books' })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show more books' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Next chapter' }));
 
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument(),
-    );
+    expect(screen.getByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show more books' })).toBeInTheDocument();
   });
 
   test('selecting a revealed book navigates to it', async () => {

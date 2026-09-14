@@ -112,7 +112,6 @@ export function BookChapterControl({
   const [selectedChapterForVersesView, setSelectedChapterForVersesView] = useState<
     number | undefined
   >(undefined);
-  const [isCommandListHidden, setIsCommandListHidden] = useState(false);
   // Whether the book list is expanded past the active project's books. Governs browsing only —
   // searching always spans every reachable book.
   const [isShowingMoreBooks, setIsShowingMoreBooks] = useState(false);
@@ -512,14 +511,8 @@ export function BookChapterControl({
 
   // Only offer the expansion while browsing: searching already spans every reachable book, so the
   // control would sit there doing nothing.
-  // `!isCommandListHidden` because the toggle governs that list: quick navigation hides it while
-  // leaving viewMode 'books', and a control offering to expand a list that is not on screen does
-  // nothing a user can see.
   const canShowMoreBooksToggle =
-    viewMode === 'books' &&
-    !isCommandListHidden &&
-    !inputValue.trim() &&
-    booksOutsideProject.size > 0;
+    viewMode === 'books' && !inputValue.trim() && booksOutsideProject.size > 0;
 
   const isBookDisabled = useCallback(
     (bookId: string) =>
@@ -860,8 +853,6 @@ export function BookChapterControl({
 
       setInputValue((prevValue) => prevValue + event.key);
       commandInputRef.current.focus();
-
-      setIsCommandListHidden(false);
     }
   }, []);
 
@@ -1099,14 +1090,13 @@ export function BookChapterControl({
         >
           {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
-            <div className="tw:flex tw:items-end">
+            <div className="tw:flex tw:items-center">
               <div className="tw:relative tw:flex-1">
                 <CommandInput
                   ref={commandInputRef}
                   value={inputValue}
                   onValueChange={setInputValue}
                   onKeyDown={handleInputKeyDown}
-                  onFocus={() => setIsCommandListHidden(false)}
                   className={recentSearches && recentSearches.length > 0 ? 'tw:!pr-10' : ''}
                   // Picker semantics: with nothing typed, Space picks the highlighted book (the
                   // Enter UX). Neither of this control's own Space handlers covers that state —
@@ -1131,19 +1121,16 @@ export function BookChapterControl({
                 )}
               </div>
               {/* Navigation buttons for previous/next chapter/book */}
-              <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:pe-2">
+              <div className="tw:flex tw:items-center tw:gap-1 tw:pe-2">
                 {quickNavButtons.map(
                   ({ onClick, disabled: isQuickNavDisabled, title, icon: Icon }) => (
                     <Button
                       key={title}
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        setIsCommandListHidden(true);
-                        onClick();
-                      }}
+                      onClick={onClick}
                       disabled={isQuickNavDisabled}
-                      className="tw:h-10 tw:w-4 tw:p-0"
+                      className="tw:h-8 tw:w-4 tw:p-0"
                       title={title}
                       onKeyDown={handleQuickNavButtonKeyDown}
                     >
@@ -1190,166 +1177,162 @@ export function BookChapterControl({
           )}
 
           {/** Body */}
-          {!isCommandListHidden && (
-            <CommandList ref={commandListRef}>
-              {/** Book list mode (also used in case of top matches) */}
-              {viewMode === 'books' && (
-                <>
-                  {/* Book List - Show when we don't have a top match */}
-                  {!topMatch &&
-                    Object.entries(filteredBooksByType).map(([type, books]) => {
-                      if (books.length === 0) return undefined;
+          <CommandList ref={commandListRef}>
+            {/** Book list mode (also used in case of top matches) */}
+            {viewMode === 'books' && (
+              <>
+                {/* Book List - Show when we don't have a top match */}
+                {!topMatch &&
+                  Object.entries(filteredBooksByType).map(([type, books]) => {
+                    if (books.length === 0) return undefined;
 
-                      return (
-                        // We are mapping over filteredBooksByType, which uses Section as key type
-                        // eslint-disable-next-line no-type-assertion/no-type-assertion
-                        <CommandGroup key={type} heading={getSectionLabel(type as Section)}>
-                          {books.map((bookId) => (
-                            <BookItem
-                              key={bookId}
-                              bookId={bookId}
-                              onSelect={(selectedBookId: string) =>
-                                handleBookSelect(selectedBookId)
-                              }
-                              section={getSectionForBook(bookId)}
-                              commandValue={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
-                              ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
-                              localizedBookNames={localizedBookNames}
-                              disabled={isBookDisabled(bookId)}
-                              dimmedReason={
-                                booksOutsideProject.has(bookId) ? bookNotInProjectLabel : undefined
-                              }
-                              dimmedDescription={
-                                booksOutsideProject.has(bookId)
-                                  ? getBookNotInProjectDescription(bookId)
-                                  : undefined
-                              }
-                            />
-                          ))}
-                        </CommandGroup>
-                      );
-                    })}
+                    return (
+                      // We are mapping over filteredBooksByType, which uses Section as key type
+                      // eslint-disable-next-line no-type-assertion/no-type-assertion
+                      <CommandGroup key={type} heading={getSectionLabel(type as Section)}>
+                        {books.map((bookId) => (
+                          <BookItem
+                            key={bookId}
+                            bookId={bookId}
+                            onSelect={(selectedBookId: string) => handleBookSelect(selectedBookId)}
+                            section={getSectionForBook(bookId)}
+                            commandValue={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
+                            ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
+                            localizedBookNames={localizedBookNames}
+                            disabled={isBookDisabled(bookId)}
+                            dimmedReason={
+                              booksOutsideProject.has(bookId) ? bookNotInProjectLabel : undefined
+                            }
+                            dimmedDescription={
+                              booksOutsideProject.has(bookId)
+                                ? getBookNotInProjectDescription(bookId)
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </CommandGroup>
+                    );
+                  })}
 
-                  {/* Top match scripture reference */}
-                  {topMatch && (
-                    <CommandGroup>
-                      <CommandItem
-                        key="top-match"
-                        value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
-                          topMatch.chapterNum || ''
-                        }:${topMatch.verseNum || ''})}`}
-                        onSelect={handleTopMatchSelect}
-                        disabled={
-                          !!disableReferencesUpTo &&
-                          isVerseBefore(
-                            topMatch.book,
-                            topMatch.chapterNum ?? 1,
-                            topMatch.verseNum ?? 1,
-                            disableReferencesUpTo,
-                          )
-                        }
-                        className="tw:font-semibold tw:text-primary"
-                      >
-                        {formatScrRef(
-                          {
-                            book: topMatch.book,
-                            chapterNum: topMatch.chapterNum ?? 1,
-                            verseNum: topMatch.verseNum ?? 1,
-                          },
-                          // 'English', matching the trigger formatter's fallback above: with no
-                          // localizedBookNames prop (no app code passes one today), `undefined`
-                          // made formatScrRef render the raw book CODE ("OBA 1:1") here while the
-                          // trigger showed "Obadiah 1:1" — the same reference in two spellings in
-                          // one control.
-                          localizedBookNames
-                            ? getLocalizedBookId(topMatch.book, localizedBookNames)
-                            : 'English',
-                        )}
-                      </CommandItem>
-                    </CommandGroup>
+                {/* Top match scripture reference */}
+                {topMatch && (
+                  <CommandGroup>
+                    <CommandItem
+                      key="top-match"
+                      value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
+                        topMatch.chapterNum || ''
+                      }:${topMatch.verseNum || ''})}`}
+                      onSelect={handleTopMatchSelect}
+                      disabled={
+                        !!disableReferencesUpTo &&
+                        isVerseBefore(
+                          topMatch.book,
+                          topMatch.chapterNum ?? 1,
+                          topMatch.verseNum ?? 1,
+                          disableReferencesUpTo,
+                        )
+                      }
+                      className="tw:font-semibold tw:text-primary"
+                    >
+                      {formatScrRef(
+                        {
+                          book: topMatch.book,
+                          chapterNum: topMatch.chapterNum ?? 1,
+                          verseNum: topMatch.verseNum ?? 1,
+                        },
+                        // 'English', matching the trigger formatter's fallback above: with no
+                        // localizedBookNames prop (no app code passes one today), `undefined`
+                        // made formatScrRef render the raw book CODE ("OBA 1:1") here while the
+                        // trigger showed "Obadiah 1:1" — the same reference in two spellings in
+                        // one control.
+                        localizedBookNames
+                          ? getLocalizedBookId(topMatch.book, localizedBookNames)
+                          : 'English',
+                      )}
+                    </CommandItem>
+                  </CommandGroup>
+                )}
+
+                {/* Verse selector - when chapter-verse separator is present in the input */}
+                {topMatch &&
+                  shouldShowVerseGridForTopMatch &&
+                  topMatch.chapterNum &&
+                  getEndVerse && (
+                    <>
+                      <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
+                        <span>
+                          {`${getLocalizedBookName(topMatch.book, localizedBookNames)} ${topMatch.chapterNum}`}
+                        </span>
+                        <span>{selectVerseTitle}</span>
+                      </div>
+                      <VerseGrid
+                        bookId={topMatch.book}
+                        chapterNum={topMatch.chapterNum}
+                        endVerse={getEndVerse(topMatch.book, topMatch.chapterNum)}
+                        scrRef={scrRef}
+                        onVerseSelect={handleVerseSelect}
+                        setVerseRef={setVerseRef}
+                        isVerseDisabled={makeIsVerseDisabled(topMatch.book, topMatch.chapterNum)}
+                        className="tw:px-4 tw:pb-4"
+                      />
+                    </>
                   )}
 
-                  {/* Verse selector - when chapter-verse separator is present in the input */}
-                  {topMatch &&
-                    shouldShowVerseGridForTopMatch &&
-                    topMatch.chapterNum &&
-                    getEndVerse && (
-                      <>
-                        <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
-                          <span>
-                            {`${getLocalizedBookName(topMatch.book, localizedBookNames)} ${topMatch.chapterNum}`}
-                          </span>
-                          <span>{selectVerseTitle}</span>
-                        </div>
-                        <VerseGrid
-                          bookId={topMatch.book}
-                          chapterNum={topMatch.chapterNum}
-                          endVerse={getEndVerse(topMatch.book, topMatch.chapterNum)}
-                          scrRef={scrRef}
-                          onVerseSelect={handleVerseSelect}
-                          setVerseRef={setVerseRef}
-                          isVerseDisabled={makeIsVerseDisabled(topMatch.book, topMatch.chapterNum)}
-                          className="tw:px-4 tw:pb-4"
-                        />
-                      </>
-                    )}
+                {/* Chapter Selector - Show when we have a top match without a verse separator */}
+                {topMatch &&
+                  !shouldShowVerseGridForTopMatch &&
+                  fetchEndChapter(topMatch.book) > 1 && (
+                    <>
+                      <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
+                        <span>{getLocalizedBookName(topMatch.book, localizedBookNames)}</span>
+                        <span>{selectChapterTitle}</span>
+                      </div>
+                      <ChapterGrid
+                        bookId={topMatch.book}
+                        scrRef={scrRef}
+                        onChapterSelect={handleChapterSelect}
+                        setChapterRef={setChapterRef}
+                        isChapterDimmed={doesChapterMatch}
+                        isChapterDisabled={makeIsChapterDisabled(topMatch.book)}
+                        className="tw:px-4 tw:pb-4"
+                      />
+                    </>
+                  )}
+              </>
+            )}
 
-                  {/* Chapter Selector - Show when we have a top match without a verse separator */}
-                  {topMatch &&
-                    !shouldShowVerseGridForTopMatch &&
-                    fetchEndChapter(topMatch.book) > 1 && (
-                      <>
-                        <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
-                          <span>{getLocalizedBookName(topMatch.book, localizedBookNames)}</span>
-                          <span>{selectChapterTitle}</span>
-                        </div>
-                        <ChapterGrid
-                          bookId={topMatch.book}
-                          scrRef={scrRef}
-                          onChapterSelect={handleChapterSelect}
-                          setChapterRef={setChapterRef}
-                          isChapterDimmed={doesChapterMatch}
-                          isChapterDisabled={makeIsChapterDisabled(topMatch.book)}
-                          className="tw:px-4 tw:pb-4"
-                        />
-                      </>
-                    )}
-                </>
-              )}
+            {/* Basic chapter view mode */}
+            {viewMode === 'chapters' && selectedBookForChaptersView && (
+              <ChapterGrid
+                bookId={selectedBookForChaptersView}
+                scrRef={scrRef}
+                onChapterSelect={handleChapterSelect}
+                setChapterRef={setChapterRef}
+                isChapterDisabled={makeIsChapterDisabled(selectedBookForChaptersView)}
+                className="tw:p-4"
+              />
+            )}
 
-              {/* Basic chapter view mode */}
-              {viewMode === 'chapters' && selectedBookForChaptersView && (
-                <ChapterGrid
-                  bookId={selectedBookForChaptersView}
+            {/* Verse view mode */}
+            {viewMode === 'verses' &&
+              selectedBookForVersesView &&
+              selectedChapterForVersesView !== undefined &&
+              getEndVerse && (
+                <VerseGrid
+                  bookId={selectedBookForVersesView}
+                  chapterNum={selectedChapterForVersesView}
+                  endVerse={getEndVerse(selectedBookForVersesView, selectedChapterForVersesView)}
                   scrRef={scrRef}
-                  onChapterSelect={handleChapterSelect}
-                  setChapterRef={setChapterRef}
-                  isChapterDisabled={makeIsChapterDisabled(selectedBookForChaptersView)}
+                  onVerseSelect={handleVerseSelect}
+                  setVerseRef={setVerseRef}
+                  isVerseDisabled={makeIsVerseDisabled(
+                    selectedBookForVersesView,
+                    selectedChapterForVersesView,
+                  )}
                   className="tw:p-4"
                 />
               )}
-
-              {/* Verse view mode */}
-              {viewMode === 'verses' &&
-                selectedBookForVersesView &&
-                selectedChapterForVersesView !== undefined &&
-                getEndVerse && (
-                  <VerseGrid
-                    bookId={selectedBookForVersesView}
-                    chapterNum={selectedChapterForVersesView}
-                    endVerse={getEndVerse(selectedBookForVersesView, selectedChapterForVersesView)}
-                    scrRef={scrRef}
-                    onVerseSelect={handleVerseSelect}
-                    setVerseRef={setVerseRef}
-                    isVerseDisabled={makeIsVerseDisabled(
-                      selectedBookForVersesView,
-                      selectedChapterForVersesView,
-                    )}
-                    className="tw:p-4"
-                  />
-                )}
-            </CommandList>
-          )}
+          </CommandList>
 
           {/* Outside CommandList on purpose: inside it, cmdk would register this as an option —
               arrow-navigable and matched by typing — instead of a control. */}
