@@ -72,12 +72,14 @@ describe('web-view-content-zoom.service', () => {
     settings[key] = value;
     return true;
   });
-  const updateDefinition = vi.fn((id: string, update: { state?: Record<string, unknown> }) => {
+  /** The harness's own definition write, so a test can swap it out and put it back. */
+  function applyDefinitionUpdate(id: string, update: { state?: Record<string, unknown> }): boolean {
     const def = definitions.get(id);
     if (!def) return false;
     def.state = update.state;
     return true;
-  });
+  }
+  const updateDefinition = vi.fn(applyDefinitionUpdate);
   let iframe: HTMLIFrameElement;
   const showIndicator = vi.fn();
   let lastFocused: string | undefined;
@@ -101,6 +103,7 @@ describe('web-view-content-zoom.service', () => {
     onDidUpdateWebViewCallback = undefined;
     settingsSet.mockClear();
     updateDefinition.mockClear();
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
     showIndicator.mockClear();
     vi.mocked(logger.warn).mockClear();
     lastFocused = undefined;
@@ -285,6 +288,32 @@ describe('web-view-content-zoom.service', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('keeps the deletion half of a memory delta when a sibling sync throws', () => {
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { main: 1.5 } },
+    });
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.5 } };
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.5 }));
+    // A definition write can throw partway through the walk: it reaches an unguarded local-storage
+    // write that fails when the quota is exhausted, after earlier panes were already updated.
+    updateDefinition.mockImplementation(
+      (id: string, update: { state?: Record<string, unknown> }) => {
+        if (id === 'editor-2') throw new Error('local storage quota exceeded');
+        return applyDefinitionUpdate(id, update);
+      },
+    );
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } });
+    expect(logger.warn).toHaveBeenCalled();
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-2')?.state).toEqual({});
   });
 
   it('brings both changed areas of a pane in line with one definition write', () => {
