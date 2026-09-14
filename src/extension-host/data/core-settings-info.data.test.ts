@@ -101,6 +101,13 @@ describe('content zoom settings', () => {
     await expect(validate(Number.NaN, 1, {})).resolves.toBe(false);
   });
 
+  it('rejects NaN for the whole-UI zoom factor', async () => {
+    const validate = coreSettingsValidators['platform.zoomFactor'];
+    if (!validate) throw new Error('validator missing');
+    await expect(validate(1.2, 1, {})).resolves.toBe(true);
+    await expect(validate(Number.NaN, 1, {})).resolves.toBe(false);
+  });
+
   it('validates the memory as a record of in-range numbers', async () => {
     const validate = coreSettingsValidators['platform.webViewContentZoomMemory'];
     if (!validate) throw new Error('validator missing');
