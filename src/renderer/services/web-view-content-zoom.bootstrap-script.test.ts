@@ -483,11 +483,59 @@ describe('content-zoom bootstrap script', () => {
     api.showIndicator('footnotes', '120 %');
     const badge = document.getElementById('platform-content-zoom-indicator');
     expect(badge?.textContent).toBe('120 %');
-    expect(badge?.getAttribute('aria-live')).toBe('polite');
     expect(badge?.dataset.area).toBe('footnotes');
   });
 
-  it('hides the indicator by fading out after 1.1 s, keeping its text', () => {
+  it('puts the announcement in a live region that is in the accessibility tree, and empty, before any zoom', () => {
+    install('wv-live', TWO_AREAS);
+    const region = byId('platform-content-zoom-indicator-status');
+    expect(region.parentElement).toBe(document.body);
+    expect(region.getAttribute('role')).toBe('status');
+    expect(region.getAttribute('aria-live')).toBe('polite');
+    expect(region.textContent).toBe('');
+    // Visually hidden rather than display:none, which would take it out of the tree.
+    expect(region.style.width).toBe('1px');
+    // The visible badge carries no live-region semantics of its own: its text is rewritten on every
+    // wheel notch.
+    const badge = byId('platform-content-zoom-indicator');
+    expect(badge.getAttribute('aria-hidden')).toBe('true');
+    expect(badge.getAttribute('role')).toBeNull();
+    expect(badge.getAttribute('aria-live')).toBeNull();
+    expect(badge.style.opacity).toBe('0');
+  });
+
+  it('announces only the settled level, once the gesture has gone quiet', () => {
+    install('wv-announce', TWO_AREAS);
+    stubMatchMedia(false);
+    vi.useFakeTimers();
+    try {
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      const api = window.__platformContentZoom;
+      if (!api) throw new Error('indicator api missing');
+      const region = byId('platform-content-zoom-indicator-status');
+      const badge = byId('platform-content-zoom-indicator');
+      ['110 %', '120 %', '130 %', '140 %', '150 %'].forEach((text, index) => {
+        if (index > 0) vi.advanceTimersByTime(20);
+        api.showIndicator('main', text);
+      });
+      // The visible badge takes every notch; the live region has said nothing yet.
+      expect(badge.textContent).toBe('150 %');
+      expect(region.textContent).toBe('');
+      vi.advanceTimersByTime(480);
+      expect(region.textContent).toBe('');
+      vi.advanceTimersByTime(40);
+      expect(region.textContent).toBe('150 %');
+      // One announcement for the whole gesture, held for as long as the badge is up.
+      vi.advanceTimersByTime(500);
+      expect(region.textContent).toBe('150 %');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hides the indicator by fading out after 1.1 s, keeping its text and dropping the announcement', () => {
     install('wv-11', TWO_AREAS);
     stubMatchMedia(false);
     vi.useFakeTimers();
@@ -503,6 +551,9 @@ describe('content-zoom bootstrap script', () => {
       expect(badge?.style.opacity).toBe('0');
       expect(badge?.style.transition).not.toBe('none');
       expect(badge?.textContent).toBe('120 %');
+      // The faded badge is out of sight but still in the accessibility tree, so the level it
+      // announced goes with the fade.
+      expect(byId('platform-content-zoom-indicator-status').textContent).toBe('');
     } finally {
       vi.useRealTimers();
     }
@@ -524,6 +575,7 @@ describe('content-zoom bootstrap script', () => {
       expect(badge?.style.opacity).toBe('0');
       expect(badge?.style.transition).toBe('none');
       expect(badge?.textContent).toBe('120 %');
+      expect(byId('platform-content-zoom-indicator-status').textContent).toBe('');
     } finally {
       vi.useRealTimers();
     }
