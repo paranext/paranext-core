@@ -864,4 +864,20 @@ describe('this window becoming the OS-focused window', () => {
 
     expect(focusTabMock).toHaveBeenCalledWith('tab-1', undefined);
   });
+
+  test('a gesture after main has named this window focused ignores a stale note, because that focus ended the withholding', () => {
+    // If naming this window focused did not end the withholding, the pointerdown below would find
+    // the latch still open and treat itself as the window's FIRST activation — reading the
+    // unbounded `takeTabAwaitingDocumentFocus` and reviving a note the focus transition should
+    // already have retired, rather than leaving it alone as stale.
+    vi.useFakeTimers();
+    testingWindowService.resetActivationLatchForTesting();
+
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+    noteTabAwaitingDocumentFocus('tab-1');
+    vi.advanceTimersByTime(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS + 1);
+    window.dispatchEvent(new Event('pointerdown'));
+
+    expect(focusTabMock).not.toHaveBeenCalled();
+  });
 });
