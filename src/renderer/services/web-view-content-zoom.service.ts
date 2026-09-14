@@ -179,6 +179,23 @@ const flushMemoryWritesDebounced = debounce(flushMemoryWrites, MEMORY_WRITE_DEBO
 /** The registered `beforeunload` flush listener, if any; guards against registering a second one. */
 let beforeUnloadListener: (() => void) | undefined;
 
+/**
+ * Zoom areas each pane's bootstrap has reported (`setContentZoomAreas`), in document order. A pane
+ * that never reported — a URL web view, or one whose React tree has not mounted yet — has no entry
+ * and counts as having no areas; whether that earns it the whole-iframe fallback is
+ * {@link mayScaleWholeIframe}'s question, not this map's.
+ */
+const areasByWebViewId = new Map<WebViewId, string[]>();
+
+/** The area the user last clicked or focused in each pane (`setContentZoomActiveArea`). */
+const activeAreaByWebViewId = new Map<WebViewId, string>();
+
+/**
+ * Area ids already reported as unknown for a pane. A menu entry or a held key can ask for the same
+ * missing area many times a second, and one line per pane and area says everything the log can.
+ */
+const unknownAreasLoggedByWebViewId = new Map<WebViewId, Set<string>>();
+
 /** Test seam only. Production code never calls this. */
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
 export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>): void {
@@ -190,6 +207,9 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   cachedDefaultLabel = undefined;
   initialized = undefined;
   clearAllFallbackGraces();
+  areasByWebViewId.clear();
+  activeAreaByWebViewId.clear();
+  unknownAreasLoggedByWebViewId.clear();
   pendingMemoryWrites.clear();
   flushMemoryWritesDebounced.cancel();
   memoryChain = Promise.resolve();
@@ -241,23 +261,6 @@ export function resolveContentZoomTarget(
   if (explicitWebViewId) return explicitWebViewId;
   return deps.getLastFocusedTabId();
 }
-
-/**
- * Zoom areas each pane's bootstrap has reported (`setContentZoomAreas`), in document order. A pane
- * that never reported — a URL web view, or one whose React tree has not mounted yet — has no entry
- * and counts as having no areas; whether that earns it the whole-iframe fallback is
- * {@link mayScaleWholeIframe}'s question, not this map's.
- */
-const areasByWebViewId = new Map<WebViewId, string[]>();
-
-/** The area the user last clicked or focused in each pane (`setContentZoomActiveArea`). */
-const activeAreaByWebViewId = new Map<WebViewId, string>();
-
-/**
- * Area ids already reported as unknown for a pane. A menu entry or a held key can ask for the same
- * missing area many times a second, and one line per pane and area says everything the log can.
- */
-const unknownAreasLoggedByWebViewId = new Map<WebViewId, Set<string>>();
 
 /**
  * Explicit area (must be one the pane reported) → the pane's active area → its first area →
