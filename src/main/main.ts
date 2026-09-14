@@ -2128,7 +2128,10 @@ async function main() {
     },
     {
       method: {
-        summary: 'Increase the zoom factor of all application windows by 10%',
+        summary:
+          'Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
+          'On Windows and Linux, Ctrl+= / Ctrl++ invoke this until PT-4577 hands those chords ' +
+          'to per-pane content zoom (platform.webViewContentZoomIn).',
         params: [],
         result: {
           name: 'return value',
@@ -2145,7 +2148,10 @@ async function main() {
     },
     {
       method: {
-        summary: 'Decrease the zoom factor of all application windows by 10%',
+        summary:
+          'Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
+          'On Windows and Linux, Ctrl+- invokes this until PT-4577 hands that chord to per-pane ' +
+          'content zoom (platform.webViewContentZoomOut).',
         params: [],
         result: {
           name: 'return value',
