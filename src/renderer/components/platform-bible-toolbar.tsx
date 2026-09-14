@@ -54,6 +54,7 @@ import {
   Toolbar,
   ToolbarCompoundLabel,
   Tooltip,
+  TOOLTIP_DELAY,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
@@ -67,8 +68,6 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
-
-const TOOLTIP_DELAY = 300;
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 

@@ -12,6 +12,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
+  TOOLTIP_DELAY,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
@@ -62,9 +63,6 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
 };
-
-/** Matches the tooltip delay used elsewhere in `platform-bible-toolbar.tsx`. */
-const TOOLTIP_DELAY = 300;
 
 /**
  * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something

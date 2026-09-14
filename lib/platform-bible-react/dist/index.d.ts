@@ -4180,6 +4180,13 @@ export declare const Z_INDEX_FIRST_RUN = 700;
  */
 export declare const Z_INDEX_CONNECTION_LOST = 800;
 /**
+ * Standard hover delay (ms) before a tooltip reveals, shared across the app and extensions so every
+ * tooltip has one consistent feel. Extensions can't reach app-side renderer constants directly (see
+ * the repo's Security-Guide.md Module Import Restrictions), so — mirroring `Z_INDEX_OVERLAY` and
+ * its siblings in `z-index.ts` — this lives here instead.
+ */
+export declare const TOOLTIP_DELAY = 300;
+/**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using
  * object syntax, and uses [`tailwind-merge`](https://www.npmjs.com/package/tailwind-merge) to make

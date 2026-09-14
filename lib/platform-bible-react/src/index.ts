@@ -370,6 +370,9 @@ export {
   Z_INDEX_MODAL,
 } from './components/z-index';
 
+// Tooltip delay
+export { TOOLTIP_DELAY } from './components/tooltip-delay';
+
 // Utils
 export { cn } from './utils/shadcn-ui/utils';
 export { getToolbarOSReservedSpaceClassName } from './components/advanced/toolbar.component';

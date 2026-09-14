@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
+import {
+  cn,
+  Tooltip,
+  TOOLTIP_DELAY,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { EDITOR_PARA_SELECTOR, findScrollContainer } from '../editor-dom.util';
 import { blockMarkerToBlockNames } from '../platform-scripture-editor.utils';
@@ -30,6 +37,12 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   const scrollContainerRef = useRef<HTMLElement | undefined>(undefined);
   const currentParaRef = useRef<HTMLElement | undefined>(undefined);
   const rafIdRef = useRef<number>(0);
+  // Pending reveal timer: armed on hover-enter while nothing is showing yet, fired to actually set
+  // hoveredData once TOOLTIP_DELAY elapses. Cleared on every leave path so a fast pass never shows
+  // anything. Hidden-view case (see .claude/rules/cross-view-sync-hidden-views.md): not handled
+  // separately — a display:none pane can't receive real mouseover events, so no new timer can ever
+  // start while hidden.
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Set to true by keydown so the tooltip stays hidden until the mouse actually moves.
   const suppressUntilMoveRef = useRef(false);
   // Keeps the trigger at the last known paragraph position while the tooltip closes, so the
@@ -48,43 +61,69 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   const tooltipText =
     localizedDescription ?? (hoveredData?.marker ? `\\${hoveredData.marker}` : '');
 
-  const handleMouseOver = useCallback((e: React.MouseEvent) => {
-    // e.target is EventTarget; cast to Element for DOM traversal via .closest()
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const para = (e.target as Element).closest<HTMLElement>(EDITOR_PARA_SELECTOR);
-    if (para === currentParaRef.current) return; // same para, skip re-render
-    currentParaRef.current = para ?? undefined;
-    const anchor = positionAnchorRef.current;
-    const scroller = scrollContainerRef.current;
-    if (para && anchor && scroller) {
-      const marker = extractMarker(para.className);
-      if (marker) {
-        const pos = computePosition(para, anchor, scroller);
-        lastPositionRef.current = pos;
-        setHoveredData({ ...pos, marker });
-        return;
-      }
+  const clearHoverTimer = useCallback(() => {
+    if (hoverTimerRef.current !== undefined) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = undefined;
     }
-    setHoveredData(undefined);
   }, []);
 
-  const handleMouseOut = useCallback((e: React.MouseEvent) => {
-    // Fires when the cursor leaves any element. Use relatedTarget to detect when the cursor
-    // truly exits into non-paragraph territory (editor whitespace, chrome, etc.), catching
-    // the stale-tooltip case that onMouseOver alone misses when the cursor stops moving.
-    // e.target / e.relatedTarget are EventTarget; cast to Element for DOM traversal via .closest()
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const leavingPara = (e.target as Element).closest<HTMLElement>(EDITOR_PARA_SELECTOR);
-    // e.relatedTarget is EventTarget; cast to Element for DOM traversal via .closest()
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const enteringPara = (e.relatedTarget as Element | null)?.closest<HTMLElement>(
-      EDITOR_PARA_SELECTOR,
-    );
-    if (leavingPara && !enteringPara) {
-      currentParaRef.current = undefined;
+  const handleMouseOver = useCallback(
+    (e: React.MouseEvent) => {
+      // e.target is EventTarget; cast to Element for DOM traversal via .closest()
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const para = (e.target as Element).closest<HTMLElement>(EDITOR_PARA_SELECTOR);
+      if (para === currentParaRef.current) return; // same para, skip re-render
+      currentParaRef.current = para ?? undefined;
+      // The hovered target changed — whatever reveal was pending for the previous one no longer
+      // applies.
+      clearHoverTimer();
+      const anchor = positionAnchorRef.current;
+      const scroller = scrollContainerRef.current;
+      if (para && anchor && scroller) {
+        const marker = extractMarker(para.className);
+        if (marker) {
+          const pos = computePosition(para, anchor, scroller);
+          lastPositionRef.current = pos;
+          const newData = { ...pos, marker };
+          if (hoveredData) {
+            // A tooltip is already showing: move directly to the new marker with no further delay.
+            // This is the adjacent-marker case — Radix's own "tooltip group" grace period, but
+            // hand-rolled since Radix's timer never runs on a caller-forced `open` (see the
+            // `Tooltip` below).
+            setHoveredData(newData);
+          } else {
+            hoverTimerRef.current = setTimeout(() => setHoveredData(newData), TOOLTIP_DELAY);
+          }
+          return;
+        }
+      }
       setHoveredData(undefined);
-    }
-  }, []);
+    },
+    [hoveredData, clearHoverTimer],
+  );
+
+  const handleMouseOut = useCallback(
+    (e: React.MouseEvent) => {
+      // Fires when the cursor leaves any element. Use relatedTarget to detect when the cursor
+      // truly exits into non-paragraph territory (editor whitespace, chrome, etc.), catching
+      // the stale-tooltip case that onMouseOver alone misses when the cursor stops moving.
+      // e.target / e.relatedTarget are EventTarget; cast to Element for DOM traversal via .closest()
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const leavingPara = (e.target as Element).closest<HTMLElement>(EDITOR_PARA_SELECTOR);
+      // e.relatedTarget is EventTarget; cast to Element for DOM traversal via .closest()
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const enteringPara = (e.relatedTarget as Element | null)?.closest<HTMLElement>(
+        EDITOR_PARA_SELECTOR,
+      );
+      if (leavingPara && !enteringPara) {
+        currentParaRef.current = undefined;
+        clearHoverTimer();
+        setHoveredData(undefined);
+      }
+    },
+    [clearHoverTimer],
+  );
 
   const handleMouseMove = useCallback(() => {
     if (!suppressUntilMoveRef.current) return;
@@ -96,8 +135,9 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   const handleMouseLeave = useCallback(() => {
     suppressUntilMoveRef.current = false;
     currentParaRef.current = undefined;
+    clearHoverTimer();
     setHoveredData(undefined);
-  }, []);
+  }, [clearHoverTimer]);
 
   // Accessibility companion for onMouseOver: hide tooltip when focus moves outside the editor
   const handleFocus = useCallback(() => {
@@ -106,15 +146,19 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   }, []);
 
   // Accessibility companion for onMouseOut: hide tooltip when focus moves outside the editor
-  const handleBlur = useCallback((e: React.FocusEvent) => {
-    // Only clear when focus leaves the wrapper entirely, not when moving between internal children.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-      suppressUntilMoveRef.current = false;
-      currentParaRef.current = undefined;
-      setHoveredData(undefined);
-    }
-  }, []);
+  const handleBlur = useCallback(
+    (e: React.FocusEvent) => {
+      // Only clear when focus leaves the wrapper entirely, not when moving between internal children.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+        suppressUntilMoveRef.current = false;
+        currentParaRef.current = undefined;
+        clearHoverTimer();
+        setHoveredData(undefined);
+      }
+    },
+    [clearHoverTimer],
+  );
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -137,6 +181,10 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
       // stays true until the mouse actually moves, at which point currentParaRef is reset and
       // the next mouseover re-evaluates normally.
       suppressUntilMoveRef.current = true;
+      if (hoverTimerRef.current !== undefined) {
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = undefined;
+      }
       setHoveredData(undefined);
     };
 
@@ -165,6 +213,12 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
       positionAnchor.removeEventListener('keydown', handleKeyDown, true);
       scrollContainer.removeEventListener('scroll', handleScroll);
       cancelAnimationFrame(rafIdRef.current);
+      // Runs on unmount AND whenever `enabled` flips to false mid-hover — either way, a reveal
+      // pending from before must not fire once nothing can render it.
+      if (hoverTimerRef.current !== undefined) {
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = undefined;
+      }
     };
   }, [enabled]); // refs are stable; re-run only when enabled flips to (un)attach listeners
 
