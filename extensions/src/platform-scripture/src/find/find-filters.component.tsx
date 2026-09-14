@@ -91,7 +91,7 @@ export function FindFilters({
   // useRef requires null as the initial value when used with a DOM element ref
   // eslint-disable-next-line no-null/no-null
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const wasDismissedByPointerRef = useRef(false);
+  const dismissedByKeyboardRef = useRef(false);
 
   // These filters are a form of grouped settings, not a menu of commands. A menu container would
   // give them `role="menu"`, whose keyboard model only navigates registered menu items and calls
@@ -99,13 +99,24 @@ export function FindFilters({
   // leaves the controls their native keyboard behavior: Tab moves between groups and arrow keys move
   // within a radio group.
   //
-  // The panel is portalled after everything else in the web view, so Shift+Tab out of it lands at the
-  // bottom of the Find panel and dismisses it on the way. Focus returns to the trigger instead, which
-  // keeps a keyboard user where they can reopen the panel or carry on past it. A focus trap would do
-  // this too, but a non-modal surface must not trap focus (WCAG 2.1.2), and trapping also hides the
-  // rest of the panel from screen readers, which silences the results area while a filter re-runs.
+  // The panel is portalled after everything else in the web view, so Shift+Tab out of it would strand
+  // a keyboard user at the bottom of the Find panel. `onCloseAutoFocus` below sends focus to the
+  // trigger instead, which keeps them where they can reopen the panel or carry on past it — a
+  // separate mechanism from what dismisses the panel, and deliberately narrower than it. A focus trap
+  // would also solve the stranding, but a non-modal surface must not trap focus (WCAG 2.1.2), and
+  // trapping hides the rest of the panel from screen readers, silencing the results area while a
+  // filter re-runs.
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        // Radix can start a close and then cancel it (reopening mid-animation), leaving the flag set
+        // with no `onCloseAutoFocus` to clear it. Clearing on open keeps one visit's exit from
+        // deciding where the next visit's focus goes.
+        if (nextOpen) dismissedByKeyboardRef.current = false;
+        onOpenChange?.(nextOpen);
+      }}
+    >
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -137,16 +148,18 @@ export function FindFilters({
       <PopoverContent
         align="end"
         collisionPadding={8}
-        // A pointer dismissal already put the user somewhere deliberate; only keyboard and Escape
-        // dismissals get sent back to the trigger.
-        onPointerDownOutside={() => {
-          wasDismissedByPointerRef.current = true;
+        // Tab and Escape are the keyboard's two ways out of the panel, and both leave the user with
+        // nowhere to stand once it unmounts, so both hand focus to the trigger. Capture phase records
+        // the key even if a control inside stops the event.
+        onKeyDownCapture={(event) => {
+          if (event.key === 'Tab' || event.key === 'Escape') dismissedByKeyboardRef.current = true;
         }}
+        // Every other dismissal leaves focus wherever it went. That matters most when the app moved
+        // it deliberately: invoking Find calls `focusSearchInput`, and the resulting focus change is
+        // itself what dismisses the panel, so returning focus to the trigger here would take the
+        // caret straight back out of the search box the invoke exists to reach.
         onCloseAutoFocus={(event) => {
-          if (wasDismissedByPointerRef.current) {
-            wasDismissedByPointerRef.current = false;
-            return;
-          }
+          if (!dismissedByKeyboardRef.current) return;
           event.preventDefault();
           triggerRef.current?.focus();
         }}

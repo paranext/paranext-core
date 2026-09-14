@@ -435,11 +435,25 @@ async function waitForCounterToChangeFrom(frame: FrameLocator, previous: string 
   return current;
 }
 
-/** Open the filters dropdown (the SlidersHorizontal / Toggle filters button). */
+/**
+ * Open the filters panel (the SlidersHorizontal / Toggle filters button), converging on "open" from
+ * either starting point.
+ *
+ * The button toggles a Radix popover, so a bare click closes an already-open panel as readily as it
+ * opens a closed one, and the caller rarely knows which state it is in — focus leaving the panel
+ * dismisses it, so merely filling a field elsewhere closes it. The decision reads the trigger's
+ * `aria-expanded`, which flips synchronously with Radix's open state, rather than the content's
+ * visibility, which stays true through the exit animation. `resetFindPanel` uses the same
+ * sequence.
+ */
 async function openFiltersPanel(frame: FrameLocator): Promise<void> {
   const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
-  await expect(filtersBtn).toBeVisible({ timeout: 5_000 });
-  await filtersBtn.click();
+  const matchCase = frame.locator('#matchCase');
+  await expect(async () => {
+    if (!isPopoverTriggerExpanded(await filtersBtn.getAttribute('aria-expanded')))
+      await filtersBtn.click();
+    await expect(matchCase).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 5_000 });
 }
 
 /**
@@ -868,13 +882,10 @@ test.describe('Search History', () => {
     // from what is already recorded, so a write reaching history here can only be explained by the
     // options-change effect itself.
     await searchInput.fill(secondTerm);
-    // Focusing the search box dismisses the filters panel: it is a non-modal popover, so focus
-    // leaving it closes it — the same rule that lets Shift+Tab and Escape return focus to the
-    // trigger. The menu this panel replaced was modal and stayed open, which is why filling the box
-    // mid-test used to leave the panel standing. Reopen it for the second option change.
+    // Filling the search box dismisses the filters panel — it is a non-modal popover, so focus
+    // landing outside it closes it. Reopen for the second option change.
     await openFiltersPanel(frame);
     const matchCaseCheckbox = frame.locator('#matchCase');
-    await expect(matchCaseCheckbox).toBeVisible({ timeout: 5_000 });
     await matchCaseCheckbox.click();
     await expect(matchCaseCheckbox).toBeChecked();
     await matchCaseCheckbox.press('Escape');

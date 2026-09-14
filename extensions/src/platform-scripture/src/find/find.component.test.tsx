@@ -426,6 +426,11 @@ const STRINGS = {
     "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
 };
 
+/** Gets the Find search box, which sits outside the filters panel */
+function getSearchInput() {
+  return screen.getByPlaceholderText(STRINGS['%webView_find_searchPlaceholder%']);
+}
+
 /** `buildProps` with the English string map swapped in, for the suites below. */
 function buildLifecycleProps(overrides: Partial<FindProps>): FindProps {
   return buildProps({ localizedStrings: STRINGS, ...overrides });
@@ -1008,30 +1013,71 @@ describe('Find — filters panel keyboard accessibility', () => {
     await user.hover(screen.getByTestId('any-text-explanation'));
     const tooltip = await screen.findByRole('tooltip');
 
-    const zIndexOf = (element: Element) =>
-      Number(element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex);
-    expect(zIndexOf(tooltip)).toBeGreaterThan(zIndexOf(screen.getByRole('dialog')));
+    const declaredZIndexOf = (element: Element) =>
+      element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex;
+    const panelZIndex = declaredZIndexOf(screen.getByRole('dialog'));
+    const tooltipZIndex = declaredZIndexOf(tooltip);
+
+    // Check both are actually declared before comparing. `Number('')` is 0, so a bare greater-than
+    // keeps passing against an element that declares no stacking at all — which is precisely the
+    // regression that would put the explanation back behind the panel.
+    expect(panelZIndex).not.toBe('');
+    expect(tooltipZIndex).not.toBe('');
+    expect(Number(tooltipZIndex)).toBeGreaterThan(Number(panelZIndex));
   });
 
-  // Dropping `modal` (WCAG 2.1.2) means focus leaving the panel dismisses it, which is what lets
-  // Shift+Tab and Escape hand the trigger its focus back above. The same rule necessarily applies to
-  // focus landing anywhere else, the search box included — worth pinning down, because the menu this
-  // replaced behaved the opposite way: being modal, it stayed open and put the box out of reach.
-  it('dismisses the panel when the search box outside it takes focus', async () => {
+  // The pointer counterpart of the test below: clicking into the search box both dismisses the panel
+  // and puts the caret where the user aimed it, so nothing should move afterwards. Without this, the
+  // condition guarding the focus return has only one of its two branches covered and reads as
+  // deletable complexity.
+  it('leaves focus in the search box when the box outside the panel is clicked', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    const searchBox = getSearchInput();
+
+    await user.click(searchBox);
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(searchBox).toHaveFocus();
+  });
+
+  // The panel is a non-modal popover, so focus landing outside it dismisses it — including focus the
+  // app itself moves. Invoking Find while the panel is open does exactly that: `focusSearchInput`
+  // puts the caret in the search box, which dismisses the panel. The caret must survive that;
+  // returning focus to the trigger belongs to the keyboard exits below, not to every dismissal.
+  it('leaves focus in the search box when the box outside the panel takes focus', async () => {
     const user = setupUser();
     render(<Find {...buildLifecycleProps({})} />);
 
     await openFilters(user);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
+    const searchBox = getSearchInput();
     // `focus()` rather than a click, so this turns on focus alone rather than on the pointer
-    // interaction that would dismiss the panel regardless. `act` flushes the close before the
-    // assertion; `waitFor` would pass on its first check, before any of it had been processed.
+    // interaction that would dismiss the panel regardless.
     await act(async () => {
-      screen.getByPlaceholderText('Enter search text\u2026').focus();
+      searchBox.focus();
     });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Radix returns focus from a `setTimeout`, so the panel is already unmounted a full macrotask
+    // before focus settles. Asserting without draining that timer reads the caret mid-flight, while
+    // it is still in the box, and passes whether or not it is taken away next.
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+
+    expect(searchBox).toHaveFocus();
   });
 });
 
