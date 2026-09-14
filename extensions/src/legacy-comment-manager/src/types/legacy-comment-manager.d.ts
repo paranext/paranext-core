@@ -493,6 +493,12 @@ declare module 'legacy-comment-manager' {
   export type TypeFilter = 'all' | 'conflicts' | 'comments';
   /** Assignment filter axis: all threads, assigned to me, assigned to the team, or unassigned. */
   export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
+  /**
+   * Date filter axis: the closed set of presets the toolbar stores. Distinct from {@link DateFilter}
+   * above, which is the richer shape the selector itself carries — a preset is resolved to one of
+   * those at query-build time.
+   */
+  export type DatePresetFilter = 'all' | 'today' | 'last-7-days' | 'last-30-days';
 
   /** The five orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
   export type CommentFilters = {
@@ -500,12 +506,7 @@ declare module 'legacy-comment-manager' {
     read: ReadFilter;
     type: TypeFilter;
     assignment: AssignmentFilter;
-    /**
-     * UI-facing date preset. Declared in `comment-list-filters.model.ts` (not here) because it is a
-     * closed set of presets the toolbar stores, distinct from {@link DateFilter} above, which is the
-     * richer shape the selector itself carries.
-     */
-    date: import('../comment-list-filters.model').DatePresetFilter;
+    date: DatePresetFilter;
   };
 
   /** Scope axis: current chapter vs all books. */

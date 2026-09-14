@@ -4,6 +4,7 @@ import type {
   ReadFilter,
   TypeFilter,
   AssignmentFilter,
+  DatePresetFilter,
   CommentFilters,
   ScopeFilter,
 } from 'legacy-comment-manager';
@@ -15,6 +16,7 @@ export type {
   ReadFilter,
   TypeFilter,
   AssignmentFilter,
+  DatePresetFilter,
   CommentFilters,
   ScopeFilter,
 };
@@ -114,15 +116,6 @@ export function isAssignmentFilter(value: string): value is AssignmentFilter {
 }
 
 // --- Date axis (when the thread's first comment was written) ---
-
-/**
- * Closed set of date presets. The UI stores the preset, not a timestamp: a concrete bound is
- * derived at query-build time so a preset picked before midnight does not keep querying yesterday.
- *
- * Distinct from `DateFilter` in this data provider's type declarations, which is the richer
- * exact/range/before/after union the selector itself carries.
- */
-export type DatePresetFilter = 'all' | 'today' | 'last-7-days' | 'last-30-days';
 
 export const datePresetFilterToLabelKey = {
   all: '%comment_filter_date_all%',
