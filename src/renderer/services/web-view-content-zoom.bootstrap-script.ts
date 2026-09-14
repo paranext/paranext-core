@@ -25,11 +25,18 @@ const INDICATOR_ANNOUNCE_QUIET_MS = 500;
 /**
  * The rule that scales one zoom area: its own variable, else the default. The `main` area's rule
  * names both spellings of its marker — the empty value a view writes when it names no area, and the
- * id itself — so that a marker carrying an id no rule was generated for (an invalid id, or an area
- * ignored for nesting inside another) is left unscaled instead of quietly following `main`. A named
- * (non-`main`) area's rule comes from {@link CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE}, the same
- * template the bootstrap's own runtime `ensureRule` substitutes into, so the two never spell a
- * named area's rule differently.
+ * id itself — so that a marker carrying an id no rule was generated for (an invalid id, or one this
+ * pane has neither a remembered level for nor the bootstrap accepted at runtime) is left unscaled
+ * instead of quietly following `main`. Nesting is no part of that guarantee and cannot be: these
+ * selectors are generated with no knowledge of the view's DOM, so a nested marker matches whenever
+ * its id has a rule — always the case for `main`/the empty value, and the case for any named id
+ * that is also a legitimate area elsewhere in the view — and CSS `zoom` compounds, so such a marker
+ * scales by the product of its own area's factor and its ancestor area's. The runtime
+ * `collectAreas` refuses to report a nested area, so its level never changes from what is baked
+ * here; keeping markers un-nested is the view's side of the contract. A named (non-`main`) area's
+ * rule comes from {@link CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE}, the same template the bootstrap's
+ * own runtime `ensureRule` substitutes into, so the two never spell a named area's rule
+ * differently.
  */
 function areaRule(areaId: string): string {
   if (areaId === MAIN_CONTENT_ZOOM_AREA) {
