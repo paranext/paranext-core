@@ -12,6 +12,10 @@ import {
   isApplicationFocused,
   isWindowClosing,
 } from '@main/services/window-state.service';
+import {
+  forgetWindowWithholding,
+  shouldContentAvoidDocumentFocus,
+} from '@main/window-activation.util';
 import { resolveShardForWindow } from '@main/services/target-shard-resolver.util';
 import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import {
@@ -122,10 +126,36 @@ async function findWebViewAdoptedAfterTimeout(
 /**
  * Raise the window a completed move put the web view in. Raising is how the user sees where the web
  * view went — same narrow rule as cross-window opens: only between this app's windows, never taking
- * focus from another application. A new window raises itself when it is created.
+ * focus from another application. A window created for the move is not raised at all: it is
+ * revealed without activation on purpose, so the move does not pull the user out of the window they
+ * are working in. An existing window the platform deliberately kept out of the foreground is left
+ * alone the same way, UNLESS the move itself was declared user-requested: naming a background
+ * window from a control the user operated (the tab context menu's "Move to window") is the user
+ * asking to go there, and raising it is what a person asking for a window is for.
+ *
+ * A user-requested raise stops the withholding itself, right here, rather than leaving that to the
+ * window's own `focus` handler: that handler's bounce-back (`shouldBounceFocusBack`) fires for any
+ * window still marked as awaiting its first activation, and every condition it checks can hold on
+ * this path — so leaving the mark in place would have the raise trigger the bounce-back, which
+ * hands focus straight back to wherever the user was and silently discards the very raise the user
+ * just asked for.
  */
-function raiseMoveTarget(target: MoveWebViewTarget): void {
-  if (target.kind === 'window' && isApplicationFocused()) focusWindow(target.windowId);
+function raiseMoveTarget(target: MoveWebViewTarget, isUserRequested: boolean): void {
+  if (
+    target.kind === 'window' &&
+    isApplicationFocused() &&
+    (isUserRequested || !shouldContentAvoidDocumentFocus(target.windowId))
+  ) {
+    // The user's declared intent overrides whatever withholding decision the platform made for
+    // this window, so that decision must be revoked before the raise, not left for the focus
+    // handler to (fail to) sort out — see the docblock above.
+    // Unlike the clear in `main.ts`'s window `focus` handler, which follows a confirmed activation,
+    // this clear is speculative: it happens before the OS is asked. A raise the OS refuses leaves
+    // the window backgrounded but no longer withheld, so a later open that predicts no raise of its
+    // own can take latent document focus there with no catch-up note. See PT-4573.
+    if (isUserRequested) forgetWindowWithholding(target.windowId);
+    focusWindow(target.windowId);
+  }
 }
 
 /**
@@ -152,6 +182,10 @@ function raiseMoveTarget(target: MoveWebViewTarget): void {
 export async function moveWebView(
   webViewId: WebViewId,
   target: MoveWebViewTarget,
+  // Defaults to "nobody asked for this", the safe answer: a caller that does not say is an
+  // extension moving a view on its own, and a window the user did not ask for must not take the
+  // foreground. The tab context menu, which IS a person asking, says so explicitly.
+  isUserRequested = false,
 ): Promise<WebViewId> {
   // Refused, not queued. A second move of the same web view races the first for a tab only one of
   // them can capture, and the loser is told the tab may have closed while it is safe in the window
@@ -170,7 +204,7 @@ export async function moveWebView(
     );
   movesInProgress.add(webViewId);
   try {
-    return await moveCapturedWebView(webViewId, target);
+    return await moveCapturedWebView(webViewId, target, isUserRequested);
   } finally {
     movesInProgress.delete(webViewId);
   }
@@ -184,6 +218,7 @@ export async function moveWebView(
 async function moveCapturedWebView(
   webViewId: WebViewId,
   target: MoveWebViewTarget,
+  isUserRequested: boolean,
 ): Promise<WebViewId> {
   const matcher: OwnerMatcher = { kind: 'id', webViewId };
   const { owner, hadUnreachableWindows } = await findOwner(matcher, 'move');
@@ -258,12 +293,13 @@ async function moveCapturedWebView(
     // window that never comes up costs the user a wait and an error rather than a web view open in
     // no window at all. It opens nothing: an empty window gives reuse logic nothing to find, so
     // what makes the capture below have to come before the adopt is untouched by doing this early.
-    const freshWindow = await createFreshWindow(webViewId);
+    const freshWindow = await createFreshWindow(webViewId, isUserRequested);
     freshWindowId = freshWindow.windowId;
     destinationWindowId = freshWindow.windowId;
     adoptIntoDestination = (definition) =>
       freshWindow.runOpen(
-        (shard) => shard.adoptWebView(definition),
+        (shard, activateWithoutDocumentFocus) =>
+          shard.adoptWebView(definition, activateWithoutDocumentFocus),
         (standingWindow) => {
           standingNewWindow = standingWindow;
         },
@@ -287,6 +323,15 @@ async function moveCapturedWebView(
     );
     targetShard = shard;
     destinationWindowId = target.windowId;
+    // TODO(PT-4573): This adopt carries no document-focus instruction, so the dock decides purely
+    // from whether the destination is awaiting its first activation — which is false for an
+    // ordinary window that is simply not the one holding OS focus, so the adopt takes document
+    // focus there. `raiseMoveTarget` below is what is meant to make that harmless, by raising the
+    // destination right after; when it is skipped (the application does not hold focus, or the
+    // destination is withheld from activation and the move was not declared user-requested) or
+    // refused by the OS, the window stays backgrounded and the adopt's focus stays latent — it
+    // claims the caret only once something later raises that window, at a moment the user never
+    // associated with this move.
     adoptIntoDestination = (definition) => shard.adoptWebView(definition);
   }
 
@@ -368,7 +413,7 @@ async function moveCapturedWebView(
           logger.debug(
             `Webview ${webViewId}'s adopt into window ${adoptedWindowId} succeeded, but that window's close was decided while the adopt was running; its own close path will handle the view.`,
           );
-        else raiseMoveTarget(target);
+        else raiseMoveTarget(target, isUserRequested);
         return movedWebViewId;
       }
       logger.warn(
@@ -396,7 +441,7 @@ async function moveCapturedWebView(
           targetDescription,
         );
         if (lateAdoptedWebViewId !== undefined) {
-          raiseMoveTarget(target);
+          raiseMoveTarget(target, isUserRequested);
           return lateAdoptedWebViewId;
         }
       }
