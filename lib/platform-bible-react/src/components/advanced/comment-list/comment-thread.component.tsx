@@ -470,13 +470,26 @@ export function CommentThread({
       aria-selected={isSelected}
       id={getCommentThreadElementId(threadId)}
       className={cn(
-        'tw:group tw:w-full tw:rounded-none tw:border-none tw:p-4 tw:outline-hidden tw:transition-all tw:duration-200 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
+        // `border-s-4` is always present so the bar's width is reserved on every card and
+        // selecting one does not shift its content sideways. Logical property, so it follows RTL.
+        'tw:group tw:w-full tw:rounded-none tw:border-s-4 tw:p-4 tw:outline-hidden tw:transition-all tw:duration-200 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
         { 'tw:cursor-pointer tw:hover:shadow-md': !isSelected },
+        // Selection rides the leading bar and elevation, never the background. The background
+        // channel already carries three meanings (unread, resolved, read) and cannot express a
+        // fourth. The bar is `foreground` rather than `primary` because `primary` measures 2.38:1
+        // against the card in paratext-dark, below the 3:1 non-text minimum — see
+        // theme-contrast.test.ts.
         {
-          'tw:bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,
-          'tw:bg-background': isSelected && threadStatus !== 'Resolved' && isRead,
+          'tw:border-foreground tw:shadow-md': isSelected,
+          'tw:border-transparent': !isSelected,
+        },
+        // Status keeps the background channel. `bg-card` is the surface token; the previous
+        // `bg-primary-foreground` was a text-on-primary token and rendered near-white in
+        // paratext-dark.
+        {
+          'tw:bg-card': threadStatus !== 'Resolved' && isRead,
           'tw:bg-muted': threadStatus === 'Resolved',
-          'tw:bg-accent': !isRead && !isSelected && threadStatus !== 'Resolved',
+          'tw:bg-accent': !isRead && threadStatus !== 'Resolved',
         },
       )}
       onClick={() => {

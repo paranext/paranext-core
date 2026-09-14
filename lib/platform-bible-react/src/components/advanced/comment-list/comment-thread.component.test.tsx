@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import React from 'react';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { CommentThread } from './comment-thread.component';
@@ -295,7 +296,39 @@ describe('CommentThread DOM id', () => {
   it('sets its root element id via getCommentThreadElementId(threadId)', () => {
     render(<CommentThread {...defaultProps} />);
 
-    const threadElement = screen.getByRole('option');
-    expect(threadElement).toHaveAttribute('id', getCommentThreadElementId(defaultProps.threadId));
+    const threadOption = screen.getByRole('option');
+    expect(threadOption).toHaveAttribute('id', getCommentThreadElementId(defaultProps.threadId));
+  });
+});
+
+// A read, non-resolved thread: the case whose surface is `bg-card`, distinct from the unread
+// (`bg-accent`) and resolved (`bg-muted`) cases the selection-styling test below isn't about.
+const baseThreadProps = { ...defaultProps, isRead: true };
+
+function threadElement(overrides: Partial<React.ComponentProps<typeof CommentThread>>) {
+  return <CommentThread {...baseThreadProps} {...overrides} />;
+}
+
+function renderThread(overrides: Partial<React.ComponentProps<typeof CommentThread>>) {
+  return render(threadElement(overrides));
+}
+
+describe('CommentThread selection styling', () => {
+  test('the selected thread carries the leading bar and every card uses the card surface', () => {
+    const { rerender } = renderThread({ isSelected: false });
+
+    const unselected = screen.getByRole('option');
+    expect(unselected.className).toMatch(/\bbg-card\b/);
+    // Selection must not ride the background channel, which carries read/resolved status.
+    expect(unselected.className).not.toMatch(/\bbg-primary-foreground\b/);
+    // The bar's width is reserved while unselected so selecting does not shift content sideways.
+    expect(unselected.className).toMatch(/\bborder-s-4\b/);
+    expect(unselected.className).toMatch(/\bborder-transparent\b/);
+
+    rerender(threadElement({ isSelected: true }));
+
+    const selected = screen.getByRole('option');
+    expect(selected.className).toMatch(/\bborder-foreground\b/);
+    expect(selected.className).not.toMatch(/\bborder-transparent\b/);
   });
 });
