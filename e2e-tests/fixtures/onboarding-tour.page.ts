@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { ONBOARDING_TOUR_DONE_KEY } from '../../fixtures/helpers';
+import { ONBOARDING_TOUR_DONE_KEY } from './helpers';
 
 /**
  * Page-object helpers for the onboarding tour overlay.
