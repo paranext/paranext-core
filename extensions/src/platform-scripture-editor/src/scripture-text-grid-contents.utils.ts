@@ -8,7 +8,11 @@ import type {
 } from 'platform-scripture';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
-import { matchesDownloaded, type DownloadedResource } from './downloaded-resources.utils';
+import {
+  indexDblResourcesByUid,
+  matchesDownloaded,
+  type DownloadedResource,
+} from './downloaded-resources.utils';
 
 /**
  * A Bible-text reference — the only reference types that carry `id` and
@@ -218,9 +222,10 @@ export function getViewOptionsTexts(
     });
   });
 
+  const dblResourcesByUid = indexDblResourcesByUid(options?.dblResources ?? []);
   (options?.downloaded ?? []).forEach((downloadedResource) => {
     const alreadyListed = [...top, ...bottom].some((row) =>
-      matchesDownloaded(downloadedResource, row.reference, options?.dblResources ?? []),
+      matchesDownloaded(downloadedResource, row.reference, dblResourcesByUid),
     );
     if (alreadyListed) return;
     bottom.push({
