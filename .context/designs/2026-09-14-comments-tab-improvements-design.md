@@ -1,5 +1,8 @@
 # Comments tab: density, active-comment visibility, filters, toolbar order
 
+> **Frozen record** — approved 2026-09-14 against `014cdcd51d4`. Line citations reflect the tree
+> at that commit; follow the current files and the named symbols, not these line numbers.
+
 - **Date:** 2026-09-14
 - **Branch:** `pt-4554-improving-comments`
 - **Status:** Approved, ready for implementation planning
@@ -48,17 +51,33 @@ The background channel already carries three meanings (unread `tw:bg-accent`, re
 the current attempt reads as invisible in one theme and inverted in another.
 
 **Decision.** Move every card to the semantically correct `tw:bg-card`, leave status on the
-background channel, and encode "active" on a dedicated channel: a 4px leading-edge
-`border-primary` bar (`tw:border-s-4 tw:border-primary`, logical property so it follows RTL) plus
-`tw:shadow-md`. The existing `tw:hover:shadow-md` on non-selected cards
-(`comment-thread.component.tsx:474`) becomes the hover echo of the active state rather than an
-unrelated affordance. Inactive cards reserve the bar's width with a transparent border so selecting
-a card does not shift its content sideways.
+background channel, and encode "active" on a dedicated channel: a 4px leading-edge bar
+(`tw:border-s-4 tw:border-foreground`, logical property so it follows RTL) plus `tw:shadow-md`. The
+existing `tw:hover:shadow-md` on non-selected cards (`comment-thread.component.tsx:474`) becomes the
+hover echo of the active state rather than an unrelated affordance. Inactive cards reserve the bar's
+width with a transparent border so selecting a card does not shift its content sideways.
+
+**The bar token is `foreground`, not `primary`, and that is measured rather than assumed.** WCAG
+contrast of each candidate against the two surfaces the bar can sit on (`card` for active,
+`muted` for active-and-resolved), computed with `chroma-js` from the token values in
+`lib/platform-bible-react/src/index.css`:
+
+| Theme | `foreground`/card | `foreground`/muted | `primary`/card | `ring`/card |
+| --- | --- | --- | --- | --- |
+| default-light | 19.99 | 17.75 | 17.84 | 19.99 |
+| default-dark | 19.08 | 13.94 | 19.08 | 13.45 |
+| paratext-light | 19.59 | 17.76 | 5.05 | **2.32 fail** |
+| paratext-dark | 16.38 | 13.79 | **2.38 fail** | 3.98 |
+
+`primary` and `ring` each fail the 3:1 non-text threshold, in *opposite* themes — the same
+one-theme-passing-proves-nothing trap NN-1.2 already fell into. `foreground` clears it everywhere
+with a 13.79 worst case. The cost is that the bar reads as a strong neutral marker rather than a
+brand accent in the paratext themes; NN-1.2 asks for "obviously active", not for the brand colour.
 
 Consequences:
 
-- Contrast becomes primary-vs-card, which is large in every theme **by construction** rather than
-  something tuned per theme.
+- Contrast is checked against every surface in every theme by the test in strategy item 2, not
+  assumed from the token's name.
 - Fixes selected-and-resolved and selected-and-unread, which currently show no selection at all.
 - **Requires a 1px divider between threads.** Cards are `tw:border-none tw:rounded-none` and rely on
   the list's 12px `tw:space-y-3` (`comment-list.component.tsx:139`) for separation. Once cards are
@@ -271,7 +290,7 @@ deliberate answer rather than an unexamined default.
   there is an inner scroller when there is not. The source comment ("pinned to the top of whichever
   ancestor scrolls") papers over it. Worth its own ticket; touching it here would balloon the PR and
   risk the sticky behaviour D5 depends on.
-- Tag/category filter — PT9 has one, Platform.Bible has none at any layer. That is Q8.
+- Tag/category filter — PT9 has one, Platform.Bible has none at any layer. That is Q8, unanswered as of 2026-09-14.
 - Editor annotations — explicit no-go.
 
 ## Open items
@@ -279,8 +298,8 @@ deliberate answer rather than an unexamined default.
 1. **UX sign-off on D4.** NN-1.3 says "two filter controls **with their options displayed**". A
    popover arguably fails that reading. The decision to collapse is made; the sign-off is not.
    Blocking for merge, not for starting.
-2. **Q8** — are the PT9 filter omissions deliberate? Non-blocking.
-3. **Coordinate with PR #2211** (per-view zoom, same web view). D2's rejection of responsive density
+2. **Q8** — are the PT9 filter omissions deliberate? Unanswered as of 2026-09-14; non-blocking.
+3. **Coordinate with PR #2211** (per-view zoom, same web view) — open as of 2026-09-14. D2's rejection of responsive density
    was partly to avoid fighting it.
 4. **Architecture-Decisions entries.** Per `CLAUDE.md`, D1 (selection encoded on a dedicated visual
    channel rather than the overloaded background channel — a convention other list surfaces should
