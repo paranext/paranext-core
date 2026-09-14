@@ -92,3 +92,27 @@ test('renders the contents body (no outcome line) when conflictResolutionAction 
   expect(screen.queryByText(OUTCOME_USED_OTHER)).not.toBeInTheDocument();
   expect(screen.queryByText(OUTCOME_COMBINED)).not.toBeInTheDocument();
 });
+
+test('has no space-y on the item root, which would add dead margin on a flex row', () => {
+  const { container } = render(
+    <CommentItem comment={baseComment} localizedStrings={localizedStrings} />,
+  );
+
+  // `space-y-*` emits margin-top on siblings. On this flex-row with items-baseline it added 12px
+  // of dead space and broke the avatar/text baseline alignment.
+  expect(container.firstElementChild?.className).not.toMatch(/\bspace-y-/);
+});
+
+test('keeps content order and nesting inside a comment unchanged', () => {
+  const { container } = render(
+    <CommentItem comment={baseComment} localizedStrings={localizedStrings} />,
+  );
+
+  const root = container.firstElementChild;
+  expect(root).not.toBeNull();
+  // Avatar first, then the text column — the density change must not reorder or re-nest anything.
+  const [avatar, column] = Array.from(root?.children ?? []);
+  expect(avatar?.textContent).toBe('AA');
+  expect(column?.textContent).toContain('Alice Ann');
+  expect(column?.textContent).toContain('ORDINARY BODY');
+});
