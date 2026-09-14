@@ -268,6 +268,19 @@ describe('web-view-content-zoom.service', () => {
     expect(logger.warn).toHaveBeenCalled();
   });
 
+  it('keeps a memory entry whose key this build cannot parse when it writes the record back', async () => {
+    settings[MEMORY] = { 'palette:proj-A:main': 1.4 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main');
+    await __flushContentZoomMemoryForTesting();
+    expect(settingsSet).toHaveBeenCalledWith(MEMORY, {
+      'palette:proj-A:main': 1.4,
+      'editor:proj-A:main': 1.1,
+    });
+  });
+
   it('seeds a new pane per area from state, else memory, else the default', async () => {
     settings[MEMORY] = {
       'editor:proj-A:main': 1.3,
