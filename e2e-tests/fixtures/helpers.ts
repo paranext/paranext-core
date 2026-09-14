@@ -9,6 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
+import { suppressOnboardingTour } from './onboarding-tour.page';
 import { WINDOW_ID_SHAPE_SOURCE } from './window-id-shape';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
@@ -2293,13 +2294,6 @@ export function describeInconclusiveOverlayTimeout(originalError: unknown): Erro
   );
 }
 
-/**
- * LocalStorage key persisting onboarding-tour completion. Mirrors ONBOARDING_TOUR_DONE_KEY in
- * src/renderer/components/onboarding-tour/onboarding-tour.store.ts — keep in sync (renderer source
- * cannot be imported into the Playwright Node context).
- */
-export const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
-
 /** Options accepted by {@link waitForAppReady}. */
 export interface WaitForAppReadyOptions {
   /**
@@ -2326,12 +2320,8 @@ export interface WaitForAppReadyOptions {
  * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
  * theme) finish initializing — it must be gone before tests interact with the UI.
  *
- * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour: in Simple mode with a
- * fresh profile the tour opens automatically (and asynchronously — it waits for the dock layout and
- * localized strings), and its full-screen overlay blocks all pointer events. Writing the done flag
- * makes `OnboardingTour` (which re-reads it each render) refuse to open from that point on, closing
- * the race a visibility check alone would leave; an instance that already opened before the flag
- * landed is dismissed with Escape.
+ * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour — see
+ * {@link suppressOnboardingTour} for why and how.
  */
 export async function waitForAppReady(
   page: Page,
@@ -2363,18 +2353,7 @@ export async function waitForAppReady(
     // waitForOverlayGone reported it.
     throw gateOutcome === 'inconclusive' ? describeInconclusiveOverlayTimeout(error) : error;
   }
-  if (!allowOnboardingTour) {
-    await page.evaluate((key) => {
-      localStorage.setItem(key, 'true');
-    }, ONBOARDING_TOUR_DONE_KEY);
-    // The tour-specific test id (not a generic modal-dialog selector) so an unrelated dialog —
-    // e.g. a real startup error — is never silently Escape-dismissed here.
-    const tourDialog = page.getByTestId('tour-dialog');
-    if (await tourDialog.isVisible()) {
-      await page.keyboard.press('Escape');
-      await expect(tourDialog).not.toBeVisible({ timeout: 5000 });
-    }
-  }
+  if (!allowOnboardingTour) await suppressOnboardingTour(page);
 }
 
 /**

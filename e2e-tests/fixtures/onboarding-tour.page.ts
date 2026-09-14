@@ -1,5 +1,6 @@
-import type { Locator, Page } from '@playwright/test';
-import { ONBOARDING_TOUR_DONE_KEY } from './helpers';
+import { expect, type Locator, type Page } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Page-object helpers for the onboarding tour overlay.
@@ -11,15 +12,50 @@ import { ONBOARDING_TOUR_DONE_KEY } from './helpers';
  * mode — in Power it reduces to the stops whose anchors exist there.
  *
  * All locator helpers scope queries inside the tour dialog element so they cannot accidentally
- * match other content in the app.
+ * match other content in the app. Button names are resolved from the English localization file
+ * through {@link englishLabel}, so a relabel in `en.json` moves these helpers with it.
  *
- * Button labels (from `assets/localization/en.json`):
- *
- * - Next: `%firstRun_button_next%` → "Next"
- * - Back: `%firstRun_button_back%` → "Back"
- * - Done: `%onboardingTour_button_done%` → "Done"
- * - Skip: `%onboardingTour_button_skip%` → "Skip tour"
+ * This lives under `fixtures/` rather than beside the tour spec because `waitForAppReady` in
+ * `helpers.ts` suppresses the tour for every other spec and needs the same locators; `helpers.ts`
+ * imports from here, so this module must not import from `helpers.ts`.
  */
+
+/**
+ * LocalStorage key persisting onboarding-tour completion. Mirrors ONBOARDING_TOUR_DONE_KEY in
+ * src/renderer/components/onboarding-tour/onboarding-tour.store.ts — keep in sync (renderer source
+ * cannot be imported into the Playwright Node context).
+ */
+export const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
+
+const ENGLISH_LOCALIZATION_PATH = path.resolve(__dirname, '../../assets/localization/en.json');
+
+let englishStrings: Record<string, string> | undefined;
+
+/**
+ * Resolves a `%localize_key%` to its English label from `assets/localization/en.json`, so a locator
+ * can be written against the key the component uses rather than a copy of its current wording.
+ * Throws on an unknown key: a silently-empty name would match nothing and read as a UI regression.
+ */
+export function englishLabel(localizeKey: string): string {
+  englishStrings ??= JSON.parse(fs.readFileSync(ENGLISH_LOCALIZATION_PATH, 'utf-8'));
+  const label = englishStrings?.[localizeKey];
+  if (label === undefined)
+    throw new Error(`No English localization for ${localizeKey} in ${ENGLISH_LOCALIZATION_PATH}`);
+  return label;
+}
+
+function escapeForRegExp(label: string): string {
+  return label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Exact, whole-name match for an accessible name (case-insensitive, no substring matches), so "Skip
+ * tour" cannot also match a hypothetical "Skip tour and hide" and "Next" cannot match a "Next
+ * chapter" button elsewhere in the dialog.
+ */
+function exactName(...labels: string[]): RegExp {
+  return new RegExp(`^(?:${labels.map(escapeForRegExp).join('|')})$`, 'i');
+}
 
 /** Clears the onboarding-tour completion flag from localStorage. */
 export async function clearTourDone(page: Page): Promise<void> {
@@ -35,6 +71,13 @@ export async function clearTourDone(page: Page): Promise<void> {
  */
 export function getTourDialog(page: Page): Locator {
   return page.getByTestId('tour-dialog');
+}
+
+/** The tour's Skip button, named from `%onboardingTour_button_skip%`. */
+export function getTourSkipButton(page: Page): Locator {
+  return getTourDialog(page).getByRole('button', {
+    name: exactName(englishLabel('%onboardingTour_button_skip%')),
+  });
 }
 
 /** Returns the step-counter display text (e.g. `"1 of 5"`). */
@@ -62,18 +105,25 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
 }
 
 /**
- * Clicks the primary action button (Next on intermediate steps, Done on the last step). Uses a
- * regex so it matches whichever label the localization provides.
+ * Clicks the primary action button (Next on intermediate steps, Done on the last step). Matches
+ * either label so a caller need not know which step it is on.
  */
 export async function advanceTour(page: Page): Promise<void> {
-  const dialog = getTourDialog(page);
-  await dialog.getByRole('button', { name: /^(Next|Done)$/i }).click();
+  await getTourDialog(page)
+    .getByRole('button', {
+      name: exactName(
+        englishLabel('%firstRun_button_next%'),
+        englishLabel('%onboardingTour_button_done%'),
+      ),
+    })
+    .click();
 }
 
 /** Clicks the Back button to return to the previous step. */
 export async function goBackTour(page: Page): Promise<void> {
-  const dialog = getTourDialog(page);
-  await dialog.getByRole('button', { name: /^Back$/i }).click();
+  await getTourDialog(page)
+    .getByRole('button', { name: exactName(englishLabel('%firstRun_button_back%')) })
+    .click();
 }
 
 /**
@@ -83,8 +133,9 @@ export async function goBackTour(page: Page): Promise<void> {
  * visible after the bound, the caller's next assertion fails with a clear error.
  */
 export async function advanceToLastStep(page: Page): Promise<void> {
-  const dialog = getTourDialog(page);
-  const nextButton = dialog.getByRole('button', { name: /^Next$/i });
+  const nextButton = getTourDialog(page).getByRole('button', {
+    name: exactName(englishLabel('%firstRun_button_next%')),
+  });
   for (let i = 0; i < 10; i += 1) {
     // Steps are inherently sequential — must observe the current step before advancing.
     // eslint-disable-next-line no-await-in-loop
@@ -96,10 +147,36 @@ export async function advanceToLastStep(page: Page): Promise<void> {
 }
 
 /**
- * Clicks the Skip button to dismiss the tour early. The Skip button label is "Skip tour" from the
- * English localization file. Both skip and done persist the localStorage flag.
+ * Clicks the Skip button to dismiss the tour early. Both skip and done persist the localStorage
+ * flag.
  */
 export async function skipTour(page: Page): Promise<void> {
-  const dialog = getTourDialog(page);
-  await dialog.getByRole('button', { name: /skip/i }).click();
+  await getTourSkipButton(page).click();
+}
+
+/**
+ * Keeps the onboarding tour from covering the UI. In Simple mode with a fresh profile the tour
+ * opens automatically (and asynchronously — it waits for the dock layout and localized strings),
+ * and its full-screen overlay blocks all pointer events. Writing the done flag makes
+ * `OnboardingTour` (which re-reads it each render) refuse to open from that point on, closing the
+ * race a visibility check alone would leave; an instance that already opened before the flag landed
+ * is dismissed through its own Skip button.
+ *
+ * Skip is clicked rather than Escape pressed because the tour listens for Escape on the main
+ * document, and `page.keyboard` delivers to whatever has focus — which, once a scripture editor is
+ * open, is the editor's iframe. A click lands on the dialog regardless of focus.
+ *
+ * `waitForAppReady` calls this by default. A spec that skips `waitForAppReady` (the
+ * scripture-editor specs, which gate on the editor iframe instead) must call it itself before its
+ * first click in the main frame.
+ */
+export async function suppressOnboardingTour(page: Page): Promise<void> {
+  await page.evaluate((key) => {
+    localStorage.setItem(key, 'true');
+  }, ONBOARDING_TOUR_DONE_KEY);
+  const tourDialog = getTourDialog(page);
+  if (await tourDialog.isVisible()) {
+    await skipTour(page);
+    await expect(tourDialog).not.toBeVisible({ timeout: 5000 });
+  }
 }
