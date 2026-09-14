@@ -290,9 +290,47 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
-  it('keeps the deletion half of a memory delta when a sibling sync throws', () => {
+  it('logs instead of throwing when the trailing definition write of a burst fails', async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main'); // written immediately
+      await adjustContentZoom('editor-1', 1, 'main'); // deferred into the open window
+      updateDefinition.mockImplementation(() => {
+        throw new Error('local storage quota exceeded');
+      });
+      expect(() => vi.advanceTimersByTime(250)).not.toThrow();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('could not store'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still flushes the memory write on beforeunload when a definition write fails', async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main'); // written immediately
+      await adjustContentZoom('editor-1', 1, 'main'); // deferred into the open window
+      updateDefinition.mockImplementation(() => {
+        throw new Error('local storage quota exceeded');
+      });
+      settingsSet.mockClear();
+      window.dispatchEvent(new Event('beforeunload'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:PROJ-A:main': 1.2 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps syncing the siblings after one pane's write fails, instead of leaving the rest of the walk on the old value", () => {
     definitions.set('editor-2', {
       id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { main: 1.5 } },
+    });
+    definitions.set('editor-3', {
+      id: 'editor-3',
       webViewType: 'platformScriptureEditor.react',
       projectId: 'proj-A',
       state: { [LEVELS]: { main: 1.5 } },
@@ -300,7 +338,7 @@ describe('web-view-content-zoom.service', () => {
     requireDefinition('editor-1').state = { [LEVELS]: { main: 1.5 } };
     memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.5 }));
     // A definition write can throw partway through the walk: it reaches an unguarded local-storage
-    // write that fails when the quota is exhausted, after earlier panes were already updated.
+    // write that fails when the quota is exhausted.
     updateDefinition.mockImplementation(
       (id: string, update: { state?: Record<string, unknown> }) => {
         if (id === 'editor-2') throw new Error('local storage quota exceeded');
@@ -308,12 +346,10 @@ describe('web-view-content-zoom.service', () => {
       },
     );
     memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('editor-1')?.state).toEqual({});
-    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } });
-    expect(logger.warn).toHaveBeenCalled();
-    updateDefinition.mockImplementation(applyDefinitionUpdate);
-    memoryCallbacks.forEach((cb) => cb({}));
-    expect(definitions.get('editor-2')?.state).toEqual({});
+    expect(definitions.get('editor-1')?.state).toEqual({}); // before the failing pane: still lands
+    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } }); // its own write failed
+    expect(definitions.get('editor-3')?.state).toEqual({}); // after the failing pane: still reached
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-2'));
   });
 
   it('brings both changed areas of a pane in line with one definition write', () => {
