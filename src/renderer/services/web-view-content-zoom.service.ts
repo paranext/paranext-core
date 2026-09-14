@@ -936,40 +936,48 @@ function repushAllPanes(): void {
  * data-driven and applies with no layout, so an inactive tab is already in line when it is shown.
  *
  * @returns `true` when every pane that needed a change took it, so this delta is fully applied;
- *   `false` when at least one pane's write did not land, which leaves the delta still owed to that
- *   pane. Either way every remaining pane is visited: one pane's failure is not the others'.
+ *   `false` when at least one pane's write did not land or its turn threw, which leaves the delta
+ *   still owed to that pane. Either way every remaining pane is visited, and a pane that throws is
+ *   logged and stepped over: one pane's failure is not the others'.
  */
 function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryRecord): boolean {
   let everyPaneTookItsUpdate = true;
   deps.getAllOpenDefinitions().forEach((definition) => {
-    const id = memoryIdentityFor(definition);
-    if (!id) return;
-    const areas = new Set([
-      ...Object.keys(collectMemoryLevelsFor(memory, id)),
-      ...Object.keys(collectMemoryLevelsFor(previousMemory, id)),
-    ]);
-    // One read and one write per pane: every write reconciles the whole dock layout, so a pane
-    // whose two areas both moved must not cost two of them.
-    const current = deps.getDefinition(definition.id) ?? definition;
-    const levels: Levels = { ...effectiveOwnLevels(current) };
-    let changed = false;
-    areas.forEach((areaId) => {
-      const key = buildContentZoomMemoryKey(id.kind, id.identity, areaId);
-      // A newer local edit for this key hasn't reached the setting yet; this echo predates it, so
-      // applying it would revert the area until the newer write's own echo arrives.
-      if (pendingMemoryWrites.has(key)) return;
-      const remembered = isValidZoomFactor(memory[key]) ? memory[key] : undefined;
-      if (levels[areaId] === remembered) return;
-      if (remembered === undefined) delete levels[areaId];
-      else levels[areaId] = remembered;
-      changed = true;
-    });
-    // A pane whose levels have not reached its definition yet is written even when this delta asks
-    // for nothing new: those levels are what the pane shows and they still owe a write, so the
-    // change that memory delivers next is also this pane's next chance to store them.
-    if (!changed && !pendingOwnLevels.has(definition.id)) return;
-    if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
-    else everyPaneTookItsUpdate = false;
+    try {
+      const id = memoryIdentityFor(definition);
+      if (!id) return;
+      const areas = new Set([
+        ...Object.keys(collectMemoryLevelsFor(memory, id)),
+        ...Object.keys(collectMemoryLevelsFor(previousMemory, id)),
+      ]);
+      // One read and one write per pane: every write reconciles the whole dock layout, so a pane
+      // whose two areas both moved must not cost two of them.
+      const current = deps.getDefinition(definition.id) ?? definition;
+      const levels: Levels = { ...effectiveOwnLevels(current) };
+      let changed = false;
+      areas.forEach((areaId) => {
+        const key = buildContentZoomMemoryKey(id.kind, id.identity, areaId);
+        // A newer local edit for this key hasn't reached the setting yet; this echo predates it, so
+        // applying it would revert the area until the newer write's own echo arrives.
+        if (pendingMemoryWrites.has(key)) return;
+        const remembered = isValidZoomFactor(memory[key]) ? memory[key] : undefined;
+        if (levels[areaId] === remembered) return;
+        if (remembered === undefined) delete levels[areaId];
+        else levels[areaId] = remembered;
+        changed = true;
+      });
+      // A pane whose levels have not reached its definition yet is written even when this delta asks
+      // for nothing new: those levels are what the pane shows and they still owe a write, so the
+      // change that memory delivers next is also this pane's next chance to store them.
+      if (!changed && !pendingOwnLevels.has(definition.id)) return;
+      if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
+      else everyPaneTookItsUpdate = false;
+    } catch (e) {
+      logger.warn(
+        `Content zoom: could not bring web view ${definition.id} in line with memory. ${getErrorMessage(e)}`,
+      );
+      everyPaneTookItsUpdate = false;
+    }
   });
   return everyPaneTookItsUpdate;
 }
