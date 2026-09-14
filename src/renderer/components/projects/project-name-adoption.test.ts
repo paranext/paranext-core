@@ -11,19 +11,16 @@ const ROOTS = [
 ];
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'temp-build', 'storybook-static', '.vite']);
 
-/**
- * Files that spell out or discuss the rules themselves rather than re-inlining them: the helper's
- * own home, and this test's own source (whose explanatory comments quote the rules verbatim and
- * would otherwise flag themselves).
- */
+/** The helper's own home — the one place allowed to spell these rules out in real code. */
 const SELF_REFERENTIAL_FILES = new Set([
   path.join('lib', 'platform-bible-utils', 'src', 'project-util.ts'),
-  path.join('src', 'renderer', 'components', 'projects', 'project-name-adoption.test.ts'),
 ]);
 
 /**
  * Sites that match a pattern without being a project-name label. Per-site, not per-file, so a new
- * inline format added to one of these files is still caught.
+ * inline format added to one of these files is still caught. Comment lines quoting or discussing a
+ * rule are handled structurally (see `isCommentLine`), not listed here — a line-keyed exemption for
+ * prose goes stale silently the moment an unrelated edit shifts the line number.
  */
 const EXEMPT = new Map<string, string>([
   [
@@ -34,15 +31,13 @@ const EXEMPT = new Map<string, string>([
     'src/stories/design-ideas/home-unified.component.tsx:2870',
     'design-ideas prototype, not shipped UI',
   ],
-  [
-    'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.stories.tsx:117',
-    'story comment quoting the de-dup rule for context, not a re-implementation',
-  ],
-  [
-    'lib/platform-bible-react/src/components/advanced/settings-components/settings-sidebar.component.tsx:36',
-    'TSDoc comment referencing the de-dup rule, not a re-implementation',
-  ],
 ]);
+
+/** Whether a line is a comment (line comment, block-comment body, or JSDoc/TSDoc line). */
+function isCommentLine(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*');
+}
 
 /** The de-dup rule, matched in both operand orders. */
 const DEDUP = [
@@ -72,6 +67,7 @@ function findViolations(patterns: RegExp[]): string[] {
     return readFileSync(file, 'utf8')
       .split('\n')
       .flatMap((line, index) => {
+        if (isCommentLine(line)) return [];
         if (!patterns.some((pattern) => pattern.test(line))) return [];
         const site = `${relative.split(path.sep).join('/')}:${index + 1}`;
         return EXEMPT.has(site) ? [] : [site];
