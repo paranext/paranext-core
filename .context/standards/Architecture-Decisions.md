@@ -251,6 +251,119 @@ step, no automation. Just a record.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
 
+## adr-bcv-item-value-contract: BookChapterControl owns the cmdk item-value contract; activation reads component state, not cmdk's DOM internals
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** `BookChapterControl`'s chapter and verse grids render as cmdk `CommandItem`s
+  (`lib/platform-bible-react/src/components/advanced/book-chapter-control/`), and its
+  Enter/Space activation previously read the highlighted cell straight off cmdk's own DOM state —
+  `commandRef.current?.querySelector('[cmdk-item][data-selected="true"]:not([data-disabled="true"])')`,
+  then `.click()` on whatever it found. Those attribute names (`cmdk-item`, `data-selected`,
+  `data-disabled`) are cmdk implementation details, not a contract the `cmdk` package documents or
+  versions; nothing in this codebase pinned them, so a `cmdk` upgrade could rename or drop one and
+  the Enter/Space handler would silently stop finding a highlighted cell, with no compiler or type
+  error to catch it. Separately, the cmdk `CommandItem` `value` string that both drives the
+  highlight and gets parsed back into a chapter/verse number was hand-built inline at six call
+  sites, each spelling its own
+  `` `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ...` `` template, and
+  parsed back with two ad hoc regexes (`commandValue.match(/:(\d+)$/)` and
+  `commandValue.match(/(\d+)$/)`), each of which had to agree with every builder site by
+  convention alone.
+- **Decision:** Keep cmdk (`Command`/`CommandItem`/`CommandList`/`CommandInput`) for list
+  rendering and filtering, but own the item-value contract: `chapterItemValue` / `verseItemValue`
+  build the `CommandItem` value, `parseChapterFromItemValue` / `parseVerseFromItemValue` read it
+  back, and `TOP_MATCH_ITEM_VALUE` is a fixed sentinel for the top-match row — all in one place,
+  `lib/platform-bible-react/src/components/shared/book-item.utils.ts`, consumed by both the grid
+  components and the keyboard handler. Enter/Space activation in `handleCommandKeyDown`
+  (`book-chapter-control.component.tsx`) reads the highlighted item number out of the
+  `commandValue` state the component already owns and calls the same `handleVerseSelect` /
+  `handleChapterSelect` callback the grid's own `onSelect` would call — never reading a cmdk DOM
+  attribute, never synthesizing a click.
+- **Scope — one path is deliberately NOT migrated.** `CommandInput`'s `spaceSelectsHighlightedItem`
+  (`components/shadcn-ui/command.tsx`), which `BookChapterControl` opts into for the books view's
+  "Space picks the highlighted book on an empty query", still does
+  `querySelector('[cmdk-item][data-selected="true"]:not([data-disabled="true"])')` followed by
+  `.click()` — exactly the shape this decision removes from the grid path. It is shared by seven
+  pickers (project selector, book scope picker, combo boxes, the inline marker menu), so migrating
+  it is a change to all of them rather than to this control, and it is left for whoever takes the
+  roving-`tabindex` follow-up in alternative (b). Until then, the books-view Space path remains
+  bound to cmdk internals: a `cmdk` rename would break it silently, with no type or build error.
+- **Alternatives:** (a) **keep steering cmdk through its private DOM attributes** — rejected:
+  nothing pins those attributes across `cmdk` versions, and a break would be silent (no type error,
+  no failing build — just Enter/Space quietly doing nothing). (b) **replace the grids with a
+  roving-`tabindex` native-focus grid** (the WAI-ARIA grid pattern) — the structurally honest fix,
+  since cmdk is a 1-D listbox primitive being asked to render and drive a 2-D grid (6 columns,
+  wrap-around horizontal movement, RTL mirroring); deferred as a follow-up rather than built here,
+  since it would replace `ChapterGrid`/`VerseGrid`'s rendering model, not just their keyboard
+  wiring.
+- **Consequences:** The grids and the keyboard handler cannot drift apart — both read and write
+  through the same builder/parser pair instead of six independently-formatted template strings.
+  Disabled-item filtering, which the removed `:not([data-disabled="true"])` DOM selector provided
+  for free, now has to be checked explicitly (`makeIsChapterDisabled` / `makeIsVerseDisabled`) in
+  the activation branch — an easy thing to forget when adding a new activation path. Grid movement
+  arithmetic (wrap-around horizontal, clamp vertical, RTL mirroring) is now one pure function,
+  `computeTargetGridItem` in `book-chapter-control.utils.ts`, shared by both grids instead of two
+  near-duplicate `switch` statements that had already drifted from each other before this branch.
+- **Source:** PT-4345 (BookChapterControl keyboard-navigation rework), PR #2750. The removed
+  DOM-query activation and the six inline value-builders are in that PR's diff of
+  `lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx`.
+  A round-trip check in `parseChapterFromItemValue` is part of the contract, not an optimization:
+  two canon books have English names that end in digits (`PS2` → "Psalm 151", `PS3` → "Psalms
+  152-155"), so a trailing-number match alone reads a book ROW as a chapter cell of itself.
+
+## adr-bcv-keyboard-ownership: The BookChapterControl popover is one keyboard surface — exactly one thing is focused, and Tab stays inside it
+
+- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Context:** The picker stacks three keyboard consumers in one popover: a text input (the search
+  box, which owns a caret), a cmdk list whose highlight is a `data-selected` ring on an item that
+  never holds DOM focus, and header buttons (quick navigation, recent searches) that do hold DOM
+  focus and draw their own ring. Reviewing the shipped behaviour surfaced three ways they collided.
+  Tabbing to a quick-nav arrow left the book list's ring painted alongside the button's, so two
+  focus indicators were on screen with nothing saying which one the next keystroke addressed.
+  `Tab` in the chapters and verses views dismissed the whole picker, because those views render no
+  tab stop of their own — the back button is deliberately out of the tab order — so focus left the
+  popover and Radix closed it, discarding a book-and-chapter selection the user had already made.
+  And the horizontal arrows stayed with the caret unconditionally, which is right while the user is
+  typing but strands anyone who has stepped into the preview grid with a vertical arrow: they can
+  move the highlight down a row and never back along one.
+- **Decision:** Treat the open popover as a single keyboard surface with one focused thing at a
+  time. (1) **One focus indicator.** While a header control holds focus, the list and grids paint
+  no keyboard ring — `suppressKeyboardHighlight` on `BookItem` / `NumberedItemGrid` suppresses the
+  *paint*, not cmdk's highlight state, so the ring returns to exactly where the user left it.
+  (2) **Tab cycles, never dismisses.** `Tab` / `Shift+Tab` wrap through the current view's own tab
+  stops and are swallowed outright in views that have none; `Escape` and the trigger remain the
+  ways out. (3) **The grid takes the arrows once entered.** In the books view a horizontal arrow
+  belongs to the caret until either the caret has nowhere left to go or a vertical arrow has
+  stepped into the preview grid; editing the query hands them back. The vertical arrows are the way
+  in and typing is the way out, so the caret is never taken from someone still typing.
+- **Alternatives:** (a) **Clear cmdk's highlight when a button takes focus** rather than suppress
+  its paint — rejected: an empty controlled value hands the highlight to cmdk's select-first-item
+  fallback, which *moves* it rather than removing it, and the user's place is lost on the way back.
+  (b) **Let Tab dismiss, as the WAI-ARIA combobox pattern has it** — rejected for this surface: the
+  pattern assumes a popup whose whole content is one listbox, whereas this popover is a multi-view
+  picker with its own toolbar, and dismissing mid-selection costs more than the convention buys.
+  The trap is bounded by `Escape` still closing, which is what keeps it from stranding a keyboard
+  user. (c) **Give the horizontal arrows to the grid unconditionally once a preview is on screen**
+  — rejected: it freezes the caret mid-query and silently retargets what Enter submits, since the
+  top-match row prefers the highlighted cell over the parsed query. (d) **Make the vertical arrows
+  a pure mode switch that does not move the highlight** — rejected as a larger change to a reviewed
+  behaviour than the report warranted; the first vertical arrow both enters the grid and moves,
+  which reads correctly because a single-row grid has nowhere to move to and so shows only the
+  entry.
+- **Consequences:** Three surfaces now agree on one rule, so a future keyboard change has one
+  invariant to preserve rather than three local conventions. The suppression is a prop rather than
+  a CSS descendant rule, which keeps it assertable in jsdom, where no stylesheet is applied. Tab
+  being trapped means `Escape` is load-bearing for keyboard exit; it is Radix's own
+  document-capture handler, ahead of this control's handlers, so the picker cannot swallow it. The
+  books view's preview grids lost their headings as part of the same pass — the top-match row
+  directly above already names the book, so the heading repeated it one line later — which means
+  the top-match row is now the only place the resolved book is named in that view.
+- **Source:** PT-4345, PR #2750, review round three. Supplements
+  [`adr-bcv-item-value-contract`](#adr-bcv-item-value-contract-bookchaptercontrol-owns-the-cmdk-item-value-contract-activation-reads-component-state-not-cmdks-dom-internals),
+  which governs how the highlight is spelled; this one governs who owns the keyboard.
+
 ## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25
@@ -426,6 +539,394 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
+  Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
+  project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
+  `openResourceText` calls and `openCommentListPanel`; its fourth command, `openModelText`, targets
+  the **Column 1** Model Text panel, not Column 3 — see `simple-layout.data.ts`) plus Find
+  separately (`updateRelatedFindPanel`, which waits for the new editor's web view id). The Text Collection was the one panel left to work its project out for
+  itself: opened by the shipped layout with no `projectId`, it fell back to the 5th tuple member of
+  `useWebViewScrollGroupScrRef` — which is the scroll group's **source** project, "whichever project
+  last SET the group's reference", a signal that exists for versification conversion
+  (`use-scroll-group-scr-ref.hook.ts`, `extractSourceProjectId`). The local name at the call site,
+  `activeEditorProjectId`, invited reading it as "the active editor's project", which it is not. A
+  project switch does not change the reference — the incoming editor stamps the group only when the
+  caret moves (`setScrRefNoScroll`) — so the value keeps naming the *outgoing* project, and the panel
+  kept rendering the outgoing project's texts until the user next navigated, at which point it
+  silently corrected itself.
+- **Decision:** Every Column 3 panel is **told** its project by the switch; none infers one. The Text
+  Collection is re-pointed by `updateRelatedTextCollectionPanel`, called directly from
+  `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the four
+  command-driven panels, whose handlers live in `main.ts` for Model Text and the two resource
+  panels, in `legacy-comment-manager` for Comments, and in `platform-scripture` for Find). There are **two** switch paths and both must call it:
+  the editor-column switch via `openOrUpdateRelatedPanels`, and the Power→Simple mode switch via
+  `finalizeProjectSwitch`. The mode switch needs its own call because `buildSimpleLayoutForProject`
+  stamps `projectId` only onto the static layout's tabs, while the Text Collection is merged in
+  afterwards from the default-layout supplement, which carries none — so it is the one panel that
+  arrives unbound from a mode switch. Its *shape* — `getAllOpenWebViewDefinitions()` → `.find(webViewType)` →
+  `reloadWebView` — is the one `openResourceText` already uses (`main.ts`), not something novel. What
+  it takes from **Find** is the *policy*: never open a panel that is not already there, skip the
+  reload when the panel already shows the project, and never bring the tab to front. Find's own
+  distinguishing feature — the `openWebView(…, { existingId: '?', createNewIfNotFound: false })`
+  probe, which routes through `findOwner` and so reaches the panel in whichever window holds it — is
+  deliberately **not** adopted here; see the multi-window note in Consequences. Reload rather
+  than an in-place `projectId` update for two reasons — `papi.webViews` exposes no
+  definition-updating call at all (only a web view can update its *own* definition, so from the
+  service side a reload is the only route), and, more bindingly, the grid reads admin layout settings
+  through `useBufferedLayoutSetting`, which documents itself as built for consumers that switch
+  projects via `reloadWebView` and NOT safe for ones that change `projectId` in place, with a
+  `logger.warn` tripwire for exactly that. (`projectId` *is* in
+  `WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS` — the constraint is the absent service-side updater
+  and the hook's remount requirement, not the property list.) The scroll-group source project survives only as the fallback for a grid opened with
+  no explicit project, and its call-site name now says what it is.
+- **Alternatives:** **Fix the inferred signal instead** — track the live Scripture editor's web view
+  from inside the panel and follow that rather than the scroll group. Rejected: it re-derives, inside
+  a web view, something the switch already knows and can simply hand over; and because Simple mode
+  shows one Column 3 tab at a time, the panel is usually hidden exactly when the switch happens, so a
+  panel-side solution has to be designed around having no layout (see
+  `.claude/rules/cross-view-sync-hidden-views.md`). A main-driven reload feeding a data-driven render
+  has no such constraint. **Copy the older sibling variant** (open-if-absent, `bringToFront: true`,
+  projectId smuggled through a module-level pending variable) — rejected: fronting fights
+  `sharedLayoutReceiver.applyForProject`, which picks the front tab moments later, so every switch
+  would flash the Text Collection forward and then away; and the module-level pending slot adds
+  hidden coupling with a forgot-to-clear failure mode. **Register a public command** like the other
+  four — rejected as surface area for nobody: the Text Collection has no menu entry and no external
+  caller.
+- **Consequences:** The scroll group's source project is now documented at its call site as *not* an
+  active-editor signal, which is the trap that produced this bug; any future panel that reaches for
+  it should be re-pointed explicitly instead. `adr-find-follows-editor-to-read-only` records Find as "the only
+  Column 3 panel that command re-points without also being able to open it"; that stays true, since
+  the Text Collection is re-pointed by a direct call rather than a command. What changed is the
+  narrower fact that Find is no longer the only panel re-pointed *without being openable*. Reloading the grid drops its in-memory React state (for example an
+  open chapter-context split); state held through `useWebViewState` — `viewMode`, per-cell zoom —
+  survives, because a reload reuses the same web view id. That loss is accepted, because the
+  collection's contents legitimately change on a project switch anyway, and the skip-if-unchanged
+  guard keeps it from happening when the project did not change. **One part of it is not cosmetic:**
+  the reload destroys the iframe's JS realm, so a DBL install in flight in the grid is abandoned —
+  `installDblResource` proxies to .NET and finishes, but the continuation that calls
+  `persistUserAddition` never runs, leaving the resource installed on disk and absent from the
+  collection with no notification and no log. The Text Collection is the only Column 3 panel hosting
+  an install flow, so it is the only one where a re-point can lose work rather than just view state.
+  Accepted for now as a narrow window with a recoverable outcome (re-adding the resource succeeds
+  immediately); the real fix belongs in the install path, which should persist the addition somewhere
+  that survives a reload — tracked as PT-4510. The reload also
+  reopens the panel's load window on every switch rather than only at first mount; the body's own
+  state machine (`getGridBodyState`) treats an unresolved read as "show the grid", so that window
+  needs no separate treatment. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
+  `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
+  rather than giving it a signal to infer from. Five limits of this decision are recorded
+  deliberately rather than left to be re-derived:
+  - **Read-only resources are not followed.** `openOrUpdateRelatedPanels` takes
+    `isProjectEditable` and skips the Text Collection re-point when it is false, so a published
+    resource opened in the editor column does not re-point the grid at itself — a project with no
+    collection of its own. Everything else the function drives (Bible Texts, Commentaries and
+    Comments in Column 3, plus Model Text in Column 1) follows the editor either way. This upholds
+    `adr-find-follows-editor-to-read-only`'s Context rather than changing it; the gate lives one
+    level in from the call site that entry describes, which is the only detail that has shifted.
+  - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
+    window, so `.find()` returns whichever Text Collection comes first, not the one in the window
+    that switched. If that panel already shows the target project the skip guard returns early and a
+    second window's panel is never re-pointed. `openResourceText` has the same limitation, so this
+    is consistent with the siblings rather than newly broken; Find avoids it via the `findOwner`
+    probe noted in the Decision.
+  - **A failed re-point no longer self-corrects.** `projectId` is not in
+    `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any re-point succeeds the panel's saved
+    definition carries a project and `explicitProjectId` wins from then on — the scroll-group
+    fallback that used to fix a stale panel on the next navigation stops running. Because of that,
+    `updateRelatedTextCollectionPanel` checks `reloadWebView`'s return (it resolves `undefined`
+    rather than throwing when the definition has gone or the provider declines) and logs failures at
+    **error**, naming the project left on screen. It still does not recover; it just stops failing
+    silently.
+  - **The re-point runs on both switch paths, and each costs a probe and a reload.** Every switch
+    now performs a `getAllOpenWebViewDefinitions()` (which the router rejects outright if any window
+    is unreachable) and a `reloadWebView` → `addWebViewToDock` → rc-dock `updateTab`. On the
+    `openOrUpdateRelatedPanels` path it is awaited *ahead of* the editor's replace-tab `openWebView`
+    — deliberately, because re-pointing afterwards would flash the outgoing project's texts — and two
+    E2E suites already retry around the "Replacing tab failed" rejection that window produces. The
+    `finalizeProjectSwitch` path is the Power→Simple switch #2425 optimized. It already enumerated
+    web views there — in Simple mode it calls `applyForProject` → `focusSharedLayoutDefaultTab`,
+    which issues an `existingId: '?'` probe — so this adds a second enumeration and a reload to a
+    path that had one probe. If both run for one switch the case-normalized skip guard makes the
+    second a no-op.
+  - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
+    continues to change `projectId` in place through its latch effect, which is exactly the usage
+    `useBufferedLayoutSetting` warns about: `shouldApply` is already `false` after the first apply,
+    so the held admin list can stay on the outgoing project while the per-user list and overlay
+    resubscribe to the incoming one.
+- **Source:** PT-4423, which fixes PT-4238.
+
+## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** PT-4434 diagnosed the renderer's Chromium `WebSocket` as the peer that dies on a
+  suspend, and left instrumentation but no user-visible reaction — NN-6 ("app never dies silently")
+  needs one. Every channel the app would normally reach for to report a failure travels over the
+  socket that just died: `notificationService` is a network object, so toasts are unavailable;
+  `sendCommand` needs the same connection to reach main; `useLocalizedStrings`
+  (`src/renderer/hooks/papi-hooks/use-localized-strings-hook.ts`) fetches over PAPI and, on
+  failure or before the first response, returns `defaultState`, whose values are the raw keys
+  themselves (`defaultState[key] = key`) — so an unfetched string renders as literal
+  `%overlay_connectionLost%`; and `useIsPowerMode`
+  (`src/renderer/hooks/use-is-power-mode.hook.ts`) reads the interface-mode setting over PAPI
+  and falls back to `false` (Simple) while loading or on failure. A state meant to tell the user the
+  backend is unreachable cannot itself depend on the backend to render.
+- **Decision:** Detect and render the connection-lost state entirely inside the renderer process,
+  using no PAPI round trip anywhere in the reaction path, from a component mounted unconditionally
+  at app startup rather than mounted in response to the disconnect.
+  - **Signal:** a new local event, `onDidLoseConnection: PlatformEvent<void>`, added to
+    `IRpcMethodRegistrar` (`src/shared/models/rpc.interface.ts`). It is real on `RpcClient`
+    (`src/client/services/rpc-client.ts`, emitted from `onWebSocketClose`'s unclean-close branch
+    via `connectionLostEmitter.emitIsolated(...)` with a logging handler, and guarded by that
+    method's own early return on `this.hasCompletedTeardown` so it cannot double-fire) and inert on
+    `RpcWebSocketListener` (`src/main/services/rpc-websocket-listener.ts`, documented as "never
+    fires here" because only a process holding a client connection can lose one). This deliberately
+    mirrors `onDidDisconnectClient`, which is the same seam in the opposite direction — real in
+    main, inert on the client — so the pair reads as one convention rather than two unrelated ones.
+    Both are marked platform-internal core plumbing rather than part of the `@papi/*` surface, even
+    though both are emitted verbatim into `papi.d.ts`. The event carries no payload on purpose:
+    PT-4434's instrumentation already logs the rich close detail where it is observed, and the UI
+    shows the same one message regardless of close code, so a payload would have no reader.
+    `network.service.ts` relays it through its own emitter, subscribed inside `initialize()`, using
+    the shared `relayWhileUp(...)` helper that both this relay and `onDidDisconnectClient`'s were
+    extracted into — so the `hasShutDown` guard (quit-time teardown isn't reported as a failure)
+    and `emitIsolated` with an error log (one throwing subscriber doesn't cost the others the news)
+    cannot be forgotten by the next event added to `IRpcMethodRegistrar`.
+
+    Line numbers are deliberately omitted throughout this entry: they went stale within one review
+    round of being written.
+  - **Scope: an ESTABLISHED connection only.** `RpcClient` emits the loss only while
+    `connectionStatus` is `Connected`. A socket that dies during the opening handshake is a failed
+    connection ATTEMPT, which `connect()` already reports through its return value, and how the app
+    surfaces a startup that never reached the network belongs to PT-4494 / PT-4495 rather than to
+    this state — the banner offers a reload, which is not the answer to a server that was never
+    there. The gate is also what makes the two shapes of a failed startup agree instead of the
+    feature depending on which events a failing peer happened to emit: a refused socket fires
+    `error` then `close`, and since `onError` settles the connection attempt through
+    `failConnectionAttempt` while `AsyncVariable` rejects SYNCHRONOUSLY, `connect()`'s catch runs on
+    the next microtask — before the browser dispatches the `close` task — and strips the listeners,
+    so `onWebSocketClose` never runs at all; a peer that accepts the TCP connection and then drops
+    it before the upgrade fires `close` with no `error`, and the handler does run. Both shapes are
+    pinned in `rpc-client-connection-lost.test.ts`.
+  - **Store:** `src/renderer/services/connection-lost-store.ts` is a one-way latch — `isConnectionLost`
+    starts `false`, flips to `true` on the first reported loss, and nothing in the module ever sets
+    it back (the `resetConnectionLost` export is explicitly test-only). State and wiring are split
+    across two modules, following the `workspace-updating-store.ts` / `workspace-updating-service.ts`
+    pair: the store has zero imports, and `connection-lost-service.ts` holds the network
+    subscription. That split is what lets a consumer's test drive the store directly instead of
+    mocking a service graph to reach it — the collapsed version forced `app.component.test.tsx` to
+    mock the store outright to keep the network service out of the suite.
+  - **Startup wiring:** `initConnectionLostService()` is called at module evaluation in
+    `src/renderer/index.tsx`, before the async service-startup IIFE, NOT from a React effect.
+    `onDidLoseConnection` is a module-level emitter on the network service, so it exists before
+    `initialize()` runs, and subscribing before any await closes the startup window entirely rather
+    than merely relocating it. This follows the `onDidChangeCurrentTheme` subscription in the same
+    file, which is placed at module evaluation for the same "no change can slip through the gap"
+    reason, and the three renderer-lifetime services (`initAutoSyncBlockingService`,
+    `initAutoSyncEditBlockDriver`, `initSyncActivityService`) started from that file. Like those
+    three, the call site itself is untested and the behaviour is pinned at the service level
+    (`connection-lost-service.test.ts`).
+  - **Component:** `ConnectionLostOverlay`
+    (`src/renderer/components/overlays/overlay-connection-lost.component.tsx`) is mounted
+    unconditionally in `Main`'s JSX (`app.component.tsx`) and returns `undefined` until the store
+    flips. This is load-bearing, not stylistic: mounted from startup, its `useLocalizedStrings` and
+    `useIsPowerMode` calls resolve while the connection is alive, and their resolved values persist
+    in the component's own React state afterwards because `useData`'s subscription state is not
+    re-fetched just because the underlying provider stops answering — it holds the last good value.
+    Mounted only on the disconnect, both hooks would be reading a PAPI that has already broken:
+    `useLocalizedStrings` would show the raw `%overlay_connectionLost%` key, and `useIsPowerMode`
+    would report `false`, misplacing the banner at the Simple-mode toolbar height even in Power mode.
+    This property cannot be honestly pinned at the component level — the persistence lives in
+    `useData`'s state caching, not in this component's own code — so it is pinned instead at the app
+    level: `src/renderer/app.component.test.tsx` mounts `<App />` and asserts the connection-lost
+    overlay is present in `Main`'s rendered tree ("mounts the connection-lost overlay so it is
+    listening from startup"), the same pattern already used to pin `<FirstRunOverlay />`'s presence
+    in the same file.
+  - **Scrim:** a blocking scrim, not a `pointer-events: none` dimming, covering the toolbar as well
+    as the dock (`overlay-connection-lost.component.tsx`, `tw:fixed tw:inset-0` at
+    `Z_INDEX_CONNECTION_LOST`). Every toolbar control — project selector, reference, sync, menus —
+    reaches the rest of the app over the same dead socket, so leaving the toolbar clickable would
+    leave the exact silent failure NN-6 exists to end: controls that look live but do nothing.
+  - **Keyboard gate:** a scrim stops pointers only, so the state is a Radix modal `Dialog` with
+    `role="alertdialog"`, following the `FirstRunOverlay` precedent. Radix's `FocusScope` supplies
+    the trap and focuses Reload on open. Without the gate, Tab off Reload reaches the toolbar and
+    dock, where every control is still focusable and Enter-activatable — the same silent failure by
+    keyboard. A hand-rolled document-level Tab handler was tried first and rejected: a `document`
+    listener cannot see keydowns raised inside a web view's iframe, which has its own document, so
+    focus starting inside a web view would not have been contained. `DialogContent`'s own backdrop
+    renders at `Z_INDEX_MODAL_BACKDROP` (450) and accepts no `style`, so it cannot be raised to
+    `Z_INDEX_CONNECTION_LOST` (800); the full-viewport content is therefore itself the scrim, which
+    is the same override `FirstRunOverlay` applies to that card for the same reason.
+    `DialogContent` always renders that backdrop, so this state passes `overlayClassName` to
+    neutralize it rather than letting a `bg-black/10` + blur layer compound with its own scrim, and
+    cancels the card's `zoom-in-95` open animation, which on a full-viewport layer would leave a
+    band of undimmed app around all four edges while it animated.
+
+    **The gate is not total, and that is a documented limit rather than a claim.** A `FocusScope`
+    constrains where DOM focus lands; it does not stop handlers bound above or outside the focused
+    element. Three categories escape it, and all of them still travel over the dead socket:
+    main-process `before-input-event` accelerators (F12, Ctrl+Tab, the Paratext 9 verse-navigation
+    set), which are seen by main before any renderer frame gets them; the `document`-level toaster
+    hotkeys (Sonner's own, plus `notification-display.tsx`'s Alt+T focus cycling), which bubble out
+    of the dialog regardless of the focus scope; and `PlatformMenubar`'s Alt, Alt+P, Alt+L, Alt+N
+    and Alt+H, which are `react-hotkeys-hook` bindings — also `document`-level — that call
+    `.focus()` on a menu trigger behind the scrim and so pull focus out of the scope as well as
+    opening a menu whose items dispatch over the dead socket.
+
+    The first two need main to be told this renderer has latched, which is exactly what this
+    renderer-local design does not do. The third does NOT: it is renderer-local and closable by
+    gating `PlatformMenubar`'s `useHotkeys` call behind a new prop. It is left open with the others
+    anyway, because closing one of three would leave the guarantee just as false while reading as
+    fixed. All three are recorded at the component, here, and in the keyboard-shortcuts catalog
+    entry rather than papered over. Escape is separately prevented (`onEscapeKeyDown`), making this the one dialog in the app
+    where Escape closes nothing; that is catalogued as its own entry.
+
+  - **Arbitration with the other app-gating modal:** `FirstRunOverlay` stands down entirely once
+    the connection-lost state has latched. `Z_INDEX_CONNECTION_LOST` (800) above `Z_INDEX_FIRST_RUN`
+    (700) decides only what is VISIBLE; Radix's `FocusScope` and `DismissableLayer` arbitrate
+    between two open modal `Dialog`s by MOUNT ORDER. A first-run gate raised after the
+    connection-lost state would therefore take the focus trap and leave the visible Reload button
+    unreachable, behind a scrim, in a wizard whose every step needs the connection that just died.
+    The gate genuinely can be raised late — a background registration re-check, or a registration
+    probe in flight when the socket dropped, both resolve into `applyStatus` long after startup — so
+    z-index alone was not enough to implement what this entry's ordering argument intended.
+  - **Banner composition:** the banner is the exported `Alert`/`AlertTitle`/`AlertDescription`
+    family with `variant="destructive"`, not hand-rolled utility classes, so the destructive tone
+    tokens and the icon size slot come from the design system. `DialogTitle` and `DialogDescription`
+    wrap the banner's own title and message with `asChild`, so the dialog's accessible name is the
+    visible text rather than a hidden second copy that could drift from it. Two consequences of
+    `asChild` are load-bearing: Radix's `Slot` merges as `{...slotProps, ...childProps}`, so
+    `data-slot="alert-description"` has to be restated on the child or the dialog's own slot name
+    replaces it and silently drops the destructive variant's description colour.
+
+    The reload button is placed in a third grid column in normal flow rather than in `Alert`'s
+    `AlertAction` slot. That slot positions its children absolutely and reserves 72px for them,
+    which suits a one-word action or an icon; this label is two words and this strip is as wide as
+    the window, so the button would overlap the message at narrow widths or in a locale with a
+    longer label. `AlertAction` is consequently NOT exported from `platform-bible-react` — an
+    earlier round of this work added it to the public index for a consumer that no longer uses it.
+
+    **Banner text takes `--diff-deleted`, and the strip carries no background tint.** Two separate
+    contrast problems, both of which the destructive variant walks into. First, the variant's
+    `text-destructive`: `--destructive` is background-grade in the Platform dark theme, which
+    `index.css` states where `--diff-deleted` is defined, and at `oklch(0.396 …)` on a slate-950
+    ground it reaches roughly 2:1 against the 4.5:1 AA needs. `--diff-deleted` is the text-grade red
+    the themes provision — red-600 light, red-400 dark. Second, a `bg-destructive/10` wash over the
+    banner's opaque `bg-background` costs about 0.6:1, which is the entire remaining margin in the
+    LIGHT themes: on the tint the title measures 4.18 (Platform light) and 3.99 (paratext-light),
+    both failing, and the description sits ~0.2 lower again. So the tint is dropped and the
+    destructive tone is carried by the border and the icon alone; the worst case across all four
+    themes is then 4.52. Darkening the light-theme `--diff-deleted` to red-700 would buy real
+    headroom rather than a thin pass and was the better fix on the merits, but `index.css` requires
+    UX approval for a theme-token change and this state cannot wait on one. This is the screen a
+    user reaches when nothing else in the app works, so reading it cannot depend on the theme.
+  - **Reload label:** "Reload anyway", not a bare "Reload". Reloading discards whatever the message
+    just warned may be unsaved, and the scrim means the user cannot select and copy that text out
+    first, so the label carries the consequence — the `Guidelines/Applying Changes` rule that a
+    control which discards work must state or confirm it. A confirmation step was rejected: a second
+    dialog in a state where nothing else works is one more thing to get stuck in.
+  - **English fallback:** `localizedOrEnglish`
+    (`overlay-connection-lost.component.tsx`) substitutes the `en.json` text when a value is
+    still the raw key. The unconditional mount is necessary but not sufficient: a socket that dies
+    before localization has answered leaves `useLocalizedStrings` returning `defaultState`, and
+    there is no live PAPI left to wait for.
+  - **Recovery:** the Reload button calls `window.location.reload()` directly
+    (`overlay-connection-lost.component.tsx`) — no command, no main-process round trip,
+    because both are unreachable by definition once the socket is dead. A page load also reruns
+    every method registration the renderer made, which is what makes reload a genuine recovery
+    rather than a cosmetic one; PT-4434 verified this empirically (a broken renderer's reload logged
+    `Websocket client 7 connected` and restored the UI). The store is never cleared by anything else
+    in this component or in the reload path, matching the one-way design above.
+- **Alternatives:**
+  - **A toast via `notificationService`** — rejected outright: it is a network object, so calling it
+    would itself be a PAPI call over the socket that just died.
+  - **A non-blocking banner with no scrim** — rejected: it would leave every toolbar and dock control
+    clickable and silently non-functional, which is the exact failure this feature exists to end.
+  - **A `pointer-events: none` dimming scrim** instead of a blocking one — rejected. It would keep
+    on-screen text selectable and copyable, which the chosen scrim does not, but it would let clicks
+    reach dead controls underneath, reintroducing the silent-failure problem to save a smaller,
+    unrelated one (text selection).
+  - **Reconnect instead of a one-way state** — deferred, not rejected on the merits: reconnecting
+    needs the socket re-established AND every method this renderer registered re-announced to main,
+    neither of which this branch implements. `connection-lost-store.ts` is deliberately kept simple
+    (no ref-counting, no safety leash) because a state that could flip back to `false` on its own
+    would be claiming a recovery that had not actually happened.
+- **Consequences:**
+  - Content behind the scrim is readable but not selectable — a user who was mid-sentence when the
+    socket died cannot copy out what they just typed. This is an accepted, explicit tradeoff for
+    blocking interaction with a single layer rather than layering a separate no-select-but-clickable
+    scrim on top.
+  - **Extension-host disconnect is not covered.** Main already learns of an extension-host
+    disconnect through `onDidDisconnectClient`
+    (`src/shared/services/network.service.ts`), but relaying that specific case to the
+    renderer needs a new main→renderer network event and different wording ("extensions have
+    stopped working" is a materially different claim than "you are disconnected," since the
+    renderer's own socket is still alive). Deferred to the follow-up ticket below.
+  - **The quit-time false positive is narrowed in code, but not closed.**
+    `adr-renderer-websocket-suspend-disconnect` records that `INTENTIONAL_CLOSE_CODE` (4000) is
+    currently unreachable from every peer, and that every socket dies with 1006 on the way down. The
+    gate here, `isCleanCloseEvent`, rejects 1006 the same as any other unclean close — it cannot
+    distinguish "the app is quitting" from "the network just broke." Main copes by asking
+    `isAppShuttingDown()` (`src/main/services/shutdown-latch.service.ts`) before deciding how loud
+    to log a handshake-less close; the renderer has no access to that latch, since it is main's.
+
+    So the renderer keeps its own equivalent: `markShuttingDown()` in the store, latched by
+    `connection-lost-service.ts` from the browser's `beforeunload` and `pagehide`, and consulted by
+    `reportConnectionLost()`. A loss reported after the latch is ignored; a loss already reported
+    before it survives, so a real disconnect the user is looking at is not erased by them starting
+    to close the window. `pagehide` as well as `beforeunload` because a reload from inside this
+    state leaves by that path.
+
+    **What that latch does and does not reach.** It fires on a window closing while the app stays
+    up, and on a reload. It does NOT fire on an app quit: main takes the `isAppShuttingDown()`
+    branch and calls `newWindow.destroy()` rather than `close()` (`src/main/main.ts`), and
+    `destroy()` raises neither `beforeunload` nor `pagehide` — main's own comment at that branch
+    says so, which is why it uses `close()` on the other one. So on a quit the store still latches
+    and the overlay is still asked to render, exactly as before, and the banner is still kept off
+    screen only by teardown outrunning paint.
+
+    Originally this entry left that question open — recording that the store may latch during an
+    ordinary quit, and that whether the user SEES a farewell error banner depended only on whether
+    the renderer painted before its `BrowserWindow` was destroyed, "an empirical question, being
+    checked against the running app." Live checking found no visible banner on quit. That
+    observation stands, and so does the objection to resting on it: a correct-by-paint-timing
+    invisible is not a correct one, since the same code on a slower machine is a coin flip. The
+    latch is therefore a narrowing, not a fix — the quit case needs main to tell the renderer it is
+    going down, the same main→renderer relay the keyboard gaps and the extension-host disconnect
+    want, and is deferred with them (see the follow-up ticket below). What the latch does cover
+    is pinned by
+    `connection-lost-store.test.ts` and `connection-lost-service.test.ts` rather than by the live
+    observation.
+  - **The startup window where a loss could be missed is closed.** An earlier revision wired the
+    subscription from a React effect in `Main`, which lost to `ConnectionLostOverlay`'s own subscribe
+    effect (React runs child effects before a parent's) — and since `PlatformEvent` does not replay
+    to a late subscriber, a loss landing in that window was seen by nothing. Subscribing at module
+    evaluation in `index.tsx` removes the window rather than documenting it; see **Startup wiring**
+    above. The component's own read of the store is a `useSyncExternalStore`, which re-reads on
+    subscribe, so the component cannot miss a flip that happened before it mounted either.
+  - **Reconnect stays entirely out of scope.** The three pre-existing `RpcClient` reconnect blockers
+    pinned by `test.fails` cases in
+    `src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts` (a premature `Connected`
+    status, a permanently-fatal timed-out first connect, and stacking `applyMiddleware` calls) are
+    untouched by this work and remain the reconnect branch's problem to resolve.
+  - `Z_INDEX_CONNECTION_LOST = 800` (`lib/platform-bible-react/src/components/z-index.ts`) sits
+    above `Z_INDEX_FIRST_RUN = 700` in the same module rather than below it. The first-run wizard is
+    itself entirely PAPI-driven, so a socket death mid-wizard would otherwise strand a brand-new user
+    in a form that can no longer submit, with no visible explanation why. Pinned by
+    `z-index.test.ts`.
+  - **One follow-up closes three of these consequences.** The extension-host disconnect, the
+    main-process half of the keyboard gaps, and the quit-time latch all want the same thing: a
+    main-to-renderer channel telling a renderer what main already knows. Until that ticket is
+    filed, all three sites carry the literal marker `TODO(main-renderer-shutdown-relay)` — a slug rather than
+    a `PT-XXXX`, because inventing an id that resolves to nothing is worse than admitting there
+    is not one yet. Grep the marker to find every site; replace it with the real id once it exists.
+- **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
+  (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
+
 ## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
 
 - **Date:** 2026-09-04
@@ -477,6 +978,96 @@ step, no automation. Just a record.
   the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
   public audience.
 - **Source:** the multi-agent review of #2654, finding 1.
+## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
+
+- **Date:** 2026-09-01
+- **Status:** Accepted
+- **Context:** `platformGetResources.getCachedResources` is the only source the Get Resources page,
+  Home, the resource picker, Share Layout, the scripture text grid and
+  `use-dbl-resource-catalog.hook` read — six consumers. Its background sync reconciled `installed`
+  against local project metadata on every call but never recomputed `updateAvailable`, and its one
+  rewrite branch fired only when `installed` flipped — so updating an already-installed resource
+  left the row reading "Update" for the rest of the session. The C# provider does fire
+  `SendDataUpdateEvent(DBL_RESOURCES, …)` after an install, but nothing has subscribed to that data
+  type since the cache replaced the front end's `useData` subscription (zero `.DblResources(` call
+  sites repo-wide), so the event refreshes nothing. `updateAvailable` cannot be derived in
+  TypeScript: it compares the installed resource's DBL revision against the catalog's, and neither
+  number is reachable there. The DBL side is dropped when C# projects `InstallableResource` into
+  `DblResourceData`; the installed side is an entry name under `.dbl/revision/` inside the
+  password-protected `.p8z` bundle, read through ParatextData's zip file manager — no project
+  setting or metadata field exposes it, and `Revision` appears nowhere in `c-sharp/`.
+- **Decision:** Extend the read-path reconciliation rather than adding a write-path invalidation. A
+  new no-network provider function, `recomputeDblResourcesUpdateStatus`, re-evaluates
+  `InstallableResource.IsNewerThanCurrentlyInstalled()` over the already-loaded catalog snapshot,
+  and the front end's flag sync applies it alongside the `installed` check. The sync is
+  single-flighted by `ensureInstalledFlagsSynced`, so the recompute happens at most once at a time
+  however many views refresh together. Reads do not wait for it — `getCachedResources` answers from
+  the array it already has — which makes a read one refresh behind. That is invisible for
+  `installed`, whose caller already knows what it just did, but it is the whole defect for
+  `updateAvailable`: nothing else about an updated row changes, and there is no data-update event,
+  so the row keeps offering "Update" until the catalog is read a second time.
+
+  Two consequences shape the wiring. The backend round trip is **opt-in** rather than part of every
+  sync, because exactly one surface renders `updateAvailable` — the Get Resources list — and the
+  other five consumers of the catalog would otherwise wait on a value they discard; the resource
+  picker's whole list spun on it. And a caller that needs the flag current awaits
+  `refreshResourceFlags`, which asks for the recompute and, rather than joining a sync already in
+  flight, lets that one finish before starting its own: an in-flight sync may have read its project
+  metadata before the caller's change, and a background sync does not recompute the flag at all.
+  The Get Resources view is therefore the only caller — once when its list settles, so a resource
+  updated from another surface loses its stale badge, and again after any install or removal the
+  user performs there. Resources absent from the result keep their cached value, so a
+  not-yet-loaded catalog or a busy provider gate degrades to the previous behavior instead of
+  guessing — including on the awaited path, where a contended gate leaves the stale flag in place
+  rather than blocking the user. Skipping the
+  catalog fetch is sound because the DBL-side revision is the half that should stay fixed;
+  ParatextData re-reads the *installed* revision on each call (`ExistingScrText` is a live
+  `ScrTextCollection` lookup, and `InternalInstall` nulls the ScrText's FileManager before
+  overwriting the `.p8z`, so `DBLResourceSettings` is rebuilt from the new file). Verified against
+  the pinned ParatextData 9.5.0.24 assembly (ILSpy, 2026-09-04); source is not available locally,
+  so re-probe when that pin moves.
+- **Alternatives:**
+  - **Patch the cache entry after a successful install** — rejected, but not because the install is
+    unverified: `InstallDblResourceCore`'s `ScrTextCollection.IsPresent(InstalledScrText)` guard
+    inspects `InstalledScrText`, which `InstallableResource.InternalInstall` assigns only as its last
+    statement, so a failed install leaves it null and the guard throws rather than reporting success.
+    Rejected instead because the patch would have to be applied by every caller that installs — the
+    Get Resources web view, `platform-scripture-editor`'s install util, and the Send/Receive path
+    that PT-4268 describes, which cannot reach the provider at all — and because it only corrects
+    the one resource this client just installed, leaving flags that changed for any other reason
+    stale. Recomputing on read asks the source of truth instead of inferring from an action.
+  - **Re-fetch the catalog on install** — rejected: `FetchResourcesCore` is an unbounded network
+    download and would stall the list refresh. Subscribing to `DBL_RESOURCES` from the extension is
+    the same alternative in disguise, because `subscribe<data_type>` calls `get<data_type>` and
+    `getDblResources` fetches unconditionally.
+  - **Clear the flag optimistically in the web view** — rejected: leaves the cache wrong for Home and
+    the resource picker, and adds a second "caller must remember to notify" seam of exactly the kind
+    PT-4268 documents.
+  - **Send both revisions to TypeScript and compare there** — rejected: the installed half still
+    requires a C# call to read it out of the encrypted bundle, so it removes no round trip while
+    adding ~10 fields to the contract and a TypeScript copy of
+    `IsNewerThanCurrentlyInstalled`'s five-branch precedence chain (name, language,
+    `IsResourceProject`, `RequiresDBLCheck`, then revision / permissions checksum / manifest checksum
+    plus timestamp). That copy would drift silently when the ParatextData pin moves.
+- **Consequences:** Reads are authoritative for both derived flags, which makes the `DBL_RESOURCES`
+  data-update event dead weight rather than a missing link — PT-4268's stated premise ("the provider's
+  install path fires the event so the Get Resources UI refreshes") is already false, and whoever picks
+  it up should re-scope it against this decision. Cost is bounded by gathering the installed DBL uids
+  in ONE pass over the project collection and consulting ParatextData only for entries in that set:
+  `InstallableResource.ExistingScrText` is a computed property with no backing field that enumerates
+  the whole collection on every access, so asking each of the ~1850 catalog entries whether it is
+  installed would cost ~1850 full scans, and an installed entry pays it twice (once for `Installed`,
+  once inside `IsNewerThanCurrentlyInstalled`). Gating on `Installed` does not help, because that
+  property is the same lookup. The provider gate is taken with a non-waiting `Monitor.TryEnter`, so a
+  recheck never queues behind a catalog download or an install: everything holding that gate runs for
+  seconds, far longer than a refresh should block, so waiting could only delay the same empty answer,
+  and two rechecks cannot contend with each other because the only caller is single-flighted.
+  `IsNewerThanCurrentlyInstalled()` returns `true` for every *uninstalled* resource — nothing
+  installed trivially fails its "is the installed copy the newest" test — so the front end clears
+  `updateAvailable` for any row it reconciles as not installed rather than persisting a flag that
+  describes nothing. That keeps the cached flag meaning what the list renders it as: "the copy on
+  disk is out of date".
+- **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
@@ -514,6 +1105,97 @@ step, no automation. Just a record.
   hand-added entry can silently break it — no such check existed as of 2026-09-03, and adding one is
   open follow-up work.
 - **Source:** PR #2770.
+
+## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `scripture-editors` supplies `@eten-tech-foundation/platform-editor` and
+  `@eten-tech-foundation/scripture-utilities`. Every consumer declared them as registry ranges
+  (`~0.8.15` / `~0.1.6`) and then yalc-linked a locally built copy over the installed package. The
+  registry entry's real job was never the code — that is discarded seconds later — but the
+  *dependency closure*: 8 of the editor's 13 runtime dependencies (`@floating-ui/dom`, five
+  `@lexical/*`, `quill-delta`, plus the `yjs` peer) reach this repo's `node_modules` only as
+  transitive dependencies of the published package. That ties the editor's dependency set to
+  whatever was last published by an organization we do not control: a dependency the editor adds is
+  never installed, and one it bumps silently resolves to the older published version. The source had
+  already drifted to 0.8.16 against a published 0.8.15, and a fresh worktree resolving the registry
+  copy failed 36 tests against a symbol the published build lacked.
+- **Decision:** A `preinstall` step (`.erb/scripts/stage-dev-packages.ts`) builds each package listed
+  in `dev-packages.json` and copies exactly the files `npm pack` would publish into
+  `dev-packages/staging/<stagingFolder>`. Every `package.json` here depends on that folder with a
+  `file:` specifier. npm reads the staged manifest and installs the package's own dependencies into
+  this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
+  Staging must run in `preinstall` because the staged folders are the resolution targets; the script
+  is therefore plain Node importing only the standard library, since no devDependency exists yet.
+  pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
+  the whole graph on the build we just made. yalc is removed.
+- **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but
+  the sync obligation multiplies by consumer (paratext-bible-extensions is already a second one) and
+  every editor dependency change would require edits in each. **`file:` straight at the source
+  package** — rejected: the source sits in a pnpm workspace whose per-package `node_modules` holds
+  its own `react`, `react-dom`, and `lexical`; Node resolves a link through its real path, so the
+  editor would bind to those, giving duplicate React (invalid hook calls) and duplicate Lexical
+  (cross-boundary `instanceof` node checks fail). It also installs no closure, since npm only does
+  that for a target inside the project. **`file:` at a packed tarball** — rejected: npm never
+  re-reads a tarball at a stable path, so a rebuild silently installs the cached previous build.
+  **Publishing** (npm scope or GitHub Release assets) — deferred: both work and both give semver
+  ranges, but publishing needs a scope we own, which means renaming the packages.
+- **Consequences:** Nothing here resolves the editor from the npm registry, and `scripture-editors`
+  can change its dependencies freely. Install gets stricter: `preinstall` now needs git, pnpm, and
+  reachability of the dev repo, so a failure to stage fails the install rather than silently leaving
+  a stale published copy. `package-lock.json` records the staged packages' resolved dependencies, so
+  an editor dependency change produces a lockfile commit here. Honoring the editor's declared ranges
+  surfaced that it asks for `@sillsdev/scripture@^2.1.0` while this repo's lockfile pinned 2.0.5 —
+  previously masked, since the linked build just resolved whatever was in the tree. Only the staged
+  output must live inside this repo; the source checkout may stay a sibling.
+  **Revisit** if a third consumer appears that cannot build the editor or sit beside a built
+  `paranext-core`, which is the point at which publishing earns its cost.
+- **Source:** PT-4500, forking `scripture-editors` into the paranext organization.
+
+## adr-dev-packages-staging-shape-deferred: The staging mechanism keeps its branch pin, `.ts` install scripts, sibling fallback and self-heal re-run
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** Review of the staged-`file:`-dependency change (#2745) raised four alternatives to
+  the shape it landed in, each defensible on its own: pin an immutable `v<version>` tag instead of
+  the force-pushed `platform-yalc` branch, so an editor bump becomes one core commit and the
+  branch-sync machinery retires; write the two install-path scripts as `.mjs` with JSDoc types
+  instead of `.ts`, so consuming repos need no Node floor (native type stripping is unflagged only
+  from 22.18, and one consumer's Volta pin predates it); make the sibling-checkout fallback opt-in
+  rather than automatic, so an npm lifecycle hook never writes to a checkout it merely found next
+  door; and replace `postinstall`'s nested `npm install` with a message telling the developer to run
+  it again.
+- **Decision:** Keep all four as they are for now. Consumers call core's `stage-dev-packages` npm
+  script rather than a path inside core, which was the fifth suggestion and is taken — it removes
+  eight repos' dependency on an internal file location. It does not lift the Node floor: the npm
+  script runs a bare `node`, and the one consumer whose Volta pin predates 22.18 passes
+  `--experimental-strip-types` from its own workflow, where the flag can precede the script path.
+- **Alternatives:** Each of the four is a real improvement to some property, and none was rejected
+  on merit. The tag pin buys reproducibility, `.mjs` removes a floor that has already bitten a
+  consumer repo, opt-in sibling use removes a class of surprise entirely, and a non-nested install
+  is easier to reason about when it fails. They are deferred because they change the shape of a
+  mechanism that is about to be exercised across eleven repositories at once, and doing that before
+  it has run in anger trades a known state for an unknown one.
+- **Consequences:** The Node 22.18 floor is real for every caller, npm script or not; a consumer
+  below it passes the flag itself. Editor code can change under an unchanged core commit while
+  `platform-yalc` moves, which the consumer-lockfile check and the pre-commit provisional guard
+  exist to contain. A sibling checkout is used and moved by a plain `npm install`; it is protected
+  when dirty, on a branch of its own, or detached, and the README says so. Revisit whichever of
+  these the mechanism actually makes painful.
+
+  The branch pin is the one whose exposure is worth stating precisely, because it now spans eleven
+  repositories and the parts of it that ARE covered are easy to mistake for the whole. A change to
+  the staged packages' **dependencies or versions** is visible and gated: npm records the staged
+  manifest under `dev-packages/staging/<folder>` in `package-lock.json`, `diffStagedAgainstLock`
+  fails an install that disagrees with it, `verify:dev-packages` lets a consumer run that check
+  without core's `postinstall`, and `scripture-editors`' `verify-platform-yalc` workflow gates the
+  push that would cause it. Release provenance is covered too: `paratext-10-studio`'s
+  `snap-product-info` rewrites each dev repo's `branch` to the SHA actually built. What remains
+  uncovered is a **code-only push at an unchanged version** — it changes what core's `main` builds
+  with no commit anywhere in core — and that is the ordinary case, not an exotic one, since
+  `move-platform-yalc` rebases onto `main` rather than bumping versions. That residue is the price
+  of the branch pin, and it is accepted rather than overlooked.
 
 ## adr-disclosure-outside-package-graphs: What ships outside the npm and NuGet graphs is disclosed in prose, not by silence
 
@@ -1275,6 +1957,53 @@ step, no automation. Just a record.
   content-based-guard test exercises, then delete the content-based branch and that guard's
   now-redundant test in one deliberate commit.
 - **Source:** PR #2425
+
+## adr-library-string-keys-ship-in-shell-assets: `platform-bible-react` string-key values ship in the platform shell's locale assets by default
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** A `lib/platform-bible-react/` component declares the localize keys it needs in an
+  exported `*_STRING_KEYS` array, but nothing about declaring a key produces a value, and the
+  Localization Guide's routing rule ("built-in shell UI" vs "extension features") does not say where
+  a *shared library* component's values belong. The library also carries
+  `src/localizedStrings.json`, a hand-maintained Storybook pseudo-localization fixture with the same
+  filename and shape as a real extension contribution, which never ships. That collision is a
+  silent trap: `%markerMenu_searchPlaceholder_character%` was defined only in the fixture, rendered
+  correctly in Storybook, and rendered as raw `%key%` text in the running app.
+- **Decision:** A `platform-bible-react` component's string values must be defined in *some*
+  English shipping source. The platform shell's own assets — `assets/localization/en.json`, plus
+  `es.json` — are the **default** home for a shared-library string, because the count of consuming
+  extensions is not a stable property. An extension's
+  `contributions/localizedStrings.json` is nevertheless a legitimate English shipping source — as of
+  this decision, most library-declared keys are routed that way, including whole arrays for
+  `COMMENT_LIST`, `CONFLICT_NOTE`, `INVENTORY`, `SCOPE_SELECTOR`, `BOOK_SELECTOR` and
+  `DEVELOPER_SECTION`. This decision does not ask for them to move.
+  `src/node/data/shipped-locale-assets.test.ts` enforces the floor, not the default: every key in
+  every `*_STRING_KEYS` array exported from the `.` or `./experimental` package entry must resolve
+  in an English shipping source, and every key in the Storybook fixture must ship too. Arrays
+  exported from neither entry stay invisible to it — the known case is
+  `UI_LANGUAGE_SELECTOR_STRING_KEYS`.
+- **Alternatives:** (a) Route by consumer — a library string used by exactly one extension lives in
+  that extension's contribution. Rejected *as the default* for a new key: the count of consumers is
+  not a stable property, so the string would have to move the first time a second extension adopted
+  the component, and nothing would notice it had not. Not rejected outright, and not made a `never`:
+  it is where most library keys live today, and a rule the codebase overwhelmingly contradicts would
+  produce false findings against existing code and imply a cross-extension migration nothing here
+  scopes. (b) Leave the convention unwritten and rely on review. Rejected: the
+  failure is invisible in Storybook and in every test, which is precisely why it reached main.
+  (c) Generate the Storybook fixture from `assets/localization/en.json` the way
+  `.storybook/localization.utils.ts` already does, so the two files cannot diverge. Deferred, not
+  rejected — it removes the trap structurally rather than guarding it, and is the better long-term
+  answer; it is out of scope for the branch that introduced the guard.
+- **Consequences:** Adding a key to a library component now has a fourth required step (ship a
+  value) documented in `Localization-Guide.md`. CI fails when a key ships in no English source at
+  all; it does not, and is not meant to, flag a key that ships from an extension contribution rather
+  than from the shell assets — the default is a convention for reviewers, not a gate. The guard also
+  reads the committed `lib/platform-bible-react/dist/`, which no CI step rebuilds, so a newly
+  exported array is covered only once the library is rebuilt and the rebuilt bundle committed —
+  meaning a skipped fourth step can still reach main until that rebuild lands. Revisit if the
+  fixture becomes generated (alternative c), which would make most of the guard redundant.
+- **Source:** PR #2664
 
 ## adr-licensing-boundary: Platform.Bible is AGPL-3.0-or-later, with an MIT carve-out drawn by runtime linking
 
@@ -2549,6 +3278,45 @@ step, no automation. Just a record.
 - **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
   architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
 
+## adr-recent-searches-menu-semantics: RecentSearches is a menu, not a listbox
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `RecentSearches`
+  (`lib/platform-bible-react/src/components/advanced/recent-searches.component.tsx`) was built on
+  `Popover` + cmdk's `Command`/`CommandItem`. Inside the BCV control that nesting misbehaved twice
+  over: cmdk items are never DOM-focused (the list container owns focus and items only carry
+  `data-selected`), so the inner list competed with the outer picker's own cmdk instance for arrow
+  keys and highlight state; and a popover-in-a-popover left the recent-searches list on the same
+  stacking tier as its host. The component is exported from
+  `lib/platform-bible-react/src/index.ts`, so the roles it renders are public API.
+- **Decision:** Rebuild it on Radix `DropdownMenu` + `DropdownMenuItem`, with `modal={false}`. A
+  list of past references that you pick one item from is a menu, and menu semantics
+  (`role="menu"` / `role="menuitem"`, roving DOM focus, type-ahead, Escape-to-close) are what
+  Radix already implements correctly. `modal={false}` is required rather than cosmetic: Radix menus
+  default to modal, which traps focus and sets `pointer-events: none` on `<body>` for as long as
+  the menu is open — this list opens beside a search input the user is still typing in, usually
+  inside another popover, so the surrounding controls must stay clickable. The component carries
+  its own `TooltipProvider` because it is exported standalone and cannot assume a host tree has
+  one.
+- **Alternatives:** (a) **keep `Popover` + `Command` and coordinate the two cmdk instances** —
+  rejected: two cmdk roots sharing a keyboard surface means arbitrating `data-selected` between
+  them on every keystroke, which is the bug, not a fix for it. (b) **keep listbox semantics and
+  hand-roll roving focus on the items** — rejected: reimplements what Radix ships, and listbox is
+  the wrong role for a pick-one-action-and-close list. (c) **ship the role change undocumented** —
+  rejected: it silently breaks any consumer querying `role="option"`, which is exactly the class of
+  drift this log exists to catch.
+- **Consequences:** This is a **breaking accessibility-contract change** for consumers outside this
+  repo: `getByRole('option')` / `listbox` queries against `RecentSearches` no longer match, and
+  screen readers announce a menu rather than a listbox. In-repo the only consumers are
+  `BookChapterControl` and its story, so nothing here needed updating — which is precisely why the
+  change needed pinning. `recent-searches.component.test.tsx` now asserts both halves (menu
+  semantics present, listbox semantics absent), so a swap back fails a test rather than a
+  consumer. The `ariaLabel` prop additionally became the button's visible tooltip text, so it is
+  now user-visible microcopy and its TSDoc says so.
+- **Source:** PT-4345 (BCV styling/keyboard-nav epic), where the nested-cmdk keyboard conflict
+  surfaced while rebuilding the picker's arrow-key navigation.
+
 ## adr-registration-validity-once-per-session: Registration validity resolves once per session, in a store the first-run gate and the UI share
 
 - **Date:** 2026-08-22
@@ -3385,15 +4153,24 @@ step, no automation. Just a record.
     nothing and is the right shape if a future editor makes slices addressable; do not read it as
     evidence that a write-back currently occurs.
 
-    Verified 2026-08-16 against `@eten-tech-foundation/platform-editor` **0.8.15**, in both places it
-    can be read: the published npm package, and `dev-packages/scripture-editors` `packages/platform`,
-    which `postinstall` → `link-dev-packages` builds and yalc-links over `node_modules`. They agree
-    on this mechanism (the vendored copy trails published 0.8.15 by one caret-placement line in
-    `$moveCaretToVerseStart`). **Verify against the linked build, not `package-lock.json`** — the lock
-    still named 0.8.14 when this was written, and reading that stale tarball is exactly how an earlier
-    draft of this ADR came to describe `$findAndSetChapterAndVerse` and its chapter-1 fallback as the
-    live mechanism. That was wrong; that plugin does not exist in 0.8.15. Corrected in review of
-    #2663.
+    Re-verified 2026-09-10 against the staged `@eten-tech-foundation/platform-editor` **0.8.16**
+    (`dev-packages/scripture-editors` `packages/platform`, which `preinstall` stages into
+    `dev-packages/staging/platform-editor`): `Editor.tsx` still mounts `ScriptureReferencePlugin`
+    gated on `scrRef && onScrRefChange` alone, and `$resolvePosition` still returns `undefined` when
+    the document has neither a `BookNode` nor a `ChapterNode`. Both statements above therefore still
+    hold. **There is now only one copy to read.** This repo no longer installs the editor from the
+    registry, so the earlier "check the published package and the local build agree" framing has no
+    second copy to compare against — the staged build is the only thing that runs. Do not read
+    `package-lock.json` for a version either: it records a `file:` link, and reading a stale tarball
+    is exactly how an earlier draft came to describe `$findAndSetChapterAndVerse` and its chapter-1
+    fallback as the live mechanism. That was wrong; that plugin does not exist. Corrected in review
+    of #2663.
+
+    **Not re-verified:** the behavior end to end. `$moveCaretToVerseStart` is no longer the
+    one-line-from-published function this paragraph used to describe — it is 57 lines against
+    0.8.15's 30, having gained chapter resolution in its "already here" guard — so if this ADR's
+    conclusions are ever load-bearing for a change, exercise the surfaces rather than trusting this
+    note.
 
     **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
     `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
@@ -3559,6 +4336,103 @@ step, no automation. Just a record.
   a coordinated studio merge was therefore unavoidable. Verification report, including the 12 renamed
   cycles against live controls and the `snap disconnect` repair for an already-broken install:
   https://claude.ai/code/artifact/cc4c4c08-2e75-4dd5-855a-312fc4a6a57e
+
+## adr-staged-closure-owned-by-core: paranext-core owns the editor's dependency closure; every other consumer resolves through it
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `adr-dev-packages-staged-file-deps` records *that* the staged copy has to live
+  inside this repo. It does not record *why* the same
+  `file:` specifier behaves differently one directory up, or what that means for the ten repos in
+  the organization that depend on `lib/platform-bible-react` and `lib/platform-bible-utils`. Both
+  questions came up again when a consumer's CI broke, and both were answered by measurement rather
+  than by reading npm's documentation, so the measurements belong here.
+
+  npm treats a `file:` dependency two entirely different ways depending on whether its target is
+  inside the depending project:
+
+  | Target | What npm does | `npm ci` when the target's manifest gains a dependency |
+  | --- | --- | --- |
+  | `file:dev-packages/staging/platform-editor` (inside) | real install: the target's whole dependency closure lands in this repo's `node_modules` | **fails**, `EUSAGE … Missing: <dep> from lock file` |
+  | `file:../scripture-editors/packages/platform` (outside) | bare symlink; the closure is never installed | **exits 0**, dependency silently absent |
+
+  Node and webpack resolve a symlinked package from its **real path**, so a package reached by
+  symlink looks for its own dependencies where it physically sits, not where the link is. Those two
+  facts together explain everything downstream.
+
+- **Decision:** Exactly one repository installs the editor's dependency closure, and that repository
+  is paranext-core, which is why the staged copy must sit inside it. Everything else reaches the
+  editor by symlink and resolves its dependencies out of core's `node_modules` through the real
+  path. No other repository declares, installs, or gates on that closure.
+
+  Concretely, an extension repo depends on `file:../paranext-core/lib/platform-bible-react`, which
+  npm links rather than installs. Its lockfile records PBR's dependency *declaration* — including
+  the editor — but resolves nothing from it and never validates it. When the extension's webpack
+  bundles PBR (PBR is not in the extension template's `externals`; `platform-bible-utils` is), the
+  editor import resolves from `paranext-core/lib/platform-bible-react/` upward into
+  `paranext-core/node_modules/`, which core's own install populated for real.
+
+- **Alternatives:** **Point core at the source checkout instead of copying** (`file:` one directory
+  up) — rejected, and this is the failure that motivated the copy: npm installs no closure for an
+  out-of-tree target, so the editor's dependencies stay in `scripture-editors/node_modules` under
+  pnpm's layout and nothing in core can resolve them. **Gate `platform-yalc` on every dependent
+  repo's lockfile** — rejected: it would enforce a constraint that does not exist. An editor
+  dependency change invalidates exactly one lockfile, core's, which
+  `verify-consumer-lockfile-sync.mjs` already checks on every push to `platform-yalc`. Scanning the
+  organization would turn each editor dependency bump into an N-way lockstep merge, growing with
+  every new consumer, to protect lockfiles that install nothing.
+
+- **Consequences:** Adding a consumer costs nothing: it needs no lockfile refresh when the editor's
+  dependencies change, and no entry in any list. What it does need is for core's `node_modules` to
+  be genuinely populated, which is why every consumer CI job that installs core with
+  `--ignore-scripts` must run core's `npm run stage-dev-packages` first — without it npm links
+  a target that does not exist, `npm ci` still exits 0, and
+  `node_modules/@eten-tech-foundation/platform-editor` is left a dangling symlink. That surfaces far
+  away, as an unresolved module during a consumer's lint or typecheck (PBR imports the editor in 28
+  files, PBU in 10), which is a long way from the cause.
+
+  The reasoning holds only while consumers reach core from **outside** it. A repo that vendored core
+  inside itself, or that added a staged package as an in-tree `file:` dependency of its own, would
+  join core in the hard-coupled class and would then need its lockfile kept in sync.
+- **Source:** PT-4500, review of #2745.
+
+## adr-stale-value-survives-resubscription: A value held across a resubscription is not the current read's answer
+
+- **Date:** 2026-09-13
+- **Status:** Accepted
+- **Context:** `useData` (and everything built on it — `useProjectData`, `useProjectSetting`) resets
+  `isLoading` when the selector or data provider changes, but never resets `data`
+  (`create-use-data-hook.util.ts`). The last delivered value therefore survives every
+  resubscription: a reference change, a retry, a provider swap. Surfaces routinely render that value
+  as though it described the reference currently on screen. Two defects in the resource panels came
+  from exactly this. A failed chapter read left its `PlatformError` in hand, so re-driving the read
+  re-rendered the identical "text could not be loaded" message for the whole round trip — the retry
+  button the panel had just gained looked inert, and if the second attempt failed the same way the
+  screen never changed at all. The same staleness made a plain chapter navigation flash the previous
+  reference's failure over the new one.
+- **Decision:** A surface that renders a delivered value must decide whether that value belongs to
+  the read now in flight, and withhold it when it does not. Concretely: pair every value read
+  through these hooks with its `isLoading`, and treat a terminal state (a named failure, an "empty"
+  claim) as reportable only once the read has settled. `resolveResourceContentState` takes
+  `isUsjSettled` for precisely this and uses it in both directions — to escalate OUT of `loading`
+  when `undefined` is the delivered answer, and INTO `loading` when an error is the previous
+  attempt's.
+- **Alternatives:** **Reset `data` to the default on resubscribe, in the hook** — the real fix, and
+  still worth doing, but it changes behaviour for every consumer in the app at once (several rely on
+  the previous value persisting to avoid a flash of empty content between references) and so is not
+  a change to make from inside one panel's bug fix. **Track a retry-pending flag at each call site**
+  — rejected: it answers only the retry case, leaving the identical staleness on ordinary
+  navigation, and puts a second source of truth beside `isLoading`. **Compare value identity across
+  renders** — rejected: a provider free to re-deliver an equal object makes identity an unreliable
+  proxy for freshness.
+- **Consequences:** Terminal states arrive one render later than the value that triggers them, since
+  `isLoading` is re-armed from an effect. That window is invisible where the held value is USJ or
+  `undefined`, and shows the old failure for a single render where it is an error. Any new surface
+  reading these hooks inherits the same trap and needs the same pairing; a reviewer seeing a
+  rendered value without its `isLoading` nearby should ask which reference it belongs to. If the
+  hook is ever changed to reset `data`, these settled-checks become redundant rather than wrong.
+- **Source:** PT-4350, found in review — two independent analysis passes reached the same defect
+  from the retry affordance and from the `useLayoutEffect` change.
 
 ## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
@@ -4345,3 +5219,77 @@ step, no automation. Just a record.
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
+
+## adr-z-index-ordering-invariants: The z-index scale is defined by ordering invariants, pinned by tests — not by the individual numbers
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** PR #2365 raised `Z_INDEX_ABOVE_DOCK`
+  (`lib/platform-bible-react/src/components/z-index.ts`) from 250 to 600 for an unrelated
+  combobox-in-a-modal fix. That silently put every tooltip (550 at the time) behind every popover,
+  select, context menu, and the menubar, which all sit on `Z_INDEX_ABOVE_DOCK`. Nothing failed: no
+  test asserted the relative order between tiers, only their existence. Separately,
+  `Z_INDEX_OVERLAY`'s doc comment claimed the shadcn popovers used it, when in fact no shadcn
+  overlay does: each sets a constant from this scale that matches its own tier —
+  `dropdown-menu.tsx`, `select.tsx`, `popover.tsx` and `context-menu.tsx` on `Z_INDEX_ABOVE_DOCK`,
+  `tooltip.tsx` on `Z_INDEX_TOOLTIP`, `dialog.tsx` on `Z_INDEX_MODAL`/`Z_INDEX_MODAL_BACKDROP`.
+  That stale comment is what led PR #2229 to place a menu at `Z_INDEX_OVERLAY` (400) underneath its
+  own 600-tier host.
+- **Decision:** Define the scale by **ordering invariants**, not the individual numbers:
+  backdrop (`Z_INDEX_MODAL_BACKDROP`, 450) < modal (`Z_INDEX_MODAL`, 500) < overlay content
+  (`Z_INDEX_ABOVE_DOCK`, 600) < content portalled out of a popover (`Z_INDEX_ABOVE_POPOVER`, 650) <
+  tooltip (`Z_INDEX_TOOLTIP`, 675) < first-run gate (`Z_INDEX_FIRST_RUN`, 700). Pin these with
+  order-only assertions in `lib/platform-bible-react/src/components/z-index.test.tsx` (e.g.
+  `expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_ABOVE_POPOVER)`), plus rendered-stacking tests that
+  render a tooltip inside a popover and a dropdown menu on its own, and assert the resulting
+  `style.zIndex` values. Overlay components own their own z-index — every shadcn overlay sets the
+  constant for its own tier itself — rather than leaving each consumer to pick a value, closing the
+  PR #2229 failure mode. Overlays nested inside other overlays (a tooltip inside a
+  popover, a menu inside a dialog) share the overlay tier and resolve by DOM/paint document order
+  rather than getting a tier of their own.
+- **Alternatives:** (a) **a dedicated numeric tier per nesting level** — rejected: does not compose
+  past one level (a third nesting depth needs a fourth number, in perpetuity), and every new tier
+  needs a name nobody can define ahead of the UI that will eventually need it. (b) **a React
+  context threading the host's z-index down to descendants** so a child can compute "host + 1" —
+  more machinery than the problem warrants; the document-order rule already gives the same visual
+  result once both layers share a tier. (c) **rename `Z_INDEX_ABOVE_DOCK`** to describe what it
+  actually is now (the general overlay tier, not "the value that clears the dock") — rejected here
+  only because it is exported public API from `lib/platform-bible-react/src/index.ts`, so a rename
+  is a breaking change for any extension importing it; worth doing at the next breaking-change
+  window.
+- **Consequences:** Re-tiering the scale (moving every layer's absolute number to make room)
+  stays cheap, but *reordering* it (swapping which tier sits above which) now fails a test
+  immediately instead of shipping a silent visual regression like PR #2365's.
+  `src/renderer/styles/_vars.scss` restates the scale for SCSS consumers, and a test reads that file
+  to assert it still agrees with the TypeScript constants — a twin that drifts is worse than a
+  duplicated one, because neither copy can then be trusted to say what a layer's value is.
+  `Z_INDEX_OVERLAY`
+  (400) itself was left largely untouched as out of scope for this work: it sits below
+  `Z_INDEX_MODAL_BACKDROP` in the scale and is not covered by any ordering test above, so it may
+  warrant its own review. Its consumers were audited for the one shape this decision does forbid —
+  a consumer pinning an overlay BELOW the host it renders inside — and the two instances found in
+  `project-selector.component.tsx` (a filter menu and a row tooltip inside that component's own
+  `PopoverContent`) were removed rather than left as counterexamples. One consumer override
+  survives, in `settings-sidebar.component.tsx`, carrying a TODO: it pins a host popover rather
+  than nesting an overlay under one, and needs verifying against the surfaces that sidebar renders
+  in before it can be dropped.
+- **Follow-through:** "Every shadcn overlay sets the constant for its own tier itself" was not true
+  of `menubar.tsx` when this was written — its content and submenu were still on Tailwind's
+  `tw:z-50`, two orders of magnitude below the tier `tooltip.tsx`'s own comment named it as a member
+  of. It now sets `Z_INDEX_ABOVE_DOCK`, with a rendered-stacking test in `z-index.test.tsx`.
+  `DropdownMenuSubContent` sets `Z_INDEX_ABOVE_POPOVER` rather than copying its parent's tier, so a
+  caller that lifts a menu to that tier (the footnote type and caller dropdowns do) cannot leave its
+  own submenu painting underneath it.
+- **Known remaining violations — the claim above is about the overlays this work reached, not all of
+  them.** `drawer.tsx` still hard-codes `tw:z-50` on both `DrawerOverlay` and `DrawerContent`, which
+  are portalled surfaces; by the shape of the scale they belong on `Z_INDEX_MODAL_BACKDROP` /
+  `Z_INDEX_MODAL` alongside `dialog.tsx`. It is left alone deliberately: its only consumers are the
+  `platform-lexical-tools` dictionary components, re-tiering a modal surface changes what it covers,
+  and there is no test or Storybook play function that would catch a mistake. Consumer overrides
+  that pin an overlay BELOW its own host also survive in `overlay-context-menu.component.tsx`,
+  `manage-books-dialog.component.tsx` and `settings-sidebar.component.tsx`. TODO(PT-4345-followup):
+  these want their own pass, with the app running to verify each surface.
+- **Source:** PT-4345 (BCV styling/keyboard-nav epic, the z-index repair task), which reconciles the
+  drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
+  PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
+  adding the ordering tests in `z-index.test.tsx` and this decision record.

@@ -13,23 +13,27 @@ import { ReactNode, useId, useState } from 'react';
  *
  * @param label Already-localized status text shown next to the spinner (e.g. "Installing
  *   resource…"). Doubles as the state's accessible name.
- * @param className Sizing for the block, replacing the default full-panel height. A panel waiting
- *   inside its own content area — below a selector header that stays mounted — passes the height of
- *   that area instead, so the spinner centres in the region it describes rather than pushing past
- *   the bottom of the panel.
+ * @param sizingClassName Sizing for the block, REPLACING the default full-panel height rather than
+ *   merging with it. A panel waiting inside its own content area — below a selector header that
+ *   stays mounted — passes the height of that area instead, so the spinner centres in the region it
+ *   describes rather than pushing past the bottom of the panel. Named for sizing specifically
+ *   because the replacement is the point: a general-purpose `className` carrying, say, padding
+ *   would silently drop the full-panel height, and `cn` would not restore it — `tw:h-screen` and a
+ *   padding utility do not conflict, so a merge would keep both and size the block to the
+ *   viewport.
  */
 export function LoadingView({
   label,
-  className = 'tw:h-screen',
+  sizingClassName = 'tw:h-screen',
 }: {
   label: ReactNode;
-  className?: string;
+  sizingClassName?: string;
 }) {
   return (
     <div
       className={cn(
         'tw:flex tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center',
-        className,
+        sizingClassName,
       )}
       role="status"
     >

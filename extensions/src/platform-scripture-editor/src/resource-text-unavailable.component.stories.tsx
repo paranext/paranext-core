@@ -11,8 +11,11 @@ import { ResourceTextUnavailable } from './resource-text-unavailable.component';
  * gets a way out; one that cannot omits it, because an inert control in a state that withholds
  * every other affordance is worse than no control.
  *
- * Layout, focus repair, and re-announcement on navigation are shared with
- * `ResourceBookNotAvailable` and `ResourceBlankChapter` through `ResourceMessageView`.
+ * The body is the library's `RetryableErrorView` — the same warning glyph and retry button the
+ * resource picker, Get Resources, and this panel's own install and catalog failures show — so one
+ * condition reads as one control wherever the reader meets it. Focus repair and re-announcement on
+ * navigation are shared with `ResourceBookNotAvailable` and `ResourceBlankChapter` through
+ * `ResourceMessageFrame`.
  */
 const meta: Meta<typeof ResourceTextUnavailable> = {
   title: 'Bundled Extensions/platform-scripture-editor/ResourceTextUnavailable',
@@ -47,6 +50,15 @@ export const WithRetry: Story = {
  */
 export const Terminal: Story = {
   args: { message: 'This text could not be loaded.' },
+};
+
+/**
+ * A handler with no label renders no control either. The underlying view gates its button on the
+ * handler alone, so passing one through unlabelled would put a button with no accessible name on
+ * screen.
+ */
+export const HandlerWithoutLabel: Story = {
+  args: { message: 'This text could not be loaded.', onRetry: () => {} },
 };
 
 /**

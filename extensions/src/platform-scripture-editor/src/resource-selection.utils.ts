@@ -72,6 +72,12 @@ export function matchesSelectedResourceId(
  *   narrower than `areSourcesSettled`: a failed catalog settles what the rows are for now, but its
  *   retry can still restore the missing row, and the stored id does not come back once overwritten.
  *   See `canResolveResourceSelection` for why the two questions diverge.
+ *
+ *   The flag is about protecting a stored pick, so it is deliberately blunt about the case where
+ *   there is none: on a first-ever open with a failed catalog, the first row is displayed and not
+ *   written back, even though no pick exists to be lost. The cost is one unpersisted default, and
+ *   the next successful catalog settles it; gating on "is there something to protect?" would put a
+ *   second condition in the way of the one guarantee this flag exists to make.
  * @returns See {@link ResourceSelectionResolution}
  */
 export function resolveResourceSelection({

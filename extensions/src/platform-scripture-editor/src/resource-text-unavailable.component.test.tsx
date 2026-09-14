@@ -2,6 +2,7 @@
 
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   RESOURCE_TEXT_UNAVAILABLE_TEST_ID,
@@ -9,6 +10,7 @@ import {
 } from './resource-text-unavailable.component';
 
 const MESSAGE = 'This text could not be loaded.';
+const RETRY_LABEL = 'Try again';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -40,6 +42,46 @@ describe('ResourceTextUnavailable', () => {
     render(<ResourceTextUnavailable message={MESSAGE} />);
 
     expect(screen.getByTestId(RESOURCE_TEXT_UNAVAILABLE_TEST_ID)).toHaveFocus();
+  });
+
+  it('offers a retry the caller can act on', async () => {
+    const onRetry = vi.fn();
+    render(
+      <ResourceTextUnavailable message={MESSAGE} retryLabel={RETRY_LABEL} onRetry={onRetry} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: RETRY_LABEL }));
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the failure without a control when nothing can re-drive the read', () => {
+    // The Model text panel has no re-subscribe path for this failure. An inert button in a state
+    // that withholds every other affordance is worse than no button.
+    render(<ResourceTextUnavailable message={MESSAGE} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(MESSAGE);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('renders no control when a handler arrives without a label', () => {
+    // The underlying view gates its button on the handler alone, so passing one through without a
+    // label would render a button with no accessible name — a control a screen-reader user is told
+    // nothing about.
+    render(<ResourceTextUnavailable message={MESSAGE} onRetry={vi.fn()} />);
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('reports the failure politely, because focus already carries it', () => {
+    // This state moves focus to itself, which is what announces the message. An assertive `alert`
+    // on top of that interrupts the reader to repeat what they are already being told.
+    render(
+      <ResourceTextUnavailable message={MESSAGE} retryLabel={RETRY_LABEL} onRetry={vi.fn()} />,
+    );
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('re-announces when the reference changes while the failure stays on screen', () => {

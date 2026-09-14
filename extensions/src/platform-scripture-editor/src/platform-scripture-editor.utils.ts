@@ -11,7 +11,12 @@
  * on any module the host's `require` shim does not supply.
  */
 
-import { LocalizationSelectors, OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
+import {
+  LocalizationSelectors,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
@@ -1177,6 +1182,14 @@ export async function finalizeProjectSwitch(
   // tab within it.
   syncOnProjectSwitch(papi, projectId, undefined);
   if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
+    // The rebuilt Simple layout stamps `projectId` onto the tabs of the static layout, but the Text
+    // Collection is merged in afterwards from the default-layout supplement, which carries none — so
+    // this is the one Column 3 panel that arrives unbound from a mode switch and would otherwise
+    // fall back to the scroll group's (outgoing) source project. Ordered before `applyForProject`
+    // for the same reason the editor-column switch is: the re-point settles the panel's content
+    // before the shared layout picks which tab to front. It swallows its own failures, so no
+    // try/catch here.
+    await updateRelatedTextCollectionPanel(papi, projectId);
     await applyForProject?.(projectId);
   }
   try {
@@ -1197,7 +1210,11 @@ export async function finalizeProjectSwitch(
 
 /**
  * Opens or updates the model text and the various views to be displayed in tabs in "column 3" (
- * reference texts, commentaries, comments, etc.) for a project.
+ * reference texts, commentaries, comments, Text Collection, etc.) for a project.
+ *
+ * Every panel here is error-isolated, so one failing panel never stops the rest from being
+ * re-pointed. Find is NOT here: it needs the id of the editor web view the switch produces, so it
+ * is re-pointed separately by {@link updateRelatedFindPanel} once that editor exists.
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
@@ -1254,34 +1271,79 @@ export async function openOrUpdateRelatedPanels(
  * because an inline literal would trip TypeScript's excess-property check.
  *
  * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
- * this same type: the writer here and the reader there are otherwise linked only by the field name,
- * so renaming or dropping `projectId` on one side would leave `typecheck` green and silently stop
- * the panel following project switches. (Mirrors `FindWebViewOptions`, which Find exports once and
- * uses on both sides.)
+ * this same type, which catches a _rename_ of `projectId` on either side via the object literal's
+ * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
+ * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
+ * savedWebView.projectId` would quietly fall back to the stale saved id, leaving the panel on the
+ * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence and
+ * `buildScriptureTextGridWebView` is what the provider calls, so both the rule and its use are
+ * covered. (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
+
+/**
+ * Which project the Text Collection provider should hand its web view.
+ *
+ * The two halves of the re-point meet here. `openWebViewOptions` is the half a project switch fills
+ * in — `updateRelatedTextCollectionPanel` passes the incoming project through `reloadWebView` — and
+ * it has to win: preferring the saved definition when a switch supplied a project leaves the panel
+ * rendering the outgoing project's texts. `savedWebView.projectId` is what keeps a restored tab, or
+ * one re-provided for an unrelated reason, on the project it already had.
+ *
+ * Extracted from the provider so this precedence is testable: the provider itself lives in
+ * `main.ts`, which no test imports, so inline the rule could be inverted and every test would still
+ * pass.
+ *
+ * @param openWebViewOptions Options the caller passed to `openWebView`/`reloadWebView`.
+ * @param savedWebView The saved definition being re-provided.
+ * @returns The project id to bind the web view to, or `undefined` when neither half names one.
+ */
+export function resolveGridProviderProjectId(
+  openWebViewOptions: TextCollectionPanelOptions,
+  savedWebView: Pick<SavedWebViewDefinition, 'projectId'>,
+): string | undefined {
+  return openWebViewOptions.projectId ?? savedWebView.projectId;
+}
 
 /**
  * Re-points the Text Collection panel at `projectId`, the way {@link openOrUpdateRelatedPanels}
  * re-points the rest of Column 3.
  *
- * Re-pointing is a reload, not an in-place `projectId` update: `papi.webViews` exposes no
- * definition-updating call from the service side, and the grid _requires_ a remount anyway because
- * it reads admin layout settings through `useBufferedLayoutSetting`, which documents itself as
- * built for consumers that switch projects via `reloadWebView` and NOT safe for ones that change
- * `projectId` in place.
+ * Re-pointing is a reload, not an in-place `projectId` update, for two reasons. `papi.webViews`
+ * exposes no definition-updating call at all — only a web view can update its _own_ definition
+ * (`updateWebViewDefinition` in `WebViewProps`), so from the service side a reload is the only way
+ * to change any updatable property, as `reloadWebView`'s own TSDoc says. More importantly the grid
+ * _requires_ a remount: it reads admin layout settings through `useBufferedLayoutSetting`, which
+ * documents itself as built for consumers that switch projects via `reloadWebView` and NOT safe for
+ * ones that change `projectId` in place (it would keep serving the previous project's held value,
+ * and it `logger.warn`s if it detects that). Without any re-point the panel would fall back to
+ * inferring its project from the scroll group's source project — the project that last SET the
+ * group's reference, which a project switch does not change — and would keep rendering the outgoing
+ * project's texts until the user next navigated.
  *
  * Three deliberate constraints:
  *
- * - Never creates a panel when none is open. The Text Collection's only open path is the
- *   default-layout supplement, so "not open" means the tab was closed in Power mode or the
- *   `platformScriptureEditor.enableScriptureTextGrid` setting is off — neither a state a project
- *   switch should reverse.
+ * - Never creates a panel when none is open. The Text Collection has no open command and no menu
+ *   entry: its only open path is the default-layout supplement, which puts it in Column 3 from
+ *   startup. So "not open" means the tab was closed in Power mode or the
+ *   `platformScriptureEditor.enableScriptureTextGrid` setting is off, and neither is a state a
+ *   project switch should reverse. (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels`
+ *   for an editor-column switch and `finalizeProjectSwitch` for a Power→Simple one — so this guard
+ *   is a contract, not a hot path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
- *   the grid's in-memory React state (an open chapter-context split, in-flight "Installing…" rows)
- *   for no gain.
- * - Never brings the panel to front. This re-points the whole column rather than answering a request
- *   for the Text Collection, and the admin's shared layout chooses the front tab next.
+ *   the grid's in-memory React state for no gain. State held through `useWebViewState` —
+ *   `viewMode`, per-cell zoom — survives, since a reload reuses the same web view id.
+ *
+ *   Not all of that loss is cosmetic. The reload destroys the iframe's JS realm, so a DBL install
+ *   running in the grid is abandoned mid-flight: `installDblResource` proxies to .NET and completes
+ *   regardless, but the continuation that calls `persistUserAddition` dies with the realm, leaving
+ *   the resource installed on disk and absent from the collection, with no notification and no log
+ *   (the post-await `sourcesRef` check is a staleness re-read, not a liveness check). Recoverable
+ *   by re-adding the resource, which then succeeds immediately. TODO(PT-4510): fix in the install
+ *   path — persist the addition somewhere that survives a reload.
+ * - Never brings the panel to front. This runs as part of re-pointing the whole column, not because
+ *   anyone asked for the Text Collection, and the admin's shared layout chooses the front tab
+ *   immediately afterward.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
@@ -1293,21 +1355,55 @@ export async function updateRelatedTextCollectionPanel(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<void> {
+  let existingPanel: SavedWebViewDefinition | undefined;
   try {
     const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const existingPanel = allOpenDefs.find(
-      (def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+    existingPanel = allOpenDefs.find((def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+  } catch (e) {
+    // The router rejects this outright when any window is unreachable, so this is "what is open is
+    // unknown", not "no panel is open" — distinct from the no-panel case below, which is normal.
+    papi.logger.error(
+      `Text Collection re-point to ${projectId} aborted: could not establish which web views are open (${getErrorMessage(e)}). The panel may still show a previous project.`,
     );
-    if (!existingPanel || existingPanel.projectId === projectId) return;
+    return;
+  }
 
+  // Normalized on both sides, as this module does everywhere else it compares ids: they arrive
+  // verbatim from a resource reference while the .NET side canonicalizes to uppercase, so a raw
+  // `===` would read a case-differing id as a different project and reload on every switch back —
+  // discarding exactly the in-memory state this guard exists to protect.
+  if (
+    !existingPanel ||
+    (existingPanel.projectId !== undefined &&
+      normalizeProjectId(existingPanel.projectId) === normalizeProjectId(projectId))
+  )
+    return;
+
+  try {
     // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
     // inactive tab. That is fine and needs no catch-up — the reload remounts the panel and its
     // render is entirely data-driven (no geometry reads, no scrollIntoView), so it produces the
     // right content while hidden and is simply revealed when the tab is next activated.
     const options: TextCollectionPanelOptions = { projectId, bringToFront: false };
-    await papi.webViews.reloadWebView(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, existingPanel.id, options);
+    const reloadedId = await papi.webViews.reloadWebView(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      existingPanel.id,
+      options,
+    );
+    // `reloadWebView` resolves `undefined` rather than throwing when the definition has gone or the
+    // provider declines to supply one. Worth an error rather than silence: a failed re-point is not
+    // self-correcting. `projectId` is not in `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any
+    // re-point has succeeded the panel's saved definition carries a project and `explicitProjectId`
+    // wins in `resolveTextCollectionProjectId` from then on — the scroll-group fallback that used to
+    // correct a stale panel on the next navigation no longer runs.
+    if (reloadedId === undefined)
+      papi.logger.error(
+        `Text Collection re-point to ${projectId} did not take: reloadWebView returned no id for panel ${existingPanel.id}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,
+      );
   } catch (e) {
-    papi.logger.warn(`Error updating text collection panel project: ${getErrorMessage(e)}`);
+    papi.logger.error(
+      `Text Collection re-point to ${projectId} failed for panel ${existingPanel.id}: ${getErrorMessage(e)}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,
+    );
   }
 }
 
@@ -1318,9 +1414,10 @@ export async function updateRelatedTextCollectionPanel(
  * in the editor, and a project switch that replaces the editor tab mints a new one. Running this
  * alongside the other panels would hand Find the id of the editor being replaced.
  *
- * Find is also the one Column 3 panel that is re-pointed without being opened. In Simple mode it is
- * part of the fixed layout from startup, so it is always already there; anywhere else it is a panel
- * the user opened deliberately, and a project switch is not a request to open it.
+ * Find is re-pointed without being opened, the same way {@link updateRelatedTextCollectionPanel}
+ * treats the Text Collection. In Simple mode it is part of the fixed layout from startup, so it is
+ * always already there; anywhere else it is a panel the user opened deliberately, and a project
+ * switch is not a request to open it.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
@@ -1677,13 +1774,27 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | '
  *   `isLoading` its own `deriveCellState` takes.
  * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
  *   less means the panel has no book it can name, so no claim is made about one.
- * @param options.isUsjSettled Whether the chapter subscription has stopped loading. Distinguishes a
- *   `undefined` that has not arrived yet from one that IS the answer — the data type's `getData` is
- *   `Usj | undefined` and the extender PDP returns `undefined` for a falsy USX, so a delivered
- *   `undefined` is reachable and would otherwise spin forever. Used ONLY to escalate out of
- *   `'loading'`, never to enter it: the flag is re-armed from an effect, so for one render after a
- *   selector change it still reads settled — harmless here, because the value in hand at that
- *   moment is the previous reference's USJ rather than `undefined`.
+ * @param options.isUsjSettled Whether the chapter subscription has stopped loading. Answers "is the
+ *   value in hand the CURRENT read's?", which both terminal branches need, because the data layer
+ *   holds the last delivered value across a resubscription — it resets `isLoading`, never `data`.
+ *
+ *   Escalating out of `'loading'`: distinguishes a `undefined` that has not arrived yet from one that
+ *   IS the answer — the data type's `getData` is `Usj | undefined` and the extender PDP returns
+ *   `undefined` for a falsy USX, so a delivered `undefined` is reachable and would otherwise spin
+ *   forever. This reports that case as `'failed'`, which is the honest answer for the only
+ *   reference it can reach here — chapter 0, the book's front matter. For a real chapter the
+ *   resource panel decides first that a delivered nothing is an EMPTY chapter and renders that
+ *   message instead; see its `isBlankChapter`. A retry cannot change a deterministic `undefined`,
+ *   so that precedence is what keeps an inert control off the state.
+ *
+ *   Entering `'loading'`: an error with a read in flight is the previous attempt's, so it is withheld
+ *   rather than named. Without this, re-driving a failed read leaves the identical message on
+ *   screen for the whole round trip and the retry affordance reads as inert.
+ *
+ *   The flag is re-armed from an effect, so for one render after a selector change it still reads
+ *   settled. With USJ or `undefined` in hand that is invisible (the value is the previous
+ *   reference's USJ, not `undefined`); with a stale error in hand it shows the old failure for a
+ *   single render before the spinner replaces it.
  * @param options.isAnswerCurrent Whether the value in hand answers for the resource on screen NOW.
  *   A data hook preserves its value across a source change, so on a resource switch the previous
  *   resource's chapter is still in hand with nothing about the value itself to reveal that. The
@@ -1736,6 +1847,14 @@ export function resolveResourceContentState({
   // give opposite answers about one error.
   if (missingBook || isMissingBookError(usjPossiblyError)) return 'loading';
 
+  // An error with a read already in flight belongs to the PREVIOUS attempt. The data layer holds
+  // the last delivered value across a resubscription — it resets `isLoading`, never `data` — so the
+  // error survives both a retry and a plain navigation, and reporting it would name a failure for a
+  // reference whose read has not finished. This is also what makes the retry affordance legible:
+  // without it, re-driving the read leaves the identical message on screen for the whole round
+  // trip, so pressing the button looks like it did nothing.
+  if (!isUsjSettled) return 'loading';
+
   // Any other failure is terminal: the value in hand is an error rather than USJ, and nothing
   // re-emits until the data provider does. Naming it beats both a spinner that never resolves and an
   // editor with no scripture in it.
@@ -1743,3 +1862,54 @@ export function resolveResourceContentState({
 }
 
 // #endregion Missing Book Detection
+
+/** Localize key for the Text Collection tab's title and tooltip. */
+export const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+
+/**
+ * Builds the Text Collection's web view definition.
+ *
+ * Lives here rather than inline in the provider so the project-binding seam is reachable by a test:
+ * `main.ts` is the extension entry point and no test imports it, so inline the precedence between
+ * `openWebViewOptions.projectId` and `savedWebView.projectId` could be inverted — leaving the panel
+ * on the outgoing project — with the whole suite still green.
+ *
+ * The web view's content and styles are passed in rather than imported: they are webpack `?inline`
+ * assets, and importing them here would pull them into every consumer of this module.
+ *
+ * @param papi The instance of papi to read the interface mode and localized strings from.
+ * @param savedWebView The saved definition being re-provided.
+ * @param openWebViewOptions Options the caller passed to `openWebView`/`reloadWebView`.
+ * @param webViewContent The web view's inline content and styles.
+ * @returns The definition to provide.
+ */
+export async function buildScriptureTextGridWebView(
+  papi: typeof PapiBackend,
+  savedWebView: SavedWebViewDefinition,
+  openWebViewOptions: TextCollectionPanelOptions,
+  webViewContent: { content: string; styles: string },
+): Promise<WebViewDefinition> {
+  if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
+    throw new Error(
+      `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+    );
+
+  const projectId = resolveGridProviderProjectId(openWebViewOptions, savedWebView);
+  const interfaceMode = await papi.settings.get('platform.interfaceMode');
+  const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
+    localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
+  });
+
+  return {
+    ...savedWebView,
+    title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
+    tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
+    isClosable: interfaceMode === 'power',
+    shouldShowToolbar: false,
+    projectId,
+    content: webViewContent.content,
+    styles: webViewContent.styles,
+    iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+  };
+}

@@ -236,15 +236,17 @@ describe('render', () => {
   });
 
   it('describes a package only another platform installs without calling it displaced', () => {
-    // Both are `fromLock`, and the dev-link paragraph would otherwise claim this one was resolved
-    // differently "because a yalc dev link replaces a package with a symlink" - which is not what
+    // Both are `fromLock`, and the displaced paragraph would otherwise claim this one was resolved
+    // differently "because a dev link replaces a package with a symlink" - which is not what
     // happened: npm never installed it here at all.
     // Asserted per PARAGRAPH: the two paragraphs are adjacent with no heading between them, so a
-    // pattern spanning from one to the other matches whatever the renderer does.
+    // pattern spanning from one to the other matches whatever the renderer does. Each needle is a
+    // phrase the renderer emits on ONE line, because these paragraphs are pushed line by line and a
+    // needle spanning a line break stops matching the moment the wrapping shifts.
     const paragraphs = render(report).split('\n\n');
     const named = (needle: string) => paragraphs.filter((p) => p.includes(needle));
     const platformOnly = named('Installed by npm only where');
-    const displacedParagraph = named('link replaces a package with a symlink');
+    const displacedParagraph = named('Resolved differently on this machine');
     expect(platformOnly).toHaveLength(1);
     expect(platformOnly[0]).toContain('`eta@7.0.0`');
     expect(displacedParagraph).toHaveLength(1);

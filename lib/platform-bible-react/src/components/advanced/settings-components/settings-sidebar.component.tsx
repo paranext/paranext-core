@@ -2,7 +2,6 @@ import {
   ProjectSelector,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
-import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import {
   Sidebar,
   SidebarContent,
@@ -172,9 +171,6 @@ export function SettingsSidebar({
                 buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
                 buttonPlaceholder={buttonPlaceholderText}
                 ariaLabel={projectsSidebarGroupLabel}
-                // TODO: Check if this z-index override is necessary — the PopoverContent default
-                // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
-                popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
               />
             </div>
           </SidebarGroupContent>

@@ -22,17 +22,71 @@ export type ResourceMessageViewProps = {
    * screen-reader user gets no confirmation that their navigation applied at all.
    */
   announcementKey?: string;
-  /**
-   * A recovery control rendered under the message, for the states that have one. Omitted by the
-   * states that are genuinely terminal — an inert button in a state that withholds every other
-   * affordance is worse than no button.
-   *
-   * Sits inside the focusable wrapper so a keyboard user who lands on the message reaches it with
-   * the next Tab. The wrapper keeps `aria-label={message}`, which names the region rather than the
-   * control; the control names itself.
-   */
-  action?: ReactNode;
 };
+
+export type ResourceMessageFrameProps = {
+  /** `data-testid` for the focusable wrapper, so a test can address the element that takes focus. */
+  testId: string;
+  /** See {@link ResourceMessageViewProps.announcementKey}. */
+  announcementKey?: string;
+  /**
+   * Accessible name for the wrapper — normally the message being shown, since the wrapper names the
+   * region rather than any control inside it.
+   */
+  label: string;
+  /** What fills the region: a bare message, or a richer zero state with its own recovery action. */
+  children: ReactNode;
+};
+
+/**
+ * The focus-and-announcement wrapper every "the panel has no text to show" state sits in,
+ * independent of what fills it.
+ *
+ * Extracted because these states do not all render the same body — a failure the reader can
+ * re-drive goes through the library's `RetryableErrorView`, so that one retry button looks and
+ * behaves the same wherever the app reports the same condition — while every one of them needs the
+ * identical focus repair and re-announcement on navigation.
+ *
+ * Accessibility: this REPLACES the editor subtree, so its arrival is a content swap a screen-reader
+ * user gets no other notice of, and the focused element inside the editor is destroyed along with
+ * it. A live region mounted with its text already present is not reliably announced, so the focus
+ * move is what actually carries the message. The wrapper takes focus on mount via
+ * {@link useFocusReplacedContent}, which repairs focus only when it actually fell to the body, so
+ * arriving here by picking a text from a panel's own selector does not yank focus off that
+ * selector.
+ *
+ * The wrapper carries `aria-label` rather than only wrapping the message: a role-less `div` maps to
+ * `generic`, which does not support name-from-content, so a focused wrapper without one has an
+ * empty accessible name and is announced as "group" or as nothing at all. It deliberately does NOT
+ * carry a `role` of its own — the body it wraps supplies the live region, and nesting two is worse
+ * than one.
+ */
+export function ResourceMessageFrame({
+  testId,
+  announcementKey,
+  label,
+  children,
+}: ResourceMessageFrameProps) {
+  const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
+
+  return (
+    // Keyed on the FOCUS TARGET, not on the message inside it. A new subject has to remount this
+    // element for the announcement to carry: a surviving wrapper keeps focus, so the focus repair
+    // sees a non-body `activeElement` and declines, leaving only a remounted live region that
+    // several screen readers do not report. Remounting here drops focus to `body`, which is the
+    // condition the repair is waiting for.
+    <div
+      key={announcementKey}
+      ref={regionRef}
+      data-testid={testId}
+      tabIndex={-1}
+      aria-label={label}
+      className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:px-4 tw:outline-none"
+    >
+      {children}
+    </div>
+  );
+}
 
 /**
  * The shared body of a resource panel's "there is no text to show, and here is why" state: a
@@ -42,46 +96,22 @@ export type ResourceMessageViewProps = {
  * reserves for a bare sentence with no title, media, or action; going through it keeps these
  * reading like every other empty state in the app and supplies the `role="status"` live region.
  *
- * Accessibility: this REPLACES the editor subtree, so its arrival is a content swap a screen-reader
- * user gets no other notice of, and the focused element inside the editor is destroyed along with
- * it. `EmptyState` mounts its `role="status"` region with the text already present, which several
- * screen readers do not announce — the focus move is what actually carries the message, and closing
- * that gap belongs to the shared primitive (PT-4416). The wrapper is the focus target, taking focus
- * on mount via {@link useFocusReplacedContent}, which repairs focus only when it actually fell to
- * the body, so arriving here by picking a text from a panel's own selector does not yank focus off
- * that selector.
+ * For the states whose whole content is that sentence. A state that also offers a way out renders
+ * {@link ResourceMessageFrame} directly around a richer body, so its recovery control matches the
+ * one every other surface shows for the same condition.
  *
- * The wrapper carries `aria-label` rather than only wrapping the message: a role-less `div` maps to
- * `generic`, which does not support name-from-content, so a focused wrapper without one has an
- * empty accessible name and is announced as "group" or as nothing at all. `aria-label` is used in
- * preference to `aria-labelledby` because `EmptyState`'s `id` prop is a `data-testid`, not a DOM
- * id. The wrapper deliberately does NOT repeat `role="status"` — nesting two live regions is worse
- * than one.
+ * `EmptyState` supplies the `role="status"` live region; the focus repair and re-announcement are
+ * {@link ResourceMessageFrame}'s, which also explains why the message is not reliably announced by
+ * the live region alone (closing that gap belongs to the shared primitive — PT-4416).
  */
 export function ResourceMessageView({
   message,
   testId,
   announcementKey,
-  action,
 }: ResourceMessageViewProps) {
-  const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
-
   return (
-    // Keyed on the FOCUS TARGET, not on the message inside it. A new subject has to remount this
-    // element for the announcement to carry: a surviving wrapper keeps focus, so the focus repair
-    // sees a non-body `activeElement` and declines, leaving only a remounted `role="status"` that
-    // several screen readers do not report. Remounting here drops focus to `body`, which is the
-    // condition the repair is waiting for.
-    <div
-      key={announcementKey}
-      ref={regionRef}
-      data-testid={testId}
-      tabIndex={-1}
-      aria-label={message}
-      className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:px-4 tw:outline-none"
-    >
+    <ResourceMessageFrame testId={testId} announcementKey={announcementKey} label={message}>
       <EmptyState message={message} className="tw:text-center" />
-      {action}
-    </div>
+    </ResourceMessageFrame>
   );
 }
