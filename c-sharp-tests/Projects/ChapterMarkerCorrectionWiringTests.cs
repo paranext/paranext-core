@@ -74,14 +74,17 @@ internal class ChapterMarkerCorrectionWiringTests : PapiTestBase
     public void SetChapterUsx_MarkerNamesAnotherChapter_CorrectsAndWrites()
     {
         var provider = CreateProvider();
+        // Edit the verse as well as the chapter number, so what is stored afterward can only have
+        // come from this write — the seeded chapter already reads "two".
         var wrongChapterUsx = provider
             .GetChapterUsx(ChapterToWrite)
-            .Replace("<chapter number=\"2\"", "<chapter number=\"7\"");
+            .Replace("<chapter number=\"2\"", "<chapter number=\"7\"")
+            .Replace(">two", ">edited");
 
         Assert.That(provider.SetChapterUsx(ChapterToWrite, wrongChapterUsx), Is.True);
         Assert.That(
             provider.GetChapterUsfm(ChapterToWrite),
-            Does.StartWith("\\c 2\r\n").And.Contains("\\v 1 two")
+            Does.StartWith("\\c 2\r\n").And.Contains("\\v 1 edited")
         );
     }
 }

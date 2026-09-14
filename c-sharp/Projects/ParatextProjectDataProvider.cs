@@ -2558,9 +2558,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         out var wasCorrected
                     );
                     if (wasCorrected)
-                        Console.WriteLine(
-                            $"Chapter markers in {verseRef.Book} {verseRef.ChapterNum} did not match the chapter being written; they were corrected before saving."
-                        );
+                        Console.WriteLine(GetChapterMarkersCorrectedMessage(verseRef));
                     scrText.PutText(
                         verseRef.BookNum,
                         verseRef.ChapterNum,
@@ -2855,10 +2853,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         verseRef.ChapterNum,
                         out var wasCorrected
                     );
-                    if (wasCorrected)
-                        Console.WriteLine(
-                            $"Chapter markers in {verseRef.Book} {verseRef.ChapterNum} did not match the chapter being written; they were corrected before saving."
-                        );
 
                     // Compare the current USFM to the normalized input USFM to see if anything changed
                     // This may happen if someone makes a whitespace change that gets normalized
@@ -2870,6 +2864,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         return;
                     }
 
+                    if (wasCorrected)
+                        Console.WriteLine(GetChapterMarkersCorrectedMessage(verseRef));
                     scrText.PutText(verseRef.BookNum, verseRef.ChapterNum, true, usfm, writeLock);
                 }
             );
@@ -2909,6 +2905,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #endregion
 
     #region Private helper methods
+
+    /// <summary>
+    /// What a chapter write logs when its chapter markers had to be corrected to match the chapter
+    /// being written. See <see cref="ChapterMarkerCorrection"/> for why they are corrected rather
+    /// than left for Paratext to reject. Written immediately before the write it describes, so a
+    /// correction that turns out to match what is already stored logs nothing.
+    /// </summary>
+    private static string GetChapterMarkersCorrectedMessage(VerseRef verseRef) =>
+        $"Chapter markers in {verseRef.Book} {verseRef.ChapterNum} did not match the chapter "
+        + "being written; they were corrected before saving.";
 
     private string GetFromScrText(
         VerseRef verseRef,

@@ -32,6 +32,12 @@ internal class ChapterMarkerCorrectionTests
         TestName = "Chapter 1 need not have a chapter number, Unix line endings"
     )]
     [TestCase(
+        "1\r\n2\n",
+        "1\r\n2\n",
+        1,
+        TestName = "Chapter 1 need not have a chapter number, mixed line endings"
+    )]
+    [TestCase(
         "junk\r\n\\c 1\r\n",
         "junk\r\n\\c 2\r\n",
         1,
@@ -56,6 +62,12 @@ internal class ChapterMarkerCorrectionTests
         TestName = "Chapter 1 keeps an already non-introductory first marker"
     )]
     [TestCase(
+        "\\ip p1\r\n\\c 1\r\n\\p p2\r\n\\p p3\r\n",
+        "\\ip p1\r\n\\c 1\r\n\\p p2\r\n\\c 1\n\\p p3\n",
+        1,
+        TestName = "Chapter 1 keeps an already non-introductory first marker, Unix line endings"
+    )]
+    [TestCase(
         "\\c 2\r\n1\r\n2\r\n",
         "\\c 2\r\n1\r\n2\r\n",
         2,
@@ -78,6 +90,12 @@ internal class ChapterMarkerCorrectionTests
         "\\c 2\r\n1\r\n\\c 2\r\n2\r\n",
         2,
         TestName = "A marker typed mid-chapter is removed"
+    )]
+    [TestCase(
+        "\\c 2\r\n1\r\n2\r\n",
+        "\\c 2\n1\r\n\\c 2\n2\r\n",
+        2,
+        TestName = "A marker typed mid-chapter is removed, Unix line endings"
     )]
     [TestCase(
         "\\c 2\r\n\\s Section Head",
