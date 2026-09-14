@@ -717,8 +717,9 @@ export async function getInitialContentZoomForWebView(
   const levels: Levels = { ...getOwnLevels(webView) };
   const id = memoryIdentityFor(webView);
   if (id) {
-    // The memory subscription keeps the cache current once the first read has landed, so opening a
-    // pane does not wait on a settings round trip; only the very first pane of a session does.
+    // Initialization pre-warms the cache and the memory subscription keeps it current, so opening
+    // a pane does not wait on a settings round trip — except a pane opened before that first read
+    // lands, or after one failed, which reads for itself rather than seeding from an empty record.
     const memory = memoryLoaded ? cachedMemory : ((await readMemory()) ?? {});
     Object.entries(collectMemoryLevelsFor(memory, id)).forEach(([areaId, level]) => {
       if (levels[areaId] === undefined) levels[areaId] = level;
@@ -814,7 +815,10 @@ export function initializeContentZoomService(
   if (shardDeps) deps = { ...deps, ...shardDeps };
   if (initialized) return initialized;
   initialized = (async () => {
-    await getDefaultZoom();
+    // The first pane's head variables need both, and neither read depends on the other.
+    // Pre-warming memory here is also what keeps `getInitialContentZoomForWebView` off the
+    // settings round trip when a read fails: without it, every eligible pane retries it.
+    await Promise.all([getDefaultZoom(), readMemory()]);
     try {
       cachedDefaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
     } catch (e) {
