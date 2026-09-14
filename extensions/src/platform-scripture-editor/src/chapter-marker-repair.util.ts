@@ -125,6 +125,15 @@ function findChapterStartIndex(content: MarkerContent[]): number {
 }
 
 /**
+ * A result carrying `repairedContent`, reporting a repair only when that content actually differs
+ * from what the document already holds.
+ */
+function toRepairResult(usj: Usj, repairedContent: MarkerContent[]): ChapterMarkerRepairResult {
+  const didRepair = JSON.stringify(repairedContent) !== JSON.stringify(usj.content);
+  return { usj: didRepair ? { ...usj, content: repairedContent } : usj, didRepair };
+}
+
+/**
  * The given chapter document with exactly one correctly numbered chapter marker in the one place it
  * belongs, so Paratext will accept the write (see the module comment for why a document that fails
  * that check poisons every later save of the chapter).
@@ -145,39 +154,40 @@ export function repairChapterMarkers(
   if (expectedChapterNum < 1) return { usj, didRepair: false };
 
   const expected = String(expectedChapterNum);
-  const originalContent = usj.content;
+  // Nested chapter markers go first and unconditionally: they are never legal USJ, they reach the
+  // writer as a `\c` all the same, and they must not survive even the paths below that leave the
+  // document's own top-level markers alone.
+  const strippedContent = usj.content.map((item) => withoutNestedChapters(item));
 
   const chapterEntries: ChapterEntry[] = [];
-  originalContent.forEach((item, index) => {
+  strippedContent.forEach((item, index) => {
     if (isChapterObject(item)) chapterEntries.push({ index, chapterObject: item });
   });
 
-  // An introduction-only chapter 1 (e.g. Jude) legitimately carries no chapter marker at all.
-  if (expectedChapterNum === 1 && chapterEntries.length === 0) return { usj, didRepair: false };
+  // An introduction-only chapter 1 (e.g. Jude) legitimately carries no chapter marker at all, so
+  // there is no marker to place — but a nested one may still have been stripped above.
+  if (expectedChapterNum === 1 && chapterEntries.length === 0) {
+    return toRepairResult(usj, strippedContent);
+  }
 
-  const anchor = chooseAnchor(originalContent, chapterEntries, expectedChapterNum);
+  const anchor = chooseAnchor(strippedContent, chapterEntries, expectedChapterNum);
   const repairedChapterObject: MarkerObject = anchor
     ? { ...anchor.chapterObject, number: expected }
     : { type: CHAPTER_TYPE, marker: 'c', number: expected };
 
-  const survivors = originalContent
-    .filter((item) => !isChapterObject(item))
-    .map((item) => withoutNestedChapters(item));
+  const survivors = strippedContent.filter((item) => !isChapterObject(item));
   // Chapter 1 keeps its marker where the user has it, since the introduction ahead of it is the
   // author's; every other chapter puts its marker at the start of the document.
   const insertIndex =
     expectedChapterNum === 1 && anchor
-      ? originalContent.slice(0, anchor.index).filter((item) => !isChapterObject(item)).length
+      ? strippedContent.slice(0, anchor.index).filter((item) => !isChapterObject(item)).length
       : findChapterStartIndex(survivors);
 
-  const repairedContent: MarkerContent[] = [
+  return toRepairResult(usj, [
     ...survivors.slice(0, insertIndex),
     repairedChapterObject,
     ...survivors.slice(insertIndex),
-  ];
-
-  const didRepair = JSON.stringify(repairedContent) !== JSON.stringify(originalContent);
-  return { usj: didRepair ? { ...usj, content: repairedContent } : usj, didRepair };
+  ]);
 }
 
 /** What a chapter save should do with the document the editor is holding. */

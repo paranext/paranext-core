@@ -140,6 +140,22 @@ describe('repairChapterMarkers — USJ specifics', () => {
     ]);
   });
 
+  it('removes a chapter marker nested inside a paragraph of an intro-only chapter 1', () => {
+    const { usj, didRepair } = repairChapterMarkers(
+      usjOf(ID_GEN, {
+        type: 'para',
+        marker: 'p',
+        content: ['before', chapter('9'), 'after'],
+      }),
+      1,
+    );
+    expect(didRepair).toBe(true);
+    expect(usj.content).toEqual([
+      ID_GEN,
+      { type: 'para', marker: 'p', content: ['before', 'after'] },
+    ]);
+  });
+
   it('does not mutate its input', () => {
     const input = usjOf(chapter('9'), para('p', 'body'));
     const snapshot = JSON.stringify(input);
