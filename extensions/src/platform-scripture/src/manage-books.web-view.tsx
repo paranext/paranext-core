@@ -327,10 +327,14 @@ function booksToNumbers(bookIds: string[]): number[] {
  * picker doesn't consume these — it locks into a bespoke versification grouping built on the dialog
  * side.
  *
- * `language` is left out: the manage-books wire carries no language, and the per-project
- * `platform.language` fan-out that could supply one was removed to keep this list fast (I2).
- * Offering the grouping anyway would produce a single "Unknown language" bucket for every project,
- * so it is omitted rather than shown as a menu item that cannot do anything.
+ * `language` is left out: the manage-books wire carries no language, and fetching it would cost one
+ * project-settings round-trip per row on a list that has to stay fast. Offering the grouping anyway
+ * would produce a single "Unknown language" bucket for every project, so it is omitted rather than
+ * shown as a menu item that cannot do anything.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
  *
  * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
  * backed by data {@link toManageBooksSelectorRows} actually packs, so adding an id here without

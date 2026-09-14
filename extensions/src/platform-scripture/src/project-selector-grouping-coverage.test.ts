@@ -9,6 +9,10 @@ import {
   CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS,
   toChecksSelectorRows,
 } from './checks/checks-side-panel/checks-side-panel.component';
+import {
+  CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS,
+  toChecklistSelectorRows,
+} from './checklist.web-view';
 import { FIND_PROJECT_SELECTOR_GROUPING_IDS, toFindSelectorRows } from './find/find.component';
 import {
   MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS,
@@ -17,10 +21,10 @@ import {
 
 /**
  * `ProjectSelectorProject.customData` is an untyped `Record<string, unknown>`, so nothing in the
- * type system connects "this picker offers the Language grouping" to "this picker's rows carry a
- * language". This suite is that connection: for every grouping a picker offers, it runs the
- * picker's own row builder over a representative fixture and proves the grouping actually reads
- * something from the resulting rows.
+ * type system connects "this picker offers the Language grouping" to "this picker's row builder
+ * packs a language into `customData`". This suite is that connection: for every grouping a picker
+ * offers, it runs the picker's own row builder over a representative fixture and proves the
+ * grouping actually reads something out of the `customData` the builder produced.
  *
  * A grouping that reads nothing is a dead menu item — the user picks it and sees one
  * undifferentiated bucket ("Other", "Unknown language"). That is the failure this suite exists to
@@ -29,6 +33,11 @@ import {
  * Each surface's `groupingIds` is the SAME exported constant its component filters
  * `makeBuiltInGroupings` against, not a copy of it — so offering a new grouping is what puts it in
  * front of this suite, and there is no list to forget to update.
+ *
+ * WHAT THIS SUITE DOES NOT COVER: the fixture stands in for the production feed, so the suite
+ * proves `builder input -> customData -> group key` and nothing upstream of the builder. Deleting
+ * the `platform.language` fetch that feeds `toFindSelectorRows` would kill Find's Language grouping
+ * and leave this suite green. Each web view's own tests cover that the feed supplies the field.
  */
 
 /**
@@ -61,6 +70,18 @@ const SURFACES: readonly Surface[] = [
       // No `lastUsedAt`: the panel lists every scripture project, most of which were never opened.
       { id: 'b', shortName: 'B', fullName: 'Project B', language: 'Spanish' },
     ]),
+  },
+  {
+    name: 'checklist',
+    groupingIds: CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS,
+    rows: toChecklistSelectorRows(
+      [
+        { id: 'a', shortName: 'A', fullName: 'Project A', rawLanguage: 'English' },
+        // No recency: the checklist lists every scripture project, most never opened.
+        { id: 'b', shortName: 'B', fullName: 'Project B', rawLanguage: 'Spanish' },
+      ],
+      recencyMapFromOrderedIds(['a'].map(normalizeProjectId)),
+    ),
   },
   {
     name: 'manage-books',
@@ -106,6 +127,12 @@ const SURFACES: readonly Surface[] = [
  * This mirrors a deliberately non-exported library internal rather than a public API: widening
  * `experimental.ts` to serve one test is the worse trade. Delete this helper and call the real
  * partitioner if those functions are ever published.
+ *
+ * Two things it deliberately does not mirror, neither of which can change a verdict here: the real
+ * partitioner DROPS unknown rows when the grouping has no `unknownSectionHeading`
+ * (`project-selector.rows.ts:551`) where this always emits an `<unknown>` bucket; and this buckets
+ * projects where the real one buckets `computeRows` rows, which are 1:1 with projects only in
+ * `mode="project"` (Find's `projectScrollGroup` branch expands one project into several rows).
  */
 function bucketSignature(
   grouping: ProjectSelectorGrouping,
@@ -129,7 +156,7 @@ function withoutCustomData(
   return projects.map((project) => ({ ...project, customData: undefined }));
 }
 
-describe("every grouping a picker offers is backed by that picker's own row data", () => {
+describe("every grouping a picker offers is backed by that picker's own customData", () => {
   const builtIns = makeBuiltInGroupings();
 
   SURFACES.forEach((surface) => {
@@ -138,7 +165,7 @@ describe("every grouping a picker offers is backed by that picker's own row data
     surface.groupingIds
       .filter((groupingId) => groupingId !== 'openTabs')
       .forEach((groupingId) => {
-        it(`${surface.name}: ${groupingId} reads real data off the rows`, () => {
+        it(`${surface.name}: ${groupingId} reads data the builder packed into customData`, () => {
           expect(builtIns.map((candidate) => candidate.id)).toContain(groupingId);
           const grouping = builtIns.find((candidate) => candidate.id === groupingId);
           if (!grouping) return;

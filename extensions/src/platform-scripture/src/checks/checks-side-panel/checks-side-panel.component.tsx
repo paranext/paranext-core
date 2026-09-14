@@ -63,6 +63,10 @@ export type ChecksSidePanelProject = ProjectOption & {
  * single "Unknown type" bucket. `lastUsed` stays — the panel lists ALL scripture projects, so the
  * recent/other split is a real partition here.
  *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
  * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
  * backed by data {@link toChecksSelectorRows} actually packs, so adding an id here without adding
  * its data is a build failure rather than a dead menu item.

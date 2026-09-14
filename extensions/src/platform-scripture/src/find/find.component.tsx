@@ -430,6 +430,10 @@ export type FindProps = {
  *   non-empty only when more than five projects are open at once. The grouping also cannot order by
  *   recency — the picker sorts every bucket alphabetically by short name.
  *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
  * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
  * backed by data {@link toFindSelectorRows} actually packs, so adding an id here without adding its
  * data is a build failure rather than a dead menu item.

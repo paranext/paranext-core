@@ -147,6 +147,58 @@ function cellToText(cell: ChecklistCell): string {
     .join(' | ');
 }
 
+/**
+ * The built-in grouping ids both checklist project pickers offer, in `makeBuiltInGroupings` order.
+ * The comparative-texts picker appends `makeSelectionGrouping` on top of these — `'selection'` is
+ * not a built-in, so it is not a member of this list.
+ *
+ * `type` is left out because the checklist has no project-type source: the project fetch reads
+ * `platform.name`, `platform.fullName`, and `platform.language` only, so the grouping would put
+ * every row under a single "Unknown type" bucket.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in these pickers. That is deliberate: a new grouping reaches users only
+ * once someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toChecklistSelectorRows} actually packs, so adding an id here without adding
+ * its data is a build failure rather than a dead menu item.
+ */
+export const CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = [
+  'openTabs',
+  'lastUsed',
+  'language',
+];
+
+/**
+ * A checklist project as fetched, before its grouping inputs are packed. `rawLanguage` is held
+ * beside the row rather than inside `customData` so recency (which arrives from a separate
+ * subscription) can be merged in one pass.
+ */
+export type ChecklistRawProject = ProjectSelectorProject & { rawLanguage: string | undefined };
+
+/**
+ * Maps fetched checklist projects onto ProjectSelector rows, packing the grouping inputs the
+ * picker's built-in groupings read into `customData`. Exported for coverage tests.
+ *
+ * `recencyMap` must already be keyed by {@link normalizeProjectId}-normalized ids — the recents
+ * service stores whatever id its caller handed it, while these are canonical project ids, so
+ * normalizing only one side can miss on casing alone and route every project into the grouping's
+ * "Other" bucket.
+ */
+export function toChecklistSelectorRows(
+  projects: readonly ChecklistRawProject[],
+  recencyMap: ReadonlyMap<string, number>,
+): ProjectSelectorProject[] {
+  return projects.map(({ rawLanguage, ...rest }) => ({
+    ...rest,
+    customData: makeProjectSelectorCustomData({
+      language: rawLanguage,
+      lastUsedAt: recencyMap.get(normalizeProjectId(rest.id)),
+    }),
+  }));
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────
 
 /**
@@ -604,7 +656,7 @@ global.webViewComponent = function ChecklistWebView({
       // Load id/name/fullName/language for every project in parallel. `platform.language` is a
       // core project setting; fetching it here lets the built-in `language` grouping partition
       // rows into real per-language buckets rather than everything under "Unknown language".
-      const results: Array<ProjectSelectorProject & { rawLanguage: string | undefined }> = [];
+      const results: ChecklistRawProject[] = [];
       await Promise.all(
         allMetadata.map(async (metadata) => {
           try {
@@ -634,7 +686,7 @@ global.webViewComponent = function ChecklistWebView({
       );
       return results;
     }, []),
-    useMemo<Array<ProjectSelectorProject & { rawLanguage: string | undefined }>>(() => [], []),
+    useMemo<ChecklistRawProject[]>(() => [], []),
   );
 
   // Recency input for the built-in `lastUsed` grouping. The service exposes an ordered id list
@@ -661,13 +713,7 @@ global.webViewComponent = function ChecklistWebView({
     // it, while these ids are canonical project ids, so an un-normalized `get` can miss on casing
     // alone and route every project into the "Other" bucket.
     const recencyMap = recencyMapFromOrderedIds(orderedRecentProjectIds.map(normalizeProjectId));
-    return allProjectsRaw.map(({ rawLanguage, ...rest }) => ({
-      ...rest,
-      customData: makeProjectSelectorCustomData({
-        language: rawLanguage,
-        lastUsedAt: recencyMap.get(normalizeProjectId(rest.id)),
-      }),
-    }));
+    return toChecklistSelectorRows(allProjectsRaw, recencyMap);
   }, [allProjectsRaw, recentProjectIds]);
 
   const comparativeProjects = useMemo<ProjectSelectorProject[]>(
@@ -764,21 +810,27 @@ global.webViewComponent = function ChecklistWebView({
     [projectSelectorStrings],
   );
 
-  // Built-in groupings (openTabs / lastUsed / language / type) for the primary-project picker.
+  // Built-in groupings for the primary-project picker, narrowed to the ids the checklist offers.
+  // See CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
   const primaryProjectGroupings = useMemo(
-    () => makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)),
+    () =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter((grouping) =>
+        CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
     [projectSelectorStrings],
   );
 
-  // Comparative-texts picker: same built-in options as the primary picker PLUS the multi-select
-  // Selection grouping (Selected / Unselected bucketing). Explicit array — when a consumer
-  // passes `availableGroupings`, the component uses it verbatim with no auto-additions.
+  // Comparative-texts picker: the same built-in options as the primary picker PLUS the multi-select
+  // Selection grouping (Selected / Unselected bucketing), which partitions off row selection state
+  // rather than `customData` and so is appended after the narrowing rather than named in it.
+  // Explicit array — when a consumer passes `availableGroupings`, the component uses it verbatim
+  // with no auto-additions.
   const comparativeTextsGroupings = useMemo<ProjectSelectorGrouping[]>(
     () => [
-      ...makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)),
+      ...primaryProjectGroupings,
       makeSelectionGrouping(buildSelectionGroupingStrings(projectSelectorStrings)),
     ],
-    [projectSelectorStrings],
+    [primaryProjectGroupings, projectSelectorStrings],
   );
 
   const comparativeTextsSelectorNode = useMemo(
