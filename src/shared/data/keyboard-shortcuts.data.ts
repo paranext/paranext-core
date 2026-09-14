@@ -230,7 +230,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Zoom the focused zoom area of the pane in by 10 % (the area containing keyboard focus, else the area last used)',
     category: 'Zoom',
     context:
-      'Inside any web view that marks at least one zoom area, the platform bootstrap handles the key and targets the area containing focus, else the area last clicked or focused. With keyboard focus on the window chrome (tab bar, reference box) the window-level listener targets the active tab’s active area and does nothing while a dialog is open. On macOS the View menu item carries the ⌘ accelerator.',
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area); on the window chrome (renderer listener, no-op while a dialog is open); or the macOS View menu',
     // The handler also accepts `=` (the unshifted key sharing the `+` cap), the numpad `+` key, and
     // Ctrl+Shift+`=` — the `+` key itself on US/UK layouts — so the published `Ctrl++` is literally the working chord.
     keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
@@ -245,7 +245,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'content-zoom-out',
     purpose: 'Zoom the focused zoom area of the pane out by 10 %',
     category: 'Zoom',
-    context: 'Same as content-zoom-in',
+    context:
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area); on the window chrome (renderer listener, no-op while a dialog is open); or the macOS View menu',
     // The handler also accepts the numpad `-` key.
     keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
     locations: [
@@ -260,7 +261,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose:
       'Return the focused zoom area of the pane to the default zoom set in Settings (not to 100 %)',
     category: 'Zoom',
-    context: 'Same as content-zoom-in',
+    context:
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area); on the window chrome (renderer listener, no-op while a dialog is open); or the macOS View menu',
     // The handler also accepts the numpad `0` key.
     keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
     locations: [

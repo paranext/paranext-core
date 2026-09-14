@@ -20,7 +20,7 @@ vi.mock('@shared/services/logger.service', () => ({
  * trusting the (pre-existing) declared type.
  */
 function isRecord(candidate: unknown): candidate is Record<string, unknown> {
-  return !!candidate && typeof candidate === 'object';
+  return !!candidate && typeof candidate === 'object' && !Array.isArray(candidate);
 }
 
 function isZeroArgClickHandler(candidate: unknown): candidate is () => void {
