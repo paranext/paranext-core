@@ -56,8 +56,8 @@ export type ToolbarCompoundLabelProps = {
    */
   separator?: string;
   /**
-   * Render `secondary` before `primary`, for labels that read that way round — a project selector
-   * shows `Translation Project 1 (TP1)`, full name first, short name last.
+   * Render `secondary` before `primary`, for labels that read that way round — a measurement that
+   * reads `12 pt` puts its unit last while the number is the field that must survive.
    */
   secondaryFirst?: boolean;
   /** Whether the secondary field is rendered at all. Defaults to `true`. */

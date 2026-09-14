@@ -1329,10 +1329,26 @@ describe('PlatformBibleToolbar project selector label', () => {
   });
 
   it('keeps the project name and short name readable as one string', () => {
-    // Split across two spans, so without a real separator this reads "Test Project(TP)".
+    // Split across two spans, so without a real separator this reads "TPTest Project".
     renderAtStep(SHRINK_STEP.WIDE);
 
-    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Test Project (TP)');
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('TP - Test Project');
+  });
+
+  it('does not repeat the name when the full name equals the short name', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+      currentSimpleProject: { id: 'proj-1', fullName: 'TP', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('TP');
+    expect(screen.getByTestId('project-picker-value')).not.toHaveTextContent('TP - TP');
   });
 
   it('shows an error in place of the label, not alongside it', async () => {
@@ -1403,7 +1419,7 @@ describe('PlatformBibleToolbar project selector label', () => {
     renderAtStep(SHRINK_STEP.WIDE);
 
     const trigger = screen.getByTestId('project-picker-value');
-    expect(trigger).toHaveTextContent('Test Project (TP)');
+    expect(trigger).toHaveTextContent('TP - Test Project');
     expect(trigger).not.toHaveTextContent('Test select a project');
   });
 

@@ -63,8 +63,10 @@ import {
   type ProjectSelectorSection,
 } from 'platform-bible-react/experimental';
 import {
+  formatProjectName,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  hasDistinctFullName,
   isPlatformError,
   type LanguageStrings,
   LocalizeKey,
@@ -133,7 +135,7 @@ function ProjectSelectorLabel({
   shortName,
   errorMessage,
 }: {
-  fullName: string;
+  fullName?: string;
   shortName: string;
   errorMessage?: string;
 }) {
@@ -175,13 +177,13 @@ function ProjectSelectorLabel({
 
   return (
     <ToolbarCompoundLabel
-      // The short name is the identifying part, so it is the field that must survive — but it reads
-      // second, hence `secondaryFirst`.
-      primary={isAtMinimum ? shortName : `(${shortName})`}
+      // The short name identifies the project, so it leads and is the field that survives the
+      // narrowest step; the full name is the one that clips and then drops.
+      primary={shortName}
       secondary={fullName}
-      secondaryFirst
-      showSecondary={!isAtMinimum}
-      fullText={`${fullName} (${shortName})`}
+      separator=" - "
+      showSecondary={!isAtMinimum && hasDistinctFullName({ shortName, fullName })}
+      fullText={formatProjectName({ shortName, fullName })}
     />
   );
 }
@@ -321,7 +323,7 @@ function ToolbarProjectSelector({
       if (pendingProject)
         return (
           <ProjectSelectorLabel
-            fullName={pendingProject.fullName ?? pendingProject.shortName}
+            fullName={pendingProject.fullName}
             shortName={pendingProject.shortName}
           />
         );
@@ -329,12 +331,7 @@ function ToolbarProjectSelector({
         return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
       const named = selected ?? displayedProject;
       if (!named) return placeholder;
-      return (
-        <ProjectSelectorLabel
-          fullName={named.fullName ?? named.shortName}
-          shortName={named.shortName}
-        />
-      );
+      return <ProjectSelectorLabel fullName={named.fullName} shortName={named.shortName} />;
     },
     [pendingProject, displayedProject, currentProjectError, placeholder],
   );
