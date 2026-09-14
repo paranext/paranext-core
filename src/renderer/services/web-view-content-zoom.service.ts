@@ -451,13 +451,21 @@ export function setContentZoomActiveArea(webViewId: WebViewId, areaId: ContentZo
   if (isValidContentZoomAreaId(areaId)) activeAreaByWebViewId.set(webViewId, areaId);
 }
 
-/** Drop everything remembered in this window about a pane (its iframe is gone). */
+/**
+ * Drop everything remembered in this window about a pane (its iframe is gone).
+ *
+ * The tail of a zoom gesture the pane was in the middle of is written first, rather than going down
+ * with the pane: an unmount is not only a close — a pane is also unmounted when it is re-rendered
+ * or moved — and the definition the levels belong to commonly outlives it. On a genuine close there
+ * is no definition left to write them into, and the write is a no-op.
+ */
 export function forgetContentZoom(webViewId: WebViewId): void {
   const timer = ownLevelWriteTimers.get(webViewId);
   if (timer !== undefined) {
     clearTimeout(timer);
     ownLevelWriteTimers.delete(webViewId);
   }
+  commitOwnLevels(webViewId);
   pendingOwnLevels.delete(webViewId);
   areasByWebViewId.delete(webViewId);
   activeAreaByWebViewId.delete(webViewId);
@@ -520,14 +528,18 @@ export function pushContentZoom(
  * fallback grace or grant left over from whatever the pane showed before — otherwise a grant the
  * old content earned would still authorize scaling the new content before its own bootstrap gets a
  * chance to report. For a non-URL pane it then arms a fresh grace exactly as if the pane had just
- * been opened: a pane whose bootstrap never runs at all (an HTML view opened with `allowScripts:
- * false`, say) still eventually gets the whole-iframe fallback, and one that does go on to report
- * an area within the grace still cancels it as usual. The whole-iframe `zoom` a reload does not
- * reset on its own (it lives on the host `<iframe>` element, not the content a reload replaces) is
- * cleared by the {@link pushContentZoom} below, which assigns the host zoom in both directions, so
- * the new content never renders whole-scaled on the strength of the old grant. A URL pane keeps its
- * immediate fallback and is left out of the grace: {@link mayScaleWholeIframe} always allows a URL
- * pane, so that same push reapplies it.
+ * been opened, and a pane that goes on to report an area within it cancels the grace as usual. What
+ * that grace can still grant is bounded by the areas the pane already has: a pane that has never
+ * reported one — an HTML view opened with `allowScripts: false`, say, whose bootstrap never runs —
+ * eventually gets the whole-iframe fallback, while a pane whose earlier content reported areas
+ * keeps them (see the paragraph below), so replacement content that never runs the bootstrap of its
+ * own is left with those areas rather than scaled whole. Clearing areas on a content replacement is
+ * open work on PT-4581. The whole-iframe `zoom` a reload does not reset on its own (it lives on the
+ * host `<iframe>` element, not the content a reload replaces) is cleared by the
+ * {@link pushContentZoom} below, which assigns the host zoom in both directions, so the new content
+ * never renders whole-scaled on the strength of the old grant. A URL pane keeps its immediate
+ * fallback and is left out of the grace: {@link mayScaleWholeIframe} always allows a URL pane, so
+ * that same push reapplies it.
  *
  * The pane's last-reported areas are deliberately kept. A real load replaces the iframe's realm, so
  * the fresh content's bootstrap reports its own areas from scratch; dropping them here instead
