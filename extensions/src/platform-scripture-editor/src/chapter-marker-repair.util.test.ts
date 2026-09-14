@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { Usj, MarkerContent } from '@eten-tech-foundation/scripture-utilities';
-import { prepareUsjForChapterSave, repairChapterMarkers } from './chapter-marker-repair.util';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  MarkerContent,
+  MarkerObject,
+  Usj,
+  usxStringToUsj,
+} from '@eten-tech-foundation/scripture-utilities';
+import {
+  applyChapterSavePreparation,
+  prepareUsjForChapterSave,
+  repairChapterMarkers,
+} from './chapter-marker-repair.util';
 
 /** A USJ document from a flat list of content items. */
 function usjOf(...content: MarkerContent[]): Usj {
@@ -204,5 +213,160 @@ describe('prepareUsjForChapterSave', () => {
     );
     expect(secondPass.repairedUsj).toBeUndefined();
     expect(secondPass.usjToSave?.content).toEqual([chapter('3'), para('p', 'body edited twice')]);
+  });
+});
+
+// Shapes the PDP actually serves: `GetChapterUsx` output for chapter 1 (which carries the `\id`
+// line and the book headers) and for a later chapter (no `\id`, `sid` present). Driven through the
+// real USX parser rather than hand-built USJ, because what these guard against is a repair that
+// reports `didRepair` on a document nobody edited — which toasts the user on every save of an
+// ordinary typing session.
+const CH1_USX = `<usx version="3.0"><book code="GEN" style="id">Genesis</book><para style="h">Genesis</para><para style="toc1">Genesis</para><para style="mt1">Genesis</para><para style="ip">Intro paragraph.</para><chapter number="1" style="c" sid="GEN 1"/><para style="p"><verse number="1" style="v" sid="GEN 1:1"/>In the beginning.</para></usx>`;
+const CH3_USX = `<usx version="3.0"><chapter number="3" style="c" sid="GEN 3"/><para style="s1">A section</para><para style="p"><verse number="1" style="v" sid="GEN 3:1"/>Now the serpent.</para></usx>`;
+const CH3_CA_CP_USX = `<usx version="3.0"><chapter number="3" style="c" sid="GEN 3" altnumber="2" pubnumber="C"/><para style="p"><verse number="1" style="v" sid="GEN 3:1"/>Text.</para></usx>`;
+
+/** The document's one top-level chapter marker node. */
+function chapterNodeOf(usj: Usj): MarkerObject {
+  const node = usj.content.find((item) => typeof item === 'object' && item.type === 'chapter');
+  if (typeof node !== 'object') throw new Error('expected a chapter node in the document');
+  return node;
+}
+
+describe('repairChapterMarkers against documents shaped like the PDP serves them', () => {
+  it('reports no repair for a realistic chapter 1 with id, headers and intro', () => {
+    const { didRepair } = repairChapterMarkers(usxStringToUsj(CH1_USX), 1);
+    expect(didRepair).toBe(false);
+  });
+
+  it('reports no repair for a realistic chapter 3', () => {
+    const { didRepair } = repairChapterMarkers(usxStringToUsj(CH3_USX), 3);
+    expect(didRepair).toBe(false);
+  });
+
+  it('reports no repair for a chapter carrying altnumber and pubnumber', () => {
+    const { didRepair } = repairChapterMarkers(usxStringToUsj(CH3_CA_CP_USX), 3);
+    expect(didRepair).toBe(false);
+  });
+
+  it('still repairs an edited number on a realistic chapter 3', () => {
+    const usj = usxStringToUsj(CH3_USX);
+    chapterNodeOf(usj).number = '5';
+    const { usj: repaired, didRepair } = repairChapterMarkers(usj, 3);
+    expect(didRepair).toBe(true);
+    const repairedChapter = chapterNodeOf(repaired);
+    expect(repairedChapter.number).toBe('3');
+    expect(repairedChapter.sid).toBe('GEN 3');
+  });
+});
+
+describe('applyChapterSavePreparation', () => {
+  const REPAIRED = usjOf(chapter('3'), para('p', 'body'));
+  const TO_SAVE = usjOf(chapter('3'), para('p', 'body edited'));
+
+  /**
+   * Stands in for the editor side of the call site, where one callback moves the sent-to-PDP
+   * baseline and the editor's own document, so the two cannot be moved apart.
+   */
+  function editorStandIn() {
+    const state: { usjSentToPdp?: Usj; editorUsj?: Usj } = {};
+    const applyRepairToEditor = vi.fn((usj: Usj) => {
+      state.usjSentToPdp = usj;
+      state.editorUsj = usj;
+    });
+    return { state, applyRepairToEditor };
+  }
+
+  it('pushes the repaired document back when the save targets the chapter on screen', () => {
+    const { state, applyRepairToEditor } = editorStandIn();
+    const notifyRepair = vi.fn();
+
+    const usjToSave = applyChapterSavePreparation({
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey: 'GEN 3',
+      applyRepairToEditor,
+      notifyRepair,
+    });
+
+    expect(applyRepairToEditor).toHaveBeenCalledTimes(1);
+    expect(applyRepairToEditor).toHaveBeenCalledWith(REPAIRED);
+    expect(state.usjSentToPdp).toBe(REPAIRED);
+    expect(state.editorUsj).toBe(REPAIRED);
+    expect(usjToSave).toBe(TO_SAVE);
+  });
+
+  it('leaves the editor alone when the save targets a chapter the user has left', () => {
+    const { state, applyRepairToEditor } = editorStandIn();
+    const notifyRepair = vi.fn();
+
+    const usjToSave = applyChapterSavePreparation({
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey: 'GEN 4',
+      applyRepairToEditor,
+      notifyRepair,
+    });
+
+    expect(applyRepairToEditor).not.toHaveBeenCalled();
+    expect(state.usjSentToPdp).toBeUndefined();
+    expect(state.editorUsj).toBeUndefined();
+    expect(usjToSave).toBe(TO_SAVE);
+  });
+
+  it('tells the user about the repair whether or not the editor was corrected', () => {
+    const sameChapterNotify = vi.fn();
+    applyChapterSavePreparation({
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey: 'GEN 3',
+      applyRepairToEditor: vi.fn(),
+      notifyRepair: sameChapterNotify,
+    });
+    expect(sameChapterNotify).toHaveBeenCalledTimes(1);
+
+    const crossChapterNotify = vi.fn();
+    applyChapterSavePreparation({
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey: 'GEN 4',
+      applyRepairToEditor: vi.fn(),
+      notifyRepair: crossChapterNotify,
+    });
+    expect(crossChapterNotify).toHaveBeenCalledTimes(1);
+  });
+
+  it('still corrects the editor and reports when the repair left nothing to save', () => {
+    const { state, applyRepairToEditor } = editorStandIn();
+    const notifyRepair = vi.fn();
+
+    const usjToSave = applyChapterSavePreparation({
+      preparation: { repairedUsj: REPAIRED, usjToSave: undefined },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey: 'GEN 3',
+      applyRepairToEditor,
+      notifyRepair,
+    });
+
+    expect(state.editorUsj).toBe(REPAIRED);
+    expect(notifyRepair).toHaveBeenCalledTimes(1);
+    expect(usjToSave).toBeUndefined();
+  });
+
+  it('touches nothing and saves normally when no repair was needed', () => {
+    const { state, applyRepairToEditor } = editorStandIn();
+    const notifyRepair = vi.fn();
+
+    const usjToSave = applyChapterSavePreparation({
+      preparation: { repairedUsj: undefined, usjToSave: TO_SAVE },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey: 'GEN 3',
+      applyRepairToEditor,
+      notifyRepair,
+    });
+
+    expect(applyRepairToEditor).not.toHaveBeenCalled();
+    expect(notifyRepair).not.toHaveBeenCalled();
+    expect(state.editorUsj).toBeUndefined();
+    expect(usjToSave).toBe(TO_SAVE);
   });
 });

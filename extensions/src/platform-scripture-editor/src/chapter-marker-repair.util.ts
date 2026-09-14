@@ -225,3 +225,47 @@ export function prepareUsjForChapterSave(
     usjToSave: resolveUsjToSaveToPdp(repaired, usjFromPdp),
   };
 }
+
+/**
+ * Carries out what {@link prepareUsjForChapterSave} decided: corrects the editor's own document when
+ * the save still targets the chapter on screen, tells the user either way, and hands back the
+ * document to write.
+ *
+ * The push-back into the editor is not bookkeeping — without it the bad marker stays on screen, so
+ * every later save repairs it again and reports it again, forever. It is skipped only when the
+ * chapter being saved is no longer the chapter being shown: a save can fire after the user has
+ * navigated away (a trailing save, a chapter-switch flush) through the closure captured for the
+ * chapter the content was typed in, and pushing that chapter's document into the editor would
+ * overwrite the chapter the user is now looking at. The user is still told, because the correction
+ * was still made to what gets written.
+ *
+ * `applyRepairToEditor` is responsible for its own failures: the PDP write has to run even when the
+ * editor refuses the repaired document, because it is that write which un-poisons the chapter.
+ *
+ * @param preparation - What {@link prepareUsjForChapterSave} returned for this save.
+ * @param savedChapterKey - The chapter this save was scheduled for.
+ * @param currentChapterKey - The chapter the editor is showing now.
+ * @param applyRepairToEditor - Puts the repaired document back into the editor. Must not throw.
+ * @param notifyRepair - Tells the user the chapter marker was corrected.
+ * @returns The document to write to the PDP, or `undefined` when there is nothing to write.
+ */
+export function applyChapterSavePreparation({
+  preparation,
+  savedChapterKey,
+  currentChapterKey,
+  applyRepairToEditor,
+  notifyRepair,
+}: {
+  preparation: ChapterSavePreparation;
+  savedChapterKey: string;
+  currentChapterKey: string;
+  applyRepairToEditor: (usj: Usj) => void;
+  notifyRepair: () => void;
+}): Usj | undefined {
+  const { repairedUsj, usjToSave } = preparation;
+  if (repairedUsj) {
+    if (savedChapterKey === currentChapterKey) applyRepairToEditor(repairedUsj);
+    notifyRepair();
+  }
+  return usjToSave;
+}

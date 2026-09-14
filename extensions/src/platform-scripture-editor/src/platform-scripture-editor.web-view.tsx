@@ -136,7 +136,10 @@ import {
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave } from './debounced-pdp-save.util';
-import { prepareUsjForChapterSave } from './chapter-marker-repair.util';
+import {
+  applyChapterSavePreparation,
+  prepareUsjForChapterSave,
+} from './chapter-marker-repair.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
@@ -2742,35 +2745,41 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // An open command surface's in-progress input is excluded by the editor itself
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
-      const { repairedUsj, usjToSave } = prepareUsjForChapterSave(
-        correctEditorUsjVersion(usjFromEditor),
-        usjFromPdp,
-        savedChapterSelector.chapterNum,
-      );
-
-      if (repairedUsj) {
-        // The repaired document has to reach the editor too, or the bad marker stays on screen and
-        // every later save repairs and re-reports it forever. Only when this save targets the
-        // chapter still on screen: a cross-chapter flush runs through the CAPTURED chapter's
-        // closure, and the editor has already moved on to different content.
-        if (savedChapterKey === chapterKeyRef.current) {
-          try {
-            usjSentToPdp.current = repairedUsj;
-            setEditorUsj.current(repairedUsj);
-          } catch (error) {
-            // The write below must still run even when the editor refuses the repaired document:
-            // it is the write that un-poisons the chapter, and skipping it would leave the PDP
-            // holding the document Paratext rejects, so every later save is rejected too.
-            logger.error(
-              `Error putting the repaired chapter marker back into the editor: ${getErrorMessage(error)}`,
-            );
-          }
-        }
-        notifyChapterMarkerCorrected();
-      }
+      const usjToSave = applyChapterSavePreparation({
+        preparation: prepareUsjForChapterSave(
+          correctEditorUsjVersion(usjFromEditor),
+          usjFromPdp,
+          savedChapterSelector.chapterNum,
+        ),
+        savedChapterKey,
+        // Read live rather than captured, so a save that fires after a chapter switch compares the
+        // chapter it was scheduled for against the chapter actually on screen now.
+        currentChapterKey: chapterKeyRef.current,
+        applyRepairToEditor: putRepairedUsjInEditor,
+        notifyRepair: notifyChapterMarkerCorrected,
+      });
 
       if (usjToSave) return saveUsjToPdpInternal(usjToSave);
       return Promise.resolve(false);
+    }
+
+    /**
+     * Puts a repaired chapter document back into the editor, moving the sent-to-PDP baseline with
+     * it so the two cannot drift apart.
+     *
+     * Swallows a refusal by the editor (after logging it) because the caller must go on to write:
+     * it is the write that un-poisons the chapter, and skipping it would leave the PDP holding the
+     * document Paratext rejects, so every later save is rejected too.
+     */
+    function putRepairedUsjInEditor(repairedUsj: Usj): void {
+      try {
+        usjSentToPdp.current = repairedUsj;
+        setEditorUsj.current(repairedUsj);
+      } catch (error) {
+        logger.error(
+          `Error putting the repaired chapter marker back into the editor: ${getErrorMessage(error)}`,
+        );
+      }
     }
 
     // Not wired directly to the editor's `onUsjChanged`: the editor fires `onUsjChanged` even
