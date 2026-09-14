@@ -9,7 +9,7 @@ namespace Paranext.DataProvider.Projects;
 /// associated external lexical project (e.g. FieldWorks) rather than in Lexicon.xml, so an empty
 /// <c>Lexicon</c> does not mean the project has no gloss data; such a project's lexical data is
 /// resolved through the platform's Lexicon extension rather than through this interface.
-///
+/// <para>
 /// Files are read with PT9's own semantics, never more strictly: a duplicate verse reference,
 /// lexicon key, or wordform keeps the last occurrence; a cluster missing its Range element gets
 /// range (0, 0); and a malformed boolean or unknown enum name fails the whole file the same way
@@ -17,6 +17,7 @@ namespace Paranext.DataProvider.Projects;
 /// loads quietly serve an empty file in a corrupt one's place, costing one book silently, while
 /// here one bad file fails the whole request, so corruption is visible and no partial payload
 /// ever poses as complete data.
+/// </para>
 /// </summary>
 public sealed record Pt9InterlinearProjectData(
     [property: JsonPropertyName("setups")] List<Pt9InterlinearSetup> Setups,
@@ -145,24 +146,28 @@ public sealed record Pt9Lexicon(
 /// user gave the language for setups created without a model text (name, font, size, direction),
 /// the model text the interlinearization reads from, and the export half: whether and where
 /// approved verses export.
-///
+/// <para>
 /// The model name is absent for a setup with no model text; the model id serves whenever PT9
 /// stored one, since a model-less setup mints an id as its settings key.
-///
-/// Emptiness is not normalized uniformly. A <c>FontName</c> or <c>ExportScrTextName</c> that is
-/// empty in the project is absent here, as is an empty <c>ModelScrTextName</c>, which the
-/// no-model rule above already covers. <c>LanguageId</c> and <c>LanguageName</c> serve the
-/// project's text verbatim, while <c>ModelScrTextId</c> and <c>ExportScrTextId</c> serve PT9's
-/// own re-formatting of the id rather than the characters the project stored: hex digits fold to
-/// lowercase, and a legacy resource id is re-encoded (<c>1234567890abcdefres</c> serves as
-/// <c>1234567890abcdefabcdefff</c>). An empty one of those four serves as an empty string, and
-/// only a field the project omits is absent.
-///
-/// That split is incidental to how each field is read rather than a guarantee of this payload, so
-/// treat an empty string and an absent field alike.
-///
-/// An id that is neither empty nor valid hex is not degraded to absent: it fails the whole read
-/// with the setups file named, taking books, lexicon, and word analyses down with it.
+/// </para>
+/// <para>
+/// A string field that is empty in the project is absent here. PT9 distinguishes an empty value
+/// from an omitted one inconsistently, and differently again for a setup rebuilt from legacy
+/// settings, so no such distinction is served: every string field is either present and non-empty
+/// or absent.
+/// </para>
+/// <para>
+/// <c>ModelScrTextId</c> and <c>ExportScrTextId</c> serve PT9's own re-formatting of the id
+/// rather than the characters the project stored: hex digits fold to lowercase, and a legacy
+/// resource id is re-encoded (<c>1234567890abcdefres</c> serves as
+/// <c>1234567890abcdefabcdefff</c>).
+/// </para>
+/// <para>
+/// The two paths disagree about a malformed id. In the setups file an id that is neither empty
+/// nor valid hex is not degraded to absent: it fails the whole read with the file named, taking
+/// books, lexicon, and word analyses down with it. A setup rebuilt from legacy settings tolerates
+/// one instead, serving the id as absent.
+/// </para>
 /// </summary>
 public sealed record Pt9InterlinearSetup(
     [property: JsonPropertyName("type")] string Type,

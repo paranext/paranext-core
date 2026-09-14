@@ -543,10 +543,9 @@ internal static class Pt9InterlinearReader
     /// <summary>
     /// Maps one setup to its served shape. A model name that is empty or PT9's no-model sentinel
     /// means the setup has no model text, so the name is absent; the model id serves whenever
-    /// present, since a model-less setup mints one as its settings key. The only strings this
-    /// normalizes are the font name and the export text name, both absent when empty; the two id
-    /// fields serve <c>HexId.ToString()</c> and the language fields serve verbatim. See
-    /// <see cref="Pt9InterlinearSetup"/> for what that leaves a consumer.
+    /// present, since a model-less setup mints one as its settings key. Every other string is
+    /// normalized through <see cref="NullIfEmpty"/>, so an empty value and an omitted one are
+    /// indistinguishable in the served payload, whichever path produced the setup.
     /// </summary>
     private static Pt9InterlinearSetup ConvertPt9InterlinearSetup(InterlinearSetup setup)
     {
@@ -555,20 +554,27 @@ internal static class Pt9InterlinearReader
             && setup.MdlScrTextName != InterlinearSetup.emptyModelTextName;
         return new Pt9InterlinearSetup(
             setup.Type.ToString(),
-            setup.LanguageId,
-            setup.LanguageName,
-            string.IsNullOrEmpty(setup.FontName) ? null : setup.FontName,
+            NullIfEmpty(setup.LanguageId),
+            NullIfEmpty(setup.LanguageName),
+            NullIfEmpty(setup.FontName),
             setup.FontSize,
             setup.RightToLeft,
             hasModel ? setup.MdlScrTextName : null,
-            setup.MdlScrTextId?.ToString(),
+            NullIfEmpty(setup.MdlScrTextId?.ToString()),
             setup.MdlIsResource,
             setup.RelatedLanguages,
             setup.ExportOnApprove,
-            string.IsNullOrEmpty(setup.ExportScrTextName) ? null : setup.ExportScrTextName,
-            setup.ExportScrTextId?.ToString()
+            NullIfEmpty(setup.ExportScrTextName),
+            NullIfEmpty(setup.ExportScrTextId?.ToString())
         );
     }
+
+    /// <summary>
+    /// Collapses an empty string to absent. PT9 stores "never set" as an empty element, an
+    /// omitted element, or an empty setting depending on the field and on which loader wrote it,
+    /// and none of those distinctions means anything to a consumer.
+    /// </summary>
+    private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     /// <summary>
     /// Applies the cleanup PT9 itself applies on every lexicon read: entry and analysis forms are

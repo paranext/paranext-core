@@ -491,11 +491,10 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
 
     [Test]
     [Description(
-        "Emptiness is not normalized uniformly: an empty font name or text name serves as "
-            + "absent, while an empty language id, language name, or text id serves as an empty "
-            + "string and only a field the project omits is absent."
+        "Every setup string the project wrote empty serves as absent, matching the setup that "
+            + "omits the field entirely, so a consumer cannot tell the two apart."
     )]
-    public void GetPt9InterlinearData_ServesEmptySetupStringsAsAbsentOrEmptyPerField()
+    public void GetPt9InterlinearData_ServesEmptyAndOmittedSetupStringsAlikeAsAbsent()
     {
         WriteProjectFile(
             "InterlinearSetup.xml",
@@ -520,19 +519,19 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         Assert.That(data.Setups, Has.Count.EqualTo(2));
         Assert.Multiple(() =>
         {
-            // Written empty: the font and text names serve as absent, the language fields and
-            // the two ids keep the empty string.
+            // Written empty. Each of these fails if its NullIfEmpty guard is dropped, since the
+            // empty string PT9 stored would then reach the payload.
             Assert.That(data.Setups[0].FontName, Is.Null);
             Assert.That(data.Setups[0].ModelScrTextName, Is.Null);
             Assert.That(data.Setups[0].ExportScrTextName, Is.Null);
-            Assert.That(data.Setups[0].LanguageId, Is.Empty);
-            Assert.That(data.Setups[0].LanguageName, Is.Empty);
-            Assert.That(data.Setups[0].ModelScrTextId, Is.Empty);
-            Assert.That(data.Setups[0].ExportScrTextId, Is.Empty);
+            Assert.That(data.Setups[0].LanguageId, Is.Null);
+            Assert.That(data.Setups[0].LanguageName, Is.Null);
+            Assert.That(data.Setups[0].ModelScrTextId, Is.Null);
+            Assert.That(data.Setups[0].ExportScrTextId, Is.Null);
 
-            // Omitted entirely: absent regardless of which side of the split the field is on.
-            // The type pins that this really is a parsed setup, so the nulls below are the
-            // payload's answer rather than a default-constructed object's.
+            // Omitted entirely, for the same answer by a different route. The type pins that this
+            // really is a parsed setup, so the nulls below are the payload's answer rather than a
+            // default-constructed object's.
             Assert.That(data.Setups[1].Type, Is.EqualTo("Glossing"));
             Assert.That(data.Setups[1].FontName, Is.Null);
             Assert.That(data.Setups[1].ModelScrTextName, Is.Null);
@@ -606,8 +605,8 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     [Test]
     [Description(
         "A setup rebuilt from legacy settings serves no display fields at all, since that path "
-            + "never assigns them, and an empty export text id setting serves as absent rather "
-            + "than as the empty string the setups-file path would serve."
+            + "never assigns them, and an empty export text setting serves as absent - the same "
+            + "answer the setups-file path gives for an empty value."
     )]
     public void GetPt9InterlinearData_ServesLegacySetupsWithoutDisplayFieldsOrAnEmptyExportId()
     {
@@ -624,15 +623,14 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         Assert.That(data.Setups, Has.Count.EqualTo(1));
         Assert.Multiple(() =>
         {
-            // Never assigned on this path, so the emptiness split the record documents does not
-            // reach them: they are absent whatever the project stores.
+            // Never assigned on this path, so these are absent whatever the project stores.
             Assert.That(data.Setups[0].LanguageName, Is.Null);
             Assert.That(data.Setups[0].FontName, Is.Null);
             Assert.That(data.Setups[0].FontSize, Is.Zero);
             Assert.That(data.Setups[0].RightToLeft, Is.False);
 
-            // HexId.FromStrSafe turns an empty setting into no id, so this id field cannot serve
-            // the empty string here even though the setups-file path serves it.
+            // Absent by a third route: HexId.FromStrSafe turns the empty setting into no id
+            // before the conversion's own guard would have seen an empty string.
             Assert.That(data.Setups[0].ExportScrTextId, Is.Null);
             Assert.That(data.Setups[0].ExportScrTextName, Is.Null);
         });
