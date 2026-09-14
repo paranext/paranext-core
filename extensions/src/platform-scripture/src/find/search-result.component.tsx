@@ -12,6 +12,7 @@ import {
   getReplaceTextColorClasses,
 } from './replace-preview-styles';
 import { DEFAULT_FIND_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
+import { collapseUsfmMarkersForDisplay } from './usfm-tokens.util';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
@@ -111,23 +112,6 @@ interface SearchResultProps {
 const countWords = (text: string): number => {
   return text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
 };
-
-/**
- * Matches a run of USFM markers and the whitespace around it — a paragraph or verse marker sitting
- * between two words, together with the line breaks the USFM writer put around it.
- */
-const USFM_MARKER_RUN_REGEX = /\s*(?:\\\+?[a-z]+\d*\*?\s*)+/g;
-
-/**
- * Collapses USFM markers in a matched span to a single space for display.
- *
- * A match may span a block boundary, so the raw USFM slice can read `of Abraham.\r\n\\p\r\n\\v 2
- * Abraham became` where the editor shows a line break and the user's query had a space. Showing the
- * markers inside the highlight — and copying them to the clipboard — would not resemble what was
- * searched for.
- */
-const collapseUsfmMarkersForDisplay = (text: string): string =>
-  text.replace(USFM_MARKER_RUN_REGEX, ' ');
 
 const truncateText = (text: string, maxWords: number, shouldCutFromStart: boolean): string => {
   // Don't trim when truncating because we want to keep the original spacing so the text doesn't
@@ -239,13 +223,14 @@ export default function SearchResult({
 
       const usfm = cachedUsfm ?? usjReaderWriter.toUsfm();
 
-      let beforeText = usfm.substring(0, startIndexInUsfm);
+      // The raw USFM carries markers the reader never sees. Collapse them so the highlighted span
+      // (and the clipboard copy built from it) reads as the searched phrase does, and so the
+      // context on either side reads the same way rather than showing markers the match doesn't.
+      let beforeText = collapseUsfmMarkersForDisplay(usfm.substring(0, startIndexInUsfm));
 
-      // A boundary-spanning match slices markers out of the raw USFM; collapse them so the
-      // highlighted span (and the clipboard copy built from it) reads as the searched phrase does.
       const text = collapseUsfmMarkersForDisplay(usfm.substring(startIndexInUsfm, endIndexInUsfm));
 
-      let afterText = usfm.substring(endIndexInUsfm);
+      let afterText = collapseUsfmMarkersForDisplay(usfm.substring(endIndexInUsfm));
 
       if (countWords(beforeText) > WORDS_AROUND_SEARCH_RESULT) {
         beforeText = truncateText(beforeText, WORDS_AROUND_SEARCH_RESULT, true);

@@ -193,6 +193,15 @@ let openedProjectId: string | undefined;
 let defaultScrRef: SerializedVerseRef | undefined;
 
 /** Point the scroll group at `scrRef`, so Find's book scope resolves to that book. */
+/**
+ * Sets scroll group 0's reference, labelling it with the project this suite opened.
+ *
+ * The capture in `beforeAll` reads the reference back without a source project, so restoring it
+ * through here re-labels the group as `openedProjectId`'s rather than reproducing whatever label it
+ * originally carried. That is not a pure restore, but this suite opens exactly one project, so the
+ * label it writes is the only one in play; a multi-project suite would need to capture and restore
+ * the source project too.
+ */
 async function setScrollGroupRef(scrRef: SerializedVerseRef): Promise<void> {
   await sendPapiRequestOnce(
     'object:ScrollGroupService.setScrRef',
@@ -379,7 +388,20 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   // which book every later test searches — and several of them assert exact match counts that only
   // hold in the default book. Resetting the toggles below without resetting this would leave the
   // most consequential piece of leaked state in place.
-  if (defaultScrRef) await setScrollGroupRef(defaultScrRef);
+  //
+  // Failing here rather than skipping the restore: a falsy capture would put every test back on
+  // whatever book the previous one left behind, which is the exact bug this restore exists for, and
+  // it would do so invisibly.
+  if (!defaultScrRef)
+    throw new Error('resetFindPanel: the default scripture reference was never captured');
+  await setScrollGroupRef(defaultScrRef);
+  // Wait for the panel to observe the navigation before returning, the same way
+  // `navigateToBoundaryTermBook` does — otherwise the next test's first search can race the scope
+  // update and run against the outgoing book.
+  await expect(frame.getByRole('button', { name: /showing/i })).toContainText(
+    new RegExp(defaultScrRef.book, 'i'),
+    { timeout: 15_000 },
+  );
 
   // Reset the scope to the whole book. Same open/closed hazard as the filters popover above,
   // including the animate-out race and the aria-expanded-over-visibility fix — see the comment
@@ -503,16 +525,20 @@ function firstResultCard(frame: FrameLocator): Locator {
 }
 
 /**
- * Every single-word term this suite types into the search box. A selection equal to one of these
- * would let the pre-fill assertion in "Editor selection to Find" pass without the selection ever
- * reaching Find, because the panel restores the project's last search term into an empty box on
- * mount.
+ * Terms this suite types into the search box that the editor-selection helper could otherwise pick.
+ * A selection equal to one of these would let the pre-fill assertion in "Editor selection to Find"
+ * pass without the selection ever reaching Find, because the panel restores the project's last
+ * search term into an empty box on mount.
  *
- * Multi-word phrases are deliberately absent: the selector matches whole `\p{L}{6,}` words and
- * compares them with `===`, so a phrase containing a space can never be selected and listing one
- * here would exclude nothing.
+ * This is not every term the suite types, and does not need to be. The selector only ever returns a
+ * whole run of six or more letters, and compares case-insensitively — so a shorter term
+ * ({@link COMMON_SEARCH_TERM}, `LORD`), any multi-word phrase, and anything with a digit or
+ * underscore in it can never be selected whole, and listing one here would exclude nothing.
+ * `Bartholomew` is in practice the only real exclusion; it covers both {@link RARE_SEARCH_TERM} and
+ * {@link BOUNDARY_TERM_BOOK_CONTROL}, which are the same word. {@link NO_MATCH_TERM} is listed to
+ * keep the list honest about intent even though its digits put it out of the selector's reach.
  */
-const SEARCHED_TERMS = [COMMON_SEARCH_TERM, RARE_SEARCH_TERM, NO_MATCH_TERM];
+const SEARCHED_TERMS = [RARE_SEARCH_TERM, NO_MATCH_TERM];
 
 /**
  * Select the first word in the editor's text that is long enough to be distinctive and is not one

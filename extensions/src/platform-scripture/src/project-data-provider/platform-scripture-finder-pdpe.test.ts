@@ -2126,13 +2126,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await expect(engine.getIsStructureProtected()).resolves.toBe(true);
     });
 
-    it('refuses to replace a match that spans a paragraph boundary while structure is protected', async () => {
-      // Verse 1 ends its paragraph with "Abraham." and verse 2 opens a new paragraph with "Abraham
-      // was" — the shape of a block-boundary match Find reports. The range below starts at the end
-      // of verse 1's text and ends at the end of the word "Abraham" in verse 2's text, so the
-      // removed span crosses the intervening \p and \v 2 markers without also removing any of the
-      // surrounding words.
-      const TWO_PARAGRAPH_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
+    const TWO_PARAGRAPH_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
 <usx version="3.0">
   <book code="MAT" style="id">Matthew</book>
   <chapter number="1" style="c" sid="MAT 1"/>
@@ -2144,6 +2138,13 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
   </para>
   <chapter eid="MAT 1"/>
 </usx>`;
+
+    it('refuses to replace a match that spans a real paragraph boundary in power mode', async () => {
+      // Verse 1 ends its paragraph with "Abraham." and verse 2 opens a new paragraph with "Abraham
+      // was" — the shape of a block-boundary match Find reports. The range below starts at the end
+      // of verse 1's text and ends at the end of the word "Abraham" in verse 2's text, so the
+      // removed span crosses the intervening \p and \v 2 markers without also removing any of the
+      // surrounding words.
       const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
         createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
       );
@@ -2154,6 +2155,33 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
           start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 24 },
           // offset 12 = 5 (start of verse 2's text) + 7 (length of "Abraham") — the end of the word
           // "Abraham" in verse 2, so the full word is removed but "was the father." is not.
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
+        },
+      ];
+      // Power mode is where Replace is actually offered, so this is the branch a real user
+      // reaches. The removed span holds `\p` and `\v 2`, which a plain-text replacement drops.
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+      await expect(boundaryEngine.replace(ranges, 'replaced')).rejects.toThrow(
+        MARKER_DELETION_ERROR,
+      );
+
+      // A replacement that puts the same markers back is accepted, which is what shows the guard
+      // is counting markers rather than refusing every boundary-spanning range outright.
+      await expect(
+        boundaryEngine.replace(ranges, 'replaced\r\n\\p\r\n\\v 2 Abraham'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('refuses a boundary-spanning replacement in simple mode too, via structure protection', async () => {
+      // Simple mode reaches the first guard instead, so the same range is refused either way —
+      // this is what the two guards being sequential rather than exclusive buys.
+      const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
+      );
+      vi.mocked(papi.settings.get).mockResolvedValue('simple');
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 24 },
           end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
         },
       ];

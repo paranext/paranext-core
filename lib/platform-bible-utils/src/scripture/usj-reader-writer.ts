@@ -54,22 +54,23 @@ Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
 
 /**
  * USJ node types that render as their own block. A change of block ancestor between two adjacent
- * text nodes is where the editor renders a line break.
+ * text nodes is where the editor renders a block break — a line break in every case but adjacent
+ * cells of one table row, which render side by side.
  *
  * Absences are deliberate:
  *
  * - `note` — USJ nests a note inside its paragraph, so entering and leaving one would report two
  *   boundaries at positions the editor renders as continuous text.
  * - `chapter` — chapter nodes carry no content and can never be a text node's ancestor. Chapter
- *   transitions are recorded separately, by sibling scan rather than by ancestor change, so a match
- *   cannot span one.
+ *   transitions are recorded separately, by a flag set as the document-order walk passes a chapter
+ *   node, so a match cannot span one.
  * - `char` — inline formatting (`\it`, `\bd`, …) renders continuous with the surrounding text.
  * - `optbreak` — `//` does render a line break, but it is a _sibling_ of the surrounding text rather
- *   than an ancestor of it, so an ancestor comparison cannot see it. Bridging an `optbreak` needs a
- *   sibling scan like the chapter one; not done here.
- * - `periph` — a `periph` ancestor resolves to `undefined` on both sides of a `periph`→`periph` join,
- *   which compares equal, so no boundary is recorded. Peripheral matter is out of scope for Find
- *   today.
+ *   than an ancestor of it, so an ancestor comparison cannot see it. The same document-order flag
+ *   the chapter case uses would bridge it; not done here, because `//` is rare enough in practice
+ *   that it has not been worth the extra state.
+ * - `periph` — needs no entry: peripheral content is itself wrapped in `para` nodes, so a join inside
+ *   or between `periph` sections is already reported by those paragraphs.
  *
  * Note the USJ spellings: a row is `table:row` and a cell is `table:cell`. The bare USX names `row`
  * and `cell` never appear in USJ and would match nothing.
@@ -1749,27 +1750,51 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     });
   }
 
-  search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
-  search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
-  search(
-    regex: RegExp,
-    markerStylesOrSearchOptions?: Set<string> | UsjSearchOptions,
-  ): UsjSearchResult[] {
-    const markerStylesToInclude =
-      markerStylesOrSearchOptions instanceof Set
-        ? markerStylesOrSearchOptions
-        : markerStylesOrSearchOptions?.markerStylesToInclude;
-    const normalizationForm =
-      markerStylesOrSearchOptions instanceof Set
-        ? undefined
-        : markerStylesOrSearchOptions?.normalizationForm;
-    const isBoundaryFilterOn =
-      markerStylesOrSearchOptions instanceof Set
-        ? false
-        : !!markerStylesOrSearchOptions?.flexibleWhitespaceAtBlockBoundaries;
-    const retVal: UsjSearchResult[] = [];
-    if (this.usj.content.length === 0) return retVal;
+  /**
+   * True when `source` declares at least one whitespace capture group that
+   * {@link hasWhitespaceGapAwayFromBoundary} would act on.
+   *
+   * Scans for an actual group declaration rather than testing for the substring `(?<ws`, which also
+   * fires inside a character class (`/[(?<ws]b/`) and on a caller's own similarly-prefixed name
+   * (`(?<wsGap>…)`). Either false positive would rebuild a caller's regex needlessly and could
+   * reach the fail-closed throw below with no named groups present at all.
+   */
+  private static hasSearchWhitespaceGroup(source: string): boolean {
+    let isInCharacterClass = false;
+    for (let index = 0; index < source.length; index++) {
+      const character = source[index];
+      if (character === '\\') {
+        index += 1;
+      } else if (isInCharacterClass) {
+        if (character === ']') isInCharacterClass = false;
+      } else if (character === '[') {
+        isInCharacterClass = true;
+      } else if (character === '(') {
+        const declaration = /^\(\?<([A-Za-z_$][\w$]*)>/.exec(source.slice(index));
+        if (declaration && SEARCH_WHITESPACE_GROUP_NAME_REGEXP.test(declaration[1])) return true;
+      }
+    }
+    return false;
+  }
 
+  /**
+   * Walks the USJ content tree and concatenates every text node the search should see.
+   *
+   * @param markerStylesToInclude When provided, text under a `para`/`note` ancestor whose style is
+   *   absent from the set is left out.
+   * @param shouldRecordBoundaries When `true`, also records the offsets in the concatenated text
+   *   where adjacent text nodes belong to different blocks.
+   * @returns The text chunks, a map from each chunk's offset to its document location, and the set
+   *   of block-boundary offsets (empty when `shouldRecordBoundaries` is `false`).
+   */
+  private collectSearchText(
+    markerStylesToInclude: Set<string> | undefined,
+    shouldRecordBoundaries: boolean,
+  ): {
+    textChunks: string[];
+    fullTextIndexMap: SortedNumberMap<UsjNodeAndDocumentLocation<UsjTextContentLocation>>;
+    blockBoundaryOffsets: Set<number>;
+  } {
     // Start searching from the first node in the USJ content tree
     const startingPoint: UsjNodeAndDocumentLocation = {
       node: this.usj,
@@ -1784,24 +1809,15 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const fullTextIndexMap = new SortedNumberMap<
       UsjNodeAndDocumentLocation<UsjTextContentLocation>
     >();
-    // Group offsets require the `d` flag, but only a pattern that actually carries a whitespace
-    // group can ever be rejected by the boundary filter. Computed before the walk so the
-    // bookkeeping below is skipped for a pattern that could never benefit from it.
-    const hasWhitespaceGroup = regex.source.includes(`(?<${SEARCH_WHITESPACE_GROUP_PREFIX}`);
-    const shouldRecordBoundaries = isBoundaryFilterOn && hasWhitespaceGroup;
-
     // Offsets in the concatenated text where the adjacent text nodes belong to different blocks.
     const blockBoundaryOffsets = new Set<number>();
+
     let previousBlockAncestor: MarkerObject | Usj | undefined;
     let hasPushedAChunk = false;
     // Set when a chapter node is walked past. A chapter transition is a hard break: a match that
     // spanned one would make `replace()` fall back to a whole-book write with the `\c` marker
     // inside the removed span, deleting it.
     let hasCrossedChapterSincePush = false;
-    // Set when a text node is dropped by `markerStylesToInclude`. Excluded content (a footnote,
-    // say) leaves a zero-character gap in the concatenated text that the editor does *not* render
-    // as a line break, so such a join must not be treated as a boundary.
-    let hasDroppedTextSincePush = false;
 
     // Variables to track our current position while walking through the USJ content tree
     let currentIndex = 0;
@@ -1843,33 +1859,28 @@ export class UsjReaderWriter implements IUsjReaderWriter {
               return markerStyle !== undefined && !markerStylesToInclude.has(markerStyle);
             });
 
-            if (hasExcludedAncestor) {
-              // Record that text was removed here before skipping it. The bookkeeping below must
-              // see the drop: without it, two paragraphs separated only by a footnote look like
-              // adjacent chunks and their join reads as a zero-gap block boundary, so a match
-              // would be allowed to span the footnote in the underlying USFM.
-              if (shouldRecordBoundaries) hasDroppedTextSincePush = true;
-              return false; // Skip this text node - an ancestor's style is not in the allowed set
-            }
+            // Skip this text node - an ancestor's style is not in the allowed set. A filtered-out
+            // node never suppresses a boundary: a paragraph that ends in a footnote still renders
+            // a line break before the next one, so the join is a real boundary whether or not the
+            // note was searched. The USFM the note occupies is guarded on the replace side, where
+            // marker deletion is refused, rather than by narrowing what Find can match.
+            if (hasExcludedAncestor) return false;
           }
 
           // Block-boundary bookkeeping is pure overhead for a caller that never asked for the
           // filter, or whose pattern carries no whitespace group to relax, so skip it then.
           if (shouldRecordBoundaries) {
             const blockAncestor = UsjReaderWriter.findNearestBlockAncestor(workingStack);
-            // A boundary is tolerable only when the gap in the concatenated text is genuinely
-            // nothing: the block changed, no chapter was crossed, and no text was dropped.
+            // A boundary is tolerable only when the block changed and no chapter was crossed.
             if (
               hasPushedAChunk &&
               blockAncestor !== previousBlockAncestor &&
-              !hasCrossedChapterSincePush &&
-              !hasDroppedTextSincePush
+              !hasCrossedChapterSincePush
             )
               blockBoundaryOffsets.add(currentIndex);
             previousBlockAncestor = blockAncestor;
             hasPushedAChunk = true;
             hasCrossedChapterSincePush = false;
-            hasDroppedTextSincePush = false;
           }
 
           textChunks.push(node);
@@ -1885,6 +1896,91 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         },
       );
     }
+
+    return { textChunks, fullTextIndexMap, blockBoundaryOffsets };
+  }
+
+  /**
+   * Converts one accepted regex match into a search result, resolving its start and end offsets to
+   * document locations. Pure with respect to the search loop — it reads no loop state.
+   */
+  private static buildSearchResult(
+    match: RegExpExecArray,
+    fullText: string,
+    fullTextIndexMap: SortedNumberMap<UsjNodeAndDocumentLocation<UsjTextContentLocation>>,
+    nfdToOriginalMap: number[] | undefined,
+  ): UsjSearchResult {
+    // Convert NFD match positions back to original-string positions if normalization was applied
+    const originalStart = nfdToOriginalMap ? nfdToOriginalMap[match.index] : match.index;
+    const originalEnd = nfdToOriginalMap
+      ? nfdToOriginalMap[match.index + match[0].length]
+      : match.index + match[0].length;
+
+    if (originalStart < 0 || originalStart >= fullText.length)
+      throw new Error(`Match index out of bounds: ${originalStart}`);
+
+    const startingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalStart);
+    if (!startingNodeEntry)
+      throw new Error(`Internal error: no starting node found for index ${originalStart}`);
+    const start: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+      node: startingNodeEntry.value.node,
+      documentLocation: {
+        jsonPath: startingNodeEntry.value.documentLocation.jsonPath,
+        offset: originalStart - startingNodeEntry.key,
+      },
+    };
+
+    // Have to find the node containing the last character in the match so we don't go past the
+    // ending text node and to the next text node that may be multiple markers past the end text
+    // node. Then do NOT subtract one from the index in the offset since the ending location is
+    // exclusive, meaning the last character in the match is the character before the ending
+    // location.
+    const endingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalEnd - 1);
+    if (!endingNodeEntry)
+      throw new Error(`Internal error: no ending node found for index ${originalStart}`);
+    const end: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+      node: endingNodeEntry.value.node,
+      documentLocation: {
+        jsonPath: endingNodeEntry.value.documentLocation.jsonPath,
+        offset: originalEnd - endingNodeEntry.key,
+      },
+    };
+
+    // When text was NFD-normalized for search, return the original (non-NFD) text slice so the
+    // caller sees the same characters that appear in the source document.
+    const text = nfdToOriginalMap ? fullText.substring(originalStart, originalEnd) : match[0];
+    return { text, start, end };
+  }
+
+  search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
+  search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
+  search(
+    regex: RegExp,
+    markerStylesOrSearchOptions?: Set<string> | UsjSearchOptions,
+  ): UsjSearchResult[] {
+    const searchOptions =
+      markerStylesOrSearchOptions instanceof Set
+        ? { markerStylesToInclude: markerStylesOrSearchOptions }
+        : markerStylesOrSearchOptions;
+    const { markerStylesToInclude, normalizationForm } = searchOptions ?? {};
+    const isBoundaryFilterOn = !!(searchOptions &&
+    'flexibleWhitespaceAtBlockBoundaries' in searchOptions
+      ? searchOptions.flexibleWhitespaceAtBlockBoundaries
+      : false);
+
+    const retVal: UsjSearchResult[] = [];
+    if (this.usj.content.length === 0) return retVal;
+
+    // Group offsets require the `d` flag, but only a pattern that actually carries a whitespace
+    // group can ever be rejected by the boundary filter. Computed before the walk so the
+    // bookkeeping below is skipped for a pattern that could never benefit from it.
+    const shouldRecordBoundaries =
+      isBoundaryFilterOn && UsjReaderWriter.hasSearchWhitespaceGroup(regex.source);
+
+    const { textChunks, fullTextIndexMap, blockBoundaryOffsets } = this.collectSearchText(
+      markerStylesToInclude,
+      shouldRecordBoundaries,
+    );
 
     // Connect all the text chunks together so we can search them all at once. Note that there are
     // no spaces between the text chunks. If we need spaces inserted between verses, chapters, etc.
@@ -1902,97 +1998,59 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const searchText = nfdToOriginalMap ? fullText.normalize('NFD') : fullText;
 
     // A plain pattern with no whitespace group would pay for a rebuild (and the `d`-flag
-    // bookkeeping V8 does on every match) for nothing. Rebuilding also resets `lastIndex`, so it
-    // must not happen for a search that didn't ask for the filter — a caller's own regex must be
-    // left exactly as they compiled it.
+    // bookkeeping V8 does on every match) for nothing.
     const searchRegex =
       shouldRecordBoundaries && !regex.flags.includes('d')
         ? new RegExp(regex.source, `${regex.flags}d`)
         : regex;
+    // When no rebuild happened, the loop below drives the caller's own object. Restore its cursor
+    // on every exit so the documented contract — the caller's `RegExp` is never modified, its
+    // `lastIndex` included — holds whether or not they happened to supply the `d` flag.
+    const callerLastIndex = regex.lastIndex;
 
-    // Lean on regular expressions to do the heavy lifting of finding matches
-    let match: RegExpExecArray | null = searchRegex.exec(searchText);
-    while (match) {
-      // A zero-length match leaves `lastIndex` where it is, so stepping past it is the only way out
-      // of this loop.
-      if (match[0].length === 0) {
-        if (!searchRegex.global || searchRegex.lastIndex >= searchText.length) {
-          searchRegex.lastIndex = 0;
-          break;
+    try {
+      // Lean on regular expressions to do the heavy lifting of finding matches
+      let match: RegExpExecArray | null = searchRegex.exec(searchText);
+      while (match) {
+        // A zero-length match leaves `lastIndex` where it is, so stepping past it is the only way
+        // out of this loop.
+        if (match[0].length === 0) {
+          if (!searchRegex.global || searchRegex.lastIndex >= searchText.length) break;
+          searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(
+            searchText,
+            searchRegex.lastIndex,
+          );
+          match = searchRegex.exec(searchText);
+        } else if (
+          // Same condition as the bookkeeping above: with no whitespace group there is nothing to
+          // filter, and `hasWhitespaceGapAwayFromBoundary` would demand a `d` flag that was
+          // deliberately not added.
+          shouldRecordBoundaries &&
+          UsjReaderWriter.hasWhitespaceGapAwayFromBoundary(
+            match,
+            blockBoundaryOffsets,
+            nfdToOriginalMap,
+          )
+        ) {
+          // Resume one code point on rather than at `lastIndex`, so a legitimate match that
+          // overlaps this rejected one is still reachable. Only rejected matches rewind: doing
+          // this for accepted matches would return overlapping duplicates, which Replace All
+          // refuses outright.
+          if (!searchRegex.global) break;
+          searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(searchText, match.index);
+          match = searchRegex.exec(searchText);
+        } else {
+          retVal.push(
+            UsjReaderWriter.buildSearchResult(match, fullText, fullTextIndexMap, nfdToOriginalMap),
+          );
+
+          // If the regex is not global, then running `exec` again will return the same match
+          if (!searchRegex.global) break;
+          match = searchRegex.exec(searchText);
         }
-        searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(
-          searchText,
-          searchRegex.lastIndex,
-        );
-        match = searchRegex.exec(searchText);
-      } else if (
-        // Same condition as the bookkeeping above: with no whitespace group there is nothing to
-        // filter, and `hasWhitespaceGapAwayFromBoundary` would demand a `d` flag that was
-        // deliberately not added.
-        shouldRecordBoundaries &&
-        UsjReaderWriter.hasWhitespaceGapAwayFromBoundary(
-          match,
-          blockBoundaryOffsets,
-          nfdToOriginalMap,
-        )
-      ) {
-        // Resume one code point on rather than at `lastIndex`, so a legitimate match that overlaps
-        // this rejected one is still reachable. Only rejected matches rewind: doing this for accepted
-        // matches would return overlapping duplicates, which Replace All refuses outright.
-        if (!searchRegex.global) {
-          searchRegex.lastIndex = 0;
-          break;
-        }
-        searchRegex.lastIndex = UsjReaderWriter.advancePastCodePoint(searchText, match.index);
-        match = searchRegex.exec(searchText);
-      } else {
-        // Convert NFD match positions back to original-string positions if normalization was applied
-        const originalStart = nfdToOriginalMap ? nfdToOriginalMap[match.index] : match.index;
-        const originalEnd = nfdToOriginalMap
-          ? nfdToOriginalMap[match.index + match[0].length]
-          : match.index + match[0].length;
-
-        if (originalStart < 0 || originalStart >= fullText.length)
-          throw new Error(`Match index out of bounds: ${originalStart}`);
-
-        const startingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalStart);
-        if (!startingNodeEntry)
-          throw new Error(`Internal error: no starting node found for index ${originalStart}`);
-        const start: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
-          node: startingNodeEntry.value.node,
-          documentLocation: {
-            jsonPath: startingNodeEntry.value.documentLocation.jsonPath,
-            offset: originalStart - startingNodeEntry.key,
-          },
-        };
-
-        // Have to find the node containing the last character in the match so we don't go past the
-        // ending text node and to the next text node that may be multiple markers past the end text
-        // node. Then do NOT subtract one from the index in the offset since the ending location is
-        // exclusive, meaning the last character in the match is the character before the ending
-        // location.
-        const endingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalEnd - 1);
-        if (!endingNodeEntry)
-          throw new Error(`Internal error: no ending node found for index ${originalStart}`);
-        const end: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
-          node: endingNodeEntry.value.node,
-          documentLocation: {
-            jsonPath: endingNodeEntry.value.documentLocation.jsonPath,
-            offset: originalEnd - endingNodeEntry.key,
-          },
-        };
-
-        // When text was NFD-normalized for search, return the original (non-NFD) text slice so the
-        // caller sees the same characters that appear in the source document.
-        const matchText = nfdToOriginalMap
-          ? fullText.substring(originalStart, originalEnd)
-          : match[0];
-        retVal.push({ text: matchText, start, end });
-
-        // If the regex is not global, then running `exec` again will return the same match
-        if (!searchRegex.global) break;
-        match = searchRegex.exec(searchText);
       }
+    } finally {
+      regex.lastIndex = callerLastIndex;
     }
 
     return retVal;

@@ -109,6 +109,25 @@ describe('structure-protection.util', () => {
     it('sees a replacement that swallows a cell marker as a structural change', () => {
       expect(usfmChangesStructure('Abraham\\tc2 became', 'Abraham became')).toBe(true);
     });
+
+    it('recognizes the centred and right-aligned cell spellings, including a column span', () => {
+      // Driven off the shared markers map rather than a hand-written pattern, so `thc#`/`tcc#`
+      // are covered alongside `tc#`/`th#`. The repo's own canonical 3.1 fixture contains `thc3`.
+      expect(extractStructuralMarkers('\\thc3 a \\tcc2 b \\thr4 c \\tcr1 d')).toEqual([
+        'thc3',
+        'tcc2',
+        'thr4',
+        'tcr1',
+      ]);
+      expect(extractStructuralMarkers('\\thc3-4 spans two columns')).toEqual(['thc3-4']);
+      expect(usfmDeletesMarkers('Header\\thc3 centred', 'Header centred')).toBe(true);
+    });
+
+    it('recognizes sidebar boundaries', () => {
+      // `esb`/`esbe` open and close a block; swallowing one half orphans the other.
+      expect(extractStructuralMarkers('\\esb side matter \\esbe')).toEqual(['esb', 'esbe']);
+      expect(usfmDeletesMarkers('text\\esbe after', 'text after')).toBe(true);
+    });
   });
 
   describe('usfmDeletesMarkers', () => {
@@ -137,6 +156,11 @@ describe('structure-protection.util', () => {
       expect(usfmDeletesMarkers('earth.\\f + \\ft note\\f* Blessed', 'earth. Blessed')).toBe(true);
     });
 
+    it('counts the extended study-Bible note markers, which the shared map omits', () => {
+      expect(usfmDeletesMarkers('text\\ef + \\ft note\\ef* after', 'text after')).toBe(true);
+      expect(usfmDeletesMarkers('text\\ex + \\xt ref\\ex* after', 'text after')).toBe(true);
+    });
+
     it('is false when a marker is added rather than removed', () => {
       // Narrower than usfmChangesStructure on purpose: additions stay a matter of editorial policy
       // and are only refused by the opt-in Simple-mode protection.
@@ -150,9 +174,12 @@ describe('structure-protection.util', () => {
   });
 
   describe('MARKER_DELETION_ERROR', () => {
-    it('is a distinct sentinel from STRUCTURE_PROTECTED_ERROR', () => {
-      // The UI branches on these two separately to show different messages.
-      expect(MARKER_DELETION_ERROR).not.toBe(STRUCTURE_PROTECTED_ERROR);
+    it('is a stable sentinel that does not collide with the structure-protection one', () => {
+      // Both are substring-matched out of an error message by the Find web view, so neither may
+      // contain the other — that, not mere inequality, is what would break the UI's branching.
+      expect(MARKER_DELETION_ERROR).toBe('platformScripture.replace.markerDeletion');
+      expect(MARKER_DELETION_ERROR.includes(STRUCTURE_PROTECTED_ERROR)).toBe(false);
+      expect(STRUCTURE_PROTECTED_ERROR.includes(MARKER_DELETION_ERROR)).toBe(false);
     });
   });
 

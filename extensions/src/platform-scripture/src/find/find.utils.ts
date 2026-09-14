@@ -818,10 +818,13 @@ export function buildSearchRegex(
         let runPattern: string;
         if (ignoreWhitespace) {
           // Collapse the run to a lazy multi-whitespace pattern (including ~ when it represents
-          // NBSP, i.e., when AllowInvisibleChars is false).
-          runPattern = isInteriorRun
-            ? `${whitespaceClass}*?`
-            : `${whitespaceClass}+?${diacriticSuffix}`;
+          // NBSP, i.e., when AllowInvisibleChars is false). The diacritic class goes inside the
+          // repetition for the same reason it is emitted per code point above: a mark sitting
+          // between two whitespace characters must not stop the run from matching. Without that,
+          // collapsing whitespace would match strictly *less* than matching it exactly, which
+          // inverts what the option means.
+          const runUnit = `${whitespaceClass}${diacriticSuffix}`;
+          runPattern = isInteriorRun ? `(?:${runUnit})*?` : `(?:${runUnit})+?`;
         } else {
           runPattern = run
             .map((runChar) => `${escapeStringRegexp(runChar)}${diacriticSuffix}`)

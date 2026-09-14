@@ -30,6 +30,7 @@ import {
 } from 'platform-scripture';
 import { buildSearchRegex, CharacterCategorizer } from '../find/find.utils';
 import {
+  extractGuardedMarkers,
   MARKER_DELETION_ERROR,
   STRUCTURE_PROTECTED_ERROR,
   usfmChangesStructure,
@@ -442,6 +443,9 @@ export class ScriptureFinderProjectDataProviderEngine
    * @throws Error with message {@link STRUCTURE_PROTECTED_ERROR} when structure protection is active
    *   and a replacement would add, remove, change, or reorder a paragraph-level, verse, or chapter
    *   marker
+   * @throws Error with message {@link MARKER_DELETION_ERROR} when a replacement would delete a
+   *   structural marker or a note that the replacement does not put back. Checked in every
+   *   interface mode, independently of structure protection
    */
   async replace(
     rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
@@ -603,16 +607,16 @@ export class ScriptureFinderProjectDataProviderEngine
                   rangeWithIndex.startIndex,
                   rangeWithIndex.endIndex,
                 );
-                if (isStructureProtected) {
-                  if (usfmChangesStructure(removed, replacement)) {
-                    throw new Error(STRUCTURE_PROTECTED_ERROR);
-                  }
-                } else if (usfmDeletesMarkers(removed, replacement)) {
-                  // Structure protection proper is Simple-mode-only by design, and Replace is not
-                  // offered in Simple mode, so nothing above ever runs today. Marker *deletion* is
-                  // guarded separately and unconditionally: a match may span a block boundary, and
-                  // replacing across one would drop the `\p`/`\q1`/`\tc2` or footnote that sat in
-                  // the gap with no way to get it back.
+                if (isStructureProtected && usfmChangesStructure(removed, replacement)) {
+                  throw new Error(STRUCTURE_PROTECTED_ERROR);
+                }
+                // Marker deletion is guarded in every interface mode, including where structure
+                // protection is on: a match may span a block boundary, and replacing across one
+                // would drop the `\p`/`\q1`/`\tc2` or footnote that sat in the gap with no way to
+                // get it back. The two guards are sequential rather than exclusive because
+                // `usfmChangesStructure` deliberately ignores notes, so it cannot see a swallowed
+                // `\f …\f*` that this one refuses.
+                if (usfmDeletesMarkers(removed, replacement)) {
                   throw new Error(MARKER_DELETION_ERROR);
                 }
                 modifiedUsfm =
@@ -970,17 +974,34 @@ export class ScriptureFinderProjectDataProviderEngine
       flexibleWhitespaceAtBlockBoundaries: !job.options.useRegex,
     });
 
+    if (matches.length === 0) return [];
+
+    // A match may span markers — always at a block boundary, and sometimes mid-paragraph across a
+    // `\v`. Replacing such a match with plain text would delete those markers, which `replace()`
+    // refuses. Record them per result so the UI can disable Replace on exactly those results
+    // instead of letting the user click a button that can only fail. One USFM conversion serves
+    // every match in the scope.
+    const scopeUsfm = usj.toUsfm();
+
     return matches.map((match) => {
+      const start = usj.usjDocumentLocationToUsfmVerseRefVerseLocation(
+        match.start.documentLocation,
+        scope.bookId,
+      );
+      const end = usj.usjDocumentLocationToUsfmVerseRefVerseLocation(
+        match.end.documentLocation,
+        scope.bookId,
+      );
+      const removedUsfm = scopeUsfm.substring(
+        usj.usfmVerseLocationToIndexInUsfm(start),
+        usj.usfmVerseLocationToIndexInUsfm(end),
+      );
+      const removedMarkers = extractGuardedMarkers(removedUsfm);
       return {
         ...match,
-        start: usj.usjDocumentLocationToUsfmVerseRefVerseLocation(
-          match.start.documentLocation,
-          scope.bookId,
-        ),
-        end: usj.usjDocumentLocationToUsfmVerseRefVerseLocation(
-          match.end.documentLocation,
-          scope.bookId,
-        ),
+        start,
+        end,
+        ...(removedMarkers.length > 0 ? { removedMarkers } : {}),
       };
     });
   }

@@ -1222,7 +1222,8 @@ step, no automation. Just a record.
   boundary, so the gap is common, not a corner case.
 - **Decision:** A whitespace run in the query may match zero characters, but only at a **break
   boundary** — a point where two adjacent text chunks' nearest block-level ancestors differ by
-  identity. The block-level set is `para`, `table`, `table:row`, `table:cell`, `sidebar` — the USJ
+  identity. "Break" rather than "line break": the editor renders most of these as a line break, but
+  two cells in one table row sit side by side and are a boundary all the same. The block-level set is `para`, `table`, `table:row`, `table:cell`, `sidebar` — the USJ
   spellings; the bare USX names `row` and `cell` never appear in USJ and would match nothing.
 
   Some boundaries are deliberately excluded. **`char`-marker** boundaries (e.g. `the ` + `LORD` +
@@ -1230,20 +1231,25 @@ step, no automation. Just a record.
   boundaries are excluded because a note nests inside a `para` in USJ, so treating it as block-level
   would fire on entering and leaving a note the editor renders as continuous flowing text.
   **`optbreak`** (`//`) does render a line break but is a *sibling* of the surrounding text rather
-  than an ancestor of it, so an ancestor comparison cannot see it; bridging one would need a sibling
-  scan. **`periph`** resolves to `undefined` on both sides of a `periph`→`periph` join, which
-  compares equal, so no boundary is recorded there.
+  than an ancestor of it, so an ancestor comparison cannot see it; the same document-order flag the
+  chapter case uses would bridge it, and it is left undone because `//` is rare enough in practice
+  not to have earned the extra state. **`periph`** needs no entry at all: peripheral content is
+  itself wrapped in `para` nodes, so a join inside or between `periph` sections is already reported
+  by those paragraphs.
 
   Two further conditions suppress a boundary that the ancestor comparison would otherwise record:
 
   - **A chapter transition is never a boundary.** `chapter` nodes carry no `content` and cannot be a
-    text node's ancestor, so they are detected by a sibling scan instead. A match spanning one would
-    make `replace()` fall back to a whole-book `setBookUSFM` with the `\c` marker inside the removed
-    span, deleting it.
-  - **A join made adjacent only by `markerStylesToInclude` is never a boundary.** Under *Verse text
-    only* the notes between two paragraphs are dropped from the concatenated text, leaving a
-    zero-character gap that is an artifact of the filter rather than a rendered line break. Text
-    dropped by the filter is recorded so such a join is not tolerated.
+    text node's ancestor, so they are detected by a flag set as the document-order walk passes one.
+    A match spanning a chapter would make `replace()` fall back to a whole-book `setBookUSFM` with
+    the `\c` marker inside the removed span, deleting it.
+
+  A join made adjacent only by `markerStylesToInclude` **is** still a boundary, which an earlier
+  round of this work had wrong. Under *Verse text only* the notes ending a paragraph are dropped
+  from the concatenated text, but the editor renders a line break between those two paragraphs
+  whether or not the notes were searched, so refusing the join made Find miss a real break for the
+  common case of a paragraph that ends in a footnote. Replace safety at such a join is carried by
+  the marker-deletion guard below, which counts notes, rather than by narrowing what Find matches.
 
   Mid-paragraph matching and regex mode are both unchanged — the tolerance applies only at the
   boundary positions computed above, never to an ordinary run of whitespace inside one paragraph.
@@ -1264,12 +1270,14 @@ step, no automation. Just a record.
     the contract between the two packages is stringly-typed: the caller and `search()` agree on the
     capture-group name via an exported `SEARCH_WHITESPACE_GROUP_PREFIX` rather than a type. A typed
     hand-off (the caller passing group names, or a structured pattern description) would be better
-    and was not built; the prefix is anchored to `/^ws\d+$/` so it cannot swallow a caller's own
-    group names.
+    and was not built; the prefix is anchored to `/^ws\d+$/`, which narrows the collision surface to
+    exactly the names `ws0`, `ws1`, … — a caller who picks one of those is still swallowed, so the
+    library contract is not collision-proof, only collision-unlikely.
 - **Consequences:** Because paragraph-final whitespace is stripped in conversion, boundary-spanning
   matches become available at every paragraph boundary in every project — a broad change, not a
-  narrow one. In `web-matthew-1-and-2.usj` **all 35** boundary joins have no whitespace on either
-  side; in `web-matthew-5-section-header.usj`, 24 of 28.
+  narrow one. In `web-matthew-1-and-2.usj` **all 35** block-ancestor changes have no whitespace on
+  either side (33 after chapter suppression — 2 of the 35 cross a chapter and are excluded); in
+  `web-matthew-5-section-header.usj`, 24 of 28, with no chapter crossings.
 
   That makes Replace's exposure the main consequence, and it was worse than a "default is off"
   reading suggests. Structure protection (`usfmChangesStructure`) is gated on
@@ -1280,22 +1288,67 @@ step, no automation. Just a record.
   here.
 
   What is closed here is marker **deletion**, which is not an editorial-policy question:
-  `usfmDeletesMarkers` refuses any replacement that drops a block marker or a note the replacement
-  does not put back, in **every** interface mode, independent of `isStructureProtected`. It is
-  deliberately narrower than `usfmChangesStructure` — additions and reordering stay behind the
-  opt-in Simple-mode protection, because losing a marker that was there is unrecoverable content
-  loss whereas adding one is a matter of policy.
+  `usfmDeletesMarkers` refuses any replacement that drops a structural marker or a note the
+  replacement does not put back. It runs in **every** interface mode — via `usfmChangesStructure`
+  when protection is on, and `usfmDeletesMarkers` otherwise — as two *sequential* guards rather than
+  an either/or, because `usfmChangesStructure` deliberately ignores notes and so cannot see a
+  swallowed `\f …\f*` that the deletion guard refuses. It is deliberately narrower than
+  `usfmChangesStructure` — additions and reordering stay behind the opt-in Simple-mode protection,
+  because losing a marker that was there is unrecoverable content loss whereas adding one is a
+  matter of policy.
 
   Two marker classes had to be added for that guard to mean anything, because `isBlockMarker`
-  reports `false` for both: **table markers** (`tr`, `tc#`, `th#`) and **notes** (`f`, `fe`, `x`).
-  The table gap also affected `extractStructuralMarkers` itself, so Simple-mode structure protection
-  was blind to a deleted `\tc2` as well; both now go through a shared `isStructuralMarker`.
+  reports `false` for both: **table and sidebar markers** (`tr`, every `t[hc][rc]?#` cell spelling
+  including a `-N` column span, `esb`, `esbe`) and **notes** (`f`, `fe`, `x`, plus the study-Bible
+  variants `ef`/`ex`). The table gap also affected `extractStructuralMarkers` itself, so Simple-mode
+  structure protection was blind to a deleted `\tc2` as well; both now go through a shared
+  `isStructuralMarker` in `find/usfm-tokens.util.ts`.
+
+  That helper reads the **shared markers map** (`USFM_MARKERS_MAP_3_0`: `markers.tr`, the
+  `markersRegExp` cell pattern, and the `esb`/`esbe` sidebar entries) rather than a hand-written
+  list. Two rounds of review found a missing spelling in a hand-written one — first `tc#`, then the
+  centred and right-aligned `thc#`/`tcc#` that the repo's own canonical 3.1 fixture contains — so
+  the list is derived from the map that already has the authoritative answer. `isBlockMarker` itself
+  is left alone: it is driven by `usfmMarkers`, which omits table and sidebar markers entirely, and
+  its only other consumer (the editor's marker menu) iterates `usfmMarkers` children, none of which
+  is a table or sidebar marker, so it cannot be reached with one.
+
+  The guard being reachable is what exposed the next problem: **every** boundary-spanning match's
+  USFM span contains the block marker that made it a boundary, so a plain-text replacement trips the
+  guard on all of them. A refusal raised after the click would make the feature ship a Replace button
+  that can only fail. So results now carry `FindResult.removedMarkers` — the guarded markers inside
+  the result's span, extracted once by the PDP when results are built — and the UI gates on them per
+  result: Replace is disabled with an explaining tooltip on a card whose markers the replacement term
+  does not put back, Replace All skips those results and reports how many it skipped, and a
+  replacement that does put the markers back (raw USFM, which Power mode's replacement field accepts)
+  is still allowed. Repairing the markers automatically was considered and deferred: it needs a
+  marker-preserving splice in `replace()` and reopens the structure-protection policy question.
+
+  Replace All also had to become recoverable. It issues one `replace()` call per book, and `replace()`
+  is all-or-nothing only *within* a book — so one refused book used to leave the others' writes
+  committed while control jumped to the error path, skipping the revert window entirely. It now uses
+  `Promise.allSettled` and rolls the written books back from the snapshots it already captured before
+  surfacing the failure.
 
   Remaining, documented and not fixed: a boundary **ending in a footnote or cross-reference** is not
   bridged, because the gap is note content rather than zero characters. **Whole-word Find** is still
   broken at these boundaries — the concatenated text makes `Abraham.Abraham` one word-run — which is
   the same root cause and out of scope here.
-- **Source:** PT-3609, `docs/specs/2026-09-09-find-block-boundary-whitespace-design.md`.
+- **Excepts:** [adr-find-tolerance-as-engine-options](#adr-find-tolerance-as-engine-options-find-expresses-its-search-tolerances-as-engine-options-not-by-rewriting-the-query)
+  — that entry's "both default to off" rule; see its **Amended by** note for what is given up.
+- **Key symbols:** `UsjReaderWriter.search` / `collectSearchText` / `hasWhitespaceGapAwayFromBoundary`
+  and `BLOCK_LEVEL_NODE_TYPES` (`lib/platform-bible-utils/src/scripture/usj-reader-writer.ts`);
+  `SEARCH_WHITESPACE_GROUP_PREFIX` and `UsjSearchOptions.flexibleWhitespaceAtBlockBoundaries`
+  (`lib/platform-bible-utils/src/scripture/usj-reader-writer.model.ts`); `buildSearchRegex`
+  (`extensions/src/platform-scripture/src/find/find.utils.ts`); `isStructuralMarker` /
+  `isNoteMarker` / `collapseUsfmMarkersForDisplay`
+  (`extensions/src/platform-scripture/src/find/usfm-tokens.util.ts`); `usfmDeletesMarkers` /
+  `markersDeletedBy` (`extensions/src/platform-scripture/src/find/structure-protection.util.ts`).
+- **Source:** PT-3609, review of PR #2795. The design spec and implementation plan this work
+  started from were dropped from the branch rather than carried: they described an earlier shape of
+  the feature (the removed Verse-text-only note behavior, the pre-fix USX marker spellings, the
+  `match.index + 1` advance) and would have stood as a second, contradictory account of behavior
+  this entry already records accurately.
 
 ## adr-find-follows-editor-to-read-only: Find follows the editor onto read-only resources, with replace withheld
 
@@ -1468,14 +1521,21 @@ step, no automation. Just a record.
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
 
-  **Amended by `adr-find-block-boundary-whitespace` (2026-09-09).** That decision adds one tolerance
+- **Amended by:** [adr-find-block-boundary-whitespace](#adr-find-block-boundary-whitespace-find-tolerates-a-whitespace-gap-only-at-block-boundaries-never-mid-paragraph) (2026-09-09). That decision adds one tolerance
   that is always on for a non-regex search and has no toggle: a query whitespace run may match zero
   characters at a block boundary. It does not contradict the rule above — the query still reaches
   the engine byte-identical, and the tolerance is still expressed as an engine option
   (`flexibleWhitespaceAtBlockBoundaries`) rather than by rewriting what the user typed. It is an
   exception to "both default to off": there is no third toggle, because the tolerance is licensed by
-  *position* rather than by preference. It can only fire where the editor renders a line break, so
-  there is no exact-search case for a user to protect by turning it off.
+  *position* rather than by preference.
+
+  That exception has a real cost, stated plainly rather than denied: a byte-exact non-regex search
+  is **no longer available at a block boundary**, including for a specific invisible character.
+  `SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS` contains NBSP (U+00A0) and ZWSP (U+200B), so an
+  interior NBSP or ZWSP in a plain query compiles as an optional group like any other whitespace and
+  will match where no such character exists — the very capability this entry's own
+  Consequences section singles out. That is knowingly given up: the position licensing makes the false positives rare enough
+  not to warrant a third toggle.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 

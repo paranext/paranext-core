@@ -63,6 +63,7 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
 import { SearchResultsInBook } from './search-results-in-book.component';
+import { markersDeletedBy } from './structure-protection.util';
 import {
   REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
   ReplacePreviewOptions,
@@ -115,9 +116,12 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_replaceAll%',
   '%webView_find_replaceTab%',
   '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_replace_markerDeletionError%',
+  '%webView_find_replace_markerDeletionTooltip%',
   '%webView_find_replace_readOnlyNote%',
   '%webView_find_replace_readOnlyTooltip%',
-  '%webView_find_replace_markerDeletionError%',
+  '%webView_find_replace_skippedAllResults%',
+  '%webView_find_replace_skippedNResults%',
   '%webView_find_replace_structureProtectedError%',
   '%webView_find_replace_structureProtectedMarkerTooltip%',
   '%webView_find_replace_structureProtectedNote%',
@@ -747,6 +751,14 @@ export function Find({
   const isReplaceUnavailable =
     searchStatus === 'running' || isReplacing || isReplaceActionBlocked || !isSearchQueryValid;
 
+  // The toolbar Replace acts on the focused result, so it answers to the same per-result gate the
+  // result's own Replace button does: a replacement that drops a marker the result's span holds is
+  // refused by `replace()`, whatever the interface mode.
+  const isFocusedResultMarkerDeleting =
+    activeMode === 'replace' &&
+    focusedResultIndex !== undefined &&
+    markersDeletedBy(results[focusedResultIndex]?.removedMarkers ?? [], replaceTerm);
+
   // Map the flat localized-string bag into the shape the preview-options picker expects.
   const previewOptionsStrings: ReplacePreviewOptionsStrings = {
     togglePreviewOptions: localizedStrings['%webView_find_previewOptions_toggle%'],
@@ -1055,8 +1067,12 @@ export function Find({
               </div>
               <DisabledActionTooltip
                 className="tw:flex tw:gap-2"
-                disabled={isReplaceActionBlocked}
-                tooltipText={replaceBlockedTooltipText}
+                disabled={isReplaceActionBlocked || isFocusedResultMarkerDeleting}
+                tooltipText={
+                  isReplaceActionBlocked
+                    ? replaceBlockedTooltipText
+                    : localizedStrings['%webView_find_replace_markerDeletionTooltip%']
+                }
               >
                 <Button
                   variant="outline"
@@ -1068,7 +1084,11 @@ export function Find({
                 </Button>
                 <Button
                   onClick={() => onReplace()}
-                  disabled={focusedResultIndex === undefined || isReplaceUnavailable}
+                  disabled={
+                    focusedResultIndex === undefined ||
+                    isReplaceUnavailable ||
+                    isFocusedResultMarkerDeleting
+                  }
                 >
                   <Replace className="tw:h-4 tw:w-4" />
                   {localizedStrings['%webView_find_replace%']}
@@ -1284,6 +1304,9 @@ export function Find({
                 isReplacing={isReplacing}
                 isReplaceBlocked={isReplaceActionBlocked}
                 replaceBlockedTooltipText={replaceBlockedTooltipText}
+                markerDeletionBlockedTooltipText={
+                  localizedStrings['%webView_find_replace_markerDeletionTooltip%']
+                }
                 replaceConfig={replaceConfig}
                 previewOptions={previewOptions}
                 allowInvisibleCharacters={allowInvisibleCharacters}

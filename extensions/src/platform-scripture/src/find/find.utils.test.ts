@@ -1263,11 +1263,10 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
     expect(regex.flags).not.toContain('d');
   });
 
-  it('drops a diacritic mark sitting inside an interior whitespace run rather than tolerating it mid-run', () => {
-    // ignoreDiacritics emits one trailing diacritic class after a whole whitespace run, not one
-    // between every whitespace code point in that run — a combining mark placed between two
-    // spaces in the query is dropped from the compiled pattern entirely, so text carrying that
-    // same mark between two spaces is not matched by the resulting run.
+  it('tolerates a diacritic inside an interior whitespace run when whitespace is collapsed', () => {
+    // Collapsing whitespace must not match less than matching it exactly does: the diacritic class
+    // sits inside the run's repetition, so a combining mark between two spaces is tolerated under
+    // both settings of ignoreWhitespaceDifferences (see the sibling test below for the other one).
     const regex = buildSearchRegex(
       {
         ...baseOptions,
@@ -1280,7 +1279,7 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
     regex.lastIndex = 0;
     expect(regex.test('a   b')).toBe(true);
     regex.lastIndex = 0;
-    expect(regex.test('a \u0301 b')).toBe(false);
+    expect(regex.test('a \u0301 b')).toBe(true);
   });
 
   it('tolerates a diacritic between two whitespace code points when whitespace is matched exactly', () => {
