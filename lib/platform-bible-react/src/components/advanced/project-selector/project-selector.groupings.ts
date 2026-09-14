@@ -37,16 +37,15 @@ export const PROJECT_SELECTOR_STRING_KEYS = [
 /** The union of {@link PROJECT_SELECTOR_STRING_KEYS} entries. */
 export type ProjectSelectorLocalizedStringKey = (typeof PROJECT_SELECTOR_STRING_KEYS)[number];
 
-/** A map from every {@link ProjectSelectorLocalizedStringKey} to its resolved localized value. */
-export type ProjectSelectorResolvedStrings = Readonly<
-  Record<ProjectSelectorLocalizedStringKey, string>
->;
-
 /**
  * The lookup the `%projectSelector_*%` string builders accept: anything keyed by localization key,
  * including the loose `LanguageStrings` record `useLocalizedStrings` returns. Values are read one
  * key at a time and used only when they are strings, so consumers pass their localized-strings bag
  * straight through with no narrowing.
+ *
+ * The one narrowing it does impose: a FRESH OBJECT LITERAL passed directly here fails
+ * excess-property checking on any key that is not `%`-delimited, where a plain `Record<string,
+ * unknown>` accepted it. Named types and variables are unaffected.
  */
 export type ProjectSelectorStringLookup = Readonly<Record<`%${string}%`, unknown>>;
 

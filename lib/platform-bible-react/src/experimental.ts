@@ -20,7 +20,6 @@ export {
   type ProjectSelectorGrouping,
   type ProjectSelectorLocalizedStrings,
   type ProjectSelectorLocalizedStringKey,
-  type ProjectSelectorResolvedStrings,
   type ProjectSelectorStringLookup,
   type BuiltInGroupingStrings,
   type SelectionGroupingStrings,

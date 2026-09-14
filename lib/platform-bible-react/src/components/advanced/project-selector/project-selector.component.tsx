@@ -95,7 +95,6 @@ export {
   type BuiltInGroupingStrings,
   type SelectionGroupingStrings,
   type ProjectSelectorLocalizedStringKey,
-  type ProjectSelectorResolvedStrings,
   type ProjectSelectorStringLookup,
 } from './project-selector.groupings';
 
