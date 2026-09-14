@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
@@ -1008,6 +1008,27 @@ describe('Find — filters panel keyboard accessibility', () => {
     const zIndexOf = (element: Element) =>
       Number(element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex);
     expect(zIndexOf(tooltip)).toBeGreaterThan(zIndexOf(screen.getByRole('dialog')));
+  });
+
+  // Dropping `modal` (WCAG 2.1.2) means focus leaving the panel dismisses it, which is what lets
+  // Shift+Tab and Escape hand the trigger its focus back above. The same rule necessarily applies to
+  // focus landing anywhere else, the search box included — worth pinning down, because the menu this
+  // replaced behaved the opposite way: being modal, it stayed open and put the box out of reach.
+  it('dismisses the panel when the search box outside it takes focus', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    // `focus()` rather than a click, so this turns on focus alone rather than on the pointer
+    // interaction that would dismiss the panel regardless. `act` flushes the close before the
+    // assertion; `waitFor` would pass on its first check, before any of it had been processed.
+    await act(async () => {
+      screen.getByPlaceholderText('Enter search text\u2026').focus();
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

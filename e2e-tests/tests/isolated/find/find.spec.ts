@@ -838,7 +838,13 @@ test.describe('Search History', () => {
     // from what is already recorded, so a write reaching history here can only be explained by the
     // options-change effect itself.
     await searchInput.fill(secondTerm);
+    // Focusing the search box dismisses the filters panel: it is a non-modal popover, so focus
+    // leaving it closes it — the same rule that lets Shift+Tab and Escape return focus to the
+    // trigger. The menu this panel replaced was modal and stayed open, which is why filling the box
+    // mid-test used to leave the panel standing. Reopen it for the second option change.
+    await openFiltersPanel(frame);
     const matchCaseCheckbox = frame.locator('#matchCase');
+    await expect(matchCaseCheckbox).toBeVisible({ timeout: 5_000 });
     await matchCaseCheckbox.click();
     await expect(matchCaseCheckbox).toBeChecked();
     await matchCaseCheckbox.press('Escape');
