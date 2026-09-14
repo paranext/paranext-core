@@ -175,7 +175,13 @@ async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> 
  * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`
  */
 async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
-  if (cachedResources === undefined) return;
+  // Nothing cached to reconcile yet — the startup fetch window, or a fresh profile. A caller that
+  // awaited a refresh gets a resolved promise and re-reads the flags it already had, so say so
+  // here: this is the one silent no-op that is reachable without any contention.
+  if (cachedResources === undefined) {
+    logger.debug('Skipped a resource flag sync: no cached catalog to reconcile yet');
+    return;
+  }
   try {
     // Sample the backend inside fetchMutex, not before it. Two things depend on that: a concurrent
     // fetchAndCacheResources cannot overwrite cachedResources between the read and the assignment,
@@ -183,14 +189,22 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
     // older sync whose status predates an install cannot win the write and persist flags from
     // before it.
     await fetchMutex.runExclusive(async () => {
-      if (cachedResources === undefined) return;
+      if (cachedResources === undefined) {
+        logger.debug('Skipped a resource flag sync: the cached catalog went away while waiting');
+        return;
+      }
 
       const installStatus = await readInstallStatus();
       // An empty map is not an answer: the backend's catalog has not loaded yet, another DBL
       // operation held the provider, or the catalog really is empty — and it reports all three the
       // same way. Reconciling against it would mark every installed resource not-installed and
       // persist that, so leave the flags alone until there is something to act on.
-      if (!installStatus || Object.keys(installStatus).length === 0) return;
+      if (!installStatus || Object.keys(installStatus).length === 0) {
+        logger.debug(
+          'Skipped a resource flag sync: the backend reported no install status, so the flags are left as they are',
+        );
+        return;
+      }
 
       const updateStatus = shouldRecomputeUpdateStatus ? await readUpdateStatus() : undefined;
 
@@ -247,10 +261,10 @@ function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promis
  * caller that has just changed local state awaits this first, then re-reads.
  */
 async function refreshResourceFlags(): Promise<void> {
-  // Joining a sync that is already running is not enough, for two reasons: it may have read its
-  // project metadata before the change this caller just made, and a background sync does not
-  // refresh `updateAvailable` at all. Let any running sync finish, then start one that is
-  // guaranteed to observe the change and to ask the backend.
+  // Joining a sync that is already running is not enough, for two reasons: it may have asked the
+  // backend before the change this caller just made, and a background sync does not refresh
+  // `updateAvailable` at all. Let any running sync finish, then start one that is guaranteed to
+  // observe the change and to ask again.
   if (syncInFlight) await syncInFlight;
   await ensureInstalledFlagsSynced(true);
 }
