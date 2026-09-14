@@ -181,10 +181,7 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
       // stays true until the mouse actually moves, at which point currentParaRef is reset and
       // the next mouseover re-evaluates normally.
       suppressUntilMoveRef.current = true;
-      if (hoverTimerRef.current !== undefined) {
-        clearTimeout(hoverTimerRef.current);
-        hoverTimerRef.current = undefined;
-      }
+      clearHoverTimer();
       setHoveredData(undefined);
     };
 
@@ -215,12 +212,9 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
       cancelAnimationFrame(rafIdRef.current);
       // Runs on unmount AND whenever `enabled` flips to false mid-hover — either way, a reveal
       // pending from before must not fire once nothing can render it.
-      if (hoverTimerRef.current !== undefined) {
-        clearTimeout(hoverTimerRef.current);
-        hoverTimerRef.current = undefined;
-      }
+      clearHoverTimer();
     };
-  }, [enabled]); // refs are stable; re-run only when enabled flips to (un)attach listeners
+  }, [enabled, clearHoverTimer]); // refs are stable; re-run only when enabled or clearHoverTimer changes
 
   return (
     <div
