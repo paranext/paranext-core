@@ -1346,6 +1346,13 @@ function assertOptionalContentZoomArgument(
  * the user is looking at for an id the caller believes is still open elsewhere. The no-id case,
  * which never claimed to act on any particular web view, always falls back to the focused window
  * instead, or no-ops if nothing is focused.
+ *
+ * That fallback reads focus directly rather than {@link getTargetWindowId} — the accessor the routed
+ * calls above use — because the command promises the focused window's last focused tab, and the
+ * routing target deliberately holds on to the previous window while a newly focused one starts up.
+ * Routing by it would zoom a pane in a window the user has already left. The startup skew it exists
+ * to absorb is covered here by {@link resolveShardForWindow}, which waits out the focused window's
+ * shard announcement.
  */
 async function resolveContentZoomShard(
   webViewId: unknown,
