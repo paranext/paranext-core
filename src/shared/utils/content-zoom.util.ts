@@ -3,6 +3,7 @@ import {
   ContentZoomKind,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  RESERVED_CONTENT_ZOOM_AREA_ID,
   ZOOM_STEP,
 } from '@shared/models/content-zoom.model';
 
@@ -47,10 +48,15 @@ export function isValidZoomFactor(value: unknown): value is number {
 
 /**
  * `true` for a well-formed zoom area id: lower-case letters, digits and hyphens, starting with a
- * letter.
+ * letter, and not {@link RESERVED_CONTENT_ZOOM_AREA_ID}, whose CSS custom property is the pane-wide
+ * default every other area falls back to.
  */
 export function isValidContentZoomAreaId(value: unknown): value is string {
-  return typeof value === 'string' && CONTENT_ZOOM_AREA_ID_PATTERN.test(value);
+  return (
+    typeof value === 'string' &&
+    value !== RESERVED_CONTENT_ZOOM_AREA_ID &&
+    CONTENT_ZOOM_AREA_ID_PATTERN.test(value)
+  );
 }
 
 function isContentZoomKind(value: string): value is ContentZoomKind {

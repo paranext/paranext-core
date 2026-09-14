@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { ZOOM_STEP } from '@shared/models/content-zoom.model';
-import { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
+import {
+  CONTENT_ZOOM_AREA_ID_PATTERN,
+  getContentZoomCssVariable,
+  RESERVED_CONTENT_ZOOM_AREA_ID,
+  ZOOM_STEP,
+} from '@shared/models/content-zoom.model';
+import {
+  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  MAIN_CONTENT_ZOOM_AREA,
+} from '@shared/models/web-view.model';
 import {
   adjustZoomFactor,
   buildContentZoomMemoryKey,
@@ -56,6 +64,22 @@ describe('content-zoom.util', () => {
     expect(isValidContentZoomAreaId('')).toBe(false);
     expect(isValidContentZoomAreaId('a:b')).toBe(false);
     expect(isValidContentZoomAreaId(3)).toBe(false);
+  });
+
+  it('rejects the reserved area id, whose variable is the pane-wide default', () => {
+    expect(RESERVED_CONTENT_ZOOM_AREA_ID).toBe('default');
+    expect(getContentZoomCssVariable(RESERVED_CONTENT_ZOOM_AREA_ID)).toBe(
+      CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+    );
+    // The raw pattern still matches it; only the predicate rules it out
+    expect(CONTENT_ZOOM_AREA_ID_PATTERN.test(RESERVED_CONTENT_ZOOM_AREA_ID)).toBe(true);
+    expect(isValidContentZoomAreaId(RESERVED_CONTENT_ZOOM_AREA_ID)).toBe(false);
+    expect(() =>
+      buildContentZoomMemoryKey('editor', 'abc123', RESERVED_CONTENT_ZOOM_AREA_ID),
+    ).toThrow();
+    expect(
+      parseContentZoomMemoryKey(`editor:abc123:${RESERVED_CONTENT_ZOOM_AREA_ID}`),
+    ).toBeUndefined();
   });
 
   it('builds memory keys as kind:identity:area and parses them back, keeping colons inside the identity', () => {
