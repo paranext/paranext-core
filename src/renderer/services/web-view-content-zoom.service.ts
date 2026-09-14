@@ -692,10 +692,12 @@ export async function resetContentZoom(
   // Read the definition after the await, for the reason given in `adjustContentZoom`.
   const definition = deps.getDefinition(target);
   if (!definition) return;
+  // Only a pane that actually holds its own level for the area has anything to give up — and only
+  // then may the shared key go, which every sibling pane of this identity follows.
   if (getOwnLevels(definition)[area] !== undefined) {
     if (!writeOwnLevel(definition, area, undefined)) return;
+    writeMemory(definition, area, undefined);
   }
-  writeMemory(definition, area, undefined);
   // The label is read once at initialization, so the factor reaches the pane without waiting on a
   // cross-process request that could also fail after the state was already written.
   pushContentZoom(target, {
