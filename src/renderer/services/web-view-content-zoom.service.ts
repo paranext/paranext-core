@@ -450,8 +450,11 @@ export function pushContentZoom(
   const areas = areasByWebViewId.get(webViewId) ?? [];
   if (areas.length === 0 || !root) {
     // `zoom` predates `setProperty` support for this non-standard property; the named accessor
-    // is the form every engine implements for it, including the empty-string clear below.
-    if (mayScaleWholeIframe(webViewId)) iframe.style.zoom = String(defaultZoom);
+    // is the form every engine implements for it, including the empty-string clear.
+    // Assigning in both directions is what gives the host zoom a path back: a pane that may no
+    // longer be whole-scaled — one whose grant was revoked, or whose definition cannot be found —
+    // is cleared here rather than keeping whatever the previous content left on the element.
+    iframe.style.zoom = mayScaleWholeIframe(webViewId) ? String(defaultZoom) : '';
     return; // a view without areas has no per-area action to announce
   }
   iframe.style.zoom = '';
@@ -474,15 +477,15 @@ export function pushContentZoom(
  * runs on unmount, so the pane's id, and anything keyed by it, survives a reload). Clears any
  * fallback grace or grant left over from whatever the pane showed before — otherwise a grant the
  * old content earned would still authorize scaling the new content before its own bootstrap gets a
- * chance to report. For a non-URL pane this then also clears the whole-iframe `zoom` a reload does
- * not reset on its own (it lives on the host `<iframe>` element, not the content a reload
- * replaces), so the new content never renders whole-scaled on the strength of the old grant, before
- * arming a fresh grace exactly as if the pane had just been opened: a pane whose bootstrap never
- * runs at all (an HTML view opened with `allowScripts: false`, say) still eventually gets the
- * whole-iframe fallback, and one that does go on to report an area within the grace still cancels
- * it as usual. A URL pane keeps its immediate fallback and is left out of this reset:
- * {@link pushContentZoom} reapplies it below regardless, since {@link mayScaleWholeIframe} always
- * allows a URL pane.
+ * chance to report. For a non-URL pane it then arms a fresh grace exactly as if the pane had just
+ * been opened: a pane whose bootstrap never runs at all (an HTML view opened with `allowScripts:
+ * false`, say) still eventually gets the whole-iframe fallback, and one that does go on to report
+ * an area within the grace still cancels it as usual. The whole-iframe `zoom` a reload does not
+ * reset on its own (it lives on the host `<iframe>` element, not the content a reload replaces) is
+ * cleared by the {@link pushContentZoom} below, which assigns the host zoom in both directions, so
+ * the new content never renders whole-scaled on the strength of the old grant. A URL pane keeps its
+ * immediate fallback and is left out of the grace: {@link mayScaleWholeIframe} always allows a URL
+ * pane, so that same push reapplies it.
  *
  * The pane's last-reported areas are deliberately kept. A real load replaces the iframe's realm, so
  * the fresh content's bootstrap reports its own areas from scratch; dropping them here instead
@@ -494,11 +497,8 @@ export function pushContentZoom(
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
   clearFallbackGrace(webViewId);
   const definition = deps.getDefinition(webViewId);
-  if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
+  if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL)
     startFallbackGrace(webViewId);
-    const iframe = deps.getIframe(webViewId);
-    if (iframe) iframe.style.zoom = '';
-  }
   pushContentZoom(webViewId);
 }
 
