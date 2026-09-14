@@ -672,7 +672,7 @@ function ProjectRowView({
   const rowNode = (
     <CommandItem
       ref={row.isSelected ? selectedRowRef : undefined}
-      value={`${row.rowKey} ${row.shortName} ${row.fullName} ${row.language ?? ''} ${row.languageCode ?? ''}`}
+      value={`${row.rowKey} ${row.shortName} ${row.fullName ?? ''} ${row.language ?? ''} ${row.languageCode ?? ''}`}
       onSelect={() => {
         if (row.isDisabled) return;
         onClick(row);
@@ -740,7 +740,7 @@ function ProjectRowView({
         className="tw:max-w-xs tw:text-center"
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
-        <div className="tw:font-semibold">{row.fullName}</div>
+        <div className="tw:font-semibold">{row.fullName ?? row.shortName}</div>
         {tooltipHasLanguage && (
           <div className="tw:text-sm">
             {row.language}
@@ -1022,7 +1022,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       result = result.filter(
         (r) =>
           r.shortName.toLowerCase().includes(needle) ||
-          r.fullName.toLowerCase().includes(needle) ||
+          (r.fullName ?? '').toLowerCase().includes(needle) ||
           (r.language ?? '').toLowerCase().includes(needle) ||
           (r.languageCode ?? '').toLowerCase().includes(needle),
       );

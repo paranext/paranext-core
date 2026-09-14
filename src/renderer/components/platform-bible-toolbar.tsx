@@ -321,7 +321,7 @@ function ToolbarProjectSelector({
       if (pendingProject)
         return (
           <ProjectSelectorLabel
-            fullName={pendingProject.fullName}
+            fullName={pendingProject.fullName ?? pendingProject.shortName}
             shortName={pendingProject.shortName}
           />
         );
@@ -329,7 +329,12 @@ function ToolbarProjectSelector({
         return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
       const named = selected ?? displayedProject;
       if (!named) return placeholder;
-      return <ProjectSelectorLabel fullName={named.fullName} shortName={named.shortName} />;
+      return (
+        <ProjectSelectorLabel
+          fullName={named.fullName ?? named.shortName}
+          shortName={named.shortName}
+        />
+      );
     },
     [pendingProject, displayedProject, currentProjectError, placeholder],
   );
