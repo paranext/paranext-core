@@ -542,6 +542,95 @@ describe('web-view-content-zoom.service', () => {
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.2 });
   });
 
+  /**
+   * Replaces the settings dep with one whose memory reads can be made to fail or to park, so a test
+   * can drive what the flush's round trip does. Everything else behaves as the default harness.
+   */
+  function useControllableMemoryReads(): {
+    failNextReads: (count: number) => void;
+    parkNextRead: () => Promise<() => void>;
+  } {
+    let readsToFail = 0;
+    let parkRead: ((release: () => void) => void) | undefined;
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          if (key === MEMORY && readsToFail > 0) {
+            readsToFail -= 1;
+            throw new Error('network blip');
+          }
+          if (key === MEMORY && parkRead) {
+            const announce = parkRead;
+            parkRead = undefined;
+            await new Promise<void>((resolve) => {
+              announce(resolve);
+            });
+          }
+          return settings[key];
+        },
+        set: settingsSet,
+        subscribe: async (key: string, callback: (value: unknown) => void) => {
+          if (key === MEMORY) memoryCallbacks.push(callback);
+          else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
+          callback(settings[key]);
+          return async () => {};
+        },
+      },
+    });
+    return {
+      failNextReads: (count: number) => {
+        readsToFail = count;
+      },
+      parkNextRead: () =>
+        new Promise<() => void>((resolve) => {
+          parkRead = resolve;
+        }),
+    };
+  }
+
+  it('keeps the echo guard on a pending level until the write carrying it has landed', async () => {
+    const reads = useControllableMemoryReads();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main');
+    const parked = reads.parkNextRead();
+    const flushing = __flushContentZoomMemoryForTesting();
+    const release = await parked;
+    // A foreign window's value for the same key arrives while this window's write is in flight.
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 0.8 }));
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    release();
+    await flushing;
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
+  });
+
+  it('retries a memory write whose read failed, storing the level on the retry', async () => {
+    const reads = useControllableMemoryReads();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main');
+    reads.failNextReads(1);
+    await __flushContentZoomMemoryForTesting();
+    expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
+    await __flushContentZoomMemoryForTesting();
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
+  });
+
+  it('gives a memory edit up after three failed attempts, warning once and keeping nothing pending', async () => {
+    const reads = useControllableMemoryReads();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main');
+    reads.failNextReads(3);
+    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomMemoryForTesting();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('giving up'));
+    settingsSet.mockClear();
+    await __flushContentZoomMemoryForTesting();
+    expect(settingsSet).not.toHaveBeenCalled();
+  });
+
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
     setContentZoomAreas('editor-1', []);
     await adjustContentZoom('editor-1', 1);

@@ -163,8 +163,17 @@ let memoryChain: Promise<void> = Promise.resolve();
 /** How long a per-key memory edit waits for more edits to the same or another key before it flushes. */
 const MEMORY_WRITE_DEBOUNCE_MS = 250;
 
-/** Memory edits not yet flushed to the setting, keyed by memory key; `undefined` means delete. */
+/** Memory edits not yet stored in the setting, keyed by memory key; `undefined` means delete. */
 const pendingMemoryWrites = new Map<string, number | undefined>();
+
+/** What a memory transaction did, so its caller can tell a write that failed from one that ran. */
+type MemoryTransactionOutcome = 'written' | 'unchanged' | 'failed';
+
+/** How many times in a row a flush may fail before it gives its edits up. */
+const MAX_MEMORY_FLUSH_ATTEMPTS = 3;
+
+/** Consecutive failed flush attempts; reset by any attempt that reached the setting. */
+let memoryFlushFailures = 0;
 
 /**
  * Debounced entry point for {@link flushMemoryWrites}: a burst of edits within
@@ -209,6 +218,7 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   activeAreaByWebViewId.clear();
   unknownAreasLoggedByWebViewId.clear();
   pendingMemoryWrites.clear();
+  memoryFlushFailures = 0;
   flushMemoryWritesDebounced.cancel();
   memoryChain = Promise.resolve();
   if (beforeUnloadListener !== undefined && typeof window !== 'undefined') {
@@ -577,35 +587,57 @@ function memoryKeyFor(
  */
 function enqueueMemoryTransaction(
   mutate: (memory: MemoryRecord) => MemoryRecord | undefined,
-): Promise<void> {
+): Promise<MemoryTransactionOutcome> {
   const previous = memoryChain;
-  memoryChain = (async () => {
+  const transaction = (async (): Promise<MemoryTransactionOutcome> => {
     await previous;
     try {
       const memory = await readMemory();
-      if (!memory) return;
+      if (!memory) return 'failed';
       const next = mutate({ ...memory });
-      if (!next) return;
+      if (!next) return 'unchanged';
       await deps.settings.set('platform.webViewContentZoomMemory', next);
       cachedMemory = next;
+      return 'written';
     } catch (e) {
       logger.warn(`Content zoom: could not write memory. ${getErrorMessage(e)}`);
+      return 'failed';
     }
   })();
-  return memoryChain;
+  memoryChain = (async () => {
+    await transaction;
+  })();
+  return transaction;
+}
+
+/**
+ * Forgets the edits a finished flush carried, leaving behind any key a newer edit has changed since
+ * the flush read it — that one is a pending edit of its own and still needs a write.
+ */
+function clearStoredMemoryWrites(stored: Map<string, number | undefined>): void {
+  stored.forEach((level, key) => {
+    if (pendingMemoryWrites.has(key) && pendingMemoryWrites.get(key) === level)
+      pendingMemoryWrites.delete(key);
+  });
 }
 
 /**
  * Applies every pending edit as one transaction against the latest stored memory, so a debounced
  * burst becomes a single write. Safe to call with nothing pending.
+ *
+ * The edits stay pending for the whole round trip and are forgotten only once the transaction says
+ * they are stored. That is what {@link syncSiblingsFromMemory} reads to tell an echo that predates a
+ * local edit from a real change, and it is what lets a failed attempt be tried again instead of
+ * being dropped with the pane's state already changed. A run of {@link MAX_MEMORY_FLUSH_ATTEMPTS}
+ * failures gives the edits up rather than retrying forever, which would hold the echo guard open
+ * for the rest of the session.
  */
-function flushMemoryWrites(): Promise<void> {
-  if (pendingMemoryWrites.size === 0) return Promise.resolve();
-  const pending = new Map(pendingMemoryWrites);
-  pendingMemoryWrites.clear();
-  return enqueueMemoryTransaction((memory) => {
+async function flushMemoryWrites(): Promise<void> {
+  if (pendingMemoryWrites.size === 0) return;
+  const flushing = new Map(pendingMemoryWrites);
+  const outcome = await enqueueMemoryTransaction((memory) => {
     let changed = false;
-    pending.forEach((level, key) => {
+    flushing.forEach((level, key) => {
       if (level === undefined) {
         if (key in memory) {
           delete memory[key];
@@ -618,6 +650,22 @@ function flushMemoryWrites(): Promise<void> {
     });
     return changed ? memory : undefined;
   });
+  if (outcome !== 'failed') {
+    memoryFlushFailures = 0;
+    clearStoredMemoryWrites(flushing);
+    return;
+  }
+  memoryFlushFailures += 1;
+  if (memoryFlushFailures < MAX_MEMORY_FLUSH_ATTEMPTS) {
+    // The edits are still pending, so the re-scheduled flush carries them.
+    flushMemoryWritesDebounced().catch(() => {});
+    return;
+  }
+  memoryFlushFailures = 0;
+  clearStoredMemoryWrites(flushing);
+  logger.warn(
+    `Content zoom: giving up on ${flushing.size} memory edit(s) after ${MAX_MEMORY_FLUSH_ATTEMPTS} failed attempts.`,
+  );
 }
 
 /**
