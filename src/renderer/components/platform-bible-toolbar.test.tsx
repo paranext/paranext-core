@@ -1347,8 +1347,7 @@ describe('PlatformBibleToolbar project selector label', () => {
 
     renderAtStep(SHRINK_STEP.WIDE);
 
-    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('TP');
-    expect(screen.getByTestId('project-picker-value')).not.toHaveTextContent('TP - TP');
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent(/^TP$/);
   });
 
   it('shows an error in place of the label, not alongside it', async () => {
