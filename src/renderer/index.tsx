@@ -135,8 +135,8 @@ initConnectionLostService();
     // Composes the content-zoom service with the web-view and window shards' functions before the
     // web-view service shard (below) can open a web view that needs them. Importing either shard
     // directly from the zoom service would create a cycle, since both shards import from it; this
-    // is the one place that can wire them together without one. Not awaited: its startup prune does
-    // a project lookup, and no web view should wait on that to open.
+    // is the one place that can wire them together without one. Not awaited: it reads two settings,
+    // and no web view should wait on those round trips to open.
     initializeContentZoomService({
       getDefinition: getSavedWebViewDefinitionSync,
       updateDefinition: (webViewId, update) => updateWebViewDefinitionSync(webViewId, update),
