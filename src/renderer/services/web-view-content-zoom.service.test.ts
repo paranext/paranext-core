@@ -207,6 +207,26 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).toHaveBeenLastCalledWith('main', 'Default · 150 %');
   });
 
+  it('leaves the shared memory key alone when the acting pane holds no level of its own', async () => {
+    settings[MEMORY] = { 'editor:proj-A:main': 1.2 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { main: 1.2 } },
+    });
+    requireDefinition('editor-1').state = {}; // the drift state: memory remembers, the pane does not
+    settingsSet.mockClear();
+    await resetContentZoom('editor-1', 'main');
+    await __flushContentZoomMemoryForTesting();
+    expect(settingsSet).not.toHaveBeenCalled();
+    memoryCallbacks.forEach((cb) => cb(settings[MEMORY]));
+    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
+  });
+
   it('clamps at the range edges and does not write when nothing changes', async () => {
     requireDefinition('editor-1').state = { [LEVELS]: { main: 3 } };
     await adjustContentZoom('editor-1', 1, 'main');
