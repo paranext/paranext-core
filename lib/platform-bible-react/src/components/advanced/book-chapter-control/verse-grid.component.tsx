@@ -1,4 +1,4 @@
-import { ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.utils';
+import { verseItemValue } from '@/components/shared/book-item.utils';
 import { NumberedItemGrid } from './numbered-item-grid.component';
 
 export interface VerseGridProps {
@@ -18,6 +18,8 @@ export interface VerseGridProps {
   isVerseDimmed?: (verse: number) => boolean;
   /** Optional function to determine if a verse should be disabled (not selectable). */
   isVerseDisabled?: (verse: number) => boolean;
+  /** Forwarded to `NumberedItemGrid` — see `suppressKeyboardHighlight` there. */
+  suppressKeyboardHighlight?: boolean;
   /** Optional additional class name for styling */
   className?: string;
 }
@@ -35,6 +37,7 @@ export function VerseGrid({
   setVerseRef,
   isVerseDimmed,
   isVerseDisabled,
+  suppressKeyboardHighlight,
   className,
 }: VerseGridProps) {
   if (!bookId || endVerse <= 0) return undefined;
@@ -42,9 +45,7 @@ export function VerseGrid({
   return (
     <NumberedItemGrid
       count={endVerse}
-      valueBuilder={(verse) =>
-        `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapterNum}:${verse}`
-      }
+      valueBuilder={(verse) => verseItemValue(bookId, chapterNum, verse)}
       onSelect={onVerseSelect}
       itemRef={setVerseRef}
       isDisabled={isVerseDisabled}
@@ -52,6 +53,7 @@ export function VerseGrid({
       isSelected={(verse) =>
         bookId === scrRef.book && chapterNum === scrRef.chapterNum && verse === scrRef.verseNum
       }
+      suppressKeyboardHighlight={suppressKeyboardHighlight}
       className={className}
     />
   );

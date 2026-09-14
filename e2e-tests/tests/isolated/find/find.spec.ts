@@ -458,7 +458,13 @@ function recentSearchesButton(frame: FrameLocator): Locator {
   return frame.getByRole('button', { name: /show recent searches/i });
 }
 
-/** Open the recent searches history dropdown. */
+/**
+ * Open the recent searches history dropdown.
+ *
+ * Its entries are `menuitem`s, not `option`s: the list is a Radix `DropdownMenu`. Matching on the
+ * role is what scopes an assertion to the list rather than to the many result-card texts that also
+ * contain the search term.
+ */
 async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
   await expect(recentSearchesButton(frame)).toBeVisible({ timeout: 5_000 });
   await recentSearchesButton(frame).click();
@@ -898,7 +904,7 @@ test.describe('Search History', () => {
     await mainPage.waitForTimeout(HISTORY_DEBOUNCE_MS + 500);
 
     await openHistoryDropdown(frame);
-    await expect(frame.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
+    await expect(frame.getByRole('menuitem', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 
   test('should add search term to history immediately when Enter is pressed', async ({
@@ -913,7 +919,7 @@ test.describe('Search History', () => {
 
     // History updates synchronously on Enter — no debounce wait needed
     await openHistoryDropdown(frame);
-    await expect(frame.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
+    await expect(frame.getByRole('menuitem', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 
   test('should add the term in the box to history when options change, even right after an option change already recorded a different term', async ({
@@ -969,7 +975,9 @@ test.describe('Search History', () => {
     await searchInput.fill('');
 
     await openHistoryDropdown(frame);
-    await expect(frame.getByRole('option', { name: secondTerm })).toBeVisible({ timeout: 5_000 });
+    await expect(frame.getByRole('menuitem', { name: secondTerm })).toBeVisible({
+      timeout: 5_000,
+    });
   });
 });
 
