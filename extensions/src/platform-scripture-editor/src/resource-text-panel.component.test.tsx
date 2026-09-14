@@ -556,6 +556,68 @@ describe('ResourceTextPanel content-area waiting state', () => {
   });
 });
 
+describe('ResourceTextPanel switching the resource shown', () => {
+  /** The props that move together when the panel is pointed at the commentary instead of the text. */
+  const SWITCHED_TO_COMMENTARY = {
+    resourceType: 'CommentaryResource',
+    filteredResources: [COMMENTARY_ROW],
+    selectedRef: COMMENTARY_ROW,
+    dblResources: [INSTALLED_COMMENTARY],
+  } as const;
+
+  it("does not present the previous resource's chapter as the newly selected one", () => {
+    // The SAME USJ object across the switch, settled throughout: this is what the data layer hands
+    // back for the whole window between the pick and the new resource's first delivery. Nothing
+    // about the value marks it as the outgoing resource's — a valid USJ carries no book or project
+    // of its own — so the panel can only know by having recorded whose answer it was holding.
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ, isUsjLoading: false });
+    expectEditorShowing();
+
+    rerenderWith({ ...SWITCHED_TO_COMMENTARY, usjPossiblyError: SAMPLE_USJ, isUsjLoading: false });
+
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+  });
+
+  it("shows the new resource's chapter once it arrives", () => {
+    // The recovery direction, and the assumption the whole mechanism rests on: a delivery is
+    // deserialized fresh, so it can never be identity-equal to the value it replaces, and that
+    // identity change is what re-attributes the held value to the resource on screen. Without this
+    // case, bookkeeping that pinned the panel on the spinner forever would leave the suite green —
+    // every other assertion here is about what the panel WITHHOLDS.
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ, isUsjLoading: false });
+    rerenderWith({ ...SWITCHED_TO_COMMENTARY, usjPossiblyError: SAMPLE_USJ, isUsjLoading: false });
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+    setUsjSpy.mockClear();
+
+    rerenderWith({ ...SWITCHED_TO_COMMENTARY, usjPossiblyError: OTHER_USJ, isUsjLoading: false });
+
+    expectEditorShowing();
+    // The spinner unmounted the editor, so the remount holds nothing until the feed refills it.
+    expect(setUsjSpy).toHaveBeenLastCalledWith(OTHER_USJ);
+  });
+
+  it('keeps waiting when a round trip through an unresolved row lands on another resource', () => {
+    // Ownership is recorded only while the row has resolved to a project. That guard exists so a
+    // row resolving with the same value in hand does not wedge the panel on a spinner — but it must
+    // not also let the value be re-attributed on the way through: picking a different resource
+    // still leaves the first one's chapter in hand, and passing through an unresolved row on the
+    // way must not launder it into an answer for the second.
+    const unresolvedCommentaryRow: PickerResource = { ...COMMENTARY_ROW, projectId: undefined };
+    const { rerenderWith } = renderPanel({ usjPossiblyError: SAMPLE_USJ, isUsjLoading: false });
+    expectEditorShowing();
+
+    rerenderWith({
+      ...SWITCHED_TO_COMMENTARY,
+      selectedRef: unresolvedCommentaryRow,
+      usjPossiblyError: SAMPLE_USJ,
+      isUsjLoading: false,
+    });
+    rerenderWith({ ...SWITCHED_TO_COMMENTARY, usjPossiblyError: SAMPLE_USJ, isUsjLoading: false });
+
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
+  });
+});
+
 describe('ResourceTextPanel editor feed while the tab is hidden', () => {
   // rc-dock keeps an inactive tab's pane mounted under `display: none`, so this panel keeps
   // receiving chapters for a view nobody can see. See `.claude/rules/cross-view-sync-hidden-views.md`.

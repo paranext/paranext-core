@@ -3167,20 +3167,23 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
         isUsjSettled: false,
+        isAnswerCurrent: true,
       }),
     ).toBe('loading');
   });
 
   it('returns "loading" while nothing has arrived and the subscription is still working', () => {
-    // The state a caller reaches by seeding its hook with `undefined` (the Bible texts panel): no
-    // chapter in hand and none refused, so the honest answer is a spinner. Falling to `'ready'`
-    // here would mount an editor with nothing to put in it.
+    // The Bible texts panel's own first-render state: it seeds its hook with nothing, so the value
+    // is `undefined` until a chapter arrives, and none has been refused. Falling to `'ready'` here
+    // would mount an editor with nothing to put in it, which paints Lexical's "Enter some
+    // Scripture…" prompt.
     expect(
       resolveResourceContentState({
         resourceProjectId: PROJECT_ID,
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
         isUsjSettled: false,
+        isAnswerCurrent: true,
       }),
     ).toBe('loading');
   });
@@ -3195,6 +3198,25 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: undefined,
         currentBookNum: GENESIS,
         isUsjSettled: true,
+        isAnswerCurrent: true,
+      }),
+    ).toBe('failed');
+  });
+
+  it('still settles on "failed" when nothing arrived and the answer reads stale', () => {
+    // Pins the order of the two escalations: the `undefined` branch has to be decided BEFORE the
+    // currency check. Currency is derived from a change of value IDENTITY, and a delivered
+    // `undefined` produces none when the held value is already `undefined` — so it reads stale here
+    // forever, and a currency check consulted first would hold the panel on a spinner that can
+    // never resolve. That is the very symptom the settled-`undefined` branch above exists to
+    // remove, so the two orderings are not interchangeable.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: undefined,
+        currentBookNum: GENESIS,
+        isUsjSettled: true,
+        isAnswerCurrent: false,
       }),
     ).toBe('failed');
   });
@@ -3206,6 +3228,7 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
         currentBookNum: GENESIS,
         isUsjSettled: true,
+        isAnswerCurrent: true,
       }),
     ).toBe('ready');
   });
@@ -3217,6 +3240,7 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: missingBook(GENESIS),
         currentBookNum: GENESIS,
         isUsjSettled: true,
+        isAnswerCurrent: true,
       }),
     ).toBe('bookNotAvailable');
   });
@@ -3237,6 +3261,7 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: missingBook(MATTHEW),
         currentBookNum: GENESIS,
         isUsjSettled: true,
+        isAnswerCurrent: true,
       }),
     ).toBe('loading');
   });
@@ -3250,6 +3275,7 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: missingBook(GENESIS, 'someOtherProject'),
         currentBookNum: GENESIS,
         isUsjSettled: true,
+        isAnswerCurrent: true,
       }),
     ).toBe('loading');
   });
@@ -3269,6 +3295,7 @@ describe('resolveResourceContentState', () => {
         },
         currentBookNum: GENESIS,
         isUsjSettled: true,
+        isAnswerCurrent: true,
       }),
     ).toBe('ready');
   });
@@ -3284,6 +3311,7 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: missingBook(GENESIS, 'ABC123'),
         currentBookNum: GENESIS,
         isUsjSettled: true,
+        isAnswerCurrent: true,
       }),
     ).toBe('bookNotAvailable');
   });
@@ -3298,6 +3326,7 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: missingBook(0),
         currentBookNum: 0,
         isUsjSettled: true,
+        isAnswerCurrent: true,
       }),
     ).toBe('loading');
   });
@@ -3315,6 +3344,7 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
         currentBookNum: GENESIS,
         isUsjSettled: true,
+        isAnswerCurrent: true,
       }),
     ).toBe('failed');
   });
@@ -3331,6 +3361,39 @@ describe('resolveResourceContentState', () => {
         usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
         currentBookNum: GENESIS,
         isUsjSettled: false,
+        isAnswerCurrent: true,
+      }),
+    ).toBe('loading');
+  });
+
+  // A resource switch hands the panel the PREVIOUS resource's chapter: the data layer preserves its
+  // value across a source change, and the `ChapterUSJ` selector does not change on a switch. The
+  // loading flag does not mark the window either — it is re-armed on a provider change, but the old
+  // provider is handed back for the whole async lookup of the new one. A valid USJ carries no
+  // provenance of its own, so the panel has to say whose answer it is holding.
+  it('returns "loading" when the chapter in hand answers for a different resource', () => {
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
+        currentBookNum: GENESIS,
+        isUsjSettled: true,
+        isAnswerCurrent: false,
+      }),
+    ).toBe('loading');
+  });
+
+  it('withholds a missing-book message that answers for a different resource', () => {
+    // Belt and braces: the identity check inside this function already covers a missing-book error
+    // naming another project. Asserted so that ordering the currency check ahead of the error
+    // branches cannot silently start reporting one resource's failure against another.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(GENESIS),
+        currentBookNum: GENESIS,
+        isUsjSettled: true,
+        isAnswerCurrent: false,
       }),
     ).toBe('loading');
   });

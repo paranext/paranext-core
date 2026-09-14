@@ -28,6 +28,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 import {
   hasNewScrollTarget,
@@ -336,6 +337,12 @@ export function ResourceTextPanel({
   //
   // Keyed on `usjPossiblyError`, NOT on `usjFromPdp`: the latter is also `undefined` when the read
   // failed, so using it would report a genuine error as an empty chapter and swallow the failure.
+  //
+  // Deliberately NOT gated on `isAnswerCurrent`, unlike `contentState`: a held `undefined` never
+  // changes identity, so nothing is ever recorded as its owner and gating here would suppress the
+  // ordinary empty-chapter message rather than only a misattributed one. The stale case that leaves
+  // open is described on `resolveResourceContentState`. `renderContent` below tests `'loading'`
+  // before this, which is what keeps the message off a switch in every other case — keep that order.
   const isBlankChapter = useMemo(
     () =>
       !isUsjLoading &&
@@ -343,6 +350,55 @@ export function ResourceTextPanel({
         (usjPossiblyError === undefined && scrRef.chapterNum > 0)),
     [usjFromPdp, usjPossiblyError, isUsjLoading, scrRef.chapterNum],
   );
+
+  // Which resource the value in hand answers for. Why no signal already reaching this panel can
+  // answer that — and why the check is ordered where it is — is documented once on
+  // `resolveResourceContentState`; this is the bookkeeping that feeds it.
+  //
+  // A change of value IDENTITY marks a fresh delivery: every value crosses the network object RPC
+  // boundary and is deserialized per delivery, so it can never be identity-equal to what it
+  // replaces even when the bytes match. Recording the resource in effect at that moment therefore
+  // tells "this answers for the resource on screen" from "this is what the reader just navigated
+  // away from".
+  //
+  // That deserialization is the load-bearing assumption, and it is a property of the delivery
+  // contract rather than of this panel. Anything that hands the same object identity back on
+  // repeated reads — a cache between the provider and here, or a provider that mutates a live
+  // object in place instead of replacing it — silently breaks the mechanism in one direction: the
+  // record stops updating, no resource ever matches it again, and the panel holds a spinner that
+  // never clears. Such a layer has to keep delivering a fresh object (copy before handing it over)
+  // or this check has to be replaced with an explicit delivery counter.
+  //
+  // One residual race is accepted. Attribution uses the resource of the CURRENT render, not the
+  // provider that actually delivered the value, and those differ for a moment: the provider lookup
+  // is async and the hook preserves the OUTGOING provider until it resolves, so the outgoing
+  // resource's subscription is still live and still keyed on an unchanged selector. An emission
+  // from it inside that window would be recorded as answering for the incoming resource and shown.
+  // Narrow — these resources are read-only and rarely emit — and closing it needs a per-delivery
+  // sequence number from the data layer, which the panel is not given.
+  //
+  // Held as state adjusted during render, not as a ref written during render: React re-runs the
+  // component before committing anything, so the value below is read from the adjusted state, and a
+  // render React discards leaves nothing behind. The update has to happen here rather than in an
+  // effect either way — an effect records the owner a commit too late, which paints one stale frame.
+  const [answeredFor, setAnsweredFor] = useState<{
+    value: unknown;
+    resourceProjectId: string | undefined;
+  }>({ value: undefined, resourceProjectId: undefined });
+
+  // Nothing is recorded while the row has not resolved to a project. The value in hand cannot be
+  // attributed to a resource yet, and `resolveResourceContentState` reports `'loading'` for an
+  // unresolved row before it ever consults this — so recording `undefined` here would only pin the
+  // held value to a resource that does not exist, and the panel would stay on the spinner once the
+  // row resolved with that same value still in hand. Leaving the previous record in place is also
+  // what keeps a deselect-and-pick-another round trip honest: the value stays attributed to the
+  // resource it actually arrived for.
+  //
+  // Conditional, which is what makes the render-time update terminate: the re-run sees an
+  // identity-equal value and sets nothing.
+  if (resourceProjectId && answeredFor.value !== usjPossiblyError)
+    setAnsweredFor({ value: usjPossiblyError, resourceProjectId });
+  const isAnswerCurrent = answeredFor.resourceProjectId === resourceProjectId;
 
   // The book-not-available message is withheld unless the failure names the book AND project on
   // screen right now, so a result still describing the reference the user just left cannot be
@@ -355,8 +411,9 @@ export function ResourceTextPanel({
         usjPossiblyError,
         currentBookNum: Canon.bookIdToNumber(scrRef.book),
         isUsjSettled: !isUsjLoading,
+        isAnswerCurrent,
       }),
-    [resourceProjectId, usjPossiblyError, scrRef.book, isUsjLoading],
+    [resourceProjectId, usjPossiblyError, scrRef.book, isUsjLoading, isAnswerCurrent],
   );
 
   // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a

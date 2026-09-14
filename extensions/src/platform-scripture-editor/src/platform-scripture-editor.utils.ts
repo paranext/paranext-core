@@ -1795,6 +1795,15 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | '
  *   settled. With USJ or `undefined` in hand that is invisible (the value is the previous
  *   reference's USJ, not `undefined`); with a stale error in hand it shows the old failure for a
  *   single render before the spinner replaces it.
+ * @param options.isAnswerCurrent Whether the value in hand answers for the resource on screen NOW.
+ *   A data hook preserves its value across a source change, so on a resource switch the previous
+ *   resource's chapter is still in hand with nothing about the value itself to reveal that. The
+ *   caller tracks which resource its held value arrived for and says so here.
+ *
+ *   `isUsjSettled` cannot stand in for this. It is re-armed when the data PROVIDER changes, but a
+ *   resource switch resolves the new provider asynchronously and the old one is handed back for the
+ *   whole lookup — so across the window this parameter exists to cover, the subscription still
+ *   reads settled.
  * @returns Which of the four content states to render.
  */
 export function resolveResourceContentState({
@@ -1802,16 +1811,41 @@ export function resolveResourceContentState({
   usjPossiblyError,
   currentBookNum,
   isUsjSettled,
+  isAnswerCurrent,
 }: {
   resourceProjectId: string | undefined;
   usjPossiblyError: unknown;
   currentBookNum: number;
   isUsjSettled: boolean;
+  isAnswerCurrent: boolean;
 }): ResourceContentState {
   if (!resourceProjectId) return 'loading';
+
   // Nothing in hand. Still on its way until the subscription says otherwise; once it has settled,
   // `undefined` is the delivered answer and there is no text to show.
+  //
+  // Ahead of the currency check below, and that order is load-bearing. `isAnswerCurrent` is
+  // derived from a change of value IDENTITY, which a delivered `undefined` does not produce when
+  // the held value is already `undefined` — so it reads stale here and would pin this case on
+  // `'loading'` forever, which is the symptom this branch exists to remove.
+  //
+  // That precedence leaves one stale case uncovered, rather than none. A resource whose chapter
+  // delivered `undefined` puts `undefined` in hand, and it survives a switch to another resource:
+  // this branch answers before the currency check is consulted, so the panel reports the OUTGOING
+  // resource's blank chapter under the incoming one's name until the new data provider resolves and
+  // re-arms loading. Gating the caller's blank-chapter branch on `isAnswerCurrent` does not fix it —
+  // a held `undefined` never changed identity, so nothing was ever recorded for it and the flag
+  // reads stale even for the resource that really did deliver it. Closing the gap needs a signal
+  // this function is not given; it is left open deliberately, because the orderings available here
+  // trade this narrow case against a spinner that can never resolve.
   if (usjPossiblyError === undefined) return isUsjSettled ? 'failed' : 'loading';
+
+  // Whose answer this is outranks what it says. A resource switch leaves the PREVIOUS resource's
+  // chapter in hand — the data hook preserves its value across a source change, and a chapter
+  // selector does not change when only the resource does, so no timing signal marks it — and a valid
+  // USJ carries no book or project of its own to compare, the way a missing-book error does. Without
+  // this the reader is shown one resource's scripture under another resource's name.
+  if (!isAnswerCurrent) return 'loading';
   if (!isPlatformError(usjPossiblyError)) return 'ready';
 
   // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then
