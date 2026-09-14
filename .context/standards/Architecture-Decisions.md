@@ -5418,14 +5418,15 @@ step, no automation. Just a record.
   does to become visible. The flag is required rather than defaulted so a call site added later has
   to answer the question rather than inherit an answer. This entry exists so the inference is not
   re-attempted.
-- **Scope — this is about activating a NEW window, not about raising an existing one.** Focus state
-  remains the right input for a raise, and is used deliberately today: `isApplicationFocused()`
-  gates the cross-window open raise (`web-view.service-router.ts`) and the move raise, so an in-app
-  action never pulls the app in front of whatever the user is working in. `handleUri` in `main.ts`
-  is just as deliberately *not* gated on it, and its comment states this entry's principle for the
-  case that was already shipped: the raise runs precisely when the app does not own the foreground,
-  because the user asked by following the link. Those guards answer "is this app in front?", which
-  focus state does know. Nothing here argues against them.
+- **Scope — this is about activating a NEW window, not about raising an existing one.** Focus
+  state remains the right input for a raise, and is used deliberately today:
+  `isApplicationFocused()` gates the cross-window open raise (`web-view.service-router.ts`), the
+  move raise, and the withheld-window hand-back, so an in-app action never pulls the app in front
+  of whatever the user is working in. `handleUri` in `main.ts` is just as deliberately *not*
+  gated on it, and its comment states this entry's principle for the case that was already
+  shipped: the raise runs precisely when the app does not own the foreground, because the user
+  asked by following the link. Those guards answer "is this app in front?", which focus state
+  does know. Nothing here argues against them.
 - **Amended 2026-09-09:** The move raise picked up a second, inferred guard that this Scope note
   did not cover: `raiseMoveTarget` (`web-view.service-router.ts`) started leaving a target window
   alone whenever the platform was withholding it from activation, on the theory that a move landing
@@ -5475,7 +5476,12 @@ step, no automation. Just a record.
   not — the user was in another application, or nothing of ours had focus at all — the gate leaves
   the foreground on the newly-revealed window rather than raising a second window of ours over
   whatever the user was in, but it cannot put the foreground back where it came from. That residual
-  case is unsolved by this PR.
+  case is unsolved by this PR. The gate also has a case where it answers wrong in the other
+  direction: a focus handover between two of our own windows leaves `isApplicationFocused()`
+  briefly false, so a withheld window revealed in that gap reads "the user was in another
+  application" and keeps a foreground it was meant to hand back. One background window is enough
+  to reach it. That is this entry's own thesis on the raise side — a question about the
+  foreground standing in for a question about intent.
 - **Where two answers disagree about the same window, the main process wins.** The renderer keeps
   its own latch for the focus requests its panels and web views make as they mount, which never
   leave that process; but that latch only sees gestures in the shell document, and a web view's

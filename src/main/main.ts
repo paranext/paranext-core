@@ -1219,6 +1219,10 @@ async function main() {
         // a raise.
         if (activation.revealWhenReady === 'activate') newWindow.show();
         else {
+          // Inherits `handleWindowBlurred`'s ordering: a focus handover between two of our own windows
+          // clears the flag on the loser's blur, so this can answer false while the user is still in the
+          // app, and the hand-back then declines. Known and accepted; the gap is brief and reaching it
+          // takes a window the user did not ask for.
           wasApplicationFocusedBeforeReveal = isApplicationFocused();
           // Armed before the window is revealed, so the ordering carries no assumption about when
           // Electron dispatches this window's `focus`: a handler running during `showInactive()`
