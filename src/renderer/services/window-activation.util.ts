@@ -69,10 +69,10 @@ export function noteTabAwaitingDocumentFocus(tabId: string): void {
 /**
  * Take the tab that is waiting for document focus, clearing it.
  *
- * Unbounded by design: the gesture-gated catch-up this feeds (a `pointerdown`/`keydown` inside a
- * window still awaiting its first activation) may run long after the note was made — the user can
- * take as long as they like before first clicking into a background window — and that wait is not a
- * reason to drop the tab that was waiting for them.
+ * Unbounded by design: both catch-ups that can reach a window's FIRST activation — a
+ * `pointerdown`/`keydown` inside it, or main naming this window focused — read this, because the
+ * user can take as long as they like before first arriving in a background window, however that
+ * arrival happens, and that wait is not a reason to drop the tab that was waiting for them.
  *
  * @returns The waiting tab's id, or `undefined` if no tab is waiting
  */
@@ -87,12 +87,12 @@ export function takeTabAwaitingDocumentFocus(): string | undefined {
  * Take the tab that is waiting for document focus, but only if the note is no older than
  * `maxAgeMs`; otherwise leaves it in place and returns `undefined`.
  *
- * For the focus-driven catch-up (an already-activated window regaining OS focus, not a gesture
- * inside it): that trigger can fire long after the raise it is meant to catch up on — an unrelated
- * later alt-tab back into this window, once the window has moved on to something else entirely —
- * and consuming a stale note then would focus a tab the user never asked to see. The gesture-gated
- * catch-up has no such spurious trigger (a click IS the arrival it is catching up on), which is why
- * only this bounded read exists for it.
+ * For the focus-driven catch-up (main naming this window focused, not a gesture inside it) once the
+ * window has already been through its first activation: a later transition can fire long after the
+ * raise it is meant to catch up on — an unrelated later alt-tab back into this window, once the
+ * window has moved on to something else entirely — and consuming a stale note then would focus a
+ * tab the user never asked to see. Neither catch-up reads this bounded take for a window's FIRST
+ * activation, whichever trigger reaches it — see {@link takeTabAwaitingDocumentFocus}.
  *
  * @param maxAgeMs How old the note may be and still count as fresh
  * @returns The waiting tab's id if the note is fresh, `undefined` otherwise (leaving it in place)
