@@ -119,6 +119,7 @@ internal class DblResourcesDataProvider(
         return
         [
             ("getDblResources", GetDblResources),
+            ("recomputeDblResourcesInstallStatus", RecomputeDblResourcesInstallStatus),
             ("recomputeDblResourcesUpdateStatus", RecomputeDblResourcesUpdateStatus),
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
@@ -232,20 +233,29 @@ internal class DblResourcesDataProvider(
             lock (_providerGate)
             {
                 FetchResourcesCore();
+                var installedProjectIds = InstalledProjectIdsByDblId();
                 return _resources
-                    .Select(resource => new DblResourceData(
-                        resource.DBLEntryUid.Id,
-                        resource.DisplayName,
-                        resource.FullName,
-                        resource.BestLanguageName,
-                        resource.Type,
-                        resource.Size,
-                        resource.Installed,
-                        resource.IsNewerThanCurrentlyInstalled(),
-                        resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
-                            ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
-                            ?? ""
-                    ))
+                    .Select(resource =>
+                    {
+                        // `installed` and `projectId` come from one lookup, the same one
+                        // RecomputeDblResourcesInstallStatus uses, because the front end reads the
+                        // flag as "there is a project id I can open".
+                        var projectId = installedProjectIds.GetValueOrDefault(
+                            resource.DBLEntryUid.Id,
+                            ""
+                        );
+                        return new DblResourceData(
+                            resource.DBLEntryUid.Id,
+                            resource.DisplayName,
+                            resource.FullName,
+                            resource.BestLanguageName,
+                            resource.Type,
+                            resource.Size,
+                            projectId != "",
+                            resource.IsNewerThanCurrentlyInstalled(),
+                            projectId
+                        );
+                    })
                     .ToList();
             }
         });
@@ -292,7 +302,7 @@ internal class DblResourcesDataProvider(
                 if (!gateTaken || !_hasFetchedResources)
                     return [];
 
-                return ProjectUpdateStatus(_resources, InstalledDblIds());
+                return ProjectUpdateStatus(_resources, InstalledProjectIdsByDblId());
             }
             finally
             {
@@ -303,8 +313,79 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// The DBL entry uids of every resource currently installed locally, gathered in a single pass
-    /// over the project collection.
+    /// Recompute which resources in the already-loaded catalog are installed locally, and under
+    /// which project id.
+    /// </summary>
+    /// <remarks>
+    /// Callers cannot work this out for themselves: a resource project's id is unrelated to the DBL
+    /// entry it was installed from — ParatextData records the entry uid in the project's settings
+    /// and matches on that — so nothing in the local project list identifies the catalog row it
+    /// belongs to. Never loads the catalog, for the same reason as
+    /// <see cref="RecomputeDblResourcesUpdateStatus"/>.
+    /// </remarks>
+    /// <returns>
+    /// The local project id of each catalogued resource, keyed by DBL entry uid, empty for one that
+    /// is not installed. The dictionary itself is empty when the catalog has not loaded yet or when
+    /// another DBL operation holds the gate; callers must read that as "no answer" and keep the
+    /// values they have, never as "nothing is installed".
+    /// </returns>
+    [NetworkTimeout(UPDATE_STATUS_NETWORK_TIMEOUT)]
+    internal Task<Dictionary<string, string>> RecomputeDblResourcesInstallStatus()
+    {
+        if (!_hasFetchedResources)
+            return Task.FromResult(new Dictionary<string, string>());
+
+        return Task.Run(() =>
+        {
+            bool gateTaken = false;
+            try
+            {
+                Monitor.TryEnter(_providerGate, ref gateTaken);
+                if (!gateTaken || !_hasFetchedResources)
+                    return [];
+
+                return ProjectInstallStatus(_resources, InstalledProjectIdsByDblId());
+            }
+            finally
+            {
+                if (gateTaken)
+                    Monitor.Exit(_providerGate);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Projects a catalog into "which local project is this installed as", keyed by DBL entry uid.
+    /// </summary>
+    /// <param name="resources">The catalog entries to report on.</param>
+    /// <param name="installedProjectIds">
+    /// Local project id per installed uid, from <see cref="InstalledProjectIdsByDblId"/>. An entry
+    /// outside this map is reported as not installed.
+    /// </param>
+    internal static Dictionary<string, string> ProjectInstallStatus(
+        IEnumerable<InstallableResource> resources,
+        IReadOnlyDictionary<string, string> installedProjectIds
+    )
+    {
+        Dictionary<string, string> installStatus = [];
+        foreach (var resource in resources)
+        {
+            var dblEntryUid = resource.DBLEntryUid?.Id;
+            if (dblEntryUid == null)
+                continue;
+            // TryAdd, not the indexer, for the same reason as ProjectUpdateStatus: a duplicate uid
+            // resolves to the entry FindResource's FirstOrDefault picks.
+            installStatus.TryAdd(
+                dblEntryUid,
+                installedProjectIds.GetValueOrDefault(dblEntryUid, "")
+            );
+        }
+        return installStatus;
+    }
+
+    /// <summary>
+    /// The local project id of every DBL resource installed locally, keyed by DBL entry uid and
+    /// gathered in a single pass over the project collection.
     /// </summary>
     /// <remarks>
     /// This exists to keep <see cref="ProjectUpdateStatus"/> off
@@ -322,9 +403,9 @@ internal class DblResourcesDataProvider(
     /// reaching here without a uid would be reported as not installed, which is what
     /// ParatextData already returns for anything uninstalled.
     /// </remarks>
-    internal static HashSet<string> InstalledDblIds()
+    internal static Dictionary<string, string> InstalledProjectIdsByDblId()
     {
-        HashSet<string> installedDblIds = [];
+        Dictionary<string, string> installedProjectIds = [];
         foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
         {
             try
@@ -333,7 +414,10 @@ internal class DblResourcesDataProvider(
                     continue;
                 var dblId = scrText.Settings.DBLId;
                 if (dblId != null)
-                    installedDblIds.Add(dblId.Id);
+                    installedProjectIds.TryAdd(
+                        dblId.Id,
+                        scrText.Guid.ToString().ToUpperInvariant()
+                    );
             }
             catch (Exception e)
             {
@@ -348,7 +432,7 @@ internal class DblResourcesDataProvider(
                 );
             }
         }
-        return installedDblIds;
+        return installedProjectIds;
     }
 
     /// <summary>
@@ -356,14 +440,14 @@ internal class DblResourcesDataProvider(
     /// </summary>
     /// <param name="resources">The catalog entries to report on.</param>
     /// <param name="installedDblIds">
-    /// Uids of the resources installed locally, from <see cref="InstalledDblIds"/>. An entry
-    /// outside this set is reported as having an update available without consulting
+    /// Local project id per installed uid, from <see cref="InstalledProjectIdsByDblId"/>. An entry
+    /// outside this map is reported as having an update available without consulting
     /// ParatextData — the same answer <c>IsNewerThanCurrentlyInstalled</c> gives for anything
     /// uninstalled, since it opens with <c>if (!Installed) return true;</c>.
     /// </param>
     internal static Dictionary<string, bool> ProjectUpdateStatus(
         IEnumerable<InstallableResource> resources,
-        ISet<string> installedDblIds
+        IReadOnlyDictionary<string, string> installedProjectIds
     )
     {
         Dictionary<string, bool> updateStatus = [];
@@ -379,7 +463,7 @@ internal class DblResourcesDataProvider(
                 // then describes the resource the install/uninstall buttons act on.
                 updateStatus.TryAdd(
                     dblEntryUid,
-                    !installedDblIds.Contains(dblEntryUid)
+                    !installedProjectIds.ContainsKey(dblEntryUid)
                         || resource.IsNewerThanCurrentlyInstalled()
                 );
             }
@@ -442,12 +526,11 @@ internal class DblResourcesDataProvider(
                 )
             );
 
-        // Note that we don't get any info telling if the installation succeeded or failed
-        installableResource.Install();
-
-        ScrTextCollection.RefreshScrTexts();
-
-        if (!ScrTextCollection.IsPresent(installableResource.InstalledScrText))
+        // Install() reports its own outcome, including the paths that fail without throwing (a
+        // failed download, a bundle CheckResource rejects, an unsupported migration). Inferring
+        // success from what landed on disk instead cannot see a failed update — the previous
+        // revision is still there and still resolves.
+        if (!installableResource.Install())
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
@@ -455,6 +538,8 @@ internal class DblResourcesDataProvider(
                     $"Resource cannot be found after attempted installation. Installation failed."
                 )
             );
+
+        ScrTextCollection.RefreshScrTexts();
 
         SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
         // A newly installed resource is a new project on disk; tell the project-list consumers

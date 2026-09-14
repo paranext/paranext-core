@@ -7,7 +7,11 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import type { DblResourceCatalog, DblResourceUpdateStatus } from 'platform-get-resources';
+import type {
+  DblResourceCatalog,
+  DblResourceInstallStatus,
+  DblResourceUpdateStatus,
+} from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
 import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
@@ -140,6 +144,16 @@ async function getLocalProjectMetadata(): Promise<{
  * number is reachable from TypeScript, so only the backend can answer. `undefined` leaves those
  * flags at their cached values rather than guessing.
  */
+async function readInstallStatus(): Promise<DblResourceInstallStatus | undefined> {
+  try {
+    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+    return await provider?.recomputeDblResourcesInstallStatus();
+  } catch (error: unknown) {
+    logger.warn(`Could not recompute DBL resource install status: ${getErrorMessage(error)}`);
+    return undefined;
+  }
+}
+
 async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> {
   try {
     const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
@@ -163,22 +177,26 @@ async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> 
 async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
   if (cachedResources === undefined) return;
   try {
-    const { metadata: localProjectMetadata, hasResourceProjects } = await getLocalProjectMetadata();
-    // No read-only project in the list means either C# has not registered yet or the machine has
-    // none. Syncing against it would mark every installed resource not-installed and persist that,
-    // and it can never mark anything installed, so there is nothing to gain by continuing.
-    if (!hasResourceProjects) return;
-
-    const updateStatus = shouldRecomputeUpdateStatus ? await readUpdateStatus() : undefined;
-
-    // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
-    // overwrite cachedResources between our reconcile and our assignment.
+    // Sample the backend inside fetchMutex, not before it. Two things depend on that: a concurrent
+    // fetchAndCacheResources cannot overwrite cachedResources between the read and the assignment,
+    // and — because a refresh deliberately starts a sync of its own rather than joining one — an
+    // older sync whose status predates an install cannot win the write and persist flags from
+    // before it.
     await fetchMutex.runExclusive(async () => {
       if (cachedResources === undefined) return;
 
+      const installStatus = await readInstallStatus();
+      // An empty map is not an answer: the backend's catalog has not loaded yet, another DBL
+      // operation held the provider, or the catalog really is empty — and it reports all three the
+      // same way. Reconciling against it would mark every installed resource not-installed and
+      // persist that, so leave the flags alone until there is something to act on.
+      if (!installStatus || Object.keys(installStatus).length === 0) return;
+
+      const updateStatus = shouldRecomputeUpdateStatus ? await readUpdateStatus() : undefined;
+
       const { resources: newCachedResources, isChanged } = reconcileCachedResources(
         cachedResources,
-        localProjectMetadata.map((localProject) => localProject.id),
+        installStatus,
         updateStatus,
       );
 
