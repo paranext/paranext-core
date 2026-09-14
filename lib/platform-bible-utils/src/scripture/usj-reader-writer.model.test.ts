@@ -7,6 +7,10 @@ import type { ContentJsonPath, PropertyJsonPath } from './usj-reader-writer.mode
 // depth regression fail `npm run typecheck` (tsc) directly, independent of how this file is run.
 const deepContentPath: ContentJsonPath =
   '$.content[0].content[1].content[2].content[3].content[4].content[5].content[6].content[7]';
+// `PropertyJsonPath`'s catch-all `` `$.${string}` `` member matches any string starting with
+// `$.`, so this assertion type-checks regardless of how many `.content[${number}]` clauses
+// precede `['lemma']` — it does not, on its own, guard the eight-clause depth bound. It is kept
+// for shape parity with `deepContentPath` above and to exercise the type at the intended depth.
 const deepPropertyPath: PropertyJsonPath =
   "$.content[0].content[1].content[2].content[3].content[4].content[5].content[6].content[7]['lemma']";
 
