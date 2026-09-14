@@ -836,9 +836,9 @@ global.webViewComponent = function ChecklistWebView({
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
             buttonPlaceholder:
-              localizedStrings['%markersChecklist_toolbar_comparativeTexts%'] ??
+              localizedStrings['%markersChecklist_toolbar_comparativeProjects%'] ??
               'Select comparative projects',
-            ariaLabel: localizedStrings['%markersChecklist_toolbar_comparativeTexts%'],
+            ariaLabel: localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
           }}
           availableGroupings={comparativeTextsGroupings}
         />

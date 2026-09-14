@@ -91,6 +91,13 @@
         "message": "ProjectSelector no longer offers a Select all button — it was redundant with the Selection grouping. Only Clear all remains."
       }
     },
+    "%markersChecklist_toolbar_comparativeTexts%": {
+      "fallbackKey": "%markersChecklist_toolbar_comparativeProjects%",
+      "deprecationInfo": {
+        "date": "2026-09-14",
+        "message": "Superseded by %markersChecklist_toolbar_comparativeProjects%, which says \"projects\" rather than \"texts\" to match what the picker selects."
+      }
+    },
     "%manageBooks_copy_confirmMergeFromSource%": {
       "fallbackKey": "%manageBooks_copy_onlyNonExistingChapters%"
     },
@@ -676,7 +683,8 @@
       "%markersChecklist_settings_cancel%": "Cancel",
       "%markersChecklist_settings_helpIconAriaLabel%": "Help",
       "%markersChecklist_toolbar_primaryProject%": "Select primary Scripture text",
-      "%markersChecklist_toolbar_comparativeTexts%": "Select comparative projects",
+      "%markersChecklist_toolbar_comparativeTexts%": "Select comparative texts",
+      "%markersChecklist_toolbar_comparativeProjects%": "Select comparative projects",
       "%markersChecklist_toolbar_verseRange%": "Select verse range",
       "%markersChecklist_toolbar_copy%": "Copy",
       "%markersChecklist_toolbar_view%": "View",
