@@ -596,6 +596,23 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('clears a whole-iframe zoom the pane may no longer have, even when its definition cannot be found', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    vi.useFakeTimers();
+    try {
+      setContentZoomAreas('editor-1', []);
+      vi.advanceTimersByTime(1000);
+      expect(iframe.style.zoom).toBe('1.3'); // the grant the pane earned
+      definitions.delete('editor-1');
+      applyContentZoomForWebView('editor-1');
+      expect(iframe.style.zoom).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('scales a URL web view whole straight away, since it never runs the bootstrap and never reports areas', () => {
     definitions.set('url-1', {
       id: 'url-1',
