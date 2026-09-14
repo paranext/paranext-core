@@ -85,24 +85,68 @@ export async function sendPapiCommandWhenRegistered(
  * project root.
  */
 export async function makeSampleProjectEditable(): Promise<void> {
-  // Wait until the Paratext factory has registered AND the sample project is installed and
-  // advertised — see waitForSampleProjectMetadata for why a generic any-project wait is racy, and
-  // LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular needs the cold-boot budget.
+  const pdpId = await getSampleProjectDataProviderId();
+  await sendPapiRequestOnce<boolean>(
+    `object:${pdpId}.setSetting`,
+    ['platform.isEditable', true],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+}
+
+/**
+ * Resolves the sample WEB project's data provider id once the Paratext factory has registered AND
+ * the sample project is installed and advertised — see waitForSampleProjectMetadata for why a
+ * generic any-project wait is racy, and LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular
+ * needs the cold-boot budget.
+ */
+async function getSampleProjectDataProviderId(): Promise<string> {
   await waitForPapiMethodRegistered(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     WEBSOCKET_PORT,
     LAUNCH_PHASE_TIMEOUT_MS,
   );
   await waitForSampleProjectMetadata();
-  const pdpId = await sendPapiRequestOnce<string>(
+  return sendPapiRequestOnce<string>(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     [SAMPLE_WEB_PROJECT_ID],
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
-  await sendPapiRequestOnce<boolean>(
-    `object:${pdpId}.setSetting`,
-    ['platform.isEditable', true],
+}
+
+/** The book/chapter selector the chapter USFM data type takes; `verseNum` is ignored for chapters. */
+export interface SampleChapterRef {
+  book: string;
+  chapterNum: number;
+  verseNum: number;
+}
+
+/**
+ * Rewrites one chapter of the sample WEB project through its data provider — read the chapter's
+ * USFM, pass it through `transform`, write the result back — so a spec can put markers the sample
+ * text does not contain in front of real verses. Writes go to the isolated project root only, so
+ * this is for specs that launch with `isolatedProjectRoot: true`.
+ *
+ * Going through PAPI rather than editing the SFM file on disk means the write lands the same way an
+ * editor save does: the provider re-parses it and every open editor for the chapter is notified.
+ */
+export async function rewriteSampleProjectChapterUsfm(
+  chapter: SampleChapterRef,
+  transform: (usfm: string) => string,
+): Promise<void> {
+  const pdpId = await getSampleProjectDataProviderId();
+  const usfm = await sendPapiRequestOnce<string | undefined>(
+    `object:${pdpId}.getChapterUSFM`,
+    [chapter],
+    WEBSOCKET_PORT,
+    COMMAND_TIMEOUT_MS,
+  );
+  if (!usfm)
+    throw new Error(`Sample project has no USFM for ${chapter.book} ${chapter.chapterNum}`);
+  await sendPapiRequestOnce(
+    `object:${pdpId}.setChapterUSFM`,
+    [chapter, transform(usfm)],
     WEBSOCKET_PORT,
     COMMAND_TIMEOUT_MS,
   );
