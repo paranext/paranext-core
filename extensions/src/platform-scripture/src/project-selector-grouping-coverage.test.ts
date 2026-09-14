@@ -5,9 +5,15 @@ import {
   type ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
 import { normalizeProjectId, recencyMapFromOrderedIds } from 'platform-bible-utils';
-import { toChecksSelectorRows } from './checks/checks-side-panel/checks-side-panel.component';
-import { toFindSelectorRows } from './find/find.component';
-import { toManageBooksSelectorRows } from './manage-books.web-view';
+import {
+  CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS,
+  toChecksSelectorRows,
+} from './checks/checks-side-panel/checks-side-panel.component';
+import { FIND_PROJECT_SELECTOR_GROUPING_IDS, toFindSelectorRows } from './find/find.component';
+import {
+  MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS,
+  toManageBooksSelectorRows,
+} from './manage-books.web-view';
 
 /**
  * `ProjectSelectorProject.customData` is an untyped `Record<string, unknown>`, so nothing in the
@@ -20,8 +26,9 @@ import { toManageBooksSelectorRows } from './manage-books.web-view';
  * undifferentiated bucket ("Other", "Unknown language"). That is the failure this suite exists to
  * catch.
  *
- * The `groupingIds` below mirror what each component passes as `availableGroupings`; the citation
- * on each surface points at the filter that decides it. Change one and change the other.
+ * Each surface's `groupingIds` is the SAME exported constant its component filters
+ * `makeBuiltInGroupings` against, not a copy of it — so offering a new grouping is what puts it in
+ * front of this suite, and there is no list to forget to update.
  */
 
 /**
@@ -40,8 +47,7 @@ type Surface = {
 const SURFACES: readonly Surface[] = [
   {
     name: 'find',
-    // find.component.tsx: `type` and `lastUsed` are filtered out of makeBuiltInGroupings().
-    groupingIds: ['openTabs', 'language'],
+    groupingIds: FIND_PROJECT_SELECTOR_GROUPING_IDS,
     rows: toFindSelectorRows([
       { id: 'a', shortName: 'A', fullName: 'Project A', language: 'English', lastUsedAt: 2 },
       { id: 'b', shortName: 'B', fullName: 'Project B', language: 'Spanish', lastUsedAt: 1 },
@@ -49,8 +55,7 @@ const SURFACES: readonly Surface[] = [
   },
   {
     name: 'checks-side-panel',
-    // checks-side-panel.component.tsx: only `type` is filtered out of makeBuiltInGroupings().
-    groupingIds: ['openTabs', 'language', 'lastUsed'],
+    groupingIds: CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS,
     rows: toChecksSelectorRows([
       { id: 'a', shortName: 'A', fullName: 'Project A', language: 'English', lastUsedAt: 2 },
       // No `lastUsedAt`: the panel lists every scripture project, most of which were never opened.
@@ -59,8 +64,7 @@ const SURFACES: readonly Surface[] = [
   },
   {
     name: 'manage-books',
-    // manage-books.web-view.tsx: `language` is filtered out of makeBuiltInGroupings().
-    groupingIds: ['openTabs', 'type', 'lastUsed'],
+    groupingIds: MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS,
     rows: toManageBooksSelectorRows(
       [
         {
@@ -98,6 +102,10 @@ const SURFACES: readonly Surface[] = [
  * nor `partitionByGrouping` is exported from `index.ts` or `experimental.ts`), so the bucketing
  * rule is reproduced here. Everything data-dependent — the grouping descriptor and its
  * `getGroupKey` — is the real built-in.
+ *
+ * This mirrors a deliberately non-exported library internal rather than a public API: widening
+ * `experimental.ts` to serve one test is the worse trade. Delete this helper and call the real
+ * partitioner if those functions are ever published.
  */
 function bucketSignature(
   grouping: ProjectSelectorGrouping,

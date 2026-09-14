@@ -322,6 +322,27 @@ function booksToNumbers(bookIds: string[]): number[] {
 }
 
 /**
+ * The built-in grouping ids the manage-books project pickers offer, in `makeBuiltInGroupings`
+ * order. Shared by the sidebar's primary picker and the Copy "From" picker. The Create "Based on"
+ * picker doesn't consume these — it locks into a bespoke versification grouping built on the dialog
+ * side.
+ *
+ * `language` is left out: the manage-books wire carries no language, and the per-project
+ * `platform.language` fan-out that could supply one was removed to keep this list fast (I2).
+ * Offering the grouping anyway would produce a single "Unknown language" bucket for every project,
+ * so it is omitted rather than shown as a menu item that cannot do anything.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toManageBooksSelectorRows} actually packs, so adding an id here without
+ * adding its data is a build failure rather than a dead menu item.
+ */
+export const MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = [
+  'openTabs',
+  'lastUsed',
+  'type',
+];
+
+/**
  * Maps manage-books wire projects onto ProjectSelector rows. Exported for coverage tests.
  *
  * `recencyMap` must already be keyed by {@link normalizeProjectId}-normalized ids: the recents
@@ -515,18 +536,13 @@ global.webViewComponent = function ManageBooksWebView({
     [projectSelectorStrings],
   );
 
-  // Built-in groupings (openTabs / lastUsed / type) shared by the sidebar's primary project picker
-  // and the Copy "From" picker. The Create "Based on" picker doesn't consume these — it locks into
-  // a bespoke versification grouping built on the dialog side.
-  //
-  // `language` is filtered out: the manage-books wire carries no language, and the per-project
-  // `platform.language` fan-out that could supply one was removed to keep this list fast (I2).
-  // Offering the grouping anyway would produce a single "Unknown language" bucket for every
-  // project, so it is omitted rather than shown as a menu item that cannot do anything.
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys, narrowed to
+  // the ids these pickers offer. See MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS for which ones and
+  // why.
   const projectSelectorGroupings = useMemo<ProjectSelectorGrouping[]>(
     () =>
-      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter(
-        (grouping) => grouping.id !== 'language',
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter((grouping) =>
+        MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
       ),
     [projectSelectorStrings],
   );

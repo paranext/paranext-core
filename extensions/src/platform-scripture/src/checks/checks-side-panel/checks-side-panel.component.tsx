@@ -55,6 +55,25 @@ export type ChecksSidePanelProject = ProjectOption & {
 };
 
 /**
+ * The built-in grouping ids the checks side panel's project picker offers, in
+ * `makeBuiltInGroupings` order.
+ *
+ * `type` is left out because this panel has no project-type source: `ChecksSidePanelProject`
+ * carries no type and nothing upstream supplies one, so the grouping would put every row under a
+ * single "Unknown type" bucket. `lastUsed` stays — the panel lists ALL scripture projects, so the
+ * recent/other split is a real partition here.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toChecksSelectorRows} actually packs, so adding an id here without adding
+ * its data is a build failure rather than a dead menu item.
+ */
+export const CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = [
+  'openTabs',
+  'lastUsed',
+  'language',
+];
+
+/**
  * Maps caller-supplied checks-side-panel projects onto ProjectSelector rows, sorted by full name
  * and carrying the grouping inputs (language, recency) in the picker's `customData` envelope.
  * Exported for coverage tests.
@@ -202,16 +221,13 @@ export function ChecksSidePanel({
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const projectSelectorStrings = localizedStrings as ProjectSelectorResolvedStrings;
 
-  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys.
-  //
-  // `type` is filtered out because this panel has no project-type source: `ChecksSidePanelProject`
-  // carries no type and nothing upstream supplies one, so the grouping would put every row under a
-  // single "Unknown type" bucket. `lastUsed` stays — the panel lists ALL scripture projects, so the
-  // recent/other split is a real partition here.
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys, narrowed to
+  // the ids this panel offers. See CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS for which ones
+  // and why.
   const projectSelectorGroupings = useMemo(
     () =>
-      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter(
-        (grouping) => grouping.id !== 'type',
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter((grouping) =>
+        CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
       ),
     [projectSelectorStrings],
   );
