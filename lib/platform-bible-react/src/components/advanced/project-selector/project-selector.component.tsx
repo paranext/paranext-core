@@ -24,7 +24,9 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import {
+  formatProjectName,
   getLocalizeKeyForScrollGroupId,
+  hasDistinctFullName,
   normalizeProjectId,
   type ScrollGroupId,
 } from 'platform-bible-utils';
@@ -711,7 +713,7 @@ function ProjectRowView({
         className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
       >
         <span className="tw:w-full tw:truncate tw:font-medium">{row.shortName}</span>
-        {row.fullName && row.fullName !== row.shortName && (
+        {hasDistinctFullName(row) && (
           <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
             {row.fullName}
           </span>
@@ -1223,13 +1225,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         if (props.renderTriggerLabel)
           return { node: props.renderTriggerLabel(selected), title: '' };
         let text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
-        if (
-          selected &&
-          props.triggerLabelFormat === 'shortNameAndFullName' &&
-          selected.fullName &&
-          selected.fullName !== selected.shortName
-        )
-          text = `${selected.shortName} - ${selected.fullName}`;
+        if (selected && props.triggerLabelFormat === 'shortNameAndFullName')
+          text = formatProjectName(selected);
         return { node: text, title: text };
       }
       case 'project-multi': {
