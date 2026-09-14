@@ -597,7 +597,7 @@
   "%settings_platform_requestTimeout_label%": "Tiempo de espera de la solicitud",
   "%settings_platform_syncOnStartup_label%": "Sincronizar automáticamente al iniciar",
   "%settings_platform_webViewContentZoom_description%": "Tamaño predeterminado del contenido en los paneles, como el Editor de Escrituras, los recursos y las notas. 1.0 equivale al 100 %; el rango permitido es de 0,5 a 3,0. Los menús de la aplicación y las barras de herramientas de las pestañas mantienen su tamaño. Para escalar toda la aplicación, use el ajuste Zoom.",
-  "%settings_platform_webViewContentZoom_label%": "Zoom del texto",
+  "%settings_platform_webViewContentZoom_label%": "Zoom del contenido",
   "%settings_platform_webViewContentZoomMemory_label%": "Pane zoom memory (oculto - sin traducir intencionalmente)",
   "%settings_platform_zoomFactor_description%": "Se aplica a toda la aplicación. El valor predeterminado es 1. El rango permitido es de 0,5 a 3.",
   "%settings_platform_zoomFactor_errorMessage%": "El rango permitido es de {lowerLimit} a {upperLimit}.",
