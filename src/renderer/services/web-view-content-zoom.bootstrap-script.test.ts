@@ -358,6 +358,40 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-retry', 1, 'main');
   });
 
+  it('leaves the active area unchanged when reporting it to the parent throws', () => {
+    let throwsLeft = 1;
+    const reportContentZoomActiveAreaById = vi.fn((_webViewId: string, areaId: string) => {
+      if (areaId === 'footnotes' && throwsLeft > 0) {
+        throwsLeft -= 1;
+        throw new Error('parent refused the active area');
+      }
+    });
+    const { bound, papi } = install('wv-active-throws', TWO_AREAS, {
+      reportContentZoomActiveAreaById,
+    });
+
+    // The pane reported the areas and refresh() activated the first one, "main", before the
+    // pointerdown below is dispatched.
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    const warnings = papi.logger.warn.mock.calls.map(([message]) => String(message));
+    expect(warnings.some((message) => message.includes('reporting the active zoom area'))).toBe(
+      true,
+    );
+
+    // The throw was consumed by the call above; this one succeeds.
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-active-throws',
+      'footnotes',
+    );
+  });
+
   it('stops observing, listening and publishing itself once it is destroyed', async () => {
     const { bound } = install('wv-destroy', TWO_AREAS);
     await nextFrame();
@@ -370,6 +404,9 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.reportContentZoomAreasById).toHaveBeenCalled();
     byId('verse').focus();
     expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true);
+    api.showIndicator('main', '120 %');
+    expect(document.getElementById('platform-content-zoom-indicator')).not.toBeNull();
+    expect(document.getElementById('platform-content-zoom-indicator-status')).not.toBeNull();
 
     api.destroy();
     bound.reportContentZoomAreasById.mockClear();
@@ -384,6 +421,7 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(false);
     expect(document.getElementById('platform-content-zoom-indicator')).toBeNull();
+    expect(document.getElementById('platform-content-zoom-indicator-status')).toBeNull();
     // The bootstrap script defines this global; the double underscore marks it as an internal
     // platform/pane contract, not a name this file invents.
     // eslint-disable-next-line no-underscore-dangle
