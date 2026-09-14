@@ -4,7 +4,6 @@ import { appService } from '@shared/services/app.service';
 import { AppInfo } from '@shared/services/app.service-model';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import { ExternalLink } from 'lucide-react';
 import { Button, usePromise } from 'platform-bible-react';
 import {
   formatReplacementString,
@@ -41,8 +40,8 @@ const STRING_KEYS: LocalizeKey[] = [
   '%about_db_ip_attribution_format%',
   '%about_db_ip_attribution_intro%',
   '%about_db_ip_attribution_terms%',
-  '%about_ariaLabel_opensTermsOfService%',
-  '%about_error_couldNotOpenTermsOfService%',
+  '%about_ariaLabel_opensTermsOfService_2%',
+  '%about_error_couldNotOpenTermsOfService_2%',
 ];
 
 const defaultAppInfo: AppInfo = {
@@ -62,8 +61,8 @@ function AboutDialog() {
       '%about_db_ip_attribution_format%': dbIpAttributionFormat,
       '%about_db_ip_attribution_intro%': dbIpAttributionIntro,
       '%about_db_ip_attribution_terms%': dbIpAttributionTerms,
-      '%about_ariaLabel_opensTermsOfService%': opensTermsOfServiceLabel,
-      '%about_error_couldNotOpenTermsOfService%': couldNotOpenTermsOfService,
+      '%about_ariaLabel_opensTermsOfService_2%': opensTermsOfServiceLabel,
+      '%about_error_couldNotOpenTermsOfService_2%': couldNotOpenTermsOfService,
     },
   ] = useLocalizedStrings(STRING_KEYS);
 
@@ -92,10 +91,8 @@ function AboutDialog() {
   const [didOpenTermsOfServiceFail, setDidOpenTermsOfServiceFail] = useState(false);
 
   // The command reports an open it could not perform, and this is the only place a user can be told
-  // about it: the main process reveals the document in the file manager as a fallback, but on a
-  // stock Windows machine with no Markdown handler that leaves the user looking at a file manager
-  // they did not ask for, and inside the snap - whose confinement does not reach
-  // `org.freedesktop.FileManager1` - the button appears to do nothing at all.
+  // about it: the main process shows the document in a window of its own, so a failure to load it
+  // leaves nothing on screen for the user to interpret.
   const openTermsOfService = useCallback(() => {
     setDidOpenTermsOfServiceFail(false);
     sendCommand('platform.openTermsOfService').catch((e) => {
@@ -105,20 +102,20 @@ function AboutDialog() {
   }, []);
 
   const licenseDisplay = resolveLicenseDisplay(displayInfo.license, termsOfService);
-  // The Terms of Service ship beside the application rather than at a URL, so this opens the
-  // installed document through the operating system instead of navigating anywhere.
+  // The Terms of Service ship beside the application rather than at a URL, so this shows the
+  // installed document in a window the application owns instead of navigating anywhere.
   //
-  // The description says "your default application for Markdown files", not "a browser window":
-  // the Terms of Service ship as an installed file and `platform.openTermsOfService` hands the path
-  // to the operating system, so whatever opens Markdown there is what appears - often not a browser.
+  // The description says "a window of its own", not "a browser window": `platform.openTermsOfService`
+  // loads the installed file into a sandboxed window rather than handing it to a browser or to
+  // whatever the operating system opens the file type with.
   //
-  // A button is named from its contents, which folds in every descendant's accessible name - so a
-  // label on the icon becomes part of the button's name rather than staying beside it. It is
-  // carried as a DESCRIPTION instead, on a
-  // visually-hidden sibling outside the button so name-from-contents cannot reach it, leaving the
-  // visible text as the whole accessible name (WCAG 2.5.3). The icon is decorative and hidden:
-  // lucide adds `aria-hidden` only when no accessibility prop is passed, so passing one is exactly
-  // what exposes the icon.
+  // The trigger reads as an ordinary link: the document opens inside the application, so an
+  // external-link glyph would promise a departure that does not happen.
+  //
+  // A button is named from its contents, which folds in every descendant's accessible name - so the
+  // supplementary wording is carried as a DESCRIPTION instead, on a visually-hidden sibling outside
+  // the button where name-from-contents cannot reach it, leaving the visible text as the whole
+  // accessible name (WCAG 2.5.3).
   const licenseContent: ReactNode = licenseDisplay.isTermsOfService ? (
     <>
       <Button
@@ -128,7 +125,6 @@ function AboutDialog() {
         aria-describedby={opensTermsOfServiceId}
       >
         {licenseDisplay.name}
-        <ExternalLink aria-hidden="true" />
       </Button>
       <span id={opensTermsOfServiceId} className="tw:sr-only">
         {opensTermsOfServiceLabel}

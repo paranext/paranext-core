@@ -26,6 +26,7 @@ import { announceAppWindowInput, startAppWindowInputEvent } from '@main/app-wind
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
+import { openTermsOfServiceWindow } from '@main/terms-of-service-window';
 import chroma from 'chroma-js';
 import {
   APP_NAME,
@@ -330,38 +331,6 @@ async function openExternal(url: string) {
   }
 
   return true;
-}
-
-/**
- * Name of the Terms of Service document `electron-builder.json5` lists in `extraResources`.
- *
- * `globalThis.resourcesPath` is the repository root in development and the install directory's
- * `resources` folder when packaged, so the same relative name finds the document in both.
- */
-const TERMS_OF_SERVICE_FILE_NAME = 'TERMS-OF-SERVICE.md';
-
-/**
- * Open the Terms of Service document that ships beside the application.
- *
- * `shell.openPath` hands the file to whatever the operating system opens Markdown with, which is
- * not guaranteed to be anything: a stock Windows machine registers no handler for `.md`. When
- * nothing does, reveal the document in the file manager so the user can still reach it.
- *
- * THROWS when the open failed, even though the reveal was attempted. `shell.openPath` RESOLVES with
- * an error string rather than rejecting and `shell.showItemInFolder` returns `void`, so a function
- * that only logged could not report either failure - and both can fail together inside the snap,
- * whose confinement does not reach `org.freedesktop.FileManager1`. The caller is a dialog the user
- * clicked a license link in; it needs to be able to say the document did not open.
- */
-async function openTermsOfService() {
-  const termsOfServicePath = path.join(globalThis.resourcesPath, TERMS_OF_SERVICE_FILE_NAME);
-  const openError = await shell.openPath(termsOfServicePath);
-  if (!openError) return;
-  logger.warn(
-    `Could not open ${termsOfServicePath}: ${openError}. Revealing it in the file manager instead.`,
-  );
-  shell.showItemInFolder(termsOfServicePath);
-  throw new Error(`Could not open the Terms of Service at ${termsOfServicePath}: ${openError}`);
 }
 
 async function main() {
@@ -2131,7 +2100,14 @@ async function main() {
   commandService.registerCommand(
     'platform.openTermsOfService',
     async () => {
-      await openTermsOfService();
+      // Parented to the window the user clicked the link in, so Electron closes the document with
+      // it and counts it against that window rather than keeping the application alive on its own.
+      // Falls back to any tracked window: the parent only has to be an application window, and the
+      // focused one is merely the best guess at which.
+      const focusedWindowId = getFocusedWindowId();
+      const parent =
+        (focusedWindowId ? getWindowById(focusedWindowId) : undefined) ?? getWindows()[0];
+      await openTermsOfServiceWindow(openExternal, parent);
     },
     {
       method: {
