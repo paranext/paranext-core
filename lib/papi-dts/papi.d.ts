@@ -635,6 +635,10 @@ declare module 'shared/models/web-view.model' {
    * view's primary content; a view that has several independently zoomable parts gives each its own
    * id).
    *
+   * `default` is reserved: its CSS custom property is the pane-wide default every other area falls
+   * back to, so an area of that name would set the default for the whole pane. The platform ignores
+   * an area marked with it — pick any other id.
+   *
    * @experimental This type is unstable and may change or disappear without notice
    */
   export type ContentZoomAreaId = string;
@@ -1173,21 +1177,23 @@ declare module 'shared/global-this.model' {
      */
     var updateWebViewDefinition: UpdateWebViewDefinition;
     /**
-     * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out).
+     * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out). Omit `areaId` to zoom the web
+     * view's active area.
      *
      * @experimental This function is unstable and may change or disappear without notice
      */
     var adjustContentZoomById: (
       webViewId: string,
       deltaSteps: number,
-      areaId: ContentZoomAreaId,
+      areaId?: ContentZoomAreaId,
     ) => void;
     /**
-     * Return one area of a web view to the Settings default.
+     * Return one area of a web view to the Settings default. Omit `areaId` to reset the web view's
+     * active area.
      *
      * @experimental This function is unstable and may change or disappear without notice
      */
-    var resetContentZoomById: (webViewId: string, areaId: ContentZoomAreaId) => void;
+    var resetContentZoomById: (webViewId: string, areaId?: ContentZoomAreaId) => void;
     /**
      * Report the zoom areas a web view's bootstrap discovered, in document order.
      *
@@ -5486,13 +5492,15 @@ declare module 'papi-shared-types' {
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
     /**
-     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. Has no
-     * default keyboard shortcut; per-pane content zoom uses `platform.webViewContentZoomIn`
+     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
+     * and Linux, Ctrl+`=` / Ctrl+`+` invoke this until PT-4577 hands those chords to per-pane
+     * content zoom (`platform.webViewContentZoomIn`).
      */
     'platform.zoomIn': () => Promise<void>;
     /**
-     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. Has no
-     * default keyboard shortcut; per-pane content zoom uses `platform.webViewContentZoomOut`
+     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
+     * and Linux, Ctrl+`-` invokes this until PT-4577 hands that chord to per-pane content zoom
+     * (`platform.webViewContentZoomOut`).
      */
     'platform.zoomOut': () => Promise<void>;
     /**
@@ -5804,8 +5812,9 @@ declare module 'papi-shared-types' {
     };
     /**
      * The zoom factor that applies to the entire application, including menus and toolbars. 1.0 is
-     * the default. Allowed range is 0.5 to 3.0. Changed in Settings only; per-pane content zoom is
-     * `platform.webViewContentZoom`.
+     * the default. Allowed range is 0.5 to 3.0. Written from Settings, by the `platform.zoomIn` /
+     * `platform.zoomOut` commands, and by the application's own zoom keyboard shortcuts; per-pane
+     * content zoom is `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
@@ -13728,7 +13737,7 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
-   * getBoundingClientRect of the WebView iframe.
+   * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.
    *
    * @param webViewId The webViewId of the iframe
    * @param position The iframe-relative position
