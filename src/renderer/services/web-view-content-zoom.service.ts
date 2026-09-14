@@ -140,10 +140,11 @@ let memoryLoaded = false;
 /**
  * The memory record the sibling sync last reconciled against, so it can tell an entry that was
  * deleted from an entry that was never there. Only the memory subscription advances it, and only
- * after a walk that ran to the end: the deletion half of a delta exists nowhere else, so a walk
- * that threw partway must leave the record where it was for the next emission to find. A local
- * write must not advance it either, or this window would have no record of the entry the write
- * removed and would leave its own sibling panes at the level the write just gave up.
+ * after a walk in which every pane took its update: the deletion half of a delta exists nowhere
+ * else, so a walk that threw partway, or one a pane's failed write left owed, must leave the record
+ * where it was for the next emission to find. A local write must not advance it either, or this
+ * window would have no record of the entry the write removed and would leave its own sibling panes
+ * at the level the write just gave up.
  */
 let lastSyncedMemory: MemoryRecord = {};
 
@@ -907,8 +908,13 @@ function repushAllPanes(): void {
  *
  * Hidden panes need no special handling here: writing a level and pushing its variable is
  * data-driven and applies with no layout, so an inactive tab is already in line when it is shown.
+ *
+ * @returns `true` when every pane that needed a change took it, so this delta is fully applied;
+ *   `false` when at least one pane's write did not land, which leaves the delta still owed to that
+ *   pane. Either way every remaining pane is visited: one pane's failure is not the others'.
  */
-function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryRecord): void {
+function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryRecord): boolean {
+  let everyPaneTookItsUpdate = true;
   deps.getAllOpenDefinitions().forEach((definition) => {
     const id = memoryIdentityFor(definition);
     if (!id) return;
@@ -934,7 +940,9 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
     });
     if (!changed) return;
     if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
+    else everyPaneTookItsUpdate = false;
   });
+  return everyPaneTookItsUpdate;
 }
 
 /**
@@ -995,11 +1003,11 @@ export function initializeContentZoomService(
         cachedMemory = memory;
         memoryLoaded = true;
         try {
-          syncSiblingsFromMemory(memory, previousMemory);
-          // Only a walk that finished may advance the record the next delta is computed against. A
-          // pane whose write merely declined is not a reason to hold it back; a throw is, since
-          // every pane after it was never visited at all.
-          lastSyncedMemory = memory;
+          // Only a walk in which every pane took its update may advance the record the next delta
+          // is computed against: a pane whose write did not land is retried against the same delta
+          // on the next memory change, because the deletion half of the delta exists nowhere else.
+          // A throw leaves the record where it was for the same reason.
+          if (syncSiblingsFromMemory(memory, previousMemory)) lastSyncedMemory = memory;
         } catch (e) {
           logger.warn(`Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`);
         }
