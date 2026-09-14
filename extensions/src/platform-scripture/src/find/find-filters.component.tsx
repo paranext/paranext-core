@@ -1,4 +1,5 @@
 import { Info, SlidersHorizontal } from 'lucide-react';
+import { useRef } from 'react';
 import {
   Button,
   Checkbox,
@@ -58,12 +59,16 @@ type FindFiltersProps = {
 };
 
 /**
- * Ids for the visually hidden copies of the explanations. The control each one explains points at
- * it with `aria-describedby`, so the text reaches a screen reader on the control itself rather than
- * through the icon beside it: the icon sits inside a radio group, where a tab stop of its own is
- * unreachable whenever the other radio is the selected one.
+ * Id for the hidden copy of the "Any text" explanation. The radio points at it with
+ * `aria-describedby`, which is how the text reaches a screen reader: the icon beside it cannot
+ * carry a tab stop, because it sits inside a radio group, where a tab stop is unreachable whenever
+ * the other radio is the selected one.
  */
 const ANY_TEXT_DESCRIPTION_ID = 'searchTextType-all-description';
+/**
+ * Id for the hidden copy of the whitespace explanation, pointed at by the checkbox's
+ * `aria-describedby` so both explanations reach a screen reader the same way.
+ */
 const IGNORE_WHITESPACE_DESCRIPTION_ID = 'ignoreWhitespaceDifferences-description';
 
 /**
@@ -92,22 +97,30 @@ export function FindFilters({
   open,
   onOpenChange,
 }: FindFiltersProps) {
+  // useRef requires null as the initial value when used with a DOM element ref
+  // eslint-disable-next-line no-null/no-null
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const wasDismissedByPointerRef = useRef(false);
+
   // These filters are a form of grouped settings, not a menu of commands. A menu container would
   // give them `role="menu"`, whose keyboard model only navigates registered menu items and calls
   // preventDefault on Tab — leaving these plain form controls unreachable by keyboard. A popover
   // leaves the controls their native keyboard behavior: Tab moves between groups and arrow keys move
   // within a radio group.
   //
-  // `modal` traps focus inside the panel. The panel is portalled after everything else in the web
-  // view, so without the trap Shift+Tab from the first control leaves for the bottom of the Find
-  // panel, which dismisses the popover without returning focus to its trigger.
+  // The panel is portalled after everything else in the web view, so Shift+Tab out of it lands at the
+  // bottom of the Find panel and dismisses it on the way. Focus returns to the trigger instead, which
+  // keeps a keyboard user where they can reopen the panel or carry on past it. A focus trap would do
+  // this too, but a non-modal surface must not trap focus (WCAG 2.1.2), and trapping also hides the
+  // rest of the panel from screen readers, which silences the results area while a filter re-runs.
   return (
-    <Popover open={open} onOpenChange={onOpenChange} modal>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
               <Button
+                ref={triggerRef}
                 variant="outline"
                 size="icon"
                 aria-label={localizedStrings.toggleFilters}
@@ -133,6 +146,19 @@ export function FindFilters({
       <PopoverContent
         align="end"
         collisionPadding={8}
+        // A pointer dismissal already put the user somewhere deliberate; only keyboard and Escape
+        // dismissals get sent back to the trigger.
+        onPointerDownOutside={() => {
+          wasDismissedByPointerRef.current = true;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (wasDismissedByPointerRef.current) {
+            wasDismissedByPointerRef.current = false;
+            return;
+          }
+          event.preventDefault();
+          triggerRef.current?.focus();
+        }}
         aria-label={localizedStrings.toggleFilters}
         className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:gap-0 tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
       >
@@ -172,8 +198,9 @@ export function FindFilters({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Info
+                          aria-hidden
                           data-testid="any-text-explanation"
-                          className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground"
+                          className="tw:h-3.5 tw:w-3.5 tw:cursor-help tw:text-muted-foreground"
                         />
                       </TooltipTrigger>
                       <TooltipContent style={EXPLANATION_TOOLTIP_STYLE}>
@@ -183,7 +210,7 @@ export function FindFilters({
                   </TooltipProvider>
                 )}
                 {value === 'all' && (
-                  <span id={ANY_TEXT_DESCRIPTION_ID} className="tw:sr-only">
+                  <span id={ANY_TEXT_DESCRIPTION_ID} className="tw:hidden">
                     {localizedStrings.allTextTooltip}
                   </span>
                 )}
@@ -266,7 +293,10 @@ export function FindFilters({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
+                  <Info
+                    aria-hidden
+                    className="tw:h-3.5 tw:w-3.5 tw:cursor-help tw:text-muted-foreground"
+                  />
                 </TooltipTrigger>
                 <TooltipContent style={EXPLANATION_TOOLTIP_STYLE}>
                   <p className="tw:max-w-xs">
@@ -275,7 +305,7 @@ export function FindFilters({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <span id={IGNORE_WHITESPACE_DESCRIPTION_ID} className="tw:sr-only">
+            <span id={IGNORE_WHITESPACE_DESCRIPTION_ID} className="tw:hidden">
               {localizedStrings.ignoreWhitespaceDifferencesTooltip}
             </span>
           </div>

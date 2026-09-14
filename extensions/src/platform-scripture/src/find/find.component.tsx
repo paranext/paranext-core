@@ -838,10 +838,11 @@ export function Find({
     // scrolled, the search re-run that follows every filter change would move the results across the
     // viewport boundary and toggle its scrollbar, and each toggle narrows the viewport by the
     // scrollbar's width — shifting this right-aligned toolbar, and the filters popover anchored to it,
-    // sideways. The results list and the loading skeleton below both give way first, so at normal
-    // panel heights nothing reaches this container and it never shows a scrollbar of its own; when a
-    // panel is short enough that it does, scrolling here is what keeps the status bar's Cancel button
-    // reachable.
+    // sideways. The loading skeleton above the results list gives way entirely, and the list itself
+    // down to its floor, so at normal panel heights nothing reaches this container and it shows no
+    // scrollbar of its own. Once a panel is short enough that the header, that floor and the status
+    // bar no longer fit, this container does scroll — which is what keeps the status bar's Cancel
+    // button reachable, at the cost of the toolbar shifting while a search runs.
     <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
@@ -1208,11 +1209,15 @@ export function Find({
       <div
         ref={resultsContainerRef}
         // A floor of roughly one and a half result cards, rather than this list's natural minimum
-        // (zero, since a scroll container can always shrink). Without it a short panel squeezes the
-        // list away entirely and its results become unreachable; much more than this and the header,
-        // floor and status bar together outgrow the root, which then scrolls and shifts the toolbar.
-        // The empty-state placeholder carries its own minimum height, so the idle view keeps its size.
-        className="tw:min-h-24 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
+        // (zero, since a scroll container can always shrink): without one, a short panel squeezes the
+        // list away entirely and its results, and the idle prompt inside it, become unreachable. The
+        // floor is dropped while the loading skeleton is up, where this list is empty and the space
+        // would be blank — and where reserving it pushes the root into scrolling, which shifts the
+        // toolbar. Raising it eats the same budget: the root's height also covers its padding, the
+        // gaps between its children, the header and the status bar.
+        className={`tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2 ${
+          resultsAreaState === 'skeleton' ? '' : 'tw:min-h-24'
+        }`}
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}

@@ -937,10 +937,7 @@ test.describe('Search Filters', () => {
     const counterBefore = await frame.locator('.tw\\:tabular-nums').textContent();
 
     await openFiltersPanel(frame);
-    // By attribute, not by role: the panel is modal, so while it is open everything outside it is
-    // aria-hidden, and role-based locators skip aria-hidden elements. Every other locator below
-    // reaches a control inside the panel, which is unaffected.
-    const filtersButton = frame.locator('button[aria-label="Toggle filters"]');
+    const filtersButton = frame.getByRole('button', { name: /toggle filters/i });
     const positionsDuringReRun = filtersButton.evaluate(
       (button, { previousCount, settleMs, timeoutMs }) =>
         new Promise<number[]>((resolve) => {
@@ -966,17 +963,22 @@ test.describe('Search Filters', () => {
           };
           requestAnimationFrame(sample);
         }),
-      { previousCount: counterBefore, settleMs: 1_000, timeoutMs: SEARCH_TIMEOUT_MS },
+      // Below Playwright's per-test timeout, so a re-run that never reports a new count still
+      // resolves with the positions it sampled instead of dying with no assertion output.
+      { previousCount: counterBefore, settleMs: 1_000, timeoutMs: 35_000 },
     );
 
-    // Whole word moves this term's count (52 -> 51), so the counter proves the search re-ran.
-    await frame.locator('#wordRestriction-wholeWord').click();
-    await waitForCounterToChangeFrom(frame, counterBefore);
-
-    const positions = await positionsDuringReRun;
-    // Closed before asserting, not after: the panel is modal, so leaving it open on a failure makes
-    // everything outside it inert and the next test's reset cannot clear the search box.
-    await frame.locator('#wordRestriction-wholeWord').press('Escape');
+    let positions: number[];
+    try {
+      // Whole word moves this term's count (52 -> 51), so the counter proves the search re-ran.
+      await frame.locator('#wordRestriction-wholeWord').click();
+      await waitForCounterToChangeFrom(frame, counterBefore);
+      positions = await positionsDuringReRun;
+    } finally {
+      // Closed however this ends. A panel left open by a failure here is state the afterEach reset
+      // has to undo before it can attribute the failure to this test.
+      await frame.locator('#wordRestriction-wholeWord').press('Escape');
+    }
 
     expect(new Set(positions).size).toBe(1);
   });

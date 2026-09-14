@@ -900,17 +900,39 @@ describe('Find — filters panel keyboard accessibility', () => {
 
   // The explanation beside "Any text" describes the radio itself. A tab stop of its own would sit
   // inside the radio group, where Tab never reaches it whenever the other radio is the selected one.
-  it.each([['all'] as const, ['verseOnly'] as const])(
-    'describes "Any text" with its explanation when %s is selected',
-    async (searchTextType) => {
+  it('describes "Any text" with its explanation', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('radio', { name: 'Any text' })).toHaveAccessibleDescription(
+      'Including introductions, titles, headings, etc.',
+    );
+  });
+
+  it('describes "Ignore whitespace differences" with its explanation', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Ignore whitespace differences' }),
+    ).toHaveAccessibleDescription(
+      'Match any run of spaces in the text where the search has spaces.',
+    );
+  });
+
+  it.each([['Match content in'], ['Match boundaries']])(
+    'names the "%s" group after its legend',
+    async (name) => {
       const user = setupUser();
-      render(<Find {...buildLifecycleProps({ searchTextType })} />);
+      render(<Find {...buildLifecycleProps({})} />);
 
       await openFilters(user);
 
-      expect(screen.getByRole('radio', { name: 'Any text' })).toHaveAccessibleDescription(
-        'Including introductions, titles, headings, etc.',
-      );
+      expect(screen.getByRole('group', { name })).toBeInTheDocument();
     },
   );
 
@@ -934,22 +956,33 @@ describe('Find — filters panel keyboard accessibility', () => {
     render(<Find {...buildLifecycleProps({ setSearchTextType })} />);
 
     await openFilters(user);
-    await user.keyboard('{ArrowDown>}');
+    await user.keyboard('{ArrowDown>}{/ArrowDown}');
 
     await waitFor(() => expect(setSearchTextType).toHaveBeenCalledWith('verseOnly'));
     expect(screen.getByRole('radio', { name: 'Verse text only' })).toHaveFocus();
   });
 
-  // The panel is portalled after the rest of the web view, so leaving it with Shift+Tab lands at the
-  // bottom of the Find panel and dismisses the popover behind the user.
-  it('keeps focus inside the panel when the user presses Shift+Tab from the first control', async () => {
+  // Leaving the panel with Shift+Tab dismisses it, so the question is where focus goes. The panel is
+  // portalled after the rest of the web view, so without help it lands at the bottom of the Find
+  // panel, nowhere near the control the user was on.
+  it('hands focus back to the filters button when Shift+Tab leaves the panel', async () => {
     const user = setupUser();
     render(<Find {...buildLifecycleProps({})} />);
 
     await openFilters(user);
     await user.tab({ shift: true });
 
-    expect(screen.queryByRole('dialog')?.contains(document.activeElement)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
+  it('hands focus back to the filters button when Escape closes the panel', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
   });
 
   it('names the open panel after the button that opens it', async () => {
@@ -970,7 +1003,7 @@ describe('Find — filters panel keyboard accessibility', () => {
 
     await openFilters(user);
     await user.hover(screen.getByTestId('any-text-explanation'));
-    const tooltip = await screen.findByRole('tooltip', {}, { timeout: 3_000 });
+    const tooltip = await screen.findByRole('tooltip');
 
     const zIndexOf = (element: Element) =>
       Number(element.closest<HTMLElement>('[data-radix-popper-content-wrapper]')?.style.zIndex);
