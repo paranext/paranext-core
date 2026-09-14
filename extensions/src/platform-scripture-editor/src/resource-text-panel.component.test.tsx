@@ -62,6 +62,8 @@ const STRINGS = {
   '%webView_resourcePanel_installFailed%': "The resource couldn't be installed.",
   '%webView_resourcePanel_installFailedOffline%':
     "The resource couldn't be installed. Check your connection and try again.",
+  '%webView_resourcePanel_installedButUnavailable%':
+    "The resource is installed but couldn't be opened.",
   '%webView_resourcePanel_retry%': 'Try again',
   '%webView_resourcePanel_settingsUnavailable%': "Couldn't load your resources.",
   '%webView_resourcePanel_loading%': 'Loading…',
@@ -474,17 +476,17 @@ describe('ResourceTextPanel install failure', () => {
     ).toBeInTheDocument();
   });
 
-  it('drops the connection hint when the install succeeded but the catalog has not caught up', () => {
-    // The download worked, so blaming the network would send the user off fixing the wrong thing.
+  it('says the resource is installed, with no connection hint, when the catalog has not caught up', () => {
+    // The download worked, so "couldn't be installed, check your connection" would be wrong twice.
     renderPanel({
       installFailed: true,
       installFailureReason: 'listNotConverging',
       isOnline: false,
     });
 
-    expect(screen.getByText(STRINGS['%webView_resourcePanel_installFailed%'])).toBeInTheDocument();
     expect(
-      screen.queryByText(STRINGS['%webView_resourcePanel_installFailedOffline%']),
-    ).not.toBeInTheDocument();
+      screen.getByText(STRINGS['%webView_resourcePanel_installedButUnavailable%']),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't be installed/)).not.toBeInTheDocument();
   });
 });

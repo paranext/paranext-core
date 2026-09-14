@@ -49,6 +49,8 @@ const STRINGS = {
   '%webView_modelTextPanel_installFailed%': "The model text couldn't be installed.",
   '%webView_modelTextPanel_installFailedOffline%':
     "The model text couldn't be installed. Check your connection and try again.",
+  '%webView_modelTextPanel_installedButUnavailable%':
+    "The model text is installed but couldn't be opened.",
   '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
   '%webView_modelTextPanel_bookNotAvailable%':
@@ -147,6 +149,25 @@ function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanel
 function renderPanel(overrides: Partial<ModelTextPanelProps> = {}) {
   const props = makeProps(overrides);
   return { props, ...render(<ModelTextPanel {...props} />) };
+}
+
+/**
+ * Renders a configured model text whose install resolves, then replays the refetch that success
+ * triggers: the catalog clears while the fetch is in flight and comes back still reporting the
+ * resource uninstalled. That is what a no-op install against a stale catalog looks like.
+ */
+async function renderWithCatalogStaleAfterInstall() {
+  const installResource = vi.fn(async () => {});
+  const props = makeProps({
+    modelTextsState: readyState(configuredModelText('uid-web')),
+    dblResources: [UNINSTALLED_RESOURCE],
+    installResource,
+  });
+  const { rerender } = render(<ModelTextPanel {...props} />);
+  await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
+  rerender(<ModelTextPanel {...props} dblResources={[]} />);
+  rerender(<ModelTextPanel {...props} dblResources={[{ ...UNINSTALLED_RESOURCE }]} />);
+  return { installResource };
 }
 
 afterEach(() => {
@@ -314,48 +335,24 @@ describe('ModelTextPanel', () => {
   });
 
   it('offers a retry rather than reinstalling when a successful install leaves the flag stale', async () => {
-    // Installing a resource already on disk succeeds as a no-op, so a stale catalog hands the same
-    // uid back after the refetch that success triggers. Re-firing there would loop; the panel
-    // surfaces the recovery affordance instead.
-    const installResource = vi.fn(async () => {});
-    const props = makeProps({
-      modelTextsState: readyState(configuredModelText('uid-web')),
-      dblResources: [UNINSTALLED_RESOURCE],
-      installResource,
-    });
-    const { rerender } = render(<ModelTextPanel {...props} />);
-    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
-
-    // The refetch the successful install triggered: the catalog clears while it is in flight, then
-    // comes back reporting the resource as uninstalled still.
-    rerender(<ModelTextPanel {...props} dblResources={[]} />);
-    rerender(<ModelTextPanel {...props} dblResources={[{ ...UNINSTALLED_RESOURCE }]} />);
+    // Re-firing the install here would loop: every success asks for a re-read, which hands back the
+    // same uid.
+    const { installResource } = await renderWithCatalogStaleAfterInstall();
 
     await screen.findByRole('button', { name: 'Try again' });
     expect(installResource).toHaveBeenCalledTimes(1);
   });
 
-  it('drops the connection hint when the install succeeded but the catalog has not caught up', async () => {
-    // Offline, but the resource is already on disk: the no-op install succeeds, so blaming the
-    // network would send the user off fixing the wrong thing.
+  it('says the model text is installed, with no connection hint, when the catalog has not caught up', async () => {
+    // Offline, but the no-op install succeeded: "couldn't be installed, check your connection" would
+    // be wrong on both counts.
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    const installResource = vi.fn(async () => {});
-    const props = makeProps({
-      modelTextsState: readyState(configuredModelText('uid-web')),
-      dblResources: [UNINSTALLED_RESOURCE],
-      installResource,
-    });
-    const { rerender } = render(<ModelTextPanel {...props} />);
-    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
-    rerender(<ModelTextPanel {...props} dblResources={[]} />);
-    rerender(<ModelTextPanel {...props} dblResources={[{ ...UNINSTALLED_RESOURCE }]} />);
+    await renderWithCatalogStaleAfterInstall();
 
-    expect(await screen.findByText("The model text couldn't be installed.")).toBeInTheDocument();
     expect(
-      screen.queryByText(
-        "The model text couldn't be installed. Check your connection and try again.",
-      ),
-    ).not.toBeInTheDocument();
+      await screen.findByText("The model text is installed but couldn't be opened."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't be installed/)).not.toBeInTheDocument();
   });
 
   it('does not auto-install a model text whose resource is already installed', async () => {

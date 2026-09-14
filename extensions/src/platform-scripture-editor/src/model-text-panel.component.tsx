@@ -55,6 +55,8 @@ import type {
   ModelTextPanelLocalizedStringKey,
   ModelTextPanelLocalizedStrings,
 } from './model-text-panel.const';
+import { MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS } from './model-text-panel.const';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -559,12 +561,11 @@ export function ModelTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          // The connection hint only fits a download that actually failed. When the install
-          // succeeded and the catalog simply has not caught up, the network is not the problem and
-          // saying so would send the user off fixing the wrong thing.
-          isOnline || installFailureReason === 'listNotConverging'
-            ? '%webView_modelTextPanel_installFailed%'
-            : '%webView_modelTextPanel_installFailedOffline%',
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS,
+          ),
         )}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onRetry={retryInstall}

@@ -12,6 +12,27 @@ const failInstall = () =>
     throw new Error('install failed');
   });
 
+/**
+ * Renders the hook for `uid` with an install that resolves, then replays the catalog refetch that
+ * success triggers: the uid drops out while the fetch is in flight and comes back still
+ * uninstalled.
+ */
+async function renderThroughStaleRefetch(
+  uid: string,
+  installResource: (dblEntryUid: string) => Promise<void>,
+) {
+  const initialProps: { uid: string | undefined } = { uid };
+  const rendered = renderHook(
+    ({ uid: current }: { uid: string | undefined }) =>
+      useDblResourceAutoInstall(current, installResource),
+    { initialProps },
+  );
+  await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
+  rendered.rerender({ uid: undefined });
+  rendered.rerender({ uid });
+  return rendered;
+}
+
 describe('useDblResourceAutoInstall', () => {
   it('installs the uid and reports isInstalling while pending', async () => {
     const installResource = okInstall();
@@ -133,20 +154,7 @@ describe('useDblResourceAutoInstall', () => {
     // same uid straight back. Re-firing there would loop: every success asks for a re-read, which
     // returns the same uid again.
     const installResource = okInstall();
-    // Typed up front (rather than asserted at the call) so the uid can later be cleared to
-    // `undefined`, which is how the catalog refetch between attempts presents itself.
-    const initialProps: { uid: string | undefined } = { uid: 'uid-a' };
-    const { result, rerender } = renderHook(
-      ({ uid }: { uid: string | undefined }) => useDblResourceAutoInstall(uid, installResource),
-      { initialProps },
-    );
-
-    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
-
-    // The catalog refetch the install triggered: the uid drops out while the fetch is in flight and
-    // comes back still uninstalled.
-    rerender({ uid: undefined });
-    rerender({ uid: 'uid-a' });
+    const { result } = await renderThroughStaleRefetch('uid-a', installResource);
 
     await waitFor(() => expect(result.current.installFailed).toBe(true));
     expect(installResource).toHaveBeenCalledTimes(1);
@@ -156,17 +164,7 @@ describe('useDblResourceAutoInstall', () => {
     // A user-initiated retry is a genuinely fresh attempt, not a replay of the state that produced
     // the error view.
     const installResource = okInstall();
-    // Typed up front (rather than asserted at the call) so the uid can later be cleared to
-    // `undefined`, which is how the catalog refetch between attempts presents itself.
-    const initialProps: { uid: string | undefined } = { uid: 'uid-a' };
-    const { result, rerender } = renderHook(
-      ({ uid }: { uid: string | undefined }) => useDblResourceAutoInstall(uid, installResource),
-      { initialProps },
-    );
-
-    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(1));
-    rerender({ uid: undefined });
-    rerender({ uid: 'uid-a' });
+    const { result } = await renderThroughStaleRefetch('uid-a', installResource);
     await waitFor(() => expect(result.current.installFailed).toBe(true));
 
     act(() => result.current.retryInstall());
@@ -175,24 +173,14 @@ describe('useDblResourceAutoInstall', () => {
   });
 
   it('distinguishes a rejected install from a list that will not converge', async () => {
-    // The two need different explanations: a rejected download may well be a connection problem,
-    // while a successful one whose flag never flips is not — telling that user to check their
-    // connection sends them off fixing the wrong thing.
+    // The two need different messages: a rejected download may well be a connection problem, while
+    // a successful one whose flag never flips is not.
     const failing = failInstall();
     const { result: rejected } = renderHook(() => useDblResourceAutoInstall('uid-a', failing));
     await waitFor(() => expect(rejected.current.installFailed).toBe(true));
     expect(rejected.current.installFailureReason).toBe('installRejected');
 
-    const succeeding = okInstall();
-    const initialProps: { uid: string | undefined } = { uid: 'uid-b' };
-    const { result: stale, rerender } = renderHook(
-      ({ uid }: { uid: string | undefined }) => useDblResourceAutoInstall(uid, succeeding),
-      { initialProps },
-    );
-    await waitFor(() => expect(succeeding).toHaveBeenCalledTimes(1));
-    rerender({ uid: undefined });
-    rerender({ uid: 'uid-b' });
-
+    const { result: stale } = await renderThroughStaleRefetch('uid-b', okInstall());
     await waitFor(() => expect(stale.current.installFailed).toBe(true));
     expect(stale.current.installFailureReason).toBe('listNotConverging');
   });

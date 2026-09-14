@@ -51,6 +51,8 @@ import type {
   ResourcePanelLocalizedStrings,
 } from './resource-text-panel.const';
 import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
+import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
@@ -583,11 +585,11 @@ export function ResourceTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          // The connection hint only fits a download that actually failed. When the install
-          // succeeded and the catalog simply has not caught up, the network is not the problem.
-          isOnline || installFailureReason === 'listNotConverging'
-            ? '%webView_resourcePanel_installFailed%'
-            : '%webView_resourcePanel_installFailedOffline%',
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            RESOURCE_PANEL_INSTALL_FAILURE_KEYS,
+          ),
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onRetry={retryInstall}
