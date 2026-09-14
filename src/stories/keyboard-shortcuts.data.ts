@@ -256,7 +256,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Zoom',
     context:
       'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
-    // The handler also accepts `=` (the unshifted key sharing the `+` cap) and the numpad `+` key.
+    // The handler also accepts `=` (the unshifted key sharing the `+` cap), the numpad `+` key, and
+    // Ctrl+Shift+`=` — the `+` key itself on US/UK layouts — so the published `Ctrl++` is literally the working chord.
     // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
     // branches that claim this chord are removed.
     keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
