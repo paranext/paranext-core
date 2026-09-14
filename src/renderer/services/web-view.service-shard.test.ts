@@ -3091,4 +3091,25 @@ describe('content zoom wiring', () => {
     expect(setContentZoomAreasMock).toHaveBeenCalledWith('wv-1', ['main', 'footnotes']);
     expect(setContentZoomActiveAreaMock).not.toHaveBeenCalled();
   });
+
+  test('warns instead of throwing back into the web view when a report cannot be applied', async () => {
+    await import('@renderer/services/web-view.service-shard');
+    const { logger } = await import('@shared/services/logger.service');
+    setContentZoomAreasMock.mockImplementationOnce(() => {
+      throw new Error('dock layout is not registered');
+    });
+    setContentZoomActiveAreaMock.mockImplementationOnce(() => {
+      throw new Error('dock layout is not registered');
+    });
+
+    expect(() => window.reportContentZoomAreasById('wv-1', ['main'])).not.toThrow();
+    expect(() => window.reportContentZoomActiveAreaById('wv-1', 'main')).not.toThrow();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Content zoom areas report failed for wv-1'),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Content zoom active area report failed for wv-1'),
+    );
+  });
 });

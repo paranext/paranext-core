@@ -2484,13 +2484,26 @@ globalThis.resetContentZoomById = (webViewId, areaId) => {
     logger.warn(`Content zoom reset failed for ${webViewId}: ${getErrorMessage(e)}`),
   );
 };
-globalThis.reportContentZoomAreasById = (webViewId, areaIds) =>
-  setContentZoomAreas(
-    webViewId,
-    Array.isArray(areaIds) ? areaIds.filter((areaId) => typeof areaId === 'string') : [],
-  );
+// The bootstrap calls these two synchronously while it is still setting itself up, so anything they
+// throw crosses back into the web view's realm and can abort the bootstrap before its wheel and key
+// listeners are installed. This boundary warns and continues, exactly as the asynchronous pair above
+// does, so a parent-side failure can never take a pane's zoom handling down with it.
+globalThis.reportContentZoomAreasById = (webViewId, areaIds) => {
+  try {
+    setContentZoomAreas(
+      webViewId,
+      Array.isArray(areaIds) ? areaIds.filter((areaId) => typeof areaId === 'string') : [],
+    );
+  } catch (e) {
+    logger.warn(`Content zoom areas report failed for ${webViewId}: ${getErrorMessage(e)}`);
+  }
+};
 globalThis.reportContentZoomActiveAreaById = (webViewId, areaId) => {
-  if (typeof areaId === 'string') setContentZoomActiveArea(webViewId, areaId);
+  try {
+    if (typeof areaId === 'string') setContentZoomActiveArea(webViewId, areaId);
+  } catch (e) {
+    logger.warn(`Content zoom active area report failed for ${webViewId}: ${getErrorMessage(e)}`);
+  }
 };
 
 // #endregion Set up global variables to use in `openWebView`'s `imports` below
