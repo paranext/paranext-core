@@ -543,9 +543,8 @@ internal static class Pt9InterlinearReader
     /// <summary>
     /// Maps one setup to its served shape. A model name that is empty or PT9's no-model sentinel
     /// means the setup has no model text, so the name is absent; the model id serves whenever
-    /// present, since a model-less setup mints one as its settings key. Every other string is
-    /// normalized through <see cref="NullIfEmpty"/>, so an empty value and an omitted one are
-    /// indistinguishable in the served payload, whichever path produced the setup.
+    /// present, since a model-less setup mints one as its settings key. Every other string serves
+    /// only when non-empty, so an empty value and an omitted one are indistinguishable downstream.
     /// </summary>
     private static Pt9InterlinearSetup ConvertPt9InterlinearSetup(InterlinearSetup setup)
     {
@@ -570,9 +569,8 @@ internal static class Pt9InterlinearReader
     }
 
     /// <summary>
-    /// Collapses an empty string to absent. PT9 stores "never set" as an empty element, an
-    /// omitted element, or an empty setting depending on the field and on which loader wrote it,
-    /// and none of those distinctions means anything to a consumer.
+    /// Collapses an empty string to absent. PT9's several ways of storing "never set" carry no
+    /// distinction worth serving.
     /// </summary>
     private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 

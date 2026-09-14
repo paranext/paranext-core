@@ -151,22 +151,14 @@ public sealed record Pt9Lexicon(
 /// stored one, since a model-less setup mints an id as its settings key.
 /// </para>
 /// <para>
-/// A string field that is empty in the project is absent here. PT9 distinguishes an empty value
-/// from an omitted one inconsistently, and differently again for a setup rebuilt from legacy
-/// settings, so no such distinction is served: every string field is either present and non-empty
-/// or absent.
+/// A string field the project left empty is absent here, so every string field is either present
+/// and non-empty or absent.
 /// </para>
 /// <para>
-/// <c>ModelScrTextId</c> and <c>ExportScrTextId</c> serve PT9's own re-formatting of the id
-/// rather than the characters the project stored: hex digits fold to lowercase, and a legacy
-/// resource id is re-encoded (<c>1234567890abcdefres</c> serves as
-/// <c>1234567890abcdefabcdefff</c>).
-/// </para>
-/// <para>
-/// The two paths disagree about a malformed id. In the setups file an id that is neither empty
-/// nor valid hex is not degraded to absent: it fails the whole read with the file named, taking
-/// books, lexicon, and word analyses down with it. A setup rebuilt from legacy settings tolerates
-/// one instead, serving the id as absent.
+/// <c>ModelScrTextId</c> and <c>ExportScrTextId</c> serve PT9's re-formatting of the id rather
+/// than the characters the project stored: hex digits fold to lowercase, and a legacy resource id
+/// is re-encoded. An id that is neither empty nor valid hex fails the whole read when it comes
+/// from the setups file, but serves as absent when it comes from legacy settings.
 /// </para>
 /// </summary>
 public sealed record Pt9InterlinearSetup(

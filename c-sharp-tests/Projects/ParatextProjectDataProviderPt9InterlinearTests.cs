@@ -492,7 +492,7 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     [Test]
     [Description(
         "Every setup string the project wrote empty serves as absent, matching the setup that "
-            + "omits the field entirely, so a consumer cannot tell the two apart."
+            + "omits the field entirely."
     )]
     public void GetPt9InterlinearData_ServesEmptyAndOmittedSetupStringsAlikeAsAbsent()
     {
@@ -519,8 +519,7 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         Assert.That(data.Setups, Has.Count.EqualTo(2));
         Assert.Multiple(() =>
         {
-            // Written empty. Each of these fails if its NullIfEmpty guard is dropped, since the
-            // empty string PT9 stored would then reach the payload.
+            // Written empty.
             Assert.That(data.Setups[0].FontName, Is.Null);
             Assert.That(data.Setups[0].ModelScrTextName, Is.Null);
             Assert.That(data.Setups[0].ExportScrTextName, Is.Null);
@@ -529,9 +528,8 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
             Assert.That(data.Setups[0].ModelScrTextId, Is.Null);
             Assert.That(data.Setups[0].ExportScrTextId, Is.Null);
 
-            // Omitted entirely, for the same answer by a different route. The type pins that this
-            // really is a parsed setup, so the nulls below are the payload's answer rather than a
-            // default-constructed object's.
+            // Omitted entirely. The type is asserted so the nulls cannot pass on a setup that
+            // never parsed.
             Assert.That(data.Setups[1].Type, Is.EqualTo("Glossing"));
             Assert.That(data.Setups[1].FontName, Is.Null);
             Assert.That(data.Setups[1].ModelScrTextName, Is.Null);
@@ -590,9 +588,7 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
             </InterlinearSetupList>
             """
         );
-        // A perfectly readable lexicon, to show the failure is not scoped to the setups: the
-        // setups file is parsed before any other, so one bad id costs the caller the whole
-        // payload rather than just the setup carrying it.
+        // A readable lexicon, so the throw shows the whole read failing rather than just setups.
         WriteProjectFile("Lexicon.xml", LexiconXml);
 
         var exception = Assert.Throws<InvalidDataException>(
@@ -629,8 +625,7 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
             Assert.That(data.Setups[0].FontSize, Is.Zero);
             Assert.That(data.Setups[0].RightToLeft, Is.False);
 
-            // Absent by a third route: HexId.FromStrSafe turns the empty setting into no id
-            // before the conversion's own guard would have seen an empty string.
+            // Already absent before the conversion sees them: an empty id setting reads as no id.
             Assert.That(data.Setups[0].ExportScrTextId, Is.Null);
             Assert.That(data.Setups[0].ExportScrTextName, Is.Null);
         });

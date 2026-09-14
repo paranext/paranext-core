@@ -1465,9 +1465,8 @@ declare module 'platform-scripture' {
    * locally installed projects, as PT9 itself does, so a setup whose model text is not installed is
    * absent.
    *
-   * A string field that is empty in the project is absent here, so an optional string field is
-   * either present and non-empty or absent. Paratext 9 itself distinguishes an empty value from an
-   * omitted one inconsistently; that distinction is normalized away rather than passed on.
+   * A string field the project left empty is absent here, so an optional string field is either
+   * present and non-empty or absent.
    *
    * @experimental
    */
