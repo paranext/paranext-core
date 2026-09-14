@@ -16,27 +16,32 @@ export type ContentZoomChromeKeysDeps = {
   isAnyDialogOpen: () => boolean;
 };
 
-/**
- * Same modifier rule as the in-view bootstrap chords, except Shift is accepted here: `Ctrl+Shift+=`
- * is how many keyboards type `Ctrl++`. Alt is still excluded, because Ctrl+Alt chords carry their
- * own meanings.
- */
+/** Ctrl (or ⌘) is required. Alt is excluded, because Ctrl+Alt chords carry their own meanings. */
 function isChordModifier(e: KeyboardEvent): boolean {
   return (e.ctrlKey || e.metaKey) && !e.altKey;
 }
 
+type ChordAction = 'in' | 'out' | 'reset';
+
 /**
- * Whether the event target is a web view's iframe, or lives inside one. The in-view bootstrap
- * script already turns these chords into zoom actions for a target inside a web view, so this
- * listener must not act on the same keystroke a second time.
+ * Whether Shift may accompany the given action. Shift is accepted only for zoom-in, since
+ * `Ctrl+Shift+=` is how many keyboards type `Ctrl++`; a held Shift on the zoom-out or reset keys is
+ * rejected so `Ctrl+Shift+-` and `Ctrl+Shift+0` stay free for other handlers.
+ */
+function isAllowedShiftState(e: KeyboardEvent, action: ChordAction): boolean {
+  return !e.shiftKey || action === 'in';
+}
+
+/**
+ * Keystrokes inside a web view's iframe belong to the in-view bootstrap. They do not bubble into
+ * this document, so this is insurance against an iframe element itself (or a same-document node
+ * under one) being the target.
  */
 function isInsideIframe(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   if (target instanceof HTMLIFrameElement) return true;
   return !!target.closest('iframe');
 }
-
-type ChordAction = 'in' | 'out' | 'reset';
 
 /** Keys exactly as the in-view bootstrap recognizes them. */
 function actionFor(e: KeyboardEvent): ChordAction | undefined {
@@ -68,6 +73,7 @@ export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): 
     if (isInsideIframe(e.target)) return;
     const action = actionFor(e);
     if (!action) return;
+    if (!isAllowedShiftState(e, action)) return;
     e.preventDefault();
     const promise =
       action === 'reset'

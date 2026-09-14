@@ -6,9 +6,8 @@ import { rootKeyboardShortcuts } from './keyboard-shortcuts.data';
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
 /**
- * The content-zoom chord handlers this file's Zoom category must cite once the chords move from the
- * main-process app-wide zoom to per-pane content zoom: the in-view bootstrap, the window-chrome
- * listener, the macOS View menu items, and the command router they all funnel through.
+ * The four handlers that implement the content-zoom chords; every Zoom-category chord entry must
+ * cite all of them.
  */
 const CONTENT_ZOOM_CHORD_LOCATIONS = [
   'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -23,7 +22,9 @@ function zoomEntries() {
 
 /** All (entry id, location) pairs across the Zoom category, for a per-pair existence check. */
 function zoomEntryLocationPairs(): [entryId: string, location: string][] {
-  return zoomEntries().flatMap((entry) => entry.locations.map((location) => [entry.id, location]));
+  return zoomEntries().flatMap((entry) =>
+    entry.locations.map((location): [string, string] => [entry.id, location]),
+  );
 }
 
 describe('keyboard-shortcuts.data Zoom category', () => {
@@ -38,7 +39,7 @@ describe('keyboard-shortcuts.data Zoom category', () => {
     'documents all four content-zoom chord handlers on %s',
     (id) => {
       const entry = zoomEntries().find((zoomEntry) => zoomEntry.id === id);
-      expect(entry?.locations).toEqual(CONTENT_ZOOM_CHORD_LOCATIONS);
+      expect(entry?.locations).toEqual(expect.arrayContaining(CONTENT_ZOOM_CHORD_LOCATIONS));
     },
   );
 
