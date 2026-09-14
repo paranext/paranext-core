@@ -139,9 +139,11 @@ let memoryLoaded = false;
 
 /**
  * The memory record the sibling sync last reconciled against, so it can tell an entry that was
- * deleted from an entry that was never there. Only the memory subscription advances it — a local
- * write must not, or this window would have no record of the entry the write removed and would
- * leave its own sibling panes at the level the write just gave up.
+ * deleted from an entry that was never there. Only the memory subscription advances it, and only
+ * after a walk that ran to the end: the deletion half of a delta exists nowhere else, so a walk
+ * that threw partway must leave the record where it was for the next emission to find. A local
+ * write must not advance it either, or this window would have no record of the entry the write
+ * removed and would leave its own sibling panes at the level the write just gave up.
  */
 let lastSyncedMemory: MemoryRecord = {};
 
@@ -727,21 +729,19 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
   await memoryChain;
 }
 
-/**
- * Writes a pane's pending levels into its definition state; an empty map is removed entirely. The
- * pending entry is kept if the write does not land, so the next attempt still carries the levels.
- */
+/** Writes a pane's pending levels into its definition state; an empty map is removed entirely. */
 function commitOwnLevels(webViewId: WebViewId): boolean {
   const levels = pendingOwnLevels.get(webViewId);
   if (!levels) return true;
   const definition = deps.getDefinition(webViewId);
+  // The levels stop being pending either way, including if the write below throws: they are then
+  // stored, or the write did not land and a read has to go back to what the definition holds.
+  pendingOwnLevels.delete(webViewId);
   if (!definition) return false;
   const state: Record<string, unknown> = { ...(definition.state ?? {}) };
   if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
   else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
-  if (!deps.updateDefinition(webViewId, { state })) return false;
-  pendingOwnLevels.delete(webViewId);
-  return true;
+  return deps.updateDefinition(webViewId, { state });
 }
 
 /**
@@ -754,10 +754,7 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
 function setOwnLevels(webViewId: WebViewId, levels: Levels): boolean {
   pendingOwnLevels.set(webViewId, levels);
   if (ownLevelWriteTimers.has(webViewId)) return true;
-  if (!commitOwnLevels(webViewId)) {
-    pendingOwnLevels.delete(webViewId);
-    return false;
-  }
+  if (!commitOwnLevels(webViewId)) return false;
   ownLevelWriteTimers.set(
     webViewId,
     setTimeout(() => {
@@ -973,8 +970,15 @@ export function initializeContentZoomService(
         const previousMemory = lastSyncedMemory;
         cachedMemory = memory;
         memoryLoaded = true;
-        lastSyncedMemory = memory;
-        syncSiblingsFromMemory(memory, previousMemory);
+        try {
+          syncSiblingsFromMemory(memory, previousMemory);
+          // Only a walk that finished may advance the record the next delta is computed against. A
+          // pane whose write merely declined is not a reason to hold it back; a throw is, since
+          // every pane after it was never visited at all.
+          lastSyncedMemory = memory;
+        } catch (e) {
+          logger.warn(`Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`);
+        }
       });
     } catch (e) {
       logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
