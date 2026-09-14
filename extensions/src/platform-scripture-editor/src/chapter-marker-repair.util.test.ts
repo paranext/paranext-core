@@ -136,6 +136,15 @@ describe('repairChapterMarkers — USJ specifics', () => {
     expect(usj.content).toEqual([chapter('2'), ID_GEN, para('p', 'body')]);
   });
 
+  it('restores the chapter marker at the start of a document holding nothing but book nodes', () => {
+    // The degenerate shape of the case above: with no non-book node to fall behind, the marker
+    // still leads, because Paratext judges a later chapter on what precedes its marker regardless
+    // of what that content is.
+    const { usj, didRepair } = repairChapterMarkers(usjOf(ID_GEN), 2);
+    expect(didRepair).toBe(true);
+    expect(usj.content).toEqual([chapter('2'), ID_GEN]);
+  });
+
   it('removes a chapter marker nested inside a paragraph', () => {
     const { usj, didRepair } = repairChapterMarkers(
       usjOf(chapter('3'), {
