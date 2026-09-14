@@ -183,6 +183,19 @@ let memoryFlushFailures = 0;
  */
 const flushMemoryWritesDebounced = debounce(flushMemoryWrites, MEMORY_WRITE_DEBOUNCE_MS);
 
+/**
+ * How long a pane's further level edits wait after the one written immediately. Every definition
+ * write reconciles the whole dock layout, serializes every open view's state and re-renders the
+ * pane, so a gesture's remaining steps are worth one write rather than one each.
+ */
+const OWN_LEVEL_WRITE_DEBOUNCE_MS = 250;
+
+/** Levels given to a pane in this window but not yet written into its definition, by pane id. */
+const pendingOwnLevels = new Map<WebViewId, Levels>();
+
+/** The open burst window per pane: while one is running, a further edit is deferred into it. */
+const ownLevelWriteTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>();
+
 /** The registered `beforeunload` flush listener, if any; guards against registering a second one. */
 let beforeUnloadListener: (() => void) | undefined;
 
@@ -217,6 +230,9 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   areasByWebViewId.clear();
   activeAreaByWebViewId.clear();
   unknownAreasLoggedByWebViewId.clear();
+  ownLevelWriteTimers.forEach((timer) => clearTimeout(timer));
+  ownLevelWriteTimers.clear();
+  pendingOwnLevels.clear();
   pendingMemoryWrites.clear();
   memoryFlushFailures = 0;
   flushMemoryWritesDebounced.cancel();
@@ -264,6 +280,14 @@ function getOwnLevels(definition: Pick<SavedWebViewDefinition, 'state'> | undefi
     if (isValidContentZoomAreaId(areaId) && isValidZoomFactor(level)) out[areaId] = level;
   });
   return out;
+}
+
+/** The pane's own levels, with a write this window has not committed yet taking precedence. */
+function effectiveOwnLevels(
+  definition: Pick<SavedWebViewDefinition, 'id' | 'state'> | undefined,
+): Levels {
+  if (!definition) return {};
+  return pendingOwnLevels.get(definition.id) ?? getOwnLevels(definition);
 }
 
 /** Explicit id → the window's last focused tab → nothing. Exported for tests. */
@@ -389,6 +413,7 @@ function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
   const definition = deps.getDefinition(webViewId);
   if (!definition) return;
   if (definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state) return;
+  if (pendingOwnLevels.has(webViewId)) return;
   const id = memoryIdentityFor(definition);
   if (!id) return;
   const levels = collectMemoryLevelsFor(cachedMemory, id);
@@ -425,6 +450,12 @@ export function setContentZoomActiveArea(webViewId: WebViewId, areaId: ContentZo
 
 /** Drop everything remembered in this window about a pane (its iframe is gone). */
 export function forgetContentZoom(webViewId: WebViewId): void {
+  const timer = ownLevelWriteTimers.get(webViewId);
+  if (timer !== undefined) {
+    clearTimeout(timer);
+    ownLevelWriteTimers.delete(webViewId);
+  }
+  pendingOwnLevels.delete(webViewId);
   areasByWebViewId.delete(webViewId);
   activeAreaByWebViewId.delete(webViewId);
   unknownAreasLoggedByWebViewId.delete(webViewId);
@@ -466,7 +497,7 @@ export function pushContentZoom(
     return; // a view without areas has no per-area action to announce
   }
   iframe.style.zoom = '';
-  const own = getOwnLevels(deps.getDefinition(webViewId));
+  const own = effectiveOwnLevels(deps.getDefinition(webViewId));
   new Set([...areas, ...Object.keys(own)]).forEach((areaId) => {
     root.style.setProperty(getContentZoomCssVariable(areaId), String(own[areaId] ?? defaultZoom));
   });
@@ -685,26 +716,75 @@ function writeMemory(
   flushMemoryWritesDebounced().catch(() => {});
 }
 
-/** Test seam only. Flushes any pending edit now and waits for the transaction chain to settle. */
+/**
+ * Test seam only. Writes every deferred pane level and memory edit now and waits for the memory
+ * transaction chain to settle.
+ */
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
-export async function __flushContentZoomMemoryForTesting(): Promise<void> {
+export async function __flushContentZoomWritesForTesting(): Promise<void> {
+  flushOwnLevelWrites();
   await flushMemoryWritesDebounced.flush();
   await memoryChain;
 }
 
-/** Sets or deletes one area's level in the definition state; an empty map is removed entirely. */
+/**
+ * Writes a pane's pending levels into its definition state; an empty map is removed entirely. The
+ * pending entry is kept if the write does not land, so the next attempt still carries the levels.
+ */
+function commitOwnLevels(webViewId: WebViewId): boolean {
+  const levels = pendingOwnLevels.get(webViewId);
+  if (!levels) return true;
+  const definition = deps.getDefinition(webViewId);
+  if (!definition) return false;
+  const state: Record<string, unknown> = { ...(definition.state ?? {}) };
+  if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+  else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+  if (!deps.updateDefinition(webViewId, { state })) return false;
+  pendingOwnLevels.delete(webViewId);
+  return true;
+}
+
+/**
+ * Gives a pane its next levels. The FIRST edit of a burst is written at once — that write is what
+ * makes the level survive a crash, since the layout save it triggers writes synchronously to local
+ * storage — and every further edit inside {@link OWN_LEVEL_WRITE_DEBOUNCE_MS} of it is deferred into
+ * the open window and written once when it closes. Reads go through {@link effectiveOwnLevels}
+ * meanwhile, so what the pane shows is always the newest level.
+ */
+function setOwnLevels(webViewId: WebViewId, levels: Levels): boolean {
+  pendingOwnLevels.set(webViewId, levels);
+  if (ownLevelWriteTimers.has(webViewId)) return true;
+  if (!commitOwnLevels(webViewId)) {
+    pendingOwnLevels.delete(webViewId);
+    return false;
+  }
+  ownLevelWriteTimers.set(
+    webViewId,
+    setTimeout(() => {
+      ownLevelWriteTimers.delete(webViewId);
+      commitOwnLevels(webViewId);
+    }, OWN_LEVEL_WRITE_DEBOUNCE_MS),
+  );
+  return true;
+}
+
+/** Closes every open burst window and writes what it still holds. */
+function flushOwnLevelWrites(): void {
+  ownLevelWriteTimers.forEach((timer) => clearTimeout(timer));
+  ownLevelWriteTimers.clear();
+  [...pendingOwnLevels.keys()].forEach((webViewId) => commitOwnLevels(webViewId));
+}
+
+/** Sets or deletes one area's level among the pane's levels. */
 function writeOwnLevel(
   definition: SavedWebViewDefinition,
   areaId: ContentZoomAreaId,
   level: number | undefined,
 ): boolean {
-  const state: Record<string, unknown> = { ...(definition.state ?? {}) };
-  const levels: Levels = { ...getOwnLevels(definition) };
+  const levels: Levels = { ...effectiveOwnLevels(definition) };
   if (level === undefined) delete levels[areaId];
   else levels[areaId] = level;
-  if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
-  else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
-  return deps.updateDefinition(definition.id, { state });
+  return setOwnLevels(definition.id, levels);
 }
 
 /**
@@ -731,7 +811,7 @@ export async function adjustContentZoom(
   // default was being fetched, and the write below must start from what it holds now.
   const definition = deps.getDefinition(target);
   if (!definition) return;
-  const current = getOwnLevels(definition)[area] ?? defaultZoom;
+  const current = effectiveOwnLevels(definition)[area] ?? defaultZoom;
   const next = adjustZoomFactor(current, deltaSteps);
   if (next === current) return;
   if (!writeOwnLevel(definition, area, next)) return;
@@ -754,7 +834,7 @@ export async function resetContentZoom(
   if (!definition) return;
   // Only a pane that actually holds its own level for the area has anything to give up — and only
   // then may the shared key go, which every sibling pane of this identity follows.
-  if (getOwnLevels(definition)[area] !== undefined) {
+  if (effectiveOwnLevels(definition)[area] !== undefined) {
     if (!writeOwnLevel(definition, area, undefined)) return;
     writeMemory(definition, area, undefined);
   }
@@ -774,7 +854,7 @@ export async function resetContentZoom(
 export async function getInitialContentZoomForWebView(
   webView: Pick<SavedWebViewDefinition, 'id' | 'webViewType' | 'projectId' | 'state'>,
 ): Promise<{ defaultZoom: number; levels: Levels }> {
-  const levels: Levels = { ...getOwnLevels(webView) };
+  const levels: Levels = { ...effectiveOwnLevels(webView) };
   const id = memoryIdentityFor(webView);
   if (id) {
     // Initialization pre-warms the cache and the memory subscription keeps it current, so opening
@@ -815,18 +895,24 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       ...Object.keys(collectMemoryLevelsFor(memory, id)),
       ...Object.keys(collectMemoryLevelsFor(previousMemory, id)),
     ]);
+    // One read and one write per pane: every write reconciles the whole dock layout, so a pane
+    // whose two areas both moved must not cost two of them.
+    const current = deps.getDefinition(definition.id) ?? definition;
+    const levels: Levels = { ...effectiveOwnLevels(current) };
     let changed = false;
     areas.forEach((areaId) => {
-      const current = deps.getDefinition(definition.id) ?? definition;
       const key = buildContentZoomMemoryKey(id.kind, id.identity, areaId);
       // A newer local edit for this key hasn't reached the setting yet; this echo predates it, so
       // applying it would revert the area until the newer write's own echo arrives.
       if (pendingMemoryWrites.has(key)) return;
       const remembered = isValidZoomFactor(memory[key]) ? memory[key] : undefined;
-      if (getOwnLevels(current)[areaId] === remembered) return;
-      if (writeOwnLevel(current, areaId, remembered)) changed = true;
+      if (levels[areaId] === remembered) return;
+      if (remembered === undefined) delete levels[areaId];
+      else levels[areaId] = remembered;
+      changed = true;
     });
-    if (changed) pushContentZoom(definition.id);
+    if (!changed) return;
+    if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
   });
 }
 
@@ -904,6 +990,7 @@ export function initializeContentZoomService(
     // reset removes it so a later re-initialization can register its own.
     if (typeof window !== 'undefined' && !beforeUnloadListener) {
       beforeUnloadListener = () => {
+        flushOwnLevelWrites();
         flushMemoryWritesDebounced.flush();
       };
       window.addEventListener('beforeunload', beforeUnloadListener);
