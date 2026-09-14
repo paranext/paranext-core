@@ -948,6 +948,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       setIsTriggerNarrow(width < NARROW_TRIGGER_THRESHOLD_PX);
     };
     update(el.getBoundingClientRect().width);
+    // Environments without ResizeObserver (jsdom, SSR) keep the one-shot measurement above and
+    // simply never re-measure. Throwing here would take down the whole React tree of every
+    // consumer, so degrade instead.
+    if (typeof ResizeObserver === 'undefined') return undefined;
     // Border-box width, NOT `contentRect` (which is content-box, i.e. minus padding). The
     // narrow-mode branch below tightens the button's padding, so switching states changes
     // contentRect but not the button's outer size — measuring contentRect would race against
