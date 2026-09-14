@@ -384,6 +384,8 @@ describe('content-zoom bootstrap script', () => {
 
     // The throw was consumed by the call above; this one succeeds.
     byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
     // eslint-disable-next-line no-underscore-dangle
     expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
     expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
