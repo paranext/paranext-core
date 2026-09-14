@@ -1,5 +1,5 @@
 import type { DblResourceData } from 'platform-bible-utils';
-import type { DblResourceUpdateStatus } from 'platform-get-resources';
+import type { DblResourceInstallStatus, DblResourceUpdateStatus } from 'platform-get-resources';
 
 /** Result of reconciling the cached DBL resource list against current local state. */
 export type ReconciledCachedResources = {
@@ -13,37 +13,31 @@ export type ReconciledCachedResources = {
  * Bring the cached DBL resource list back in line with current local state.
  *
  * @param cachedResources Resource list from the cache.
- * @param localProjectIds Ids of the Scripture projects currently present locally.
+ * @param installStatus Local project id per DBL entry uid, from the backend. A resource absent from
+ *   it is one the backend did not report on, and is left exactly as it was.
  * @param updateStatus Freshly computed update availability from the backend, or `undefined` if it
  *   could not be determined. Resources absent from it keep their cached `updateAvailable`.
  * @returns The reconciled list and whether anything changed.
  */
 export function reconcileCachedResources(
   cachedResources: DblResourceData[],
-  localProjectIds: string[],
+  installStatus: DblResourceInstallStatus,
   updateStatus: DblResourceUpdateStatus | undefined,
 ): ReconciledCachedResources {
   let isChanged = false;
 
   const resources = cachedResources.map((resource) => {
-    // Deliberately NOT `doesCatalogRowCoverProject` from `platform-bible-utils`, despite the
-    // near-identical shape. That helper answers "does this row already account for this project?"
-    // and refuses a never-synced row (`installed: false, projectId: ''`) so a stale entry for a
-    // reassigned uid cannot hide a local project. This asks the opposite question — "which local
-    // project does this row correspond to?" — and a never-synced row is exactly the case it has
-    // to resolve, because recognising that such a row now has a project on disk is what marks it
-    // installed. Routing this through that helper makes every first-time install undetectable.
-    const matchingLocalProjectId = localProjectIds.find((localProjectId) =>
-      // If the `projectId` is defined then tries to use that
-      resource.projectId
-        ? resource.projectId === localProjectId
-        : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
-          // Guard against an empty dblEntryUid: ''.startsWith('') is true for every string.
-          resource.dblEntryUid !== '' &&
-          localProjectId.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
-    );
+    // The backend answers this outright, keyed by uid. Matching a catalog row to a local project
+    // from here cannot work: a resource project's id is unrelated to the DBL entry it was installed
+    // from — ParatextData records the uid in the project's settings and matches on that — so an
+    // exact-or-prefix comparison silently misses every resource whose ids diverge.
+    const reportedProjectId = installStatus[resource.dblEntryUid];
 
-    const installed = matchingLocalProjectId !== undefined;
+    // Absent means the backend said nothing about this row, which is not the same as "not
+    // installed". Leave it exactly as it was.
+    if (reportedProjectId === undefined) return resource;
+
+    const installed = reportedProjectId !== '';
     const installedChanged = installed !== resource.installed;
 
     // Prefer the backend's answer. Falling back to `false` when the installed state just changed
@@ -59,10 +53,10 @@ export function reconcileCachedResources(
     // describes nothing.
     const updateAvailable = installed && installedUpdateAvailable;
 
-    // An installed resource's id is whichever local project it matched; an uninstalled one has
-    // none. This can differ without `installed` differing: a row cached as installed but with an
-    // empty `projectId` matches on the `dblEntryUid` prefix, so the id is recovered here.
-    const projectId = matchingLocalProjectId ?? '';
+    // Whatever the backend reported — the project id for an installed resource, empty for one
+    // that is not. This can differ without `installed` differing, which is the case that made the
+    // old prefix inference wrong: a row cached as installed can carry the wrong id entirely.
+    const projectId = reportedProjectId;
 
     if (
       installedChanged ||

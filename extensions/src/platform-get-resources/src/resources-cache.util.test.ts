@@ -18,7 +18,7 @@ describe('reconcileCachedResources', () => {
   it('clears updateAvailable on an installed resource once the backend reports no update', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: false },
     );
 
@@ -30,7 +30,7 @@ describe('reconcileCachedResources', () => {
   it('sets updateAvailable on an installed resource once the backend reports an update', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, updateAvailable: false }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: true },
     );
 
@@ -41,7 +41,7 @@ describe('reconcileCachedResources', () => {
   it('keeps the cached updateAvailable when the backend reports no status for the resource', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       undefined,
     );
 
@@ -54,7 +54,7 @@ describe('reconcileCachedResources', () => {
   it('keeps the cached updateAvailable when the backend returns an empty status map', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       {},
     );
 
@@ -65,7 +65,7 @@ describe('reconcileCachedResources', () => {
   it('keeps the cached updateAvailable when the backend answers only for other resources', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { somethingElse: false },
     );
 
@@ -76,7 +76,7 @@ describe('reconcileCachedResources', () => {
   it('clears updateAvailable on a resource installed elsewhere while the backend cannot answer', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, installed: false, projectId: '' }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       {},
     );
 
@@ -88,7 +88,7 @@ describe('reconcileCachedResources', () => {
   it('reports no change when the backend agrees with the cache', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: true },
     );
 
@@ -99,7 +99,7 @@ describe('reconcileCachedResources', () => {
   it('marks a resource installed and records its project id when its project appears locally', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, installed: false, projectId: '' }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: false },
     );
 
@@ -109,9 +109,13 @@ describe('reconcileCachedResources', () => {
   });
 
   it('marks a resource uninstalled and clears its project id when its project is gone locally', () => {
-    const { resources, isChanged } = reconcileCachedResources([INSTALLED_WITH_UPDATE], [], {
-      abc123: true,
-    });
+    const { resources, isChanged } = reconcileCachedResources(
+      [INSTALLED_WITH_UPDATE],
+      { abc123: '' },
+      {
+        abc123: true,
+      },
+    );
 
     expect(resources[0].installed).toBe(false);
     expect(resources[0].projectId).toBe('');
@@ -122,9 +126,13 @@ describe('reconcileCachedResources', () => {
   // newest. `updateAvailable` is only meaningful while installed, so that answer must not survive
   // into the cache.
   it('clears updateAvailable on an uninstall even when the backend reports an update', () => {
-    const { resources, isChanged } = reconcileCachedResources([INSTALLED_WITH_UPDATE], [], {
-      abc123: true,
-    });
+    const { resources, isChanged } = reconcileCachedResources(
+      [INSTALLED_WITH_UPDATE],
+      { abc123: '' },
+      {
+        abc123: true,
+      },
+    );
 
     expect(resources[0].installed).toBe(false);
     expect(resources[0].updateAvailable).toBe(false);
@@ -134,7 +142,7 @@ describe('reconcileCachedResources', () => {
   it('keeps the backend answer on an install, where it is the authoritative fresh value', () => {
     const { resources } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, installed: false, projectId: '', updateAvailable: false }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: true },
     );
 
@@ -145,7 +153,7 @@ describe('reconcileCachedResources', () => {
   it('recovers a missing project id on a resource already cached as installed', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, projectId: '' }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: true },
     );
 
@@ -159,7 +167,7 @@ describe('reconcileCachedResources', () => {
   it('does not match a resource with an empty dblEntryUid to an arbitrary local project', () => {
     const { resources } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, dblEntryUid: '', installed: false, projectId: '' }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       {},
     );
 
@@ -181,7 +189,7 @@ describe('reconcileCachedResources', () => {
 
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE, laterUnchanged],
-      ['ABC123AAAA', 'DEF456AAAA'],
+      { abc123: 'ABC123AAAA', def456: 'DEF456AAAA' },
       { abc123: false, def456: true },
     );
 

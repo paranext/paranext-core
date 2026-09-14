@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -4954,19 +4954,25 @@ export type DblResourceData = {
 	projectId: string;
 };
 /**
- * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or
- * by the `startsWith(dblEntryUid)` convention (the local project id of an installed DBL resource
- * begins with its DBL entry UID).
+ * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or,
+ * failing that, by the `startsWith(dblEntryUid)` convention.
+ *
+ * The prefix branch is a best-effort fallback, not an invariant. A resource project's id is
+ * unrelated to the DBL entry it was installed from: ParatextData records the entry uid in the
+ * project's settings and matches on that, so the prefix holds for many installed resources and not
+ * for others. The authoritative answer is the `projectId` the backend reports, which is why the
+ * exact match is tried first. Note the prefix test is a fallthrough, not an `else`: a reconciled
+ * row whose exact match _fails_ is still tested by prefix, and for such a row a prefix hit can only
+ * be a different project. See `adr-dbl-install-status-from-backend`.
  *
  * Both branches require the row to have been reconciled against disk at least once (`installed`, or
  * a non-empty `projectId`). A never-synced row carries `installed: false, projectId: ''`, and
  * `''.startsWith('')` is true for every string, so trusting such a row would let a stale entry for
  * a DBL-reassigned UID hide a local project whose real UID still matches.
  *
- * This is the single home for that rule. Producers on both sides of the picker consult it — the one
- * that decides which local projects are NOT already in the catalog, and the one that decides which
- * catalog row describes a downloaded project. They must agree, or a project is claimed by one and
- * disowned by the other.
+ * Producers on both sides of the picker consult this — the one that decides which local projects
+ * are NOT already in the catalog, and the one that decides which catalog row describes a downloaded
+ * project. They must agree, or a project is claimed by one and disowned by the other.
  *
  * @param row The DBL catalog row to test
  * @param localProjectId The id of the local project to test it against

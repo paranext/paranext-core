@@ -1072,6 +1072,51 @@ step, no automation. Just a record.
   disk is out of date".
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
 
+## adr-dbl-install-status-from-backend: The backend is the authority on which DBL resources are installed, and on which project id
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** The cache's read-path reconciliation matched a catalog row to a local project by its
+  `projectId`, falling back to `localProjectId.startsWith(dblEntryUid)`. That premise is false. A
+  resource project's id is unrelated to the DBL entry it was installed from — ParatextData records
+  the entry uid in the project's settings (`InstallableResource.ExistingScrText` matches on
+  `scr.Settings.DBLId`) — so the ids coincide for some resources and share nothing for others. TNCV
+  is the second kind (entry `07ff1d5c6a53cb05`, project `9D60FD8F4A6E03BE…ABCDEFFF`, both observed
+  from a live install), and for it the inference could never succeed: Get Resources spun forever
+  after a successful install and still offered "Get" on reopen. The same false premise had reached
+  the C# post-install verification, which read a successful install as a failure and suppressed the
+  events that tell the rest of the app a project appeared.
+- **Decision:** Only the backend can answer, so it does. `recomputeDblResourcesInstallStatus`
+  returns the local project id per DBL entry uid (empty string for not-installed), and
+  `reconcileCachedResources` takes that map in place of the local project list. It is a sibling of
+  `recomputeDblResourcesUpdateStatus` from `adr-dbl-cache-recompute-on-read` in every respect —
+  same no-network rule, same non-waiting gate, same "an empty map means no answer, keep what you
+  have" contract — and the two share one `InstalledProjectIdsByDblId()` pass over the project
+  collection, which also feeds the catalog projection. Post-install success is taken from
+  `InstallableResource.Install()`'s own `bool` return rather than inferred from what landed on
+  disk.
+- **Alternatives:** Keep inferring from a better heuristic — rejected; every heuristic here is
+  guessing at a link only the project's settings record. Add a second pull command for callers to
+  invoke after installing — rejected once `refreshResourceFlags` already existed; one refresh entry
+  point covers both flags. Verify the install by re-reading the collection
+  (`ScrTextCollection.IsPresent(InstalledScrText)`, or `ExistingScrText`) — rejected: the first is
+  what produced the false failure, the second cannot see a failed *update* because the previous
+  revision is still on disk and still resolves, and `Install()` reports both directly. Deriving
+  `installed` from ParatextData's `Installed` property rather than from the project id — rejected
+  on "one flag, one expression" grounds; the two are provably equivalent in ParatextData 9.5.0.24
+  (`InstallAsDictionary` is never assigned and `ExistingDictionary` is `ldnull; ret`), so the
+  argument is that deriving one flag from two expressions invites drift, not that they disagree.
+- **Consequences:** The prefix convention survives only as a documented best-effort fallback in
+  `doesCatalogRowCoverProject`, behind an exact `projectId` match; the sites that stated it as fact
+  now say otherwise. Two behavioural sites still resolve by prefix alone — `matchesDownloaded` in
+  `platform-scripture-editor` (the admin-configured resource path, no catalog fallback) and the
+  commentary marker-style lookup, which degrades to missing styles. Both were judged below the bar
+  for their own work: they need a post-install DBL UID reassignment, or a divergent-id resource on
+  the admin path, and neither is reproduced. Folding the install lookup into the existing single
+  pass removed the per-row `ExistingScrText` scans from the catalog projection as well, so the
+  projection now costs one collection pass rather than one per catalogued row.
+- **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.
+
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
 - **Date:** 2026-09-03

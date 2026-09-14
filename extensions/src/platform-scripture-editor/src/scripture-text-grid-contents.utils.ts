@@ -1,3 +1,4 @@
+import type { DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   ProjectReference,
@@ -7,7 +8,11 @@ import type {
 } from 'platform-scripture';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
-import { matchesDownloaded, type DownloadedResource } from './downloaded-resources.utils';
+import {
+  indexDblResourcesByUid,
+  matchesDownloaded,
+  type DownloadedResource,
+} from './downloaded-resources.utils';
 
 /**
  * A Bible-text reference — the only reference types that carry `id` and
@@ -177,11 +182,13 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  *   display.
  * @param options.downloaded When provided, downloaded-but-unlisted projects are appended to
  *   `bottom` as unchecked, non-removable rows. Omit to skip — PT-4171 will wire this up.
+ * @param options.dblResources Catalog rows, needed to tell whether a downloaded project is already
+ *   listed. Without them a resource whose project id and DBL entry uid diverge is listed twice.
  */
 export function getViewOptionsTexts(
   sources: TextCollectionSources,
   resolveLongName?: (reference: BibleTextReference) => string | undefined,
-  options?: { downloaded?: DownloadedResource[] },
+  options?: { downloaded?: DownloadedResource[]; dblResources?: DblResourceData[] },
 ): { top: ViewOptionsTextEntry[]; bottom: ViewOptionsTextEntry[] } {
   const { adminReferenced, userReferenced, overlay } = sources;
   const adminOwned = getAdminOwnedEntries(adminReferenced, overlay);
@@ -215,9 +222,10 @@ export function getViewOptionsTexts(
     });
   });
 
+  const dblResourcesByUid = indexDblResourcesByUid(options?.dblResources ?? []);
   (options?.downloaded ?? []).forEach((downloadedResource) => {
     const alreadyListed = [...top, ...bottom].some((row) =>
-      matchesDownloaded(downloadedResource, row.reference),
+      matchesDownloaded(downloadedResource, row.reference, dblResourcesByUid),
     );
     if (alreadyListed) return;
     bottom.push({
