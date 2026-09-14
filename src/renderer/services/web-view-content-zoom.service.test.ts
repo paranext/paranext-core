@@ -440,6 +440,50 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-2')?.state).toEqual({});
   });
 
+  it('retries a sibling update that was queued into a zoom burst whose write then failed', async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.1 at once; the burst window is open
+      // Another window's level for a second area of the same identity, which this pane can only
+      // queue into the window its own gesture has open.
+      memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:footnotes': 1.4 }));
+      updateDefinition.mockImplementation(() => {
+        throw new Error('local storage quota exceeded');
+      });
+      vi.advanceTimersByTime(250); // the trailing write that was to carry it fails
+      updateDefinition.mockImplementation(applyDefinitionUpdate);
+      updateDefinition.mockClear();
+      memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:footnotes': 1.4 }));
+      expect(updateDefinition).toHaveBeenCalledWith('editor-1', {
+        state: { [LEVELS]: { main: 1.1, footnotes: 1.4 } },
+      });
+      expect(definitions.get('editor-1')?.state).toEqual({
+        [LEVELS]: { main: 1.1, footnotes: 1.4 },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up a level that memory dropped while the pane's burst window was open", async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.1 at once; the burst window is open
+      memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:footnotes': 1.4 }));
+      vi.advanceTimersByTime(250); // the burst's trailing write lands, carrying both levels
+      expect(definitions.get('editor-1')?.state).toEqual({
+        [LEVELS]: { main: 1.1, footnotes: 1.4 },
+      });
+      // The deletion half of a delta exists only in the record the walk reconciled against, so the
+      // pane must be counted as in line with a change it took through an open burst window: a
+      // record left behind here names no area, and the level the reset gave up would stay applied.
+      memoryCallbacks.forEach((cb) => cb({})); // the footnotes level is reset in another window
+      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('brings both changed areas of a pane in line with one definition write', () => {
     requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4, footnotes: 1.4 } };
     updateDefinition.mockClear();
