@@ -37,6 +37,26 @@ function makeBaseEngine() {
   };
 }
 
+/** Make the registration boundaries succeed, returning minimal stand-in disposables. */
+function mockSuccessfulRegistration() {
+  // Cast: the doubles carry only the `dispose` surface these two call sites reach for, not the
+  // full network object / data provider each really resolves to.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  vi.mocked(networkObjectService.set).mockResolvedValue({ dispose: vi.fn() } as never);
+  vi.mocked(registerEngineByType).mockResolvedValue({ dispose: vi.fn(async () => true) } as never);
+  /* eslint-enable no-type-assertion/no-type-assertion */
+}
+
+/** The internal factory the service registered, reached through the `networkObjectService.set` mock */
+function captureRegisteredFactory() {
+  // set() types its object argument as a generic NetworkableObject, so cast to reach the methods.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return vi.mocked(networkObjectService.set).mock.calls[0][1] as unknown as {
+    getProjectDataProviderId(projectId: string): Promise<string>;
+    dispose(): Promise<boolean>;
+  };
+}
+
 describe('registerProjectDataProviderEngineFactory — attributes + documentation parameters', () => {
   it('exposes attributes and documentation as optional trailing parameters (compile-time)', () => {
     type Sig = Parameters<typeof registerProjectDataProviderEngineFactory>;
@@ -71,14 +91,7 @@ describe('registerProjectDataProviderEngineFactory — attributes + documentatio
 describe('registerProjectDataProviderEngineFactory — platform-canonical attributes win (anti-spoofing)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // The mocks return minimal disposables standing in for the full network object / data provider.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    vi.mocked(networkObjectService.set).mockResolvedValue({ dispose: vi.fn() } as never);
-    // The mocks return minimal disposables standing in for the full network object / data provider.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    vi.mocked(registerEngineByType).mockResolvedValue({
-      dispose: vi.fn(async () => true),
-    } as never);
+    mockSuccessfulRegistration();
   });
 
   it('overwrites caller-supplied projectInterfaces with the canonical value at the factory level', async () => {
@@ -128,13 +141,7 @@ describe('registerProjectDataProviderEngineFactory — platform-canonical attrib
 
     await registerProjectDataProviderEngineFactory('pdpf-id', ['platform.base'], engineFactory);
 
-    // Capture the internal factory the service registered, then drive a PDP creation through it.
-    // set() types its object argument as a generic NetworkableObject, so cast to reach the method.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const factory = vi.mocked(networkObjectService.set).mock.calls[0][1] as unknown as {
-      getProjectDataProviderId(projectId: string): Promise<string>;
-    };
-    await factory.getProjectDataProviderId('real-project-id');
+    await captureRegisteredFactory().getProjectDataProviderId('real-project-id');
 
     expect(registerEngineByType).toHaveBeenCalledTimes(1);
     const mergedAttributes = vi.mocked(registerEngineByType).mock.calls[0][3];
@@ -144,6 +151,35 @@ describe('registerProjectDataProviderEngineFactory — platform-canonical attrib
       projectInterfaces: ['platform.base'],
       custom: 'keep',
     });
+  });
+});
+
+describe('registerProjectDataProviderEngineFactory — enumeration is not part of platform.base', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSuccessfulRegistration();
+  });
+
+  it('registers a platform.base engine that does not enumerate its extension data', async () => {
+    // Not every base PDP can enumerate — one over a remote store may not be able to, and
+    // platform-lexical-tools holds no extension data at all — so `listExtensionDataQualifiers`
+    // lives on its own projectInterface, `platform.extensionDataEnumeration`, and the
+    // `platform.base` guard must keep checking only getExtensionData and getSetting. Requiring it
+    // there would stop every engine that does not claim that interface from registering.
+    const engineWithoutEnumeration = makeBaseEngine();
+    expect('listExtensionDataQualifiers' in engineWithoutEnumeration).toBe(false);
+    const engineFactory: IProjectDataProviderEngineFactory<['platform.base']> = {
+      getAvailableProjects: async () => [],
+      // The test engine isn't a full typed engine; cast to satisfy the generic engine return type.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      createProjectDataProviderEngine: async () => engineWithoutEnumeration as never,
+    };
+
+    await registerProjectDataProviderEngineFactory('pdpf-id', ['platform.base'], engineFactory);
+
+    await expect(
+      captureRegisteredFactory().getProjectDataProviderId('real-project-id'),
+    ).resolves.toBeTruthy();
   });
 });
 
