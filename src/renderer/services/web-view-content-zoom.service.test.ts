@@ -401,6 +401,45 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-1')?.state).toEqual({});
   });
 
+  it("keeps walking the siblings when reading one pane's definition throws", async () => {
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { main: 1.5 } },
+    });
+    definitions.set('editor-3', {
+      id: 'editor-3',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { main: 1.5 } },
+    });
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.5 } };
+    // A definition read can throw partway through the walk: the dock layout it reconciles is shared
+    // state that another window's update can leave a pane detached from.
+    let throwingPane: string | undefined;
+    __setContentZoomDepsForTesting({
+      getDefinition: (id: string) => {
+        if (id === throwingPane) throw new Error('detached from the dock layout');
+        return definitions.get(id);
+      },
+    });
+    memoryCallbacks.length = 0;
+    await initializeContentZoomService();
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.5 }));
+    throwingPane = 'editor-2';
+    vi.mocked(logger.warn).mockClear();
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-1')?.state).toEqual({}); // before the throwing pane: still lands
+    expect(definitions.get('editor-3')?.state).toEqual({}); // after it: still reached
+    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } });
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-2'));
+    // The record did not advance, so the same delta reaches the pane that missed it.
+    throwingPane = undefined;
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-2')?.state).toEqual({});
+  });
+
   it('brings both changed areas of a pane in line with one definition write', () => {
     requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4, footnotes: 1.4 } };
     updateDefinition.mockClear();
