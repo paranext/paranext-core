@@ -478,14 +478,13 @@ export function CommentThread({
         // channel already carries three meanings (unread, resolved, read) and cannot express a
         // fourth. The bar is `foreground` rather than `primary` because `primary` measures 2.38:1
         // against the card in paratext-dark, below the 3:1 non-text minimum — see
-        // theme-contrast.test.ts.
+        // active-comment-bar-contrast.test.ts.
         {
           'tw:border-foreground tw:shadow-md': isSelected,
           'tw:border-transparent': !isSelected,
         },
-        // Status keeps the background channel. `bg-card` is the surface token; the previous
-        // `bg-primary-foreground` was a text-on-primary token and rendered near-white in
-        // paratext-dark.
+        // Status keeps the background channel. `--card` is the surface token; text-on-* tokens
+        // like `--primary-foreground` are not surfaces and render near-white in paratext-dark.
         {
           'tw:bg-card': threadStatus !== 'Resolved' && isRead,
           'tw:bg-muted': threadStatus === 'Resolved',
