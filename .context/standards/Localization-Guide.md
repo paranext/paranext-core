@@ -249,7 +249,12 @@ Add `...` to labels that open dialogs:
 
 ### Language Requirements
 
-**Always provide both `en` AND `es` translations.** Both are required for the build to pass.
+**Always provide both `en` AND `es` translations.** This is a review requirement, not a build one —
+nothing in the build, lint, or test run checks parity, so an `en`-only key ships silently and a
+Spanish user sees English text or a raw `%key%`. The only guard is a per-extension
+`localized-strings.test.ts` asserting the keys that extension's own code reads; see
+`platform-scripture-editor`, `legacy-comment-manager`, and `platform-scripture` for the shape. Add
+your keys to that test in the same change.
 
 ### Translation Style (All Languages)
 

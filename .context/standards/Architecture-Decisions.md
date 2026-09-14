@@ -1463,11 +1463,12 @@ step, no automation. Just a record.
   with PT-4343's `platform.isEditable` read (`adr-per-web-view-ctrl-f-for-find`'s sibling work) when
   the branch rebased.
 
-## adr-find-narrows-book-lists: Find excludes extra material by narrowing its book lists, not by gating its scopes
+## adr-find-narrows-book-lists: Find excludes extra material by narrowing its book lists and by gating its scopes
 
 - **Formerly:** ADR-0025
 - **Date:** 2026-08-24
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-14 — the deferral of the scope gate recorded in the Decision
+  below no longer holds, and PT-4415 is closed. Read the Decision together with the amendment.
 - **Context:** Find reports a result's location by walking the `\c` and `\v` markers of the book it
   matched in. Extra material (GLO, FRT, INT, XXA, … — `Canon.nonCanonicalIds`) is organized by
   paragraph markers rather than verses, so every match in one resolves to the same useless reference
@@ -1480,11 +1481,14 @@ step, no automation. Just a record.
   Flags are cleared **in place** rather than removed, because consumers index into the string by
   book number and reject a length that does not match the canon. The `book`/`chapter` scopes are
   **deliberately not gated** in this change; PT-4415 covers them, and PT-4414 covers dropping the
-  whole exclusion once extra material can be opened and addressed.
+  whole exclusion once extra material can be opened and addressed. *(Superseded by the 2026-09-14
+  amendment: every scope Find offers is now gated, and PT-4415 is closed. PT-4414 still stands.)*
 - **Alternatives considered:**
   - **Filter `findScope` before the search runs**, as a second line of defence behind the prune.
     Rejected here: it half-solves the `book`/`chapter` bypass, which would make PT-4415's real fix
     harder to reason about — two partial filters in different layers rather than one gate.
+    *(Adopted by the 2026-09-14 amendment for the `selectedBooks` scope only, once that scope turned
+    out to need it for a reason this entry did not anticipate — see the amendment.)*
   - **Drop the excluded positions from the flag string.** Rejected: it breaks the canon-length
     invariant every downstream decoder relies on.
   - **Filter at each consumer.** Rejected: filtering the search but not the picker (or the reverse)
@@ -1500,6 +1504,55 @@ step, no automation. Just a record.
   answer would have wiped that selection permanently — `useProjectSetting` reports an error as
   loaded, so the error branch has to be recognized on its own.
 - **Source:** PT-3299, review of #2708.
+- **Amended 2026-09-14 (PT-3299 reopened; review of #2792):** The deferred gate landed, and covers
+  every scope Find offers rather than only the reference-derived two.
+
+  **The query gate is the enforcement point, not the disabled scope option.** `isFindQueryValid`
+  rejects a query whose scope cannot resolve to a searchable book; `ScopeSelector` disabling the
+  option is an affordance layered on top. `scope` is persisted per web view while the scripture
+  reference moves independently, so a user already in the `book` scope who then navigates into extra
+  material arrives in the blocked state without ever touching the scope selector — a UI-only
+  restriction would never see them.
+
+  The rule is one exported constant and one predicate, so the gate and the picker cannot disagree.
+  `FIND_AVAILABLE_SCOPES` is both the picker's `availableScopes` and the set `isFindQueryValid`
+  accepts, because `findScope` can map exactly those to a `FindScope` and throws on anything else —
+  a scope that passed the gate without being in the list would fail during render rather than be
+  refused as a query. `isScopeBlockedByExtraMaterial` then answers for the reference-derived
+  `book`/`chapter` scopes, and both the gate and the disabled-explanation map call it rather than
+  restating it.
+
+  `selectedBooks` needed a different shape, and it is the one place this entry's rejected
+  "filter `findScope`" alternative was adopted. A selection persisted with `useWebViewState`
+  outlives the picker that produced it and is pruned against the project's book list only once that
+  list resolves, so a restored tab can still name a glossary when the restore-path auto-search
+  fires. The gate therefore asks whether the selection still contains a searchable book (it does not
+  modify the selection), and `findScope` drops extra material from the books it actually searches.
+  Neither waits on `availableBookIds`, which is what closes the window. Two filters in two layers is
+  exactly what the alternative was rejected for; it is accepted here because the two answer
+  different questions — may this query run, and which books does it run over — and because the
+  persisted-selection race has no single-layer answer.
+
+  The predicate lives in `find/extra-material.utils.ts`, which imports only `@sillsdev/scripture`.
+  `find.utils.ts` is reached from the extension host's entry point and the host's `require` shim
+  supplies no UI package, so importing the predicate from the book-lists module pulled
+  `platform-bible-react` and a bare react require into the host bundle and would have failed
+  activation. `platform-scripture` now carries the `extension-host-import-boundary.test.ts` guard
+  `platform-scripture-editor` already had; **any extension whose entry point reaches shared utility
+  modules wants that guard**, since nothing in the build, lint, or test output reports the violation
+  otherwise.
+
+  **A disabled control is out of the tab order, so an explanation carried on hover or focus reaches
+  nobody.** Both `ScopeSelector` variants render a disabled scope's explanation as inline text under
+  the option, which is the form that works for every user and does not touch the surrounding
+  semantics. The alternative — a focusable wrapper carrying a tooltip — was tried and rejected: in
+  the `radio` variant it puts a tabbable `role="group"` element between the `radiogroup` and its
+  `radio` children, which is not an owned role the grouping allows and adds stops to a roving-focus
+  group that specifies exactly one. In the `dropdown` variant Radix drops a disabled item out of the
+  menu's roving focus entirely. The generalized rule is recorded in
+  [Component-Builder-Patterns.md](Component-Builder-Patterns.md#explaining-why-a-control-is-disabled).
+
+  PT-4414 still covers removing every half of the exclusion together.
 
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 

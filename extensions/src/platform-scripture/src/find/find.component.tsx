@@ -53,10 +53,14 @@ import {
   Section,
 } from 'platform-bible-utils';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useId, useMemo, useRef } from 'react';
 import { FindFilters } from './find-filters.component';
 import { LocalizedBookData, SearchTextType } from './find-types';
-import { isFindQueryValid } from './find.utils';
+import {
+  FIND_AVAILABLE_SCOPES,
+  isFindQueryValid,
+  isScopeBlockedByExtraMaterial,
+} from './find.utils';
 import {
   FindLogger,
   HidableFindResult,
@@ -94,6 +98,8 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_clearSearch%',
   '%webView_find_errorOccurred%',
   '%webView_find_extraMaterialNotSearched%',
+  '%webView_find_extraMaterialNotSearchedScope%',
+  '%webView_find_extraMaterialNotSearchedScopeResults%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
   '%webView_find_matchContentIn%',
@@ -148,6 +154,36 @@ export const FIND_LOCALIZED_STRING_KEYS = [
  */
 const EXTRA_MATERIAL_NOT_SEARCHED_KEY =
   '%webView_find_extraMaterialNotSearched%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * Key for the tooltip on the `book` and `chapter` scope options while the current reference sits in
+ * extra material, which those scopes cannot search. Distinct from
+ * {@link EXTRA_MATERIAL_NOT_SEARCHED_KEY}, whose wording is specific to the book picker's list.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} for the same reason as that key.
+ */
+const EXTRA_MATERIAL_SCOPE_KEY =
+  '%webView_find_extraMaterialNotSearchedScope%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * Key for the results-area placeholder shown in that same state. Separate from
+ * {@link EXTRA_MATERIAL_SCOPE_KEY} because a placeholder has to name a way out — the two ways out
+ * are the `Selected books` scope and moving the reference — while the tooltip sits on the control
+ * the user is already looking at and only has to say why it is unavailable.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} for the same reason as that key.
+ */
+const EXTRA_MATERIAL_SCOPE_RESULTS_KEY =
+  '%webView_find_extraMaterialNotSearchedScopeResults%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * `data-testid` of the results-area placeholder for the extra-material state.
+ *
+ * The DOM id the collapsed scope trigger points at with `aria-describedby` is derived per instance
+ * from `useId` instead — see {@link ResultsPlaceholder} — because a fixed id is not unique in a
+ * document holding more than one `Find`.
+ */
+const EXTRA_MATERIAL_PLACEHOLDER_TEST_ID = 'find-extra-material-placeholder';
 
 /**
  * A search result paired with its index in the complete (ungrouped) results array, as produced by
@@ -404,10 +440,24 @@ export type FindProps = {
  * list (idle prompt, invalid-query prompt). {@link EmptyState} supplies the muted/small text styling
  * and a `role="status"` region.
  */
-function ResultsPlaceholder({ id, message }: { id: string; message: string }) {
+function ResultsPlaceholder({
+  domId,
+  testId,
+  message,
+}: {
+  domId: string;
+  testId: string;
+  message: string;
+}) {
   return (
-    <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4">
-      <EmptyState id={id} className="tw:text-center tw:font-light" message={message} />
+    // `EmptyState`'s `id` is a `data-testid`, not a DOM id, so the wrapper carries the real one —
+    // without it there is nothing for a control elsewhere in the panel to reference with
+    // `aria-describedby`. The two are separate props because they have different uniqueness
+    // requirements: the test id is a fixed name, while the DOM id has to be unique across the
+    // whole document, and more than one `Find` can share a document — a Storybook autodocs page
+    // renders every story into one.
+    <div id={domId} className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4">
+      <EmptyState id={testId} className="tw:text-center tw:font-light" message={message} />
     </div>
   );
 }
@@ -635,7 +685,17 @@ export function Find({
   // the container previously passed its own copy as isSearchQueryValid, which drifted from the
   // Storybook harness's copy and let impossible prop combinations exist in tests. Find already
   // receives every input the rule needs.
-  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  const isSearchQueryValid = isFindQueryValid({
+    searchTerm,
+    scope,
+    selectedBookIds,
+    currentBookId: verseRef.book,
+  });
+
+  // Whether the invalid query is invalid *because* the current reference sits in extra material,
+  // which the `book` and `chapter` scopes cannot search. Read only to pick which placeholder the
+  // results area shows; `isSearchQueryValid` above is what actually blocks the search.
+  const isBlockedByExtraMaterial = isScopeBlockedByExtraMaterial(scope, verseRef.book);
 
   // Single source of truth for which (if any) results-area placeholder shows, so the four states
   // are mutually exclusive by construction instead of by four separately-maintained boolean
@@ -650,6 +710,7 @@ export function Find({
     | 'skeleton'
     | 'idlePrompt'
     | 'invalidQueryPrompt'
+    | 'extraMaterialPrompt'
     | 'none' = useMemo(() => {
     if (noOpenProjects) return 'noOpenProjectsPrompt';
     // Outranks the results still on screen. They belong to the last query that DID run, so leaving
@@ -658,13 +719,49 @@ export function Find({
     // makes an invalid query show the right thing by construction: no container effect has to land
     // first, so there is no window in which stale results are on screen under a query that cannot
     // produce them.
-    if (!isSearchQueryValid) return searchTerm.trim() === '' ? 'idlePrompt' : 'invalidQueryPrompt';
+    if (!isSearchQueryValid) {
+      // Ranked ahead of the empty-term idle prompt as well as the generic invalid-query prompt.
+      // Ahead of idle because "type to search" is false here — no term will run while the scope is
+      // blocked, and the state before typing is exactly where the reason is most useful. Ahead of
+      // the generic prompt because its "select books" wording sends the user to a picker that
+      // cannot fix this; only moving the reference or switching scope can.
+      if (isBlockedByExtraMaterial) return 'extraMaterialPrompt';
+      if (searchTerm.trim() === '') return 'idlePrompt';
+      return 'invalidQueryPrompt';
+    }
     if (results.length > 0) return 'none';
     if (searchStatus === 'running') return 'skeleton';
     if (searchStatus !== undefined) return 'none';
     if (searchTerm.trim() === '') return 'idlePrompt';
     return 'skeleton';
-  }, [noOpenProjects, results.length, searchStatus, searchTerm, isSearchQueryValid]);
+  }, [
+    noOpenProjects,
+    results.length,
+    searchStatus,
+    searchTerm,
+    isSearchQueryValid,
+    isBlockedByExtraMaterial,
+  ]);
+
+  /**
+   * Namespace for this `Find`'s results-area placeholder DOM ids.
+   *
+   * A fixed id would collide wherever two `Find` components share a document — a Storybook autodocs
+   * page renders every story into one — and a duplicate id makes `aria-describedby` resolve to
+   * whichever copy comes first.
+   */
+  const instanceId = useId();
+  const extraMaterialPlaceholderDomId = `${instanceId}-extra-material-placeholder`;
+
+  /**
+   * Whether the extra-material explanation is on screen in the results area.
+   *
+   * The one condition behind both halves of the scope trigger's unavailable presentation. Keying
+   * the de-emphasis off `isBlockedByExtraMaterial` instead would let the trigger render as
+   * unavailable in states that show a different placeholder — and `aria-describedby` has to key off
+   * this, since the id it names only exists while that placeholder is rendered.
+   */
+  const isExtraMaterialExplained = resultsAreaState === 'extraMaterialPrompt';
 
   const resultsMessage = useMemo(() => {
     if (results.length === 0) {
@@ -690,6 +787,25 @@ export function Find({
         : undefined,
     [hasExcludedExtraMaterial, localizedStrings],
   );
+
+  // Asks the same predicate the query gate asks, for each scope Find offers, rather than restating
+  // which scopes the rule covers. Extending the rule then reaches the picker and the gate together;
+  // a second copy here would let Find keep offering a scope the gate has started rejecting.
+  // Supplied only while something is blocked: an always-present explanation would disable scopes
+  // everywhere.
+  //
+  // Falls back to the key itself, as the library's own `localizeString` does. `localizedStrings` is
+  // an open index signature, so a key that went unrequested reads as `undefined` with no compile
+  // error — and an `undefined` explanation here would leave both scopes ENABLED while the query
+  // gate still rejects them, which is the one outcome worse than showing a raw key.
+  const disabledScopeExplanations = useMemo(() => {
+    const blockedScopes = FIND_AVAILABLE_SCOPES.filter((availableScope) =>
+      isScopeBlockedByExtraMaterial(availableScope, verseRef.book),
+    );
+    if (blockedScopes.length === 0) return undefined;
+    const explanation = localizedStrings[EXTRA_MATERIAL_SCOPE_KEY] ?? EXTRA_MATERIAL_SCOPE_KEY;
+    return Object.fromEntries(blockedScopes.map((blockedScope) => [blockedScope, explanation]));
+  }, [verseRef.book, localizedStrings]);
 
   /** Text shown in the scope popover trigger, e.g. "GEN 1", "GEN, EXO, JHN", or "All books" */
   const scopeDisplayText = useMemo(() => {
@@ -1091,11 +1207,30 @@ export function Find({
                 variant="outline"
                 size="sm"
                 className="tw:h-auto tw:min-w-0 tw:shrink tw:gap-1 tw:overflow-hidden tw:px-2 tw:py-1 tw:font-normal"
+                // On the Button, not on the summary span inside it: a button is atomic to
+                // assistive technology, so a description on a role-less descendant is never
+                // announced — the span's text would only fold into the button's NAME.
+                aria-describedby={
+                  isExtraMaterialExplained ? extraMaterialPlaceholderDomId : undefined
+                }
               >
                 <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
                   {localizedStrings['%webView_find_showing%']}
                 </span>
-                <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:font-medium">
+                {/* While the scope is blocked the trigger would otherwise read as a normal,
+                    active scope — "XXB 1" with nothing to say it cannot run. The results area
+                    carries the full explanation, but it can be scrolled away, so the summary drops
+                    its emphasis here too. Both the de-emphasis and the description above key off
+                    the same condition, so the trigger never renders as unavailable while the
+                    reason is nowhere on screen — and the id can only be pointed at while the
+                    element carrying it is rendered. */}
+                <span
+                  className={
+                    isExtraMaterialExplained
+                      ? 'tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:text-muted-foreground tw:italic'
+                      : 'tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:font-medium'
+                  }
+                >
                   {scopeDisplayText}
                 </span>
                 <ChevronDown className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
@@ -1113,7 +1248,7 @@ export function Find({
             >
               <ScopeSelector
                 scope={scope}
-                availableScopes={['chapter', 'book', 'selectedBooks']}
+                availableScopes={FIND_AVAILABLE_SCOPES}
                 // ScopeSelector's onScopeChange takes the wider ScopeWithRange (the
                 // markers-checklist work added a 'range' scope). Find never enables
                 // 'range' (not in availableScopes), so this narrowing wrapper just
@@ -1131,10 +1266,18 @@ export function Find({
                 // quick-select button disabled on a project that has some. Say why, so it doesn't
                 // read as "this project has no extra material".
                 disabledSectionExplanations={extraMaterialNotSearchedExplanation}
+                // Find cannot search extra material, and both these scopes resolve to the current
+                // reference's book. Disabling them keeps the user from choosing a scope that would
+                // only produce the blocked-query placeholder.
+                disabledScopeExplanations={disabledScopeExplanations}
               />
             </PopoverContent>
           </Popover>
-          {visibleResults.length > 0 && (
+          {/* Gated on the query as well as on the results: the rows below are suppressed for an
+              invalid query, and a count with working arrows left behind reads as a live search —
+              "1 of 12" over an empty results area, with navigation that still drives the editor.
+              Navigating the scroll group into extra material makes that the common path. */}
+          {isSearchQueryValid && visibleResults.length > 0 && (
             <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1">
               <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
                 {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
@@ -1206,7 +1349,8 @@ export function Find({
             so the results region would otherwise be blank. */}
         {resultsAreaState === 'idlePrompt' && (
           <ResultsPlaceholder
-            id="find-idle-placeholder"
+            domId={`${instanceId}-idle-placeholder`}
+            testId="find-idle-placeholder"
             message={localizedStrings['%webView_find_searchPrompt%']}
           />
         )}
@@ -1216,7 +1360,8 @@ export function Find({
             invites clicks that silently do nothing. */}
         {resultsAreaState === 'noOpenProjectsPrompt' && (
           <ResultsPlaceholder
-            id="find-no-open-projects-placeholder"
+            domId={`${instanceId}-no-open-projects-placeholder`}
+            testId="find-no-open-projects-placeholder"
             message={localizedStrings['%webView_find_noOpenProjectsOrResources_results%']}
           />
         )}
@@ -1225,8 +1370,21 @@ export function Find({
             selection). Distinct from the idle prompt so the user knows why nothing is happening. */}
         {resultsAreaState === 'invalidQueryPrompt' && (
           <ResultsPlaceholder
-            id="find-invalid-query-placeholder"
+            domId={`${instanceId}-invalid-query-placeholder`}
+            testId="find-invalid-query-placeholder"
             message={localizedStrings['%webView_find_selectBooksPrompt%']}
+          />
+        )}
+        {/* The current reference is in extra material, so the `book`/`chapter` scopes have nothing
+            searchable to resolve to. Separate from the invalid-query placeholder because the fix is
+            different: move the reference or switch scope, not pick books. */}
+        {resultsAreaState === 'extraMaterialPrompt' && (
+          <ResultsPlaceholder
+            domId={extraMaterialPlaceholderDomId}
+            testId={EXTRA_MATERIAL_PLACEHOLDER_TEST_ID}
+            message={
+              localizedStrings[EXTRA_MATERIAL_SCOPE_RESULTS_KEY] ?? EXTRA_MATERIAL_SCOPE_RESULTS_KEY
+            }
           />
         )}
         {(() => {
