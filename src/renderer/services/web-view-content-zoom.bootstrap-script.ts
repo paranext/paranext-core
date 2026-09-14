@@ -166,7 +166,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       return found;
     };
     const setActive = (areaId) => {
-      if (!areaId || areaId === activeArea) return;
+      // Only an area this pane reported can become active: a click or focus inside a marker
+      // collectAreas rejected (nested, or an ill-formed id) still resolves to that marker's id, and
+      // an active area the parent has no record of is a silent no-op for every later action.
+      if (!areaId || areaId === activeArea || areas.indexOf(areaId) === -1) return;
       if (!callBound(boundReportActive, 'reporting the active zoom area', areaId)) return;
       activeArea = areaId;
     };
