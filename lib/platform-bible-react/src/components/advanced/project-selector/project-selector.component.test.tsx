@@ -385,6 +385,44 @@ describe('group-by menu naming', () => {
   });
 });
 
+describe('ProjectSelector — project-multi trigger shape at 1 vs 2+ selected', () => {
+  it('renders the same count-badge shape at one selected as at two selected', () => {
+    const { unmount } = render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ pairs: [{ projectId: 'esvus16' }] }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ buttonPlaceholder: 'Select projects', ariaLabel: 'Projects' }}
+      />,
+    );
+    const oneSelectedTrigger = screen.getByRole('combobox', { name: 'Projects' });
+    expect(oneSelectedTrigger).toHaveTextContent('1');
+    expect(oneSelectedTrigger).toHaveTextContent('ESVUS16');
+    unmount();
+
+    render(
+      <ProjectSelector
+        mode="project-multi"
+        projects={SAMPLE_PROJECTS}
+        openTabs={SAMPLE_OPEN_TABS}
+        selection={{ pairs: [{ projectId: 'esvus16' }, { projectId: 'esv16uk' }] }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ buttonPlaceholder: 'Select projects', ariaLabel: 'Projects' }}
+      />,
+    );
+    const twoSelectedTrigger = screen.getByRole('combobox', { name: 'Projects' });
+    expect(twoSelectedTrigger).toHaveTextContent('2');
+    expect(twoSelectedTrigger).toHaveTextContent('ESVUS16, ESV16UK');
+
+    // Both triggers render the count as a distinct Badge element rather than folding it into the
+    // plain-text label — the shape that would otherwise diverge between 1 and 2+.
+    expect(oneSelectedTrigger.querySelector('[data-slot="badge"]')).toHaveTextContent('1');
+    expect(twoSelectedTrigger.querySelector('[data-slot="badge"]')).toHaveTextContent('2');
+  });
+});
+
 describe('first paint', () => {
   it('renders a non-empty trigger label when no localized strings are supplied', () => {
     render(

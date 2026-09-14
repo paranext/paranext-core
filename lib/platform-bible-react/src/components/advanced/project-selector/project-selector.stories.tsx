@@ -211,6 +211,30 @@ export const MultiProject: Story = {
   },
 };
 
+export const MultiProjectSingleSelection: Story = {
+  render: () => {
+    const [pairs, setPairs] = useState<ProjectSelectorProjectPair[]>([{ projectId: 'esvus16' }]);
+    return (
+      <ProjectSelector
+        mode="project-multi"
+        projects={sampleProjects}
+        openTabs={sampleOpenTabs}
+        selection={{ pairs }}
+        onChangeSelection={({ pairs: next }) => setPairs(next)}
+        localizedStrings={{ buttonPlaceholder: 'Select projects', ariaLabel: 'Projects' }}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multi-select with exactly one project selected — isolates the trigger at the boundary between "nothing selected" and "2+ selected" so its shape can be compared against `MultiProject`. The trigger already renders the same `Badge` + comma-joined-items shape at 1 as it does at 2+ (the count badge renders unconditionally once `pairs.length > 0`); this story exists to keep that comparison checkable in Storybook rather than only in source.',
+      },
+    },
+  },
+};
+
 // #endregion
 
 // #region projectScrollGroup
