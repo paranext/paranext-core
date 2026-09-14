@@ -2612,10 +2612,17 @@ export function ManageBooksDialog({
                     {createMethod === 'fromTemplate' && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Info
-                            className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
-                            aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
-                          />
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="tw:shrink-0 tw:text-muted-foreground"
+                            aria-label={t(
+                              '%manageBooks_create_method_referenceText%',
+                              'Create based on',
+                            )}
+                          >
+                            <Info className="tw:h-4 tw:w-4" />
+                          </Button>
                         </TooltipTrigger>
                         <TooltipContent>
                           {t(

@@ -1214,7 +1214,14 @@ export function Find({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground tw:cursor-default" />
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="tw:text-muted-foreground"
+                        aria-label={localizedStrings['%webView_find_preserveCase%']}
+                      >
+                        <Info className="tw:h-3.5 tw:w-3.5" />
+                      </Button>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="tw:max-w-xs tw:whitespace-pre-line">
