@@ -8,7 +8,7 @@
  * Shadcn/Lexical Editor Documentation: https://shadcn-editor.vercel.app/docs/
  */
 
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { AutoFocusPlugin } from '@lexical/react/LexicalAutoFocusPlugin';
@@ -38,10 +38,12 @@ export function Plugins({
   placeholder = 'Start typing ...',
   autoFocus = false,
   onClear,
+  actions,
 }: {
   placeholder?: string;
   autoFocus?: boolean;
   onClear?: (clearFn: () => void) => void;
+  actions?: ReactNode;
 }) {
   const [, setFloatingAnchorElem] = useState<HTMLDivElement | undefined>(undefined);
 
@@ -85,7 +87,14 @@ export function Plugins({
         <ClearEditorPlugin />
         {/* editor plugins */}
       </div>
-      {/* actions plugins */}
+      {actions && (
+        <div
+          data-slot="editor-actions"
+          className="tw:flex tw:flex-row tw:items-center tw:gap-2 tw:border-t tw:px-2 tw:py-1.5"
+        >
+          {actions}
+        </div>
+      )}
     </div>
   );
 }

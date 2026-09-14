@@ -1,17 +1,19 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { CommentThread } from './comment-thread.component';
 import { getCommentThreadElementId } from './comment-list.types';
 
 vi.mock('@/components/advanced/editor/editor', () => ({
-  Editor: vi.fn(({ onClear }: { onClear?: (fn: () => void) => void }) => {
-    onClear?.(() => {});
-    return <div data-testid="mock-editor" />;
-  }),
+  Editor: vi.fn(
+    ({ onClear, actions }: { onClear?: (fn: () => void) => void; actions?: ReactNode }) => {
+      onClear?.(() => {});
+      return <div data-testid="mock-editor">{actions}</div>;
+    },
+  ),
 }));
 
 // jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView, all of which the

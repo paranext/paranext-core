@@ -249,25 +249,28 @@ export function CommentItem({
               )}
               editorSerializedState={editorState}
               onSerializedChange={(value) => setEditorState(value)}
+              actions={
+                <>
+                  <div className="tw:flex-1" />
+                  <Button
+                    size="icon-sm"
+                    onClick={handleCancelEdit}
+                    variant="outline"
+                    className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                  >
+                    <X />
+                  </Button>
+                  <Button
+                    size="icon-sm"
+                    onClick={handleSaveEdit}
+                    className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                    disabled={!hasEditorContent(editorState)}
+                  >
+                    <ArrowUp />
+                  </Button>
+                </>
+              }
             />
-            <div className="tw:flex tw:flex-row tw:items-start tw:justify-end tw:gap-2">
-              <Button
-                size="icon"
-                onClick={handleCancelEdit}
-                variant="outline"
-                className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-              >
-                <X />
-              </Button>
-              <Button
-                size="icon"
-                onClick={handleSaveEdit}
-                className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                disabled={!hasEditorContent(editorState)}
-              >
-                <ArrowUp />
-              </Button>
-            </div>
           </div>
         )}
         {!isEditing && (

@@ -683,98 +683,104 @@ export function CommentThread({
                       onClear={(clearFn) => {
                         clearEditorRef.current = clearFn;
                       }}
-                    />
-                    <div className="tw:flex tw:flex-row tw:items-center tw:justify-end tw:gap-2">
-                      {pendingCommentAssignedUser !== undefined &&
-                        (hasEditorContent(pendingCommentEditorState) ||
-                          pendingCommentAssignedUser !== lastSubmittedAssignedUser) && (
-                          <span className="tw:flex-1 tw:text-sm tw:text-muted-foreground">
-                            {formatReplacementString(
-                              localizedStrings['%comment_assigning_to%'] ??
-                                'Assigning to: {assignedUser}',
-                              {
-                                assignedUser: getAssignedUserDisplayName(
-                                  pendingCommentAssignedUser,
-                                  localizedStrings,
-                                ),
-                              },
-                            )}
-                          </span>
-                        )}
-                      <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
-                        <PopoverTrigger asChild>
+                      actions={
+                        <>
+                          {pendingCommentAssignedUser !== undefined &&
+                          (hasEditorContent(pendingCommentEditorState) ||
+                            pendingCommentAssignedUser !== lastSubmittedAssignedUser) ? (
+                            <span className="tw:flex-1 tw:text-sm tw:text-muted-foreground">
+                              {formatReplacementString(
+                                localizedStrings['%comment_assigning_to%'] ??
+                                  'Assigning to: {assignedUser}',
+                                {
+                                  assignedUser: getAssignedUserDisplayName(
+                                    pendingCommentAssignedUser,
+                                    localizedStrings,
+                                  ),
+                                },
+                              )}
+                            </span>
+                          ) : (
+                            <div className="tw:flex-1" />
+                          )}
+                          <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                size="icon-sm"
+                                variant="outline"
+                                className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                                disabled={
+                                  !canAssign ||
+                                  !assignableUsers ||
+                                  assignableUsers.length === 0 ||
+                                  !assignableUsers.includes(currentUser)
+                                }
+                                aria-label={
+                                  localizedStrings['%comment_aria_assign_user%'] ?? 'Assign user'
+                                }
+                              >
+                                <AtSign />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="tw:w-auto tw:p-0"
+                              align="end"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                  e.stopPropagation();
+                                  setIsAssignPopoverOpen(false);
+                                }
+                              }}
+                            >
+                              <Command>
+                                <CommandList>
+                                  {assignableUsers?.map((user) => (
+                                    <CommandItem
+                                      key={user || 'unassigned'}
+                                      onSelect={() => {
+                                        if (user !== assignedUser) {
+                                          setPendingCommentAssignedUser(user);
+                                        } else {
+                                          setPendingCommentAssignedUser(undefined);
+                                        }
+                                        // Manual selection supersedes the auto-populated value —
+                                        // don't treat it as stale if `canAssign` later flips, and
+                                        // don't overwrite it if `initialAssignedUser` later changes.
+                                        // Also clear last-submitted tracking so a re-selection always
+                                        // re-enables the submit button.
+                                        assigneeSelectionStateRef.current = 'user-selected';
+                                        setLastSubmittedAssignedUser(undefined);
+                                        setIsAssignPopoverOpen(false);
+                                      }}
+                                      className="tw:flex tw:items-center"
+                                    >
+                                      <span>
+                                        {getAssignedUserDisplayName(user, localizedStrings)}
+                                      </span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                           <Button
-                            size="icon"
-                            variant="outline"
+                            size="icon-sm"
+                            onClick={handleSubmitComment}
                             className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                             disabled={
-                              !canAssign ||
-                              !assignableUsers ||
-                              assignableUsers.length === 0 ||
-                              !assignableUsers.includes(currentUser)
+                              !hasEditorContent(pendingCommentEditorState) &&
+                              (pendingCommentAssignedUser === undefined ||
+                                pendingCommentAssignedUser === lastSubmittedAssignedUser)
                             }
                             aria-label={
-                              localizedStrings['%comment_aria_assign_user%'] ?? 'Assign user'
+                              localizedStrings['%comment_aria_submit_comment%'] ?? 'Submit comment'
                             }
                           >
-                            <AtSign />
+                            <ArrowUp />
                           </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="tw:w-auto tw:p-0"
-                          align="end"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') {
-                              e.stopPropagation();
-                              setIsAssignPopoverOpen(false);
-                            }
-                          }}
-                        >
-                          <Command>
-                            <CommandList>
-                              {assignableUsers?.map((user) => (
-                                <CommandItem
-                                  key={user || 'unassigned'}
-                                  onSelect={() => {
-                                    if (user !== assignedUser) {
-                                      setPendingCommentAssignedUser(user);
-                                    } else {
-                                      setPendingCommentAssignedUser(undefined);
-                                    }
-                                    // Manual selection supersedes the auto-populated value —
-                                    // don't treat it as stale if `canAssign` later flips, and
-                                    // don't overwrite it if `initialAssignedUser` later changes.
-                                    // Also clear last-submitted tracking so a re-selection always
-                                    // re-enables the submit button.
-                                    assigneeSelectionStateRef.current = 'user-selected';
-                                    setLastSubmittedAssignedUser(undefined);
-                                    setIsAssignPopoverOpen(false);
-                                  }}
-                                  className="tw:flex tw:items-center"
-                                >
-                                  <span>{getAssignedUserDisplayName(user, localizedStrings)}</span>
-                                </CommandItem>
-                              ))}
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      <Button
-                        size="icon"
-                        onClick={handleSubmitComment}
-                        className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
-                        disabled={
-                          !hasEditorContent(pendingCommentEditorState) &&
-                          (pendingCommentAssignedUser === undefined ||
-                            pendingCommentAssignedUser === lastSubmittedAssignedUser)
-                        }
-                        aria-label={
-                          localizedStrings['%comment_aria_submit_comment%'] ?? 'Submit comment'
-                        }
-                      >
-                        <ArrowUp />
-                      </Button>
-                    </div>
+                        </>
+                      }
+                    />
                   </div>
                 )}
             </>
