@@ -214,4 +214,42 @@ describe('getCachedResources installed-flag reconciliation', () => {
     await refreshResourceFlags?.();
     expect(provider.recomputeDblResourcesUpdateStatus).toHaveBeenCalled();
   });
+
+  it('still recomputes update status when a panel wait starts the next sync first', async () => {
+    // A panel wait and the update-status refresh both wait out the same in-flight sync. The panel's
+    // turn comes first and starts a sync without the recompute; the refresh must not settle for
+    // joining it, or "Update" badges go stale.
+    vi.spyOn(performance, 'now').mockReturnValue(AFTER_REGISTRATION_GRACE_MS);
+    await activateWithFreshModule();
+    await getCachedResources();
+
+    let releaseMetadata: () => void = () => {};
+    mocks.getMetadataForAllProjects.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseMetadata = () => resolve(PARTIAL_PROJECT_LIST);
+        }),
+    );
+    const flushMicrotasks = () =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+
+    // A background sync, held on its metadata read so it stays in flight.
+    const background = getCachedResources();
+    await vi.waitFor(() => expect(mocks.getMetadataForAllProjects).toHaveBeenCalledTimes(1));
+    // Queue the panel's wait first, then the refresh, both behind that sync.
+    const panelWait = getCachedResources({ waitForInstalledFlagsSync: true });
+    await flushMicrotasks();
+    const refreshResourceFlags = mocks.registeredCommands.get(
+      'platformGetResources.refreshResourceFlags',
+    );
+    const refresh = refreshResourceFlags?.();
+    await flushMicrotasks();
+
+    releaseMetadata();
+    await Promise.all([background, panelWait, refresh]);
+
+    expect(provider.recomputeDblResourcesUpdateStatus).toHaveBeenCalled();
+  });
 });

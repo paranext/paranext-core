@@ -43,6 +43,8 @@ let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
 let syncInFlight: Promise<void> | undefined;
+/** Whether the sync in `syncInFlight` also recomputes `updateAvailable`. */
+let isSyncInFlightRecomputing = false;
 
 async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
@@ -238,6 +240,7 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
  */
 function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
   if (!syncInFlight) {
+    isSyncInFlightRecomputing = shouldRecomputeUpdateStatus;
     syncInFlight = syncFlags(shouldRecomputeUpdateStatus)
       .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
@@ -255,7 +258,11 @@ function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promis
  */
 async function syncAfterInFlight(shouldRecomputeUpdateStatus: boolean): Promise<void> {
   if (syncInFlight) await syncInFlight;
-  await ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus);
+  // Another waiter may have started the next sync first. Joining it is fine unless this caller
+  // needs the recompute and that sync is not doing one; then wait that one out too.
+  if (syncInFlight && shouldRecomputeUpdateStatus && !isSyncInFlightRecomputing)
+    return syncAfterInFlight(shouldRecomputeUpdateStatus);
+  return ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus);
 }
 
 /**
