@@ -785,10 +785,8 @@ step, no automation. Just a record.
     entry rather than papered over. Escape is separately prevented (`onEscapeKeyDown`), making this the one dialog in the app
     where Escape closes nothing; that is catalogued as its own entry.
 
-  - **Arbitration with the other app-gating surfaces:** `FirstRunOverlay`, `OverlayHost` and
-    `OnboardingTour` each stand down entirely once the connection-lost state has latched. The
-    argument below is written about `FirstRunOverlay`, whose stand-down came first; it applies
-    unchanged to the other two. `Z_INDEX_CONNECTION_LOST` (800) above `Z_INDEX_FIRST_RUN`
+  - **Arbitration with the other app-gating modal:** `FirstRunOverlay` stands down entirely once
+    the connection-lost state has latched. `Z_INDEX_CONNECTION_LOST` (800) above `Z_INDEX_FIRST_RUN`
     (700) decides only what is VISIBLE; Radix's `FocusScope` and `DismissableLayer` arbitrate
     between two open modal `Dialog`s by MOUNT ORDER. A first-run gate raised after the
     connection-lost state would therefore take the focus trap and leave the visible Reload button
@@ -926,6 +924,28 @@ step, no automation. Just a record.
     filed, all three sites carry the literal marker `TODO(main-renderer-shutdown-relay)` — a slug rather than
     a `PT-XXXX`, because inventing an id that resolves to nothing is worse than admitting there
     is not one yet. Grep the marker to find every site; replace it with the real id once it exists.
+- **Amended 2026-09-14 (PT-4435, branch `pt-4435-tour-stand-down-connection-lost`):** three more
+  surfaces stand down on the latch, and the arbitration bullet above is NOT the reason for two of
+  them. It is an argument about two Radix modal `Dialog`s — `FocusScope` and `DismissableLayer`
+  arbitrating by mount order, with z-index deciding only what is visible — and it holds for
+  `FirstRunOverlay` alone.
+  - `OverlayHost` stood down in the same commit as this entry (#2742) without being recorded here.
+  - `OnboardingTour` stands down for a different reason entirely. `Tour` is a hand-written overlay
+    (`adr-hand-written-tour-spotlight`), not a Radix layer: a plain `div[role="dialog"]` with a
+    capture-phase `keydown` listener on `window` and a capture-phase focus trap on `document`. Those
+    beat any Radix layer regardless of mount order, and `Z_INDEX_ONBOARDING_TOUR` (650) is below both
+    `Z_INDEX_FIRST_RUN` and `Z_INDEX_CONNECTION_LOST`, so neither half of the argument above would
+    have saved it. What makes standing it down necessary rather than tidy: the tour's Escape routes
+    through `onSkip`, which persists a permanent `localStorage` "tour done" flag shared across
+    same-origin windows — so Escape at a banner whose only action is a reload would spend a tour the
+    user never saw, and the reload would come back to an app that believed the tour had been given.
+    Muting the key is not available: a capture-phase `window` listener cannot yield to the dialog
+    beneath it, so withdrawing the component is what withdraws the handler.
+  - A fourth full-area gating sibling in the same `Main` block, `WorkspaceUpdatingOverlay`, does NOT
+    consult the latch, and that has not been examined against this entry. It is a bounded
+    (30 s local leash) `role="status"` spinner rather than a focus-trapping dialog, so it is not an
+    obvious instance of the same problem — but it is not an established exception either.
+
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 

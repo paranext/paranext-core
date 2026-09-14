@@ -9,16 +9,27 @@ import { useSyncExternalStore } from 'react';
  *
  * One-way by design: nothing in the store clears the state, so this goes `false` → `true` at most
  * once per renderer and nothing flips it back. Recovery is a reload. Components that cannot do
- * their job without the socket stand down on it — `if (useIsConnectionLost()) return undefined;` —
- * which withdraws their key handlers and focus traps along with their UI, so Escape and Tab reach
- * the connection-lost state's own shell. Containment there is not total: main's
- * `before-input-event` accelerators, the `document`-level toaster hotkeys and `PlatformMenubar`'s
- * Alt chords still fire, deliberately (see `keyboard-shortcuts.data.ts` and
- * `Architecture-Decisions.md`).
+ * their job without the socket stand down on it, which withdraws their key handlers and focus traps
+ * along with their UI, so Escape and Tab reach the connection-lost state's own shell. Containment
+ * there is not total: main's `before-input-event` accelerators, the `document`-level toaster
+ * hotkeys and `PlatformMenubar`'s Alt chords still fire, deliberately (see
+ * `keyboard-shortcuts.data.ts` and `Architecture-Decisions.md`).
  *
  * Per renderer, and the state it guards may not be: `localStorage` is shared across same-origin
  * windows, so a flag one window declines to write is still writable by another whose socket
  * survived.
+ *
+ * Read it with the rest of the component's hooks and guard below them:
+ *
+ * ```ts
+ * const isConnectionLost = useIsConnectionLost();
+ * // ...the component's other hooks...
+ * if (isConnectionLost) return undefined;
+ * ```
+ *
+ * Written as `if (useIsConnectionLost()) return undefined;` it reads more directly, but only a
+ * component whose first statement it is can spell it that way — anywhere below another early return
+ * the call becomes conditional and `react-hooks/rules-of-hooks` rejects it.
  *
  * Backed by `useSyncExternalStore`, which re-reads the snapshot on subscribe — that closes the gap
  * a manual subscribe effect has to cover by hand: a loss that lands between the first render and

@@ -2,15 +2,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import type { FirstRunStatus } from '@renderer/services/first-run-store';
-import {
-  SIMPLE_PANEL_ID_MODEL_TEXT,
-  SIMPLE_PANEL_ID_PROJECT,
-} from '@renderer/components/docking/simple-layout.data';
 import {
   reportConnectionLost,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
+import {
+  CONNECTION_LOST_RELOAD_KEY,
+  ConnectionLostOverlay,
+  ENGLISH_FALLBACKS,
+} from '@renderer/components/overlays/overlay-connection-lost.component';
+import type { TourDomFixtures } from './onboarding-tour.test-utils';
+import { installTourDomFixtures, knobs, resetTourHarness } from './onboarding-tour.test-utils';
 import { readTourDone } from './onboarding-tour.store';
 import { OnboardingTour } from './onboarding-tour.component';
 
@@ -19,157 +21,73 @@ import { OnboardingTour } from './onboarding-tour.component';
 // would prove nothing. What matters when the connection drops is that standing the tour down
 // actually withdraws that handler: Escape routes through `onSkip`, which permanently persists the
 // done flag, and a stuck user's only remaining action is a reload. Proving the handler is gone
-// needs the real `Tour`, so this file renders it and leaves every other mock as the sibling has it.
+// needs the real `Tour`, so this file renders it. The mock harness both files share lives in
+// `onboarding-tour.test-utils.ts`.
 
 // window.matchMedia — which theme.service-host.ts calls at module init, reached here via
 // papi-frontend.service.ts — is stubbed for every jsdom test in vitest.setup.ts.
 
-// Mutable knobs the mocks read, so each test can set the scenario before rendering.
-let mockStatus: FirstRunStatus = { kind: 'app' };
-let mockIsPowerMode = false;
-let mockIsLocalizationLoading = false;
+vi.mock('@renderer/services/first-run-store', async () => {
+  const { firstRunStoreMock: factory } = await import('./onboarding-tour.test-utils');
+  return factory();
+});
 
-let mockTourDone = false;
-const mockTourDoneListeners = new Set<() => void>();
+vi.mock('./onboarding-tour.store', async () => {
+  const { tourStoreMock: factory } = await import('./onboarding-tour.test-utils');
+  return factory();
+});
 
-// Stands in for the store's replay channel — a count plus its listeners, exactly as the real one.
-let mockReplayCount = 0;
-const mockReplayListeners = new Set<() => void>();
+vi.mock('@renderer/hooks/use-is-power-mode.hook', async () => {
+  const { powerModeMock: factory } = await import('./onboarding-tour.test-utils');
+  return factory();
+});
 
-vi.mock('@renderer/services/first-run-store', () => ({
-  getFirstRunStatus: () => mockStatus,
-  subscribeToFirstRun: () => () => {},
-}));
+vi.mock('@renderer/hooks/papi-hooks', async () => {
+  const { papiHooksMock: factory } = await import('./onboarding-tour.test-utils');
+  return factory();
+});
 
-vi.mock('./onboarding-tour.store', () => ({
-  readTourDone: () => mockTourDone,
-  writeTourDone: () => {
-    mockTourDone = true;
-    mockTourDoneListeners.forEach((listener) => listener());
-  },
-  subscribeToTourDone: (listener: () => void) => {
-    mockTourDoneListeners.add(listener);
-    return () => {
-      mockTourDoneListeners.delete(listener);
-    };
-  },
-  getTourReplayCount: () => mockReplayCount,
-  subscribeToTourReplay: (listener: () => void) => {
-    mockReplayListeners.add(listener);
-    return () => {
-      mockReplayListeners.delete(listener);
-    };
-  },
-  requestTourReplay: () => {
-    mockReplayCount += 1;
-    mockReplayListeners.forEach((listener) => listener());
-  },
-}));
-
-vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
-  useIsPowerMode: () => mockIsPowerMode,
-}));
-
-// useLocalizedStrings returns [strings, isLoading] — mirror that shape; echo keys as values.
-vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(keys.map((k) => [k, k])),
-    mockIsLocalizationLoading,
-  ],
-}));
-
-/**
- * Gives an element a non-empty box. jsdom reports every rect as zero-size, and Tour drops any step
- * whose target cannot be measured — with nothing left to spotlight it reports a skip, which is the
- * very flag this file is checking never gets written.
- *
- * Assigns per element rather than swapping `Element.prototype.getBoundingClientRect`, which a file
- * rendering the real tree must not do. It keeps no handle on what it overwrote, so it is only safe
- * on elements that live no longer than one test — the fixtures below are built in `beforeEach` and
- * removed in `afterEach`. Anything longer-lived needs a restoring variant.
- */
-function stubBoundingRect(element: HTMLElement, width: number, height: number) {
-  const rect: DOMRect = {
-    top: 0,
-    left: 0,
-    width,
-    height,
-    right: width,
-    bottom: height,
-    x: 0,
-    y: 0,
-    toJSON: () => ({ top: 0, left: 0, width, height }),
-  };
-  element.getBoundingClientRect = () => rect;
-}
-
-// OnboardingTour polls for this element before it opens (the dock layout loads async, so the
-// panel divs are not present at startup; we add a stand-in so the layoutReady gate clears).
-let layoutPanelEl: HTMLElement;
-// The model-text panel. Present so the tour has three visible stops rather than two, which leaves
-// a genuinely mid-tour step index to lose — the state a socket dying on suspend actually catches.
-let modelTextPanelEl: HTMLElement;
-// The toolbar's Profile button — the one stop that survives Tour's filter in Power mode, and so
-// what the readiness gate waits for there. `platform-bible-toolbar` renders it in both modes.
-let profileTriggerEl: HTMLElement;
+let fixtures: TourDomFixtures;
 
 beforeEach(() => {
-  mockStatus = { kind: 'app' };
-  mockIsPowerMode = false;
-  mockIsLocalizationLoading = false;
-  mockTourDone = false;
-  mockReplayCount = 0;
-  mockTourDoneListeners.clear();
-  mockReplayListeners.clear();
+  resetTourHarness();
   // The connection-lost store is a module-level singleton that never clears itself, so it is reset
-  // on both sides: before, in case another file sharing this worker latched it, and after, so a
-  // test in this file that latches it does not leave every later test permanently stood down.
+  // on both sides: before, so a test in this file that latches it cannot stand down the tour in the
+  // next one, and after, so it does not stand down every later test in the run either.
   resetConnectionLost();
-
-  layoutPanelEl = document.createElement('div');
-  layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
-  stubBoundingRect(layoutPanelEl, 300, 400);
-  document.body.appendChild(layoutPanelEl);
-
-  modelTextPanelEl = document.createElement('div');
-  modelTextPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_MODEL_TEXT);
-  stubBoundingRect(modelTextPanelEl, 300, 400);
-  document.body.appendChild(modelTextPanelEl);
-
-  profileTriggerEl = document.createElement('button');
-  profileTriggerEl.setAttribute('data-testid', 'user-profile-popover-trigger');
-  stubBoundingRect(profileTriggerEl, 32, 32);
-  document.body.appendChild(profileTriggerEl);
+  fixtures = installTourDomFixtures();
 });
 
 afterEach(() => {
   cleanup();
-  mockTourDone = false;
   resetConnectionLost();
-  layoutPanelEl?.remove();
-  modelTextPanelEl?.remove();
-  profileTriggerEl?.remove();
+  fixtures.remove();
 });
 
 /**
- * Presses Escape the way a user does — at the focused element, letting it bubble — rather than
- * dispatching on `window`, which nothing below `window` would ever see. Faithful whichever host the
- * overlay's listener is attached to.
+ * Presses Escape at a fixed node outside the tour card, so the negative case below and its control
+ * exercise the same propagation path. Dispatching at `document.activeElement` instead would put the
+ * two on different paths — focus sits inside the card while the tour is open and falls to `<body>`
+ * once it is gone — and a listener moved off `window` onto the card would then leave the control
+ * green while the negative case passed vacuously.
  */
 function pressEscape() {
   act(() => {
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
   });
 }
 
 // `useLocalizedStrings` is mocked to echo its keys, so the tour's chrome is labelled by key.
 const NEXT_LABEL = '%firstRun_button_next%';
+// The overlay resolves its own copy through `localizedOrEnglish`, so with `useLocalizedStrings`
+// echoing keys it renders the shipped English fallback rather than the raw key.
+const RELOAD_LABEL = ENGLISH_FALLBACKS[CONNECTION_LOST_RELOAD_KEY];
 
 describe('OnboardingTour with the real Tour overlay', () => {
   it('leaves Escape unable to record the tour as done once the connection is lost', () => {
     render(<OnboardingTour />);
     // The real overlay is a modal dialog; its presence is what puts the Escape listener on window.
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('tour-dialog')).toBeInTheDocument();
 
     // Advance off the first stop. A socket dies on suspend far more often than on the first frame,
     // and a mid-tour tour is the one holding a saved focus target and a step index — the state the
@@ -183,7 +101,7 @@ describe('OnboardingTour with the real Tour overlay', () => {
       reportConnectionLost();
     });
 
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByTestId('tour-dialog')).toBeNull();
 
     pressEscape();
 
@@ -197,10 +115,57 @@ describe('OnboardingTour with the real Tour overlay', () => {
     // at all would read as proof the handler was withdrawn, and the file's central assertion would
     // pass while asserting nothing.
     render(<OnboardingTour />);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('tour-dialog')).toBeInTheDocument();
 
     pressEscape();
 
     expect(readTourDone()).toBe(true);
+  });
+
+  it('never opens while localization has not resolved, so no handler is installed offline', () => {
+    // The one case the mount guard does NOT cover: a reload while the server is still down comes
+    // back to a renderer that never latches the connection-lost state, so nothing stands the tour
+    // down. What keeps the Escape handler off the window there is the readiness gate — the
+    // localization data provider lives over the dead socket, so `isLoading` never resolves.
+    knobs.isLocalizationLoading = true;
+
+    render(<OnboardingTour />);
+
+    expect(screen.queryByTestId('tour-dialog')).toBeNull();
+
+    pressEscape();
+
+    expect(readTourDone()).toBe(false);
+  });
+});
+
+describe('OnboardingTour alongside the connection-lost state', () => {
+  it('hands the keyboard to the connection-lost shell when the connection drops mid-tour', () => {
+    // The pairing the keyboard-shortcuts catalog documents, and the only place it is actually
+    // exercised: rendered apart, neither component can show that the tour's focus trap releases
+    // Tab to the shell's own containment, which is what keeps Reload reachable for a stuck user.
+    render(
+      <>
+        <ConnectionLostOverlay />
+        <OnboardingTour />
+      </>,
+    );
+    expect(screen.getByTestId('tour-dialog')).toBeInTheDocument();
+
+    act(() => {
+      reportConnectionLost();
+    });
+
+    expect(screen.queryByTestId('tour-dialog')).toBeNull();
+    const reloadButton = screen.getByRole('button', { name: RELOAD_LABEL });
+    expect(reloadButton).toBeInTheDocument();
+    // Focus lands on Reload rather than being stranded on `<body>` by the tour's teardown.
+    expect(document.activeElement).toBe(reloadButton);
+
+    pressEscape();
+
+    // The shell swallows Escape, and the withdrawn tour handler cannot spend the done flag.
+    expect(screen.getByRole('button', { name: RELOAD_LABEL })).toBeInTheDocument();
+    expect(readTourDone()).toBe(false);
   });
 });

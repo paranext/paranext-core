@@ -451,6 +451,52 @@ describe('Tour', () => {
     expect(document.activeElement).toBe(priorButton);
   });
 
+  it('restores focus when an open tour is unmounted rather than closed', () => {
+    // The close path callers take when they stand the tour down. Nothing else in the tour's own
+    // tree hands focus back on this path, so without a restore here focus is left on `<body>` and
+    // whatever mounts in the same commit has to rescue it — a dependency on a sibling component
+    // that nothing states and nothing checks. The previously focused element lives outside the
+    // rendered tree, as it does in the app: the tour goes away, the app around it does not.
+    const priorButton = document.createElement('button');
+    priorButton.type = 'button';
+    document.body.appendChild(priorButton);
+    try {
+      const { rerender, unmount } = render(
+        <div>
+          <div id="a">A</div>
+          <Tour
+            steps={[{ target: '#a', title: 'A', description: 'x' }]}
+            open={false}
+            onDone={vi.fn()}
+            onSkip={vi.fn()}
+          />
+        </div>,
+      );
+      priorButton.focus();
+
+      rerender(
+        <div>
+          <div id="a">A</div>
+          <Tour
+            steps={[{ target: '#a', title: 'A', description: 'x' }]}
+            open
+            onDone={vi.fn()}
+            onSkip={vi.fn()}
+          />
+        </div>,
+      );
+      // Opening moves focus off `priorButton` onto the card's primary action, so the restore below
+      // is a real move rather than focus that never left.
+      expect(document.activeElement).not.toBe(priorButton);
+
+      unmount();
+
+      expect(document.activeElement).toBe(priorButton);
+    } finally {
+      priorButton.remove();
+    }
+  });
+
   it('resolves logical sides correctly in RTL layout', () => {
     vi.mocked(readDirection).mockReturnValue('rtl');
     const stub = stubRectFor('a', { left: 100, top: 50, width: 80, height: 40 });

@@ -255,12 +255,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose:
       'Dismiss the topmost open overlay — a context menu, command palette, or popover (works in every frame, including web views)',
     category: 'Menus',
-    context: 'Main process (global)',
+    context: 'Main process (global — nothing is left to dismiss once the connection is lost)',
     // Announced without preventDefault, so the focused frame still receives Escape and may act on
     // it too — e.g. the scripture editor's marker palette closes its own session. Only the bare,
     // initial press announces: a modified Escape (Shift/Ctrl/Alt/Meta) or an auto-repeat tick of a
     // held Escape is not the dismissal gesture. A modal dialog on top is left to its own shell,
     // and a focused command palette also answers Escape through its own keydown handler.
+    // `OverlayHost` stands down once the connection-lost state latches, taking every overlay it
+    // hosts — context menu, command palette, popover, modal dialog — with it, so the renderer-side
+    // handler named above no longer exists in that state. Main still announces the key; what
+    // answers it is the `connection-lost-swallow-escape` entry, which swallows it.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'src/main/main.ts',
@@ -726,8 +730,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // The overlay unmounts entirely once the connection is lost, so this key is not merely muted —
     // it is withdrawn, and Escape falls to the `connection-lost-swallow-escape` entry. Standing the
     // tour down is what keeps it from spending the permanent done flag on the way to a reload.
+    // `onboarding-tour.component.tsx` is listed because that unmount is what makes the context
+    // above true — the handler lives in `tour.component.tsx`, but the guard decides whether it runs.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
-    locations: ['src/renderer/components/onboarding-tour/tour.component.tsx'],
+    locations: [
+      'src/renderer/components/onboarding-tour/tour.component.tsx',
+      'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
+    ],
   },
   {
     id: 'tour-focus-cycle',
@@ -736,7 +745,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Onboarding tour overlay (not while the connection-lost state is shown)',
     // The overlay unmounts entirely once the connection is lost, so the card's focus trap goes with
     // it and Tab falls to the `connection-lost-contain-focus` entry, which holds focus on Reload.
+    // `onboarding-tour.component.tsx` is listed because that unmount is what makes the context
+    // above true — the trap lives in `tour.component.tsx`, but the guard decides whether it runs.
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
-    locations: ['src/renderer/components/onboarding-tour/tour.component.tsx'],
+    locations: [
+      'src/renderer/components/onboarding-tour/tour.component.tsx',
+      'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
+    ],
   },
 ];
