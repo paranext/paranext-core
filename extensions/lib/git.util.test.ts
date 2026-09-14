@@ -3,7 +3,13 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterAll, describe, expect, it } from 'vitest';
 import * as prettier from 'prettier';
-import { BUNDLED_EXTENSION_LICENSE, decideLicenseStamp, stampExtensionLicense } from './git.util';
+import {
+  BUNDLED_EXTENSION_LICENSE,
+  decideLicenseStamp,
+  stampExtensionLicense,
+  stampExtensionsRootLicense,
+} from './git.util';
+import { subtreeRootFolder } from '../webpack/webpack.util';
 import type { DeclaredLicense } from './git.util';
 
 const declared = (
@@ -168,5 +174,49 @@ describe('stampExtensionLicense', () => {
     );
     expect(await declaredLicense(path.join(root, folder, 'manifest.json'))).toBeUndefined();
     await expect(fsPromises.readFile(path.join(root, folder, 'LICENSE'), 'utf8')).rejects.toThrow();
+  });
+});
+
+describe('stampExtensionsRootLicense', () => {
+  const created: string[] = [];
+  afterAll(() =>
+    Promise.all(created.map((dir) => fsPromises.rm(dir, { recursive: true, force: true }))),
+  );
+
+  it('stamps the field a template merge reverts, beside the text it restores', async () => {
+    // A merge from the MIT multi-extension template rewrites BOTH files at the subtree root: the
+    // `license` field in `extensions/package.json` and `extensions/LICENSE`. Restoring only the text
+    // leaves the folder declaring MIT beside the AGPL - the declares-one/ships-another state
+    // `stampExtensionLicense` exists to prevent for every folder below this one.
+    const root = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'stamp-root-license-'));
+    created.push(root);
+    await fsPromises.writeFile(
+      path.join(root, 'LICENSE'),
+      'GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3\n',
+      'utf8',
+    );
+    await fsPromises.mkdir(path.join(root, subtreeRootFolder), { recursive: true });
+    await fsPromises.writeFile(
+      path.join(root, subtreeRootFolder, 'package.json'),
+      `${JSON.stringify({ name: 'extensions', version: '0.0.1', license: 'MIT' }, undefined, 2)}\n`,
+      'utf8',
+    );
+    await fsPromises.writeFile(
+      path.join(root, subtreeRootFolder, 'LICENSE'),
+      'MIT License\n',
+      'utf8',
+    );
+
+    await stampExtensionsRootLicense(root);
+
+    const parsed: unknown = JSON.parse(
+      await fsPromises.readFile(path.join(root, subtreeRootFolder, 'package.json'), 'utf8'),
+    );
+    expect(parsed && typeof parsed === 'object' && 'license' in parsed && parsed.license).toBe(
+      BUNDLED_EXTENSION_LICENSE,
+    );
+    expect(
+      await fsPromises.readFile(path.join(root, subtreeRootFolder, 'LICENSE'), 'utf8'),
+    ).toContain('GNU AFFERO GENERAL PUBLIC LICENSE');
   });
 });
