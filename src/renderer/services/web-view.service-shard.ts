@@ -3057,33 +3057,28 @@ export async function openOrReloadWebView(
   // to catch.
   const wasLayoutLoadInFlight = layoutLoadInFlight !== undefined;
   await waitForLayoutLoadToSettle();
-  if (!wasLayoutLoadInFlight && layoutLoadGeneration !== layoutLoadGenerationBeforeProvider) {
+  if (
+    !isReloadOfAnOpenWebView &&
+    !wasLayoutLoadInFlight &&
+    layoutLoadGeneration !== layoutLoadGenerationBeforeProvider
+  ) {
     logger.debug(
       `Not docking web view ${webView.id} (type ${webView.webViewType}): a layout load replaced this window's dock while it was being created`,
     );
-    // What this call may clean up is decided by whose the residue is, which the reload flag already
-    // answers — no dock read, so a bail-out cannot park waiting for a dock to re-register.
+    // This bail-out only ever names a fresh open — a reload is excluded above, because a reload's
+    // own tab may still be standing in whatever dock the load left behind, and the dock-read
+    // bail-out just below this one is what answers that question directly, without needing to park
+    // waiting for a dock to re-register.
     //
-    // A reload names a web view this window already had, so the nonce is that view's and not this
-    // call's (`getWebViewNonce` hands back the existing one for an open id) and
-    // `isWebViewNonceCorrect` is the sole gate on `postMessageToWebView`. Deleting it would mute a
-    // live iframe the user is still looking at. The state is that view's too, and the sibling
-    // refusal below says why it has to stay: it is keyed by the web view rather than the tab, and
-    // is what brings the view back where it lands next. So a reload leaves both alone — at the
-    // cost of a nonce entry outliving a view the load genuinely took, which is the cheaper side of
-    // that trade by a wide margin.
-    //
-    // A fresh open is the opposite: the dock write is still below this point, so nothing but this
-    // call has registered anything for this id, and no close event will ever fire for a tab that
-    // never joined the dock. Emitting it disposes the controller the provider registered and
-    // cleans up the nonce (both subscribe to it); the state is evicted directly. Same residue the
-    // catch below clears for the same shape of failure.
-    if (!isReloadOfAnOpenWebView) {
-      onDidCloseWebViewBufferedEmitter.emit({
-        webView: convertWebViewDefinitionToSaved(finalWebView),
-      });
-      deleteFullWebViewStateById(webView.id);
-    }
+    // A fresh open, unlike a reload, has never joined any dock: the write for it is still below
+    // this point, so nothing but this call has registered anything for its id, and no close event
+    // will ever fire for a tab that never existed. Emitting it disposes the controller the provider
+    // registered and cleans up the nonce (both subscribe to it); the state is evicted directly —
+    // the same residue the catch below clears for the same shape of failure.
+    onDidCloseWebViewBufferedEmitter.emit({
+      webView: convertWebViewDefinitionToSaved(finalWebView),
+    });
+    deleteFullWebViewStateById(webView.id);
     return undefined;
   }
   const dockLayoutVar = await getDockLayout();

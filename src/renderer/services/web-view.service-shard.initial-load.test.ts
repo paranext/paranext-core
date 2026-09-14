@@ -1035,6 +1035,37 @@ describe('content admitted to the dock after the entry point had its say', () =>
     expect(module.isWebViewNonceCorrect('settled-view', liveNonce)).toBe(true);
   });
 
+  test('a reload the load left docked resolves with the reloaded web view’s id', async () => {
+    // The bail-out this races is a question about residue — whose nonce and state a load that
+    // moved the generation left behind — not about whether this reload may still land. A tab the
+    // load left standing is one this reload can still complete against, and `web-view.component`
+    // reads an undefined resolution as proof the provider declined, which parks a tab still
+    // fetching its content behind its placeholder forever.
+    const {
+      module,
+      dockedWebViews,
+      provider,
+      startReloadWithSavedLayoutHanging,
+      releaseLayoutGet,
+    } = await windowHoldingOneWebViewWithNothingLoading({ doesLoadReplaceTheDock: false });
+
+    provider.makeTheProviderThink();
+    const reloading = module.reloadWebView('test.type', 'settled-view');
+    await provider.waitForTheProviderToBeAsked();
+
+    // A whole load begins and ends inside the provider await — the same generation-moving shape
+    // the test above races — but this dock keeps the named tab standing rather than replacing it.
+    const { reloading: load } = await startReloadWithSavedLayoutHanging();
+    releaseLayoutGet({ kind: 'empty' });
+    await load;
+
+    provider.releaseTheProvider();
+    const reloadedId = await reloading;
+
+    expect(dockedWebViews.map((webView) => webView.id)).toContain('settled-view');
+    expect(reloadedId).toBe('settled-view');
+  });
+
   test('a web view the load replaced leaves no controller behind', async () => {
     // The other half of the same bail-out. The provider has run, so the extension host holds a
     // controller and state is persisted — and a tab that never joined the dock gets no close event
