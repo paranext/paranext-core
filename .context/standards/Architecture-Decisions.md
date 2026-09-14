@@ -2495,6 +2495,33 @@ step, no automation. Just a record.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ProjectSelector`'s `project-multi` mode keys each row by `(projectId,
+  scrollGroupId)`, so a project open in two scroll groups renders two selectable rows. The
+  checklist's comparative-texts storage is per-project and carries no scroll group, so a stored ref
+  matched neither row: both rendered unselected, and clicking one added a duplicate ref instead of
+  toggling the existing one off
+  (`extensions/src/platform-scripture/src/checklist.web-view.tsx`). The component could have grown a
+  per-project mode that keys rows by `projectId` alone.
+- **Decision:** Consumers whose selection semantics are per-project collapse the rows themselves —
+  keep one row per project (the lowest scroll group) and pair each stored ref with that row's scroll
+  group on the way in and de-duplicate on the way back out. `ProjectSelector` keeps a single row
+  identity, `(projectId, scrollGroupId)`.
+- **Alternatives:** (a) A `project-multi-per-project` mode in `ProjectSelector` — rejected as a
+  second row-identity scheme through selection, grouping, and the trigger summary for one consumer.
+  (b) Disabling the open-tabs grouping on per-project pickers so duplicate rows never appear —
+  rejected: it removes the most useful grouping to dodge a data-shape mismatch. (c) Storing the
+  scroll group alongside each comparative-text ref — rejected: comparative texts are a property of
+  the project, and persisting a scroll group would make saved state depend on window layout.
+- **Consequences:** A project open in several scroll groups shows only the lowest group's chip in a
+  per-project picker, so the trigger under-reports where the project is open. Any future per-project
+  consumer must repeat the collapse; if a second one appears, move the collapse into
+  `ProjectSelector` as a real per-project mode rather than copying it a third time.
+- **Source:** PR #2673 (project-selector groupings).
+
 ## adr-per-web-view-ctrl-f-for-find: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 
 - **Formerly:** ADR-0015
