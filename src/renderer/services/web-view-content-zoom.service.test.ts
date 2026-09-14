@@ -344,6 +344,28 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it("keeps a forgotten pane's pending levels when the flush-on-forget write fails", async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.1, written immediately
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.2, deferred into the open window
+      updateDefinition.mockImplementation(() => {
+        throw new Error('local storage quota exceeded');
+      });
+      // The definition still exists, so forgetting the pane attempts the write, but it fails; the
+      // level must stay pending rather than being discarded along with the rest of the pane's state.
+      forgetContentZoom('editor-1');
+      updateDefinition.mockImplementation(applyDefinitionUpdate);
+      updateDefinition.mockClear();
+      window.dispatchEvent(new Event('beforeunload'));
+      expect(updateDefinition).toHaveBeenCalledWith('editor-1', {
+        state: { [LEVELS]: { main: 1.2 } },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('still flushes the memory write on beforeunload when a definition write fails', async () => {
     vi.useFakeTimers();
     try {

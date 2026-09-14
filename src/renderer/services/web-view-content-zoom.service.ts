@@ -457,7 +457,9 @@ export function setContentZoomActiveArea(webViewId: WebViewId, areaId: ContentZo
  * The tail of a zoom gesture the pane was in the middle of is written first, rather than going down
  * with the pane: an unmount is not only a close — a pane is also unmounted when it is re-rendered
  * or moved — and the definition the levels belong to commonly outlives it. On a genuine close there
- * is no definition left to write them into, and the write is a no-op.
+ * is no definition left to write them into, and {@link commitOwnLevels} drops the pending levels
+ * itself. If the definition is still there but that write fails, the levels stay pending — this
+ * function does not clear them — for the next edit of the pane or the unload flush to retry.
  */
 export function forgetContentZoom(webViewId: WebViewId): void {
   const timer = ownLevelWriteTimers.get(webViewId);
@@ -466,7 +468,6 @@ export function forgetContentZoom(webViewId: WebViewId): void {
     ownLevelWriteTimers.delete(webViewId);
   }
   commitOwnLevels(webViewId);
-  pendingOwnLevels.delete(webViewId);
   areasByWebViewId.delete(webViewId);
   activeAreaByWebViewId.delete(webViewId);
   unknownAreasLoggedByWebViewId.delete(webViewId);
