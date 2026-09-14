@@ -729,7 +729,12 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
   await memoryChain;
 }
 
-/** Writes a pane's pending levels into its definition state; an empty map is removed entirely. */
+/**
+ * Writes a pane's pending levels into its definition state; an empty map is removed entirely. A
+ * write that throws is logged and reported as `false` rather than left to propagate: this runs from
+ * a burst's debounce timer and from the `beforeunload` flush, where a throw would either have no
+ * handler at all or would stop the memory flush that runs right after it.
+ */
 function commitOwnLevels(webViewId: WebViewId): boolean {
   const levels = pendingOwnLevels.get(webViewId);
   if (!levels) return true;
@@ -741,7 +746,14 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
   const state: Record<string, unknown> = { ...(definition.state ?? {}) };
   if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
   else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
-  return deps.updateDefinition(webViewId, { state });
+  try {
+    return deps.updateDefinition(webViewId, { state });
+  } catch (e) {
+    logger.warn(
+      `Content zoom: could not store the levels of web view ${webViewId}. ${getErrorMessage(e)}`,
+    );
+    return false;
+  }
 }
 
 /**
