@@ -11,6 +11,7 @@
 import { InitialConfigType, LexicalComposer } from '@lexical/react/LexicalComposer';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { EditorState, SerializedEditorState } from 'lexical';
+import { ReactNode } from 'react';
 
 import { editorTheme } from '@/components/advanced/editor/themes/editor-theme';
 import { TooltipProvider } from '@/components/shadcn-ui/tooltip';
@@ -42,6 +43,7 @@ export function Editor({
   autoFocus = false,
   onClear,
   className,
+  actions,
 }: {
   editorState?: EditorState;
   editorSerializedState?: SerializedEditorState;
@@ -51,6 +53,12 @@ export function Editor({
   autoFocus?: boolean;
   onClear?: (clearFn: () => void) => void;
   className?: string;
+  /**
+   * Optional controls rendered inside the editor's bordered box, below the content area — e.g. a
+   * comment's assign and submit buttons. Placed after the content in DOM order so tab order runs
+   * from the text to the actions.
+   */
+  actions?: ReactNode;
 }) {
   return (
     // CUSTOM: Added `className` prop
@@ -68,7 +76,12 @@ export function Editor({
         }}
       >
         <TooltipProvider>
-          <Plugins placeholder={placeholder} autoFocus={autoFocus} onClear={onClear} />
+          <Plugins
+            placeholder={placeholder}
+            autoFocus={autoFocus}
+            onClear={onClear}
+            actions={actions}
+          />
 
           <OnChangePlugin
             ignoreSelectionChange
