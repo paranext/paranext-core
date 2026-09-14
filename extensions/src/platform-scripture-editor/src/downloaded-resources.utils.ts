@@ -72,25 +72,30 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
 
 /**
  * Whether a downloaded project is the same resource as an existing reference: exact project-id
- * match for ProjectReferences, or a dblEntryUid prefix match for DblResourceReferences.
+ * match for a `ProjectReference`, or — for a `DblResourceReference` — whichever catalog row carries
+ * that uid, resolved against the project the same way the rest of the picker resolves it.
  *
- * The prefix branch is unreliable and has no fallback here. A resource project's id is unrelated to
- * the DBL entry it was installed from — ParatextData records the entry uid in the project's
- * settings and matches on that — so a resource whose ids diverge is reported as not downloaded even
- * when it is installed. Resolving the reference through the catalog's `projectId` (the value the
- * backend reports) is the fix; it has to move this function's callers and
- * `doesCatalogRowCoverProject` with it, so it is tracked as follow-up work rather than carried
- * here. See `adr-dbl-install-status-from-backend`.
+ * Resolving through the catalog rather than comparing the uid to the project id directly is what
+ * makes a divergent-id resource match: a resource project's id is unrelated to the DBL entry it was
+ * installed from, so the two share a prefix for some resources and nothing at all for others. A
+ * reference whose uid is absent from the catalog matches nothing, which is the same conclusion
+ * `downloadedToRow` reaches when it classifies such a project as non-DBL.
+ *
+ * @param project The locally-installed project to test.
+ * @param reference The existing reference to test it against.
+ * @param dblResources Catalog rows, used to resolve a `DblResourceReference` to a local project.
  */
 export function matchesDownloaded(
   project: DownloadedResource,
   reference: ResourceReference,
+  dblResources: DblResourceData[],
 ): boolean {
   if (isProjectReference(reference)) return reference.id === project.projectId;
-  if (isDblResourceReference(reference))
-    return (
-      reference.id !== '' && project.projectId.toLowerCase().startsWith(reference.id.toLowerCase())
-    );
+  if (isDblResourceReference(reference)) {
+    if (reference.id === '') return false;
+    const row = dblResources.find((r) => r.dblEntryUid === reference.id);
+    return row !== undefined && doesCatalogRowCoverProject(row, project.projectId);
+  }
   return false;
 }
 
@@ -198,7 +203,9 @@ export function buildPickerResources(
     .map((item) => resolveReferenced(item, dblResources))
     .filter((r): r is PickerResource => r !== undefined);
   const extras = downloaded
-    .filter((project) => !effectiveItems.some((item) => matchesDownloaded(project, item)))
+    .filter(
+      (project) => !effectiveItems.some((item) => matchesDownloaded(project, item, dblResources)),
+    )
     .map((project) => downloadedToRow(project, dblResources));
   return [...referenced, ...extras];
 }
