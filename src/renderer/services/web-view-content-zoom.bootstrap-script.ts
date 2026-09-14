@@ -255,14 +255,19 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         warnPapi('Content zoom command ' + command + ' threw: ' + (e && e.message ? e.message : e));
       }
     };
-    const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
+    const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey;
 
     const onKeyDown = (e) => {
       if (!hasModifier(e)) return;
+      const zoomIn = e.key === '=' || e.key === '+' || e.code === 'NumpadAdd';
+      // On US and UK layouts the published + is Shift+=, and Chromium's own zoom in accepts
+      // Ctrl+Shift+= for the same reason, so the zoom-in chord takes Shift. Zoom out and reset
+      // reject it, leaving Ctrl+Shift+- and Ctrl+Shift+0 to whoever else wants them.
+      if (e.shiftKey && !zoomIn) return;
       const areaId = targetFor(document.activeElement);
       if (!areaId) return;
       let command;
-      if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd') command = '${CONTENT_ZOOM_COMMANDS.in}';
+      if (zoomIn) command = '${CONTENT_ZOOM_COMMANDS.in}';
       else if (e.key === '-' || e.code === 'NumpadSubtract') command = '${CONTENT_ZOOM_COMMANDS.out}';
       else if (e.key === '0' || e.code === 'Numpad0') command = '${CONTENT_ZOOM_COMMANDS.reset}';
       if (!command) return;
@@ -271,10 +276,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     };
     window.addEventListener('keydown', onKeyDown);
 
-    // Same modifier rule as the chords: Ctrl or the meta key, and neither Shift nor Alt. Chromium
-    // and the OS give Ctrl+Shift+wheel and Ctrl+Alt+wheel their own meanings, so those pass through.
+    // Ctrl or the meta key, and neither Shift nor Alt: a shifted wheel is horizontal scroll on many
+    // platforms, and Chromium and the OS give Ctrl+Alt+wheel its own meaning, so both pass through.
     const onWheel = (e) => {
-      if (!hasModifier(e)) return;
+      if (!hasModifier(e) || e.shiftKey) return;
       const areaId = targetFor(e.target);
       if (!areaId) return;
       e.preventDefault();
