@@ -61,7 +61,7 @@ import {
   advanceToLastStep,
   goBackTour,
   skipTour,
-} from './onboarding-tour.page';
+} from '../../fixtures/onboarding-tour.page';
 
 /** Title of the one stop whose anchor the toolbar renders in both interface modes. */
 const PROFILE_STEP_TITLE = 'Profile';
