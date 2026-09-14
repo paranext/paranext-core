@@ -108,7 +108,7 @@ function ContentLoadingView({
 }) {
   return (
     <div className="tw:flex tw:flex-1" data-testid={RESOURCE_TEXT_WAITING_TEST_ID}>
-      <LoadingView key={announcementKey} className="tw:flex-1" label={label} />
+      <LoadingView key={announcementKey} sizingClassName="tw:flex-1" label={label} />
     </div>
   );
 }
