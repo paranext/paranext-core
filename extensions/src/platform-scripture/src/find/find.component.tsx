@@ -416,8 +416,9 @@ export type FindProps = {
 };
 
 /**
- * The built-in grouping ids Find's project picker offers, in `makeBuiltInGroupings` order. Both
- * Find configurations offer the same options.
+ * The built-in grouping ids Find's project picker offers in the default (scroll-group) branch, in
+ * `makeBuiltInGroupings` order. The Simple-interface branch offers a different list — see
+ * {@link FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS}.
  *
  * Two of the four built-ins are left out because Find cannot populate them into more than one
  * bucket, and a menu item that always yields a single bucket is a dead option:
@@ -438,6 +439,20 @@ export type FindProps = {
  * data is a build failure rather than a dead menu item.
  */
 export const FIND_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['openTabs', 'language'];
+
+/**
+ * The built-in grouping ids Find's project picker offers in the Simple-interface branch, where the
+ * picker is handed an empty `openTabs` list to suppress scroll-group badges.
+ *
+ * It is {@link FIND_PROJECT_SELECTOR_GROUPING_IDS} minus `openTabs`: with no open tabs, the "open
+ * tabs" section has no eligible row, so that grouping collapses the list into one undifferentiated
+ * bucket — the same result as no grouping at all. Offering it would put a dead item at the top of
+ * the menu, and it is the item the picker's initial-grouping resolver picks first when present.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list too, so an id added here without the
+ * row data to back it is a build failure rather than a dead menu item.
+ */
+export const FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['language'];
 
 /**
  * Maps caller-supplied Find projects onto ProjectSelector rows: sorted by full name, with the
@@ -850,23 +865,34 @@ export function Find({
     [localizedStrings],
   );
 
-  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys, narrowed to
-  // the ids Find offers. See FIND_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys. Each branch
+  // is narrowed to the ids it can populate; see FIND_PROJECT_SELECTOR_GROUPING_IDS and
+  // FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
+  const builtInGroupings = useMemo(
+    () => makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)),
+    [localizedStrings],
+  );
   const projectSelectorGroupings = useMemo(
     () =>
-      makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)).filter((grouping) =>
+      builtInGroupings.filter((grouping) =>
         FIND_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
       ),
-    [localizedStrings],
+    [builtInGroupings],
+  );
+  const simpleProjectSelectorGroupings = useMemo(
+    () =>
+      builtInGroupings.filter((grouping) =>
+        FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [builtInGroupings],
   );
 
   // Presentation shared by both project-picker configurations, so the `hideScrollGroups` branch
-  // below differs only in the parts that actually vary: the mode, the selection shape, and the
-  // change/open callbacks.
+  // below differs only in the parts that actually vary: the mode, the selection shape, the offered
+  // groupings, and the change/open callbacks.
   const sharedProjectSelectorProps = {
     localizedStrings: projectSelectorLocalizedStrings,
     isLoading: isLoadingProjects,
-    availableGroupings: projectSelectorGroupings,
   };
 
   return (
@@ -886,14 +912,16 @@ export function Find({
                  `openTabs={[]}` is what suppresses them — `mode="project"` derives each row's
                  group badges from `openTabs`, so passing Find's real tabs here would still badge
                  every open project with its group letter. It also leaves no row eligible for the
-                 "open tabs" section, collapsing the list into one unheaded group. Matches the
-                 `ProjectSelector` "Simple Flat List" story. */
+                 "open tabs" section, which is why this branch offers
+                 `FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS` instead. Matches the `ProjectSelector`
+                 "Simple Flat List" story. */
               <ProjectSelector
                 mode="project"
                 projects={sortedProjects}
                 openTabs={NO_OPEN_TABS}
                 selection={{ projectId: selectedProjectId }}
                 onChangeSelection={({ projectId: nextId }) => onSelectProject(nextId)}
+                availableGroupings={simpleProjectSelectorGroupings}
                 {...sharedProjectSelectorProps}
               />
             ) : (
@@ -906,6 +934,7 @@ export function Find({
                   onSelectProjectScrollGroup(nextId, nextScrollGroupId)
                 }
                 onOpenProjectInGroup={onOpenProjectInGroup}
+                availableGroupings={projectSelectorGroupings}
                 {...sharedProjectSelectorProps}
               />
             )}

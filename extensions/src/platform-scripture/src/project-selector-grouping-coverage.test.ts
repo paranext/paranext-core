@@ -13,7 +13,11 @@ import {
   CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS,
   toChecklistSelectorRows,
 } from './checklist.web-view';
-import { FIND_PROJECT_SELECTOR_GROUPING_IDS, toFindSelectorRows } from './find/find.component';
+import {
+  FIND_PROJECT_SELECTOR_GROUPING_IDS,
+  FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS,
+  toFindSelectorRows,
+} from './find/find.component';
 import {
   MANAGE_BOOKS_COPY_FROM_GROUPING_IDS,
   toCopyFromSelectorRows,
@@ -61,6 +65,16 @@ const SURFACES: readonly Surface[] = [
   {
     name: 'find',
     groupingIds: FIND_PROJECT_SELECTOR_GROUPING_IDS,
+    rows: toFindSelectorRows([
+      { id: 'a', shortName: 'A', fullName: 'Project A', language: 'English', lastUsedAt: 2 },
+      { id: 'b', shortName: 'B', fullName: 'Project B', language: 'Spanish', lastUsedAt: 1 },
+    ]),
+  },
+  {
+    // Find's Simple-interface branch offers a narrower list than the scroll-group branch, so it is
+    // covered separately rather than assumed to match.
+    name: 'find-simple',
+    groupingIds: FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS,
     rows: toFindSelectorRows([
       { id: 'a', shortName: 'A', fullName: 'Project A', language: 'English', lastUsedAt: 2 },
       { id: 'b', shortName: 'B', fullName: 'Project B', language: 'Spanish', lastUsedAt: 1 },
