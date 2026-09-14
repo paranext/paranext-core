@@ -14,6 +14,7 @@ import {
   rejectAndRemoveOverlay,
   updateOverlayContent,
   updateCommandPaletteState,
+  hasOverlayOfType,
 } from './overlay-store';
 
 function createContextMenuEntry(
@@ -439,6 +440,46 @@ describe('overlay-store', () => {
 
       clearAllOverlays();
       expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('hasOverlayOfType', () => {
+    it('returns false when the store is empty', () => {
+      expect(hasOverlayOfType('modalDialog')).toBe(false);
+    });
+
+    it('returns true once a matching overlay is added', () => {
+      const modalEntry: OverlayEntry = {
+        type: 'modalDialog',
+        id: 'modal-1',
+        webViewId: 'webview-1',
+        Component: vi.fn(),
+        props: {},
+        resolve: vi.fn(),
+        reject: vi.fn(),
+      };
+      addOverlay(modalEntry);
+      expect(hasOverlayOfType('modalDialog')).toBe(true);
+    });
+
+    it('returns false again after the matching overlay is removed', () => {
+      const modalEntry: OverlayEntry = {
+        type: 'modalDialog',
+        id: 'modal-1',
+        webViewId: 'webview-1',
+        Component: vi.fn(),
+        props: {},
+        resolve: vi.fn(),
+        reject: vi.fn(),
+      };
+      addOverlay(modalEntry);
+      resolveAndRemoveOverlay('modal-1', 'modalDialog', undefined);
+      expect(hasOverlayOfType('modalDialog')).toBe(false);
+    });
+
+    it('returns false when only an overlay of a different type exists', () => {
+      addOverlay(createContextMenuEntry('overlay-1', 'webview-1'));
+      expect(hasOverlayOfType('modalDialog')).toBe(false);
     });
   });
 

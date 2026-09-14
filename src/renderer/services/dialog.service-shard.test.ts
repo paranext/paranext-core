@@ -222,6 +222,32 @@ describe('dialog.service-shard', () => {
     });
   });
 
+  describe('hasAnyDialogRequest', () => {
+    it('returns false when no dialog request exists', async () => {
+      const { hasAnyDialogRequest } = await import('./dialog.service-shard');
+      expect(hasAnyDialogRequest()).toBe(false);
+    });
+
+    it('returns true while a request is live, false once it resolves', async () => {
+      const { hasAnyDialogRequest, resolveDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      vi.mocked(addTab).mockResolvedValue(undefined);
+
+      // Start a non-overlay dialog (selectProject goes through tab-based path).
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+
+      await vi.waitFor(() => {
+        expect(hasAnyDialogRequest()).toBe(true);
+      });
+
+      resolveDialogRequest('mock-guid', 'selected-project-id');
+      expect(hasAnyDialogRequest()).toBe(false);
+
+      await dialogPromise;
+    });
+  });
+
   describe('resolveDialogRequest', () => {
     it('throws when resolving a non-existent dialog request', async () => {
       const { resolveDialogRequest } = await import('./dialog.service-shard');
