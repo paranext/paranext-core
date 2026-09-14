@@ -817,6 +817,22 @@ describe('this window becoming the OS-focused window', () => {
     expect(focusTabMock).toHaveBeenCalledWith('tab-1', undefined);
   });
 
+  test('gives the waiting tab its focus when the user first enters a background window by switching to it, however long it waited', () => {
+    // The note above only proves the fresh case, since it never ages the note past the bound. A
+    // window nobody has ever been in may sit untouched for as long as the user likes before their
+    // first arrival is an OS focus change rather than a gesture inside it (alt-tab, the taskbar, a
+    // raise) — that arrival still has to collect the waiting tab, exactly as a first gesture would.
+    vi.useFakeTimers();
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    testingWindowService.resetActivationLatchForTesting();
+    noteTabAwaitingDocumentFocus('tab-1');
+    vi.advanceTimersByTime(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS * 10);
+
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', undefined);
+  });
+
   test('lets a gesture collect a fresh note in a window that has already been activated', () => {
     // A raise the OS has not honoured yet leaves a note behind in a window the user has already
     // been in, so no further focus transition is coming to collect it. Their own gesture has to be

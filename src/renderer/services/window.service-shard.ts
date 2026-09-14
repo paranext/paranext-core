@@ -60,6 +60,7 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-vie
 import { logger } from '@shared/services/logger.service';
 import {
   CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS,
+  isWindowAwaitingFirstActivation,
   noteWindowActivated,
   resetActivationLatchForTesting,
   takeTabAwaitingDocumentFocus,
@@ -226,8 +227,14 @@ function setIsThisWindowFocused(newValue: boolean): void {
     // on that is what a declaration looks like from the renderer's side — and it is what lets the
     // catch-up below run, since a window still marked as awaiting its first activation has no
     // business taking document focus.
+    //
+    // Read before clearing the latch: this transition is the arrival a withheld window's note was
+    // left for exactly when the latch still says "awaiting" here, and `noteWindowActivated` below
+    // would otherwise already say "activated" for that very arrival, indistinguishable from any
+    // later, unrelated one.
+    const wasAwaitingFirstActivation = isWindowAwaitingFirstActivation();
     noteWindowActivated();
-    runFocusCatchUpForRaisedWindow();
+    runFocusCatchUpForRaisedWindow(wasAwaitingFirstActivation);
   }
 }
 
@@ -479,19 +486,15 @@ function endWithholdingAndCatchUp(): void {
  * has actually become the one the main process considers focused. Called from
  * {@link setIsThisWindowFocused} on every transition into "focused".
  *
- * Distinct from {@link endWithholdingAndCatchUp} above: the two differ in what triggers them, not —
- * after a window's first activation — in what they read. That one triggers on a gesture inside this
- * window and reads the unbounded `takeTabAwaitingDocumentFocus`, but only for the window's first
- * activation; every gesture after that falls back to the same bounded read this one always uses.
- * This one triggers on main naming this window focused, which — unlike a gesture — can arrive long
- * after the raise it was meant to complete (an unrelated later alt-tab back into this window, once
- * the window has moved on to something else entirely), so it always reads the bounded
- * `takeTabAwaitingDocumentFocusIfFresh` instead: a stale note is left alone rather than stealing
- * focus into a tab the user never asked to see.
- *
- * Reached only for a genuine activation, so it needs no withholding check of its own: a window's
- * own first-paint self-focus is handed back by main without ever being recorded as focus, and
- * {@link setIsThisWindowFocused} ends the withholding immediately before calling this.
+ * Distinct from {@link endWithholdingAndCatchUp} above in what triggers them, not — for a given
+ * window state — in what they read: on a window's first activation, whichever trigger reaches it
+ * first (a gesture inside the window, or main naming it focused) reads the unbounded
+ * `takeTabAwaitingDocumentFocus`, since that arrival is exactly what an indefinitely-waiting note
+ * is for, however the user happened to make it. Every later transition of either kind falls back to
+ * the bounded `takeTabAwaitingDocumentFocusIfFresh`: main naming this window focused can arrive
+ * long after the raise it was meant to complete (an unrelated later alt-tab back into this window,
+ * once the window has moved on to something else entirely), and a stale note is left alone rather
+ * than stealing focus into a tab the user never asked to see.
  *
  * Hidden case: intentionally not handled. `focusTab` makes the tab active and focuses its iframe in
  * one synchronous stack, so a tab that is not already its panel's active tab is still in a
@@ -500,9 +503,16 @@ function endWithholdingAndCatchUp(): void {
  * `revealTabGroupAndSetDocumentFocusToTab`, which records whichever tab it just activated, and only
  * the latest record is kept, so the record tracks the active tab rather than drifting from it. A
  * new door that activates a tab without passing through there is what would break this assumption.
+ *
+ * @param isArrivalInWithheldWindow Whether this transition is the FIRST arrival in a window that
+ *   was still awaiting its first activation (see {@link isWindowAwaitingFirstActivation}) — the
+ *   caller reads that before clearing the latch, since by the time this function runs the latch
+ *   already says "activated" either way.
  */
-function runFocusCatchUpForRaisedWindow(): void {
-  const tabId = takeTabAwaitingDocumentFocusIfFresh(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS);
+function runFocusCatchUpForRaisedWindow(isArrivalInWithheldWindow: boolean): void {
+  const tabId = isArrivalInWithheldWindow
+    ? takeTabAwaitingDocumentFocus()
+    : takeTabAwaitingDocumentFocusIfFresh(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS);
   if (tabId === undefined) return;
   try {
     getDockLayoutSync().focusTab(tabId);
