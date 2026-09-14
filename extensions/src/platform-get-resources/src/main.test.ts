@@ -66,6 +66,7 @@ const PARTIAL_PROJECT_LIST = [{ id: 'AAAA1', isEditable: false }];
 const provider = {
   isGetDblResourcesAvailable: vi.fn(async () => true),
   getDblResources: vi.fn(async () => [REGISTERED, NOT_YET_REGISTERED]),
+  recomputeDblResourcesUpdateStatus: vi.fn(async () => ({})),
 };
 
 let registrations: UnsubscriberAsyncList;
@@ -176,5 +177,41 @@ describe('getCachedResources installed-flag reconciliation', () => {
     expect(persisted[persisted.length - 1]).toContainEqual(
       expect.objectContaining({ dblEntryUid: 'bbbb', installed: false }),
     );
+  });
+
+  it('changes nothing when no resource project has registered yet, even after startup', async () => {
+    // An early read returns only editable projects, indistinguishable from a machine with no
+    // resources; reconciling against it would mark every installed resource uninstalled.
+    vi.spyOn(performance, 'now').mockReturnValue(AFTER_REGISTRATION_GRACE_MS);
+    mocks.getMetadataForAllProjects.mockResolvedValue([{ id: 'EDITABLE1', isEditable: true }]);
+    await activateWithFreshModule();
+    await getCachedResources();
+
+    const reconciled = await getCachedResources({ waitForInstalledFlagsSync: true });
+
+    // Positive control: the metadata was read, and the guard is what declined to act on it.
+    expect(mocks.getMetadataForAllProjects).toHaveBeenCalled();
+    expect(reconciled).toEqual({
+      status: 'available',
+      resources: [REGISTERED, NOT_YET_REGISTERED],
+    });
+  });
+
+  it('does not make the opt-in wait pay for the backend update-status recompute', async () => {
+    // Only the Get Resources list renders `updateAvailable`; a panel waiting on it would pay a
+    // whole-catalog backend round trip for a flag it discards.
+    vi.spyOn(performance, 'now').mockReturnValue(AFTER_REGISTRATION_GRACE_MS);
+    await activateWithFreshModule();
+    await getCachedResources();
+
+    await getCachedResources({ waitForInstalledFlagsSync: true });
+    expect(provider.recomputeDblResourcesUpdateStatus).not.toHaveBeenCalled();
+
+    // Positive control: the refresh that exists for that flag does ask the backend.
+    const refreshResourceFlags = mocks.registeredCommands.get(
+      'platformGetResources.refreshResourceFlags',
+    );
+    await refreshResourceFlags?.();
+    expect(provider.recomputeDblResourcesUpdateStatus).toHaveBeenCalled();
   });
 });

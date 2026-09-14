@@ -3,7 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { useRetryablePromise } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { shouldReportCatalogFailure } from './dbl-catalog.utils';
 import {
   GetResources,
@@ -126,18 +126,15 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
       return actionFunction(dblEntryUid)
         .then(async () => {
-          // Reconcile before re-reading. The in-progress row clears only once the list agrees with
-          // what was asked for, and an install that succeeded as a no-op (the resource was already
-          // on disk, the catalog just said otherwise) changes nothing for the refetch to notice —
-          // so without this the row spins forever. Swallowed on failure: the action itself already
-          // succeeded, and letting this reach the caller would report it to the user as a failure.
+          // Let the derived flags catch up before refetching, or the refetch returns the pre-action
+          // flags: an install that succeeded as a no-op leaves the row spinning, and an update keeps
+          // offering "Update". A failure here is logged, not rethrown — the action itself succeeded,
+          // and reaching the `.catch` below would report it to the user as failed.
           try {
-            await papi.commands.sendCommand('platformGetResources.getCachedResources', {
-              waitForInstalledFlagsSync: true,
-            });
+            await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
           } catch (error) {
-            logger.debug(
-              `Could not refresh installed flags after ${action}: ${getErrorMessage(error)}`,
+            logger.warn(
+              `Could not refresh resource flags after ${action}: ${getErrorMessage(error)}`,
             );
           }
           refetchResources();
@@ -153,6 +150,29 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     },
     [installResource, uninstallResource, refetchResources],
   );
+
+  // Correct the update badges once the list is up. `getCachedResources` answers one refresh behind,
+  // and the background sync deliberately skips the backend round trip that `updateAvailable` needs
+  // — every other consumer of the catalog discards that flag. So a resource updated outside this
+  // dialog arrives here still offering "Update". This view is the only one that renders the flag,
+  // which makes it the one that pays for refreshing it. Once per mount: the post-action refresh
+  // covers anything the user does from here.
+  const hasRefreshedUpdateFlags = useRef(false);
+  useEffect(() => {
+    if (!hasSettled || hasRefreshedUpdateFlags.current) return;
+    hasRefreshedUpdateFlags.current = true;
+    papi.commands
+      .sendCommand('platformGetResources.refreshResourceFlags')
+      .then(() => {
+        refetchResources();
+        return undefined;
+      })
+      // The list is already rendered; a failed refresh leaves the cached flags in place rather
+      // than costing the user the dialog.
+      .catch((e) =>
+        logger.warn(`Could not refresh DBL resource update flags: ${getErrorMessage(e)}`),
+      );
+  }, [hasSettled, refetchResources]);
 
   /** Removes resources from array of resources that are currently being handled */
   useEffect(() => {

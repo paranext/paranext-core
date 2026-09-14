@@ -23,7 +23,7 @@ import {
 } from 'platform-bible-utils';
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
+import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -76,10 +76,6 @@ export type {
   ProjectSelectorMode,
   ProjectSelectorProject,
 } from './project-selector.rows';
-
-// The selector's own popover already sits at `Z_INDEX_ABOVE_DOCK`; overlays that portal from
-// inside it (the row tooltip and the filter dropdown) must stack above that popover, not behind.
-const Z_INDEX_ABOVE_SELECTOR_POPOVER = Z_INDEX_ABOVE_DOCK + 50;
 
 // #region Localized strings
 
@@ -456,8 +452,10 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
         align="center"
         sideOffset={8}
         collisionPadding={16}
+        // No `zIndex` override: `TooltipContent` sets the tooltip tier itself, which is above the
+        // popover this row is rendered inside. Pinning it to the overlay tier (400) would put the
+        // tooltip behind its own host.
         className="tw:max-w-xs tw:text-center"
-        style={{ zIndex: Z_INDEX_ABOVE_SELECTOR_POPOVER }}
       >
         <div className="tw:font-semibold">{row.fullName}</div>
         {tooltipHasLanguage && (
@@ -527,10 +525,18 @@ function FilterMenu({
           <Filter className="tw:h-4 tw:w-4" />
         </Button>
       </DropdownMenuTrigger>
+      {/* One of the few places a consumer legitimately overrides an overlay's own tier, so the
+          reason is recorded here: this menu opens from inside this component's own
+          `PopoverContent`. `DropdownMenuContent`'s own tier is `Z_INDEX_ABOVE_DOCK`, the same tier
+          the host popover sits on, so the two TIE and the menu wins only on paint order —
+          `dropdown-menu.tsx` documents that and names this tier as what a caller needing to win
+          outright should use. Verified against the filter menu opened from the selector popover.
+          The row tooltip above needs nothing: `TooltipContent`'s own tier already clears the
+          popover. */}
       <DropdownMenuContent
         align="end"
         className="tw:w-56"
-        style={{ zIndex: Z_INDEX_ABOVE_SELECTOR_POPOVER }}
+        style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
         <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
         <DropdownMenuCheckboxItem
