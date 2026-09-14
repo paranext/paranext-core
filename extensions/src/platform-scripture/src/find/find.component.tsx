@@ -43,7 +43,6 @@ import {
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
   PROJECT_SELECTOR_STRING_KEYS,
-  ProjectSelectorResolvedStrings,
   ScopeWithRange,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
@@ -839,34 +838,26 @@ export function Find({
     [projects],
   );
 
-  // `useLocalizedStrings` returns a loose `LanguageStrings` record, while the ProjectSelector
-  // string builders published in the `platform-bible-react` dist still take the fully-resolved
-  // record, and TypeScript cannot build a required-key record from a runtime loop without an
-  // assertion. The builders in source now accept the loose record directly, so this single
-  // narrowing goes away with the next `platform-bible-react` dist regeneration.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const projectSelectorStrings = localizedStrings as ProjectSelectorResolvedStrings;
-
   // Every ProjectSelector across the app resolves the shared `%projectSelector_*%` keys, then
   // merges Find-specific overrides (placeholder, empty message, aria-label) on top.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
-      ...buildProjectSelectorLocalizedStrings(projectSelectorStrings),
+      ...buildProjectSelectorLocalizedStrings(localizedStrings),
       buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
       commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
       ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
     }),
-    [localizedStrings, projectSelectorStrings],
+    [localizedStrings],
   );
 
   // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys, narrowed to
   // the ids Find offers. See FIND_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
   const projectSelectorGroupings = useMemo(
     () =>
-      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter((grouping) =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)).filter((grouping) =>
         FIND_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
       ),
-    [projectSelectorStrings],
+    [localizedStrings],
   );
 
   // Presentation shared by both project-picker configurations, so the `hideScrollGroups` branch

@@ -19,7 +19,6 @@ import {
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
-  type ProjectSelectorResolvedStrings,
   type ScopeWithRange,
 } from 'platform-bible-react/experimental';
 import {
@@ -797,27 +796,19 @@ global.webViewComponent = function ChecklistWebView({
     [allProjects, setComparativeTexts],
   );
 
-  // `useLocalizedStrings` returns a loose `LanguageStrings` record, while the ProjectSelector
-  // string builders published in the `platform-bible-react` dist still take the fully-resolved
-  // record, and TypeScript cannot build a required-key record from a runtime loop without an
-  // assertion. The builders in source now accept the loose record directly, so this single
-  // narrowing goes away with the next `platform-bible-react` dist regeneration.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const projectSelectorStrings = projectSelectorResolvedStrings as ProjectSelectorResolvedStrings;
-
   const projectSelectorLocalizedStrings = useMemo(
-    () => buildProjectSelectorLocalizedStrings(projectSelectorStrings),
-    [projectSelectorStrings],
+    () => buildProjectSelectorLocalizedStrings(projectSelectorResolvedStrings),
+    [projectSelectorResolvedStrings],
   );
 
   // Built-in groupings for the primary-project picker, narrowed to the ids the checklist offers.
   // See CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
   const primaryProjectGroupings = useMemo(
     () =>
-      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter((grouping) =>
-        CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorResolvedStrings)).filter(
+        (grouping) => CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
       ),
-    [projectSelectorStrings],
+    [projectSelectorResolvedStrings],
   );
 
   // Comparative-texts picker: the same built-in options as the primary picker PLUS the multi-select
@@ -828,9 +819,9 @@ global.webViewComponent = function ChecklistWebView({
   const comparativeTextsGroupings = useMemo<ProjectSelectorGrouping[]>(
     () => [
       ...primaryProjectGroupings,
-      makeSelectionGrouping(buildSelectionGroupingStrings(projectSelectorStrings)),
+      makeSelectionGrouping(buildSelectionGroupingStrings(projectSelectorResolvedStrings)),
     ],
-    [primaryProjectGroupings, projectSelectorStrings],
+    [primaryProjectGroupings, projectSelectorResolvedStrings],
   );
 
   const comparativeTextsSelectorNode = useMemo(

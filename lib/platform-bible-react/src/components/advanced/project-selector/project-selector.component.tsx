@@ -893,8 +893,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
           )
           .join(', ');
         // Always render the count badge (even at 1) so the trigger is visually consistent across
-        // selection counts — one-selected used to look like a bare label indistinguishable from
-        // single-select mode's trigger.
+        // selection counts and stays distinguishable from single-select mode's bare-label trigger.
         const countText = tuples.length.toString();
         return {
           node: (

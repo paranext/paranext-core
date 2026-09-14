@@ -24,7 +24,6 @@ import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PROJECT_SELECTOR_STRING_KEYS,
-  type ProjectSelectorResolvedStrings,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
   makeBuiltInGroupings,
@@ -526,18 +525,9 @@ global.webViewComponent = function ManageBooksWebView({
     return out;
   }, [localizedStrings]);
 
-  // The ProjectSelector popover reads its strings from the shared `%projectSelector_*%` central
-  // keys. `useLocalizedStrings` returns a loose `LanguageStrings` record, while the ProjectSelector
-  // string builders published in the `platform-bible-react` dist still take the fully-resolved
-  // record, and TypeScript cannot build a required-key record from a runtime loop without an
-  // assertion. The builders in source now accept the loose record directly, so this single
-  // narrowing goes away with the next `platform-bible-react` dist regeneration.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const projectSelectorStrings = localizedStrings as ProjectSelectorResolvedStrings;
-
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
-    () => buildProjectSelectorLocalizedStrings(projectSelectorStrings),
-    [projectSelectorStrings],
+    () => buildProjectSelectorLocalizedStrings(localizedStrings),
+    [localizedStrings],
   );
 
   // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys, narrowed to
@@ -545,10 +535,10 @@ global.webViewComponent = function ManageBooksWebView({
   // why.
   const projectSelectorGroupings = useMemo<ProjectSelectorGrouping[]>(
     () =>
-      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter((grouping) =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)).filter((grouping) =>
         MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
       ),
-    [projectSelectorStrings],
+    [localizedStrings],
   );
 
   // ===== PAPI: project list =================================================

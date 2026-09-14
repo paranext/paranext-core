@@ -48,7 +48,7 @@ export type ProjectSelectorResolvedStrings = Readonly<
  * key at a time and used only when they are strings, so consumers pass their localized-strings bag
  * straight through with no narrowing.
  */
-export type ProjectSelectorStringLookup = Readonly<Record<string, unknown>>;
+export type ProjectSelectorStringLookup = Readonly<Record<`%${string}%`, unknown>>;
 
 /**
  * Read one `%projectSelector_*%` entry out of a {@link ProjectSelectorStringLookup}. Returns
