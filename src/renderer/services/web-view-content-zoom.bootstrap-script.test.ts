@@ -384,6 +384,8 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(false);
     expect(document.getElementById('platform-content-zoom-indicator')).toBeNull();
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
     // eslint-disable-next-line no-underscore-dangle
     expect(window.__platformContentZoom).toBeUndefined();
   });
@@ -618,6 +620,28 @@ describe('content-zoom bootstrap script', () => {
     );
     expect(style).not.toContain('--platform-content-zoom-main:');
     expect(style).not.toContain('Bad Id');
+  });
+
+  it('refuses a marker that claims the reserved area id, the way it refuses an ill-formed one', async () => {
+    const html = `${TWO_AREAS}<div data-platform-content-zoom-root="default" id="reserved">reserved</div>`;
+    const { bound, papi } = install('wv-reserved', html);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-reserved', [
+      'main',
+      'footnotes',
+    ]);
+    const warnings = papi.logger.warn.mock.calls.map(([message]) => String(message));
+    expect(warnings.some((message) => message.includes('"default"'))).toBe(true);
+    const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
+    const selectors = sheet
+      ? Array.from(sheet.cssRules).flatMap((rule) =>
+          rule instanceof CSSStyleRule ? [rule.selectorText] : [],
+        )
+      : [];
+    // The accepted areas are matched, so the miss below is the reserved id being refused rather
+    // than an empty sheet.
+    expect(selectors.some((selector) => byId('foot').matches(selector))).toBe(true);
+    expect(selectors.some((selector) => byId('reserved').matches(selector))).toBe(false);
   });
 
   it('matches no rule against a nested marker or one carrying an ill-formed area id', async () => {

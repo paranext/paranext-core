@@ -8,6 +8,7 @@ import {
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   DEFAULT_ZOOM_FACTOR,
   getContentZoomCssVariable,
+  RESERVED_CONTENT_ZOOM_AREA_ID,
 } from '@shared/models/content-zoom.model';
 import { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
 import { isValidContentZoomAreaId, isValidZoomFactor } from '@shared/utils/content-zoom.util';
@@ -101,6 +102,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const ATTR = '${attr}';
     const MAIN = '${MAIN_CONTENT_ZOOM_AREA}';
     const AREA_ID = new RegExp(${JSON.stringify(CONTENT_ZOOM_AREA_ID_PATTERN.source)});
+    const RESERVED_ID = ${JSON.stringify(RESERVED_CONTENT_ZOOM_AREA_ID)};
+    // The reserved id is well-formed but names the pane-wide default variable, so an area of that
+    // name would set the default for every other area instead of scaling itself.
+    const isAreaId = (value) => AREA_ID.test(value) && value !== RESERVED_ID;
     const NAMED_AREA_RULE_TEMPLATE = ${JSON.stringify(CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE)};
     const AREA_ID_PLACEHOLDER = ${JSON.stringify(CONTENT_ZOOM_AREA_ID_PLACEHOLDER)};
     const bind = (name) => (typeof window[name] === 'function' ? window[name] : undefined);
@@ -158,7 +163,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         const end = text.indexOf('"]', start);
         if (end === -1) return;
         const areaId = text.slice(start + prefix.length, end);
-        if (AREA_ID.test(areaId)) ruled.add(areaId);
+        if (isAreaId(areaId)) ruled.add(areaId);
       });
     };
     const ensureRule = (areaId) => {
@@ -173,7 +178,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       const found = [];
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
         const areaId = idOf(element);
-        if (!AREA_ID.test(areaId)) { warnOnce('ignoring zoom area with invalid id "' + areaId + '"'); return; }
+        if (!isAreaId(areaId)) { warnOnce('ignoring zoom area with invalid id "' + areaId + '"'); return; }
         if (element.parentElement && element.parentElement.closest('[' + ATTR + ']')) { warnOnce('ignoring nested zoom area "' + areaId + '"'); return; }
         if (found.indexOf(areaId) === -1) found.push(areaId);
       });
