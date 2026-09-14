@@ -25,10 +25,11 @@ export type {
 // renders the filter toolbar) and the web view (which uses the values to build its comment-thread
 // query). Kept free of React/DOM dependencies so the mapping is unit-testable.
 //
-// The comment filters are orthogonal axes (resolved status, read status, note type, assignment) that
-// AND together, plus a separate scope axis. Each axis defaults to 'all' (no filtering), so the
-// out-of-the-box view is every thread. This mirrors the axes of Paratext 9's "Define Filter" dialog;
-// PT9's own presets are reachable by combining axes (see buildCommentThreadSelector).
+// The comment filters are orthogonal axes (resolved status, read status, note type, assignment,
+// date, author) that AND together, plus a separate scope axis. Each axis defaults to 'all' (no
+// filtering), so the out-of-the-box view is every thread. This mirrors the axes of Paratext 9's
+// "Define Filter" dialog; PT9's own presets are reachable by combining axes (see
+// buildCommentThreadSelector).
 
 // --- Scope axis (current chapter vs all books) ---
 
@@ -156,12 +157,21 @@ function resolveDatePresetFilter(
   return { after: start.toISOString() };
 }
 
+// --- Author axis (who wrote the thread's comments) ---
+
+/**
+ * The author axis is an open set — any project user name — plus this sentinel, so it cannot use the
+ * closed-union label-record shape the other axes share.
+ */
+export const AUTHOR_FILTER_ALL = 'all';
+
 export const DEFAULT_COMMENT_FILTERS: CommentFilters = {
   resolved: 'all',
   read: 'all',
   type: 'all',
   assignment: 'all',
   date: 'all',
+  author: AUTHOR_FILTER_ALL,
 };
 
 /**
@@ -191,6 +201,7 @@ export function applyFilterOverrides(overrides?: Partial<CommentFilters>): Comme
     type: overrides?.type ?? DEFAULT_COMMENT_FILTERS.type,
     assignment: overrides?.assignment ?? DEFAULT_COMMENT_FILTERS.assignment,
     date: overrides?.date ?? DEFAULT_COMMENT_FILTERS.date,
+    author: overrides?.author ?? DEFAULT_COMMENT_FILTERS.author,
   };
 }
 
@@ -202,6 +213,21 @@ export const TEAM_ASSIGNED_USER = 'Team';
 // this exact empty-string `AssignedUser` value. Distinct from omitting the assignment filter
 // entirely (an absent `assignedTo`), which the provider treats as "any assignee".
 export const UNASSIGNED_USER = '';
+
+/**
+ * Narrows `findAssignableUsers()` output to values that can actually be a comment author.
+ *
+ * That call returns assignment targets, which include {@link TEAM_ASSIGNED_USER} and the
+ * empty-string {@link UNASSIGNED_USER} sentinel; neither is ever an author, so both are dropped.
+ *
+ * The options are therefore project _members_, not historical authors: a comment written by someone
+ * since removed from the project cannot be filtered to. Deriving the list from loaded threads
+ * instead would be circular, since filtering to one author hides every other author from the list.
+ */
+export function toAuthorOptions(assignableUsers: string[] | undefined): string[] {
+  if (!assignableUsers) return [];
+  return assignableUsers.filter((user) => user !== TEAM_ASSIGNED_USER && user !== UNASSIGNED_USER);
+}
 
 /**
  * Builds the comment-thread query from the current filter selections. Each axis contributes at most
@@ -262,6 +288,9 @@ export function buildCommentThreadSelector({
   // keep querying yesterday.
   const dateFilter = resolveDatePresetFilter(filters.date, now);
   if (dateFilter) selector.dateFilter = dateFilter;
+
+  // Author
+  if (filters.author !== AUTHOR_FILTER_ALL) selector.author = filters.author;
 
   return selector;
 }

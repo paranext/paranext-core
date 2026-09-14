@@ -500,13 +500,15 @@ declare module 'legacy-comment-manager' {
    */
   export type DatePresetFilter = 'all' | 'today' | 'last-7-days' | 'last-30-days';
 
-  /** The five orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
+  /** The six orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
   export type CommentFilters = {
     resolved: ResolvedFilter;
     read: ReadFilter;
     type: TypeFilter;
     assignment: AssignmentFilter;
     date: DatePresetFilter;
+    /** A project-user name to filter comment authorship by, or the `'all'` sentinel. */
+    author: string;
   };
 
   /** Scope axis: current chapter vs all books. */
