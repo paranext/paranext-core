@@ -664,7 +664,7 @@ step, no automation. Just a record.
 - **Date:** 2026-08-31
 - **Status:** Accepted
 - **Context:** PT-4434 diagnosed the renderer's Chromium `WebSocket` as the peer that dies on a
-  suspend, and left instrumentation but no user-visible reaction — NN-6 ("app never dies silently")
+  suspend, and left instrumentation but no user-visible reaction — the "app never dies silently" non-negotiable
   needs one. Every channel the app would normally reach for to report a failure travels over the
   socket that just died: `notificationService` is a network object, so toasts are unavailable;
   `sendCommand` needs the same connection to reach main; `useLocalizedStrings`
@@ -750,7 +750,7 @@ step, no automation. Just a record.
     as the dock (`overlay-connection-lost.component.tsx`, `tw:fixed tw:inset-0` at
     `Z_INDEX_CONNECTION_LOST`). Every toolbar control — project selector, reference, sync, menus —
     reaches the rest of the app over the same dead socket, so leaving the toolbar clickable would
-    leave the exact silent failure NN-6 exists to end: controls that look live but do nothing.
+    leave the exact silent failure the "app never dies silently" non-negotiable exists to end: controls that look live but do nothing.
   - **Keyboard gate:** a scrim stops pointers only, so the state is a Radix modal `Dialog` with
     `role="alertdialog"`, following the `FirstRunOverlay` precedent. Radix's `FocusScope` supplies
     the trap and focuses Reload on open. Without the gate, Tab off Reload reaches the toolbar and
@@ -3534,7 +3534,7 @@ step, no automation. Just a record.
   entry restores first. But the quit decision was still `window-all-closed`, a pure
   window count that keyed on nothing. Closing the primary window while a secondary was open left
   the app running on the secondary and spliced the primary's entry out of the persisted
-  structure, so the user's main layout did not return next launch — the NN-6 hole PT-4286's
+  structure, so the user's main layout did not return next launch — the hole in the multi-window "each window's contents and location persist across restarts" non-negotiable that PT-4286's
   window-close rule closes. Paratext 9 has the same shape: closing the main form closes
   everything, floating windows close alone.
 - **Decision:** The primary role becomes load-bearing for the application's lifetime, and stays a
@@ -3894,7 +3894,7 @@ step, no automation. Just a record.
 - **Consequences (severity, and what stays deferred):** Severity is split by whether a closing handshake completed, which is the transport's own verdict — but no peer closes politely today, so on the way down every socket dies with 1006. Main's server is still listening while the extension host calls `process.exit()` (`src/extension-host/extension-host.ts`) and each renderer process is torn down; `networkService.shutdown()` runs afterwards (`src/main/main.ts`). Reporting those at `warn` would fire on every quit and bury the signal. Main therefore asks `isAppShuttingDown()` (`src/main/services/shutdown-latch.service.ts`) and reports a handshake-less close at `info`, annotated `expected during app shutdown`, while the app is coming down. Two things follow. (a) A residual: one window closing out of several is not an app shutdown, so that renderer's socket death still reports at `warn`. Attributing it would need the socket-to-window mapping main does not have; the announced peer name (see below) is the first half of that. (b) The polite-close path stays unbuilt on purpose. `INTENTIONAL_CLOSE_CODE` (4000) is unreachable from every peer: `RpcClient.disconnect()` has no client-side caller, because `IRpcHandler.disconnect` is reached only from `networkService.shutdown()`, which runs in main where the handler is an `RpcWebSocketListener`; and `RpcServer.disconnect()` has no caller at all, because `RpcWebSocketListener.disconnect()` closes the WebSocket server without iterating its `RpcServer`s — leaving `IRpcHandler.disconnect`'s documented "on servers: disconnects from all clients" unmet. Both are recorded as `TODO(PT-4435)` at their definitions. Making peers close politely changes what shutdown does to live sockets, which belongs with the reconnect/teardown work rather than with instrumentation.
 - **Consequences (a fourth reconnect blocker, outside the tests):** Beyond the three `AsyncVariable` blockers above, the renderer cannot reconnect at all: `blockWebSocketsToPapiNetwork()` runs at `src/renderer/index.tsx` AFTER the initial connect, so a later attempt throws `Invalid URL` from `PapiRendererWebSocket`'s constructor and never reaches the `AsyncVariable` problems. It is invisible to `rpc-client.reconnect-gaps.test.ts`, which mocks the socket factory — so unlike the other three it is recorded only as a `TODO(PT-4435)` comment, with no test pinning it.
 - **Consequences (two of three peers, not three):** "Diagnosable from the log" holds for the renderer and the extension host. The .NET data provider is outside this scheme: `c-sharp/PapiClient.cs` logs `JSONRPC disconnected: Reason = …` with no close code and no clean/abnormal classification, and the only close-status handling anywhere in `c-sharp/` is the `NormalClosure` it sends — which lands on `isCleanCloseCode`'s clean list by coincidence rather than by contract. Not urgent (the .NET socket survives a suspend, per the evidence above), but a third peer disconnecting is currently less diagnosable than the two this work covers.
-- **Consequences (the `shutdown` power marker costs a Linux inhibitor):** `POWER_EVENTS` registers Electron's `shutdown` listener, which is what separates "the OS took the app down" from "the app died" in a log that simply stops — the NN-6 distinction. Subscribing to it makes Electron hold a logind shutdown-delay inhibitor for the session on Linux. Nothing is actually delayed: the handler only logs and never calls `preventDefault()`, so the OS proceeds on its own schedule. The marker is judged worth that, since without it an OS-initiated shutdown is indistinguishable from a crash. Revisit if the inhibitor is ever observed to change shutdown behavior on a supported Linux target.
+- **Consequences (the `shutdown` power marker costs a Linux inhibitor):** `POWER_EVENTS` registers Electron's `shutdown` listener, which is what separates "the OS took the app down" from "the app died" in a log that simply stops — the distinction the "app never dies silently" non-negotiable depends on. Subscribing to it makes Electron hold a logind shutdown-delay inhibitor for the session on Linux. Nothing is actually delayed: the handler only logs and never calls `preventDefault()`, so the OS proceeds on its own schedule. The marker is judged worth that, since without it an OS-initiated shutdown is indistinguishable from a crash. Revisit if the inhibitor is ever observed to change shutdown behavior on a supported Linux target.
 - **Consequences (the shutdown signal is injected, not imported):** `RpcServer` reads whether the app is coming down through `setAppShutdownSignal`, wired from `src/main/main.ts`, rather than importing `shutdown-latch.service` directly. Every module `rpc-server` imports is reachable from `papi.d.ts`'s entry points, so the direct import published the shutdown latch and the window-state service it depends on — `resetForTesting()` included — as extension-facing API on the generated surface and the TypeDoc site. Any future main-process-only state a shared or client-reachable module needs should come in through the same kind of seam.
 - **Source:** PT-4434; diagnosed on macOS 2026-08-26. Reviewed in PR #2731, which is where the severity, unreachable-4000 and third-peer consequences above were established.
 
@@ -5122,7 +5122,7 @@ step, no automation. Just a record.
 - **Formerly:** ADR-0024
 - **Date:** 2026-08-17
 - **Status:** Accepted
-- **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
+- **Context:** PT-4336's non-negotiable asks for "a single, truthful Send/Receive or Sync notification at a time" that can be cancelled with a single click. Two
   obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
   `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that
   updates on its own schedule — alongside the button, which is exactly the "two messages that seem to
@@ -5142,10 +5142,10 @@ step, no automation. Just a record.
   copy so core merges independently of the upstream release. Absent field ⇒ a bare "Syncing" that
   names no project.
 - **Alternatives:** **Read `lastRequestedProjectIds` during a sync** (the ticket as written) —
-  rejected: names the wrong projects, which is the specific failure NN-4 exists to fix. **Derive names
+  rejected: names the wrong projects, which is the specific failure that non-negotiable exists to fix. **Derive names
   from `onSyncProgress.progressText`** — rejected: it carries the current *item*, not the set, and for
   indeterminate progress it is a full localized sentence, so the label's meaning would change shape
-  mid-sync. **Ship without names** — viable and fully truthful, but misses the NN's explicit "shows
+  mid-sync. **Ship without names** — viable and fully truthful, but misses the non-negotiable's explicit "shows
   which project(s) are syncing". **Declare `syncingProjectIds` required in core** — rejected: it would
   make core's types lie for any Studio build predating the upstream change.
 - **Consequences:** Core now ships a type declaration for a field that only exists once the companion
@@ -5158,12 +5158,12 @@ step, no automation. Just a record.
   `runScheduledSessionSync`. That holds for Power mode only. In Simple mode — the only mode this
   button renders in — `main/startup-tasks.ts` calls the dotnet `syncProjects` command directly, and
   the picker's `syncOnProjectSwitch` (`platform-scripture-editor`) does the same, so neither raises a
-  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: NN-4's "status is
+  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: the non-negotiable's "status is
   correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
   still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
   claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
   changes to sync behavior rather than to how status is reported. Of the four richer UX
-  states in the NN-4 design, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
+  states in the Send/Receive indicator design, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
   deferred and marked as such in `sync-status-button.component.tsx`: none is derivable from what
   Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this work
   removes. Sync FAILURE is the exception and IS reported, because it is derivable: the snapshot's
@@ -5211,7 +5211,7 @@ step, no automation. Just a record.
   specifically the **Simple-mode overlap**, not the toast's existence. Note also that suppressing the
   toast is only wired for `sendReceiveProjects`; `syncProjects` has no such parameter, so quieting the
   scheduled path needs a C# change in Studio's patch plus a contract addition in both copies of the
-  Send/Receive declaration. NN-4's "a single, truthful notification" is therefore not achieved in the
+  Send/Receive declaration. The non-negotiable's "a single, truthful notification" is therefore not achieved in the
   shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
   this component.
   One more consequence of the status resting on `resultStatus`: the green check is decided by the
@@ -5241,7 +5241,7 @@ step, no automation. Just a record.
   deliberately out of this decision's scope and will not happen on their own.
   1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's
      `syncOnProjectSwitch` through a claiming wrapper, or land upstream PT-4214. Owner: core.
-  2. *Achieve NN-4's "single, truthful notification"* — suppress the C# toast on the paths this
+  2. *Achieve the "single, truthful notification" non-negotiable* — suppress the C# toast on the paths this
      button covers. Needs a `suppressNotification` parameter on `syncProjects` in Studio's
      `repo-patches/paranext-core.patch`, plus the matching contract addition in BOTH copies of the
      Send/Receive declaration. Owner: whoever owns Studio's patch — this cannot be done from core.
@@ -5268,7 +5268,7 @@ step, no automation. Just a record.
      the state controller also covers `runScheduledSessionSync` and the auto-sync engine. Under the
      new semantics a background sync raises the interactive "Apply now" prompt to someone who took no
      action. This decision establishes the contradiction rather than causing it. Owner: core.
-- **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
+- **Source:** PT-4348, under PT-4336's "single, truthful notification" non-negotiable; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
 ## adr-tour-offered-in-both-modes: Offer the orientation tour in both interface modes, letting the anchor filter decide what each mode sees
@@ -5362,7 +5362,7 @@ step, no automation. Just a record.
 - **Date:** 2026-08-27
 - **Status:** Accepted
 - **Context:** A React render throw inside a web view left the pane blank with nothing actionable in
-  the log — the symptom behind NN-1 "Editor never blanks out" (PT-4422, and PT-3594/PT-3776 before
+  the log — the symptom behind the "Editor never blanks out" non-negotiable (PT-4422, and PT-3594/PT-3776 before
   it). The app had **no** error boundary anywhere in `src/` or `extensions/src/`; the only one in the
   tree was Lexical's internal `LexicalErrorBoundary`. Web views are real iframes with their own
   React root, so a boundary placed anywhere in the renderer's component tree cannot catch a web
