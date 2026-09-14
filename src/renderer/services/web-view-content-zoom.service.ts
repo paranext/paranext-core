@@ -877,8 +877,20 @@ export async function getInitialContentZoomForWebView(
   return { defaultZoom: await getDefaultZoom(), levels };
 }
 
+/**
+ * One pane's push failing — a thrown definition read, or a detached iframe — must not stop the
+ * panes after it in the loop from picking up the changed default.
+ */
 function repushAllPanes(): void {
-  deps.getAllOpenDefinitions().forEach((definition) => pushContentZoom(definition.id));
+  deps.getAllOpenDefinitions().forEach((definition) => {
+    try {
+      pushContentZoom(definition.id);
+    } catch (e) {
+      logger.warn(
+        `Content zoom: could not re-push web view ${definition.id}. ${getErrorMessage(e)}`,
+      );
+    }
+  });
 }
 
 /**
