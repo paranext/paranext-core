@@ -13,7 +13,6 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  Z_INDEX_ABOVE_POPOVER,
 } from 'platform-bible-react';
 import { WordRestriction } from 'platform-scripture';
 import { SearchTextType } from './find-types';
@@ -70,14 +69,6 @@ const ANY_TEXT_DESCRIPTION_ID = 'searchTextType-all-description';
  * `aria-describedby` so both explanations reach a screen reader the same way.
  */
 const IGNORE_WHITESPACE_DESCRIPTION_ID = 'ignoreWhitespaceDifferences-description';
-
-/**
- * The panel is portalled with a z-index above the tooltip layer, and each tooltip is portalled
- * separately beside it, so a tooltip at its default layer renders behind the panel it sits inside.
- */
-// TODO(PT-4345): Remove once tooltips layer above popovers on the shared scale; this local
-// override only exists to lift these two past the panel until then.
-const EXPLANATION_TOOLTIP_STYLE = { zIndex: Z_INDEX_ABOVE_POPOVER };
 
 export function FindFilters({
   areFiltersActive,
@@ -203,7 +194,7 @@ export function FindFilters({
                           className="tw:h-3.5 tw:w-3.5 tw:cursor-help tw:text-muted-foreground"
                         />
                       </TooltipTrigger>
-                      <TooltipContent style={EXPLANATION_TOOLTIP_STYLE}>
+                      <TooltipContent>
                         <p className="tw:max-w-xs">{localizedStrings.allTextTooltip}</p>
                       </TooltipContent>
                     </Tooltip>
@@ -298,7 +289,7 @@ export function FindFilters({
                     className="tw:h-3.5 tw:w-3.5 tw:cursor-help tw:text-muted-foreground"
                   />
                 </TooltipTrigger>
-                <TooltipContent style={EXPLANATION_TOOLTIP_STYLE}>
+                <TooltipContent>
                   <p className="tw:max-w-xs">
                     {localizedStrings.ignoreWhitespaceDifferencesTooltip}
                   </p>
