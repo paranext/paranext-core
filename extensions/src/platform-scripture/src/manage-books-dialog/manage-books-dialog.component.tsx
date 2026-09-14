@@ -52,6 +52,7 @@ import {
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
+import { makeProjectSelectorCustomData } from 'platform-bible-utils';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   BookGridGroupBy,
@@ -488,6 +489,53 @@ const toProjectBookState = (books: ManageBooksDialogBookInfo[] | undefined): Pro
   return { present, dates };
 };
 
+/**
+ * The grouping ids the Copy "From" picker offers, in `makeBuiltInGroupings` order. Narrower than
+ * the `projectSelectorGroupings` the wiring layer hands the dialog, which the sidebar picker uses
+ * in full.
+ *
+ * `lastUsed` is left out: recency lives in the wiring layer's recents subscription, and threading
+ * it onto the dialog's project list would re-fetch that whole list every time the recents order
+ * changed while the dialog was open. Offering the grouping without the data would put every project
+ * under a single "Other" bucket.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toCopyFromSelectorRows} actually packs, so adding an id here without adding
+ * its data is a build failure rather than a dead menu item.
+ */
+export const MANAGE_BOOKS_COPY_FROM_GROUPING_IDS: readonly string[] = ['openTabs', 'type'];
+
+/**
+ * Maps the dialog's project list onto Copy "From" picker rows, packing the grouping inputs into
+ * `customData`. Exported for coverage tests.
+ *
+ * Resources are excluded for licensing reasons — copying text OUT of a published resource into a
+ * project is not permitted (PT9 parity: `CopyBooksForm` only lists `IsNonProtectedText()` sources).
+ * Read-only non-resource projects remain valid copy sources. Contrast the Create "Based on" picker,
+ * which deliberately INCLUDES resources: it only reads the reference's book/chapter structure to
+ * scaffold empty books, and copies no text (PT9 parity: `CreateBooksForm`'s model combobox lists
+ * all accessible scripture texts including resources).
+ */
+export function toCopyFromSelectorRows(
+  projects: readonly ManageBooksDialogProject[],
+): ProjectSelectorProject[] {
+  return projects
+    .filter((project) => !project.isResource)
+    .map((project) => ({
+      id: project.id,
+      shortName: project.shortName,
+      fullName: project.fullName ?? project.shortName,
+      customData: makeProjectSelectorCustomData({
+        type: project.type,
+        typeName: project.typeName,
+      }),
+    }));
+}
+
 // --------------------------------------------------------------------------
 // Component
 // --------------------------------------------------------------------------
@@ -815,25 +863,18 @@ export function ManageBooksDialog({
       })),
     [otherProjects, t],
   );
-  // The Copy "From" picker excludes resources for licensing reasons — copying
-  // text OUT of a published resource into a project is not permitted (PT9
-  // parity: CopyBooksForm only lists IsNonProtectedText() sources). Read-only
-  // non-resource projects remain valid copy sources.
-  //
-  // The Create "Based on" picker deliberately INCLUDES resources: it only
-  // reads the reference's book/chapter structure to scaffold empty books, no
-  // text is copied (PT9 parity: CreateBooksForm's model combobox lists all
-  // accessible scripture texts including resources).
   const copyFromProjectsAsPS = useMemo<ProjectSelectorProject[]>(
-    () =>
-      otherProjects
-        .filter((p) => !p.isResource)
-        .map((p) => ({
-          id: p.id,
-          shortName: p.shortName,
-          fullName: p.fullName ?? p.shortName,
-        })),
+    () => toCopyFromSelectorRows(otherProjects),
     [otherProjects],
+  );
+  // The Copy "From" picker offers a narrower set than the sidebar: see
+  // MANAGE_BOOKS_COPY_FROM_GROUPING_IDS for which ids and why.
+  const copyFromGroupings = useMemo<ProjectSelectorGrouping[] | undefined>(
+    () =>
+      projectSelectorGroupings?.filter((grouping) =>
+        MANAGE_BOOKS_COPY_FROM_GROUPING_IDS.includes(grouping.id),
+      ),
+    [projectSelectorGroupings],
   );
   // Custom grouping for the Create "Based on" picker: bucket by `versificationId` (lifted from
   // `customData`), display the localized `versificationName` as the section heading, and pin the
@@ -2313,7 +2354,7 @@ export function ManageBooksDialog({
                               'Select project',
                             ),
                           }}
-                          availableGroupings={projectSelectorGroupings}
+                          availableGroupings={copyFromGroupings}
                           // Mirror the prior <SelectTrigger> "primary fill while empty" affordance
                           // — the picker reads as a call-to-action until a source project is set.
                           buttonVariant={copySourceId ? 'outline' : 'default'}

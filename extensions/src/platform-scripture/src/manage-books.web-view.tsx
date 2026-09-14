@@ -855,6 +855,11 @@ global.webViewComponent = function ManageBooksWebView({
         // versification grouping. The localized name is resolved on the dialog side (it owns the
         // localizedStrings → versificationLabelKey map); here we forward the raw id.
         versificationId: p.versification,
+        // Project type for the Copy "From" picker's type grouping. Already on this same wire
+        // response, so it adds no round-trip. There is no localized display name on the wire, so
+        // the raw key doubles as the section heading.
+        type: p.projectType,
+        typeName: p.projectType,
       }));
     } catch (e) {
       logger.warn(

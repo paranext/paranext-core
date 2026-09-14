@@ -15,6 +15,10 @@ import {
 } from './checklist.web-view';
 import { FIND_PROJECT_SELECTOR_GROUPING_IDS, toFindSelectorRows } from './find/find.component';
 import {
+  MANAGE_BOOKS_COPY_FROM_GROUPING_IDS,
+  toCopyFromSelectorRows,
+} from './manage-books-dialog/manage-books-dialog.component';
+import {
   MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS,
   toManageBooksSelectorRows,
 } from './manage-books.web-view';
@@ -112,6 +116,24 @@ const SURFACES: readonly Surface[] = [
       // ever been opened.
       recencyMapFromOrderedIds(['a'].map(normalizeProjectId)),
     ),
+  },
+  {
+    name: 'manage-books-copy-from',
+    groupingIds: MANAGE_BOOKS_COPY_FROM_GROUPING_IDS,
+    rows: toCopyFromSelectorRows([
+      { id: 'a', shortName: 'A', name: 'A', fullName: 'Project A', type: 'Standard' },
+      { id: 'b', shortName: 'B', name: 'B', fullName: 'Project B', type: 'BackTranslation' },
+      // Resources are not copy sources, so the builder drops them; they must not be the only rows
+      // carrying a type, or the fixture would pass on data the picker never shows.
+      {
+        id: 'r',
+        shortName: 'R',
+        name: 'R',
+        fullName: 'Resource R',
+        isResource: true,
+        type: 'Resource',
+      },
+    ]),
   },
 ];
 

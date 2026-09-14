@@ -103,6 +103,17 @@ export type ManageBooksDialogProject = {
    * surfaced as the section header in versification-grouping mode.
    */
   versificationName?: string;
+  /**
+   * Locale-stable project-type key (the PT9 `ProjectType` enum value, e.g. "Standard"). Forwarded
+   * to the Copy "From" `<ProjectSelector>` so it can group projects by type. Arrives on the same
+   * project-list round-trip as the rest of this shape, so it costs no extra fetch.
+   */
+  type?: string;
+  /**
+   * Friendlier display name for {@link type}, used as the section heading. Falls back to the raw
+   * `type` key when absent.
+   */
+  typeName?: string;
 };
 
 /**
