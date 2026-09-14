@@ -13,7 +13,14 @@ import { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
 import { isValidContentZoomAreaId, isValidZoomFactor } from '@shared/utils/content-zoom.util';
 
 const INDICATOR_ID = 'platform-content-zoom-indicator';
+/** Id of the live region the indicator announces through, separate from the visible badge. */
+const INDICATOR_STATUS_ID = 'platform-content-zoom-indicator-status';
 const INDICATOR_VISIBLE_MS = 1100;
+/**
+ * Quiet time before the indicator's settled level reaches the live region: long enough that one
+ * wheel gesture announces once, short enough to land well inside {@link INDICATOR_VISIBLE_MS}.
+ */
+const INDICATOR_ANNOUNCE_QUIET_MS = 500;
 
 /**
  * The rule that scales one zoom area: its own variable, else the default. The `main` area's rule
@@ -195,6 +202,8 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     };
     let observer;
     const start = () => {
+      // Ahead of the observer, so the two nodes it appends are not themselves a mutation to scan.
+      ensureIndicatorElements();
       seedRuled();
       // Observing before the first scan is what makes the retry above reachable: a throw out of that
       // scan then still leaves the view watching for the DOM change that tries again.
@@ -314,19 +323,44 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         : { top: topOffset, right: Math.max(0, window.innerWidth - right) + 16, rtl };
     };
     let hideTimer;
-    const showIndicator = (areaId, text) => {
-      let badge = document.getElementById('${INDICATOR_ID}');
-      if (!badge) {
+    let announceTimer;
+    let badge;
+    let liveRegion;
+    // Both nodes exist, and the live region is empty, from the moment the view's DOM is ready: a
+    // live region that arrives in the same task as its first text is not announced at all by
+    // Chromium with NVDA or JAWS, so the region has to be in the accessibility tree before any zoom
+    // writes into it. Idempotent, and called from showIndicator as well as from start(), so a view
+    // that replaces the body's children gets the nodes back.
+    const ensureIndicatorElements = () => {
+      if (!document.body) return;
+      if (!badge || !document.body.contains(badge)) {
         badge = document.createElement('div');
         badge.id = '${INDICATOR_ID}';
-        badge.setAttribute('role', 'status');
-        badge.setAttribute('aria-live', 'polite');
-        badge.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;' +
+        // The visible badge is not the live region: its text is rewritten on every wheel notch.
+        // It starts transparent at the fallback corner, so the first show places it rather than it
+        // appearing at the flow position.
+        badge.setAttribute('aria-hidden', 'true');
+        badge.style.cssText = 'position:fixed;top:12px;right:16px;z-index:2147483647;pointer-events:none;' +
           'padding:4px 10px;border-radius:6px;font:600 13px/1.4 system-ui,sans-serif;' +
           'background:var(--popover,#1c2321);color:var(--popover-foreground,#fff);' +
-          'box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:1';
+          'box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:0';
         document.body.appendChild(badge);
       }
+      if (!liveRegion || !document.body.contains(liveRegion)) {
+        liveRegion = document.createElement('div');
+        liveRegion.id = '${INDICATOR_STATUS_ID}';
+        liveRegion.setAttribute('role', 'status');
+        liveRegion.setAttribute('aria-live', 'polite');
+        // Visually hidden rather than display:none or visibility:hidden, either of which would take
+        // the region out of the accessibility tree along with its announcement.
+        liveRegion.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;' +
+          'clip:rect(0,0,0,0);white-space:nowrap';
+        document.body.appendChild(liveRegion);
+      }
+    };
+    const showIndicator = (areaId, text) => {
+      ensureIndicatorElements();
+      if (!badge) return;
       const corner = cornerOf(areaId);
       badge.style.top = corner.top + 'px';
       if (corner.rtl) {
@@ -345,9 +379,20 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       badge.style.transition = reduce ? 'none' : 'opacity .25s ease';
       badge.style.opacity = '1';
+      // The badge shows every step of a gesture; the live region only the value it settles on, so
+      // one wheel sweep is one announcement rather than one per notch.
+      if (announceTimer) clearTimeout(announceTimer);
+      announceTimer = setTimeout(() => {
+        announceTimer = undefined;
+        if (liveRegion) liveRegion.textContent = text;
+      }, ${INDICATOR_ANNOUNCE_QUIET_MS});
       if (hideTimer) clearTimeout(hideTimer);
       hideTimer = setTimeout(() => {
-        badge.style.opacity = '0';
+        hideTimer = undefined;
+        if (badge) badge.style.opacity = '0';
+        // A faded badge is still reachable by a screen reader's browse cursor, so the level leaves
+        // the accessibility tree with the fade while the region keeps its place in it.
+        if (liveRegion) liveRegion.textContent = '';
       }, ${INDICATOR_VISIBLE_MS});
     };
     // Unwinds everything this bootstrap put outside its own closure, so a host that replaces the
@@ -361,8 +406,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (wheelListening) { window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS); wheelListening = false; }
       if (observer) { observer.disconnect(); observer = undefined; }
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = undefined; }
-      const badge = document.getElementById('${INDICATOR_ID}');
+      if (announceTimer) { clearTimeout(announceTimer); announceTimer = undefined; }
       if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
+      if (liveRegion && liveRegion.parentNode) liveRegion.parentNode.removeChild(liveRegion);
+      badge = undefined;
+      liveRegion = undefined;
       if (window.__platformContentZoom === api) window.__platformContentZoom = undefined;
     };
     const api = { showIndicator, destroy, get activeArea() { return activeArea; } };
