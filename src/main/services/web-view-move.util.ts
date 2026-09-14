@@ -149,10 +149,10 @@ function raiseMoveTarget(target: MoveWebViewTarget, isUserRequested: boolean): v
     // The user's declared intent overrides whatever withholding decision the platform made for
     // this window, so that decision must be revoked before the raise, not left for the focus
     // handler to (fail to) sort out — see the docblock above.
-    // Unlike the two sites in `main.ts`, which clear on a confirmed activation, this clear is
-    // speculative: it happens before the OS is asked. A raise the OS refuses leaves the window
-    // backgrounded but no longer withheld, so a later open that predicts no raise of its own can
-    // take latent document focus there with no catch-up note. See PT-4573.
+    // Unlike the clear in `main.ts`'s window `focus` handler, which follows a confirmed activation,
+    // this clear is speculative: it happens before the OS is asked. A raise the OS refuses leaves
+    // the window backgrounded but no longer withheld, so a later open that predicts no raise of its
+    // own can take latent document focus there with no catch-up note. See PT-4573.
     if (isUserRequested) forgetWindowWithholding(target.windowId);
     focusWindow(target.windowId);
   }
