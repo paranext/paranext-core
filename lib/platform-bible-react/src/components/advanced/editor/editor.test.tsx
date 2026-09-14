@@ -31,10 +31,10 @@ test('renders the actions slot inside the bordered box, after the content area',
   // Inside the bordered box, so it reads as part of the editor rather than a detached row.
   expect(box?.contains(actions)).toBe(true);
   // After the content area, so tab order runs text -> actions with no tabIndex juggling.
-  const position = contentEditable.compareDocumentPosition(actions);
-  // compareDocumentPosition returns a bitmask; testing the FOLLOWING bit has no non-bitwise form.
-  // eslint-disable-next-line no-bitwise
-  expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // The two elements are siblings under the editor box — neither contains the other — so the
+  // bitmask carries exactly one bit. Asserting equality rather than masking also pins that: a
+  // future nesting change that made one contain the other would set additional bits and fail here.
+  expect(contentEditable.compareDocumentPosition(actions)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 });
 
 test('renders no actions container when no actions are passed', () => {
