@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import React from 'react';
+import type { ComponentProps } from 'react';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { CommentThread } from './comment-thread.component';
@@ -112,6 +112,18 @@ const defaultProps = {
   assignableUsers: ['Alice', 'Bob', 'Current User'],
   handleSelectThread: vi.fn(),
 };
+
+// A read, non-resolved thread: the case whose surface is `bg-card`, distinct from the unread
+// (`bg-accent`) and resolved (`bg-muted`) cases the selection-styling test below isn't about.
+const baseThreadProps = { ...defaultProps, isRead: true };
+
+function threadElement(overrides: Partial<ComponentProps<typeof CommentThread>>) {
+  return <CommentThread {...baseThreadProps} {...overrides} />;
+}
+
+function renderThread(overrides: Partial<ComponentProps<typeof CommentThread>>) {
+  return render(threadElement(overrides));
+}
 
 describe('CommentThread assignee state machine', () => {
   beforeEach(() => {
@@ -301,20 +313,8 @@ describe('CommentThread DOM id', () => {
   });
 });
 
-// A read, non-resolved thread: the case whose surface is `bg-card`, distinct from the unread
-// (`bg-accent`) and resolved (`bg-muted`) cases the selection-styling test below isn't about.
-const baseThreadProps = { ...defaultProps, isRead: true };
-
-function threadElement(overrides: Partial<React.ComponentProps<typeof CommentThread>>) {
-  return <CommentThread {...baseThreadProps} {...overrides} />;
-}
-
-function renderThread(overrides: Partial<React.ComponentProps<typeof CommentThread>>) {
-  return render(threadElement(overrides));
-}
-
 describe('CommentThread selection styling', () => {
-  test('the selected thread carries the leading bar and every card uses the card surface', () => {
+  it('the selected thread carries the leading bar and every card uses the card surface', () => {
     const { rerender } = renderThread({ isSelected: false });
 
     const unselected = screen.getByRole('option');
@@ -330,5 +330,11 @@ describe('CommentThread selection styling', () => {
     const selected = screen.getByRole('option');
     expect(selected.className).toMatch(/\bborder-foreground\b/);
     expect(selected.className).not.toMatch(/\bborder-transparent\b/);
+
+    // The structural invariant: selection must not change ANY background-channel class, not just
+    // the one token being removed from it. Catches a regression to e.g. `bg-background` or
+    // `bg-secondary`, which the narrower token-specific check above would miss.
+    const bgClasses = (el: Element) => (el.className.match(/\btw:bg-[\w-]+/g) ?? []).sort();
+    expect(bgClasses(selected)).toEqual(bgClasses(unselected));
   });
 });
