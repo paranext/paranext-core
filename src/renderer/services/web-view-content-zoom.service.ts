@@ -747,30 +747,40 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
 }
 
 /**
- * Writes a pane's pending levels into its definition state; an empty map is removed entirely. A
- * write that throws is logged and reported as `false` rather than left to propagate: this runs from
- * a burst's debounce timer and from the `beforeunload` flush, where a throw would either have no
- * handler at all or would stop the memory flush that runs right after it.
+ * Writes a pane's pending levels into its definition state; an empty map is removed entirely.
+ *
+ * The levels stay pending until a write lands, so a write that did not land is tried again — by the
+ * next edit of the pane, by the sibling sync, or by the unload flush — rather than being dropped
+ * with the level the user chose. {@link effectiveOwnLevels} reads them meanwhile, so the pane goes
+ * on showing that level while its definition lags behind it.
+ *
+ * A write that throws is logged and reported as `false` rather than left to propagate: this runs
+ * from a burst's debounce timer and from the `beforeunload` flush, where a throw would either have
+ * no handler at all or would stop the memory flush that runs right after it.
  */
 function commitOwnLevels(webViewId: WebViewId): boolean {
   const levels = pendingOwnLevels.get(webViewId);
   if (!levels) return true;
   const definition = deps.getDefinition(webViewId);
-  // The levels stop being pending either way, including if the write below throws: they are then
-  // stored, or the write did not land and a read has to go back to what the definition holds.
-  pendingOwnLevels.delete(webViewId);
-  if (!definition) return false;
+  if (!definition) {
+    // The pane is gone, so there is no definition left to write the levels into and no later
+    // attempt that could find one; keeping them pending would only hold a closed pane's entry.
+    pendingOwnLevels.delete(webViewId);
+    return false;
+  }
   const state: Record<string, unknown> = { ...(definition.state ?? {}) };
   if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
   else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
   try {
-    return deps.updateDefinition(webViewId, { state });
+    if (!deps.updateDefinition(webViewId, { state })) return false;
   } catch (e) {
     logger.warn(
       `Content zoom: could not store the levels of web view ${webViewId}. ${getErrorMessage(e)}`,
     );
     return false;
   }
+  pendingOwnLevels.delete(webViewId);
+  return true;
 }
 
 /**
@@ -954,7 +964,10 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       else levels[areaId] = remembered;
       changed = true;
     });
-    if (!changed) return;
+    // A pane whose levels have not reached its definition yet is written even when this delta asks
+    // for nothing new: those levels are what the pane shows and they still owe a write, so the
+    // change that memory delivers next is also this pane's next chance to store them.
+    if (!changed && !pendingOwnLevels.has(definition.id)) return;
     if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
     else everyPaneTookItsUpdate = false;
   });
