@@ -315,6 +315,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     useWebViewState,
     resourceProjectId ? [resourceProjectId] : [],
     canPublishResourcePanelProjectIds(effectiveResourcesState, isCatalogReady, arePanelRowsReady),
+    // These panels are re-pointed by reloading them, which reuses the web view id, so the
+    // published list must be scoped to the project it was built for.
+    projectId,
   );
 
   // #endregion

@@ -326,6 +326,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     useWebViewState,
     displayedProjectIds,
     sources !== undefined && !isLoadingCachedResources,
+    // A project switch re-points this panel by reloading it, which reuses the web view id, so the
+    // published list would otherwise outlive the project it was built for.
+    effectiveProjectId,
   );
 
   // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
