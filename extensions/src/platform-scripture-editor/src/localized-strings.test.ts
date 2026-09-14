@@ -301,3 +301,21 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
+
+// The notice shown when the editor's chapter marker disagreed with the chapter it belongs to and
+// was put back. Its message names the project through a placeholder, so that slot has to survive
+// any later edit to the string — without it the toast says a correction happened but not which
+// project it happened in. English only: like the `%versionHistoryCommit_*%` keys above, this string
+// ships ahead of its translation, so no `es` parity is asserted here.
+describe('chapter marker correction notification', () => {
+  const chapterMarkerCorrectedKey =
+    '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%';
+
+  it('has an English message', () => {
+    expect(localizedStrings.en[chapterMarkerCorrectedKey]).toBeTruthy();
+  });
+
+  it('keeps the {projectName} slot', () => {
+    expect(localizedStrings.en[chapterMarkerCorrectedKey]).toContain('{projectName}');
+  });
+});

@@ -135,7 +135,8 @@ import {
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
-import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
+import { performDebouncedPdpSave } from './debounced-pdp-save.util';
+import { prepareUsjForChapterSave } from './chapter-marker-repair.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
@@ -258,6 +259,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%versionHistoryCommit_beforeInsertCrossReference%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
+  '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
   '%webView_platformScriptureEditor_error_permissions_format%',
   // The one listing of this key. Named via the const so the sync-blocked message, its severity, and
   // its self-catching stay in one place (`editor-side-effects.utils.ts`) — the character-marker
@@ -383,6 +385,10 @@ const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
 // Sentinel appended by the backend write-gate (SendReceiveWriteLock in paranext-core's c-sharp)
 // when a project write is rejected because an automatic Send/Receive is syncing that project.
 const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
+
+/** Notification id for the chapter-marker correction, so repeats update one toast. */
+const CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID =
+  'platform-scripture-editor-chapter-marker-corrected';
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
@@ -1277,6 +1283,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         severity: 'warning',
       }),
     [],
+  );
+
+  /**
+   * Tell the user the chapter marker in the document they are editing did not match the chapter it
+   * belongs to and was put back. A stable id so the repeated saves of a long edit update one toast
+   * rather than stacking.
+   */
+  const notifyChapterMarkerCorrected = useCallback(
+    () =>
+      papi.notifications
+        .send({
+          notificationId: CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID,
+          message: formatReplacementString(
+            localizedStrings[
+              '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%'
+            ],
+            { projectName },
+          ),
+          severity: 'warning',
+        })
+        .catch((error) => {
+          logger.warn(
+            `Error notifying about a corrected chapter marker: ${getErrorMessage(error)}`,
+          );
+        }),
+    [localizedStrings, projectName],
   );
 
   /**
@@ -2671,6 +2703,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.selectNote(index);
   }, []);
 
+  // The chapter currently loaded, kept in a ref so the debounced save's fire (below) can compare
+  // the chapter active NOW against the chapter a pending save was scheduled for (see
+  // `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an effect —
+  // so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it already
+  // reflects the NEW chapter and the guard sees the mismatch.
+  const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum, scrRef.versificationStr);
+  const chapterKeyRef = useRef(chapterKey);
+  chapterKeyRef.current = chapterKey;
+
   // #region PDP Save Write Path
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP. Resolves `true`
@@ -2678,6 +2719,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * in `useEditorPdpSync` records a push only on that confirmation, so a dropped save is never
    * misremembered as content that left the editor. */
   const saveUsjToPdpIfUpdated = useMemo(() => {
+    // The chapter this closure writes through. Captured rather than read live: a pending trailing
+    // save can fire after the user has navigated away, through the closure captured at schedule
+    // time, and the repair must be computed against the chapter the content was typed in.
+    const savedChapterSelector = chapterUsjSelector;
+    const savedChapterKey = getChapterKey(
+      savedChapterSelector.book,
+      savedChapterSelector.chapterNum,
+      savedChapterSelector.versificationStr,
+    );
+
     function saveUsjToPdpIfUpdatedInternal(
       usjFromEditor = editorRef.current?.getUsj(),
     ): Promise<boolean> {
@@ -2685,7 +2736,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // An open command surface's in-progress input is excluded by the editor itself
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
-      const usjToSave = resolveUsjToSaveToPdp(correctEditorUsjVersion(usjFromEditor), usjFromPdp);
+      const { repairedUsj, usjToSave } = prepareUsjForChapterSave(
+        correctEditorUsjVersion(usjFromEditor),
+        usjFromPdp,
+        savedChapterSelector.chapterNum,
+      );
+
+      if (repairedUsj) {
+        // The repaired document has to reach the editor too, or the bad marker stays on screen and
+        // every later save repairs and re-reports it forever. Only when this save targets the
+        // chapter still on screen: a cross-chapter flush runs through the CAPTURED chapter's
+        // closure, and the editor has already moved on to different content.
+        if (savedChapterKey === chapterKeyRef.current) {
+          usjSentToPdp.current = repairedUsj;
+          setEditorUsj.current(repairedUsj);
+        }
+        notifyChapterMarkerCorrected();
+      }
+
       if (usjToSave) return saveUsjToPdpInternal(usjToSave);
       return Promise.resolve(false);
     }
@@ -2841,7 +2909,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [usjFromPdp, projectName, localizedStrings, projectId, notifySyncEditBlocked]);
+  }, [
+    usjFromPdp,
+    projectName,
+    localizedStrings,
+    projectId,
+    notifySyncEditBlocked,
+    chapterUsjSelector,
+    notifyChapterMarkerCorrected,
+  ]);
 
   // #endregion PDP Save Write Path
 
@@ -2912,15 +2988,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     saveUsjToPdpIfUpdatedRef.current = saveUsjToPdpIfUpdated;
   }, [saveUsjToPdpIfUpdated]);
-
-  // The chapter currently loaded, kept in a ref so the debounced save's fire (below) can compare
-  // the chapter active NOW against the chapter a pending save was scheduled for (see
-  // `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an effect —
-  // so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it already
-  // reflects the NEW chapter and the guard sees the mismatch.
-  const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum, scrRef.versificationStr);
-  const chapterKeyRef = useRef(chapterKey);
-  chapterKeyRef.current = chapterKey;
 
   /**
    * For fluent marker typing: saving on EVERY editor change round-trips a mid-marker-typing doc

@@ -93,6 +93,7 @@
       "%webView_platformScriptureEditor_emptyChapter_protectedTooltip%": "Structure is locked. Chapter and verse markers cannot be added.",
       "%webView_platformScriptureEditor_emptyState_noProject%": "No project selected",
       "%webView_platformScriptureEditor_error_bookNotFoundResource%": "This book does not exist in this resource.",
+      "%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%": "Project {projectName}: The chapter marker was incorrect and was automatically corrected.",
       "%webView_platformScriptureEditor_error_noTextSelected%": "Please select a range of text before inserting a comment.",
       "%webView_platformScriptureEditor_error_permissions_format%": "Project {projectName}: You do not have permission to edit this chapter.",
       "%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%": "The character marker could not be removed. Your text was not changed.",
