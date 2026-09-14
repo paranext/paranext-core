@@ -352,6 +352,31 @@ describe('web-view-content-zoom.service', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-2'));
   });
 
+  it('retries a pane whose write did not land on the next memory change, without holding the other panes back', () => {
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: { [LEVELS]: { main: 1.5 } },
+    });
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.5 } };
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.5 }));
+    updateDefinition.mockImplementation(
+      (id: string, update: { state?: Record<string, unknown> }) => {
+        if (id === 'editor-2') throw new Error('local storage quota exceeded');
+        return applyDefinitionUpdate(id, update);
+      },
+    );
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-1')?.state).toEqual({}); // the healthy pane takes the deletion
+    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.5 } });
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    // The same delta reaches the pane that missed it, on the next change memory delivers.
+    memoryCallbacks.forEach((cb) => cb({}));
+    expect(definitions.get('editor-2')?.state).toEqual({});
+    expect(definitions.get('editor-1')?.state).toEqual({});
+  });
+
   it('brings both changed areas of a pane in line with one definition write', () => {
     requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4, footnotes: 1.4 } };
     updateDefinition.mockClear();
