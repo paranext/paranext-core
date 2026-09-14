@@ -494,12 +494,18 @@ declare module 'legacy-comment-manager' {
   /** Assignment filter axis: all threads, assigned to me, assigned to the team, or unassigned. */
   export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
 
-  /** The four orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
+  /** The five orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
   export type CommentFilters = {
     resolved: ResolvedFilter;
     read: ReadFilter;
     type: TypeFilter;
     assignment: AssignmentFilter;
+    /**
+     * UI-facing date preset. Declared in `comment-list-filters.model.ts` (not here) because it is a
+     * closed set of presets the toolbar stores, distinct from {@link DateFilter} above, which is the
+     * richer shape the selector itself carries.
+     */
+    date: import('../comment-list-filters.model').DatePresetFilter;
   };
 
   /** Scope axis: current chapter vs all books. */

@@ -113,11 +113,62 @@ export function isAssignmentFilter(value: string): value is AssignmentFilter {
   return Object.hasOwn(assignmentFilterToLabelKey, value);
 }
 
+// --- Date axis (when the thread's first comment was written) ---
+
+/**
+ * Closed set of date presets. The UI stores the preset, not a timestamp: a concrete bound is
+ * derived at query-build time so a preset picked before midnight does not keep querying yesterday.
+ *
+ * Distinct from `DateFilter` in this data provider's type declarations, which is the richer
+ * exact/range/before/after union the selector itself carries.
+ */
+export type DatePresetFilter = 'all' | 'today' | 'last-7-days' | 'last-30-days';
+
+export const datePresetFilterToLabelKey = {
+  all: '%comment_filter_date_all%',
+  today: '%comment_filter_date_today%',
+  'last-7-days': '%comment_filter_date_last_7_days%',
+  'last-30-days': '%comment_filter_date_last_30_days%',
+} as const satisfies Record<DatePresetFilter, LocalizeKey>;
+
+export function isDatePresetFilter(value: string): value is DatePresetFilter {
+  return Object.hasOwn(datePresetFilterToLabelKey, value);
+}
+
+/** Days of history each preset covers, counted back from the start of the current UTC day. */
+const DATE_PRESET_DAYS_BACK: Record<Exclude<DatePresetFilter, 'all'>, number> = {
+  today: 0,
+  'last-7-days': 7,
+  'last-30-days': 30,
+};
+
+/**
+ * Resolves a preset to the inclusive lower bound the provider filters on.
+ *
+ * Uses `after` rather than `exact` because `exact` compares only the calendar date in UTC, which
+ * silently shifts the window for anyone several hours off UTC.
+ */
+function resolveDatePresetFilter(
+  datePreset: DatePresetFilter,
+  now: Date,
+): { after: string } | undefined {
+  if (datePreset === 'all') return undefined;
+  const start = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() - DATE_PRESET_DAYS_BACK[datePreset],
+    ),
+  );
+  return { after: start.toISOString() };
+}
+
 export const DEFAULT_COMMENT_FILTERS: CommentFilters = {
   resolved: 'all',
   read: 'all',
   type: 'all',
   assignment: 'all',
+  date: 'all',
 };
 
 /**
@@ -146,6 +197,7 @@ export function applyFilterOverrides(overrides?: Partial<CommentFilters>): Comme
     read: overrides?.read ?? DEFAULT_COMMENT_FILTERS.read,
     type: overrides?.type ?? DEFAULT_COMMENT_FILTERS.type,
     assignment: overrides?.assignment ?? DEFAULT_COMMENT_FILTERS.assignment,
+    date: overrides?.date ?? DEFAULT_COMMENT_FILTERS.date,
   };
 }
 
@@ -171,11 +223,13 @@ export function buildCommentThreadSelector({
   scopeFilter,
   scrRef,
   currentUserName,
+  now = new Date(),
 }: {
   filters: CommentFilters;
   scopeFilter: ScopeFilter;
   scrRef: { book: string; chapterNum: number; verseNum: number };
   currentUserName: string;
+  now?: Date;
 }): LegacyCommentThreadSelector {
   const selector: LegacyCommentThreadSelector = {};
 
@@ -210,6 +264,11 @@ export function buildCommentThreadSelector({
     if (currentUserName) selector.assignedTo = currentUserName;
   } else if (filters.assignment === 'team') selector.assignedTo = TEAM_ASSIGNED_USER;
   else if (filters.assignment === 'unassigned') selector.assignedTo = UNASSIGNED_USER;
+
+  // Date — resolved here rather than at selection time so a preset chosen before midnight does not
+  // keep querying yesterday.
+  const dateFilter = resolveDatePresetFilter(filters.date, now);
+  if (dateFilter) selector.dateFilter = dateFilter;
 
   return selector;
 }
