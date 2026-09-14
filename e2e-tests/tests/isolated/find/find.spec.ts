@@ -398,10 +398,13 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   // Wait for the panel to observe the navigation before returning, the same way
   // `navigateToBoundaryTermBook` does — otherwise the next test's first search can race the scope
   // update and run against the outgoing book.
-  await expect(frame.getByRole('button', { name: /showing/i })).toContainText(
-    new RegExp(defaultScrRef.book, 'i'),
-    { timeout: 15_000 },
-  );
+  // Matched as a case-insensitive substring rather than a constructed `RegExp`: the book ID comes
+  // from the running app, so building a pattern out of it would let any regex metacharacter in it
+  // change what this assertion means.
+  await expect(frame.getByRole('button', { name: /showing/i })).toContainText(defaultScrRef.book, {
+    ignoreCase: true,
+    timeout: 15_000,
+  });
 
   // Reset the scope to the whole book. Same open/closed hazard as the filters popover above,
   // including the animate-out race and the aria-expanded-over-visibility fix — see the comment
