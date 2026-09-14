@@ -6,6 +6,7 @@ import {
   buildCommentThreadSelector,
   DEFAULT_COMMENT_FILTERS,
   isAssignmentFilter,
+  isDatePresetFilter,
   isReadFilter,
   isResolvedFilter,
   isScopeFilter,
@@ -17,12 +18,17 @@ import {
 
 const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
-function build(overrides: Partial<CommentFilters>, scopeFilter: ScopeFilter = UNFILTERED) {
+function build(
+  overrides: Partial<CommentFilters>,
+  scopeFilter: ScopeFilter = UNFILTERED,
+  now: Date = new Date(),
+) {
   return buildCommentThreadSelector({
     filters: { ...DEFAULT_COMMENT_FILTERS, ...overrides },
     scopeFilter,
     scrRef,
     currentUserName: 'Donna',
+    now,
   });
 }
 
@@ -148,6 +154,7 @@ describe('applyFilterOverrides', () => {
       read: 'all',
       type: 'conflicts',
       assignment: 'all',
+      date: 'all',
     });
   });
 
@@ -159,6 +166,7 @@ describe('applyFilterOverrides', () => {
       read: 'unread',
       type: 'all',
       assignment: 'all',
+      date: 'all',
     });
   });
 
@@ -173,5 +181,45 @@ describe('applyFilterOverrides', () => {
     // web view's setFilters handler applies exactly these semantics via applyFilterOverrides.
     const overridesWithNull: Partial<CommentFilters> = JSON.parse('{ "type": null }');
     expect(applyFilterOverrides(overridesWithNull)).toEqual(DEFAULT_COMMENT_FILTERS);
+  });
+});
+
+describe('date filter', () => {
+  it('contributes nothing when the axis is at its "all" default', () => {
+    expect(build({ date: 'all' })).toEqual({});
+  });
+
+  it('maps each preset to an inclusive "after" bound', () => {
+    const now = new Date('2026-09-14T15:30:00.000Z');
+    expect(build({ date: 'today' }, UNFILTERED, now).dateFilter).toEqual({
+      after: '2026-09-14T00:00:00.000Z',
+    });
+    expect(build({ date: 'last-7-days' }, UNFILTERED, now).dateFilter).toEqual({
+      after: '2026-09-07T00:00:00.000Z',
+    });
+    expect(build({ date: 'last-30-days' }, UNFILTERED, now).dateFilter).toEqual({
+      after: '2026-08-15T00:00:00.000Z',
+    });
+  });
+
+  it('resolves "today" against the clock at query time, not at selection time', () => {
+    // The whole point of storing a preset rather than a timestamp: an app left open overnight must
+    // not keep querying yesterday.
+    const beforeMidnight = build(
+      { date: 'today' },
+      UNFILTERED,
+      new Date('2026-09-14T23:59:00.000Z'),
+    );
+    const afterMidnight = build(
+      { date: 'today' },
+      UNFILTERED,
+      new Date('2026-09-15T00:01:00.000Z'),
+    );
+    expect(beforeMidnight.dateFilter).not.toEqual(afterMidnight.dateFilter);
+  });
+
+  it('treats an unknown string as not a date preset', () => {
+    expect(isDatePresetFilter('last-year')).toBe(false);
+    expect(isDatePresetFilter('today')).toBe(true);
   });
 });
