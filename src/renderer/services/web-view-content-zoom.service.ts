@@ -29,6 +29,7 @@ import {
   debounce,
   getErrorMessage,
   isPlatformError,
+  normalizeProjectId,
   PlatformError,
   Unsubscriber,
 } from 'platform-bible-utils';
@@ -530,7 +531,12 @@ function memoryIdentityFor(
 ): MemoryIdentity | undefined {
   const kind = getContentZoomKind(definition.webViewType);
   if (!kind) return undefined;
-  const identity = definition.projectId ?? resourceIdFromState(definition);
+  // Project ids are case-insensitive and reach a definition from sources that disagree about
+  // casing, so every key this window writes folds them the same way the rest of the platform does.
+  // A `state.resourceId` is not a project id and is left exactly as the view wrote it.
+  const identity = definition.projectId
+    ? normalizeProjectId(definition.projectId)
+    : resourceIdFromState(definition);
   if (!identity) return undefined;
   return { kind, identity };
 }
@@ -780,12 +786,13 @@ async function pruneMemoryOfRemovedProjects(): Promise<void> {
   // An empty list is never evidence that every project is gone: the project lookup answers with one
   // while no provider has registered yet, and again once its startup grace period has passed.
   if (projects.length === 0) return;
-  const projectIds = new Set(projects.map((project) => project.id));
+  const projectIds = new Set(projects.map((project) => normalizeProjectId(project.id)));
   await enqueueMemoryTransaction((memory) => {
     let changed = false;
     Object.keys(memory).forEach((key) => {
       const parsed = parseContentZoomMemoryKey(key);
-      if (!parsed || parsed.kind === 'resource' || projectIds.has(parsed.identity)) return;
+      if (!parsed || parsed.kind === 'resource') return;
+      if (projectIds.has(normalizeProjectId(parsed.identity))) return;
       delete memory[key];
       changed = true;
     });
