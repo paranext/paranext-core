@@ -264,6 +264,31 @@ describe('content-zoom bootstrap script', () => {
     expect(rules.some((text) => text.includes('"inner"'))).toBe(false);
   });
 
+  it('retries a report the parent rejected, and keeps its listeners and api when the first report throws', async () => {
+    let throwsLeft = 1;
+    const reportContentZoomAreasById = vi.fn((_webViewId: string, reported: string[]) => {
+      if (reported.length > 0 && throwsLeft > 0) {
+        throwsLeft -= 1;
+        throw new Error('parent refused the report');
+      }
+    });
+    const { bound } = install('wv-retry', TWO_AREAS, { reportContentZoomAreasById });
+    // The first scan threw on the way out to the parent; the view still has its api and its
+    // listeners, so a later DOM change can carry the report across.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom).toBeDefined();
+
+    // A mutation that leaves the area list identical still retries, because a report that threw was
+    // never recorded as made.
+    byId('toolbar').appendChild(document.createElement('span'));
+    await nextFrame();
+    expect(reportContentZoomAreasById).toHaveBeenCalledTimes(2);
+    expect(reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-retry', ['main', 'footnotes']);
+
+    expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+    expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-retry', 1, 'main');
+  });
+
   it('inserts, for an area discovered after the pane loaded, a rule identical to the head-splice helper’s rule for the same area', async () => {
     // The head-splice helper's own text for area "x", read off the style string it bakes into a
     // pane's head — the same string `getContentZoomStyleElement` produces for

@@ -167,8 +167,8 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     };
     const setActive = (areaId) => {
       if (!areaId || areaId === activeArea) return;
+      if (!callBound(boundReportActive, 'reporting the active zoom area', areaId)) return;
       activeArea = areaId;
-      if (boundReportActive) boundReportActive(webViewId, areaId);
     };
     // A MutationObserver callback already runs as a microtask after its batch of synchronous DOM
     // changes, well before the next paint - refreshing straight from it (no rAF hop) is what lets the
@@ -176,21 +176,28 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     let reported = false;
     const refresh = () => {
       const next = collectAreas();
+      // Rules are ensured before the report: a rule for an area the parent has no record of reads
+      // the pane-wide default variable, so it scales nothing on its own.
       next.forEach(ensureRule);
       if (!reported || next.join('\\n') !== areas.join('\\n')) {
-        areas = next;
-        reported = true;
-        if (boundReportAreas) boundReportAreas(webViewId, areas.slice());
+        // The list counts as reported only once the parent has taken it, so a report that throws is
+        // retried on the next mutation instead of leaving the pane unzoomable for its whole life.
+        if (callBound(boundReportAreas, 'reporting the zoom areas', next.slice())) {
+          areas = next;
+          reported = true;
+        }
       }
       if (!activeArea || areas.indexOf(activeArea) === -1) setActive(areas[0]);
     };
+    let observer;
     const start = () => {
       seedRuled();
+      // Observing before the first scan is what makes the retry above reachable: a throw out of that
+      // scan then still leaves the view watching for the DOM change that tries again.
+      observer = new MutationObserver(refresh);
+      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
       refresh();
-      new MutationObserver(refresh).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
     };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-    else start();
 
     // Capture phase: the active area must update even when a descendant stops propagation before
     // the bubble phase (the same rule the wheel listener below is deliberately the exception to).
@@ -201,6 +208,19 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (areas.length === 0) return undefined;
       const hit = areaOf(node);
       return hit && areas.indexOf(hit) !== -1 ? hit : (activeArea || areas[0]);
+    };
+    // One bound helper is one call into the parent's realm, and it can throw (the parent reaches the
+    // dock layout and a non-isolated emitter from there). The return value is what lets a caller
+    // hold back its own bookkeeping until the parent has really taken the value.
+    const callBound = (fn, what, value) => {
+      if (!fn) return true;
+      try {
+        fn(webViewId, value);
+        return true;
+      } catch (e) {
+        warnOnce(what + ' failed: ' + (e && e.message ? e.message : e));
+        return false;
+      }
     };
     const act = (command, areaId) => {
       try {
@@ -308,6 +328,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       }, ${INDICATOR_VISIBLE_MS});
     };
     window.__platformContentZoom = { showIndicator, get activeArea() { return activeArea; } };
+
+    // Last in the IIFE on purpose: the scan start() runs reaches the parent, and a throw there must
+    // not cost the view its listeners or its api. Everything start() touches is initialised by now.
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+    else start();
   })();
   `;
 }
