@@ -82,6 +82,16 @@ describe('web-view-content-zoom.service', () => {
   let iframe: HTMLIFrameElement;
   const showIndicator = vi.fn();
   let lastFocused: string | undefined;
+  /** One iframe per pane, since the production `getIframe` is keyed by web view id. */
+  const iframes = new Map<string, HTMLIFrameElement>();
+  function iframeFor(webViewId: string): HTMLIFrameElement {
+    const existing = iframes.get(webViewId);
+    if (existing) return existing;
+    const created = makeIframe();
+    Object.assign(created.contentWindow ?? {}, { __platformContentZoom: { showIndicator } });
+    iframes.set(webViewId, created);
+    return created;
+  }
 
   beforeEach(async () => {
     definitions.clear();
@@ -96,8 +106,8 @@ describe('web-view-content-zoom.service', () => {
     vi.mocked(logger.warn).mockClear();
     lastFocused = undefined;
     document.body.innerHTML = '';
-    iframe = makeIframe();
-    Object.assign(iframe.contentWindow ?? {}, { __platformContentZoom: { showIndicator } });
+    iframes.clear();
+    iframe = iframeFor('editor-1');
     definitions.set('editor-1', {
       id: 'editor-1',
       webViewType: 'platformScriptureEditor.react',
@@ -107,7 +117,7 @@ describe('web-view-content-zoom.service', () => {
     forgetContentZoom('editor-1');
     forgetContentZoom('editor-2');
     __setContentZoomDepsForTesting({
-      getIframe: () => iframe,
+      getIframe: (id: string) => iframeFor(id),
       getDefinition: (id: string) => definitions.get(id),
       updateDefinition,
       getAllOpenDefinitions: () => [...definitions.values()],
@@ -311,8 +321,9 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-3')?.state).toEqual({
       [LEVELS]: { main: 1.3, footnotes: 0.9 },
     });
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('0.9');
+    const pane = iframeFor('editor-3');
+    expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.3');
+    expect(cssVar(pane, '--platform-content-zoom-footnotes')).toBe('0.9');
     expect(showIndicator).not.toHaveBeenCalled();
     expect(settingsSet).not.toHaveBeenCalled();
   });
@@ -332,7 +343,7 @@ describe('web-view-content-zoom.service', () => {
     });
     setContentZoomAreas('editor-4', ['main', 'footnotes']);
     expect(definitions.get('editor-4')?.state).toEqual({ [LEVELS]: { main: 2 } });
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('2');
+    expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-main')).toBe('2');
   });
 
   it('seeds on the first non-empty report even when an earlier report for the same pane was empty', async () => {
@@ -355,8 +366,9 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-6')?.state).toEqual({
       [LEVELS]: { main: 1.3, footnotes: 0.9 },
     });
-    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
-    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('0.9');
+    const pane = iframeFor('editor-6');
+    expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.3');
+    expect(cssVar(pane, '--platform-content-zoom-footnotes')).toBe('0.9');
     expect(showIndicator).not.toHaveBeenCalled();
     expect(settingsSet).not.toHaveBeenCalled();
   });
@@ -578,22 +590,28 @@ describe('web-view-content-zoom.service', () => {
       contentType: 'url',
     });
     applyContentZoomForWebView('url-1');
-    expect(iframe.style.zoom).toBe('1');
-    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
+    const pane = iframeFor('url-1');
+    expect(pane.style.zoom).toBe('1');
+    expect(cssVar(pane, '--platform-content-zoom-default')).toBe('1');
   });
 
-  it('applyContentZoomForWebView leaves a pane that has not reported yet unscaled, and pushes a per-area variable once it has', () => {
-    // Every call for a known non-URL pane now arms a fallback grace timer, so fake timers keep
-    // that timer from leaking into later tests as a real pending setTimeout.
+  it('leaves a pane that has not reported yet unscaled at the iframe load hook, clearing any zoom the old content left', () => {
+    definitions.set('editor-7', {
+      id: 'editor-7',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    const pane = iframeFor('editor-7');
+    // A call for a known non-URL pane arms a fallback grace timer, so fake timers keep that timer
+    // from leaking into later tests as a real pending setTimeout.
     vi.useFakeTimers();
     try {
+      pane.style.zoom = '2'; // dirtied, so the clear is observable rather than assumed
       applyContentZoomForWebView('editor-7');
-      expect(iframe.style.zoom).toBe('');
-      expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
-      setContentZoomAreas('editor-1', ['main']);
-      applyContentZoomForWebView('editor-1');
-      expect(iframe.style.zoom).toBe('');
-      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+      expect(pane.style.zoom).toBe('');
+      expect(cssVar(pane, '--platform-content-zoom-default')).toBe('1');
+      expect(cssVar(pane, '--platform-content-zoom-main')).toBe(''); // nothing reported, no area
     } finally {
       vi.useRealTimers();
     }
@@ -673,10 +691,13 @@ describe('web-view-content-zoom.service', () => {
       webViewType: 'someExtension.urlView',
       contentType: 'url',
     });
+    const urlPane = iframeFor('url-1');
     expect(defaultCallbacks).toHaveLength(1);
     defaultCallbacks[0](1.5); // no re-init: this is the live subscription callback, fired directly
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
-    expect(iframe.style.zoom).toBe('1.5');
+    expect(iframe.style.zoom).toBe('');
+    expect(urlPane.style.zoom).toBe('1.5');
+    expect(cssVar(urlPane, '--platform-content-zoom-main')).toBe('');
   });
 
   it("pushes a pane's variables when it is adopted into this window (onDidUpdateWebView)", () => {
