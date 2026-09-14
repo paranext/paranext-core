@@ -69,21 +69,23 @@ declare global {
   /** JSDOC DESTINATION UpdateWebViewDefinition */
   var updateWebViewDefinition: UpdateWebViewDefinition;
   /**
-   * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out).
+   * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out). Omit `areaId` to zoom the web
+   * view's active area.
    *
    * @experimental This function is unstable and may change or disappear without notice
    */
   var adjustContentZoomById: (
     webViewId: string,
     deltaSteps: number,
-    areaId: ContentZoomAreaId,
+    areaId?: ContentZoomAreaId,
   ) => void;
   /**
-   * Return one area of a web view to the Settings default.
+   * Return one area of a web view to the Settings default. Omit `areaId` to reset the web view's
+   * active area.
    *
    * @experimental This function is unstable and may change or disappear without notice
    */
-  var resetContentZoomById: (webViewId: string, areaId: ContentZoomAreaId) => void;
+  var resetContentZoomById: (webViewId: string, areaId?: ContentZoomAreaId) => void;
   /**
    * Report the zoom areas a web view's bootstrap discovered, in document order.
    *
