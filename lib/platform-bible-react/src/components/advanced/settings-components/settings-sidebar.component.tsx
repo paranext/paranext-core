@@ -141,11 +141,14 @@ export function SettingsSidebar({
               (no click handler), so keeping it adjacent to — rather than inside — the trigger
               preserves the visual affordance without bloating the canonical component.
 
-              Open Tabs grouping isn't wired here because the platform-bible-react library is
-              intentionally PAPI-free (see CLAUDE.md "Symlinked Directories" / lib boundaries).
-              `useOpenProjectTabs` lives in the extension layer; passing `openTabs={[]}` makes the
-              ProjectSelector fall back to a flat (non-grouped) list. If a future consumer needs
-              the grouping, they can pass `openTabs` in via a new prop on this component.
+              No groupings at all are offered here, and that is deliberate rather than an
+              oversight. platform-bible-react is intentionally PAPI-free (see CLAUDE.md
+              "Symlinked Directories" / lib boundaries), so this component cannot reach project
+              settings or the recently-opened-projects service, and its public `ProjectInfo` prop
+              carries only an id and a name — there is no language, type, or recency to group by.
+              `useOpenProjectTabs` likewise lives in the extension layer, so `openTabs={[]}` keeps
+              the ProjectSelector on a flat (non-grouped) list. A consumer that wants grouping
+              passes `openTabs` and richer rows in via new props on this component.
             */}
             <div
               className={cn(

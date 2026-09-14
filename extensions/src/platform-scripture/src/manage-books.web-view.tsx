@@ -18,7 +18,7 @@
  * platform commands ship.
  */
 import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
+import { useData, useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -33,7 +33,14 @@ import {
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
-import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  getErrorMessage,
+  isPlatformError,
+  makeProjectSelectorCustomData,
+  normalizeProjectId,
+  recencyMapFromOrderedIds,
+} from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
@@ -61,6 +68,15 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
+
+// Stable empty-array reference serving two roles: the recently-opened-projects `useData` default,
+// and the fallback the recency map is built from when the subscription has no usable list.
+// `useData` resubscribes when the default identity changes, so keeping this at module scope avoids
+// per-render re-subscriptions. Declared as the mutable `string[]` that `useData`'s `defaultValue`
+// parameter requires, then frozen separately so the shared instance cannot be mutated out from
+// under either role.
+const EMPTY_RECENT_PROJECTS: string[] = [];
+Object.freeze(EMPTY_RECENT_PROJECTS);
 
 // Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
 // Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
@@ -95,8 +111,7 @@ type ProjectListResult = {
     name: string;
     /**
      * PT9 `ProjectType` enum value (e.g. "Standard"). Mirrors the C# `ProjectSummary.ProjectType`
-     * wire field. Currently unread on the client (the former commentary filter that consumed it was
-     * removed — N4); kept to document the wire shape and for future use.
+     * wire field. Feeds the sidebar picker's `type` grouping via {@link toManageBooksSelectorRows}.
      */
     projectType: string;
     isEditable: boolean;
@@ -306,6 +321,34 @@ function booksToNumbers(bookIds: string[]): number[] {
   return nums;
 }
 
+/**
+ * Maps manage-books wire projects onto ProjectSelector rows. Exported for coverage tests.
+ *
+ * `recencyMap` must already be keyed by {@link normalizeProjectId}-normalized ids: the recents
+ * service stores ids verbatim while these are canonical (upper-cased) project ids, so normalizing
+ * only one side misses on casing alone and routes every project into the grouping's "Other"
+ * bucket.
+ */
+export function toManageBooksSelectorRows(
+  projects: readonly ProjectListResult['projects'][number][],
+  recencyMap: ReadonlyMap<string, number>,
+): SidebarProject[] {
+  return projects.map((p) => ({
+    id: p.projectId,
+    // I2: fullName comes straight off the wire now — no per-project getSetting fan-out.
+    shortName: p.name,
+    fullName: p.fullName.length > 0 ? p.fullName : p.name,
+    isEditable: p.isEditable,
+    customData: makeProjectSelectorCustomData({
+      type: p.projectType,
+      // `projectType` is the PT9 ProjectType enum value; there is no localized display name on the
+      // wire, so the raw key doubles as the section heading.
+      typeName: p.projectType,
+      lastUsedAt: recencyMap.get(normalizeProjectId(p.projectId)),
+    }),
+  }));
+}
+
 // ===== Web view component ==================================================
 
 global.webViewComponent = function ManageBooksWebView({
@@ -472,11 +515,19 @@ global.webViewComponent = function ManageBooksWebView({
     [projectSelectorStrings],
   );
 
-  // Built-in groupings (openTabs / lastUsed / language / type) shared by the sidebar's primary
-  // project picker and the Copy "From" picker. The Create "Based on" picker doesn't consume these
-  // — it locks into a bespoke versification grouping built on the dialog side.
+  // Built-in groupings (openTabs / lastUsed / type) shared by the sidebar's primary project picker
+  // and the Copy "From" picker. The Create "Based on" picker doesn't consume these — it locks into
+  // a bespoke versification grouping built on the dialog side.
+  //
+  // `language` is filtered out: the manage-books wire carries no language, and the per-project
+  // `platform.language` fan-out that could supply one was removed to keep this list fast (I2).
+  // Offering the grouping anyway would produce a single "Unknown language" bucket for every
+  // project, so it is omitted rather than shown as a menu item that cannot do anything.
   const projectSelectorGroupings = useMemo<ProjectSelectorGrouping[]>(
-    () => makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)),
+    () =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorStrings)).filter(
+        (grouping) => grouping.id !== 'language',
+      ),
     [projectSelectorStrings],
   );
 
@@ -823,19 +874,38 @@ global.webViewComponent = function ManageBooksWebView({
   // safe. Source is `manageBooksApi.filterProjects` — the same call `loadProjects` uses, so the
   // sidebar list and the dialog's internal project list stay in lockstep.
   const [sidebarProjects, setSidebarProjects] = useState<readonly SidebarProject[]>([]);
+
+  // Recency input for the built-in `lastUsed` grouping. The service exposes an ordered id list
+  // (most-recent first) without timestamps, so we synthesize values via `recencyMapFromOrderedIds`
+  // for the grouping to read as its "recently used" presence flag.
+  const [recentProjectIds] = useData('platformScripture.recentlyOpenedProjects').RecentProjects(
+    undefined,
+    EMPTY_RECENT_PROJECTS,
+  );
+
+  const recencyMap = useMemo<ReadonlyMap<string, number>>(() => {
+    // Recency is optional to Manage Books: it only orders the built-in `lastUsed` grouping. When
+    // the provider is unavailable the subscription yields a PlatformError instead of an id list,
+    // so narrow before handing the value to `recencyMapFromOrderedIds`, which needs an array. An
+    // empty list degrades the grouping to "no recency" rather than losing the whole web view.
+    let orderedRecentProjectIds = recentProjectIds;
+    if (isPlatformError(orderedRecentProjectIds)) {
+      logger.warn(
+        `manage-books: failed to load recently opened projects: ${orderedRecentProjectIds.message}`,
+      );
+      orderedRecentProjectIds = EMPTY_RECENT_PROJECTS;
+    }
+    // Normalize BOTH sides of the lookup (see `toManageBooksSelectorRows` for why).
+    return recencyMapFromOrderedIds(orderedRecentProjectIds.map(normalizeProjectId));
+  }, [recentProjectIds]);
+
   useEffect(() => {
     if (!manageBooksApi) return undefined;
     let cancelled = false;
     (async () => {
       try {
         const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
-        // I2: fullName comes straight off the wire now — no per-project getSetting fan-out.
-        const enriched: SidebarProject[] = result.projects.map((p) => ({
-          id: p.projectId,
-          shortName: p.name,
-          fullName: p.fullName.length > 0 ? p.fullName : p.name,
-          isEditable: p.isEditable,
-        }));
+        const enriched = toManageBooksSelectorRows(result.projects, recencyMap);
         if (!cancelled) setSidebarProjects(enriched);
       } catch (err) {
         logger.warn(`manage-books: sidebarProjects fetch failed: ${getErrorMessage(err)}`);
@@ -844,7 +914,7 @@ global.webViewComponent = function ManageBooksWebView({
     return () => {
       cancelled = true;
     };
-  }, [manageBooksApi]);
+  }, [manageBooksApi, recencyMap]);
 
   // ===== Open project tabs (for ProjectSelector grouping) ====================
   // The shared `useOpenProjectTabs` hook returns a richer shape (`webViewId`, `webViewType`); map
