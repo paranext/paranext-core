@@ -44,6 +44,16 @@ export type ContentZoomKind = 'editor' | 'resource' | 'notes';
 export const CONTENT_ZOOM_AREA_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
 /**
+ * The one well-formed area id a view may not use: its CSS custom property would be
+ * {@link CONTENT_ZOOM_DEFAULT_CSS_VARIABLE} itself, the pane-wide fallback every other area reads,
+ * so an area of this name would set the default for the whole pane. Derived from the variable names
+ * so it cannot drift from them.
+ */
+export const RESERVED_CONTENT_ZOOM_AREA_ID = CONTENT_ZOOM_DEFAULT_CSS_VARIABLE.slice(
+  CONTENT_ZOOM_CSS_VARIABLE_PREFIX.length,
+);
+
+/**
  * Placeholder for the area id in {@link CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE}. Never a legal area
  * id ({@link CONTENT_ZOOM_AREA_ID_PATTERN} accepts only lower-case letters, digits and hyphens), so
  * substituting it can never collide with a real one.
