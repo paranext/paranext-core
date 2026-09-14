@@ -319,3 +319,20 @@ describe('chapter marker correction notification', () => {
     expect(localizedStrings.en[chapterMarkerCorrectedKey]).toContain('{projectName}');
   });
 });
+
+// The notice shown when the backend refused a save for a reason the editor cannot name. Its
+// message has to say which project stopped saving, so the {projectName} slot must survive any
+// later edit to the string, and it must not leak the backend's own wording — that stays in the log.
+// English only: like the keys above, this string ships ahead of its translation, so no `es` parity
+// is asserted here.
+describe('save failed notification', () => {
+  const saveFailedKey = '%webView_platformScriptureEditor_error_saveFailed_format%';
+
+  it('has an English message', () => {
+    expect(localizedStrings.en[saveFailedKey]).toBeTruthy();
+  });
+
+  it('keeps the {projectName} slot', () => {
+    expect(localizedStrings.en[saveFailedKey]).toContain('{projectName}');
+  });
+});

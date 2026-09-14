@@ -140,6 +140,12 @@ import {
   applyChapterSavePreparation,
   prepareUsjForChapterSave,
 } from './chapter-marker-repair.util';
+import {
+  classifySaveFailure,
+  SaveFailureKind,
+  shouldReportSaveFailure,
+  SYNC_EDIT_BLOCKED_REGEX,
+} from './save-failure-report.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
@@ -264,6 +270,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
   '%webView_platformScriptureEditor_error_permissions_format%',
+  '%webView_platformScriptureEditor_error_saveFailed_format%',
   // The one listing of this key. Named via the const so the sync-blocked message, its severity, and
   // its self-catching stay in one place (`editor-side-effects.utils.ts`) — the character-marker
   // bar's removal action shows the same notice through the same helper and deliberately does not
@@ -382,16 +389,12 @@ const getViewOptionsForType = (
   return paragraphStructure;
 };
 
-// This regex is connected directly to the exception message within PermissionsException.cs
-const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
-
-// Sentinel appended by the backend write-gate (SendReceiveWriteLock in paranext-core's c-sharp)
-// when a project write is rejected because an automatic Send/Receive is syncing that project.
-const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
-
 /** Notification id for the chapter-marker correction, so repeats update one toast. */
 const CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID =
   'platform-scripture-editor-chapter-marker-corrected';
+
+/** Notification id for a save the backend refused, so a repeating failure updates one toast. */
+const SAVE_FAILED_NOTIFICATION_ID = 'platform-scripture-editor-save-failed';
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
@@ -2560,6 +2563,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+  // The kind of save rejection the user has already been told about, or `undefined` when nothing is
+  // outstanding. A chapter the backend refuses is refused again on every save for as long as the
+  // user keeps typing, so this is what turns that run of identical rejections into one report; a
+  // save that gets through clears it (see `saveUsjToPdpInternal`).
+  const lastReportedSaveFailureKind = useRef<SaveFailureKind | undefined>(undefined);
   // Monotonic count of PDP deliveries observed — the failed-save retry gate's other half.
   // `withWriteInFlightGuard` owns the in-flight flag for exactly the write's own duration, so the
   // flag carries no information about deliveries; this counter is what lets a failed save tell
@@ -2787,22 +2795,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // straight back to the PDP. Until that is fixed, `saveUsjToPdpIfUpdated` (which compares
     // first) is used everywhere.
     /**
-     * Tells the user a save failed, for the two backend rejections that are worth surfacing: a
-     * sync-edit-block (expected and transient — editing pauses during an automatic Send/Receive, so
-     * a warning) and a permissions failure (an error). Touches no editor content, so both the live
-     * rejection path and the zombie path can report through it.
+     * Tells the user a save failed, whatever the backend's reason. A sync-edit-block is expected
+     * and transient — editing pauses during an automatic Send/Receive — so it is a warning; a
+     * permissions failure and anything else are errors. A rejection the editor cannot name gets a
+     * generic message: the backend's own wording is written for a developer, so it stays in the log
+     * and never reaches the toast.
      *
-     * @returns Whether the rejection was one of those two.
+     * Reports only when the kind of rejection CHANGES, so a chapter the backend keeps refusing is
+     * reported once instead of on every save. Touches no editor content, so both the live rejection
+     * path and the zombie path can report through it.
+     *
+     * @returns Whether the rejection was one the caller can recover from by restoring what the PDP
+     *   holds.
      */
     async function notifyRecoverableSaveFailure(errorMessage: string): Promise<boolean> {
-      const isSyncEditBlocked = SYNC_EDIT_BLOCKED_REGEX.test(errorMessage);
-      const isPermissionsError = PERMISSIONS_EXCEPTION_REGEX.test(errorMessage);
-      if (!isSyncEditBlocked && !isPermissionsError) return false;
+      const kind = classifySaveFailure(errorMessage);
+      const isRecoverable = kind !== 'unknown';
+      if (!shouldReportSaveFailure(kind, lastReportedSaveFailureKind.current)) return isRecoverable;
+      lastReportedSaveFailureKind.current = kind;
 
       try {
-        if (isSyncEditBlocked) {
+        if (kind === 'syncEditBlocked') {
           await notifySyncEditBlocked();
-        } else {
+        } else if (kind === 'permissions') {
           await papi.notifications.send({
             severity: 'error',
             message: formatReplacementString(
@@ -2810,15 +2825,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               { projectName },
             ),
           });
+        } else {
+          await papi.notifications.send({
+            notificationId: SAVE_FAILED_NOTIFICATION_ID,
+            message: formatReplacementString(
+              localizedStrings['%webView_platformScriptureEditor_error_saveFailed_format%'],
+              { projectName },
+            ),
+            severity: 'error',
+            // This is about this editor's chapter, and routing is also what makes the shared
+            // `notificationId` coalesce: an update that lands in a different window has never seen
+            // the id and opens a SECOND toast instead of merging.
+            webViewId,
+          });
         }
       } catch (innerError) {
         logger.error(
-          `Error handling ${
-            isSyncEditBlocked ? 'sync-edit-block' : 'permissions'
-          } exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
+          `Error handling ${kind} exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
         );
       }
-      return true;
+      return isRecoverable;
     }
 
     async function saveUsjToPdpInternal(newUsj: Usj): Promise<boolean> {
@@ -2865,6 +2891,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         const { result: saveResult } = outcome;
 
+        // The write ran without throwing, so whatever was refusing this chapter is no longer
+        // refusing it: forget the reported failure, so the next one — the same kind or a different
+        // one — is worth saying again. The generic save-failed toast is the one that stays up under
+        // a stable id, so take it down too; dismissing an id that was never sent is a no-op.
+        if (lastReportedSaveFailureKind.current !== undefined) {
+          lastReportedSaveFailureKind.current = undefined;
+          papi.notifications.dismiss(SAVE_FAILED_NOTIFICATION_ID).catch((error: unknown) => {
+            logger.warn(`Error dismissing the save-failed notification: ${getErrorMessage(error)}`);
+          });
+        }
+
         // Prompts the PDP to commit changes to the version history once a day if the save was successfully
         if (saveResult && projectId) {
           try {
@@ -2907,13 +2944,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         const errorMessage = getErrorMessage(e);
         logger.error(`Error saving USJ to PDP: ${errorMessage}`);
 
-        // The two recoverable backend rejections revert the editor to the last PDP state and
-        // notify. The revert is safe here and only here: this write still owns the guard, so
-        // `usjFromPdp` is the state the failed write started from rather than a stale snapshot.
-        if (
-          SYNC_EDIT_BLOCKED_REGEX.test(errorMessage) ||
-          PERMISSIONS_EXCEPTION_REGEX.test(errorMessage)
-        ) {
+        // Only the two recoverable backend rejections revert the editor to the last PDP state. An
+        // unrecognized rejection must not: the editor's content is the user's only copy of the
+        // edit, and nothing here knows the backend would accept `usjFromPdp` in its place. The
+        // revert is safe for the recoverable pair here and only here: this write still owns the
+        // guard, so `usjFromPdp` is the state the failed write started from rather than a stale
+        // snapshot.
+        if (await notifyRecoverableSaveFailure(errorMessage)) {
           try {
             if (usjFromPdp && editorRef.current) {
               usjSentToPdp.current = usjFromPdp;
@@ -2924,7 +2961,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               `Error restoring the last PDP state after a failed save: ${getErrorMessage(innerError)}`,
             );
           }
-          await notifyRecoverableSaveFailure(errorMessage);
         }
         // The write RAN (and rejected); only a guard-dropped save reports false, since that is
         // the one case where the content never left the editor at all.
@@ -2941,6 +2977,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     notifySyncEditBlocked,
     chapterUsjSelector,
     notifyChapterMarkerCorrected,
+    webViewId,
   ]);
 
   // #endregion PDP Save Write Path
