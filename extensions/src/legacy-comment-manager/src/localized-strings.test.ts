@@ -13,6 +13,51 @@ const SYNC_BLOCKED_KEYS = [
   '%webView_legacyCommentManager_error_syncEditBlocked%',
 ];
 
+// The comment-filter strings: the toolbar's "Filters" trigger, each axis's popover-row/chip name,
+// the chip dismiss-label template, and the date/author axes' own aria/option/search strings. Both
+// languages must define every key so a future edit that drops one in a single language fails here
+// rather than silently falling back or shipping untranslated text.
+const COMMENT_FILTER_KEYS = [
+  '%comment_filter_aria_assignment%',
+  '%comment_filter_aria_author%',
+  '%comment_filter_aria_date%',
+  '%comment_filter_aria_read%',
+  '%comment_filter_aria_resolved%',
+  '%comment_filter_aria_scope%',
+  '%comment_filter_aria_type%',
+  '%comment_filter_assignment_all%',
+  '%comment_filter_assignment_me%',
+  '%comment_filter_assignment_team%',
+  '%comment_filter_assignment_unassigned%',
+  '%comment_filter_author_all%',
+  '%comment_filter_author_no_results%',
+  '%comment_filter_author_search_placeholder%',
+  '%comment_filter_axis_assignment%',
+  '%comment_filter_axis_author%',
+  '%comment_filter_axis_date%',
+  '%comment_filter_axis_read%',
+  '%comment_filter_axis_resolved%',
+  '%comment_filter_axis_scope%',
+  '%comment_filter_axis_type%',
+  '%comment_filter_button%',
+  '%comment_filter_chip_clear%',
+  '%comment_filter_date_all%',
+  '%comment_filter_date_last_30_days%',
+  '%comment_filter_date_last_7_days%',
+  '%comment_filter_date_today%',
+  '%comment_filter_read_all%',
+  '%comment_filter_read_read%',
+  '%comment_filter_read_unread%',
+  '%comment_filter_resolved_all%',
+  '%comment_filter_resolved_resolved%',
+  '%comment_filter_resolved_unresolved%',
+  '%comment_filter_scope_all_books%',
+  '%comment_filter_scope_current_chapter%',
+  '%comment_filter_type_all%',
+  '%comment_filter_type_comments%',
+  '%comment_filter_type_conflicts%',
+];
+
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
 };
@@ -77,5 +122,31 @@ describe('legacyCommentManager sync-blocked strings', () => {
     it(`has a Spanish label for ${key}`, () => {
       expect(localizedStrings.es[key]).toBeTruthy();
     });
+  });
+});
+
+describe('legacyCommentManager comment-filter strings', () => {
+  // Enforce en/es parity for every comment-filter string, both directions: a key present in one
+  // language but not the other fails here rather than silently falling back to the key text (an
+  // unstyled "%comment_filter_axis_date%") or shipping an untranslated key to Spanish users.
+  COMMENT_FILTER_KEYS.forEach((key) => {
+    it(`has an English label for ${key}`, () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it(`has a Spanish label for ${key}`, () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+  });
+
+  it('defines every comment-filter key in both languages (no key present in only one)', () => {
+    const englishOnly = COMMENT_FILTER_KEYS.filter(
+      (key) => localizedStrings.en[key] && !localizedStrings.es[key],
+    );
+    const spanishOnly = COMMENT_FILTER_KEYS.filter(
+      (key) => localizedStrings.es[key] && !localizedStrings.en[key],
+    );
+    expect(englishOnly).toEqual([]);
+    expect(spanishOnly).toEqual([]);
   });
 });
