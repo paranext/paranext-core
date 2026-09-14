@@ -1904,6 +1904,10 @@ describe('web view service router', () => {
       await expect(zoomIn(undefined, undefined)).resolves.toBeUndefined();
       expect(shards[1].adjustContentZoom).not.toHaveBeenCalled();
       expect(shards[2].adjustContentZoom).not.toHaveBeenCalled();
+      expect(mocks.loggerWarn).not.toHaveBeenCalled();
+      expect(mocks.loggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('no window is focused'),
+      );
     });
 
     test('does nothing, and does not throw, when no window owns the named web view', async () => {
@@ -1914,6 +1918,9 @@ describe('web view service router', () => {
       await expect(zoomIn('gone-view', undefined)).resolves.toBeUndefined();
       expect(shards[1].adjustContentZoom).not.toHaveBeenCalled();
       expect(shards[2].adjustContentZoom).not.toHaveBeenCalled();
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('no window owns web view'),
+      );
     });
 
     test('rejects rather than guessing when a window that could hold the named web view is unreachable', async () => {

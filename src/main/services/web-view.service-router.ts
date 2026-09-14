@@ -383,6 +383,12 @@ function assertOptionalContentZoomArgument(
  * Routing by it would zoom a pane in a window the user has already left. The startup skew it exists
  * to absorb is covered here by {@link resolveShardForWindow}, which waits out the focused window's
  * shard announcement.
+ *
+ * The no-owner-after-all-answered case is deliberately asymmetric with {@link moveWebView}, which
+ * rejects when no window has the named web view: these commands' callers are key and wheel handlers
+ * acting on a pane the user may just have closed, so resolving as a no-op keeps a leftover gesture
+ * from surfacing as an error with nothing left to act on, while the warning it logs is still the
+ * signal a programmatic caller with a stale id gets.
  */
 async function resolveContentZoomShard(
   webViewId: unknown,
@@ -411,7 +417,7 @@ async function resolveContentZoomShard(
     if (!owner) {
       // Reached only once every window has answered and none owns it — genuinely not open
       // anywhere, not merely unproven.
-      logger.debug(`${operation}: no window owns web view ${webViewId}; ignoring`);
+      logger.warn(`${operation}: no window owns web view ${webViewId}; ignoring`);
       return undefined;
     }
     return { shard: owner.shard, targetId: webViewId, areaId };
