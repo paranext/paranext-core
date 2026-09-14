@@ -13,6 +13,7 @@ test('the format toolbar is not sticky, so it cannot paint over panel chrome', (
 
   const toolbar = container.querySelector('[data-testid="editor-format-toolbar"]');
   expect(toolbar).not.toBeNull();
-  expect(toolbar?.className).not.toMatch(/\bsticky\b/);
-  expect(toolbar?.className).not.toMatch(/\bz-\d/);
+  expect(toolbar?.className).not.toMatch(/\b(sticky|fixed)\b/);
+  expect(toolbar?.className).not.toMatch(/\bz-/);
+  expect(toolbar?.getAttribute('style') ?? '').not.toMatch(/position|z-index/);
 });
