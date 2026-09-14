@@ -735,7 +735,7 @@ test.describe('multi-window lifecycle', () => {
     // --- The ring is keyed off the window main broadcasts as focused, not merely off which tab
     // holds a window's own Focus subject (every window tracks that independently). ---
     await focusWindowAndWaitForRouting(electronApp, window1Id);
-    await clickIntoHomeWebView(mainPage, window1Id);
+    await clickIntoHomeWebView(mainPage, await getHomeTabWebViewId(mainPage));
     await expect(async () => {
       expect(await tabHasWindowFocusRing(mainPage, 'Home')).toBe(true);
     }).toPass({ timeout: 30_000, intervals: [500] });
