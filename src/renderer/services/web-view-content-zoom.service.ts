@@ -227,7 +227,11 @@ function asMemory(value: unknown): MemoryRecord {
   if (typeof value !== 'object' || !value) return {};
   const out: MemoryRecord = {};
   Object.entries(value).forEach(([key, level]) => {
-    if (parseContentZoomMemoryKey(key) && isValidZoomFactor(level)) out[key] = level;
+    // Only the VALUE is checked: an entry whose key this build cannot parse still belongs to
+    // somebody — a zoom kind or an identity shape a newer build writes — and every write stores
+    // the whole record back. Nothing downstream needs them filtered: `collectMemoryLevelsFor`
+    // ignores a key it cannot parse.
+    if (isValidZoomFactor(level)) out[key] = level;
   });
   return out;
 }
