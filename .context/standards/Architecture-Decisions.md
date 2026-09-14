@@ -1702,11 +1702,12 @@ step, no automation. Just a record.
   it) that described what a `focus()` call does was corrected to state the latent-focus fact and this
   narrower rationale in place of the two disproved claims; comments describing a genuine OS-level
   raise (`shouldBringToFront`, `focusWindow`, `raiseMoveTarget`) needed no change; a `focus()` call is
-  not in tension with any of them. On a window that is never activated at all, the question does not
-  arise rather than going unanswered: nothing reads the latent active element while the window stays
-  in the background — every reader of `document.activeElement` in this repo lives inside a web
-  view's own document and is driven by interaction with that view — so which tab holds it has no
-  observable consequence until an activation makes it live, which is the case above.
+  not in tension with any of them. On a window that is never activated at all, the latent caret
+  itself has no effect while the window stays in the background — the one reader of
+  `document.activeElement` outside a web view's own document is the window service's
+  `detectFocus()`, driven by its `focusin`/`focusout` listeners, and it updates only the
+  last-focused-tab and BCV-navigation trackers; whether a latent `focus()` call dispatches `focusin`
+  in a backgrounded window was not measured by the probe above.
 - **Source:** PT-4465; probe run 2026-09-09 on native Windows.
 
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
