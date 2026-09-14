@@ -113,15 +113,15 @@ declare module 'papi-shared-types' {
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
     /**
-     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
-     * and Linux, Ctrl+`=` / Ctrl+`+` invoke this until PT-4577 hands those chords to per-pane
-     * content zoom (`platform.webViewContentZoomIn`).
+     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. Has no
+     * default keyboard shortcut: the Ctrl/⌘ `+`/`-`/`0` chords belong to per-pane content zoom
+     * (`platform.webViewContentZoomIn` / `…Out` / `…Reset`).
      */
     'platform.zoomIn': () => Promise<void>;
     /**
-     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
-     * and Linux, Ctrl+`-` invokes this until PT-4577 hands that chord to per-pane content zoom
-     * (`platform.webViewContentZoomOut`).
+     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. Has no
+     * default keyboard shortcut: the Ctrl/⌘ `+`/`-`/`0` chords belong to per-pane content zoom
+     * (`platform.webViewContentZoomIn` / `…Out` / `…Reset`).
      */
     'platform.zoomOut': () => Promise<void>;
     /**

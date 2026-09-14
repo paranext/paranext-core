@@ -1,53 +1,13 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  getContentZoomBootstrapScript,
-  getContentZoomStyleElement,
-} from './web-view-content-zoom.bootstrap-script';
-
-type PapiLike = {
-  commands: { sendCommand: ReturnType<typeof vi.fn> };
-  logger: { warn: ReturnType<typeof vi.fn> };
-};
-type Bound = {
-  adjustContentZoomById: ReturnType<typeof vi.fn>;
-  resetContentZoomById: ReturnType<typeof vi.fn>;
-  reportContentZoomAreasById: ReturnType<typeof vi.fn>;
-  reportContentZoomActiveAreaById: ReturnType<typeof vi.fn>;
-};
+import { getContentZoomStyleElement } from './web-view-content-zoom.bootstrap-script';
+import { install } from './web-view-content-zoom.bootstrap-script.test-utils';
 
 const TWO_AREAS =
   '<div id="toolbar">bar</div>' +
   '<div data-platform-content-zoom-root id="main"><p id="verse" tabindex="0">text</p></div>' +
   '<div data-platform-content-zoom-root="footnotes" id="foot"><p id="note" tabindex="0">note</p></div>';
-
-function install(
-  webViewId: string,
-  html: string,
-  bound?: Partial<Bound>,
-  levels: { [areaId: string]: number } = {},
-): { papi: PapiLike; bound: Bound } {
-  document.head.innerHTML = getContentZoomStyleElement('n', 1, levels);
-  document.body.innerHTML = html;
-  const papi: PapiLike = {
-    commands: { sendCommand: vi.fn(async () => undefined) },
-    logger: { warn: vi.fn() },
-  };
-  const allBound: Bound = {
-    adjustContentZoomById: vi.fn(),
-    resetContentZoomById: vi.fn(),
-    reportContentZoomAreasById: vi.fn(),
-    reportContentZoomActiveAreaById: vi.fn(),
-    ...bound,
-  };
-  Object.assign(window, { papi, webViewId, __platformContentZoom: undefined, ...allBound });
-  // Exercises the bootstrap exactly as it runs inside a web view: injected as source text and
-  // evaluated, not imported as a module.
-  // eslint-disable-next-line no-new-func
-  new Function(getContentZoomBootstrapScript(webViewId))();
-  return { papi, bound: allBound };
-}
 
 function key(init: KeyboardEventInit, target: EventTarget = window): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
@@ -1279,13 +1239,3 @@ describe('content-zoom bootstrap script', () => {
     expect(selectors.some((selector) => byId('nestedMain').matches(selector))).toBe(false);
   });
 });
-
-declare global {
-  interface Window {
-    __platformContentZoom?: {
-      showIndicator: (areaId: string, text: string) => void;
-      destroy: () => void;
-      activeArea?: string;
-    };
-  }
-}
