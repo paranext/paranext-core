@@ -167,7 +167,7 @@ describe('web-view-content-zoom.service', () => {
     await adjustContentZoom('editor-1', 1, 'main');
     await __flushContentZoomMemoryForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
-    expect(settings[MEMORY]).toEqual({ 'editor:proj-A:main': 1.1 });
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
     expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1');
     expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1');
@@ -180,7 +180,7 @@ describe('web-view-content-zoom.service', () => {
     await adjustContentZoom('editor-1', 1, 'footnotes');
     await __flushContentZoomMemoryForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2, footnotes: 1.1 } });
-    expect(settings[MEMORY]).toEqual({ 'editor:proj-A:main': 1.2, 'editor:proj-A:footnotes': 1.1 });
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.2, 'editor:PROJ-A:footnotes': 1.1 });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.2');
     expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1.1');
     expect(showIndicator).toHaveBeenLastCalledWith('footnotes', '110 %');
@@ -208,7 +208,7 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('leaves the shared memory key alone when the acting pane holds no level of its own', async () => {
-    settings[MEMORY] = { 'editor:proj-A:main': 1.2 };
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.2 };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
@@ -250,8 +250,8 @@ describe('web-view-content-zoom.service', () => {
     await __flushContentZoomMemoryForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2, footnotes: 1.1 } });
     expect(settings[MEMORY]).toEqual({
-      'editor:proj-A:main': 1.2,
-      'editor:proj-A:footnotes': 1.1,
+      'editor:PROJ-A:main': 1.2,
+      'editor:PROJ-A:footnotes': 1.1,
     });
     expect(settingsSet).toHaveBeenCalledTimes(1);
   });
@@ -261,7 +261,7 @@ describe('web-view-content-zoom.service', () => {
     expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
     await __flushContentZoomMemoryForTesting();
     expect(settingsSet).toHaveBeenCalledTimes(1);
-    expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:proj-A:main': 1.1 });
+    expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:PROJ-A:main': 1.1 });
   });
 
   it('skips the memory write and warns, without losing the pane update, when the memory read fails', async () => {
@@ -289,15 +289,15 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('keeps a memory entry whose key this build cannot parse when it writes the record back', async () => {
-    settings[MEMORY] = { 'palette:proj-A:main': 1.4 };
+    settings[MEMORY] = { 'palette:PROJ-A:main': 1.4 };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main');
     await __flushContentZoomMemoryForTesting();
     expect(settingsSet).toHaveBeenCalledWith(MEMORY, {
-      'palette:proj-A:main': 1.4,
-      'editor:proj-A:main': 1.1,
+      'palette:PROJ-A:main': 1.4,
+      'editor:PROJ-A:main': 1.1,
     });
   });
 
@@ -340,9 +340,9 @@ describe('web-view-content-zoom.service', () => {
 
   it('seeds a new pane per area from state, else memory, else the default', async () => {
     settings[MEMORY] = {
-      'editor:proj-A:main': 1.3,
-      'editor:proj-A:footnotes': 0.9,
-      'editor:proj-B:main': 2,
+      'editor:PROJ-A:main': 1.3,
+      'editor:PROJ-A:footnotes': 0.9,
+      'editor:PROJ-B:main': 2,
     };
     // Re-initializes so the memory cache the seeding reads holds the record set up just above.
     __setContentZoomDepsForTesting({});
@@ -373,9 +373,9 @@ describe('web-view-content-zoom.service', () => {
 
   it("seeds a newly opened pane's state from memory on its first area report", async () => {
     settings[MEMORY] = {
-      'editor:proj-A:main': 1.3,
-      'editor:proj-A:footnotes': 0.9,
-      'editor:proj-B:main': 2,
+      'editor:PROJ-A:main': 1.3,
+      'editor:PROJ-A:footnotes': 0.9,
+      'editor:PROJ-B:main': 2,
     };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
@@ -400,8 +400,8 @@ describe('web-view-content-zoom.service', () => {
 
   it('does not overwrite a pane that already holds levels', async () => {
     settings[MEMORY] = {
-      'editor:proj-A:main': 1.3,
-      'editor:proj-A:footnotes': 0.9,
+      'editor:PROJ-A:main': 1.3,
+      'editor:PROJ-A:footnotes': 0.9,
     };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
@@ -417,7 +417,7 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('seeds on the first non-empty report even when an earlier report for the same pane was empty', async () => {
-    settings[MEMORY] = { 'editor:proj-A:main': 1.3, 'editor:proj-A:footnotes': 0.9 };
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
     definitions.set('editor-6', {
@@ -444,7 +444,7 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('does not seed on a later report', async () => {
-    settings[MEMORY] = { 'editor:proj-A:main': 1.3 };
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.3 };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
     definitions.set('editor-5', {
@@ -458,7 +458,7 @@ describe('web-view-content-zoom.service', () => {
     // A memory push (live sharing) adds `footnotes` through the existing sibling-sync path, which
     // is independent of first-report seeding.
     memoryCallbacks.forEach((cb) =>
-      cb({ 'editor:proj-A:main': 1.3, 'editor:proj-A:footnotes': 1.6 }),
+      cb({ 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 1.6 }),
     );
     const stateAfterLiveSharing = definitions.get('editor-5')?.state;
     setContentZoomAreas('editor-5', ['main', 'footnotes']);
@@ -480,6 +480,28 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
+  it('folds project-id casing into one memory key, so panes naming the same project share a level', async () => {
+    definitions.set('editor-upper', {
+      id: 'editor-upper',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'PROJ-A',
+      state: {},
+    });
+    definitions.set('editor-lower', {
+      id: 'editor-lower',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-a',
+      state: {},
+    });
+    setContentZoomAreas('editor-upper', ['main']);
+    setContentZoomAreas('editor-lower', ['main']);
+    await adjustContentZoom('editor-lower', 1, 'main');
+    await __flushContentZoomMemoryForTesting();
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
+    memoryCallbacks.forEach((cb) => cb(settings[MEMORY]));
+    expect(definitions.get('editor-upper')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+  });
+
   it('brings a sibling pane of the same project in line per area when the memory changes (live sharing)', async () => {
     definitions.set('editor-2', {
       id: 'editor-2',
@@ -489,7 +511,7 @@ describe('web-view-content-zoom.service', () => {
     });
     setContentZoomAreas('editor-2', ['main', 'footnotes']);
     showIndicator.mockClear();
-    memoryCallbacks.forEach((cb) => cb({ 'editor:proj-A:footnotes': 1.4 }));
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:footnotes': 1.4 }));
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { footnotes: 1.4 } });
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { footnotes: 1.4 } });
     expect(showIndicator).not.toHaveBeenCalled();
@@ -505,7 +527,7 @@ describe('web-view-content-zoom.service', () => {
 
   it("drops a pane's own level when memory held its key and no longer does (a reset returns siblings together)", () => {
     requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4 } };
-    memoryCallbacks.forEach((cb) => cb({ 'editor:proj-A:main': 1.4 }));
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.4 }));
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.4 } });
     memoryCallbacks.forEach((cb) => cb({}));
     expect(definitions.get('editor-1')?.state).toEqual({});
@@ -517,11 +539,11 @@ describe('web-view-content-zoom.service', () => {
     await __flushContentZoomMemoryForTesting();
     await adjustContentZoom('editor-1', 1, 'main'); // 1.2, still only pending
     // The echo of the 1.1 write arriving after the 1.2 edit was already made locally.
-    memoryCallbacks.forEach((cb) => cb({ 'editor:proj-A:main': 1.1 }));
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.1 }));
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.2');
     await __flushContentZoomMemoryForTesting();
-    expect(settings[MEMORY]).toEqual({ 'editor:proj-A:main': 1.2 });
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.2 });
   });
 
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
@@ -730,17 +752,17 @@ describe('web-view-content-zoom.service', () => {
 
   it('prunes editor/notes memory whose project no longer exists, leaving resource memory alone', async () => {
     settings[MEMORY] = {
-      'editor:proj-Z:main': 1.2,
-      'notes:proj-A:footnotes': 1.1,
+      'editor:PROJ-Z:main': 1.2,
+      'notes:PROJ-A:footnotes': 1.1,
       'resource:res-X:main': 1.4,
     };
     __setContentZoomDepsForTesting({});
     await initializeContentZoomService();
-    expect(settings[MEMORY]).toEqual({ 'notes:proj-A:footnotes': 1.1, 'resource:res-X:main': 1.4 });
+    expect(settings[MEMORY]).toEqual({ 'notes:PROJ-A:footnotes': 1.1, 'resource:res-X:main': 1.4 });
   });
 
   it('does not write the memory setting when nothing needs pruning', async () => {
-    settings[MEMORY] = { 'notes:proj-A:footnotes': 1.1, 'resource:res-X:main': 1.4 };
+    settings[MEMORY] = { 'notes:PROJ-A:footnotes': 1.1, 'resource:res-X:main': 1.4 };
     __setContentZoomDepsForTesting({});
     settingsSet.mockClear();
     await initializeContentZoomService();
@@ -748,14 +770,14 @@ describe('web-view-content-zoom.service', () => {
   });
 
   it('prunes nothing when the project lookup answers with no projects at all', async () => {
-    settings[MEMORY] = { 'editor:proj-Z:main': 1.2, 'notes:proj-A:footnotes': 1.1 };
+    settings[MEMORY] = { 'editor:PROJ-Z:main': 1.2, 'notes:PROJ-A:footnotes': 1.1 };
     __setContentZoomDepsForTesting({ listProjects: async () => [] });
     settingsSet.mockClear();
     await initializeContentZoomService();
     expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
     expect(settings[MEMORY]).toEqual({
-      'editor:proj-Z:main': 1.2,
-      'notes:proj-A:footnotes': 1.1,
+      'editor:PROJ-Z:main': 1.2,
+      'notes:PROJ-A:footnotes': 1.1,
     });
   });
 
@@ -823,7 +845,7 @@ describe('web-view-content-zoom.service', () => {
       // only pass because `beforeunload` itself flushed the write, not because the delay elapsed.
       await vi.advanceTimersByTimeAsync(0);
       expect(settingsSet).toHaveBeenCalledTimes(1);
-      expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:proj-A:main': 1.1 });
+      expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:PROJ-A:main': 1.1 });
     } finally {
       vi.useRealTimers();
     }
