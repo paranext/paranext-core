@@ -618,6 +618,10 @@ function memoryKeyFor(
  * `memoryChain` rather than reading independently means two overlapping transactions apply in order
  * against the latest write instead of both starting from the same stale snapshot. Errors are caught
  * and logged here so one failed transaction never stops the next from running.
+ *
+ * `mutate` runs once, after that read and immediately before the write, so a caller may read
+ * whatever state it draws on at that moment rather than having to capture it before the transaction
+ * was queued.
  */
 function enqueueMemoryTransaction(
   mutate: (memory: MemoryRecord) => MemoryRecord | undefined,
@@ -646,7 +650,7 @@ function enqueueMemoryTransaction(
 
 /**
  * Forgets the edits a finished flush carried, leaving behind any key a newer edit has changed since
- * the flush read it — that one is a pending edit of its own and still needs a write.
+ * the transaction applied it — that one is a pending edit of its own and still needs a write.
  */
 function clearStoredMemoryWrites(stored: Map<string, number | undefined>): void {
   stored.forEach((level, key) => {
@@ -665,11 +669,23 @@ function clearStoredMemoryWrites(stored: Map<string, number | undefined>): void 
  * being dropped with the pane's state already changed. A run of {@link MAX_MEMORY_FLUSH_ATTEMPTS}
  * failures gives the edits up rather than retrying forever, which would hold the echo guard open
  * for the rest of the session.
+ *
+ * What a flush writes is what is pending when it applies. The edits are read inside the
+ * transaction's `mutate`, which runs after the stored record has been read, rather than when the
+ * flush was scheduled: an edit made to the same key while that read was in flight is carried by
+ * this write instead of the next one. Reading them earlier would send the older level to the
+ * setting first and into {@link cachedMemory} with it, so sibling panes in other windows — and a
+ * pane opened before the following flush, which seeds from that cache — would show a level one edit
+ * out of date until then.
  */
 async function flushMemoryWrites(): Promise<void> {
   if (pendingMemoryWrites.size === 0) return;
-  const flushing = new Map(pendingMemoryWrites);
+  // The edits this flush is answerable for, below and in the give-up warning. It starts as what is
+  // pending now because a transaction whose read fails never reaches `mutate`; one that gets that
+  // far replaces it with what is pending at that moment, which is what it actually stores.
+  let flushing = new Map(pendingMemoryWrites);
   const outcome = await enqueueMemoryTransaction((memory) => {
+    flushing = new Map(pendingMemoryWrites);
     let changed = false;
     flushing.forEach((level, key) => {
       if (level === undefined) {
