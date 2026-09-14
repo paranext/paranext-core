@@ -1001,6 +1001,31 @@ describe('web-view-content-zoom.service', () => {
     expect(cssVar(urlPane, '--platform-content-zoom-main')).toBe('');
   });
 
+  it("keeps re-pushing the other panes when one pane's push fails after the default changes", async () => {
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-B',
+      state: {},
+    });
+    __setContentZoomDepsForTesting({
+      getDefinition: (id: string) => {
+        if (id === 'editor-1') throw new Error('detached from the dock layout');
+        return definitions.get(id);
+      },
+    });
+    defaultCallbacks.length = 0;
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-2', ['main']);
+    const editor2Iframe = iframeFor('editor-2');
+    vi.mocked(logger.warn).mockClear();
+    expect(defaultCallbacks).toHaveLength(1);
+    defaultCallbacks[0](1.5);
+    expect(cssVar(editor2Iframe, '--platform-content-zoom-main')).toBe('1.5');
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+  });
+
   it("pushes a pane's variables when it is adopted into this window (onDidUpdateWebView)", () => {
     requireDefinition('editor-1').state = { [LEVELS]: { main: 1.6 } };
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1'); // not pushed yet
