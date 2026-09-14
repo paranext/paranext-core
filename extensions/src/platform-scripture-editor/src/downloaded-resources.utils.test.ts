@@ -18,6 +18,7 @@ import papi, { logger } from '@papi/frontend';
 // rule cannot model this Vitest-specific hoisting requirement.
 // eslint-disable-next-line import/first
 import {
+  indexDblResourcesByUid,
   matchesDownloaded,
   buildPickerResources,
   fetchDownloadedResources,
@@ -51,7 +52,7 @@ describe('matchesDownloaded', () => {
       matchesDownloaded(
         downloaded({ projectId: 'proj-web' }),
         { type: 'project', name: 'WEB', id: 'proj-web' },
-        [],
+        indexDblResourcesByUid([]),
       ),
     ).toBe(true);
   });
@@ -61,7 +62,7 @@ describe('matchesDownloaded', () => {
       matchesDownloaded(
         downloaded({ projectId: 'abc123def-extra' }),
         { type: 'dblResource', name: 'X', id: 'abc123def' },
-        [catalogRow('abc123def', 'abc123def-extra')],
+        indexDblResourcesByUid([catalogRow('abc123def', 'abc123def-extra')]),
       ),
     ).toBe(true);
   });
@@ -74,7 +75,29 @@ describe('matchesDownloaded', () => {
       matchesDownloaded(
         downloaded({ projectId: '9D60FD8F4A6E03BE' }),
         { type: 'dblResource', name: 'TNCV', id: '07ff1d5c6a53cb05' },
-        [catalogRow('07ff1d5c6a53cb05', '9D60FD8F4A6E03BE')],
+        indexDblResourcesByUid([catalogRow('07ff1d5c6a53cb05', '9D60FD8F4A6E03BE')]),
+      ),
+    ).toBe(true);
+  });
+
+  // Uid casing differs by source — the C# catalog whitelist stores them upper-case, the commentary
+  // whitelist lower-case — so the lookup cannot be an exact comparison.
+  it('matches a DblResourceReference whose uid casing differs from the catalog row', () => {
+    expect(
+      matchesDownloaded(
+        downloaded({ projectId: '9D60FD8F4A6E03BE' }),
+        { type: 'dblResource', name: 'TNCV', id: '07FF1D5C6A53CB05' },
+        indexDblResourcesByUid([catalogRow('07ff1d5c6a53cb05', '9D60FD8F4A6E03BE')]),
+      ),
+    ).toBe(true);
+  });
+
+  it('matches when the catalog row carries the upper-cased uid and the reference does not', () => {
+    expect(
+      matchesDownloaded(
+        downloaded({ projectId: '9D60FD8F4A6E03BE' }),
+        { type: 'dblResource', name: 'TNCV', id: '07ff1d5c6a53cb05' },
+        indexDblResourcesByUid([catalogRow('07FF1D5C6A53CB05', '9D60FD8F4A6E03BE')]),
       ),
     ).toBe(true);
   });
@@ -84,7 +107,7 @@ describe('matchesDownloaded', () => {
       matchesDownloaded(
         downloaded({ projectId: 'abc123def-extra' }),
         { type: 'dblResource', name: 'X', id: 'abc123def' },
-        [],
+        indexDblResourcesByUid([]),
       ),
     ).toBe(false);
   });
@@ -94,7 +117,7 @@ describe('matchesDownloaded', () => {
       matchesDownloaded(
         downloaded({ projectId: 'proj-web' }),
         { type: 'project', name: 'KJN', id: 'proj-kjn' },
-        [],
+        indexDblResourcesByUid([]),
       ),
     ).toBe(false);
   });
@@ -104,7 +127,7 @@ describe('matchesDownloaded', () => {
       matchesDownloaded(
         downloaded({ projectId: 'proj-web' }),
         { type: 'dblResource', name: 'X', id: '' },
-        [],
+        indexDblResourcesByUid([]),
       ),
     ).toBe(false);
   });

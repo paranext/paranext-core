@@ -71,6 +71,21 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
 }
 
 /**
+ * Index catalog rows by DBL entry uid for {@link matchesDownloaded}.
+ *
+ * Keys are lower-cased because uid casing differs by source — the C# catalog whitelist stores them
+ * upper-case, the commentary whitelist lower-case — so an exact comparison silently misses. Callers
+ * build this once rather than per comparison: the picker tests every downloaded project against
+ * every listed reference, and a scan of the ~1800-row catalog inside that pair of loops is a
+ * multiplicative cost for a lookup that does not change.
+ */
+export function indexDblResourcesByUid(
+  dblResources: DblResourceData[],
+): ReadonlyMap<string, DblResourceData> {
+  return new Map(dblResources.map((row) => [row.dblEntryUid.toLowerCase(), row]));
+}
+
+/**
  * Whether a downloaded project is the same resource as an existing reference: exact project-id
  * match for a `ProjectReference`, or — for a `DblResourceReference` — whichever catalog row carries
  * that uid, resolved against the project the same way the rest of the picker resolves it.
@@ -83,17 +98,18 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
  *
  * @param project The locally-installed project to test.
  * @param reference The existing reference to test it against.
- * @param dblResources Catalog rows, used to resolve a `DblResourceReference` to a local project.
+ * @param dblResourcesByUid Catalog rows from {@link indexDblResourcesByUid}, used to resolve a
+ *   `DblResourceReference` to a local project.
  */
 export function matchesDownloaded(
   project: DownloadedResource,
   reference: ResourceReference,
-  dblResources: DblResourceData[],
+  dblResourcesByUid: ReadonlyMap<string, DblResourceData>,
 ): boolean {
   if (isProjectReference(reference)) return reference.id === project.projectId;
   if (isDblResourceReference(reference)) {
     if (reference.id === '') return false;
-    const row = dblResources.find((r) => r.dblEntryUid === reference.id);
+    const row = dblResourcesByUid.get(reference.id.toLowerCase());
     return row !== undefined && doesCatalogRowCoverProject(row, project.projectId);
   }
   return false;
@@ -202,9 +218,11 @@ export function buildPickerResources(
   const referenced = effectiveItems
     .map((item) => resolveReferenced(item, dblResources))
     .filter((r): r is PickerResource => r !== undefined);
+  const dblResourcesByUid = indexDblResourcesByUid(dblResources);
   const extras = downloaded
     .filter(
-      (project) => !effectiveItems.some((item) => matchesDownloaded(project, item, dblResources)),
+      (project) =>
+        !effectiveItems.some((item) => matchesDownloaded(project, item, dblResourcesByUid)),
     )
     .map((project) => downloadedToRow(project, dblResources));
   return [...referenced, ...extras];
