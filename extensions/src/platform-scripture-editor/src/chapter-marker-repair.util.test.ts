@@ -234,6 +234,9 @@ function chapterNodeOf(usj: Usj): MarkerObject {
 
 describe('repairChapterMarkers against documents shaped like the PDP serves them', () => {
   it('reports no repair for a realistic chapter 1 with id, headers and intro', () => {
+    // A chapter 1 carrying NO chapter marker is a legal early return reporting no repair, so pin
+    // that the parser really did produce the marker — otherwise this passes while proving nothing.
+    expect(chapterNodeOf(usxStringToUsj(CH1_USX)).number).toBe('1');
     const { didRepair } = repairChapterMarkers(usxStringToUsj(CH1_USX), 1);
     expect(didRepair).toBe(false);
   });

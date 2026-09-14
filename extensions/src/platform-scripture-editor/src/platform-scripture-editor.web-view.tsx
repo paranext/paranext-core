@@ -141,9 +141,9 @@ import {
   prepareUsjForChapterSave,
 } from './chapter-marker-repair.util';
 import {
-  classifySaveFailure,
+  planSaveFailureResponse,
   SaveFailureKind,
-  shouldReportSaveFailure,
+  SaveFailureResponse,
   SYNC_EDIT_BLOCKED_REGEX,
 } from './save-failure-report.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -2801,17 +2801,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
      * generic message: the backend's own wording is written for a developer, so it stays in the log
      * and never reaches the toast.
      *
-     * Reports only when the kind of rejection CHANGES, so a chapter the backend keeps refusing is
-     * reported once instead of on every save. Touches no editor content, so both the live rejection
-     * path and the zombie path can report through it.
-     *
-     * @returns Whether the rejection was one the caller can recover from by restoring what the PDP
-     *   holds.
+     * Reports only when `shouldReport` says the kind of rejection has CHANGED, so a chapter the
+     * backend keeps refusing is reported once instead of on every save. Touches no editor content,
+     * so both the live rejection path and the zombie path can report through it.
      */
-    async function notifyRecoverableSaveFailure(errorMessage: string): Promise<boolean> {
-      const kind = classifySaveFailure(errorMessage);
-      const isRecoverable = kind !== 'unknown';
-      if (!shouldReportSaveFailure(kind, lastReportedSaveFailureKind.current)) return isRecoverable;
+    async function reportSaveFailure({ kind, shouldReport }: SaveFailureResponse): Promise<void> {
+      if (!shouldReport) return;
       lastReportedSaveFailureKind.current = kind;
 
       try {
@@ -2833,6 +2828,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               { projectName },
             ),
             severity: 'error',
+            // Stays up until a save gets through and dismisses it. An auto-closing toast would be
+            // the bug this notice exists to prevent: the kind is reported once per run of identical
+            // rejections, so once it closed itself the chapter would go on silently failing to save
+            // with nothing on screen to say so.
+            duration: 0,
             // This is about this editor's chapter, and routing is also what makes the shared
             // `notificationId` coalesce: an update that lands in a different window has never seen
             // the id and opens a SECOND toast instead of merging.
@@ -2844,7 +2844,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           `Error handling ${kind} exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
         );
       }
-      return isRecoverable;
     }
 
     async function saveUsjToPdpInternal(newUsj: Usj): Promise<boolean> {
@@ -2873,7 +2872,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               logger.error(
                 `Error saving USJ to PDP (write rejected after the in-flight guard released, so the editor keeps its content): ${zombieMessage}`,
               );
-              await notifyRecoverableSaveFailure(zombieMessage);
+              // Only the report half of the plan is used here — `shouldRevert` is deliberately
+              // ignored, for the reason given above.
+              await reportSaveFailure(
+                planSaveFailureResponse(zombieMessage, lastReportedSaveFailureKind.current),
+              );
             }
             return false;
           }
@@ -2891,10 +2894,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         const { result: saveResult } = outcome;
 
-        // The write ran without throwing, so whatever was refusing this chapter is no longer
-        // refusing it: forget the reported failure, so the next one — the same kind or a different
-        // one — is worth saying again. The generic save-failed toast is the one that stays up under
-        // a stable id, so take it down too; dismissing an id that was never sent is a no-op.
+        // This write came back with no rejection to classify — whether or not the PDP then
+        // declined the set — so the failure the user was told about is no longer outstanding.
+        // Forget it, so the next rejection is worth reporting even if it is the same kind, and
+        // take down the generic save-failed toast, which is the one that stays up under a stable id
+        // until something dismisses it. Dismissing an id that was never sent is a no-op.
         if (lastReportedSaveFailureKind.current !== undefined) {
           lastReportedSaveFailureKind.current = undefined;
           papi.notifications.dismiss(SAVE_FAILED_NOTIFICATION_ID).catch((error: unknown) => {
@@ -2944,13 +2948,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         const errorMessage = getErrorMessage(e);
         logger.error(`Error saving USJ to PDP: ${errorMessage}`);
 
-        // Only the two recoverable backend rejections revert the editor to the last PDP state. An
-        // unrecognized rejection must not: the editor's content is the user's only copy of the
-        // edit, and nothing here knows the backend would accept `usjFromPdp` in its place. The
-        // revert is safe for the recoverable pair here and only here: this write still owns the
-        // guard, so `usjFromPdp` is the state the failed write started from rather than a stale
-        // snapshot.
-        if (await notifyRecoverableSaveFailure(errorMessage)) {
+        // Only the two recoverable backend rejections revert the editor to the last PDP state; an
+        // unrecognized one must not (see `planSaveFailureResponse`). `usjFromPdp` is the right
+        // document to restore because this write held the guard when it rejected — the guard's
+        // `finally` has since cleared it — so the snapshot is the state the failed write started
+        // from rather than a `releaseAfterMs`-stale one, which is why the zombie path above
+        // deliberately does not do this.
+        const failureResponse = planSaveFailureResponse(
+          errorMessage,
+          lastReportedSaveFailureKind.current,
+        );
+        // Synchronously, before anything is awaited. Awaiting the notification first would yield
+        // across macrotask boundaries — long enough for `useEditorPdpSync` to apply a NEWER PDP
+        // delivery into the editor, which this revert would then overwrite with the older snapshot
+        // and record as last-sent, leaving the editor out of step until the next delivery.
+        if (failureResponse.shouldRevert) {
           try {
             if (usjFromPdp && editorRef.current) {
               usjSentToPdp.current = usjFromPdp;
@@ -2962,6 +2974,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             );
           }
         }
+        await reportSaveFailure(failureResponse);
         // The write RAN (and rejected); only a guard-dropped save reports false, since that is
         // the one case where the content never left the editor at all.
         return true;
