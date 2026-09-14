@@ -19,7 +19,7 @@ import { formatZoomPercent } from '@shared/utils/content-zoom.util';
 // The service itself, for the same reason as the type import above.
 // eslint-disable-next-line import/first
 import {
-  __flushContentZoomMemoryForTesting,
+  __flushContentZoomWritesForTesting,
   __setContentZoomDepsForTesting,
   adjustContentZoom,
   applyContentZoomForWebView,
@@ -163,7 +163,7 @@ describe('web-view-content-zoom.service', () => {
 
   it('zooms one area in from the default, writes state and memory for that area, pushes its variable and shows the indicator there', async () => {
     await adjustContentZoom('editor-1', 1, 'main');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
@@ -176,7 +176,7 @@ describe('web-view-content-zoom.service', () => {
     await adjustContentZoom('editor-1', 1, 'main');
     await adjustContentZoom('editor-1', 1, 'main');
     await adjustContentZoom('editor-1', 1, 'footnotes');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2, footnotes: 1.1 } });
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.2, 'editor:PROJ-A:footnotes': 1.1 });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.2');
@@ -196,9 +196,9 @@ describe('web-view-content-zoom.service', () => {
     await initializeContentZoomService();
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main'); // 1.6
-    await __flushContentZoomMemoryForTesting(); // persist 1.6 so the reset below deletes a real entry
+    await __flushContentZoomWritesForTesting(); // persist 1.6 so the reset below deletes a real entry
     await resetContentZoom('editor-1', 'main');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({});
     expect(settings[MEMORY]).toEqual({});
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.5');
@@ -219,7 +219,7 @@ describe('web-view-content-zoom.service', () => {
     requireDefinition('editor-1').state = {}; // the drift state: memory remembers, the pane does not
     settingsSet.mockClear();
     await resetContentZoom('editor-1', 'main');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(settingsSet).not.toHaveBeenCalled();
     memoryCallbacks.forEach((cb) => cb(settings[MEMORY]));
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
@@ -245,7 +245,7 @@ describe('web-view-content-zoom.service', () => {
     const second = adjustContentZoom('editor-1', 1, 'main');
     const third = adjustContentZoom('editor-1', 1, 'footnotes');
     await Promise.all([first, second, third]);
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2, footnotes: 1.1 } });
     expect(settings[MEMORY]).toEqual({
       'editor:PROJ-A:main': 1.2,
@@ -254,10 +254,55 @@ describe('web-view-content-zoom.service', () => {
     expect(settingsSet).toHaveBeenCalledTimes(1);
   });
 
+  it('writes the first step of a zoom burst at once and the rest as one trailing write', async () => {
+    vi.useFakeTimers();
+    try {
+      updateDefinition.mockClear();
+      for (let step = 0; step < 10; step += 1) {
+        // The burst is sequential the way a wheel gesture is, all inside one debounce window.
+        // eslint-disable-next-line no-await-in-loop
+        await adjustContentZoom('editor-1', 1, 'main');
+      }
+      expect(updateDefinition).toHaveBeenCalledTimes(1);
+      // Reads during the burst see the level the user is looking at, not the one last written.
+      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('2');
+      vi.advanceTimersByTime(250);
+      expect(updateDefinition).toHaveBeenCalledTimes(2);
+      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 2 } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes a deferred definition write on beforeunload', async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main');
+      await adjustContentZoom('editor-1', 1, 'main');
+      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+      window.dispatchEvent(new Event('beforeunload'));
+      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('brings both changed areas of a pane in line with one definition write', () => {
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4, footnotes: 1.4 } };
+    updateDefinition.mockClear();
+    memoryCallbacks.forEach((cb) =>
+      cb({ 'editor:PROJ-A:main': 1.2, 'editor:PROJ-A:footnotes': 1.3 }),
+    );
+    expect(updateDefinition).toHaveBeenCalledTimes(1);
+    expect(definitions.get('editor-1')?.state).toEqual({
+      [LEVELS]: { main: 1.2, footnotes: 1.3 },
+    });
+  });
+
   it('holds the memory write behind the debounce delay, then flushes it in one call', async () => {
     await adjustContentZoom('editor-1', 1, 'main');
     expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(settingsSet).toHaveBeenCalledTimes(1);
     expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:PROJ-A:main': 1.1 });
   });
@@ -278,7 +323,7 @@ describe('web-view-content-zoom.service', () => {
     });
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
     expect(showIndicator).toHaveBeenCalledWith('main', '110 %');
@@ -292,7 +337,7 @@ describe('web-view-content-zoom.service', () => {
     await initializeContentZoomService();
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(settingsSet).toHaveBeenCalledWith(MEMORY, {
       'palette:PROJ-A:main': 1.4,
       'editor:PROJ-A:main': 1.1,
@@ -383,7 +428,7 @@ describe('web-view-content-zoom.service', () => {
       state: {},
     });
     setContentZoomAreas('editor-3', ['main', 'footnotes']);
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(definitions.get('editor-3')?.state).toEqual({
       [LEVELS]: { main: 1.3, footnotes: 0.9 },
     });
@@ -428,7 +473,7 @@ describe('web-view-content-zoom.service', () => {
     showIndicator.mockClear();
     settingsSet.mockClear();
     setContentZoomAreas('editor-6', ['main', 'footnotes']);
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(definitions.get('editor-6')?.state).toEqual({
       [LEVELS]: { main: 1.3, footnotes: 0.9 },
     });
@@ -492,7 +537,7 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-upper', ['main']);
     setContentZoomAreas('editor-lower', ['main']);
     await adjustContentZoom('editor-lower', 1, 'main');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
     memoryCallbacks.forEach((cb) => cb(settings[MEMORY]));
     expect(definitions.get('editor-upper')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
@@ -532,13 +577,13 @@ describe('web-view-content-zoom.service', () => {
 
   it('ignores a stale memory echo for an area that already has a newer pending write', async () => {
     await adjustContentZoom('editor-1', 1, 'main'); // 1.1, flushed below
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     await adjustContentZoom('editor-1', 1, 'main'); // 1.2, still only pending
     // The echo of the 1.1 write arriving after the 1.2 edit was already made locally.
     memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.1 }));
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.2');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.2 });
   });
 
@@ -594,7 +639,7 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main');
     const parked = reads.parkNextRead();
-    const flushing = __flushContentZoomMemoryForTesting();
+    const flushing = __flushContentZoomWritesForTesting();
     const release = await parked;
     // A foreign window's value for the same key arrives while this window's write is in flight.
     memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 0.8 }));
@@ -610,9 +655,9 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main');
     reads.failNextReads(1);
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
   });
 
@@ -622,12 +667,12 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main');
     reads.failNextReads(3);
-    await __flushContentZoomMemoryForTesting();
-    await __flushContentZoomMemoryForTesting();
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
+    await __flushContentZoomWritesForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('giving up'));
     settingsSet.mockClear();
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(settingsSet).not.toHaveBeenCalled();
   });
 
@@ -920,7 +965,7 @@ describe('web-view-content-zoom.service', () => {
   it('ignores a non-finite deltaSteps, writing no state, memory or indicator', async () => {
     await adjustContentZoom('editor-1', Number.NaN, 'main');
     await adjustContentZoom('editor-1', Number.POSITIVE_INFINITY, 'main');
-    await __flushContentZoomMemoryForTesting();
+    await __flushContentZoomWritesForTesting();
     expect(definitions.get('editor-1')?.state).toEqual({});
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(settingsSet).not.toHaveBeenCalledWith(MEMORY, expect.anything());
