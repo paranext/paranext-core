@@ -185,6 +185,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         if (callBound(boundReportAreas, 'reporting the zoom areas', next.slice())) {
           areas = next;
           reported = true;
+          syncWheelListener();
         }
       }
       if (!activeArea || areas.indexOf(activeArea) === -1) setActive(areas[0]);
@@ -268,8 +269,21 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (e.deltaY === 0) return;
       act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
     };
+    // A non-passive listener is what lets this cancel the gesture, but it also means the compositor
+    // consults the main thread for the first event of every scrolling sequence - a cost a pane with
+    // no zoom area can never repay, since every gesture there ends in targetFor returning undefined.
+    // So it is registered and removed on the 0 <-> n transition of the area list. It stays on the
+    // window rather than moving to the marked roots, so a gesture outside every area still reaches
+    // the fallback in targetFor.
     const WHEEL_OPTIONS = { passive: false };
-    window.addEventListener('wheel', onWheel, WHEEL_OPTIONS);
+    let wheelListening = false;
+    const syncWheelListener = () => {
+      const wanted = areas.length > 0;
+      if (wanted === wheelListening) return;
+      wheelListening = wanted;
+      if (wanted) window.addEventListener('wheel', onWheel, WHEEL_OPTIONS);
+      else window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS);
+    };
 
     // An area's own text direction, read off one of its marked elements (falling back to the
     // document's when the area currently has no elements) so a marker inside an otherwise-LTR
@@ -341,7 +355,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       window.removeEventListener('pointerdown', onPointerDown, true);
       window.removeEventListener('focusin', onFocusIn, true);
       window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS);
+      if (wheelListening) { window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS); wheelListening = false; }
       if (observer) { observer.disconnect(); observer = undefined; }
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = undefined; }
       const badge = document.getElementById('${INDICATOR_ID}');
