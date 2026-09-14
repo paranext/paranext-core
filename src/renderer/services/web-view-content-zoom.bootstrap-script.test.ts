@@ -215,6 +215,37 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-5b', 1, 'main');
   });
 
+  it('keeps the non-passive wheel listener off the window while the pane marks no zoom area', async () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    const removed = vi.spyOn(window, 'removeEventListener');
+    try {
+      const { bound } = install('wv-wheel-gate', '<div id="toolbar">bar</div>');
+      await nextFrame();
+      const wheelRegistrations = () => added.mock.calls.filter(([type]) => type === 'wheel').length;
+      // Positive control: the other root listeners are registered, so a zero above is the gate and
+      // not a bootstrap that installed nothing.
+      expect(added.mock.calls.some(([type]) => type === 'keydown')).toBe(true);
+      expect(wheelRegistrations()).toBe(0);
+
+      const area = document.createElement('div');
+      area.id = 'late-area';
+      area.setAttribute('data-platform-content-zoom-root', 'main');
+      document.body.appendChild(area);
+      await nextFrame();
+      expect(wheelRegistrations()).toBe(1);
+      expect(wheel({ deltaY: -100, ctrlKey: true }, area).defaultPrevented).toBe(true);
+      expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-wheel-gate', 1, 'main');
+
+      area.remove();
+      await nextFrame();
+      expect(removed.mock.calls.some(([type]) => type === 'wheel')).toBe(true);
+      expect(wheel({ deltaY: -100, ctrlKey: true }).defaultPrevented).toBe(false);
+    } finally {
+      added.mockRestore();
+      removed.mockRestore();
+    }
+  });
+
   it('is suppressed by an inner capture handler that stops propagation (Text Collection grid rule)', () => {
     const { bound } = install('wv-6', TWO_AREAS);
     const inner = document.createElement('div');
