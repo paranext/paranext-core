@@ -630,6 +630,21 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('keeps a pane zoomable after the iframe load hook when it reported its areas before it', async () => {
+    vi.useFakeTimers();
+    try {
+      setContentZoomAreas('editor-1', ['main']);
+      applyContentZoomForWebView('editor-1');
+      expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
+      vi.advanceTimersByTime(2000);
+      expect(iframe.style.zoom).toBe(''); // not whole-scaled by the grace either
+    } finally {
+      vi.useRealTimers();
+    }
+    await adjustContentZoom('editor-1', 1, 'main');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
+  });
+
   it('gives a late-reported area its remembered level', async () => {
     requireDefinition('editor-1').state = { [LEVELS]: { footnotes: 1.7 } };
     setContentZoomAreas('editor-1', ['main']);

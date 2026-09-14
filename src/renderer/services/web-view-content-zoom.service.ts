@@ -474,19 +474,25 @@ export function pushContentZoom(
  * runs on unmount, so the pane's id, and anything keyed by it, survives a reload). Clears any
  * fallback grace or grant left over from whatever the pane showed before — otherwise a grant the
  * old content earned would still authorize scaling the new content before its own bootstrap gets a
- * chance to report — and drops the pane's last-reported areas, since they described that old
- * content too. For a non-URL pane this then also clears the whole-iframe `zoom` a reload does not
- * reset on its own (it lives on the host `<iframe>` element, not the content a reload replaces), so
- * the new content never renders whole-scaled on the strength of the old grant, before arming a
- * fresh grace exactly as if the pane had just been opened: a pane whose bootstrap never runs at all
- * (an HTML view opened with `allowScripts: false`, say) still eventually gets the whole-iframe
- * fallback, and one that does go on to report an area within the grace still cancels it as usual. A
- * URL pane keeps its immediate fallback and is left out of this reset: {@link pushContentZoom}
- * reapplies it below regardless, since {@link mayScaleWholeIframe} always allows a URL pane.
+ * chance to report. For a non-URL pane this then also clears the whole-iframe `zoom` a reload does
+ * not reset on its own (it lives on the host `<iframe>` element, not the content a reload
+ * replaces), so the new content never renders whole-scaled on the strength of the old grant, before
+ * arming a fresh grace exactly as if the pane had just been opened: a pane whose bootstrap never
+ * runs at all (an HTML view opened with `allowScripts: false`, say) still eventually gets the
+ * whole-iframe fallback, and one that does go on to report an area within the grace still cancels
+ * it as usual. A URL pane keeps its immediate fallback and is left out of this reset:
+ * {@link pushContentZoom} reapplies it below regardless, since {@link mayScaleWholeIframe} always
+ * allows a URL pane.
+ *
+ * The pane's last-reported areas are deliberately kept. A real load replaces the iframe's realm, so
+ * the fresh content's bootstrap reports its own areas from scratch; dropping them here instead
+ * races that report — the child document's `DOMContentLoaded`, which the bootstrap reports from,
+ * fires before the iframe element's `load` — and a pane that reported first would be left with no
+ * areas that nothing ever re-reports, since the bootstrap only calls the parent when its area LIST
+ * changes and keeps that list inside the iframe.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
   clearFallbackGrace(webViewId);
-  areasByWebViewId.delete(webViewId);
   const definition = deps.getDefinition(webViewId);
   if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     startFallbackGrace(webViewId);
