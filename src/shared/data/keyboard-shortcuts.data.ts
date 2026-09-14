@@ -225,72 +225,48 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/renderer/components/overlays/overlay-connection-lost.component.tsx'],
   },
   {
-    id: 'zoom-in',
-    purpose: 'Zoom in',
-    category: 'Zoom',
-    context: 'Main process (global)',
-    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
-    locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
-  },
-  {
-    id: 'zoom-out',
-    purpose: 'Zoom out',
-    category: 'Zoom',
-    context: 'Main process (global)',
-    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
-    locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
-  },
-  {
-    id: 'reset-zoom',
-    purpose: 'Reset zoom to default',
-    category: 'Zoom',
-    context: 'Main process (global)',
-    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
-    locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
-  },
-  {
     id: 'content-zoom-in',
-    purpose: 'Zoom the content of the pane in by one step (10 %)',
+    purpose:
+      'Zoom the focused zoom area of the pane in by 10 % (the area containing keyboard focus, else the area last used)',
     category: 'Zoom',
     context:
-      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+      'Inside any web view that marks at least one zoom area, the platform bootstrap handles the key and targets the area containing focus, else the area last clicked or focused. With keyboard focus on the window chrome (tab bar, reference box) the window-level listener targets the active tab’s active area and does nothing while a dialog is open. On macOS the View menu item carries the ⌘ accelerator.',
     // The handler also accepts `=` (the unshifted key sharing the `+` cap), the numpad `+` key, and
     // Ctrl+Shift+`=` — the `+` key itself on US/UK layouts — so the published `Ctrl++` is literally the working chord.
-    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
-    // branches that claim this chord are removed.
     keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
     locations: [
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
   },
   {
     id: 'content-zoom-out',
-    purpose: 'Zoom the content of the pane out by one step (10 %)',
+    purpose: 'Zoom the focused zoom area of the pane out by 10 %',
     category: 'Zoom',
-    context:
-      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    context: 'Same as content-zoom-in',
     // The handler also accepts the numpad `-` key.
-    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
-    // branches that claim this chord are removed.
     keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
     locations: [
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
   },
   {
     id: 'content-zoom-reset',
-    purpose: 'Return the content of the pane to the default zoom from Settings',
+    purpose:
+      'Return the focused zoom area of the pane to the default zoom set in Settings (not to 100 %)',
     category: 'Zoom',
-    context:
-      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    context: 'Same as content-zoom-in',
     // The handler also accepts the numpad `0` key.
-    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
-    // branches that claim this chord are removed.
     keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
     locations: [
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
   },
