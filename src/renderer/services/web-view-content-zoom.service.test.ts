@@ -329,6 +329,21 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it("writes a burst's pending levels when a pane is forgotten mid-burst", async () => {
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.1, written immediately
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.2, deferred into the open window
+      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+      // A re-render or a move between windows unmounts the pane while its definition lives on, so
+      // the tail of the gesture has somewhere to land.
+      forgetContentZoom('editor-1');
+      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('still flushes the memory write on beforeunload when a definition write fails', async () => {
     vi.useFakeTimers();
     try {
