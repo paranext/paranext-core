@@ -1,5 +1,11 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
+import {
+  DEFAULT_ZOOM_FACTOR,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+  ZOOM_STEP,
+} from '@shared/models/content-zoom.model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
@@ -30,6 +36,7 @@ import {
   PlatformError,
 } from 'platform-bible-utils';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { PercentStepper } from './percent-stepper.component';
 import './settings.component.scss';
 
 /** Props shared between the user and project setting components */
@@ -133,6 +140,9 @@ type CombinedSettingProps =
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
+  '%settings_platform_webViewContentZoom_decrease%',
+  '%settings_platform_webViewContentZoom_increase%',
+  '%settings_platform_webViewContentZoom_reset%',
   '%settings_errorMessages_invalidNumber%',
   '%settings_errorMessages_invalidJSON%',
   '%settings_errorMessages_invalidValue%',
@@ -201,66 +211,95 @@ export function Setting({
    * Validate and change a setting
    *
    * @param event `ChangeEvent<HTMLInputElement>` is for `Input`; `boolean | 'indeterminate'` is for
-   *   `Switch`
+   *   `Switch`; a raw `number` is for `PercentStepper`, which already knows the new factor and has
+   *   no change event to parse one out of
    */
-  const handleChangeSetting = async (
-    event: ChangeEvent<HTMLInputElement> | string[] | boolean | 'indeterminate',
-  ) => {
-    let newValue: unknown;
+  const handleChangeSetting = useCallback(
+    async (
+      event: ChangeEvent<HTMLInputElement> | string[] | boolean | 'indeterminate' | number,
+    ) => {
+      let newValue: unknown;
 
-    if (typeof event === 'string')
-      // This event came from a `Switch` component. It should not be indeterminate
-      logger.warn(`Setting checkbox attempted to set to 'indeterminate' for some reason`);
-    else if (typeof event === 'boolean') {
-      // This event came from a `Switch` component
-      newValue = event;
-    } else if (Array.isArray(event)) {
-      // This event came from a `UiLanguageSelector` component
-      newValue = event;
-    } else {
-      // This event came from an `Input` component
-      const { value } = event.target;
-      if (typeof setting === 'number') {
-        const numericValue = parseFloat(value);
-        if (Number.isNaN(numericValue)) {
-          setErrorMessage(localizedStrings['%settings_errorMessages_invalidNumber%']);
-          return;
-        }
-        newValue = numericValue;
-      } else if (typeof setting === 'boolean' || typeof setting === 'string') {
-        newValue = value;
-      } else if (typeof setting === 'object') {
-        try {
-          newValue = JSON.parse(value);
-        } catch {
-          setErrorMessage(localizedStrings['%settings_errorMessages_invalidJSON%']);
-          return;
-        }
+      if (typeof event === 'string')
+        // This event came from a `Switch` component. It should not be indeterminate
+        logger.warn(`Setting checkbox attempted to set to 'indeterminate' for some reason`);
+      else if (typeof event === 'boolean') {
+        // This event came from a `Switch` component
+        newValue = event;
+      } else if (typeof event === 'number') {
+        // A `PercentStepper` emits the new factor itself rather than a change event, so there is
+        // nothing to parse out of a target.
+        newValue = event;
+      } else if (Array.isArray(event)) {
+        // This event came from a `UiLanguageSelector` component
+        newValue = event;
       } else {
-        newValue = value;
+        // This event came from an `Input` component
+        const { value } = event.target;
+        if (typeof setting === 'number') {
+          const numericValue = parseFloat(value);
+          if (Number.isNaN(numericValue)) {
+            setErrorMessage(localizedStrings['%settings_errorMessages_invalidNumber%']);
+            return;
+          }
+          newValue = numericValue;
+        } else if (typeof setting === 'boolean' || typeof setting === 'string') {
+          newValue = value;
+        } else if (typeof setting === 'object') {
+          try {
+            newValue = JSON.parse(value);
+          } catch {
+            setErrorMessage(localizedStrings['%settings_errorMessages_invalidJSON%']);
+            return;
+          }
+        } else {
+          newValue = value;
+        }
       }
-    }
 
-    try {
-      if (validateSetting && (await validateSetting(settingKey, newValue, setting))) {
-        setErrorMessage(undefined);
-        // Await so a rejected write (e.g. the Send/Receive write-gate) reaches the catch below
-        // and surfaces as an error message instead of vanishing as an unhandled rejection.
-        if (setSetting) await setSetting(newValue);
-      } else {
-        setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
+      try {
+        if (validateSetting && (await validateSetting(settingKey, newValue, setting))) {
+          setErrorMessage(undefined);
+          // Await so a rejected write (e.g. the Send/Receive write-gate) reaches the catch below
+          // and surfaces as an error message instead of vanishing as an unhandled rejection.
+          if (setSetting) await setSetting(newValue);
+        } else {
+          setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
+        }
+      } catch (error) {
+        setErrorMessage(`Error changing setting ${settingKey}: ${getErrorMessage(error)}`);
       }
-    } catch (error) {
-      setErrorMessage(`Error changing setting ${settingKey}: ${getErrorMessage(error)}`);
-    }
-  };
+    },
+    [localizedStrings, setting, settingKey, setSetting, validateSetting],
+  );
 
   const debouncedHandleChange = debounce(handleChangeSetting, 500);
 
   const generateComponent = useCallback(() => {
     let component = <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>;
 
-    if (typeof setting === 'string' || typeof setting === 'number')
+    // The default pane zoom stores a factor but is edited as a percentage; the generic number
+    // branch below would put a raw decimal in a text box instead.
+    if (settingKey === 'platform.webViewContentZoom' && typeof setting === 'number')
+      component = (
+        <PercentStepper
+          key={settingKey}
+          value={setting}
+          min={MIN_ZOOM_FACTOR}
+          max={MAX_ZOOM_FACTOR}
+          step={ZOOM_STEP}
+          defaultValue={DEFAULT_ZOOM_FACTOR}
+          disabled={disabled}
+          groupLabel={label}
+          labels={{
+            increase: localizedStrings['%settings_platform_webViewContentZoom_increase%'],
+            decrease: localizedStrings['%settings_platform_webViewContentZoom_decrease%'],
+            reset: localizedStrings['%settings_platform_webViewContentZoom_reset%'],
+          }}
+          onChange={handleChangeSetting}
+        />
+      );
+    else if (typeof setting === 'string' || typeof setting === 'number')
       component = (
         <Input
           key={settingKey}
@@ -325,7 +364,9 @@ export function Setting({
     localizedStrings,
     setting,
     settingKey,
+    label,
     debouncedHandleChange,
+    handleChangeSetting,
     errorMessage,
     languages,
     defaultLanguages,
