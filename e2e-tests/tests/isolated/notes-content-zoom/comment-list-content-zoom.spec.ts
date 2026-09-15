@@ -51,18 +51,8 @@ const CONTENT_ZOOM_MEMORY_SETTING = 'platform.webViewContentZoomMemory';
  */
 const INDICATOR_SELECTOR = '#platform-content-zoom-indicator';
 
-/** Bounding box (main-frame-relative) of one zoom area's marked root element. */
-async function areaBox(
-  frame: Frame,
-  areaId: string,
-): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).boundingBox();
-  if (!box) throw new Error(`Zoom area "${areaId}" has no bounding box`);
-  return box;
-}
-
 /**
- * Ctrl+wheel over the centre of `box` (main-frame-relative coordinates, as `areaBox` returns).
+ * Ctrl+wheel over the centre of `box` (main-frame-relative coordinates, as `boundingBox` returns).
  * `deltaY: -120` zooms in, `+120` zooms out. Does not itself wait for the effect — callers poll the
  * resulting factor, never a bare timeout, since geometry inside a zoomed frame moves and a fixed
  * wait would race the debounced write.
@@ -101,6 +91,22 @@ function cardLocator(frame: Frame, threadId: string) {
   return frame.locator(`[role="option"][id="${threadId}"]`);
 }
 
+/**
+ * How far a card's top sits below the top of the visible list, in the card's own (zoomed) pixels.
+ * Measured against the WebView's viewport rather than the zoom root's box: the list scrolls an
+ * ancestor of the marked element, so the marked element travels with the content and its box is not
+ * a fixed anchor. Negative values (a card scrolled above the top) clamp to 0 — `toBeInViewport`
+ * already covers that direction.
+ */
+async function cardTopWithinView(card: ReturnType<typeof cardLocator>): Promise<number> {
+  return card.evaluate((element) => Math.max(0, element.getBoundingClientRect().top));
+}
+
+/** A card's rendered height in its own (zoomed) pixels. */
+async function cardHeight(card: ReturnType<typeof cardLocator>): Promise<number> {
+  return card.evaluate((element) => element.getBoundingClientRect().height);
+}
+
 test.describe('comment list content zoom', () => {
   let projectA: CommentTestProject;
   let projectB: CommentTestProject;
@@ -124,10 +130,35 @@ test.describe('comment list content zoom', () => {
 
     await waitForAppReady(mainPage);
 
+    // Threads span several chapters so the BCV-sync step has a distinguishable target, and the six
+    // after GEN 3:1 guarantee at least a zoomed viewport's worth of content below that target — a
+    // thread at the very end of the list can never be scrolled to the top of the view.
     const threadIds = await createCommentThreads(
       projectA,
-      ['GEN 1:1', 'GEN 1:5', 'GEN 2:1', 'GEN 3:1'],
-      ['Zoom test comment 1', 'Zoom test comment 2', 'Zoom test comment 3', 'Zoom test comment 4'],
+      [
+        'GEN 1:1',
+        'GEN 1:5',
+        'GEN 2:1',
+        'GEN 3:1',
+        'GEN 4:1',
+        'GEN 5:1',
+        'GEN 6:1',
+        'GEN 7:1',
+        'GEN 8:1',
+        'GEN 9:1',
+      ],
+      [
+        'Zoom test comment 1',
+        'Zoom test comment 2',
+        'Zoom test comment 3',
+        'Zoom test comment 4',
+        'Zoom test comment 5',
+        'Zoom test comment 6',
+        'Zoom test comment 7',
+        'Zoom test comment 8',
+        'Zoom test comment 9',
+        'Zoom test comment 10',
+      ],
     );
     await openCommentList(mainPage, projectA);
     const listId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
@@ -145,8 +176,9 @@ test.describe('comment list content zoom', () => {
       const cardBoxBefore = await cardBefore.boundingBox();
       if (!cardBoxBefore) throw new Error('Comment card not found');
 
-      const listBox = await areaBox(listFrame, '');
-      await ctrlWheel(mainPage, listBox, -120);
+      // Aimed at the first card rather than the zoom area's own box: the area is taller than the
+      // pane, so its centre point can lie outside the window and the wheel event would land nowhere.
+      await ctrlWheel(mainPage, cardBoxBefore, -120);
       await expect.poll(() => readFactor(listFrame, '')).toBe(1.1);
 
       const cardBoxAfter = await cardBefore.boundingBox();
@@ -227,20 +259,19 @@ test.describe('comment list content zoom', () => {
       }
       /* eslint-enable no-await-in-loop */
 
-      const zoomRootBox = await areaBox(listFrame, '');
       const gen3Card = cardLocator(listFrame, threadIds[3]);
       await navigateToolbarBcv(mainPage, 'Genesis 3:1');
       await expect(gen3Card).toBeInViewport({ timeout: 15_000 });
-      const gen3Box = await gen3Card.boundingBox();
-      if (!gen3Box) throw new Error('GEN 3:1 card not found');
-      expect(Math.abs(gen3Box.y - zoomRootBox.y)).toBeLessThanOrEqual(gen3Box.height);
+      await expect
+        .poll(() => cardTopWithinView(gen3Card), { timeout: 10_000 })
+        .toBeLessThanOrEqual(await cardHeight(gen3Card));
 
       const gen1Card = cardLocator(listFrame, threadIds[0]);
       await navigateToolbarBcv(mainPage, 'Genesis 1:1');
       await expect(gen1Card).toBeInViewport({ timeout: 15_000 });
-      const gen1Box = await gen1Card.boundingBox();
-      if (!gen1Box) throw new Error('GEN 1:1 card not found');
-      expect(Math.abs(gen1Box.y - zoomRootBox.y)).toBeLessThanOrEqual(gen1Box.height);
+      await expect
+        .poll(() => cardTopWithinView(gen1Card), { timeout: 10_000 })
+        .toBeLessThanOrEqual(await cardHeight(gen1Card));
     });
 
     await test.step('reopening the comment list restores the remembered level without any gesture', async () => {
