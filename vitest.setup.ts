@@ -168,6 +168,61 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// ─── Radix layout-measurement shims ──────────────────────────────────────────
+//
+// Radix primitives (dropdown menu, context menu, menubar, select, popover) measure their content on
+// mount. jsdom ships neither these Element methods nor (see `installNoopResizeObserver` below) a
+// ResizeObserver, so any test that opens one of these overlays throws or hangs waiting on layout it
+// can never produce.
+// Guarded on `Element` itself, not just its members: this file is shared by the repo's
+// node-environment test projects, where `Element` does not exist at all and `typeof
+// Element.prototype.x` would throw before the `typeof` could help.
+if (typeof Element !== 'undefined') {
+  if (typeof Element.prototype.hasPointerCapture !== 'function') {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
+  }
+}
+
+// `ResizeObserver` is deliberately NOT installed unconditionally above like the two shims it sits
+// next to. `use-shrink-step.hook.ts` (lib/platform-bible-react) branches on
+// `typeof ResizeObserver === 'undefined'` on purpose, so that any render test in the repo that
+// doesn't care about layout gets the widest shrink step by default instead of the 0-width jsdom
+// would otherwise report. Making `ResizeObserver` ambiently present here would silently flip that
+// default to the narrowest step for every such test — confirmed by mutation: doing so turns two
+// currently-passing platform-bible-react suites red
+// (components/advanced/toolbar.component.test.tsx and
+// components/advanced/tab-toolbar/tab-toolbar.component.test.tsx), and the same setup file is
+// shared by every jsdom test in the repo, not only platform-bible-react's. A test that opens a
+// Radix overlay and needs `ResizeObserver` to exist opts in explicitly by calling
+// `installNoopResizeObserver()` from its own `beforeAll`.
+export class NoopResizeObserver implements ResizeObserver {
+  // Keep an internal record of observed targets so the no-op methods touch `this` and don't
+  // trip @typescript-eslint/class-methods-use-this. No test inspects this state.
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+/** Installs a no-op `ResizeObserver` for a test that opens a Radix overlay and needs one to exist. */
+export function installNoopResizeObserver(): void {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+}
+
 // ─── NOTICES_POLICY_OVERLAY ──────────────────────────────────────────────────
 //
 // `loadPolicy` defaults its overlay from this variable at call time, so several notices suites that
