@@ -595,7 +595,7 @@ global.webViewComponent = function ChecklistWebView({
               results.push({
                 id: metadata.id,
                 shortName,
-                fullName: fullName ?? shortName,
+                fullName: fullName ?? undefined,
                 language,
               });
             }

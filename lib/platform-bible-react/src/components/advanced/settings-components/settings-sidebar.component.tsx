@@ -22,7 +22,21 @@ export type SelectedSettingsSidebarItem = {
   projectId?: string;
 };
 
-export type ProjectInfo = { projectId: string; projectName: string };
+export type ProjectInfo = {
+  projectId: string;
+  /**
+   * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+   * popover row. Sourced from the `platform.name` project setting.
+   */
+  projectName: string;
+  /**
+   * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+   * popover rows. Sourced from the `platform.fullName` project setting. When absent or equal to
+   * `projectName`, the row falls back to a single-line layout (matching the `ProjectSelector`
+   * de-dup rule for `fullName === shortName`).
+   */
+  projectFullName?: string;
+};
 
 export type SettingsSidebarProps = {
   /** Optional id for testing */
@@ -87,15 +101,16 @@ export function SettingsSidebar({
   );
 
   // Adapt the public `ProjectInfo[]` shape to `ProjectSelectorProject[]` for the canonical
-  // <ProjectSelector> trigger. We only have a single name string in the public API, so reuse it
-  // as both `shortName` (the trigger label) and `fullName` (the popover row's secondary line).
-  // The public prop shape is intentionally preserved so downstream consumers don't need to change.
+  // <ProjectSelector>. `projectFullName` is passed through as-is rather than falling back to the
+  // short name: the selector suppresses a full name that is absent or equal to the short name, and
+  // mirroring one into the other would make every project look like it has a full name and defeat
+  // searching on it.
   const projectSelectorProjects = useMemo<ProjectSelectorProject[]>(
     () =>
       projectInfo.map((info) => ({
         id: info.projectId,
         shortName: info.projectName,
-        fullName: info.projectName,
+        fullName: info.projectFullName,
       })),
     [projectInfo],
   );
@@ -173,6 +188,7 @@ export function SettingsSidebar({
                 buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
                 buttonPlaceholder={buttonPlaceholderText}
                 ariaLabel={projectsSidebarGroupLabel}
+                triggerLabelFormat="shortNameAndFullName"
                 // TODO: Check if this z-index override is necessary — the PopoverContent default
                 // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
                 popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}

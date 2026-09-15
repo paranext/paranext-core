@@ -24,7 +24,9 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import {
+  formatProjectName,
   getLocalizeKeyForScrollGroupId,
+  hasDistinctFullName,
   normalizeProjectId,
   type ScrollGroupId,
 } from 'platform-bible-utils';
@@ -672,7 +674,7 @@ function ProjectRowView({
   const rowNode = (
     <CommandItem
       ref={row.isSelected ? selectedRowRef : undefined}
-      value={`${row.rowKey} ${row.shortName} ${row.fullName} ${row.language ?? ''} ${row.languageCode ?? ''}`}
+      value={`${row.rowKey} ${row.shortName} ${row.fullName ?? ''} ${row.language ?? ''} ${row.languageCode ?? ''}`}
       onSelect={() => {
         if (row.isDisabled) return;
         onClick(row);
@@ -700,18 +702,16 @@ function ProjectRowView({
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
           measured on (truncation in EITHER child contributes to overflow).
-          When `fullName` is missing
-          or equal to `shortName` the second line would render the same
-          string the user already sees above (e.g. consumers that fall back
-          `fullName ?? shortName` upstream and forward an unset project
-          fullName). Suppress the muted line in that case so the row reads
-          as a single name. */}
+          The muted second line is suppressed whenever `hasDistinctFullName`
+          says there is nothing distinct to show, so the row reads as a
+          single name rather than repeating it — edit that helper, not this
+          condition, to change what counts as distinct. */}
       <span
         ref={labelRef}
         className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
       >
         <span className="tw:w-full tw:truncate tw:font-medium">{row.shortName}</span>
-        {row.fullName && row.fullName !== row.shortName && (
+        {hasDistinctFullName(row) && (
           <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
             {row.fullName}
           </span>
@@ -740,7 +740,9 @@ function ProjectRowView({
         className="tw:max-w-xs tw:text-center"
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
-        <div className="tw:font-semibold">{row.fullName}</div>
+        <div className="tw:font-semibold">
+          {hasDistinctFullName(row) ? row.fullName : row.shortName}
+        </div>
         {tooltipHasLanguage && (
           <div className="tw:text-sm">
             {row.language}
@@ -1022,7 +1024,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       result = result.filter(
         (r) =>
           r.shortName.toLowerCase().includes(needle) ||
-          r.fullName.toLowerCase().includes(needle) ||
+          (r.fullName ?? '').toLowerCase().includes(needle) ||
           (r.language ?? '').toLowerCase().includes(needle) ||
           (r.languageCode ?? '').toLowerCase().includes(needle),
       );
@@ -1223,13 +1225,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         if (props.renderTriggerLabel)
           return { node: props.renderTriggerLabel(selected), title: '' };
         let text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
-        if (
-          selected &&
-          props.triggerLabelFormat === 'shortNameAndFullName' &&
-          selected.fullName &&
-          selected.fullName !== selected.shortName
-        )
-          text = `${selected.shortName} - ${selected.fullName}`;
+        if (selected && props.triggerLabelFormat === 'shortNameAndFullName')
+          text = formatProjectName(selected);
         return { node: text, title: text };
       }
       case 'project-multi': {

@@ -40,11 +40,23 @@ async function getAllProjectIdsFromMetadata() {
   return allMetadata.flatMap((metadata) => metadata.id);
 }
 
-async function getProjectName(projectIdToGetName: string) {
+async function getProjectNames(
+  projectIdToGetName: string,
+): Promise<{ projectName: string; projectFullName?: string }> {
   const pdp = await projectDataProviders.get('platform.base', projectIdToGetName);
-  const projectName = await pdp.getSetting('platform.name');
-
-  return projectName;
+  // Fetch both names in parallel so the sidebar can render short + full name (matching
+  // manage-books / checks-side-panel behaviour). `platform.fullName` may be an empty string on
+  // legacy projects — collapse that to `undefined` so the sidebar's row renderer treats it as
+  // absent (falling back to a single-line layout).
+  const [projectName, projectFullNameRaw] = await Promise.all([
+    pdp.getSetting('platform.name'),
+    pdp.getSetting('platform.fullName'),
+  ]);
+  const projectFullName =
+    typeof projectFullNameRaw === 'string' && projectFullNameRaw.length > 0
+      ? projectFullNameRaw
+      : undefined;
+  return { projectName, projectFullName };
 }
 
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
@@ -183,10 +195,10 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
       }
 
       const projectOptions = await Promise.all(
-        allProjectIdsFromMetadata.map(async (id) => ({
-          projectId: id,
-          projectName: await getProjectName(id),
-        })),
+        allProjectIdsFromMetadata.map(async (id) => {
+          const { projectName, projectFullName } = await getProjectNames(id);
+          return { projectId: id, projectName, projectFullName };
+        }),
       );
       return projectOptions;
     }, []),

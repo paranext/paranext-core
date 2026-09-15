@@ -15,7 +15,11 @@ import {
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
-import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
+import {
+  compareProjectsByName,
+  formatReplacementString,
+  LanguageStrings,
+} from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -159,13 +163,11 @@ export function ChecksSidePanel({
 
   const sortedProjects = useMemo<ProjectSelectorProject[]>(
     () =>
-      [...projects]
-        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-        .map((project) => ({
-          id: project.id,
-          shortName: project.shortName,
-          fullName: project.fullName,
-        })),
+      [...projects].sort(compareProjectsByName).map((project) => ({
+        id: project.id,
+        shortName: project.shortName,
+        fullName: project.fullName,
+      })),
     [projects],
   );
 

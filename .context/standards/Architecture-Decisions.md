@@ -2079,6 +2079,40 @@ step, no automation. Just a record.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
 
+## adr-project-name-short-name-first: Project names lead with the short name, through one shared helper
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** Two surfaces formatted project names in two different orders — the Simple-mode
+  toolbar rendered `True Meaning Arabic (arb)` while `ProjectSelector`'s `shortNameAndFullName`
+  rendered `arb - True Meaning Arabic` — and each carried its own copy of the
+  `fullName && fullName !== shortName` de-dup rule. Five sites sorted project lists by three
+  different keys, so the same projects ordered differently depending on which surface listed them.
+- **Decision:** The short name leads everywhere, joined to the full name by a non-localized `" - "`.
+  `formatProjectName`, `hasDistinctFullName` and `compareProjectsByName` live in
+  `platform-bible-utils` — the one package every consumer already depends on — and every formatting
+  and sorting site calls them. Lists sort by `shortName` at `sensitivity: 'base'`; a site with its
+  own tie-break layers it on top. A sweep test fails the build if either rule is re-inlined outside
+  the helper.
+- **Alternatives:** **Keep long-name-first and change `ProjectSelector` instead** — rejected: the
+  short name is what a Paratext user identifies a project by and the field that must survive
+  truncation, so leading with it means the identifying half is never the half that is clipped.
+  **Sort by `fullName`** (what three of the five sites did) — rejected: with the short name leading
+  the label, a `fullName` sort orders on a field the user cannot see, so the list reads as unsorted.
+  **Per-consumer tests alone, without the sweep** — rejected: they pin today's consumers and say
+  nothing about the next surface added, which is the failure this exists to prevent.
+- **Consequences:** Supersedes the toolbar's documented long-name-first rationale. Five sort sites —
+  Find, the checks side panel, the renderer picker, `ProjectSelector`'s own rows, and the
+  sync-status popover's `use-sync-status.hook.ts` — now share one comparator, so Find, the checks
+  side panel, the renderer picker and the sync-status popover all reorder visibly; the last of
+  these also gains case-insensitive ordering it previously lacked. `secondaryFirst` on
+  `ToolbarCompoundLabel` loses its only in-repo consumer
+  but is retained, because the component is in the stable barrel and removing a documented prop is
+  a breaking change. `ProjectSelectorProject.fullName` became optional so a project with no full
+  name stops mirroring its short name into that field. Tab titles are out of scope: they already
+  carry only the short name, and they compose it inside a localized template that the sweep cannot
+  see — a follow-up is needed to route them through the helper.
+
 ## adr-project-selector-custom-sections: ProjectSelector takes ordered section descriptors, not a grouping callback
 
 - **Date:** 2026-09-09

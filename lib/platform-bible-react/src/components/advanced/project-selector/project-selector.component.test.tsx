@@ -895,3 +895,27 @@ describe('footerAction', () => {
     await waitFor(() => expect(screen.queryByTestId('project-selector-footer-action')).toBeNull());
   });
 });
+
+describe('ProjectSelector — project with no full name', () => {
+  it('renders and searches a project that has no full name at all', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={[{ id: 'p1', shortName: 'NOFULL' }]}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    // Typing drives the search filter, which reads `fullName` — it must not throw on a missing one.
+    const searchInput = await screen.findByPlaceholderText('Search projects & resources');
+    await user.type(searchInput, 'NOFULL');
+
+    expect(screen.getByRole('option', { name: 'NOFULL' })).toBeInTheDocument();
+    expect(screen.queryByText('undefined')).not.toBeInTheDocument();
+  });
+});

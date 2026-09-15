@@ -63,8 +63,10 @@ import {
   type ProjectSelectorSection,
 } from 'platform-bible-react/experimental';
 import {
+  formatProjectName,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  hasDistinctFullName,
   isPlatformError,
   type LanguageStrings,
   LocalizeKey,
@@ -133,7 +135,7 @@ function ProjectSelectorLabel({
   shortName,
   errorMessage,
 }: {
-  fullName: string;
+  fullName?: string;
   shortName: string;
   errorMessage?: string;
 }) {
@@ -175,13 +177,13 @@ function ProjectSelectorLabel({
 
   return (
     <ToolbarCompoundLabel
-      // The short name is the identifying part, so it is the field that must survive — but it reads
-      // second, hence `secondaryFirst`.
-      primary={isAtMinimum ? shortName : `(${shortName})`}
-      secondary={fullName}
-      secondaryFirst
+      // The short name identifies the project, so it leads and is the field that survives the
+      // narrowest step; the full name is the one that clips and then drops.
+      primary={shortName}
+      secondary={hasDistinctFullName({ shortName, fullName }) ? fullName : undefined}
+      separator=" - "
       showSecondary={!isAtMinimum}
-      fullText={`${fullName} (${shortName})`}
+      fullText={formatProjectName({ shortName, fullName })}
     />
   );
 }

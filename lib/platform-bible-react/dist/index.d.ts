@@ -1406,7 +1406,18 @@ export type SelectedSettingsSidebarItem = {
 };
 export type ProjectInfo = {
 	projectId: string;
+	/**
+	 * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+	 * popover row. Sourced from the `platform.name` project setting.
+	 */
 	projectName: string;
+	/**
+	 * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+	 * popover rows. Sourced from the `platform.fullName` project setting. When absent or equal to
+	 * `projectName`, the row falls back to a single-line layout (matching the `ProjectSelector`
+	 * de-dup rule for `fullName === shortName`).
+	 */
+	projectFullName?: string;
 };
 export type SettingsSidebarProps = {
 	/** Optional id for testing */
@@ -2119,8 +2130,9 @@ export type ToolbarCompoundLabelProps = {
 	 */
 	separator?: string;
 	/**
-	 * Render `secondary` before `primary`, for labels that read that way round — a project selector
-	 * shows `Translation Project 1 (TP1)`, full name first, short name last.
+	 * Render `secondary` before `primary`, for labels that read that way round — a measurement that
+	 * reads `12 pt` puts the number (`secondary`) first, even though `primary` (the unit, `pt`) is
+	 * still the field that must survive shrinking.
 	 */
 	secondaryFirst?: boolean;
 	/** Whether the secondary field is rendered at all. Defaults to `true`. */
