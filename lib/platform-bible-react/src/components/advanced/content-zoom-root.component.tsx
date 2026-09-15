@@ -6,12 +6,17 @@ import { forwardRef, HTMLAttributes } from 'react';
  * in paranext-core's `src/shared/models/web-view.model.ts`. This library cannot import that module
  * (it lives under core's `src/shared`, outside this package's reach), and `@papi/core` publishes
  * the constant as a type-only declaration whose value is not importable at runtime, so the literal
- * is duplicated here and guarded by a test that pins it equal to core's.
+ * is duplicated here; a platform test compares the two constants so they cannot drift silently.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
 
+/**
+ * Props for {@link ContentZoomRoot}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export type ContentZoomRootProps = HTMLAttributes<HTMLDivElement> & {
   /**
    * Id of the zoom area this element wraps: lower-case letters, digits and hyphens, starting with a
@@ -34,9 +39,9 @@ export type ContentZoomRootProps = HTMLAttributes<HTMLDivElement> & {
  * context menu; it remembers the chosen level per area and shows the zoom indicator. The view
  * itself writes nothing else to make zoom work.
  *
- * A view marks one element per area. Areas must not nest — a marked element found inside another
- * marked element is ignored. Keep toolbars, dividers and headers outside the marked element so they
- * are not scaled along with the content.
+ * Several elements may share one area id and zoom together. Areas must not nest — a marked element
+ * found inside another marked element is ignored. Keep toolbars, dividers and headers outside the
+ * marked element so they are not scaled along with the content.
  *
  * This component renders a plain `div` in normal flow and applies no classes of its own — the
  * caller supplies whatever layout classes its parent expects.
