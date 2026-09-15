@@ -4,12 +4,22 @@ import * as path from 'path';
 import correct from 'spdx-correct';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseDeclared } from './declared';
-import { classify, loadPolicy, CONFIDENCE_THRESHOLD } from './policy';
-import type { Detection, Exception } from './types';
+import {
+  classify,
+  loadPolicy,
+  mergePolicies,
+  overlayFromEnv,
+  CONFIDENCE_THRESHOLD,
+  MERGE_KINDS,
+} from './policy';
+import type { Detection, Exception, Policy } from './types';
 
 // Typed empty array rather than `[] as object[]`: `no-type-assertion/no-type-assertion` is an
 // error in this repo and does not exempt test files.
 const NO_EXCEPTIONS: Exception[] = [];
+
+/** Path to the committed policy, beside this test file. */
+const POLICY_PATH = path.join(__dirname, 'notices-policy.json');
 
 const POLICY = {
   allowed: ['MIT', 'Apache-2.0', 'BSD-3-Clause', 'MPL-2.0'],
@@ -1270,7 +1280,9 @@ describe('notices-policy.json', () => {
   // its copyleft ids are ones licensee can actually emit. Nothing else looks at the file that way,
   // and an unreachable copyleft entry (a deprecated spelling licensee never emits) is invisible to
   // every behavioral test in this file.
-  const POLICY_PATH = path.join(__dirname, 'notices-policy.json');
+  // What protects this from a stray NOTICES_POLICY_OVERLAY is `vitest.setup.ts`, which deletes the
+  // variable for the whole process. Passing `undefined` here would not: a default parameter fires on
+  // an explicitly passed `undefined` exactly as it does on an omitted argument.
   const policy = loadPolicy(POLICY_PATH);
 
   it('parses and has the expected top-level shape', () => {
@@ -1761,9 +1773,12 @@ describe('what a curated override may carry across', () => {
     declaredField: undefined,
     detection: { dir: '', files: [] },
   };
-  const withOverride = (entry: object) => ({
+  const withOverride = (
+    entry: object,
+    transform: (policy: Policy) => Policy = (policy) => policy,
+  ) => ({
     ...overridden,
-    policy: { ...POLICY, overrides: { 'nuget:X': entry } },
+    policy: transform({ ...POLICY, overrides: { 'nuget:X': entry } }),
   });
 
   // An override is keyed by NAME and pinned to no license text. `stalePolicyEntries` reports one
@@ -1824,6 +1839,166 @@ describe('what a curated override may carry across', () => {
     expect(v.verdict).toBe('blocked');
     expect(v.reason).toContain('1.0.0');
     expect(v.reason).toContain('re-read the package');
+  });
+
+  describe('an override linked to a separate program', () => {
+    // `overridden.version` above is '2.0.0'; the link is what is under test here, not the version
+    // pin, so this is kept in step with it rather than triggering the version-mismatch block.
+    const linked = {
+      license: 'GPL-2.0-or-later',
+      version: '2.0.0',
+      alwaysList: true,
+      separateProgram: 'Mercurial',
+    };
+    const withPrograms = (policy: Policy): Policy => ({
+      ...policy,
+      separatePrograms: {
+        Mercurial: {
+          spdx: ['GPL-2.0-or-later'],
+          copyright: 'c',
+          reviewer: 'r@e.org',
+          date: '2026-09-04',
+          reason: 'aggregation',
+          sourceAvailability: 's',
+          deliveries: [],
+        },
+      },
+    });
+
+    it('admits a copyleft license when the named program is recorded', () => {
+      const v = classify(withOverride(linked, withPrograms));
+      expect(v.verdict).toBe('overridden');
+      expect(v.spdxId).toBe('GPL-2.0-or-later');
+      expect(v.reason).toContain('separate program "Mercurial"');
+    });
+
+    it('still blocks a copyleft license with no link', () => {
+      // Destructured only to drop it from `unlinked` below.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { separateProgram, ...unlinked } = linked;
+      expect(classify(withOverride(unlinked, withPrograms)).verdict).toBe('blocked');
+    });
+
+    it('refuses a link to a program the table does not record', () => {
+      const v = classify(withOverride(linked));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('"separatePrograms" records no entry named "Mercurial"');
+    });
+
+    it('refuses a linked override whose license is free text', () => {
+      const v = classify(withOverride({ ...linked, license: 'GPL', nonSpdx: true }, withPrograms));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('SPDX expression');
+    });
+
+    // The link returns before the allowed/copyleft test, so the reviewed ENTRY is the only thing
+    // admitting this identifier. An override naming one the reviewer never read would carry it
+    // past that gate under cover of a program reviewed for entirely different terms.
+    it('refuses a linked override naming a copyleft license the program does not record', () => {
+      const v = classify(withOverride({ ...linked, license: 'AGPL-3.0-only' }, withPrograms));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('AGPL-3.0-only');
+      expect(v.reason).toContain('GPL-2.0-or-later');
+      expect(v.reason).toContain('fix whichever is wrong');
+    });
+
+    it('refuses a linked override naming an identifier on neither policy list', () => {
+      const v = classify(withOverride({ ...linked, license: 'BUSL-1.1' }, withPrograms));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('BUSL-1.1');
+      expect(v.reason).toContain('separate program "Mercurial"');
+    });
+
+    // Each case names operands the program DOES record, so the flattened-identifier test below
+    // cannot be what blocks it - only the expression's shape can. `recorded.ids` is FLATTENED, and
+    // `declared.ts` says why it is kept that way: the verdict, the lock and the reproduced text all
+    // describe the UNMODIFIED license. Tested against a program's plain identifiers, the base
+    // operand alone would satisfy the check and the row and lock would record terms - base plus
+    // exception - that nobody reviewed. The exception and declared paths already refuse this shape.
+    it.each([
+      ['a WITH exception', 'GPL-2.0-or-later WITH Classpath-exception-2.0'],
+      ['a conjunction', 'GPL-2.0-or-later AND MIT'],
+    ])('refuses a linked override whose license carries %s', (_label, license) => {
+      const recordingBothIds = (policy: Policy): Policy => {
+        const programs = withPrograms(policy).separatePrograms || {};
+        return {
+          ...policy,
+          separatePrograms: {
+            Mercurial: { ...programs.Mercurial, spdx: ['GPL-2.0-or-later', 'MIT'] },
+          },
+        };
+      };
+      const v = classify(withOverride({ ...linked, license }, recordingBothIds));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain(license);
+      expect(v.reason).toContain('separate program');
+    });
+
+    // The bound `readInstruments` puts on an UNLINKED override - the package must declare nothing
+    // parseable and identify no license text - does not apply to a linked one. Everything above
+    // uses the silent shape (`declaredField: undefined`, empty detection), which is the shape that
+    // hides this: with the bound in force the route works only while the package says nothing, so
+    // the feature's live case would rest on a third party's packaging metadata not changing.
+    describe('is consulted whatever the package says about itself', () => {
+      it('admits the program when the package declares the same copyleft license', () => {
+        const v = classify({
+          ...withOverride(linked, withPrograms),
+          declaredField: 'GPL-2.0-or-later',
+        });
+        expect(v.verdict).toBe('overridden');
+        expect(v.spdxId).toBe('GPL-2.0-or-later');
+        expect(v.reason).toContain('separate program "Mercurial"');
+      });
+
+      it('admits the program when a license text was identified in its files', () => {
+        const v = classify({
+          ...withOverride(linked, withPrograms),
+          detection: detected('GPL-2.0-or-later'),
+        });
+        expect(v.verdict).toBe('overridden');
+        expect(v.spdxId).toBe('GPL-2.0-or-later');
+      });
+
+      // The reviewed entry is still the only thing admitting the identifier: reaching
+      // `applyOverride` is not the same as clearing it.
+      it('still refuses a linked override naming a license the program does not record', () => {
+        const v = classify({
+          ...withOverride({ ...linked, license: 'AGPL-3.0-only' }, withPrograms),
+          declaredField: 'AGPL-3.0-only',
+        });
+        expect(v.verdict).toBe('blocked');
+        expect(v.reason).toContain('AGPL-3.0-only');
+      });
+
+      // The other half of the contract, and what keeps the exemption narrow: an override with no
+      // link is exactly as weak as it was, so it still cannot contradict a package's own metadata.
+      it('leaves an unlinked override bound by what the package declares', () => {
+        // Destructured only to drop it from `unlinked` below.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { separateProgram, ...unlinked } = linked;
+        const v = classify({
+          ...withOverride({ ...unlinked, license: 'MIT' }, withPrograms),
+          declaredField: 'GPL-2.0-or-later',
+        });
+        expect(v.verdict).toBe('blocked');
+        expect(v.spdxId).toBeUndefined();
+      });
+    });
+
+    it('admits a linked override naming any identifier the program does record', () => {
+      const withTwoIds = (policy: Policy): Policy => {
+        const programs = withPrograms(policy).separatePrograms || {};
+        return {
+          ...policy,
+          separatePrograms: {
+            Mercurial: { ...programs.Mercurial, spdx: ['GPL-2.0-or-later', 'GPL-3.0-or-later'] },
+          },
+        };
+      };
+      const v = classify(withOverride({ ...linked, license: 'GPL-3.0-or-later' }, withTwoIds));
+      expect(v.verdict).toBe('overridden');
+      expect(v.spdxId).toBe('GPL-3.0-or-later');
+    });
   });
 });
 
@@ -2010,5 +2185,305 @@ describe('loadPolicy', () => {
       },
     });
     expect(Object.keys(loadPolicy(file).licenseTexts ?? {})).toEqual(['nuget:Some.Package']);
+  });
+});
+
+describe('policy overlay', () => {
+  const basePolicy: Policy = {
+    allowed: ['MIT'],
+    copyleft: ['GPL-2.0-only'],
+    elections: { 'npm:jszip': { elected: 'MIT', of: 'MIT OR GPL-3.0-or-later', reason: 'x' } },
+    exceptions: [],
+    overrides: { 'nuget:Spart': { license: 'Zlib', version: '1.0.0' } },
+    platformOnlyPackages: ['fsevents'],
+  };
+
+  const NAMES = { base: 'notices-policy.json', overlay: 'overlay.json' };
+
+  it('refuses an overlay key no policy field matches, rather than dropping it', () => {
+    // The merge copies only the fields it enumerates, so a misspelled table would leave the
+    // committed empty one in place and every gate below would pass over it.
+    // Assigned rather than written inline: the overlay is untyped JSON at runtime, and a key
+    // `Partial<Policy>` does not declare is exactly what this refuses.
+    const misspelled: Partial<Policy> = {};
+    Object.assign(misspelled, { seperatePrograms: {} });
+
+    expect(() => mergePolicies(basePolicy, misspelled, NAMES)).toThrow(
+      /"seperatePrograms".*no such field/s,
+    );
+  });
+
+  it('tells a reserved key apart from a misspelled one', () => {
+    // Both are refused, but only one is a typo. A `*Note` field is spelled correctly and simply
+    // belongs to the committed file, so pointing its author at the spelling sends them hunting
+    // something that is not there.
+    const reserved: Partial<Policy> = {};
+    Object.assign(reserved, { separateProgramsNote: 'x' });
+
+    expect(() => mergePolicies(basePolicy, reserved, NAMES)).toThrow(
+      /"separateProgramsNote".*reserves to itself.*spelled correctly/s,
+    );
+    expect(() => mergePolicies(basePolicy, reserved, NAMES)).not.toThrow(/check the spelling/);
+  });
+
+  it('refuses a "product" block in the committed policy, which describes a downstream build', () => {
+    expect(() =>
+      mergePolicies({ ...basePolicy, product: { name: 'P', repository: 'o/r' } }, {}, NAMES),
+    ).toThrow(/declares a "product" block/);
+  });
+
+  it('refuses an overlay that puts one identifier on both classification lists', () => {
+    // Copyleft is tested first, so the identifier still blocks - but the "allowed" entry does
+    // nothing and the eventual block message never mentions the overlay author's edit.
+    expect(() => mergePolicies(basePolicy, { allowed: ['GPL-2.0-only'] }, NAMES)).toThrow(
+      /GPL-2\.0-only.*both "allowed" and\s+"copyleft"/s,
+    );
+  });
+
+  it('reads the overlay path by value and treats blank as none', () => {
+    expect(overlayFromEnv({ NOTICES_POLICY_OVERLAY: '  ' })).toBeUndefined();
+    expect(overlayFromEnv({})).toBeUndefined();
+    expect(overlayFromEnv({ NOTICES_POLICY_OVERLAY: '/tmp/o.json' })).toBe('/tmp/o.json');
+  });
+
+  it('unions the lists and merges the tables', () => {
+    const merged = mergePolicies(
+      basePolicy,
+      {
+        allowed: ['PSF-2.0', 'MIT'],
+        overrides: { 'nuget:hgWindows-6.3.1': { license: 'GPL-2.0-or-later', version: '1.0.0.3' } },
+        product: { name: 'P', repository: 'o/r' },
+      },
+      { base: 'base.json', overlay: 'overlay.json' },
+    );
+    expect(merged.allowed).toEqual(['MIT', 'PSF-2.0']);
+    expect(merged.copyleft).toEqual(['GPL-2.0-only']);
+    expect(Object.keys(merged.overrides || {})).toEqual(['nuget:Spart', 'nuget:hgWindows-6.3.1']);
+    expect(merged.platformOnlyPackages).toEqual(['fsevents']);
+    expect(merged.product).toEqual({ name: 'P', repository: 'o/r' });
+  });
+
+  it('refuses an overlay key the base already records', () => {
+    expect(() =>
+      mergePolicies(
+        basePolicy,
+        { overrides: { 'nuget:Spart': { license: 'MIT', versionIndependent: true } } },
+        { base: 'base.json', overlay: 'overlay.json' },
+      ),
+    ).toThrow(/overlay\.json redefines overrides nuget:Spart, which base\.json already records/);
+  });
+
+  it('concatenates exceptions and still refuses two for one package', () => {
+    const exception = {
+      package: 'npm:x',
+      spdx: 'MIT',
+      reviewer: 'a@b.c',
+      date: '2026-01-01',
+      reason: 'r',
+      textSha256: 'abc',
+      version: '1.0.0',
+    };
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-'));
+    // `finally`, for the reason the `loadPolicy` describe above states: a failing expectation aborts
+    // the body, so cleanup written as its last statement is skipped on exactly the runs that leave a
+    // directory behind.
+    try {
+      const baseFile = path.join(dir, 'base.json');
+      const overlayFile = path.join(dir, 'overlay.json');
+      fs.writeFileSync(baseFile, JSON.stringify({ ...basePolicy, exceptions: [exception] }));
+      fs.writeFileSync(overlayFile, JSON.stringify({ exceptions: [exception] }));
+      expect(() => loadPolicy(baseFile, overlayFile)).toThrow(/more than one "exceptions" entry/);
+      fs.writeFileSync(
+        overlayFile,
+        JSON.stringify({ exceptions: [{ ...exception, package: 'npm:y' }] }),
+      );
+      expect(loadPolicy(baseFile, overlayFile).exceptions.map((e) => e.package)).toEqual([
+        'npm:x',
+        'npm:y',
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The JSON text each overlay file holds, rather than a value to stringify: what the refusal is
+  // about is the shape on disk, and a null literal has no TypeScript spelling this repo permits.
+  it.each([
+    ['null', 'null'],
+    ['a list', '[{ "allowed": ["MIT"] }]'],
+    ['a number', '5'],
+    ['a string', '"allowed"'],
+  ])('refuses an overlay that is %s rather than a JSON object', (_label, contents) => {
+    // Without this refusal a non-object overlay reaches `Object.keys`: `null` throws naming neither
+    // the file nor a remedy, and every other shape yields no keys at all, so the unknown-key and
+    // reserved-key refusals pass over it and the merge returns the committed policy unchanged. That
+    // is the silent drop those refusals exist to prevent, reached from the document rather than a
+    // field.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-shape-'));
+    try {
+      const baseFile = path.join(dir, 'base.json');
+      const overlayFile = path.join(dir, 'overlay.json');
+      fs.writeFileSync(baseFile, JSON.stringify(basePolicy));
+      fs.writeFileSync(overlayFile, contents);
+      expect(() => loadPolicy(baseFile, overlayFile)).toThrow(/does not hold a JSON object/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['allowed', 'copyleft', 'platformOnlyPackages'] as const)(
+    'refuses a single %s value written as a bare string rather than a one-item list',
+    (field) => {
+      // Why the shape is worth refusing: spreading a string unions it character by character, so
+      // the list gains "A", "p", "a"... and the identifier the author meant to admit is not in it -
+      // a silent wrong answer rather than a failure.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-list-'));
+      try {
+        const baseFile = path.join(dir, 'base.json');
+        const overlayFile = path.join(dir, 'overlay.json');
+        fs.writeFileSync(baseFile, JSON.stringify(basePolicy));
+        fs.writeFileSync(overlayFile, JSON.stringify({ [field]: 'Apache-2.0' }));
+        expect(() => loadPolicy(baseFile, overlayFile)).toThrow(
+          new RegExp(`"${field}" as a string`),
+        );
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('refuses an "exceptions" value that is not a list', () => {
+    // `[...(overlay.exceptions || [])]` threw a bare "is not iterable" naming neither file nor field.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-exceptions-'));
+    try {
+      const baseFile = path.join(dir, 'base.json');
+      const overlayFile = path.join(dir, 'overlay.json');
+      fs.writeFileSync(baseFile, JSON.stringify(basePolicy));
+      fs.writeFileSync(overlayFile, JSON.stringify({ exceptions: { package: 'npm:x' } }));
+      expect(() => loadPolicy(baseFile, overlayFile)).toThrow(/"exceptions" as a object/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses an overlay path that names no readable file', () => {
+    expect(() => loadPolicy(POLICY_PATH, '/nonexistent/overlay.json')).toThrow(
+      /the notices policy overlay/,
+    );
+  });
+});
+
+describe('every field MERGE_KINDS declares is wired into the merge that reads it', () => {
+  // `satisfies Record<keyof Policy, MergeKind>` forces a new `Policy` field to DECLARE how it
+  // merges. It cannot force `mergePolicies` to implement it: the merged object spreads the base, so
+  // a field declared here and never wired into the literal type-checks while the overlay's value is
+  // silently dropped. `OVERLAY_KEYS` is derived from this same table, so such a key would be
+  // ACCEPTED by the unknown-key refusal on the way in and lost on the way out - a downstream
+  // declaration going undisclosed with the run exiting 0, which is what the overlay design exists
+  // to prevent. Walking the table is what turns "declared" into "carried".
+
+  // EVERY contributable field, not the handful the merge happens to read. A field left undefined
+  // here is a base side the merge can be handed by mistake - `mergeTable('licenseTexts',
+  // base.copyrightNotices, …)` - without the walk noticing, because merging `undefined` still lets
+  // the overlay's sentinel through. Most such swaps are caught by the compiler; the ones between
+  // two identically-typed tables are not, and this is what covers them.
+  const committed: Policy = {
+    allowed: ['MIT'],
+    copyleft: ['GPL-2.0-only'],
+    platformOnlyPackages: ['npm:base-platform-only'],
+    exceptions: [],
+    elections: { 'npm:base-election': { spdx: 'MIT', reason: 'r' } },
+    overrides: { 'nuget:Base.Override': { license: 'MIT', version: '1.0.0' } },
+    copyrightNotices: { 'npm:base-copyright': 'Copyright (c) base' },
+    licenseTexts: { 'nuget:Base.Texts': { file: 'base.txt', sha256: 'abc' } },
+    unbundledDependencies: { 'npm:base-unbundled': { reason: 'r' } },
+    snapStagePackages: { 'base-stage': { spdx: 'MIT', copyright: 'c' } },
+    staticAssetNotices: { 'base-asset': { spdx: 'MIT', copyright: 'c' } },
+    copiedPlatformLibraries: { 'base-library': { spdx: 'MIT', copyright: 'c' } },
+    separatePrograms: { BaseProgram: { spdx: ['MIT'] } },
+    externalExtensions: { 'base-extension': { itemized: false, reason: 'r' } },
+  };
+  const NAMES = { base: 'base.json', overlay: 'overlay.json' };
+
+  const SENTINEL_ID = 'SENTINEL-1.0';
+  const SENTINEL_KEY = 'npm:sentinel';
+  const SENTINEL_EXCEPTION: Exception = {
+    package: SENTINEL_KEY,
+    spdx: 'MIT',
+    reviewer: 'a@b.c',
+    date: '2026-01-01',
+    reason: 'r',
+    textSha256: 'abc',
+    version: '1.0.0',
+  };
+  const SENTINEL_PRODUCT = { name: 'Sentinel', repository: 'o/r' };
+
+  /** A property of an unknown value, narrowed rather than asserted. */
+  const field = (value: unknown, key: string): unknown =>
+    value && typeof value === 'object' && key in value ? value[key] : undefined;
+
+  /** The sentinel an overlay contributes for a field that merges this way. */
+  function sentinelFor(kind: string): unknown {
+    if (kind === 'union') return [SENTINEL_ID];
+    if (kind === 'concat') return [SENTINEL_EXCEPTION];
+    if (kind === 'table') return { [SENTINEL_KEY]: {} };
+    return SENTINEL_PRODUCT;
+  }
+
+  /** Whether the overlay's contribution survived into the merged policy. */
+  function carried(kind: string, merged: unknown): boolean {
+    if (kind === 'union') return Array.isArray(merged) && merged.includes(SENTINEL_ID);
+    if (kind === 'concat')
+      return (
+        Array.isArray(merged) &&
+        merged.some((entry: unknown) => field(entry, 'package') === SENTINEL_KEY)
+      );
+    if (kind === 'table')
+      return !!merged && typeof merged === 'object' && Object.hasOwn(merged, SENTINEL_KEY);
+    return JSON.stringify(merged) === JSON.stringify(SENTINEL_PRODUCT);
+  }
+
+  const contributable = Object.entries(MERGE_KINDS).filter(([, kind]) => kind !== 'base-only');
+
+  it('offers something to contribute for each way a field can merge', () => {
+    // Otherwise a kind could lose its last field and this would stop covering that branch in
+    // silence, or the walk below could run over an empty list and pass on absence.
+    expect(contributable.length).toBeGreaterThan(0);
+    expect(new Set(contributable.map(([, kind]) => kind))).toEqual(
+      new Set(['union', 'concat', 'table', 'overlay-only']),
+    );
+  });
+
+  it('carries the overlay value through for every field an overlay may contribute', () => {
+    const dropped = contributable
+      .filter(([key, kind]) => {
+        // One key at a time, so a failure names the field that is not wired rather than the run.
+        const overlay: Partial<Policy> = {};
+        Object.assign(overlay, { [key]: sentinelFor(kind) });
+        return !carried(kind, field(mergePolicies(committed, overlay, NAMES), key));
+      })
+      .map(([key]) => key);
+
+    expect(dropped).toEqual([]);
+  });
+
+  it('keeps the committed value for every field, merging an overlay that contributes nothing', () => {
+    // The OTHER half, and the one the overlay walk above cannot see. A merge expression handed the
+    // wrong BASE field - `mergeTable('unbundledDependencies', base.externalExtensions, …)` - still
+    // lets the overlay's sentinel through, so the walk passes while the committed determinations
+    // for that field are replaced by another field's. Between identically-typed tables the compiler
+    // cannot catch it either, which leaves this as the only thing that can.
+    //
+    // `product` is excluded because it is `overlay-only`: the committed file may not carry one, and
+    // `mergePolicies` refuses a base that does.
+    const contributableBase = contributable.filter(([key]) => key !== 'product');
+    const merged = mergePolicies(committed, {}, NAMES);
+    const changed = contributableBase
+      .filter(
+        ([key]) => JSON.stringify(field(merged, key)) !== JSON.stringify(field(committed, key)),
+      )
+      .map(([key]) => key);
+
+    expect(changed).toEqual([]);
   });
 });

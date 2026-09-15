@@ -37,7 +37,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import JSON5 from 'json5';
 
 import { compareStrings } from './compare';
 import { identify } from './identify';
@@ -76,14 +75,26 @@ import { describeBlock, openPolicyQuestions, stalePolicyEntries } from './report
 import { render, joinTexts } from './render';
 import { declaredLicenseField, readPackageNotices, readTextFile } from './package-files';
 import { messageOf, readJsonFile } from './read-json';
+import { assertProductMatchesPackaging, readPackagingConfig } from './product';
+import type { PackagingConfig } from './product';
+import {
+  assertSeparateProgramLinksRecorded,
+  assertSeparateProgramsRecorded,
+  assertSeparateProgramTextsAvailable,
+} from './separate-programs';
+import { assertExternalExtensionsRecorded, externalExtensionNames } from './external-extensions';
 import type {
   CopiedPlatformLibrary,
   Detection,
+  ExternalExtension,
   Lock,
   MergedNugetPackage,
   NamedText,
+  Override,
   Policy,
+  ProductBlock,
   ReportRow,
+  SeparateProgram,
   ShippedPackage,
   SnapStagePackage,
 } from './types';
@@ -92,7 +103,8 @@ const REPO = path.resolve(__dirname, '..', '..', '..');
 const OUT = path.join(REPO, 'THIRD-PARTY-NOTICES.md');
 const LOCK = path.join(REPO, 'THIRD-PARTY-NOTICES.lock.json');
 const POLICY = path.join(__dirname, 'notices-policy.json');
-const ELECTRON_BUILDER = path.join(REPO, 'electron-builder.json5');
+/** Exported so `derived-invariants.test.ts` checks the SAME file this pipeline reads. */
+export const ELECTRON_BUILDER = path.join(REPO, 'electron-builder.json5');
 const MANIFESTS = path.join(REPO, '.notices', 'modules');
 const DEV_PACKAGES = path.join(REPO, 'dev-packages.json');
 
@@ -177,11 +189,11 @@ const SNAP_MIN_STAGE_PACKAGES = 8;
  * the notices cannot describe a different set than the one that ships. They are neither npm nor
  * NuGet packages, so nothing else in this pipeline can see them, but they ARE redistributed inside
  * the artifact - see the "Linux snap" section `render` writes from this list.
+ *
+ * Takes the already-parsed packaging config rather than reading it again, so
+ * `electron-builder.json5` is parsed exactly once per `buildReport` run - see the caller.
  */
-function snapStagePackages(): string[] {
-  const config: { snap?: { stagePackages?: string[] } } = JSON5.parse(
-    fs.readFileSync(ELECTRON_BUILDER, 'utf8'),
-  );
+function snapStagePackages(config: PackagingConfig): string[] {
   const staged = config.snap?.stagePackages ?? [];
   if (staged.length < SNAP_MIN_STAGE_PACKAGES)
     throw new Error(
@@ -348,6 +360,37 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
 }
 
 /**
+ * The Notes cell for a NuGet row.
+ *
+ * A curated note replaces the nuspec copyright because it is the more specific statement about that
+ * package; the copyright itself is kept in its own field, which is what pairs with a canonical
+ * license text.
+ *
+ * The separate-program sentence is DERIVED from the link rather than left to the overlay's
+ * hand-typed `note`. The row is the only place a reader meets that package, and on its own it reads
+ * as an ordinary dependency listed under copyleft terms - the fact that answers that is the entry
+ * in the separate-programs section, which the row has to point at.
+ *
+ * The name is trimmed the way `applyOverride` trims it before looking the program up, so a value
+ * carrying stray whitespace resolves and renders as the same string.
+ *
+ * The link is not validated here, and does not need to be. `applyOverride` checks it for a row the
+ * override actually settles, and `assertSeparateProgramLinksRecorded` checks every recorded link
+ * against the table among the whole-set assertions in `buildReport` - which is what covers a row
+ * cleared by its own declared license, the case classification never routes through
+ * `applyOverride`. By the time this renders, the name resolves.
+ */
+export function nugetNote(pkg: MergedNugetPackage, override: Override): string {
+  const ships = pkg.assemblies?.length ? `Ships ${pkg.assemblies.join(', ')}.` : '';
+  const programName = String(override.separateProgram ?? '').trim();
+  const separate = programName
+    ? `Redistributed as the separate program "${programName}" - see "Third-party ` +
+      'programs redistributed as separate executables".'
+    : '';
+  return [ships, separate, override.note || pkg.copyright].filter(Boolean).join(' ');
+}
+
+/**
  * Composes one NuGet package's verdict.
  *
  * `nuget-license` reports nuspec metadata, not license files, so `detection` is always empty here
@@ -368,7 +411,6 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
  */
 function nugetVerdict(pkg: MergedNugetPackage, policy: Policy): ReportRow {
   const override = (policy.overrides || {})[`nuget:${pkg.name}`] || {};
-  const ships = pkg.assemblies?.length ? `Ships ${pkg.assemblies.join(', ')}.` : '';
   return {
     ...pkg,
     // A nuspec DOES have a copyright field, so unlike the npm side this is a real second source
@@ -401,10 +443,7 @@ function nugetVerdict(pkg: MergedNugetPackage, policy: Policy): ReportRow {
     // Read by `nuget-set.ts` from the restored package folder, the same place its license files
     // come from. Without this `render.ts`'s NOTICE section could never fire for a NuGet package.
     notices: pkg.notices,
-    // A curated note replaces the nuspec copyright in the Notes column because it is the more
-    // specific statement about that package; the copyright itself is kept in its own field, which
-    // is what pairs with a canonical license text.
-    note: [ships, override.note || pkg.copyright].filter(Boolean).join(' '),
+    note: nugetNote(pkg, override),
   };
 }
 
@@ -719,8 +758,11 @@ type BuiltReport = {
   snapCopyrightTexts: NamedText[];
   staticAssetNotices: NamedText[];
   copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>;
+  separatePrograms: Record<string, SeparateProgram>;
+  externalExtensions: Record<string, ExternalExtension>;
   packedExtensions: string[];
   shipsElectron: boolean;
+  product: ProductBlock | undefined;
 };
 
 /**
@@ -775,6 +817,35 @@ export function assertCopiedPlatformLibraryIdsAllowed(policy: Policy): void {
 }
 
 /**
+ * The policy gates whose inputs are committed files and nothing else.
+ *
+ * The packaging config, the policy tables, and the evidence paths those tables name - no module
+ * manifest, no build output, no directory whose contents differ per platform. So every path that
+ * reads the policy at all can afford to run them, and they are spelled ONCE so that the two that do
+ * cannot diverge. `buildReport` is the natural place to add a gate and the one a developer runs
+ * locally; `verifyNpmShippingSet` is the only notices check the release workflows run. A gate that
+ * reaches the first and not the second does not run on the path that cuts a release.
+ *
+ * Deliberately NOT here: `assertExternalExtensionsRecorded`, whose input is a directory listing;
+ * `assertStaticAssetNoticesRecorded` and the copied-platform-library pair, which read build output.
+ * Each of those is called where it can actually answer, with the scope that path can establish.
+ */
+function assertCommittedPolicyGates(policy: Policy, packagingConfig: PackagingConfig): void {
+  assertProductMatchesPackaging(
+    policy.product,
+    packagingConfig,
+    path.relative(REPO, ELECTRON_BUILDER),
+  );
+  assertSeparateProgramsRecorded(
+    REPO,
+    policy.separatePrograms || {},
+    new Set([...policy.allowed, ...policy.copyleft]),
+  );
+  assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
+  assertSeparateProgramLinksRecorded(policy.overrides || {}, policy.separatePrograms || {});
+}
+
+/**
  * Everything the document and its lock are written from, derived from this tree in one pass.
  *
  * Derives; never writes. `main` decides what becomes of the result - write the pair, diff it
@@ -800,6 +871,14 @@ export function buildReport(): BuiltReport {
 
   const policy = loadPolicy(POLICY);
 
+  // Parsed once for the whole run - `assertProductMatchesPackaging` below, `externalExtensionNames`
+  // and `snapStagePackages` further down all read the same packaging config.
+  const packagingConfig = readPackagingConfig(ELECTRON_BUILDER);
+
+  // Refused before anything is derived: the product name goes into the first sentence of the
+  // document, and the rest read committed files this run has already paid to open.
+  assertCommittedPolicyGates(policy, packagingConfig);
+
   const { npmPackages, unresolvedStylesheetSpecifiers } = buildNpmShippingSet(policy);
   const npmVerdicts = classifyNpmPackages(npmPackages, policy);
 
@@ -809,13 +888,19 @@ export function buildReport(): BuiltReport {
   assertStaticAssetNoticesRecorded(REPO, policy);
   assertCopiedPlatformLibraryIdsAllowed(policy);
   assertCopiedPlatformLibrariesRecorded(policy, copiedPlatformLibraryStems());
+  // Every platform's mapped folders, because this is the run that WRITES the document and the
+  // document covers every platform. `verifyNpmShippingSet` narrows to the platform in hand.
+  assertExternalExtensionsRecorded(
+    externalExtensionNames(REPO, packagingConfig),
+    policy.externalExtensions || {},
+  );
 
   const nugetVerdicts = buildNugetVerdicts({ policy, collected, directReferences, alwaysListed });
 
   const verdicts = [...npmVerdicts, ...nugetVerdicts];
   // Refused here rather than at render time: the document is written from this table, so a staged
   // library it does not classify has to stop the run before anything is produced from it.
-  const staged = snapStagePackages();
+  const staged = snapStagePackages(packagingConfig);
   assertSnapStagePackagesClassified(staged, policy.snapStagePackages || {});
 
   return {
@@ -849,12 +934,19 @@ export function buildReport(): BuiltReport {
     // The fifth: native libraries copied out of the build machine itself, which no manifest
     // declares and no restore resolves - see `CopiedPlatformLibrary`.
     copiedPlatformLibraries: policy.copiedPlatformLibraries || {},
+    // The sixth: third-party programs redistributed as separate executables and invoked as
+    // subprocesses - see `SeparateProgram`.
+    separatePrograms: policy.separatePrograms || {},
+    // The seventh: extensions packed from other repositories, whose bundled dependencies no
+    // manifest here describes - see `ExternalExtension`.
+    externalExtensions: policy.externalExtensions || {},
     // What the two prose sections are gated on, so neither can survive the thing it describes. The
     // extension set is the directory listing of `extensions/dist`, which is the tree an installer
     // packs; `electron` ships as a prebuilt runtime compiled into no bundle, so the policy's
     // `unbundledDependencies` entry is the record that it ships at all.
     packedExtensions: packedExtensionNames(REPO),
     shipsElectron: Boolean((policy.unbundledDependencies || {}).electron),
+    product: policy.product,
   };
 }
 
@@ -865,7 +957,10 @@ export function buildReport(): BuiltReport {
  * `CI=false` and `CI=0` - the two spellings somebody uses to say the opposite - both select the CI
  * branch, after which the check hard-fails on a condition it has explicitly decided not to fail on
  * locally. `acceptShrinkFromEnv` (`shipping-set.ts`) reads its variable the same way for the same
- * reason; these two are the pipeline's only environment reads.
+ * reason; `overlayFromEnv` (`policy.ts`) is the third: these three are the only environment reads
+ * that change what the pipeline produces. `effectivePlatform` reads a fourth,
+ * `NOTICES_FORCE_PLATFORM`, which exists only so the degradation suite can turn the write refusal
+ * on and is deliberately one-way - it is not a knob this pipeline offers a caller.
  */
 export function inCi(env: typeof process.env = process.env): boolean {
   const raw = (env.CI || '').trim().toLowerCase();
@@ -935,7 +1030,32 @@ function verifyNpmShippingSet() {
   const committed = verifyCommittedDocument();
   if (!committed) return;
 
+  // The committed-file gates live in `buildReport`, which this path deliberately does not reach -
+  // but they cost a policy read this function already pays for below, and running them here is what
+  // covers a release cut from a ref whose Linux `--verify` leg never ran.
+  let policy;
   try {
+    // Inside the try, like every other failure this path can produce: `--verify-shipping-set` is
+    // the only notices gate the release workflows run, and a missing overlay file or a moved
+    // evidence path escaping as a raw Node stack trace is exactly the shape this script's
+    // message-only convention exists to avoid.
+    policy = loadPolicy(POLICY);
+    const packagingConfig = readPackagingConfig(ELECTRON_BUILDER);
+    assertCommittedPolicyGates(policy, packagingConfig);
+    // Not a committed-file gate - it lists a directory - but this is the one path that runs beside
+    // a build that packages an installer, which is the only place it can answer at all. Without it
+    // the sequence is: a downstream drops a new extension zip into its mapped folder, does not
+    // regenerate notices (nothing about adding an extension looks like a notices change), and cuts
+    // a release. `--verify-document` is a hash compare of two unchanged committed files, so every
+    // release gate passes and the installer ships an extension whose bundled dependencies are
+    // itemized nowhere and whose omission the document does not record - the state this module
+    // exists to prevent. Scoped to `process.platform`, because the folders another platform's block
+    // maps are not copied in on this one.
+    assertExternalExtensionsRecorded(
+      externalExtensionNames(REPO, packagingConfig, process.platform),
+      policy.externalExtensions || {},
+    );
+
     ({
       packages: npmPackages,
       unresolvedStylesheetSpecifiers,
@@ -956,7 +1076,7 @@ function verifyNpmShippingSet() {
     // The same union `buildReport` applies - see `withPlatformOnlyPackages`. Without it this check
     // compares a set missing the other platforms' packages against a lock that records them, and
     // reports every one as `removed:` on the platform that does not install them.
-    npmPackages = withPlatformOnlyPackages(npmPackages, loadPolicy(POLICY));
+    npmPackages = withPlatformOnlyPackages(npmPackages, policy);
 
     // BEFORE the floors, which is the whole point of the `report` mode above. Both floors measure
     // the derived set, and a warm cache is the one condition under which that set is known to be

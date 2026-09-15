@@ -39,9 +39,266 @@ function normalizeDetectedId(id: string): string {
   return corrected || 'NOASSERTION';
 }
 
+/** The environment variable naming a second policy file to merge over the committed one. */
+export const OVERLAY_ENV = 'NOTICES_POLICY_OVERLAY';
+
 /**
- * Loads the policy document from disk: the single source of every repository-specific licensing
- * decision.
+ * The overlay path the environment names, or `undefined` when it names none.
+ *
+ * Read by VALUE like `inCi` and `acceptShrinkFromEnv`: a blank value is "no overlay", never a file
+ * called "". A downstream repository that builds a product from this source sets this to its own
+ * policy file, so its determinations live beside its build rather than in a patch to this file.
+ */
+export function overlayFromEnv(env: typeof process.env = process.env): string | undefined {
+  const raw = (env[OVERLAY_ENV] || '').trim();
+  return raw || undefined;
+}
+
+/**
+ * Refuses an overlay field that is not a list of strings.
+ *
+ * `readJsonFile<Partial<Policy>>` is a cast, so every value an overlay contributes is untyped until
+ * something tests it. A single identifier written as `"allowed": "Apache-2.0"` rather than
+ * `["Apache-2.0"]` would otherwise spread character by character into the classification list, and
+ * the identifier the author meant to admit would not be in it.
+ */
+function requireList(field: string, value: unknown, overlayName: string): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string'))
+    throw new Error(
+      `${overlayName} records "${field}" as ${Array.isArray(value) ? 'a list holding something other than a string' : `a ${typeof value}`}. ` +
+        'It is a list of strings; a single value still has to be written as a one-item list.',
+    );
+}
+
+/** The two lists' union, in base order then overlay order, each name once. */
+function unionLists(base: string[] | undefined, overlay: string[] | undefined): string[] {
+  return [...new Set([...(base || []), ...(overlay || [])])];
+}
+
+/**
+ * One keyed table merged, refusing a key both files record.
+ *
+ * An overlay ADDS determinations. Letting it replace one would let a downstream file silently
+ * change what this repository's reviewers established about a package both ship.
+ */
+function mergeTable<T>(
+  table: string,
+  base: Record<string, T> | undefined,
+  overlay: Record<string, T> | undefined,
+  names: { base: string; overlay: string },
+): Record<string, T> {
+  const collisions = Object.keys(overlay || {})
+    .filter((key) => base && Object.hasOwn(base, key))
+    .sort(compareStrings);
+  if (collisions.length)
+    throw new Error(
+      `${names.overlay} redefines ${table} ${collisions.join(', ')}, which ${names.base} already ` +
+        'records. An overlay adds determinations; it never replaces one. Remove the entry from ' +
+        'the overlay, or change the committed policy.',
+    );
+  return { ...(base || {}), ...(overlay || {}) };
+}
+
+/**
+ * How each `Policy` field combines when an overlay is merged over the committed file.
+ *
+ * Declared as a table rather than spelled out per field in `mergePolicies`, because the merge
+ * returns `Policy` by spreading the base: a field added to `Policy` later would satisfy the return
+ * type while being silently taken from the base, with the overlay's value dropped and no type
+ * error. `satisfies Record<keyof Policy, MergeKind>` makes a field that declares nothing a compile
+ * error - it has to say how it merges before this file builds. It cannot make the merge IMPLEMENT
+ * what the field declares, and `OVERLAY_KEYS` is derived from here, so a key declared and left
+ * unwired would be accepted on the way in and dropped on the way out; `policy.test.ts` walks this
+ * table and fails on exactly that.
+ *
+ * - `union` - the two lists' union, in base order then overlay order.
+ * - `concat` - appended; `assertOneExceptionPerPackage` then rejects a duplicate key.
+ * - `table` - keyed, with a key both files record refused outright.
+ * - `base-only` - the committed value stands; an overlay may not contribute one.
+ * - `overlay-only` - the overlay's value alone, and the committed file may not carry one.
+ */
+type MergeKind = 'union' | 'concat' | 'table' | 'base-only' | 'overlay-only';
+
+export const MERGE_KINDS = {
+  allowed: 'union',
+  copyleft: 'union',
+  platformOnlyPackages: 'union',
+  exceptions: 'concat',
+  elections: 'table',
+  overrides: 'table',
+  copyrightNotices: 'table',
+  licenseTexts: 'table',
+  unbundledDependencies: 'table',
+  snapStagePackages: 'table',
+  staticAssetNotices: 'table',
+  copiedPlatformLibraries: 'table',
+  separatePrograms: 'table',
+  externalExtensions: 'table',
+  product: 'overlay-only',
+  // The `*Note` fields document the table they precede for a reader of the committed file. They
+  // are read by nothing, so a downstream has nothing to add to them.
+  exceptionsNote: 'base-only',
+  copyrightNoticesNote: 'base-only',
+  licenseTextsNote: 'base-only',
+  platformOnlyPackagesNote: 'base-only',
+  unbundledDependenciesNote: 'base-only',
+  snapStagePackagesNote: 'base-only',
+  staticAssetNoticesNote: 'base-only',
+  copiedPlatformLibrariesNote: 'base-only',
+  separateProgramsNote: 'base-only',
+  externalExtensionsNote: 'base-only',
+  productNote: 'base-only',
+} as const satisfies Record<keyof Policy, MergeKind>;
+
+/** Every key an overlay may carry, which is every `Policy` field the merge does not reserve. */
+const OVERLAY_KEYS = new Set(
+  Object.entries(MERGE_KINDS)
+    .filter(([, kind]) => kind !== 'base-only')
+    .map(([key]) => key),
+);
+
+/**
+ * The committed policy with a downstream overlay merged over it.
+ *
+ * Every field combines the way `MERGE_KINDS` records. An overlay key the table does not name is
+ * REFUSED rather than ignored: the merge copies only what it enumerates, so a misspelled table
+ * (`seperatePrograms`) would otherwise leave the committed empty one in place and every gate below
+ * would pass over it - a redistributed program omitted from a legal document with the run exiting
+ * 0.
+ */
+export function mergePolicies(
+  base: Policy,
+  overlay: Partial<Policy>,
+  names: { base: string; overlay: string },
+): Policy {
+  // The document itself, before any field of it. `readJsonFile` parses and does not check a shape,
+  // so a `null` overlay would reach `Object.keys` and throw naming neither the file nor a remedy,
+  // and a JSON array, number or boolean would yield no keys at all - passing both refusals below
+  // and merging to the committed policy unchanged, which is the silent drop those refusals exist to
+  // prevent, reached through a different door.
+  if (!overlay || typeof overlay !== 'object' || Array.isArray(overlay))
+    throw new Error(
+      `${names.overlay} does not hold a JSON object. An overlay is a policy file with the same ` +
+        'shape as the committed one, carrying only the fields it contributes.',
+    );
+  // Split, because the two cases send an author to different places: a key the policy has no field
+  // for at all is a misspelling, while a `base-only` key is spelled correctly and simply reserved -
+  // telling its author to check the spelling would send them hunting a typo that is not there.
+  const refused = Object.keys(overlay).filter((key) => !OVERLAY_KEYS.has(key));
+  const misspelled = refused.filter((key) => !Object.hasOwn(MERGE_KINDS, key)).sort(compareStrings);
+  const reserved = refused.filter((key) => Object.hasOwn(MERGE_KINDS, key)).sort(compareStrings);
+  if (misspelled.length)
+    throw new Error(
+      `${names.overlay} records ${misspelled.map((key) => `"${key}"`).join(', ')}, which the ` +
+        'notices policy has no such field for. An overlay key this merge does not know is dropped ' +
+        'in silence, so what it was meant to declare would go undisclosed - check the spelling ' +
+        `against ${names.base}.`,
+    );
+  if (reserved.length)
+    throw new Error(
+      `${names.overlay} records ${reserved.map((key) => `"${key}"`).join(', ')}, which ` +
+        `${names.base} reserves to itself. The field exists and is spelled correctly, but an ` +
+        'overlay may not contribute one - these describe the committed file for a reader of it, ' +
+        'and nothing in the pipeline reads them.',
+    );
+  if (base.product)
+    throw new Error(
+      `${names.base} declares a "product" block. It describes what a DOWNSTREAM build produces, so ` +
+        "it belongs in that build's overlay; this repository's own document uses the no-product " +
+        'wording. Remove it.',
+    );
+  (['allowed', 'copyleft', 'platformOnlyPackages'] as const).forEach((field) =>
+    requireList(field, overlay[field], names.overlay),
+  );
+  if (overlay.exceptions !== undefined && !Array.isArray(overlay.exceptions))
+    throw new Error(
+      `${names.overlay} records "exceptions" as a ${typeof overlay.exceptions}. It is a list of ` +
+        'exception entries; a single exception still has to be written as a one-item list.',
+    );
+  const merged: Policy = {
+    ...base,
+    allowed: unionLists(base.allowed, overlay.allowed),
+    copyleft: unionLists(base.copyleft, overlay.copyleft),
+    platformOnlyPackages: unionLists(base.platformOnlyPackages, overlay.platformOnlyPackages),
+    exceptions: [...(base.exceptions || []), ...(overlay.exceptions || [])],
+    elections: mergeTable('elections', base.elections, overlay.elections, names),
+    overrides: mergeTable('overrides', base.overrides, overlay.overrides, names),
+    copyrightNotices: mergeTable(
+      'copyrightNotices',
+      base.copyrightNotices,
+      overlay.copyrightNotices,
+      names,
+    ),
+    licenseTexts: mergeTable('licenseTexts', base.licenseTexts, overlay.licenseTexts, names),
+    unbundledDependencies: mergeTable(
+      'unbundledDependencies',
+      base.unbundledDependencies,
+      overlay.unbundledDependencies,
+      names,
+    ),
+    snapStagePackages: mergeTable(
+      'snapStagePackages',
+      base.snapStagePackages,
+      overlay.snapStagePackages,
+      names,
+    ),
+    staticAssetNotices: mergeTable(
+      'staticAssetNotices',
+      base.staticAssetNotices,
+      overlay.staticAssetNotices,
+      names,
+    ),
+    copiedPlatformLibraries: mergeTable(
+      'copiedPlatformLibraries',
+      base.copiedPlatformLibraries,
+      overlay.copiedPlatformLibraries,
+      names,
+    ),
+    separatePrograms: mergeTable(
+      'separatePrograms',
+      base.separatePrograms,
+      overlay.separatePrograms,
+      names,
+    ),
+    externalExtensions: mergeTable(
+      'externalExtensions',
+      base.externalExtensions,
+      overlay.externalExtensions,
+      names,
+    ),
+    product: overlay.product,
+  };
+  assertListsDisjoint(merged, names);
+  return merged;
+}
+
+/**
+ * Refuses a merged policy whose two classification lists both name an identifier.
+ *
+ * `isDisallowedId` consults `copyleft` first, so an id on both still blocks and nothing unsafe
+ * ships - but the overlay author who added it to `allowed` gets a silent no-op and a later block
+ * message that never mentions their edit. The committed file is guarded by a test; the MERGED
+ * object is what every consumer actually receives, so it is checked here.
+ */
+function assertListsDisjoint(policy: Policy, names: { base: string; overlay: string }): void {
+  const copyleft = new Set(policy.copyleft);
+  const both = policy.allowed.filter((id) => copyleft.has(id)).sort(compareStrings);
+  if (both.length)
+    throw new Error(
+      `${names.overlay} merged over ${names.base} puts ${both.join(', ')} on both "allowed" and ` +
+        '"copyleft". Copyleft is tested first, so the identifier still blocks and the "allowed" ' +
+        'entry does nothing - decide which list it belongs on.',
+    );
+}
+
+/**
+ * Reads the policy document from disk - the single source of every repository-specific licensing
+ * decision - merges the overlay the environment names (if any), and refuses the shapes no consumer
+ * can act on.
+ *
+ * `overlayFile` defaults from the environment AT CALL TIME, so every caller - the generator, both
+ * verify modes, the corpus index builder - sees the same merged policy without passing anything.
  *
  * `copyrightNotices` and `overrides` are the two hand-maintained tables in this file. Their
  * rationale is recorded here because it is the part a future reader cannot reconstruct:
@@ -96,8 +353,18 @@ function normalizeDetectedId(id: string): string {
  * before it is added. Each sits immediately before the table it describes. The fuller
  * situation-to-instrument guide is `.erb/scripts/third-party-notices/README.md`.
  */
-export function loadPolicy(file: string): Policy {
-  const policy = readJsonFile<Policy>(file, 'the notices policy');
+export function loadPolicy(
+  file: string,
+  overlayFile: string | undefined = overlayFromEnv(),
+): Policy {
+  const base = readJsonFile<Policy>(file, 'the notices policy');
+  const policy = overlayFile
+    ? mergePolicies(
+        base,
+        readJsonFile<Partial<Policy>>(overlayFile, 'the notices policy overlay'),
+        { base: file, overlay: overlayFile },
+      )
+    : base;
   assertOneExceptionPerPackage(policy);
   assertLicenseTextsAreNuget(policy);
   return policy;
@@ -219,8 +486,52 @@ function blocked(reason: string, extra: Partial<Verdict> = {}): BlockedFields {
 /**
  * A value still spelled as one of the `<…>` placeholders `report.ts` prints in its paste-ready
  * templates, rather than replaced with the thing the placeholder asks for.
+ *
+ * `[\s\S]` rather than `.` so a placeholder a reviewer pasted across two lines is still caught; `.`
+ * stops at a newline, which would let the multi-line case through.
+ *
+ * A leading URI scheme is excluded because `<https://example.org/>` is a Markdown autolink, not a
+ * template: the fields this guards (`SeparateProgram.sourceAvailability`,
+ * `ExternalExtension.reason`) are documented as paragraphs that may carry a link, and a bare URL's
+ * natural spelling in this document is the autolink form.
+ *
+ * The carve-out names the two schemes this document's links actually use rather than matching any
+ * scheme shape, because a scheme is `word:` and so is the opening of an ordinary note: `<TODO: ask
+ * legal where the source lives>` and `<NOTE: fill me in>` are placeholders in every sense that
+ * matters here, and a general `[A-Za-z][A-Za-z0-9+.-]*:` lookahead admits both. `http` is kept
+ * beside `https` not because this document should carry an insecure link but because refusing one
+ * as "a placeholder from the template" is a message that describes the wrong problem.
  */
-const PLACEHOLDER_TEMPLATE_VALUE = /^<.*>$/;
+export const PLACEHOLDER_TEMPLATE_VALUE = /^<(?!(?:https?|mailto):)[\s\S]*>$/;
+
+/**
+ * Refuses a policy field that is not a filled-in string.
+ *
+ * The type is checked rather than coerced, because these values arrive as untyped JSON: a policy
+ * that records a number, a boolean or an object reaches the document either as the literal
+ * `"[object Object]"` or as a `TypeError` from inside the renderer, both of which say less than
+ * naming the field here does.
+ *
+ * Shared by every policy value the document reproduces verbatim, so one table cannot quietly accept
+ * a shape another refuses. `subject` is the caller's own phrase for the thing being checked - "the
+ * "separatePrograms" entry for "Mercurial"", "the notices policy "product" block" - because a table
+ * keyed by name and a singleton block do not read the same way.
+ */
+export function requireText(subject: string, field: string, value: unknown): void {
+  if (typeof value !== 'string')
+    throw new Error(
+      `${subject} records "${field}" as ` +
+        `${value === undefined ? 'nothing' : `a ${typeof value}`}, and every field of it is ` +
+        'reproduced in the document as written. Record it as a string.',
+    );
+  const text = value.trim();
+  if (!text || PLACEHOLDER_TEMPLATE_VALUE.test(text))
+    throw new Error(
+      `${subject} records no usable "${field}". Every field of it is reproduced in the document ` +
+        'as the reviewed determination, so an empty or template value would ship as one - fill ' +
+        'it in.',
+    );
+}
 
 /**
  * Applies a reviewed exception. Exceptions are an override applied AFTER a block, never a path
@@ -995,6 +1306,95 @@ function applyOverride(ctx: ClassifyContext, override: Override): Verdict {
           'that the value is deliberately free text and the determination was made by a human.',
       ),
     };
+
+  // A package that IS a separately redistributed program - the NuGet route for one - is admitted
+  // by the reviewed `separatePrograms` entry it names, not by this override's own fields. The
+  // link has to resolve, and the license has to be an SPDX expression, because the document
+  // reproduces that identifier's canonical text on the program's behalf.
+  if (override.separateProgram !== undefined) {
+    const programName = String(override.separateProgram).trim();
+    const programs = ctx.policy.separatePrograms || {};
+    // `Object.hasOwn` rather than a bare index, as `mergeTable` and `assertExternalExtensionsRecorded`
+    // both do: indexing answers every `Object.prototype` member, so a name like `constructor` would
+    // resolve truthy and skip the refusal below in favour of a message about reviewed identifiers.
+    const program = Object.hasOwn(programs, programName) ? programs[programName] : undefined;
+    if (!program)
+      return {
+        ...common,
+        ...blocked(
+          `the "overrides" entry for "${key}" names separate program "${programName}", and ` +
+            `"separatePrograms" records no entry named "${programName}". Record the program ` +
+            'there - reviewer, date, reason, source availability and each delivery - or remove ' +
+            'the link.',
+        ),
+      };
+    if (!recorded.ok)
+      return {
+        ...common,
+        ...blocked(
+          `the "overrides" entry for "${key}" is linked to separate program "${programName}", ` +
+            `so its "license" must be an SPDX expression, and "${override.license}" is not. The ` +
+            "document reproduces the program's canonical license text under that identifier.",
+        ),
+      };
+    // The ENTRY admits, not the override. This path returns before the allowed/copyleft test
+    // below - deliberately, because a separately redistributed program is admitted under terms
+    // the policy's lists do not have to allow (Mercurial's GPL-2.0-or-later is the live case).
+    // What makes that safe is that a human read THOSE terms and recorded them on the program:
+    // so an override may only name an identifier the reviewed entry itself names. Otherwise a
+    // link to a reviewed GPL-2.0-or-later program would carry any identifier at all - an
+    // unreviewed copyleft one, or one on neither list - past the one gate this pipeline exists
+    // to enforce, and the document would reproduce a text the reviewer never read.
+    // A `WITH` exception, an unrepresentable `+`, or a conjunction is refused BEFORE the identifier
+    // test, because `recorded.ids` is flattened: `declared.ts` keeps the operands separately and
+    // says why - the verdict, the lock and the reproduced text all describe the UNMODIFIED license.
+    // Compared against a program's plain identifiers, `GPL-2.0-or-later WITH Classpath-exception-2.0`
+    // would pass on its base operand alone, and the row and lock would then record terms - base plus
+    // exception - that nobody reviewed. The same gate the exception and declared paths already
+    // apply.
+    if (
+      recorded.exceptions.length ||
+      recorded.unrepresentablePlus.length ||
+      recorded.hasConjunction
+    )
+      return {
+        ...common,
+        ...blocked(
+          `the "overrides" entry for "${key}" records ${override.license}, which carries an ` +
+            'exception, an unrepresentable "+" or a conjunction. A linked override is admitted by ' +
+            'the terms a human read for the separate program, and those are recorded as plain ' +
+            `identifiers on "${programName}" - record the whole expression there, or name just the ` +
+            'identifier the entry carries.',
+        ),
+      };
+    // `Array.isArray`, because `program.spdx` is untyped overlay JSON until
+    // `assertSeparateProgramsRecorded` runs, and classification runs BEFORE it: a bare string would
+    // make this `String.prototype.includes`, so a narrower identifier would clear the gate merely by
+    // being a substring of the reviewed one. An empty list here blocks, and the assertion names the
+    // field a step later.
+    const reviewedIds = Array.isArray(program.spdx) ? program.spdx : [];
+    const unreviewedId = recorded.ids.find((id) => !reviewedIds.includes(id));
+    if (unreviewedId)
+      return {
+        ...common,
+        ...blocked(
+          `the "overrides" entry for "${key}" records ${override.license} and is linked to ` +
+            `separate program "${programName}", whose reviewed identifiers are ` +
+            `${reviewedIds.join(', ') || '(none)'}. A linked override is admitted by ` +
+            'the terms a human read for the program, so it cannot name ' +
+            `${unreviewedId} - fix whichever is wrong.`,
+        ),
+      };
+    return {
+      ...common,
+      verdict: 'overridden',
+      spdxId: override.license,
+      reason:
+        `recorded determination in the notices policy: ${override.license}, redistributed as ` +
+        `the separate program "${programName}"`,
+    };
+  }
+
   // The same predicate the exception path applies, for the same reason. Testing `copyleft` alone
   // makes this a denylist over 21 ids, under which an override spelled as a real SPDX identifier
   // the policy has never admitted - `CC-BY-NC-4.0`, `BUSL-1.1` - is recorded as the license of a
@@ -1184,9 +1584,10 @@ function readInstruments(
   const exception = applyException(policy, key, version, sha256, allowed, copyleft);
   // A curated override records what a human established about a package whose own metadata
   // establishes nothing - the SIL packages whose nuspecs declare no license at all, and the
-  // Windows-only ICU runtime that no restore on this machine resolves. It is applied ONLY where the
-  // package declares nothing parseable AND no license text was identified, so an override can never
-  // mask or contradict something a package actually says: if `ParatextData` ever starts declaring a
+  // Windows-only ICU runtime that no restore on this machine resolves. Unless it links to a
+  // reviewed separate program (see the bound below), it is applied ONLY where the package declares
+  // nothing parseable AND no license text was identified, so an override can never mask or
+  // contradict something a package actually says: if `ParatextData` ever starts declaring a
   // copyleft license, it blocks exactly as it would with no entry here.
   //
   // An override bypasses the allow list only where its value is deliberately NOT an SPDX expression
@@ -1211,8 +1612,27 @@ function readInstruments(
   // excluded because `NOASSERTION`/`NONE` are licensee reporting that it identified nothing, which
   // is the case an override exists for.
   const identifiedText = files.find((file) => !SENTINELS.has(file.spdxId));
+  // A `separateProgram` link is exempt from that bound, because it is not the weak instrument the
+  // bound exists to hold back. An unlinked override is a claim keyed by name and pinned to nothing;
+  // a linked one may only name a program `separatePrograms` records - reviewer, date, reason and
+  // source availability included - and may only carry an identifier that reviewed entry itself
+  // names (`applyOverride`). The determination behind it is strictly better evidence than a
+  // package's own metadata, so it does not have to wait for that metadata to be silent.
+  //
+  // Bounding it the same way would make the whole route depend on a third party's packaging
+  // staying license-silent: the NuGet delivery of a separate program is somebody's repackaging of
+  // an upstream release, and the day it declares its licence - the direction NuGet has pushed for
+  // years - the package would hard-block with no policy entry able to clear it, on a program a
+  // human had already reviewed. That is the reverse of what the reviewed entry is for.
+  //
+  // What this does NOT do is reconcile a disagreement: where the package declares one licence and
+  // the reviewed entry names another, the entry wins and the document records the entry's. That is
+  // the right authority - a person read the program's terms - but it is not a check, so a
+  // declaration that contradicts a reviewed program is worth noticing by hand.
+  const linkedToSeparateProgram = override?.separateProgram !== undefined;
   // `override` itself rather than a boolean, so the stage it clears reads the entry it applies.
-  const overridable = !declared.ok && !identifiedText ? override : undefined;
+  const overridable =
+    linkedToSeparateProgram || (!declared.ok && !identifiedText) ? override : undefined;
 
   return { exception, overridable };
 }
