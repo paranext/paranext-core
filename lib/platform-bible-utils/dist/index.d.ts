@@ -4708,7 +4708,8 @@ export declare function hasDistinctFullName(names: ProjectNames): boolean;
  */
 export declare function formatProjectName(names: ProjectNames): string;
 /**
- * Compares two projects for display order: alphabetical by short name, case- and accent-insensitive.
+ * Compares two projects for display order: alphabetical by short name, case- and
+ * accent-insensitive.
  *
  * Short name rather than full name because the short name is the field that leads every project
  * label, and a list ordered by a field the user cannot see reads as unsorted. Compares names only —

@@ -1414,7 +1414,7 @@ export type ProjectInfo = {
 	/**
 	 * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
 	 * popover rows. Sourced from the `platform.fullName` project setting. When absent or equal to
-	 * `projectName`, the row falls back to a single-line layout (matching the {@link ProjectSelector}
+	 * `projectName`, the row falls back to a single-line layout (matching the `ProjectSelector`
 	 * de-dup rule for `fullName === shortName`).
 	 */
 	projectFullName?: string;
