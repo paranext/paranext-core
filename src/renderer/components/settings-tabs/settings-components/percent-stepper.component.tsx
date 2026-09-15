@@ -53,23 +53,34 @@ export function PercentStepper({
   className,
 }: PercentStepperProps) {
   // The stored value round-trips through the platform's own setting/data-provider subscription
-  // before this component sees it again, so two quick presses would both read the same stale
-  // `value` prop and the second would re-emit the first press's factor. Show the pending value
-  // optimistically and hand control back to the prop as soon as it moves at all — whether that
-  // move is the platform confirming this component's own press or something else's write to the
-  // same setting (e.g. another window) arriving first.
+  // before this component sees it again, so a rapid second press can see the prop confirm the
+  // FIRST press before the second one has round-tripped. Track every target this component has
+  // emitted since its display last settled, so an intermediate confirmation (the prop catching up
+  // to an earlier press) can be recognized and skipped rather than mistaken for external authority.
   const [pendingValue, setPendingValue] = useState<number | undefined>(undefined);
   const pendingTargetRef = useRef<number | undefined>(undefined);
+  const emittedTargetsRef = useRef<Set<number>>(new Set());
   const displayValue = pendingValue ?? value;
 
   useEffect(() => {
-    // The incoming prop is authoritative: this effect only runs when `value` has actually changed
-    // from the previous render, so any such change — the platform confirming our own press, or
-    // another window writing the same setting first — hands control back to the prop. Keeping the
-    // optimistic value only while the prop hasn't moved avoids the display rewinding to a stale
-    // pre-press value between the press and the platform round-trip.
-    if (pendingTargetRef.current !== undefined) {
+    // This effect only runs when `value` has actually changed from the previous render, and only
+    // matters while a press is outstanding (`pendingTargetRef.current !== undefined`). Three cases:
+    // - `value` is the latest target this component emitted: the platform has caught up, so settle
+    //   — clear the pending display and forget every target emitted since.
+    // - `value` is an earlier target still in the set: the platform is confirming presses in turn,
+    //   not yet the latest one, so drop it from the set but keep showing the pending value.
+    // - `value` is anything else: a write this component never emitted (another window, or a
+    //   rejected/clamped write) — the prop is authoritative, so hand control back immediately.
+    if (pendingTargetRef.current === undefined) return;
+    if (value === pendingTargetRef.current) {
       pendingTargetRef.current = undefined;
+      emittedTargetsRef.current.clear();
+      setPendingValue(undefined);
+    } else if (emittedTargetsRef.current.has(value)) {
+      emittedTargetsRef.current.delete(value);
+    } else {
+      pendingTargetRef.current = undefined;
+      emittedTargetsRef.current.clear();
       setPendingValue(undefined);
     }
   }, [value]);
@@ -96,10 +107,11 @@ export function PercentStepper({
   const emit = (candidate: number) => {
     const next = clampToProps(candidate);
     if (next === displayValue) return;
-    // A write the platform rejects leaves this optimistic value showing until the prop's next
-    // change — the effect above treats any change to the prop as authoritative, so the stale
-    // optimistic value is dropped as soon as something (a retry, another window) writes next.
+    // A write the platform rejects leaves this optimistic value showing until the prop moves to
+    // something outside the emitted set — the effect above then treats it as authoritative, so the
+    // stale optimistic value is dropped as soon as something (a retry, another window) writes next.
     pendingTargetRef.current = next;
+    emittedTargetsRef.current.add(next);
     setPendingValue(next);
     onChange(next);
   };
