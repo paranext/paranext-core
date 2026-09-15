@@ -42,13 +42,24 @@
    family once, in src/renderer/styles/fonts.css; this demo pulls the same faces from Google Fonts
    in scripture-editor.stories.css, since Storybook does not load the application's stylesheet. */
 /* The Scripture text fallback chain, published as a custom property so a generated project
-   stylesheet can put the project's own font in front of it rather than replacing it outright:
-   the editor's `generateUsjCss` emits `font-family: "<project font>", var(--usj-font-fallback,
-   serif)`. Declared on `.usfm` so it reaches the unformatted view too, where the chain itself is
-   not applied. */
+   stylesheet can put the project's own font in front of it rather than replacing it outright: the
+   editor's `generateUsjCss` emits `font-family: "<project font>", var(--usj-font-fallback, serif)`.
+   Declared on `.usfm` so it reaches the unformatted view too, where the chain itself is not applied.
+
+   Diverges from the editor library's copy, which hard-codes the chain: Platform.Bible has its own
+   deliberately ordered Scripture stack, so this points at it instead. `--scripture-font-stack`
+   comes from src/renderer/styles/fonts.css, which is inlined into every web view; the literal
+   chain after it is the library's, and is what applies anywhere fonts.css is not loaded. */
 .usfm {
-  --usj-font-fallback:
-    'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+  --usj-font-fallback: var(
+    --scripture-font-stack,
+    'Charis SIL',
+    'Times New Roman',
+    'Liberation Serif',
+    'DejaVu Serif',
+    Georgia,
+    serif
+  );
 }
 .usfm.formatted-font {
   font-family: var(--usj-font-fallback);
