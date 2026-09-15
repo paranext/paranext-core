@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { Setting } from './setting.component';
 
 // Setting pulls in useData (only for the UI-language-selector fallback, unused by the string/
@@ -13,12 +14,22 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [{}]),
 }));
 
+// Accessible names for the percent-stepper buttons; only the webViewContentZoom stepper tests
+// below need real localized strings, so they override the default `[{}]` mock per test.
+const ZOOM_STRINGS = {
+  '%settings_platform_webViewContentZoom_increase%': 'Increase default zoom',
+  '%settings_platform_webViewContentZoom_decrease%': 'Decrease default zoom',
+  '%settings_platform_webViewContentZoom_reset%': 'Reset default zoom',
+};
+
 // Props shared by every case below; only settingKey/setting/label (and `disabled`) differ per test,
 // so each spreads this and passes just those (same idea as the renderPanel helper in
 // comment-list.component.test.tsx). Kept as a shared spread rather than a wrapper fn because
 // Setting's project/user union props make a single-typed render helper awkward, and spreading at
-// each call site keeps the inline settingKey/setting that discriminates the union. Mocks are cleared
-// between tests so the shared no-op fns can't leak call state.
+// each call site keeps the inline settingKey/setting that discriminates the union. `vi.clearAllMocks`
+// between tests resets call history on the shared no-op fns, but not a mock's `mockReturnValue`
+// implementation — the zoom describe below resets that explicitly, since it is the only one that
+// overrides `useLocalizedStrings`'s return value per test.
 const baseProps = {
   setSetting: vi.fn(),
   isLoading: false,
@@ -100,5 +111,64 @@ describe('Setting disabled forwarding', () => {
       />,
     );
     expect(screen.getByRole('textbox')).not.toBeDisabled();
+  });
+});
+
+// platform.webViewContentZoom and platform.zoomFactor are both `SettingNames` (the "other"/user
+// settings variant), validated via `validateOtherSetting` rather than `validateProjectSetting` —
+// unlike baseProps' platform.language/platform.isEditable cases above, which are project settings.
+// So these tests build their own props rather than spreading baseProps' validateProjectSetting,
+// which the `Setting` props union forbids alongside an other-setting key.
+describe('platform.webViewContentZoom stepper', () => {
+  afterEach(() => {
+    // `vi.clearAllMocks` (the top-level beforeEach) does not undo `mockReturnValue`, so without this
+    // the override set by a test here would otherwise leak into whatever test runs next.
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('renders the percent stepper instead of a text box', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        settingKey="platform.webViewContentZoom"
+        setting={1.2}
+        label="Tab content default zoom"
+      />,
+    );
+    expect(screen.getByText('120 %')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('writes the stepped factor through setSetting', async () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
+    const validateOtherSetting = vi.fn().mockResolvedValue(true);
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        validateOtherSetting={validateOtherSetting}
+        settingKey="platform.webViewContentZoom"
+        setting={1.2}
+        label="Tab content default zoom"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Increase default zoom' }));
+    await waitFor(() => expect(baseProps.setSetting).toHaveBeenCalledWith(1.3));
+  });
+
+  it('still renders a text box for the app-wide zoom factor', () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        settingKey="platform.zoomFactor"
+        setting={1.2}
+        label="Interface scaling"
+      />,
+    );
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.queryByRole('group')).toBeNull();
   });
 });

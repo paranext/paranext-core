@@ -26,7 +26,13 @@ import {
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
-import { initializeContentZoomService } from '@renderer/services/web-view-content-zoom.service';
+import { isAnyDialogOpen } from '@renderer/services/dialog-open.util';
+import { registerContentZoomChromeKeys } from '@renderer/services/web-view-content-zoom.chrome-keys';
+import {
+  adjustContentZoom,
+  initializeContentZoomService,
+  resetContentZoom,
+} from '@renderer/services/web-view-content-zoom.service';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
 import {
   getAllOpenWebViewDefinitionsSync,
@@ -143,9 +149,12 @@ initConnectionLostService();
       getAllOpenDefinitions: getAllOpenWebViewDefinitionsSync,
       onDidUpdateWebView,
       getLastFocusedTabId,
+      isAnyDialogOpen,
     }).catch((e) =>
       logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
     );
+    // The returned unsubscriber is discarded: this listener runs for the window's lifetime.
+    registerContentZoomChromeKeys({ adjustContentZoom, resetContentZoom, isAnyDialogOpen });
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),

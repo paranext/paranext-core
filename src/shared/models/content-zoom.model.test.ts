@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CONTENT_ZOOM_ROOT_ATTRIBUTE as LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import {
   CONTENT_ZOOM_COMMANDS,
@@ -34,5 +35,9 @@ describe('content-zoom.model', () => {
     expect(CONTENT_ZOOM_COMMANDS.in).toBe('platform.webViewContentZoomIn');
     expect(CONTENT_ZOOM_COMMANDS.out).toBe('platform.webViewContentZoomOut');
     expect(CONTENT_ZOOM_COMMANDS.reset).toBe('platform.webViewContentZoomReset');
+  });
+
+  it('keeps the library marker attribute equal to the platform constant', () => {
+    expect(LIBRARY_CONTENT_ZOOM_ROOT_ATTRIBUTE).toBe(CONTENT_ZOOM_ROOT_ATTRIBUTE);
   });
 });

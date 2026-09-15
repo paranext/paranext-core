@@ -1,0 +1,174 @@
+import { Minus, Plus, RotateCcw } from 'lucide-react';
+import {
+  Button,
+  ButtonGroup,
+  ButtonGroupText,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
+import { useEffect, useRef } from 'react';
+import { formatZoomPercent } from '@shared/utils/content-zoom.util';
+
+/**
+ * How long a just-emitted factor stays available as the arithmetic baseline for the next press. The
+ * stored value round-trips through the platform's own setting/data-provider subscription before
+ * this component sees it again — tens of milliseconds in practice — so a second press inside this
+ * window steps from the still-unconfirmed factor rather than re-deriving from a prop that hasn't
+ * caught up yet. Past the window (or once the prop catches up), the baseline is simply the prop
+ * again.
+ */
+const STEP_BASELINE_WINDOW_MS = 1500;
+
+/** Props for {@link PercentStepper}. */
+export type PercentStepperProps = {
+  /** Current factor, e.g. `1.2` for 120 %. */
+  value: number;
+  /** Smallest factor the stepper will emit. */
+  min: number;
+  /** Largest factor the stepper will emit. */
+  max: number;
+  /** Amount one `+` / `−` press moves the factor. */
+  step: number;
+  /** Factor the reset button returns to; reset is disabled while the value is already here. */
+  defaultValue: number;
+  /** When true, every button is disabled. Defaults to `false`. */
+  disabled?: boolean;
+  /** Localized accessible names for the three buttons. */
+  labels: { increase: string; decrease: string; reset: string };
+  /** Localized accessible name for the group as a whole — normally the setting's own label. */
+  groupLabel?: string;
+  /** Called with the new factor whenever a press changes it. Never called with an unchanged value. */
+  onChange: (factor: number) => void;
+  /** Additional css classes for the group container. */
+  className?: string;
+};
+
+/**
+ * A `+`/`−`/reset control for editing a zoom-style factor without typing a decimal. Displays the
+ * factor as a percentage and clamps every step to the caller's own `min`/`max`/`step`, so the
+ * bounds are not hard-coded to any one feature's zoom range.
+ */
+export function PercentStepper({
+  value,
+  min,
+  max,
+  step,
+  defaultValue,
+  disabled = false,
+  labels,
+  groupLabel,
+  onChange,
+  className,
+}: PercentStepperProps) {
+  // The displayed value is always the confirmed prop — never an optimistic guess — because there
+  // is no way to tell a write the platform is still applying from one it silently rejected or
+  // clamped, and showing the wrong guess is worse than a tens-of-milliseconds lag behind a press.
+  // What still needs help is the arithmetic for a rapid second press: without a baseline, it would
+  // step from the same stale `value` twice (1.1, 1.1 instead of 1.1, 1.2). `lastEmittedRef` records
+  // the most recent press so the next one can step from it while the round trip is in flight.
+  const lastEmittedRef = useRef<{ factor: number; at: number } | undefined>(undefined);
+
+  useEffect(() => {
+    // Any change to the prop — whether it is the platform confirming the press this component made,
+    // or a write from elsewhere (another window, a clamp) — makes `value` the right baseline again.
+    // Clearing on every change (not only a matching one) is what makes a foreign write win
+    // immediately instead of being masked by a baseline the platform never confirmed.
+    lastEmittedRef.current = undefined;
+  }, [value]);
+
+  // The shared platform helper rounds to a tenth because that is the platform's own zoom step;
+  // `min`/`max`/`step` are the contract this component actually offers callers, so rounding must
+  // follow the caller's `step` instead — otherwise any step other than a tenth would have its
+  // output silently snapped to the wrong precision. `step.toString()` can render in exponential
+  // notation for small values (e.g. `1e-2`), which has no `.` for the split below to find, so count
+  // decimals by scaling the value up by 10 until it lands on an integer instead of parsing the string.
+  const stepDecimals = (() => {
+    let decimals = 0;
+    let scaled = step;
+    while (!Number.isInteger(scaled) && decimals < 10) {
+      scaled *= 10;
+      decimals += 1;
+    }
+    return decimals;
+  })();
+  const roundToStep = (factor: number) => Number(factor.toFixed(stepDecimals));
+
+  const clampToProps = (factor: number) => Math.min(max, Math.max(min, roundToStep(factor)));
+
+  const emit = (candidate: (baseline: number) => number) => {
+    // Step from the last emitted factor while it is still fresh — the effect above already clears it
+    // as soon as the prop moves for any reason, confirmed or not, so a surviving ref here means the
+    // round trip for that press is still outstanding.
+    const last = lastEmittedRef.current;
+    const stillFresh = last !== undefined && performance.now() - last.at < STEP_BASELINE_WINDOW_MS;
+    const baseline = stillFresh ? last.factor : value;
+    const next = clampToProps(candidate(baseline));
+    if (next === baseline) return;
+    lastEmittedRef.current = { factor: next, at: performance.now() };
+    onChange(next);
+  };
+
+  return (
+    <TooltipProvider>
+      <ButtonGroup aria-label={groupLabel} className={className}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label={labels.decrease}
+              disabled={disabled || value <= min}
+              onClick={() => emit((baseline) => baseline - step)}
+            >
+              <Minus />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{labels.decrease}</TooltipContent>
+        </Tooltip>
+        {/* aria-live announces the new percentage after a press; the buttons keep focus, so nothing
+            else would say it. */}
+        <ButtonGroupText
+          aria-live="polite"
+          className="tw:min-w-14 tw:justify-center tw:tabular-nums"
+        >
+          {formatZoomPercent(value)}
+        </ButtonGroupText>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label={labels.increase}
+              disabled={disabled || value >= max}
+              onClick={() => emit((baseline) => baseline + step)}
+            >
+              <Plus />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{labels.increase}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={labels.reset}
+              disabled={disabled || value === defaultValue}
+              onClick={() => emit(() => defaultValue)}
+            >
+              <RotateCcw />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{labels.reset}</TooltipContent>
+        </Tooltip>
+      </ButtonGroup>
+    </TooltipProvider>
+  );
+}
+
+export default PercentStepper;

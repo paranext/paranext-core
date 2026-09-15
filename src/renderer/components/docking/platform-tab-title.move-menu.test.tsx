@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { floatTab, getOpenTabCountSync } from '@renderer/services/web-view.service-shard';
 import { sendCommand } from '@shared/services/command.service';
 import { menuDataService } from '@shared/services/menu-data.service';
@@ -52,9 +52,10 @@ vi.mock('@renderer/services/theme.service', () => ({
   localThemeService: {},
 }));
 
-// Default to power mode; the "outside power mode" test overrides this to false.
-vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
-  useIsPowerMode: vi.fn(() => true),
+// Default to a settled mode so this file's Simple-mode tests see their menu decision resolve
+// immediately rather than being held back by the not-yet-known gate.
+vi.mock('@renderer/hooks/use-interface-mode.hook', () => ({
+  useInterfaceMode: vi.fn(() => ['power', undefined, true]),
 }));
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
@@ -196,7 +197,7 @@ const flushMenuRead = async () => {
 describe('PlatformTabTitle reading its contributed menu', () => {
   afterEach(() => {
     cleanup();
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     vi.mocked(menuDataService.getWebViewMenu).mockReset();
     vi.mocked(logger.warn).mockClear();
     vi.mocked(sendCommand).mockReset();
@@ -388,16 +389,16 @@ describe('PlatformTabTitle reading its contributed menu', () => {
     expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(1);
   });
 
-  it('does not read the contributed menu in Simple mode, which shows no tab menu', async () => {
-    // The whole point of reading it at all is a menu that can open; Simple mode renders none, so a
-    // fixed six-tab layout would otherwise pay six cross-process reads for nothing
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+  it('reads the contributed menu in Simple mode too, where only the zoom group is offered', async () => {
+    // Simple mode reads the same mount-time contributed menu Power mode does, then offers only the
+    // zoom group narrowed from it. This file's fixture holds no zoom group, so the menu it ends up
+    // with is empty — the read still happens, it just finds nothing to show.
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
 
-    // The tab renders (the tooltip stub repeats its text, hence the plural query), so this is a
-    // mounted component that chose not to read rather than one that never mounted
-    await waitFor(() => expect(screen.getAllByText('Tab').length).toBeGreaterThan(0));
-    expect(menuDataService.getWebViewMenu).not.toHaveBeenCalled();
+    await waitFor(() => expect(menuDataService.getWebViewMenu).toHaveBeenCalledWith('foo.bar'));
+    expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Float Tab')).not.toBeInTheDocument();
   });
 
   it('logs and offers no menu when the contributed menu cannot be read', async () => {
@@ -452,7 +453,7 @@ describe('PlatformTabTitle reading its contributed menu', () => {
 describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
   afterEach(() => {
     cleanup();
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     vi.mocked(sendCommand).mockReset();
     vi.mocked(logger.error).mockClear();
     // Every notification assertion below asks whether the message was sent at all, so calls left
@@ -480,7 +481,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
   });
 
   it('outside power mode the item is absent', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
     await flushMenuRead();
 
@@ -765,7 +766,7 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
 
   afterEach(() => {
     cleanup();
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     vi.mocked(sendCommand).mockReset();
   });
 
@@ -801,8 +802,11 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
     expect(count).toBe(1);
   });
 
-  it('does not forward in Simple mode, where the tab menu is not offered', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+  it('does not forward when the tab offers no menu', async () => {
+    // The forward is gated on the tab having menu items, not on the interface mode — this file's
+    // fixture holds no zoom group, so Simple mode still ends up with an empty menu and nothing to
+    // forward into, exercising the same "no items" path a Power-mode tab with no menu would take
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderInTab();
     const title = tabTitleIn(container);
     let count = 0;

@@ -13,6 +13,12 @@ vi.mock('@shared/services/localization.service', () => ({
 // eslint-disable-next-line import/first
 import { coreSettingsValidators, platformSettings } from './core-settings-info.data';
 
+const groups = Array.isArray(platformSettings) ? platformSettings : [platformSettings];
+const visibleKeys = (group: (typeof groups)[number]) =>
+  Object.entries(group.properties)
+    .filter(([, p]) => !p.isHidden)
+    .map(([key]) => key);
+
 describe('platform.syncOnStartup setting', () => {
   it('is declared as a hidden setting with a true default', () => {
     const group = Array.isArray(platformSettings) ? platformSettings[0] : platformSettings;
@@ -36,7 +42,7 @@ describe('platform.syncOnStartup setting', () => {
 
 describe('platform.showRegistrationReminderOnStartup setting', () => {
   it('is declared as a visible setting with a true default', () => {
-    const group = Array.isArray(platformSettings) ? platformSettings[0] : platformSettings;
+    const group = groups[1];
     const setting = group.properties['platform.showRegistrationReminderOnStartup'];
     expect(setting).toBeDefined();
     expect(setting?.default).toBe(true);
@@ -78,10 +84,8 @@ describe('platform.firstRunComplete setting', () => {
 });
 
 describe('content zoom settings', () => {
-  it('declares the new Zoom setting first in the General group and the memory setting hidden', () => {
-    const [group] = Array.isArray(platformSettings) ? platformSettings : [platformSettings];
-    const keys = Object.keys(group.properties);
-    expect(keys[0]).toBe('platform.webViewContentZoom');
+  it('declares webViewContentZoom visible with the memory setting hidden', () => {
+    const group = groups[0];
     expect(group.properties['platform.webViewContentZoom']).toMatchObject({
       label: '%settings_platform_webViewContentZoom_label%',
       description: '%settings_platform_webViewContentZoom_description%',
@@ -132,5 +136,71 @@ describe('content zoom settings', () => {
     // @ts-expect-error ts(2345) - intentional bad input
     await expect(validate(42, {}, {})).resolves.toBe(false);
     /* eslint-enable no-null/no-null */
+  });
+});
+
+describe('settings layout', () => {
+  it("shows the General group's visible settings in the UX-approved order", () => {
+    expect(visibleKeys(groups[0])).toEqual([
+      'platform.interfaceLanguage',
+      'platform.zoomFactor',
+      'platform.webViewContentZoom',
+    ]);
+  });
+
+  it('puts the supporter settings in their own group', () => {
+    expect(groups).toHaveLength(2);
+    expect(groups[1].label).toBe('%settings_platform_supporter_group_label%');
+    expect(groups[1].description).toBe('%settings_platform_supporter_group_description%');
+    expect(visibleKeys(groups[1])).toEqual([
+      'platform.requestTimeout',
+      'platform.showRegistrationReminderOnStartup',
+    ]);
+  });
+
+  it("keeps the moved settings' keys, labels and defaults unchanged", () => {
+    expect(groups[1].properties['platform.requestTimeout']).toMatchObject({
+      label: '%settings_platform_requestTimeout_label%',
+      description: '%settings_platform_requestTimeout_description%',
+      default: 30,
+    });
+    expect(groups[1].properties['platform.showRegistrationReminderOnStartup']).toMatchObject({
+      label: '%settings_platform_showRegistrationReminderOnStartup_label%',
+      description: '%settings_platform_showRegistrationReminderOnStartup_description%',
+      default: true,
+    });
+    expect(coreSettingsValidators['platform.requestTimeout']).toBeDefined();
+    expect(coreSettingsValidators['platform.showRegistrationReminderOnStartup']).toBeDefined();
+  });
+
+  it('hides the interface mode, which is switched from the profile popover', () => {
+    // The Simple/Power toggle lives in user-profile-popover.component.tsx, and the toolbar
+    // renders that popover in both modes, so a Settings entry would be a second, redundant switch.
+    expect(groups[0].properties['platform.interfaceMode']).toMatchObject({
+      label: '%settings_platform_interfaceMode_label%',
+      default: 'simple',
+      isHidden: true,
+    });
+  });
+
+  it('declares every setting exactly once across the groups', () => {
+    // Named explicitly (rather than a bare length) so adding, removing, or renaming a setting is a
+    // deliberate edit to this list instead of a silently-passing count.
+    const expectedKeys = [
+      'platform.interfaceLanguage',
+      'platform.zoomFactor',
+      'platform.webViewContentZoom',
+      'platform.webViewContentZoomMemory',
+      'platform.ptxUtilsMementoData',
+      'platform.paratextDataLastRegistryDataCachedTimes',
+      'platform.interfaceMode',
+      'platform.firstRunComplete',
+      'platform.syncOnStartup',
+      'platform.requestTimeout',
+      'platform.showRegistrationReminderOnStartup',
+    ];
+    const all = groups.flatMap((group) => Object.keys(group.properties));
+    expect(new Set(all).size).toBe(all.length);
+    expect(all.sort()).toEqual(expectedKeys.sort());
   });
 });

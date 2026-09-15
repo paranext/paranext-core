@@ -156,8 +156,6 @@ import {
   DEV_MODE_QUERY_PARAMETER,
   IS_MAIN_WINDOW_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
-  MAX_ZOOM_FACTOR,
-  MIN_ZOOM_FACTOR,
   SCROLL_GROUP_STATE_QUERY_PARAMETER,
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
@@ -175,6 +173,7 @@ import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { adjustZoomFactor } from '@shared/utils/content-zoom.util';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import { CommandNames, SettingTypes } from 'papi-shared-types';
@@ -217,32 +216,18 @@ const setZoomFactor = async (factor: number): Promise<void> => {
   }
 };
 
-/** Reset the zoom factor of the app to 1.0 (100%) */
-const resetZoomFactor = async () => {
-  try {
-    return await settingsService.reset('platform.zoomFactor');
-  } catch (e) {
-    logger.warn(`Failed to reset zoom factor from settings: ${getErrorMessage(e)}`);
-    return DEFAULT_ZOOM_FACTOR;
-  }
-};
-
-/** Increase the zoom factor of all application windows by 0.1, up to a maximum of 3.0 */
+/** Increase the zoom factor of all application windows by one step (0.1), up to 3.0 */
 const zoomIn = async () => {
   const currentZoom = await getZoomFactor();
-  if (currentZoom < MAX_ZOOM_FACTOR) {
-    const newZoom = currentZoom + 0.1;
-    await setZoomFactor(newZoom);
-  }
+  const newZoom = adjustZoomFactor(currentZoom, 1);
+  if (newZoom !== currentZoom) await setZoomFactor(newZoom);
 };
 
-/** Decrease the zoom factor of all application windows by 0.1, down to a minimum of 0.5 */
+/** Decrease the zoom factor of all application windows by one step (0.1), down to 0.5 */
 const zoomOut = async () => {
   const currentZoom = await getZoomFactor();
-  if (currentZoom > MIN_ZOOM_FACTOR) {
-    const newZoom = currentZoom - 0.1;
-    await setZoomFactor(newZoom);
-  }
+  const newZoom = adjustZoomFactor(currentZoom, -1);
+  if (newZoom !== currentZoom) await setZoomFactor(newZoom);
 };
 
 // #endregion
@@ -1507,26 +1492,6 @@ async function main() {
       if (process.platform !== 'darwin') {
         // Non-Mac shortcuts
 
-        // Zoom shortcuts - Mac's zoom shortcuts already work because of the menu items
-        // Zoom in: Ctrl++ or Ctrl+=
-        if (input.control && (input.key === '=' || input.key === '+')) {
-          event.preventDefault();
-          zoomIn();
-          return;
-        }
-        // Zoom out: Ctrl+-
-        if (input.control && input.key === '-') {
-          event.preventDefault();
-          zoomOut();
-          return;
-        }
-        // Reset zoom: Ctrl+0
-        if (input.control && input.key === '0') {
-          event.preventDefault();
-          resetZoomFactor();
-          return;
-        }
-
         // keyboard tab group navigation - Ctrl+PgUp and Ctrl+PgDown
         if (input.control && (input.key === 'PageUp' || input.key === 'PageDown')) {
           event.preventDefault();
@@ -2130,8 +2095,8 @@ async function main() {
       method: {
         summary:
           'Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
-          'On Windows and Linux, Ctrl+= / Ctrl++ invoke this until PT-4577 hands those chords ' +
-          'to per-pane content zoom (platform.webViewContentZoomIn).',
+          'Has no default keyboard shortcut: the Ctrl/⌘ +/-/0 chords belong to per-pane content ' +
+          'zoom (platform.webViewContentZoomIn / …Out / …Reset).',
         params: [],
         result: {
           name: 'return value',
@@ -2150,8 +2115,8 @@ async function main() {
       method: {
         summary:
           'Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
-          'On Windows and Linux, Ctrl+- invokes this until PT-4577 hands that chord to per-pane ' +
-          'content zoom (platform.webViewContentZoomOut).',
+          'Has no default keyboard shortcut: the Ctrl/⌘ +/-/0 chords belong to per-pane content ' +
+          'zoom (platform.webViewContentZoomIn / …Out / …Reset).',
         params: [],
         result: {
           name: 'return value',

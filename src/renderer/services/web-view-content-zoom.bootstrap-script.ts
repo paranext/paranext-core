@@ -22,6 +22,12 @@ const INDICATOR_VISIBLE_MS = 1100;
  * wheel gesture announces once, short enough to land well inside {@link INDICATOR_VISIBLE_MS}.
  */
 const INDICATOR_ANNOUNCE_QUIET_MS = 500;
+/**
+ * How long a focus change may still count as the one a click itself caused (the view putting the
+ * caret somewhere else in response to the click) rather than an unrelated focus move. See the
+ * pointerdown/focusin listeners below for the gesture this bounds.
+ */
+const GESTURE_FOCUS_MS = 200;
 
 /**
  * The rule that scales one zoom area: its own variable, else the default. The `main` area's rule
@@ -227,8 +233,46 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // Capture phase: the active area must update even when a descendant stops propagation before
     // the bubble phase (the same rule the wheel listener below is deliberately the exception to).
     // Every listener here is a named function so destroy() can take it off again.
-    const onPointerDown = (e) => setActive(areaOf(e.target));
-    const onFocusIn = (e) => setActive(areaOf(e.target));
+    // A click and the focus change it causes are one gesture, and the pointer is what says which
+    // area the user means: clicking a row in the Scripture editor's footnotes list makes the view
+    // put the caret back in the editor text, so focus lands in another area milliseconds after the
+    // pointer went down in this one. A focus change with no pointer gesture behind it - the caret
+    // reaching a footnote by keyboard, or a view focusing a pane by itself - still names the active
+    // area, which is why the gesture's reach is bounded rather than the focus listener simply
+    // deferring to the pointer one. One click may suppress at most one focus change into a
+    // DIFFERENT area: the recorded area is cleared only when such a change is actually suppressed,
+    // so a later, unrelated focus move within the same window is never mistaken for the click's
+    // own. A focus change that settles inside the clicked area itself (the footnote row taking
+    // focus a few milliseconds after the pointer went down on its caller, before the view moves
+    // focus again) is neither suppressed nor spends the gesture - it is not the click's own move
+    // into another area, and the click's protection stays live for the one that follows. A focus
+    // change that lands outside every area works the same way: there is no area to protect, so it
+    // is not suppressed, but nothing was spent either, and the gesture still protects the next
+    // change into a different area.
+    let pointerArea;
+    let pointerTime = 0;
+    const onPointerDown = (e) => {
+      const areaId = areaOf(e.target);
+      // Recorded only when the id is one setActive would actually accept - a click the pane never
+      // reported an area for (nested, ill-formed, or outside every marker) has no focus change of
+      // its own to protect, so it must not arm a suppression window either.
+      pointerArea = areaId !== undefined && areas.indexOf(areaId) !== -1 ? areaId : undefined;
+      pointerTime = Date.now();
+      setActive(areaId);
+    };
+    const onFocusIn = (e) => {
+      const areaId = areaOf(e.target);
+      const suppress =
+        pointerArea !== undefined &&
+        areaId !== undefined &&
+        areaId !== pointerArea &&
+        Date.now() - pointerTime < ${GESTURE_FOCUS_MS};
+      if (suppress) {
+        pointerArea = undefined;
+        return;
+      }
+      setActive(areaId);
+    };
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('focusin', onFocusIn, true);
 
@@ -267,6 +311,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         warnPapi('Content zoom command ' + command + ' threw: ' + (e && e.message ? e.message : e));
       }
     };
+    // The keydown chord rule below mirrors web-view-content-zoom.chrome-keys.ts's
+    // isChordModifier / isAllowedShiftState / actionFor. This script is serialized to a string
+    // and cannot import that module, so the two copies are independently maintained - change
+    // both together. web-view-content-zoom.chord-parity.test.ts is the guard that keeps them
+    // in sync.
     const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey;
 
     const onKeyDown = (e) => {
