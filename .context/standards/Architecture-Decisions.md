@@ -1415,7 +1415,7 @@ step, no automation. Just a record.
   live/settled translation runs only while something is pending, scoped per pending settle scope and
   memoized on that scope's content, so the identity fast path keeps the common (nothing pending) case
   free.
-- **Source:** PT-4370; paranext-core PR #TBD, scripture-editors PR #TBD. The guard this decision
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11. The guard this decision
   documents is `insertCommentAtCurrentSelection` in
   `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
 
