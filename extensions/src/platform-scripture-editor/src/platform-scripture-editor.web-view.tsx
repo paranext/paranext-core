@@ -170,6 +170,7 @@ import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control
 import {
   createInsertContextMenuItems,
   doesEditorContextMenuOwnEnter,
+  isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
@@ -2251,6 +2252,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
         // Everything below runs only with no open session — the `if (session)` above returns.
         if (event.key === defaultMarkersMenuTrigger) {
+          // The editor's own right-click menu is up: leave it the only keyboard mode on screen.
+          // It stays open across a palette, and a palette session then claims Escape one capture
+          // step above the menu's listener, so the menu would survive the dismissal with its
+          // highlighted item still armed for the next Enter. See `isEditorContextMenuOpen`.
+          if (isEditorContextMenuOpen()) return;
           // ACTIVE palette: the trigger never lands, whatever the selection shape — typing
           // filters the palette, not the document. In capture phase the claim keeps Lexical
           // from ever seeing the `\`. (`passive` still selects the overlay's
