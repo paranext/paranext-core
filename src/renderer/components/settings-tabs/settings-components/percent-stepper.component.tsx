@@ -1,7 +1,7 @@
 import { Minus, Plus, RotateCcw } from 'lucide-react';
 import { Button } from 'platform-bible-react';
 import { useEffect, useRef, useState } from 'react';
-import { formatZoomPercent, roundZoom } from '@shared/utils/content-zoom.util';
+import { formatZoomPercent } from '@shared/utils/content-zoom.util';
 
 /** Props for {@link PercentStepper}. */
 export type PercentStepperProps = {
@@ -61,7 +61,14 @@ export function PercentStepper({
     }
   }, [value]);
 
-  const clampToProps = (factor: number) => Math.min(max, Math.max(min, roundZoom(factor)));
+  // The shared platform helper rounds to a tenth because that is the platform's own zoom step;
+  // `min`/`max`/`step` are the contract this component actually offers callers, so rounding must
+  // follow the caller's `step` instead — otherwise any step other than a tenth would have its
+  // output silently snapped to the wrong precision.
+  const stepDecimals = Math.min(10, (step.toString().split('.')[1] ?? '').length);
+  const roundToStep = (factor: number) => Number(factor.toFixed(stepDecimals));
+
+  const clampToProps = (factor: number) => Math.min(max, Math.max(min, roundToStep(factor)));
 
   const emit = (candidate: number) => {
     const next = clampToProps(candidate);
