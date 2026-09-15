@@ -1,4 +1,6 @@
+import type { Localized, SingleColumnMenu } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
+import { CONTENT_ZOOM_COMMANDS } from '@shared/models/content-zoom.model';
 import type { WindowSummary } from '@shared/services/window.service-model';
 import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
 
@@ -13,6 +15,16 @@ export const FLOAT_TAB_COMMAND = 'platform.floatTab';
 
 /** Contributed command that moves the tab into a window created for it */
 export const MOVE_TO_NEW_WINDOW_COMMAND = 'platform.moveWebViewToNewWindow';
+
+/**
+ * Contributed group holding the per-tab content-zoom items, the only group Simple mode offers. Must
+ * match the group of this name in `src/extension-host/data/menu.data.json`; this file's test pins
+ * the two together by importing the shipped data.
+ */
+export const CONTENT_ZOOM_TAB_MENU_GROUP = 'platform.tabZoom';
+
+/** Ids of the contributed items {@link CONTENT_ZOOM_TAB_MENU_GROUP} holds, by their command */
+const CONTENT_ZOOM_ITEM_IDS = new Set<string>(Object.values(CONTENT_ZOOM_COMMANDS));
 
 /**
  * Marks a generated target in the move-to-window submenu. What follows is the target window's id,
@@ -56,6 +68,9 @@ function isUnavailable(item: OverlayContextMenuItem, context: TabMenuContext): b
     return !webViewId || isOnlyTabInWindowThatWouldClose;
   if (item.type === 'submenu' && item.id === MOVE_TO_WINDOW_ITEM_ID)
     return !webViewId || otherWindows.length === 0;
+  // Zooming needs something to zoom. A tab hosting no web view — a dialog or an error tab — has no
+  // content the zoom commands can reach, so the items are removed rather than offered as no-ops.
+  if (item.type === 'item' && CONTENT_ZOOM_ITEM_IDS.has(item.id)) return !webViewId;
   return false;
 }
 
@@ -106,4 +121,33 @@ export function buildTabMenuItems(
   });
 
   return pruneSeparators(withTargets);
+}
+
+/**
+ * Narrow a contributed tab menu to a single top-level group, keeping the items that belong to it.
+ *
+ * Filtering here rather than after conversion is what makes it possible at all: the converter
+ * flattens groups into one list with separators between them, so a converted item no longer says
+ * which group it came from.
+ *
+ * Only a top-level group is supported. A group anchored to a submenu item would need its host item
+ * kept too, and no such group exists in the platform's tab menu.
+ */
+export function filterTabMenuToGroup(
+  menu: Localized<SingleColumnMenu>,
+  groupId: string,
+): Localized<SingleColumnMenu> {
+  const { groups } = menu;
+
+  // Cast groups to a plain Record for string-based indexing
+  // (The original type uses ReferencedItem keys which are `${string}.${string}`)
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const groupsRecord = groups as Record<string, (typeof groups)[keyof typeof groups]>;
+
+  const groupDetail = groupsRecord[groupId];
+
+  return {
+    groups: groupDetail ? { [groupId]: groupDetail } : {},
+    items: menu.items.filter((item) => item.group === groupId),
+  };
 }
