@@ -7,7 +7,11 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { LanguageStrings } from 'platform-bible-utils';
-import { CommentListPanel, CommentListPanelProps } from './comment-list.component';
+import {
+  CommentListPanel,
+  CommentListPanelProps,
+  COMMENT_LIST_STICKY_HEADER_ELEMENT_ID,
+} from './comment-list.component';
 import { DEFAULT_COMMENT_FILTERS, DEFAULT_SCOPE_FILTER } from './comment-list-filters.model';
 
 // Radix Select scrolls its highlighted item into view on open and checks pointer capture on
@@ -252,6 +256,25 @@ describe('CommentListPanel filter dropdown localization fallback', () => {
     const options = screen.getAllByRole('option');
     expect(options.length).toBeGreaterThan(0);
     options.forEach((option) => expect(option).not.toHaveTextContent(/%.+%/));
+  });
+});
+
+describe('CommentListPanel sticky header', () => {
+  // The web view looks the header up by this id to measure how much of the view it covers, so the
+  // id and what it wraps are a DOM contract, not styling detail: without them a BCV-sync scroll
+  // parks the target card underneath the header.
+  it('gives the sticky header the id the web view looks it up by', () => {
+    const { container } = renderPanel();
+    const header = container.querySelector(`#${COMMENT_LIST_STICKY_HEADER_ELEMENT_ID}`);
+    expect(header).not.toBeNull();
+    expect(header?.className).toContain('tw:sticky');
+  });
+
+  it('wraps the filter toolbar, and the notice when shown, in that header', () => {
+    const { container } = renderPanel({ isSyncBlocked: true });
+    const header = container.querySelector(`#${COMMENT_LIST_STICKY_HEADER_ELEMENT_ID}`);
+    expect(header?.contains(screen.getByTestId('comment-scope-filter'))).toBe(true);
+    expect(header?.contains(screen.getByRole('status'))).toBe(true);
   });
 });
 
