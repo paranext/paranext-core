@@ -17,7 +17,6 @@ import localizedStringsFile from '../contributions/localizedStrings.json';
 const { topMenu } = menus.webViewMenus['platformScriptureEditor.react'];
 const { groups, items } = topMenu;
 
-const ZOOM_GROUP = 'platformScriptureEditor.zoom' as const;
 const OPTIONS_COLUMN = 'platformScriptureEditor.options';
 
 const ZOOM_COMMANDS = {
@@ -28,10 +27,8 @@ const ZOOM_COMMANDS = {
 
 describe('platform-scripture-editor zoom menu contribution', () => {
   it('declares the zoom group in the Options column, after footnotesPane, marked experimental', () => {
-    const { zoom: zoomGroup, footnotesPane: footnotesPaneGroup } = {
-      zoom: groups['platformScriptureEditor.zoom'],
-      footnotesPane: groups['platformScriptureEditor.footnotesPane'],
-    };
+    const zoomGroup = groups['platformScriptureEditor.zoom'];
+    const footnotesPaneGroup = groups['platformScriptureEditor.footnotesPane'];
     expect(zoomGroup).toBeDefined();
     expect(footnotesPaneGroup).toBeDefined();
     expect(zoomGroup.column).toBe(OPTIONS_COLUMN);
@@ -40,7 +37,7 @@ describe('platform-scripture-editor zoom menu contribution', () => {
   });
 
   it('contributes exactly three ordered items to the zoom group, one per command', () => {
-    const zoomItems = items.filter((item) => item.group === ZOOM_GROUP);
+    const zoomItems = items.filter((item) => item.group === 'platformScriptureEditor.zoom');
     expect(zoomItems).toHaveLength(3);
 
     const byOrder = [...zoomItems].sort((a, b) => a.order - b.order);
@@ -51,8 +48,8 @@ describe('platform-scripture-editor zoom menu contribution', () => {
     expect(commands).toEqual([ZOOM_COMMANDS.in, ZOOM_COMMANDS.out, ZOOM_COMMANDS.reset]);
   });
 
-  it('carries no hiddenInterfaceModes or isExperimental on any zoom item (visible, non-experimental, in both modes)', () => {
-    const zoomItems = items.filter((item) => item.group === ZOOM_GROUP);
+  it('marks the group experimental but leaves every zoom item unmarked (visible and non-experimental in both interface modes)', () => {
+    const zoomItems = items.filter((item) => item.group === 'platformScriptureEditor.zoom');
     zoomItems.forEach((item) => {
       expect('hiddenInterfaceModes' in item).toBe(false);
       expect('isExperimental' in item).toBe(false);
@@ -60,7 +57,7 @@ describe('platform-scripture-editor zoom menu contribution', () => {
   });
 
   it('has an en and es localized string for every zoom item label', () => {
-    const zoomItems = items.filter((item) => item.group === ZOOM_GROUP);
+    const zoomItems = items.filter((item) => item.group === 'platformScriptureEditor.zoom');
     const { en, es } = localizedStringsFile.localizedStrings;
     const enLookup: Record<string, string> = en;
     const esLookup: Record<string, string> = es;

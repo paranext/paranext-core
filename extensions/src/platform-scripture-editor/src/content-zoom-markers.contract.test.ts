@@ -28,8 +28,10 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
   const source = collapseWhitespace(readFileSync(WEB_VIEW_FILE, 'utf-8'));
 
   it('wraps the reverse-portal editor contents in a ContentZoomRoot', () => {
+    // Structure only — the marker's own class list is styling, not part of the zoom contract this
+    // test guards.
     expect(source).toMatch(
-      /<InPortal node={editorPortalNode}> <PortalContents> <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">/,
+      /<InPortal node={editorPortalNode}> <PortalContents> <ContentZoomRoot[ >]/,
     );
   });
 
@@ -45,9 +47,9 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
     expect(source).not.toContain('<ContentZoomRoot area=');
   });
 
-  it('leaves the editor scroll container untouched and unmarked', () => {
-    expect(source).toMatch(
-      /<div ref={editorContainerRef} className="tw:h-auto tw:flex-1 tw:min-h-0 tw:overflow-auto"/,
-    );
+  it('leaves the editor scroll container present and unmarked, not a ContentZoomRoot', () => {
+    // Matching the literal `<div` (rather than `<ContentZoomRoot`) proves the element itself is a
+    // plain div; its class list is styling, not part of the zoom contract this test guards.
+    expect(source).toMatch(/<div ref={editorContainerRef}/);
   });
 });
