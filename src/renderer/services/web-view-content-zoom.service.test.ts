@@ -1232,6 +1232,67 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it("a content replacement whose bootstrap never runs loses the previous content's areas", async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1.3');
+    vi.useFakeTimers();
+    try {
+      // Simulates a document whose bootstrap never ran (or tore itself down): the string-keyed form
+      // avoids both a type assertion and the member-access underscore the bootstrap contract owns.
+      Reflect.deleteProperty(iframe.contentWindow ?? {}, '__platformContentZoom');
+      applyContentZoomForWebView('editor-1');
+      vi.advanceTimersByTime(1000);
+      expect(resolveContentZoomArea('editor-1', undefined)).toBeUndefined();
+      expect(iframe.style.zoom).toBe('1.3');
+      updateDefinition.mockClear();
+      settingsSet.mockClear();
+      await adjustContentZoom('editor-1', 1); // content-root gate: no area, so this is a no-op
+      expect(updateDefinition).not.toHaveBeenCalled();
+      expect(settingsSet).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a reload whose bootstrap runs keeps the pane's areas", async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-1'); // __platformContentZoom stays in place, as for a real reload
+      vi.advanceTimersByTime(1000);
+      expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
+      expect(iframe.style.zoom).toBe('');
+      expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a report inside the grace still cancels it', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-1');
+      vi.advanceTimersByTime(500);
+      setContentZoomAreas('editor-1', ['main']); // the reloaded content's own report, mid-grace
+      vi.advanceTimersByTime(600);
+      expect(iframe.style.zoom).toBe('');
+      expect(resolveContentZoomArea('editor-1', undefined)).toBe('main');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('scales a URL web view whole straight away, since it never runs the bootstrap and never reports areas', () => {
     definitions.set('url-1', {
       id: 'url-1',
