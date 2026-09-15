@@ -245,7 +245,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // own. A focus change that settles inside the clicked area itself (the footnote row taking
     // focus a few milliseconds after the pointer went down on its caller, before the view moves
     // focus again) is neither suppressed nor spends the gesture - it is not the click's own move
-    // into another area, and the click's protection stays live for the one that follows.
+    // into another area, and the click's protection stays live for the one that follows. A focus
+    // change that lands outside every area works the same way: there is no area to protect, so it
+    // is not suppressed, but nothing was spent either, and the gesture still protects the next
+    // change into a different area.
     let pointerArea;
     let pointerTime = 0;
     const onPointerDown = (e) => {
