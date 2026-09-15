@@ -339,11 +339,13 @@ test.describe('scripture editor content zoom', () => {
       );
     });
 
-    await test.step('reset targets the focused area only (active-area tracking needs a real click)', async () => {
+    await test.step('reset with no area id targets the area the user last clicked in', async () => {
       // Click a REAL footnote row (`.note-caller`, `footnote-item.component.tsx`), not empty pane
       // background: the pointerdown listener resolves the clicked element's closest marked
       // ancestor, and only an actual descendant of the footnotes ContentZoomRoot is guaranteed to
-      // register as the click target under a CSS-zoomed layout.
+      // register as the click target under a CSS-zoomed layout. Selecting a row also sends the
+      // caret back into the editor text (`selectNote`), so this click is exactly the case where the
+      // pointer and the resulting focus name different areas and the pointer has to win.
       await editorFrame.locator('.note-caller').first().click({ force: true });
       // Wait for the click's effect (the bootstrap's active-area tracking crosses a realm boundary
       // to reach the renderer's resolver) rather than assuming it lands within the click's own tick.
