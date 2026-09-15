@@ -1,0 +1,36 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/AI Review/Overview" />
+
+# AI Review
+
+This section is the home for **AI-assisted UX/design review** of Platform.Bible UI — the
+review instructions and the shared state they produce. It lives next to the design-system
+guidelines so both humans and review agents find it.
+
+It is the AI-driven counterpart to [UI Review](../ui-review.mdx) (the human process). The
+guidelines themselves stay the source of truth for what "good" means; the pages here only
+describe how an AI review _uses_ them.
+
+## What's here
+
+- **[UX Design Review](./ux-design-review.mdx)** — the standard an AI follows when reviewing a
+  UI change. It catches big accessibility/UX failures, cites the guideline each finding
+  violates, and stays out of nitpicks. Read it before reviewing a PR, or run it yourself before
+  requesting a UX review.
+- **[Nightly Routine](./nightly-routine.mdx)** — a copy/paste routine that sweeps PRs and runs
+  the review as a safety net. Drop it into your own scheduled agent.
+- **[Design System Gaps](./design-system-gaps.mdx)** — the running log of UX-significant things
+  the guidelines don't yet cover. The review feeds it; the UX team drains it into real
+  guidelines. **This page owns the format for logging a gap** — other pages link to it rather
+  than restating it.
+
+## How the pieces fit
+
+1. A developer — or the nightly routine — runs the **UX Design Review** against a UI change.
+2. Findings that violate a guideline are reported. Things the guidelines are silent on become
+   **gap candidates**, appended to **Design System Gaps**.
+3. The UX team turns recurring gaps into new or expanded guidelines, then removes them from the
+   log.
+
+The AI review is a safety net. It does not replace the human [UI Review](../ui-review.mdx).
