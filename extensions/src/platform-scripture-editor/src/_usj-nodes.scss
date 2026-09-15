@@ -7,7 +7,9 @@
    Local additions: li/lim --para-indent and --verse-text-start entries in
    .psc-gutter-markers.text-spacing, mirroring scripture-editors commit 846ad99
    (https://github.com/eten-tech-foundation/scripture-editors/commit/846ad99,
-   \li/\lim gutter overlap fix). */
+   \li/\lim gutter overlap fix).
+   The source's four `local()`-only Charis SIL @font-face rules are dropped; see the note where
+   they used to be. */
 
 /* stylelint-disable */
 
@@ -28,29 +30,12 @@
 .align_end {
   text-align: end;
 }
-@font-face {
-  font-family: 'Charis SIL';
-  src:
-    local('Charis SIL'), local('Charis SIL Bold'), local('Charis SIL Bold Italic'),
-    local('Charis SIL Italic');
-  font-weight: normal;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold');
-  font-weight: bold;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Italic');
-  font-style: italic;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold Italic');
-  font-weight: bold;
-  font-style: italic;
-}
+/* Charis SIL is NOT declared here. The application declares it once, in
+   src/renderer/styles/fonts.css, which is inlined into every web view's srcdoc with real bold and
+   italic faces. A `local()`-only font face in this file would error on any machine that does not
+   have the font installed, and an erroring face makes the whole family unusable at that weight and
+   style rather than falling back to a working declaration of it — which drops bold and italic
+   Scripture text out of the family and onto an unrelated system font. */
 .usfm.formatted-font {
   font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
   font-size: 12pt;
