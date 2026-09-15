@@ -25,7 +25,6 @@ import type PapiFrontend from '@papi/frontend';
 import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
-  deepEqual,
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
@@ -430,9 +429,9 @@ export async function convertScriptureRangeToEditorRange(
   // May need to use verse refs and offsets from the USFM verse location to get USJ offsets
   let endVerseRef: SerializedVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
 
-  // `ScriptureRange.end` is required by its type, but `selectRange`/`setAnnotation` receive `range`
-  // over JSON-RPC, where nothing enforces that at runtime. Treat a missing `end` as a request for a
-  // collapsed range at `start` rather than letting `determineLocationProperties` below throw on it.
+  // A range with no `end` is a collapsed range at `start`. `selectRange`/`setAnnotation` receive
+  // `range` over JSON-RPC, so `end` can be absent at runtime even though the type marks it
+  // optional only for that reason.
   const end = range.end ?? range.start;
 
   // Figure out the book and chapter and the jsonPaths and offsets if they're in the range
@@ -474,10 +473,6 @@ export async function convertScriptureRangeToEditorRange(
       ? startVerseRef
       : { verseRef: startVerseRef, offset: startVerseOffset },
   );
-
-  // A collapsed input (end absent, or deep-equal to start) yields the start location for both
-  // ends.
-  if (deepEqual(end, range.start)) endDocumentLocation = startDocumentLocation;
 
   endDocumentLocation ??= usjRW.usfmVerseLocationToUsjDocumentLocation(
     endVerseOffset === undefined ? endVerseRef : { verseRef: endVerseRef, offset: endVerseOffset },

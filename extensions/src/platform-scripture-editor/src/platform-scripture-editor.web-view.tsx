@@ -1359,9 +1359,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         endNodeAndDocumentLocation = selection.end
           ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
           : startNodeAndDocumentLocation;
-      } catch {
+      } catch (e) {
         // A path that no longer resolves at all against the settled tree: same fail-safe response
-        // as an unresolvable selection below, not a crash.
+        // as an unresolvable selection below, not a crash. Log it — the settled contract says this
+        // cannot happen, so a hit here is a defect worth chasing, not a user mistake.
+        logger.warn(
+          `Comment insertion: selection jsonPath ${selection.start.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
+        );
         papi.notifications.send({
           message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
           severity: 'warning',
@@ -1403,6 +1407,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         'offset' in startTextDocumentLocation &&
         startTextDocumentLocation.offset > startNode.length
       ) {
+        logger.warn(
+          `Comment insertion: selection offset ${startTextDocumentLocation.offset} at ${startTextDocumentLocation.jsonPath} is past the end of the settled node (length ${startNode.length})!`,
+        );
         papi.notifications.send({
           message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
           severity: 'warning',

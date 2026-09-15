@@ -387,7 +387,7 @@ describe('convertScriptureRangeToEditorRange', () => {
   });
 
   describe('Book ID fallback for USJ document locations outside chapter 1', () => {
-    it('converts a chapter-2 USJ document location range instead of throwing "Could not find book ID"', async () => {
+    it("derives the verse from a chapter-2 USJ using the range's own book id", async () => {
       const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_2);
       // UsjFlatChapterLocation format (book + chapterNum + documentLocation); chapter 2's USJ has
       // no `id` marker to derive a book ID from
@@ -442,11 +442,7 @@ describe('convertScriptureRangeToEditorRange', () => {
         scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
         offset: 26,
       };
-      // `ScriptureRange.end` is required by the type, but callers cross the JSON-RPC boundary
-      // (selectRange/setAnnotation), where nothing enforces that at runtime; a narrow cast
-      // reproduces a start-only wire payload.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const range = { start: point } as ScriptureRange;
+      const range: ScriptureRange = { start: point };
 
       const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
 
