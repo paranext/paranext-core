@@ -133,11 +133,13 @@ test.describe('Comments panel content zoom in Simple mode', () => {
   let projectA: CommentTestProject;
   let projectB: CommentTestProject;
 
+  // Filesystem-only: creates the project copies before Electron starts scanning the projects
+  // folder. Thread seeding needs the live app's WebSocket (the PDPF's PAPI methods), so it happens
+  // in the test body instead, after waitForAppReady — beforeAll takes no fixture and so runs before
+  // Playwright launches the worker-scoped Electron app that fixture would trigger.
   test.beforeAll(async () => {
     projectA = await createCommentTestProject([]);
     projectB = await createCommentTestProject([]);
-    await createCommentThreads(projectA, ['GEN 1:1'], ['Project A comment zoom marker']);
-    await createCommentThreads(projectB, ['GEN 1:1'], ['Project B comment zoom marker']);
   });
 
   test.afterAll(() => {
@@ -153,6 +155,9 @@ test.describe('Comments panel content zoom in Simple mode', () => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
     const panelId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_PANEL_WEBVIEW_TYPE);
     await waitForOverlayGone(mainPage, 90_000);
+
+    await createCommentThreads(projectA, ['GEN 1:1'], ['Project A comment zoom marker']);
+    await createCommentThreads(projectB, ['GEN 1:1'], ['Project B comment zoom marker']);
 
     await openCommentListPanel(projectA.projectId);
     await clickCommentsPanelTab(mainPage, panelId);
@@ -194,7 +199,10 @@ test.describe('Comments panel content zoom in Simple mode', () => {
     });
 
     await test.step('the tab menu drives the same ladder as the wheel', async () => {
-      const tab = mainPage.locator(`.dock-tab[data-web-view-id="${panelId}"]`);
+      // `data-web-view-id` is emitted on `.platform-tab-title` (platform-tab-title.component.tsx),
+      // not on rc-dock's own `.dock-tab` ancestor — the same element `clickCommentsPanelTab`'s
+      // left-click path above targets.
+      const tab = mainPage.locator(`.platform-tab-title[data-web-view-id="${panelId}"]`);
       await tab.click({ button: 'right' });
       await mainPage.getByRole('menuitem', { name: 'Zoom in' }).click();
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1.2);
