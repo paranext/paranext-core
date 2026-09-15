@@ -1715,16 +1715,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setFootnotesAutoShow(!current);
           break;
         }
-        case 'insertFootnoteAtSelection': {
-          await insertFootnoteAtCurrentSelection();
-          break;
-        }
-        case 'insertCrossReferenceAtSelection': {
-          await insertCrossReferenceAtCurrentSelection();
-          break;
-        }
+        // `insertMarker` throws when the editor is readonly or has no scripture reference, and
+        // these three arrive from top-menu commands that are enabled regardless. The command has
+        // already resolved by the time the message lands, so a rejection here has nobody to
+        // return to — log it deliberately instead of leaving an unhandled promise, the same way
+        // the Ctrl+T shortcut below does.
+        case 'insertFootnoteAtSelection':
+        case 'insertCrossReferenceAtSelection':
         case 'insertEndnoteAtSelection': {
-          await insertEndnoteAtCurrentSelection();
+          const insertByMethod = {
+            insertFootnoteAtSelection: insertFootnoteAtCurrentSelection,
+            insertCrossReferenceAtSelection: insertCrossReferenceAtCurrentSelection,
+            insertEndnoteAtSelection: insertEndnoteAtCurrentSelection,
+          };
+          try {
+            await insertByMethod[editorMessage.method]();
+          } catch (error) {
+            logger.warn(`Error handling ${editorMessage.method}: ${getErrorMessage(error)}`);
+          }
           break;
         }
         case 'insertCommentAtSelection': {

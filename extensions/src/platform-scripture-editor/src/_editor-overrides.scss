@@ -247,6 +247,12 @@ button.toolbar-item {
   // the way at the heights where the whole menu already fits.
   overflow-y: auto;
   scrollbar-width: thin;
+
+  // Without this, a wheel gesture that reaches the end of the list chains to the ancestor
+  // scroller. That ancestor's scroll event does not originate inside the menu, so the
+  // close-on-scroll listener reads it as the page moving out from under a fixed-positioned menu
+  // and closes the menu mid-read — exactly when the list is long enough to need scrolling.
+  overscroll-behavior: contain;
 }
 
 .CommentPlugin_CommentInputBox_Editor,
