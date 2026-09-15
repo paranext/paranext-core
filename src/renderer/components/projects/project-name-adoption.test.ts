@@ -33,12 +33,12 @@ const SELF_REFERENTIAL_FILES = new Set([
 const EXEMPT: { file: string; contains: string; reason: string }[] = [
   {
     file: 'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx',
-    contains: 'row.rowKey} ${row.shortName} ${row.fullName',
+    contains: 'row.rowKey',
     reason: 'cmdk search haystack — five fields concatenated for matching, never rendered',
   },
   {
     file: 'src/stories/design-ideas/home-unified.component.tsx',
-    contains: 'removeConfirmTitlePrefix} ${pendingRemove.shortName} - ${pendingRemove.fullName}',
+    contains: 'pendingRemove.shortName',
     reason: 'design-ideas prototype, not shipped UI',
   },
 ];
