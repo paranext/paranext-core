@@ -44,6 +44,12 @@ export function WorkspaceUpdatingOverlayPresentational({ label, isPowerMode }: P
   );
 }
 
+// TODO(gating-surface-latch-audit): the other full-area gating surfaces in the same `Main` block
+// (`FirstRunOverlay`, `OverlayHost`, `OnboardingTour`) stand down once the connection-lost state
+// latches; this one does not, and has never been examined against that rule. It is a bounded
+// (30 s local leash) `role="status"` spinner rather than a focus-trapping dialog, so it is not an
+// obvious instance of the same problem — but it is not an established exception either. See
+// `adr-connection-lost-is-renderer-local` in `.context/standards/Architecture-Decisions.md`.
 export function WorkspaceUpdatingOverlay() {
   const [isUpdating, setIsUpdating] = useState(getWorkspaceUpdating);
 

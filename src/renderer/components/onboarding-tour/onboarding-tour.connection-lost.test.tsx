@@ -28,32 +28,33 @@ import { OnboardingTour } from './onboarding-tour.component';
 // papi-frontend.service.ts — is stubbed for every jsdom test in vitest.setup.ts.
 
 vi.mock('@renderer/services/first-run-store', async () => {
-  const { firstRunStoreMock: factory } = await import('./onboarding-tour.test-utils');
-  return factory();
+  const { firstRunStoreMock } = await import('./onboarding-tour.test-utils');
+  return firstRunStoreMock();
 });
 
 vi.mock('./onboarding-tour.store', async () => {
-  const { tourStoreMock: factory } = await import('./onboarding-tour.test-utils');
-  return factory();
+  const { tourStoreMock } = await import('./onboarding-tour.test-utils');
+  return tourStoreMock();
 });
 
 vi.mock('@renderer/hooks/use-is-power-mode.hook', async () => {
-  const { powerModeMock: factory } = await import('./onboarding-tour.test-utils');
-  return factory();
+  const { powerModeMock } = await import('./onboarding-tour.test-utils');
+  return powerModeMock();
 });
 
 vi.mock('@renderer/hooks/papi-hooks', async () => {
-  const { papiHooksMock: factory } = await import('./onboarding-tour.test-utils');
-  return factory();
+  const { papiHooksMock } = await import('./onboarding-tour.test-utils');
+  return papiHooksMock();
 });
 
 let fixtures: TourDomFixtures;
 
 beforeEach(() => {
   resetTourHarness();
-  // The connection-lost store is a module-level singleton that never clears itself, so it is reset
-  // on both sides: before, so a test in this file that latches it cannot stand down the tour in the
-  // next one, and after, so it does not stand down every later test in the run either.
+  // The connection-lost store is a module-level singleton that never clears itself, so an earlier
+  // test in this file that latches it would stand down the tour in every later one. `afterEach`
+  // below is what prevents that; this call is defensive, covering a run where that teardown did not
+  // get to happen.
   resetConnectionLost();
   fixtures = installTourDomFixtures();
 });
@@ -140,10 +141,10 @@ describe('OnboardingTour with the real Tour overlay', () => {
 });
 
 describe('OnboardingTour alongside the connection-lost state', () => {
-  it('hands the keyboard to the connection-lost shell when the connection drops mid-tour', () => {
-    // The pairing the keyboard-shortcuts catalog documents, and the only place it is actually
-    // exercised: rendered apart, neither component can show that the tour's focus trap releases
-    // Tab to the shell's own containment, which is what keeps Reload reachable for a stuck user.
+  it('hands the keyboard to the connection-lost shell when the connection drops', () => {
+    // The pairing the keyboard-shortcuts catalog documents, with both components mounted: the tour
+    // is gone and Reload holds focus. That is the precondition the catalog's Tab claim rests on —
+    // the claim itself, that Tab cycles within the shell, is not asserted here.
     render(
       <>
         <ConnectionLostOverlay />
@@ -159,12 +160,18 @@ describe('OnboardingTour alongside the connection-lost state', () => {
     expect(screen.queryByTestId('tour-dialog')).toBeNull();
     const reloadButton = screen.getByRole('button', { name: RELOAD_LABEL });
     expect(reloadButton).toBeInTheDocument();
-    // Focus lands on Reload rather than being stranded on `<body>` by the tour's teardown.
+    // Focus lands on Reload, put there by the dialog's own Radix `FocusScope`. This does not pin
+    // the tour's unmount focus restore — nothing held focus before the tour opened, so the restore
+    // has nothing to do here. That restore is pinned on its own by `restores focus when an open
+    // tour is unmounted rather than closed` in `tour.component.test.tsx`.
     expect(document.activeElement).toBe(reloadButton);
 
     pressEscape();
 
-    // The shell swallows Escape, and the withdrawn tour handler cannot spend the done flag.
+    // The shell stays up, and the withdrawn tour handler cannot spend the done flag. (That the
+    // dialog swallows the key rather than merely ignoring it is not visible from here: its
+    // `onOpenChange` is a no-op, so removing the `onEscapeKeyDown` `preventDefault` looks the same
+    // from the outside.)
     expect(screen.getByRole('button', { name: RELOAD_LABEL })).toBeInTheDocument();
     expect(readTourDone()).toBe(false);
   });

@@ -255,7 +255,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose:
       'Dismiss the topmost open overlay — a context menu, command palette, or popover (works in every frame, including web views)',
     category: 'Menus',
-    context: 'Main process (global — nothing is left to dismiss once the connection is lost)',
+    context: 'Main process (global; not while the connection-lost state is shown)',
     // Announced without preventDefault, so the focused frame still receives Escape and may act on
     // it too — e.g. the scripture editor's marker palette closes its own session. Only the bare,
     // initial press announces: a modified Escape (Shift/Ctrl/Alt/Meta) or an auto-repeat tick of a
@@ -263,14 +263,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // and a focused command palette also answers Escape through its own keydown handler.
     // `OverlayHost` stands down once the connection-lost state latches, taking every overlay it
     // hosts — context menu, command palette, popover, modal dialog — with it, so the renderer-side
-    // handler named above no longer exists in that state. Main still announces the key; what
-    // answers it is the `connection-lost-swallow-escape` entry, which swallows it.
+    // handler named above no longer exists in that state. Main's announcement goes out over the
+    // dead socket, so nothing in this renderer hears it; the key itself reaches the connection-lost
+    // dialog, which swallows it — see the `connection-lost-swallow-escape` entry.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'src/main/main.ts',
       'src/main/app-window-input.util.ts',
       'src/renderer/services/overlays/overlay.service-host.ts',
       'src/renderer/components/overlays/overlay-command-palette.component.tsx',
+      'src/renderer/components/overlay-host.component.tsx',
     ],
   },
   {

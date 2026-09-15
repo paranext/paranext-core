@@ -27,9 +27,10 @@ import { useSyncExternalStore } from 'react';
  * if (isConnectionLost) return undefined;
  * ```
  *
- * Written as `if (useIsConnectionLost()) return undefined;` it reads more directly, but only a
- * component whose first statement it is can spell it that way — anywhere below another early return
- * the call becomes conditional and `react-hooks/rules-of-hooks` rejects it.
+ * Written as `if (useIsConnectionLost()) return undefined;` it reads more directly, but only where
+ * no hook is called after it: below the component's other hooks, and above any other early return.
+ * A hook reached only when this one returns `false` is a conditional hook, which
+ * `react-hooks/rules-of-hooks` rejects.
  *
  * Backed by `useSyncExternalStore`, which re-reads the snapshot on subscribe — that closes the gap
  * a manual subscribe effect has to cover by hand: a loss that lands between the first render and

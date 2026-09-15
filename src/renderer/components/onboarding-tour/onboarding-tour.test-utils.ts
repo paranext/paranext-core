@@ -8,9 +8,9 @@ import {
  * Shared mock harness for the two `OnboardingTour` suites. They exist as separate files because
  * `vi.mock('./tour.component')` is module-scoped and cannot be undone per test — one suite needs
  * the stub to inspect what `OnboardingTour` hands `Tour`, the other needs the real overlay so its
- * keyboard handlers actually run. Everything BELOW that split is the same in both, and hand-copying
- * it meant one contract change to `onboarding-tour.store` had to be mirrored in two factories with
- * nothing checking it was.
+ * keyboard handlers actually run. Everything BELOW that split is shared here, so a contract change
+ * to `onboarding-tour.store` is made once for both suites rather than mirrored into two factories
+ * with nothing checking the copies agree.
  *
  * Vitest gives each test file its own module registry, so the mutable knobs below are per file
  * despite living in a shared module: one suite's `beforeEach` cannot disturb the other's.

@@ -93,9 +93,10 @@ let fixtures: TourDomFixtures;
 
 beforeEach(() => {
   resetTourHarness();
-  // The connection-lost store is a module-level singleton that never clears itself, so it is reset
-  // on both sides: before, so a test in this file that latches it cannot stand down the tour in the
-  // next one, and after, so it does not stand down every later test in the run either.
+  // The connection-lost store is a module-level singleton that never clears itself, so an earlier
+  // test in this file that latches it would stand down the tour in every later one. `afterEach`
+  // below is what prevents that; this call is defensive, covering a run where that teardown did not
+  // get to happen.
   resetConnectionLost();
   fixtures = installTourDomFixtures();
 });
