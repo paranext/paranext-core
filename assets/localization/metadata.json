@@ -93,6 +93,9 @@
   "%general_open%": {
     "fallbackKey": "%Paratext.Base.CommonForms.SelectScrTextsForm.SelectScrTextsForm.Text%"
   },
+  "%mainMenu_helpInfo_visitFAQsPage%": {
+    "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%"
+  },
   "%mainMenu_visitSupportBible%": {
     "fallbackKey": "%mainMenu_helpInfo_visitFAQsPage%"
   },
