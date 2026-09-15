@@ -153,11 +153,23 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // so a measurement would fail there no matter what the stylesheet says. These two properties
       // are what the override changes, and the vendored rule this menu would otherwise inherit
       // sets both to the opposite values (`scroll` + `none`), so the pair stays falsifiable.
+      //
+      // `overscroll-behavior` rides along because it protects the same gesture: without it a wheel
+      // that reaches the end of the list chains to the ancestor scroller, whose scroll event is not
+      // inside the menu, so the close-on-scroll listener closes the menu mid-read.
       const listScrollStyle = await contextMenu.locator('ul').evaluate((ul: HTMLElement) => {
         const style = getComputedStyle(ul);
-        return { overflowY: style.overflowY, scrollbarWidth: style.scrollbarWidth };
+        return {
+          overflowY: style.overflowY,
+          scrollbarWidth: style.scrollbarWidth,
+          overscrollBehaviorY: style.overscrollBehaviorY,
+        };
       });
-      expect(listScrollStyle).toEqual({ overflowY: 'auto', scrollbarWidth: 'thin' });
+      expect(listScrollStyle).toEqual({
+        overflowY: 'auto',
+        scrollbarWidth: 'thin',
+        overscrollBehaviorY: 'contain',
+      });
     });
 
     await test.step('arrow keys then Enter invoke the highlighted item, not the Enter palette', async () => {
