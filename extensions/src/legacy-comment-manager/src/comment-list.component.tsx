@@ -1,5 +1,6 @@
 import {
   CommentList,
+  ContentZoomRoot,
   Label,
   Select,
   SelectContent,
@@ -321,8 +322,10 @@ export function CommentListPanel({
       </div>
 
       {/* Comments list (or skeletons while loading / empty state). Only this region swaps on load,
-          so the toolbar above stays mounted. */}
-      <div className="tw:flex-1 tw:overflow-auto">{listContent}</div>
+          so the toolbar above stays mounted. It is also this view's only content-zoom area: the
+          sticky header above (notice + filter toolbar) stays outside the marker so it keeps its
+          size while the cards scale. */}
+      <ContentZoomRoot className="tw:flex-1 tw:overflow-auto">{listContent}</ContentZoomRoot>
     </div>
   );
 }
