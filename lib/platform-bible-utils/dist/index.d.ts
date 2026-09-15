@@ -3459,7 +3459,7 @@ export type UsjFlatTextChapterLocation = {
  * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
  * document.
  *
- * Eight clauses covers every shape the editors render (table cell → char → nested char → text is
+ * Eight clauses cover every shape the editors render (table cell → char → nested char → text is
  * seven). Deeper paths are valid at runtime; the type is a bound, not a rule.
  */
 export type ContentJsonPath = "" | `$` | `$.content[${number}]` | `$.content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`;
@@ -3468,8 +3468,12 @@ export type ContentJsonPath = "" | `$` | `$.content[${number}]` | `$.content[${n
  * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
  * if there are symbols other than underscore in the property name
  *
- * Eight clauses covers every shape the editors render (table cell → char → nested char → text is
- * seven). Deeper paths are valid at runtime; the type is a bound, not a rule.
+ * The catch-all template-literal member that matches anything starting `$.` subsumes every depth
+ * member below it — a depth path starts `$.content[` in both notations — so any such path
+ * type-checks, and the per-depth members document the shapes this type is expected to carry rather
+ * than enforcing a bound. (`$['property']`, a property directly on the document root, is the one
+ * member the catch-all does not cover, because it starts `$[`.) Eight depths cover every shape the
+ * editors render (table cell → char → nested char → text is seven).
  */
 export type PropertyJsonPath = "" | `$.${string}` | `$['${string}']` | `$.content[${number}].${string}` | `$.content[${number}]['${string}']` | `$.content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
 /**

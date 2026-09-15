@@ -44,8 +44,10 @@ These belong to no subset; run them by path (see "How to run").
   several launches per test to exercise relaunch) — tests for multi-window lifecycle (second-window startup, focus routing, app-global scroll group and theme state reaching every window and surviving any window's close, single shutdown-task run on quit), window layout persistence (windows, layouts, and bounds surviving relaunches; a deliberately closed window staying closed; the pre-multi-window single-window upgrade path), and per-window UI isolation (overlays, dialogs, notifications, navigation targets, and web-view placement staying in their own window; scroll groups deliberately app-global)
 - `navigation-history/` (one Electron per test) — tests for back/forward reference history navigation
 - `overlay/` (one Electron per test) — tests for the project-switch transition overlay
-- `scripture-editor/` (one Electron per test) — tests for Standard-view editor behaviors: view
-  defaults, marker palette, attribute-display settle, type-through save echo, annotation positions
+- `scripture-editor/` (one Electron per test) — tests for scripture editor behaviors that need a real
+  editor in a real window: which view a project opens in, marker and paragraph-style palette
+  triggers, attribute-display settle, type-through save echo, and settled annotation/selection
+  positions
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
 - `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
 - `verse-navigation/` (one Electron per worker) — tests for verse navigation keyboard shortcuts

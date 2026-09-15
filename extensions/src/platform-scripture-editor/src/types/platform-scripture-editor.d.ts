@@ -222,12 +222,13 @@ declare module 'platform-scripture-editor' {
      */
     start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
     /**
-     * Ending point where the check result applies in the document
+     * Ending point where the check result applies in the document. If not provided, the range is
+     * collapsed at `start`.
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
-    end: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+    end?: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
   };
 
   /**
