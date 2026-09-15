@@ -12,11 +12,19 @@ import {
 } from 'platform-bible-react';
 import {
   ProjectSelector,
-  ProjectSelectorLocalizedStrings,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
+  PROJECT_SELECTOR_STRING_KEYS,
+  ProjectSelectorLocalizedStrings,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  makeBuiltInGroupings,
 } from 'platform-bible-react/experimental';
-import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  LanguageStrings,
+  makeProjectSelectorCustomData,
+} from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -36,6 +44,9 @@ import { CHECK_CARD_STRING_KEYS, CheckCard, CheckStates } from './check-card.com
 export const CHECKS_SIDE_PANEL_STRING_KEYS = Object.freeze([
   ...LOCALIZED_STRINGS,
   ...CHECK_CARD_STRING_KEYS,
+  // Shared ProjectSelector keys — every ProjectSelector in the app resolves the same block, then
+  // the caller merges its own placeholder/ariaLabel on top.
+  ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const);
 
 /** A project (or resource) the user can select to run checks against. */
@@ -43,6 +54,50 @@ export type ChecksSidePanelProject = ProjectOption & {
   /** Unique id of the project. */
   id: string;
 };
+
+/**
+ * The built-in grouping ids the checks side panel's project picker offers, in
+ * `makeBuiltInGroupings` order.
+ *
+ * `type` is left out because this panel has no project-type source: `ChecksSidePanelProject`
+ * carries no type and nothing upstream supplies one, so the grouping would put every row under a
+ * single "Unknown type" bucket. `lastUsed` stays — the panel lists ALL scripture projects, so the
+ * recent/other split is a real partition here.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toChecksSelectorRows} actually packs, so adding an id here without adding
+ * its data is a build failure rather than a dead menu item.
+ */
+export const CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = [
+  'openTabs',
+  'lastUsed',
+  'language',
+];
+
+/**
+ * Maps caller-supplied checks-side-panel projects onto ProjectSelector rows, sorted by full name
+ * and carrying the grouping inputs (language, recency) in the picker's `customData` envelope.
+ * Exported for coverage tests.
+ */
+export function toChecksSelectorRows(
+  projects: readonly ChecksSidePanelProject[],
+): ProjectSelectorProject[] {
+  return [...projects]
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
+    .map((project) => ({
+      id: project.id,
+      shortName: project.shortName,
+      fullName: project.fullName,
+      customData: makeProjectSelectorCustomData({
+        language: project.language,
+        lastUsedAt: project.lastUsedAt,
+      }),
+    }));
+}
 
 /** Props for the {@link ChecksSidePanel} presentational component. */
 export type ChecksSidePanelProps = {
@@ -159,38 +214,32 @@ export function ChecksSidePanel({
   );
 
   const sortedProjects = useMemo<ProjectSelectorProject[]>(
-    () =>
-      [...projects]
-        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-        .map((project) => ({
-          id: project.id,
-          shortName: project.shortName,
-          fullName: project.fullName,
-        })),
+    () => toChecksSelectorRows(projects),
     [projects],
   );
 
-  // Chrome the picker's popover renders for itself. The panel offers only the open-tabs grouping,
-  // so the view-options menu holds exactly the "None" and "Open tabs" radio items and no filter
-  // row; the other grouping axes' labels are unreachable here and therefore unsupplied.
+  // Every ProjectSelector across the app resolves the shared `%projectSelector_*%` keys, then
+  // merges panel-specific overrides (placeholder, empty message, aria-label) on top.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
-      searchPlaceholder:
-        localizedStrings['%webView_checksSidePanel_projectSelector_searchPlaceholder%'],
-      viewOptionsAriaLabel:
-        localizedStrings['%webView_checksSidePanel_projectSelector_viewOptionsAriaLabel%'],
-      viewOptionsModifiedAriaLabel:
-        localizedStrings['%webView_checksSidePanel_projectSelector_viewOptionsModifiedAriaLabel%'],
-      groupSectionLabel:
-        localizedStrings['%webView_checksSidePanel_projectSelector_groupSectionLabel%'],
-      groupByNone: localizedStrings['%webView_checksSidePanel_projectSelector_groupByNone%'],
-      groupByOpenTabs:
-        localizedStrings['%webView_checksSidePanel_projectSelector_groupByOpenTabs%'],
-      openTabsSectionHeading:
-        localizedStrings['%webView_checksSidePanel_projectSelector_openTabsSectionHeading%'],
-      otherProjectsSectionHeading:
-        localizedStrings['%webView_checksSidePanel_projectSelector_otherProjectsSectionHeading%'],
+      ...buildProjectSelectorLocalizedStrings(localizedStrings),
+      buttonPlaceholder:
+        localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%'],
+      commandEmptyMessage:
+        localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%'],
+      ariaLabel: localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
     }),
+    [localizedStrings],
+  );
+
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys, narrowed to
+  // the ids this panel offers. See CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS for which ones
+  // and why.
+  const projectSelectorGroupings = useMemo(
+    () =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)).filter((grouping) =>
+        CHECKS_SIDE_PANEL_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
     [localizedStrings],
   );
 
@@ -247,25 +296,12 @@ export function ChecksSidePanel({
             mode="project"
             projects={sortedProjects}
             openTabs={openTabs}
-            availableGroupings={['openTabs']}
             selection={{ projectId: selectedProjectId ?? '' }}
             onChangeSelection={({ projectId: nextId }) => {
               if (nextId) onSelectProject(nextId);
             }}
-            buttonPlaceholder={
-              localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
-            }
-            commandEmptyMessage={
-              localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
-            }
-            ariaLabel={
-              localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-            }
             localizedStrings={projectSelectorLocalizedStrings}
-            buttonVariant="outline"
-            buttonClassName="tw:w-full tw:font-normal"
-            popoverContentClassName="tw:w-[300px]"
-            alignDropDown="start"
+            availableGroupings={projectSelectorGroupings}
           />
         </div>
 

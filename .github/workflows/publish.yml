@@ -252,6 +252,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-builder --publish never --linux
+          # In the same block rather than a following step: a broken snap should fail the release
+          # build here, before anything downstream treats it as a good one.
+          npm run assert:snap-metadata
 
       # The Linux failures worth debugging leave their evidence outside the build's own
       # output: snapcraft's log holds the real mksquashfs error rather than the bare

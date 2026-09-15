@@ -961,16 +961,19 @@ describe('collectUnbundledPackages', () => {
   });
 });
 
-describe('a yalc dev link is described from package-lock.json, subtree and all', () => {
+describe('a staged dev package is described from package-lock.json, subtree and all', () => {
   // THE GUARANTEE UNDER TEST: the artifact must come out the same whether the generating tree is
   // linked or not. Both halves are needed for that, and neither is sufficient alone:
   //
-  //   1. The linked package's own version, because `.yalc` holds whatever a moving branch of
-  //      another repository last published (it held platform-editor 0.8.15 while the lockfile
-  //      pinned 0.8.14, and it moved mid-task).
-  //   2. Its DISPLACED dependencies, because yalc replaces `node_modules/<linked>` with a symlink
-  //      and takes the copies nested underneath it off disk - so a dependency the lockfile nests
-  //      resolves to the hoisted copy instead, at a different version.
+  //   1. The staged package's own version, because the staging folder holds whatever a moving
+  //      branch of another repository last published, which is not necessarily what the lockfile
+  //      records for it.
+  //   2. Its DISPLACED dependencies, for a linking mechanism that replaces `node_modules/<linked>`
+  //      with a symlink and takes the copies nested underneath it off disk - so a dependency the
+  //      lockfile nests resolves to the hoisted copy instead, at a different version. Staging does
+  //      not do that (npm nests a `file:` package's dependencies on disk where the lockfile records
+  //      them), so those cases drive the correction through a lockfile that nests a copy the tree
+  //      does not have.
   //
   // The first two fixtures make the lockfile and the tree DISAGREE on purpose, so a test that
   // passed by reading the tree could not also pass there - they are what actually pins the
@@ -978,9 +981,29 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
   // not OVER-fire, which is the other way a guard like this goes wrong and the way it gets deleted
   // later for being noisy.
 
-  /** Writes a package whose directory is reached through `.yalc`, the way yalc installs one. */
+  /**
+   * The staging folder a package of this name is staged into.
+   *
+   * Deliberately NOT the package's own name. `dev-packages.json` names the folder independently of
+   * the package - the live pair is folder `platform-editor` for
+   * `@eten-tech-foundation/platform-editor` - so a fixture that spelled them the same would pass
+   * whether the name was read from the staged manifest or parsed back out of the path.
+   */
+  function stagingFolderFor(name: string) {
+    return `staged-${name.replace(/^@/, '').replace(/\//g, '-')}`;
+  }
+
+  /** The lockfile key npm writes for that staged folder, which is where its version lives. */
+  function stagedKey(name: string) {
+    return `dev-packages/staging/${stagingFolderFor(name)}`;
+  }
+
+  /**
+   * Writes a package staged the way `stage-dev-packages` stages one: its published files under
+   * `dev-packages/staging/<folder>`, installed as a `node_modules/<name>` symlink to that folder.
+   */
   function writeLinkedPackage(name: string, onDiskVersion: string) {
-    const target = path.join(repo, '.yalc', name);
+    const target = path.join(repo, 'dev-packages', 'staging', stagingFolderFor(name));
     fs.mkdirSync(target, { recursive: true });
     fs.writeFileSync(
       path.join(target, 'package.json'),
@@ -1015,7 +1038,13 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
     // branch changes this repository's committed legal artifact with no commit here at all.
     const link = writeLinkedPackage('linked-pkg', '9.9.9');
     writeManifest('main', [path.join(link, 'index.js')]);
-    writeLock({ 'node_modules/linked-pkg': { version: '1.0.0', license: 'MIT' } });
+    writeLock({
+      [stagedKey('linked-pkg')]: {
+        name: 'linked-pkg',
+        version: '1.0.0',
+        license: 'MIT',
+      },
+    });
 
     const { packages } = collectShippedPackages({
       manifestDir: path.join(repo, '.notices', 'modules'),
@@ -1033,11 +1062,11 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
     ]);
   });
 
-  it('describes a link reported by its `.yalc` REAL path, which is what webpack emits', () => {
-    // The live shape, and the one with no lockfile key of its own: `.yalc/<name>` is not a path npm
-    // ever writes, so both the version and - through `lockKey` - the subtree resolution have to go
-    // through the by-name lookup instead. Without that, the link resolves its dependencies from a
-    // tree npm never wrote, finds only the hoisted copy, and the correction silently never fires.
+  it('describes a staged package reported by its REAL path, which is what webpack emits', () => {
+    // The live shape. Webpack resolves the `node_modules` symlink, so what reaches this is the
+    // staging path - which IS a lockfile key, and the key its own dependencies resolve FROM. Look
+    // the version up by the symlink path instead and it misses, falls through to the bare name, and
+    // the subtree resolution walks a tree npm never wrote.
     const link = writeLinkedPackage('linked-pkg', '9.9.9');
     const hoisted = writePackage('node_modules/dep', 'dep', '1.0.0');
     writeManifest('main', [
@@ -1046,8 +1075,16 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
       path.join(hoisted, 'index.js'),
     ]);
     writeLock({
-      'node_modules/linked-pkg': { version: '1.0.0', license: 'MIT', dependencies: { dep: '^2' } },
-      'node_modules/linked-pkg/node_modules/dep': { version: '2.0.0', license: 'Apache-2.0' },
+      [stagedKey('linked-pkg')]: {
+        name: 'linked-pkg',
+        version: '1.0.0',
+        license: 'MIT',
+        dependencies: { dep: '^2' },
+      },
+      [`${stagedKey('linked-pkg')}/node_modules/dep`]: {
+        version: '2.0.0',
+        license: 'Apache-2.0',
+      },
       'node_modules/dep': { version: '1.0.0', license: 'MIT' },
     });
 
@@ -1068,8 +1105,16 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
     const hoisted = writePackage('node_modules/dep', 'dep', '1.0.0');
     writeManifest('main', [path.join(link, 'index.js'), path.join(hoisted, 'index.js')]);
     writeLock({
-      'node_modules/linked-pkg': { version: '1.0.0', license: 'MIT', dependencies: { dep: '^2' } },
-      'node_modules/linked-pkg/node_modules/dep': { version: '2.0.0', license: 'Apache-2.0' },
+      [stagedKey('linked-pkg')]: {
+        name: 'linked-pkg',
+        version: '1.0.0',
+        license: 'MIT',
+        dependencies: { dep: '^2' },
+      },
+      [`${stagedKey('linked-pkg')}/node_modules/dep`]: {
+        version: '2.0.0',
+        license: 'Apache-2.0',
+      },
       'node_modules/dep': { version: '1.0.0', license: 'MIT' },
     });
 
@@ -1099,8 +1144,16 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
       path.join(other, 'index.js'),
     ]);
     writeLock({
-      'node_modules/linked-pkg': { version: '1.0.0', license: 'MIT', dependencies: { dep: '^2' } },
-      'node_modules/linked-pkg/node_modules/dep': { version: '2.0.0', license: 'Apache-2.0' },
+      [stagedKey('linked-pkg')]: {
+        name: 'linked-pkg',
+        version: '1.0.0',
+        license: 'MIT',
+        dependencies: { dep: '^2' },
+      },
+      [`${stagedKey('linked-pkg')}/node_modules/dep`]: {
+        version: '2.0.0',
+        license: 'Apache-2.0',
+      },
       'node_modules/dep': { version: '1.0.0', license: 'MIT' },
       'node_modules/other': { version: '1.0.0', license: 'MIT', dependencies: { dep: '^1' } },
     });
@@ -1126,8 +1179,16 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
     writeManifest('main', [path.join(link, 'index.js'), path.join(hoisted, 'index.js')]);
     writeLock({
       '': { name: 'root', dependencies: { dep: '^1' } },
-      'node_modules/linked-pkg': { version: '1.0.0', license: 'MIT', dependencies: { dep: '^2' } },
-      'node_modules/linked-pkg/node_modules/dep': { version: '2.0.0', license: 'Apache-2.0' },
+      [stagedKey('linked-pkg')]: {
+        name: 'linked-pkg',
+        version: '1.0.0',
+        license: 'MIT',
+        dependencies: { dep: '^2' },
+      },
+      [`${stagedKey('linked-pkg')}/node_modules/dep`]: {
+        version: '2.0.0',
+        license: 'Apache-2.0',
+      },
       'node_modules/dep': { version: '1.0.0', license: 'MIT' },
     });
 
@@ -1150,8 +1211,16 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
       '': { name: 'root' },
       'extensions/src/an-extension': { version: '0.0.1', dependencies: { dep: '^1' } },
       'node_modules/an-extension': { resolved: 'extensions/src/an-extension', link: true },
-      'node_modules/linked-pkg': { version: '1.0.0', license: 'MIT', dependencies: { dep: '^2' } },
-      'node_modules/linked-pkg/node_modules/dep': { version: '2.0.0', license: 'Apache-2.0' },
+      [stagedKey('linked-pkg')]: {
+        name: 'linked-pkg',
+        version: '1.0.0',
+        license: 'MIT',
+        dependencies: { dep: '^2' },
+      },
+      [`${stagedKey('linked-pkg')}/node_modules/dep`]: {
+        version: '2.0.0',
+        license: 'Apache-2.0',
+      },
       'node_modules/dep': { version: '1.0.0', license: 'MIT' },
     });
 
@@ -1172,8 +1241,15 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
     const nested = writePackage('node_modules/other/node_modules/dep', 'dep', '3.0.0');
     writeManifest('main', [path.join(link, 'index.js'), path.join(nested, 'index.js')]);
     writeLock({
-      'node_modules/linked-pkg': { version: '1.0.0', license: 'MIT' },
-      'node_modules/linked-pkg/node_modules/dep': { version: '2.0.0', license: 'Apache-2.0' },
+      [stagedKey('linked-pkg')]: {
+        name: 'linked-pkg',
+        version: '1.0.0',
+        license: 'MIT',
+      },
+      [`${stagedKey('linked-pkg')}/node_modules/dep`]: {
+        version: '2.0.0',
+        license: 'Apache-2.0',
+      },
       'node_modules/other/node_modules/dep': { version: '3.0.0', license: 'MIT' },
     });
 
@@ -1218,10 +1294,20 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
       path.join(hoisted, 'index.js'),
     ]);
     writeLock({
-      'node_modules/link-a': { version: '1.0.0', license: 'MIT', dependencies: { dep: '^2' } },
-      'node_modules/link-a/node_modules/dep': { version: '2.0.0', license: 'MIT' },
-      'node_modules/link-b': { version: '1.0.0', license: 'MIT', dependencies: { dep: '^3' } },
-      'node_modules/link-b/node_modules/dep': { version: '3.0.0', license: 'MIT' },
+      [stagedKey('link-a')]: {
+        name: 'link-a',
+        version: '1.0.0',
+        license: 'MIT',
+        dependencies: { dep: '^2' },
+      },
+      [`${stagedKey('link-a')}/node_modules/dep`]: { version: '2.0.0', license: 'MIT' },
+      [stagedKey('link-b')]: {
+        name: 'link-b',
+        version: '1.0.0',
+        license: 'MIT',
+        dependencies: { dep: '^3' },
+      },
+      [`${stagedKey('link-b')}/node_modules/dep`]: { version: '3.0.0', license: 'MIT' },
       'node_modules/dep': { version: '1.0.0', license: 'MIT' },
     });
 
@@ -1302,7 +1388,7 @@ describe('packageDirOf stops at the package boundary', () => {
   // nearest package.json ABOVE it, so a module under a nested copy that is not on disk is silently
   // credited to the ENCLOSING package - a real directory, so the run resolves and exits 0 with the
   // missing package absent from the document entirely. The live shape: sixteen modules under
-  // `.../scripture-utilities/node_modules/@xmldom/xmldom/` when a `yalc` refresh has taken that
+  // `.../scripture-utilities/node_modules/@xmldom/xmldom/` when a dev-package refresh has taken that
   // directory off disk, all attributed to `scripture-utilities`.
 
   it('reports a module under a MISSING nested package as unresolved, not as its parent', () => {
@@ -1339,31 +1425,67 @@ describe('packageDirOf stops at the package boundary', () => {
     expect(packageDirOf(path.join(repo, 'src', 'main', 'main.ts'), repo)).toBeUndefined();
   });
 
-  it('resolves a package by its `.yalc` REAL path, which is what webpack reports', () => {
-    // webpack resolves symlinks to their real path, so a package installed as a node_modules
-    // symlink into `.yalc` is reported by its `.yalc` path. Treating that as first-party source -
-    // which is ignored without comment - removed both dev-linked packages from the document
-    // entirely while the run exited 0. `.yalc` is laid out exactly like `node_modules`.
-    const dir = path.join(repo, '.yalc', '@scope', 'linked');
+  it('resolves a staged package by its REAL path, which is what webpack reports', () => {
+    // Webpack resolves symlinks to their real path, so a package npm installed as a `node_modules`
+    // symlink to a staged folder is reported by its `dev-packages/staging` path. Treating that as
+    // first-party source - which is ignored without comment - removed both staged packages from the
+    // document entirely while the run exited 0.
+    //
+    // The folder is a plain name while the package's is scoped, which is the live pair: the
+    // boundary is the FOLDER, and the name is read from the manifest inside it.
+    const dir = path.join(repo, 'dev-packages', 'staging', 'platform-editor');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, 'package.json'),
-      JSON.stringify({ name: '@scope/linked', version: '9.9.9' }),
+      JSON.stringify({ name: '@scope/platform-editor', version: '9.9.9' }),
     );
     expect(packageDirOf(path.join(dir, 'dist', 'index.js'), repo)).toBe(dir);
   });
 
-  it('reports a module under a MISSING `.yalc` package as unresolved, not as first-party', () => {
+  it('stops at a staged package that nests its own dependency, not at the staging root', () => {
+    // Npm nests a `file:` package's dependencies under it exactly as it does for any other
+    // installed package, and the owner of that code is the NESTED package - so the innermost
+    // container has to win over the staging one, whichever kind it is.
+    const dir = path.join(
+      repo,
+      'dev-packages',
+      'staging',
+      'platform-editor',
+      'node_modules',
+      'dep',
+    );
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ name: 'dep', version: '1.0.0' }),
+    );
+    expect(packageDirOf(path.join(dir, 'lib', 'index.js'), repo)).toBe(dir);
+  });
+
+  it('reports a module under a MISSING staged package as unresolved, not as first-party', () => {
     expect(
-      packageDirOf(path.join(repo, '.yalc', '@scope', 'gone', 'dist', 'index.js'), repo),
+      packageDirOf(path.join(repo, 'dev-packages', 'staging', 'gone', 'dist', 'index.js'), repo),
     ).toBeUndefined();
+  });
+
+  it('does not read a `staging` directory INSIDE a package as a package container', () => {
+    // `dev-packages/staging` is matched as a two-segment path for this reason: a lone `staging`
+    // segment is a plausible directory name inside somebody else's package, and matching it would
+    // make the boundary a directory with no manifest - which fails the run as an unresolved module.
+    const dir = path.join(repo, 'node_modules', 'somebody');
+    fs.mkdirSync(path.join(dir, 'staging', 'inner'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ name: 'somebody', version: '1.0.0' }),
+    );
+    expect(packageDirOf(path.join(dir, 'staging', 'inner', 'index.js'), repo)).toBe(dir);
   });
 });
 
 describe('the module manifests must all come from one build', () => {
   // A set of MIXED VINTAGE is a silent under-report: a stale manifest names modules that are gone,
   // or misses ones that are now there. This repository shipped exactly that state - two extension
-  // manifests hours older than the three core ones, still naming modules under a directory a `yalc`
+  // manifests hours older than the three core ones, still naming modules under a directory a dev-package
   // refresh had removed - and nothing in a manifest said which build it came from.
 
   function writeStampedManifest(bundle: string, buildId: string | undefined, modules: string[]) {
