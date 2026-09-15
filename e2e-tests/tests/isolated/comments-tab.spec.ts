@@ -245,8 +245,9 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // Assert on rendered panel UI, not just the iframe body: the body is "attached" as soon as
     // the frame element exists, which would pass even for an empty or errored WebView. The panel
     // renders skeleton placeholders while loading (this test opens no project, so it stays in the
-    // loading state) and the filter toolbar dropdowns once loaded — either proves the
-    // CommentListPanel component actually rendered.
+    // loading state) and the Filters toolbar button once loaded (the button renders regardless of
+    // loading state, unlike the axis controls, which only mount once its popover is opened) —
+    // either proves the CommentListPanel component actually rendered.
     //
     // Click and assert inside ONE retry loop: a workspace rebuild ("Updating project view"
     // overlay) can still fire after waitForSimpleLayout. It recreates the Column 3 tabs and resets
@@ -255,12 +256,13 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // pointer events, so clicking during one always fails), then clicks and asserts with short
     // timeouts so the loop can retry promptly if another rebuild lands mid-attempt.
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
+    const skeletonOrFiltersButton = commentsFrame
+      .locator('[data-slot="skeleton"]')
+      .or(commentsFrame.locator('[data-testid="comment-filters-trigger"]'));
     await expect(async () => {
       await waitForOverlayGone(mainPage, 60_000);
       await clickCommentsTab(mainPage, commentListPanelId, 5_000);
-      await expect(
-        commentsFrame.locator('[data-slot="skeleton"], [data-slot="select-trigger"]').first(),
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(skeletonOrFiltersButton.first()).toBeVisible({ timeout: 10_000 });
     }).toPass({ timeout: 180_000 });
   });
 
@@ -331,14 +333,16 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await clickCommentsTab(mainPage, commentListPanelId);
 
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
-    // The filter dropdowns are the toolbar; the first one is the resolved-status filter. Its
-    // visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
-    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+    // The axis dropdowns now live inside the Filters popover and are unmounted while it is
+    // closed, so they can't stand in for "the toolbar is visible" any more. The Filters button
+    // itself is the toolbar chrome now — its visibility is a faithful proxy for "the filtering
+    // bar is visible" (PT-4070 DoD).
+    const filtersButton = commentsFrame.locator('[data-testid="comment-filters-trigger"]');
     const threads = commentsFrame.locator('#comment-list [role="option"]');
 
     // Wait for the seeded threads to render, then confirm the toolbar starts out visible.
     await expect(threads.first()).toBeVisible({ timeout: 90_000 });
-    await expect(firstFilter).toBeInViewport();
+    await expect(filtersButton).toBeInViewport();
 
     // Scroll the iframe DOCUMENT explicitly, not "whichever container happens to scroll". In the
     // real web view nothing bounds html/body/#root, so the document is the scroll container and
@@ -357,7 +361,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await expect(threads.first()).not.toBeInViewport();
 
     // The point of PT-4070: the sticky filter row must remain on-screen after scrolling to bottom.
-    await expect(firstFilter).toBeInViewport();
+    await expect(filtersButton).toBeInViewport();
   });
 
   // NOTE: The keyboard and scope-filter tests below MUST stay ahead of the PT-4069 test. That test
@@ -395,10 +399,19 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await clickCommentsTab(mainPage, commentListPanelId);
 
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
+    const filtersButton = commentsFrame.locator('[data-testid="comment-filters-trigger"]');
+
+    // The axis controls are unmounted until the Filters popover opens, so reach it by keyboard
+    // first, entirely without a mouse click.
+    await expect(filtersButton).toBeVisible({ timeout: 90_000 });
+    await filtersButton.focus();
+    await expect(filtersButton).toBeFocused();
+    await filtersButton.press('Enter');
+
     const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
 
-    // Wait for the loaded toolbar, then drive the first filter entirely by keyboard.
-    await expect(firstFilter).toBeVisible({ timeout: 90_000 });
+    // Wait for the popover's first filter, then drive it entirely by keyboard.
+    await expect(firstFilter).toBeVisible({ timeout: 10_000 });
     await firstFilter.focus();
     await expect(firstFilter).toBeFocused();
 
@@ -443,15 +456,25 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
     // Find the scope dropdown by its stable data-testid rather than by trigger index — the index
     // holds only while the scope trigger stays the 5th of exactly five and no comment card renders a
-    // Select, which is a coincidence rather than a contract. Click the tab inside a retry loop: a
-    // "workspace updating" overlay can intercept pointer events during dock rebuilds, so wait it out
-    // and retry (same pattern as the panel-display test).
+    // Select, which is a coincidence rather than a contract. The scope control now lives inside the
+    // Filters popover and is unmounted until it opens, so open it before looking for the trigger.
+    // Click the tab and the Filters button inside a retry loop: a "workspace updating" overlay can
+    // intercept pointer events during dock rebuilds, so wait it out and retry (same pattern as the
+    // panel-display test).
+    const filtersButton = commentsFrame.locator('[data-testid="comment-filters-trigger"]');
     const scopeTrigger = commentsFrame.locator('[data-testid="comment-scope-filter"]');
+    // Retry only the tab click — reaching the panel is what races with the overlay. Opening the
+    // popover stays OUTSIDE the loop because the trigger TOGGLES: a retry after a successful open
+    // would close it again, so the loop could alternate rather than converge.
     await expect(async () => {
       await waitForOverlayGone(mainPage, 60_000);
       await clickCommentsTab(mainPage, commentListPanelId, 5_000);
-      await expect(scopeTrigger).toBeVisible({ timeout: 15_000 });
+      await expect(filtersButton).toBeVisible({ timeout: 15_000 });
     }).toPass({ timeout: 180_000 });
+
+    await waitForOverlayGone(mainPage, 30_000);
+    await filtersButton.click();
+    await expect(scopeTrigger).toBeVisible({ timeout: 15_000 });
 
     // With the overlay cleared, open the scope dropdown and confirm the Column 3 panel actually
     // offers the "Current chapter" option — the exact capability this fix adds. Before the fix the
