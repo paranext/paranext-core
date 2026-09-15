@@ -92,14 +92,26 @@ function cardLocator(frame: Frame, threadId: string) {
 }
 
 /**
- * How far a card's top sits below the top of the visible list, in the card's own (zoomed) pixels.
- * Measured against the WebView's viewport rather than the zoom root's box: the list scrolls an
- * ancestor of the marked element, so the marked element travels with the content and its box is not
- * a fixed anchor. Negative values (a card scrolled above the top) clamp to 0 — `toBeInViewport`
- * already covers that direction.
+ * How far a card's top sits below the top of the scrollable list itself, in the card's own (zoomed)
+ * pixels. Measured against the zoom root's OWN current box (`ContentZoomRoot`, the element that
+ * actually scrolls) rather than the WebView's viewport: the sticky filter toolbar occupies space
+ * above the zoom root in the same iframe, so a viewport-relative top is offset by the toolbar's
+ * height and only happens to read correctly at zoom levels high enough to swamp it. Both boxes are
+ * read in one `evaluate` so they can't be read a tick apart. Negative values (a card scrolled above
+ * the top) clamp to 0 — `toBeInViewport` already covers that direction.
  */
-async function cardTopWithinView(card: ReturnType<typeof cardLocator>): Promise<number> {
-  return card.evaluate((element) => Math.max(0, element.getBoundingClientRect().top));
+async function cardTopWithinView(
+  frame: Frame,
+  card: ReturnType<typeof cardLocator>,
+): Promise<number> {
+  const cardId = await card.getAttribute('id');
+  if (!cardId) throw new Error('Comment card has no id');
+  return frame.evaluate((id) => {
+    const root = document.querySelector('[data-platform-content-zoom-root=""]');
+    const element = document.querySelector(`[role="option"][id="${id}"]`);
+    if (!root || !element) throw new Error(`Zoom root or card "${id}" not found`);
+    return Math.max(0, element.getBoundingClientRect().top - root.getBoundingClientRect().top);
+  }, cardId);
 }
 
 /** A card's rendered height in its own (zoomed) pixels. */
@@ -111,14 +123,18 @@ async function cardHeight(card: ReturnType<typeof cardLocator>): Promise<number>
  * Closes a dock tab by web view id. `data-web-view-id` is set on `.platform-tab-title`
  * (`platform-tab-title.component.tsx`), not on rc-dock's own `.dock-tab` element, so the close
  * button is found via its ancestor rather than a `.dock-tab[data-web-view-id]` selector that never
- * matches anything. The close button is only visible on the active or hovered tab
- * (`dock-layout-wrapper.component.scss`), so hover first rather than assume the tab is active.
+ * matches anything.
+ *
+ * `dispatchEvent` rather than a real hover+click: on a crowded tab strip the close button can sit
+ * outside the visible/scrollable area, and `rc-dock` renders a `.dock-tab-hit-area` sibling over
+ * the same region for drag/drop hit-testing, either of which can make Playwright's actionability
+ * check report the button as covered or non-actionable for a real click (see `closeFindPanel` in
+ * `find/replace.spec.ts`, which uses the same `dispatchEvent` for the same reason).
  */
 async function closeDockTab(page: Page, webViewId: string): Promise<void> {
   const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
   const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
-  await dockTab.hover();
-  await dockTab.locator('.dock-tab-close-btn').click();
+  await dockTab.locator('.dock-tab-close-btn').dispatchEvent('click');
 }
 
 test.describe('comment list content zoom', () => {
@@ -277,14 +293,14 @@ test.describe('comment list content zoom', () => {
       await navigateToolbarBcv(mainPage, 'Genesis 3:1');
       await expect(gen3Card).toBeInViewport({ timeout: 15_000 });
       await expect
-        .poll(() => cardTopWithinView(gen3Card), { timeout: 10_000 })
+        .poll(() => cardTopWithinView(listFrame, gen3Card), { timeout: 10_000 })
         .toBeLessThanOrEqual(await cardHeight(gen3Card));
 
       const gen1Card = cardLocator(listFrame, threadIds[0]);
       await navigateToolbarBcv(mainPage, 'Genesis 1:1');
       await expect(gen1Card).toBeInViewport({ timeout: 15_000 });
       await expect
-        .poll(() => cardTopWithinView(gen1Card), { timeout: 10_000 })
+        .poll(() => cardTopWithinView(listFrame, gen1Card), { timeout: 10_000 })
         .toBeLessThanOrEqual(await cardHeight(gen1Card));
     });
 
