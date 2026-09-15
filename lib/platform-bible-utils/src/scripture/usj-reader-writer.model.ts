@@ -324,8 +324,11 @@ export type ContentJsonPath =
  * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
  * if there are symbols other than underscore in the property name
  *
- * Eight clauses covers every shape the editors render (table cell → char → nested char → text is
- * seven). Deeper paths are valid at runtime; the type is a bound, not a rule.
+ * The catch-all template-literal member that matches anything starting `$.` subsumes every depth
+ * member below it — a bracket-notation path still starts `$.` — so any such path type-checks, and
+ * the per-depth members document the shapes this type is expected to carry rather than enforcing a
+ * bound. Eight depths covers every shape the editors render (table cell → char → nested char → text
+ * is seven).
  */
 export type PropertyJsonPath =
   | ''

@@ -1336,8 +1336,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
 
     // Validate that the selection doesn't contain markers, and that there is meaningful content.
-    // `selection`'s jsonPaths address the SETTLED document by contract (EditorRef.getSelection's
-    // contract) — the same document `getUsj()` returns — so they should always resolve here and
+    // `selection`'s jsonPaths address the SETTLED document per EditorRef.getSelection's contract
+    // — the same document `getUsj()` returns — so they should always resolve here and
     // land on a node whose string is the length the offsets below were computed against. A path
     // that `jsonPathToUsjNodeAndDocumentLocation` cannot resolve at all, or that resolves to a node
     // shorter than an offset expects, is not a legitimate state; it's a bug or a race. This guard,
