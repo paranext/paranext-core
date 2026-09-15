@@ -327,9 +327,9 @@ export type ContentJsonPath =
  * The catch-all template-literal member that matches anything starting `$.` subsumes every depth
  * member below it — a depth path starts `$.content[` in both notations — so any such path
  * type-checks, and the per-depth members document the shapes this type is expected to carry rather
- * than enforcing a bound. (`$['property']`, a property directly on the document root, is the one
- * member the catch-all does not cover, because it starts `$[`.) Eight depths cover every shape the
- * editors render (table cell → char → nested char → text is seven).
+ * than enforcing a bound. (`$['property']`, a property directly on the document root, and the empty
+ * string `''` are the two members the catch-all does not cover, because neither starts `$.`.) Eight
+ * depths cover every shape the editors render (table cell → char → nested char → text is seven).
  */
 export type PropertyJsonPath =
   | ''

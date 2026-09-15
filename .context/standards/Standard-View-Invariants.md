@@ -173,8 +173,10 @@ compensates for an expected divergence — there isn't one.
 
 **`ContentJsonPath` and `PropertyJsonPath` must be widened in lock-step across both repos.**
 `platform-bible-utils` (`src/scripture/usj-reader-writer.model.ts`) and the editor's
-`@eten-tech-foundation/scripture-utilities` (`packages/utilities/src/converters/usj/usj-document-location.model.ts`)
-each declare their own copy, and core assigns its copy into the editor's typed `EditorRef` API. Widen
+`@eten-tech-foundation/scripture-utilities`
+(`packages/utilities/src/converters/usj/usj-document-location.model.ts` in the `scripture-editors`
+repo) each declare their own copy, and core assigns its copy into the editor's typed `EditorRef`
+API. Widen
 one alone and the cross-repo assignment stops type-checking — in the core→editor direction only, so
 the break surfaces as red CI in core after an editor bump, with nothing in either repo's own tests to
 catch it. Both repos carry a compile-time depth test; keep them mirrored.

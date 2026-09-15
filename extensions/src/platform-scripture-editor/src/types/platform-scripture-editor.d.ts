@@ -215,15 +215,16 @@ declare module 'platform-scripture-editor' {
    */
   export type ScriptureRange = {
     /**
-     * Starting point where the check result applies in the document
+     * Starting point of the range in the document
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
     start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
     /**
-     * Ending point where the check result applies in the document. If not provided, the range is
-     * collapsed at `start`.
+     * Ending point of the range in the document. If not provided, the range is collapsed at `start`
+     * — unlike `platform-scripture`'s `ScriptureRange`, where an absent `end` selects the whole
+     * verse.
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
