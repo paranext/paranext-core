@@ -1,8 +1,8 @@
 # Paratext 9 - Master Feature Index (v2)
 
-**Version**: 3.8
-**Date**: January 22, 2026
-**Total Features**: 152 features across 16 categories
+**Version**: 3.9
+**Date**: September 15, 2026
+**Total Features**: 153 features across 16 categories
 **Methodology**: Six-source validation (MS, FR, R, M, H, C)
 
 ---
@@ -59,6 +59,7 @@
 | 1.15 | Autocorrect | MS C |
 | 1.16 | Text Normalization Utilities | MS |
 | 1.17 | Editor Real-time Validation | MS M H C |
+| 1.18 | Pane Zoom | MS H C |
 
 ---
 
@@ -444,6 +445,7 @@
 ### P
 - **Parallel Passages Tool** → 9.2
 - **Paratext Live (Real-time Collaboration)** → 10.3
+- **Pane Zoom** → 1.18
 - **Plugin System** → 14.1
 - **Print (Basic Print)** → 15.6
 - **Progress Reports** → 11.5
@@ -536,13 +538,13 @@
 ## Statistics
 
 - **Total Categories**: 16
-- **Total Features**: 152
+- **Total Features**: 153
 
 **Features by validation level:**
 - 6 sources: 23 features
 - 5 sources: 27 features
 - 4 sources: 36 features
-- 3 sources: 28 features
+- 3 sources: 29 features
 - 2 sources: 18 features
 - 1 source: 20 features
 
@@ -552,6 +554,7 @@
 
 | Ver | Date | Changes |
 |-----|------|---------|
+| v3.9 | 2026-09-15 | Added 1.18 Pane Zoom (≡ Tab > View > Zoom; `FocusedPaneZoom`/`SecondaryViewZooms`, `FormZoomer`, `HtmlZoomHelper`, `DefaultZoomMemento`, `CommentListForm` body zoom) and corrected 2.3's "Font size and zoom controls" bullet, which pointed at the project font size rather than at pane zoom; total now 153 features |
 | v3.8 | 2026-01-22 | Validation pass: fixed 13.10 sources (added C); updated statistics |
 | v3.7 | 2026-01-22 | Added 2.10 Vertical Script Support based on source code analysis (supports traditional Mongolian and other vertical scripts); total now 152 features |
 | v3.6 | 2026-01-22 | Added 3 features from HelpData coverage audit: 2.9 Encoding Converter, 11.9 Translation Priorities; expanded 13.10 Project Conversion (MS→MS FR H); total now 151 features |
