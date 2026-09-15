@@ -265,8 +265,10 @@ async function invokeFindFromHamburger(mainPage: Page): Promise<void> {
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
-  // Anchored to the exact label "Find" (%webView_platformScriptureEditor_openFind%).
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
+  // The item's accessible name is its label "Find" (%webView_platformScriptureEditor_openFind%)
+  // followed by a keyboard shortcut hint, so the match is anchored to a word boundary rather than
+  // to the end of the name. A bare prefix match would also select an item like "Find and replace…".
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find(\s|$)/i });
   await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
   await findMenuItem.click();
 }

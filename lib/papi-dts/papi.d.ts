@@ -12307,7 +12307,8 @@ declare module 'shared/services/menu-data.service-model' {
     rebuildMenus(): Promise<void>;
     /**
      *
-     * Get localized menu content for the main menu
+     * Get localized menu content for the main menu. Items hidden in the current interface mode are
+     * left out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of localized main menu content
@@ -12315,7 +12316,8 @@ declare module 'shared/services/menu-data.service-model' {
     getMainMenu(mainMenuType: undefined): Promise<Localized<MultiColumnMenu>>;
     /**
      *
-     * Get localized menu content for the main menu
+     * Get localized menu content for the main menu. Items hidden in the current interface mode are
+     * left out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of localized main menu content
@@ -12347,7 +12349,8 @@ declare module 'shared/services/menu-data.service-model' {
     ): Promise<UnsubscriberAsync>;
     /**
      *
-     * Get unlocalized menu content for the main menu
+     * Get unlocalized menu content for the main menu. Items hidden in the current interface mode are
+     * left out. Items never carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of unlocalized main menu content
@@ -12355,7 +12358,8 @@ declare module 'shared/services/menu-data.service-model' {
     getUnlocalizedMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
     /**
      *
-     * Get unlocalized menu content for the main menu
+     * Get unlocalized menu content for the main menu. Items hidden in the current interface mode are
+     * left out. Items never carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of unlocalized main menu content
@@ -12386,7 +12390,8 @@ declare module 'shared/services/menu-data.service-model' {
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
-     * Get localized menu content for a web view
+     * Get localized menu content for a web view. Items hidden in the current interface mode are left
+     * out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param webViewType The type of webview for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content

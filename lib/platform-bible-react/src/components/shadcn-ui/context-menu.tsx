@@ -268,7 +268,10 @@ function ContextMenuShortcut({ className, ...props }: React.ComponentProps<'span
       data-slot="context-menu-shortcut"
       className={cn(
         // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation; tw:ms-auto uses logical margin for RTL support
-        'pr-twp tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground tw:group-focus/context-menu-item:text-accent-foreground',
+        // CUSTOM: Added tw:[unicode-bidi:plaintext] so the hint takes its direction from its first
+        // letter, keeping macOS symbols in order (⌃F, not F⌃) in RTL menus. Unlike dir="ltr", it
+        // keeps the span's direction, so tw:ms-auto still puts the hint at the inline end
+        'pr-twp tw:[unicode-bidi:plaintext] tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground tw:group-focus/context-menu-item:text-accent-foreground',
         className,
       )}
       {...props}

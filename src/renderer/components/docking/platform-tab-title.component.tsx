@@ -39,6 +39,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuShortcut,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
@@ -180,6 +181,7 @@ function renderTabMenuItems(
     return (
       <ContextMenuItem key={key} onClick={() => onSelect(item.id)}>
         {item.label}
+        {item.shortcut && <ContextMenuShortcut>{item.shortcut}</ContextMenuShortcut>}
       </ContextMenuItem>
     );
   });
