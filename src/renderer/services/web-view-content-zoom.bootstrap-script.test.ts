@@ -242,6 +242,39 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith('wv-late-focus', 'main');
   });
 
+  it('a focus change inside the clicked area does not spend the gesture', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { bound } = install('wv-inside-area', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    // A focus change that lands inside the SAME area the pointer went down in (the footnote row
+    // itself, milliseconds after the pointerdown on its caller) is not the click's own focus
+    // change into another area, so it must not spend the gesture.
+    vi.setSystemTime(new Date(Date.now() + 4));
+    byId('note').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    // The gesture is still live: the next focus change, into a different area, is the one it
+    // protects.
+    vi.setSystemTime(new Date(Date.now() + 14));
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    expect(bound.reportContentZoomActiveAreaById).not.toHaveBeenLastCalledWith(
+      'wv-inside-area',
+      'main',
+    );
+  });
+
   it('suppresses only the first focus change after a click, not every focus change within the gesture window', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const { bound } = install('wv-one-shot', TWO_AREAS);

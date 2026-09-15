@@ -279,10 +279,13 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // pointer went down in this one. A focus change with no pointer gesture behind it - the caret
     // reaching a footnote by keyboard, or a view focusing a pane by itself - still names the active
     // area, which is why the gesture's reach is bounded rather than the focus listener simply
-    // deferring to the pointer one. Only ONE focus change is ever suppressed per click: the
-    // recorded area is cleared the instant the first focusin after the click is handled, whether
-    // or not that focusin was the one suppressed, so a later, unrelated focus move within the same
-    // window is never mistaken for the click's own.
+    // deferring to the pointer one. One click may suppress at most one focus change into a
+    // DIFFERENT area: the recorded area is cleared only when such a change is actually suppressed,
+    // so a later, unrelated focus move within the same window is never mistaken for the click's
+    // own. A focus change that settles inside the clicked area itself (the footnote row taking
+    // focus a few milliseconds after the pointer went down on its caller, before the view moves
+    // focus again) is neither suppressed nor spends the gesture - it is not the click's own move
+    // into another area, and the click's protection stays live for the one that follows.
     let pointerArea;
     let pointerTime = 0;
     const onPointerDown = (e) => {
@@ -298,10 +301,13 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       const areaId = areaOf(e.target);
       const suppress =
         pointerArea !== undefined &&
+        areaId !== undefined &&
         areaId !== pointerArea &&
         Date.now() - pointerTime < ${GESTURE_FOCUS_MS};
-      pointerArea = undefined;
-      if (suppress) return;
+      if (suppress) {
+        pointerArea = undefined;
+        return;
+      }
       setActive(areaId);
     };
     window.addEventListener('pointerdown', onPointerDown, true);
