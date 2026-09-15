@@ -548,6 +548,9 @@ describe('Tab menu', () => {
     const result = await engine.getWebViewMenu('nothing.recognized');
 
     expect(commandsIn(result.tabMenu)).toEqual([
+      'platform.webViewContentZoomIn',
+      'platform.webViewContentZoomOut',
+      'platform.webViewContentZoomReset',
       'platform.floatTab',
       'platform.moveWebViewToNewWindow',
       'platform.moveTabToWindow',
