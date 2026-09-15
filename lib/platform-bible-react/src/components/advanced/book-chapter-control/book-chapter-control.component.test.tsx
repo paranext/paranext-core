@@ -1427,6 +1427,33 @@ describe('BookChapterControl yields keys it does not own', () => {
     expect(getSearchInput()).toBeInTheDocument();
   });
 
+  test('Escape closes the recent-searches list before the picker behind it', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    await user.click(screen.getByRole('button', { name: /recent/i }));
+    await screen.findAllByRole('menuitem');
+
+    // Escape has to unwind one layer at a time, or dismissing a list the user opened by accident
+    // also throws away the reference they were part-way through choosing. Nothing here implements
+    // that ordering: it comes from nesting a Radix menu inside the Radix popover, which stops the
+    // key at the innermost dismissable layer. That makes this a characterization test of a
+    // structural choice rather than of our own logic — a recent-searches list rebuilt on `Command`
+    // inside a plain `Popover` would take both layers down on one Escape with nothing else failing.
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('menuitem')).not.toBeInTheDocument());
+    expect(getSearchInput()).toBeInTheDocument();
+
+    // And the picker still answers the next Escape, so trapping the first one costs nothing.
+    await user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      ),
+    );
+  });
+
   test('ArrowLeft moves the caret in the query instead of the preview highlight', async () => {
     const { user } = await openPickerWithRecentSearches();
     await user.keyboard('mat 12:15');
