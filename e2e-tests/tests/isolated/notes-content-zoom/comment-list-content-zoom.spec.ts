@@ -92,13 +92,13 @@ function cardLocator(frame: Frame, threadId: string) {
 }
 
 /**
- * How far a card's top sits below the top of the scrollable list itself, in the card's own (zoomed)
- * pixels. Measured against the zoom root's OWN current box (`ContentZoomRoot`, the element that
- * actually scrolls) rather than the WebView's viewport: the sticky filter toolbar occupies space
- * above the zoom root in the same iframe, so a viewport-relative top is offset by the toolbar's
- * height and only happens to read correctly at zoom levels high enough to swamp it. Both boxes are
- * read in one `evaluate` so they can't be read a tick apart. Negative values (a card scrolled above
- * the top) clamp to 0 — `toBeInViewport` already covers that direction.
+ * How far a card's top sits below the visible top of the list, in the card's own (zoomed) pixels.
+ * The visible top is the bottom edge of the sticky filter toolbar: the list's own container never
+ * clips (the web-view document is what scrolls, and the zoom root travels with the content), so
+ * neither the zoom root's box nor the bare viewport is the right anchor — the toolbar covers the
+ * top of the viewport, and the zoom root's top moves with every scroll. Both rectangles are read in
+ * one `evaluate` so they cannot be a tick apart. A card scrolled above the toolbar clamps to 0;
+ * `toBeInViewport` covers that direction.
  */
 async function cardTopWithinView(
   frame: Frame,
@@ -107,10 +107,13 @@ async function cardTopWithinView(
   const cardId = await card.getAttribute('id');
   if (!cardId) throw new Error('Comment card has no id');
   return frame.evaluate((id) => {
-    const root = document.querySelector('[data-platform-content-zoom-root=""]');
+    const toolbar = document.querySelector('[data-testid="comment-scope-filter"]');
     const element = document.querySelector(`[role="option"][id="${id}"]`);
-    if (!root || !element) throw new Error(`Zoom root or card "${id}" not found`);
-    return Math.max(0, element.getBoundingClientRect().top - root.getBoundingClientRect().top);
+    if (!toolbar || !element) throw new Error(`Filter toolbar or card "${id}" not found`);
+    return Math.max(
+      0,
+      element.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom,
+    );
   }, cardId);
 }
 
