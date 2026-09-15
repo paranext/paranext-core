@@ -3426,6 +3426,44 @@ step, no automation. Just a record.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
 
+## adr-per-web-view-state-lives-in-the-definition: Per-web-view state lives in the web view definition; user defaults and cross-instance memory live in settings
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Per-pane content zoom (epic PT-4575) needs three different lifetimes for one number:
+  the level the pane on screen is at now, the level to hand the next pane of the same project and
+  kind, and the user's default for panes that have never been zoomed. The platform already has a
+  home for the first — a web view's own `state` inside its `SavedWebViewDefinition`, written through
+  `updateWebViewDefinition` and read back in a view with `useWebViewState`. That store is the one the
+  dock layout serializes, so it survives a restart and travels with the tab when the tab moves to
+  another window (`adr-web-view-ids-are-unique-from-birth`, `adr-durable-window-ids`). An April
+  prototype of this feature (PR #2211) instead kept a `Record<webViewId, factor>` inside a renderer
+  zoom service and mirrored it into a hidden setting, making the pane's own level a second copy that
+  had to be reconciled with the definition on every open, move, reload and close.
+- **Decision:** Per-web-view state of any kind lives in that web view's `SavedWebViewDefinition.state`,
+  written with `updateWebViewDefinition`. State that must outlive a single pane — a user-level
+  default, or "what this project's editor was last set to" — lives in **user settings**: a visible
+  setting for the default the user controls, a hidden one for the memory. Services keep no parallel
+  store keyed by web view id. Content zoom is the first feature written to the rule: the pane's own
+  levels are `platform.contentZoomLevels` in the definition state, the default and the per-project
+  memory are `platform.webViewContentZoom` and `platform.webViewContentZoomMemory`
+  (`src/renderer/services/web-view-content-zoom.service.ts`).
+- **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
+  content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
+  definition has to be taught by hand about every lifecycle event the definition gets for free.
+  (b) **Everything in settings, keyed by web view id** — rejected: ids are minted per pane and never
+  reused, so such a setting grows without bound and needs a pruning story; that cost is accepted only
+  for the memory setting, which is keyed by project and kind rather than by pane, and even there
+  pruning is its own work item (PT-4585). (c) **Everything in the definition, nothing in settings** —
+  rejected: a level that dies with its pane cannot answer "the same zoom next time I open this
+  project", which is what Paratext 9 does (`ParatextBase/DefaultZoomMemento.cs`).
+- **Consequences:** Per-pane state travels through restart, window move and layout share for free, and
+  a feature that wants it writes no storage code. In exchange, definition state is semi-public — it
+  is visible in a shared layout and readable by the view itself — so nothing sensitive belongs there,
+  and every key needs a name that cannot collide, hence the `platform.`-prefixed key. **Revisit** if a
+  per-pane value ever grows larger than a layout file should reasonably carry.
+- **Source:** PT-4576 (PR #2803) and PT-4580, epic PT-4575; the rejected alternative is PR #2211.
+
 ## adr-per-window-focus-ring-keys-off-broadcast-window-id: A per-window focus ring keys off a main-broadcast window id, not local DOM focus
 
 - **Date:** 2026-09-03
@@ -5647,6 +5685,58 @@ step, no automation. Just a record.
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
 
+## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
+
+- **Date:** 2026-09-15
+- **Status:** Accepted (narrows `adr-app-global-shortcuts-in-main`; refines `adr-per-web-view-ctrl-f-for-find`)
+- **Context:** Content zoom (epic PT-4575) is scoped to one **pane**, and a pane may hold several
+  independently zoomable areas — the Scripture editor's text and its footnotes list. Acting on the
+  right one needs the id of the web view the user is in and the area holding the caret or the
+  pointer. The main process, which claimed Ctrl+`+`/`-`/`0` in its `before-input-event` handler for
+  app-wide zoom, has neither: it can name the focused window, not the focused tab, and it cannot see
+  which element inside an `about:srcdoc` iframe has focus. `adr-per-web-view-ctrl-f-for-find` already
+  settled this shape of problem for Ctrl+F by moving the listener into the view and holding it in one
+  shared hook — but that hook is extension code every view has to mount, and content zoom has to work
+  for views that know nothing about it, including plain-HTML ones.
+- **Decision:** The chords are handled inside each web view by the **platform's own injected
+  bootstrap** (`getContentZoomBootstrapScript` in
+  `src/renderer/services/web-view-content-zoom.bootstrap-script.ts`), appended to the script the
+  renderer already injects into every non-URL web view. It targets the area holding keyboard focus,
+  else the area under the pointer for the wheel, else the pane's last active area, and acts with the
+  pane's own id. This is `adr-per-web-view-ctrl-f-for-find`'s shared hook taken one step further: the
+  shared handler is platform-injected, so a view opts in by marking **content**, not by mounting
+  code. The bootstrap prefers in-process functions the window's web-view shard binds on the iframe's
+  `window` and falls back to the three PAPI commands `platform.webViewContentZoomIn` / `…Out` /
+  `…Reset`, which keeps `adr-renderer-registers-no-names` intact — the names are registered by the
+  router, not by the renderer — and keeps a wheel burst off the network. Main gives up the chords in
+  PT-4577 (PR #2809, not yet merged at the time of writing — until it lands, Windows and Linux still
+  swallow them in `before-input-event`): the three zoom branches are deleted, `platform.zoomIn` and
+  `platform.zoomOut` stay as commands with no default chord, macOS binds explicit View-menu items
+  carrying ⌘=/⌘-/⌘0 in place of the native `zoomIn`/`zoomOut`/`resetZoom` roles, and a renderer
+  top-document `keydown` listener covers the case where keyboard focus is on window chrome — the tab
+  bar, the reference box, a toolbar button — where no iframe sees the key at all.
+- **Alternatives:** (a) **Keep it in main and route to the focused window** — rejected: main knows the
+  window, not the pane and not the area; the same objection `adr-per-web-view-ctrl-f-for-find`
+  records. (b) **A renderer window-level listener that forwards keys into the right iframe** —
+  rejected as the general mechanism: it is focus-blind, since the renderer cannot see which element
+  inside a sandboxed iframe holds the caret, and it adds a hop to keep in sync. It survives only as
+  the narrow window-chrome case above, where there is no iframe to ask. (c) **A shared React hook
+  every view mounts**, as Find does — rejected here: it would make zoom an opt-in for *code* rather
+  than for *content*, it would repeat the coverage gap that decision already names, and plain-HTML
+  views could not opt in at all.
+- **Consequences:** A view that marks no zoom area ignores the chords entirely — the bootstrap does
+  not even register its wheel listener while a pane has no areas — and the platform scales such a view
+  whole at the Settings default instead. The bootstrap listens in the **bubble** phase on purpose, so
+  a view that owns Ctrl+wheel for a sub-region keeps precedence by stopping propagation in the capture
+  phase; the Text Collection grid's per-resource zoom does exactly that
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts`).
+  On macOS the chord arrives through the menu accelerator rather than through the iframe, so it
+  resolves the pane's *active* area rather than the area holding the caret; the bootstrap's `focusin`
+  tracking keeps the two equal in practice. **Revisit** if a second platform-injected shortcut appears
+  — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
+- **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2809,
+  chord ownership), epic PT-4575.
+
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
 - **Date:** 2026-08-27
@@ -6042,3 +6132,46 @@ step, no automation. Just a record.
   drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
   adding the ordering tests in `z-index.test.tsx` and this decision record.
+
+## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Platform.Bible had one scaling control — the app-wide Electron zoom behind the
+  `platform.zoomFactor` setting, which scales the chrome along with everything else — plus a
+  project-level font size the editor's Standard view honours, plus two private per-view zooms that
+  grew where the platform had nothing to offer (the Text Collection grid's per-resource factor, and
+  the Enhanced Resources viewer's own handler). Adding a per-pane zoom on top of that raises two
+  questions at once: what the layers multiply out to on screen, and what the new layer is implemented
+  with. Spikes S1 and S2 of the epic's investigation measured the candidates on the real Scripture
+  editor.
+- **Decision:** On screen a pane shows **Electron zoom × project font size × content zoom** — the
+  content zoom of the area, its own level if it has one, otherwise the Settings default — with the
+  Text Collection's per-resource factor multiplying inside the grid's area. Content zoom composes
+  with the project font size and never replaces or resets it: it scales whatever base size the area
+  already has, and reset returns to the Settings default, not to the project font size. It is
+  implemented as CSS `zoom` on each element carrying `data-platform-content-zoom-root`, driven by a
+  custom property per area (`--platform-content-zoom-<areaId>`, falling back to
+  `--platform-content-zoom-default`). **Zoom areas are a platform capability**: a view marks one or
+  more non-nested areas and the platform owns the targeting (focus, then pointer, then last active
+  area), the per-area state, the memory and the indicator. Views do not build their own zoom stacks.
+- **Alternatives:** (a) **A font-size cascade on the content root** — rejected: it does not reach the
+  editor's rendered scripture, which sets its own sizes (PT-4167), so the one view the feature exists
+  for would not scale. (b) **`transform: scale`** — rejected: it breaks hit-testing, so clicks and
+  caret placement land off-target, which S1 reproduced. (c) **Scaling the whole `<iframe>` for every
+  view** — rejected for adapted views: it scales the view's own toolbar with its content, which is
+  exactly what NN-1 forbids; it is kept only as the fallback for a view that marks no area, and for
+  URL views, where nothing can be injected. (d) **Letting each view implement its own zoom**, as the
+  grid and Enhanced Resources already had to — rejected: four near-copies of clamping, stepping,
+  storage and indicator, with no shared memory and no consistent chord.
+- **Consequences:** A view opts in with one attribute and gets targeting, state, memory, the indicator
+  and the chords for free; the cost is the CSS `zoom` measurement mismatch — inside an area
+  `getBoundingClientRect` is in zoomed pixels while `getComputedStyle(...).fontSize` is not — which
+  every consumer of both has to handle by reading the area's variable (documented in
+  `Extension-Development-Guide.md` and `Component-Builder-Patterns.md`). The Text Collection grid's
+  per-resource zoom predates this decision and stays, nesting inside the grid's own area and
+  multiplying with it: it is the documented exception, not a precedent, and PT-4582 brings it onto
+  the platform mechanism. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view
+  carries a private zoom any more.
+- **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
+  recorded here by PT-4580.

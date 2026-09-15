@@ -1,10 +1,10 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.5.0
+version: 1.7.0
 status: active
 created: 2026-03-04
-last_updated: 2026-06-18
+last_updated: 2026-09-15
 toc: true
 ---
 
@@ -166,6 +166,27 @@ await papi.webViews.openWebView(FEATURE_WEB_VIEW_TYPE, undefined, options);
 ```
 
 Reference implementations: `extensions/src/platform-scripture/src/find.web-view-provider.ts`, `extensions/src/platform-scripture/src/checks-side-panel.web-view-provider.ts`, `extensions/src/platform-scripture-editor/src/main.ts`.
+
+### Content Zoom Opt-In (experimental)
+
+A web view opts into per-pane content zoom by wrapping the content area **below its own toolbar** in `ContentZoomRoot` from `platform-bible-react` — one element, nothing else:
+
+```tsx
+import { ContentZoomRoot } from 'platform-bible-react';
+
+<div className="tw:flex tw:flex-col tw:h-full">
+  <Toolbar onSelectMenuItem={handleMenuItem} />
+  <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{content}</ContentZoomRoot>
+</div>;
+```
+
+The platform then scales that element on Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel and the tab context menu, keeps the level in the pane's own web view definition state, remembers it per project and kind of pane, and shows the level indicator. The view contributes no handler, no state and no CSS.
+
+`ContentZoomRoot` renders a plain `<div>` in normal flow and applies **no** classes of its own, so give it the layout classes its parent expects — `tw:flex-1 tw:min-h-0` inside a flex column — exactly as you would the element it replaces. It forwards its ref and every other `div` prop.
+
+**One root per zoom area.** No `area` prop means the view's `main` area; a view with several independently zoomable panes marks each with its own id (`<ContentZoomRoot area="footnotes">`; ids are `[a-z][a-z0-9-]*`, and `default` is reserved). Each id gets its own level and memory: the shortcuts act on the area holding keyboard focus, the wheel on the area under the pointer, and the tab menu on the area last used. **Areas must not nest** — a marked element inside another marked element is ignored — so mark the content, not a scroll container that also holds a second area, and keep resize handles, dividers and panel headers outside every area so they do not change size. A view that marks nothing is scaled whole at the Settings default instead (URL views immediately, other views after a roughly one-second grace) and gets no per-pane control at all.
+
+First reference implementation: the Scripture editor's two areas, `main` for the text and `footnotes` for the footnotes pane (PT-4581).
 
 ---
 
@@ -331,6 +352,23 @@ These patterns are enforced by linting rules:
 - Borders: `tw:border-border`, `tw:border-input`, `tw:border-primary`
 
 See [Code-Style-Guide.md](Code-Style-Guide.md#theming) for details.
+
+### Content Zoom and Measurement (experimental)
+
+Content zoom is CSS `zoom`, applied by the platform to each element carrying `data-platform-content-zoom-root` (see [Content Zoom Opt-In](#content-zoom-opt-in-experimental)). Never set `zoom`, a font-size cascade or `transform: scale` on your own content to imitate it: a font-size cascade does not reach the editor's rendered scripture (PT-4167), and `transform: scale` breaks hit-testing.
+
+Inside a zoomed area, geometry and computed styles disagree — **`getBoundingClientRect()` is in zoomed pixels and `getComputedStyle(element).fontSize` is not.** Code that mixes the two (virtualized lists, canvas overlays, popover anchoring, "is this taller than N lines" checks) has to read the factor and apply it itself:
+
+```ts
+const factor =
+  Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--platform-content-zoom-main'),
+  ) || 1;
+```
+
+For a named area read `--platform-content-zoom-<areaId>`; `--platform-content-zoom-default` holds the Settings default that any area without its own level follows.
+
+If a component owns Ctrl/⌘+wheel for a sub-region of its own — the Text Collection grid's per-resource zoom does — register that listener in the **capture** phase and call `stopPropagation()`. The platform's own zoom listener sits on the bubble phase precisely so that a capture-phase handler wins.
 
 ---
 
@@ -778,3 +816,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.4.1   | 2026-05-11 | Code-review fix: align `EXPLANATION:` placement wording with the Code-Style-Guide v1.2.1 relaxation — also accommodate class-level constants (e.g. regex pattern fields) when the constant *is* the algorithm. |
 | 1.5.0   | 2026-06-18 | Add "Presentational Components and Their Stories" section (keep demo/mock scaffolding out of the component, cover every wireframe state variant, `Default` story wires callbacks to `useState`). Add "Web View UI-State Persistence Caveat" (`useWebViewState` is per-`webViewId`; `existingId`/`createNewIfNotFound: false` dedupes currently-open instances only — for state that survives close/reopen use `papi.settings`). |
 | 1.6.0   | 2026-09-12 | Add "Explaining Why a Control Is Disabled" section — a disabled control is out of the tab order, so a focusable tooltip wrapper is wrong inside a `radiogroup`/menu/listbox; render the explanation inline with `aria-describedby`, and watch the half-opacity contrast and `tw:min-w-0` in a `DropdownMenuItem`. |
+| 1.7.0 | 2026-09-15 | Add "Content Zoom Opt-In (experimental)" (the `ContentZoomRoot` / `data-platform-content-zoom-root` marker, one root per zoom area, no nesting, the unmarked-view whole-iframe fallback) and "Content Zoom and Measurement (experimental)" (never imitate content zoom with font-size or `transform: scale`; zoomed `getBoundingClientRect` vs unzoomed `fontSize`; read `--platform-content-zoom-<area>`; capture-phase `stopPropagation` for a view owning Ctrl+wheel). Front-matter version also caught up with the 1.6.0 log row. |
