@@ -1237,6 +1237,13 @@ user controls, a hidden one for the memory.
 copy of the definition's state, and it has to be taught by hand about every open, move, reload and
 close the definition already handles.
 
+State kept in a definition needs to say **what it belongs to** whenever the pane can be re-pointed at
+another project: a re-point keeps the web view id and the view rebuilds its definition by spreading
+its own saved state, so the old project's state arrives looking like state chosen for the new one.
+Store the identity beside the value and check it. Content zoom stamps
+`platform.contentZoomIdentity` (`kind:identity`) alongside its levels and re-seeds the pane from
+memory when the two disagree.
+
 Reference: content zoom keeps the pane's own levels under `platform.contentZoomLevels` in the
 definition state, and the default and per-project memory in the `platform.webViewContentZoom` and
 `platform.webViewContentZoomMemory` settings
