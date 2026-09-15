@@ -5,6 +5,7 @@ import {
   CONTENT_ZOOM_COMMANDS,
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_IDENTITY_STATE_KEY,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
@@ -28,6 +29,7 @@ describe('content-zoom.model', () => {
 
   it('exposes stable names used by the bootstrap and the views', () => {
     expect(CONTENT_ZOOM_LEVELS_STATE_KEY).toBe('platform.contentZoomLevels');
+    expect(CONTENT_ZOOM_IDENTITY_STATE_KEY).toBe('platform.contentZoomIdentity');
     expect(CONTENT_ZOOM_CSS_VARIABLE_PREFIX).toBe('--platform-content-zoom-');
     expect(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE).toBe('--platform-content-zoom-default');
     expect(getContentZoomCssVariable('footnotes')).toBe('--platform-content-zoom-footnotes');
