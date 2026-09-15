@@ -1267,11 +1267,13 @@
 /* #region installed-only faces for what the downloads above leave out */
 
 /*
- * Google's builds are not the whole font: Charis SIL is served with no Greek, and both families
- * with 8 of the 112 combining marks. These faces cover the rest, from an installed copy only —
- * the complement of the downloaded ranges over the BMP, so the two sets can never compete. Where
- * the font is not installed they fail and the character falls through as before. Regenerate them
- * whenever the region above changes; `fonts.test.ts` checks the ranges.
+ * Google's builds are not the whole font: Charis SIL is served with no Greek, both families with
+ * 8 of the 112 combining marks, and neither with anything above the BMP — where the SIL builds
+ * Paratext installs carry the Latin Extended-F and G phonetic blocks. These faces cover the rest,
+ * from an installed copy only — the complement of the downloaded ranges over the whole of Unicode,
+ * so the two sets can never compete. Where the font is not installed they fail and the character
+ * falls through as before. Regenerate them whenever the region above changes; `fonts.test.ts`
+ * checks the ranges.
  */
 
 @font-face {
@@ -1283,7 +1285,7 @@
     U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
     U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
     U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
-    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-FFFF;
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
 }
 @font-face {
   font-family: 'Charis SIL';
@@ -1294,7 +1296,7 @@
     U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
     U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
     U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
-    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-FFFF;
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
 }
 @font-face {
   font-family: 'Charis SIL';
@@ -1305,7 +1307,7 @@
     U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
     U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
     U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
-    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-FFFF;
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
 }
 @font-face {
   font-family: 'Charis SIL';
@@ -1316,7 +1318,7 @@
     U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
     U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
     U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
-    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-FFFF;
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
 }
 @font-face {
   font-family: 'Gentium Plus';
@@ -1328,7 +1330,7 @@
     U+0378-0379, U+0380-0383, U+038B, U+038D, U+03A2, U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF,
     U+2070-209F, U+20C1-2112, U+2114-2115, U+2117-2121, U+2123-2190, U+2192, U+2194-2211,
     U+2213-2214, U+2216-2C5F, U+2C80-2DDF, U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE,
-    U+FF00-FFFC, U+FFFE-FFFF;
+    U+FF00-FFFC, U+FFFE-10FFFF;
 }
 @font-face {
   font-family: 'Gentium Plus';
@@ -1340,7 +1342,7 @@
     U+0378-0379, U+0380-0383, U+038B, U+038D, U+03A2, U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF,
     U+2070-209F, U+20C1-2112, U+2114-2115, U+2117-2121, U+2123-2190, U+2192, U+2194-2211,
     U+2213-2214, U+2216-2C5F, U+2C80-2DDF, U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE,
-    U+FF00-FFFC, U+FFFE-FFFF;
+    U+FF00-FFFC, U+FFFE-10FFFF;
 }
 @font-face {
   font-family: 'Gentium Plus';
@@ -1352,7 +1354,7 @@
     U+0378-0379, U+0380-0383, U+038B, U+038D, U+03A2, U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF,
     U+2070-209F, U+20C1-2112, U+2114-2115, U+2117-2121, U+2123-2190, U+2192, U+2194-2211,
     U+2213-2214, U+2216-2C5F, U+2C80-2DDF, U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE,
-    U+FF00-FFFC, U+FFFE-FFFF;
+    U+FF00-FFFC, U+FFFE-10FFFF;
 }
 @font-face {
   font-family: 'Gentium Plus';
@@ -1364,7 +1366,7 @@
     U+0378-0379, U+0380-0383, U+038B, U+038D, U+03A2, U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF,
     U+2070-209F, U+20C1-2112, U+2114-2115, U+2117-2121, U+2123-2190, U+2192, U+2194-2211,
     U+2213-2214, U+2216-2C5F, U+2C80-2DDF, U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE,
-    U+FF00-FFFC, U+FFFE-FFFF;
+    U+FF00-FFFC, U+FFFE-10FFFF;
 }
 
 /* #endregion installed-only faces for what the downloads above leave out */

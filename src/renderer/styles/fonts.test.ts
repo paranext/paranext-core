@@ -235,30 +235,86 @@ const installedOnlyFaces = parseFontFaces(regionCss(INSTALLED_ONLY_REGION));
 /** Every downloadable face — what the required-coverage checks below are about. */
 const fontFaces = [...verbatimFaces, ...installedFirstFaces];
 
-/** The codepoints a `unicode-range` descriptor covers. */
-function codepointsIn(unicodeRange: string): Set<number> {
-  const covered = new Set<number>();
-  unicodeRange.split(',').forEach((part) => {
-    const bounds = /^U\+([0-9A-Fa-f]+)(?:-([0-9A-Fa-f]+))?$/.exec(part.trim());
-    if (!bounds) return;
-    const start = parseInt(bounds[1], 16);
-    const end = parseInt(bounds[2] ?? bounds[1], 16);
-    for (let code = start; code <= end; code += 1) covered.add(code);
-  });
-  return covered;
+/** The highest codepoint Unicode defines, and the range the installed-only faces complete. */
+const UNICODE_END = 0x10ffff;
+
+/** An inclusive `[first, last]` run of codepoints. */
+type CodepointRange = [first: number, last: number];
+
+/**
+ * Sorted, with touching and overlapping runs merged — the form the set operations below assume.
+ * Coverage is compared as ranges rather than expanded into codepoints because these faces span the
+ * astral planes: a set per face would be a million entries, and the comparisons are exact either
+ * way.
+ */
+function normalizeRanges(ranges: CodepointRange[]): CodepointRange[] {
+  const merged: CodepointRange[] = [];
+  [...ranges]
+    .sort((left, right) => left[0] - right[0])
+    .forEach(([first, last]) => {
+      const previous = merged[merged.length - 1];
+      if (previous && first <= previous[1] + 1) previous[1] = Math.max(previous[1], last);
+      else merged.push([first, last]);
+    });
+  return merged;
 }
 
-/** Every codepoint a family declares for one weight/style pair. */
-function codepointsFor(faces: FontFace[], family: string, required: RequiredFace): Set<number> {
-  const covered = new Set<number>();
-  facesFor(faces, family, required).forEach((face) =>
-    codepointsIn(face.unicodeRange).forEach((code) => covered.add(code)),
+/** The codepoint runs a `unicode-range` descriptor covers. */
+function rangesIn(unicodeRange: string): CodepointRange[] {
+  // An absent descriptor means the whole of Unicode, which is what a face with no `unicode-range`
+  // actually serves — treating it as covering nothing would quietly report the rest as a gap.
+  if (unicodeRange.trim() === '') return [[0, UNICODE_END]];
+  return normalizeRanges(
+    unicodeRange.split(',').map((part) => {
+      const bounds = /^U\+([0-9A-Fa-f]+)(?:-([0-9A-Fa-f]+))?$/.exec(part.trim());
+      // Rather than skip it: an unreadable range silently covering nothing turns this guard's
+      // exactness into guesswork about which spellings it understands.
+      if (!bounds) throw new Error(`fonts.css has an unreadable unicode-range part: "${part}"`);
+      return [parseInt(bounds[1], 16), parseInt(bounds[2] ?? bounds[1], 16)];
+    }),
   );
-  return covered;
 }
 
-/** The Basic Multilingual Plane, the range the installed-only faces are the complement over. */
-const BMP_END = 0xffff;
+/** Every codepoint run a family declares for one weight/style pair. */
+function rangesFor(faces: FontFace[], family: string, required: RequiredFace): CodepointRange[] {
+  return normalizeRanges(
+    facesFor(faces, family, required).flatMap((face) => rangesIn(face.unicodeRange)),
+  );
+}
+
+/** The runs covered by both sets — empty when the two are disjoint. */
+function overlapOf(left: CodepointRange[], right: CodepointRange[]): CodepointRange[] {
+  return normalizeRanges(
+    left.flatMap(([first, last]) =>
+      right
+        .map(
+          ([otherFirst, otherLast]): CodepointRange => [
+            Math.max(first, otherFirst),
+            Math.min(last, otherLast),
+          ],
+        )
+        .filter(([start, end]) => start <= end),
+    ),
+  );
+}
+
+/** The runs of `[0, UNICODE_END]` that `ranges` leaves out. */
+function gapsIn(ranges: CodepointRange[]): CodepointRange[] {
+  const gaps: CodepointRange[] = [];
+  let next = 0;
+  normalizeRanges(ranges).forEach(([first, last]) => {
+    if (first > next) gaps.push([next, first - 1]);
+    next = Math.max(next, last + 1);
+  });
+  if (next <= UNICODE_END) gaps.push([next, UNICODE_END]);
+  return gaps;
+}
+
+/** How a codepoint run reads in a failure message. */
+function describeRange([first, last]: CodepointRange): string {
+  const hex = (code: number) => code.toString(16).toUpperCase().padStart(4, '0');
+  return first === last ? `U+${hex(first)}` : `U+${hex(first)}-${hex(last)}`;
+}
 
 /**
  * Families served by a single variable font file spanning a weight RANGE. Their required weights
@@ -406,11 +462,13 @@ describe('Scripture fonts (src/renderer/styles/fonts.css)', () => {
     'covers what the downloads leave out of %s, without ever competing with them',
     (family) => {
       // Google's builds are not the whole font — Charis SIL is served with no Greek subset at all,
-      // and both families carry 8 of the 112 combining marks — so without these faces a Greek
-      // quotation or a transliteration run falls out of the family mid-line even where the complete
-      // font is installed. Disjointness is what keeps them safe: a face that errors because the font
-      // is not installed must never be a candidate for a codepoint a downloadable face could serve,
-      // which is the shape of the bug this whole file exists to prevent.
+      // both families carry 8 of the 112 combining marks, and neither is served above the BMP,
+      // where the installed builds carry the Latin Extended-F and G phonetic blocks — so without
+      // these faces a Greek quotation, a transliteration run or a phonetic citation falls out of
+      // the family mid-line even where the complete font is installed. Disjointness is what keeps
+      // them safe: a face that errors because the font is not installed must never be a candidate
+      // for a codepoint a downloadable face could serve, which is the shape of the bug this whole
+      // file exists to prevent.
       const faces = installedOnlyFaces.filter((face) => face.family === family);
       expect(faces.length).toBeGreaterThan(0);
       expect(faces.every((face) => face.src.includes('local(') && !face.src.includes('url('))).toBe(
@@ -425,17 +483,12 @@ describe('Scripture fonts (src/renderer/styles/fonts.css)', () => {
       // Per weight and style, not per family: a union across styles hides a single face whose range
       // was narrowed, which is exactly what a hand-regenerated range list gets wrong.
       REQUIRED_FACES[family].forEach((required) => {
-        const downloadable = codepointsFor(fontFaces, family, required);
-        const installedOnly = codepointsFor(installedOnlyFaces, family, required);
-        const overlap = [...installedOnly].filter((code) => downloadable.has(code));
-        const uncovered: number[] = [];
-        for (let code = 0; code <= BMP_END; code += 1) {
-          if (!downloadable.has(code) && !installedOnly.has(code)) uncovered.push(code);
-        }
+        const downloadable = rangesFor(fontFaces, family, required);
+        const installedOnly = rangesFor(installedOnlyFaces, family, required);
         expect({
           face: describeFace(required),
-          overlapping: overlap.slice(0, 4).map((code) => code.toString(16)),
-          uncovered: uncovered.slice(0, 4).map((code) => code.toString(16)),
+          overlapping: overlapOf(downloadable, installedOnly).map(describeRange),
+          uncovered: gapsIn([...downloadable, ...installedOnly]).map(describeRange),
         }).toEqual({ face: describeFace(required), overlapping: [], uncovered: [] });
       });
     },
