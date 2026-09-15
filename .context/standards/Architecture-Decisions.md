@@ -426,6 +426,36 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** The comments panel filtered on five orthogonal axes, each a `Select` with a 128px
+  minimum width, in a wrapping toolbar row. In a 320px panel that already wrapped to three rows
+  (~112px of chrome). Adding two more axes (date, author) would have made it four rows (~148px) —
+  most of a comment card — in the same change whose goal was fitting more comments on screen. The
+  axis labels are long by necessity (`All resolved statuses`, `All read statuses`), so they cannot
+  be shortened into fitting.
+- **Decision:** Collapse every axis behind a single `Filters` trigger opening a popover that gives
+  each axis a labelled full-width row, and render a dismissible chip beside the trigger for each
+  axis not at its default. A fresh list therefore shows the trigger alone (~48px), below the
+  previous baseline rather than above it. See `CommentListPanel` and `buildFilterChips` in
+  `extensions/src/legacy-comment-manager/src/comment-list.component.tsx`.
+- **Alternatives:**
+  - *Seven inline dropdowns.* Smallest diff, but spends most of a comment card on chrome.
+  - *Drop the `min-w-32` floor so triggers size to content.* Measured and rejected: the shipped
+    default labels already exceed 128px at `text-sm`, so removing the floor does not shrink the
+    default state — it only lets flex-shrink truncate harder, producing adjacent triggers both
+    reading `All r…`.
+- **Consequences:** Axis controls are no longer in the DOM until the popover opens, which any E2E
+  test locating them directly must account for. Visible axis names need their own localization keys
+  — reusing the `aria-label` keys yields row headings like "Filter by resolved status" and chip
+  dismiss labels like "Clear Filter by resolved status filter". Nested overlays inside the popover
+  (a `Select`, or the author axis's own `Popover`) must re-portal into the popover's own container
+  or they read as outside clicks; `PopoverPortalContainerProvider` is the existing mechanism, and
+  `scope-selector.component.tsx` is the reference consumer. **Revisit** if an axis count small
+  enough to fit inline returns, or if chips prove less discoverable than visible dropdowns in use.
+
 ## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
 
 - **Date:** 2026-08-31
@@ -1743,6 +1773,38 @@ step, no automation. Just a record.
   a standing instruction rather than an optional nicety. One file for every decision also means every
   branch edits it, which is a standing source of merge conflicts; see
   `adr-decision-log-sorted-insertion` for how entry placement addresses that.
+
+## adr-list-selection-on-a-dedicated-visual-channel: List selection is encoded on a channel of its own, never on a background already carrying status
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Comment cards encoded three meanings on their background at once — unread
+  (`bg-accent`), resolved (`bg-muted`) and read — and selection was bolted onto the same channel.
+  It failed three ways: the "read" surface used `--primary-foreground`, a text-on-primary token
+  that renders near-white in the paratext-dark theme, so unselected cards appeared near-white on a
+  dark ground while the selected one went dark; in the default light theme selected-vs-unselected
+  differed by ΔL ≈ 1.6%; and selection was not encoded *at all* for resolved or unread threads,
+  because their status classes won regardless of selection.
+- **Decision:** Keep status on the background and give selection its own channel — a 4px leading
+  bar (`border-s-4`, a logical property so it follows RTL) plus elevation, with the bar's width
+  reserved by a transparent border on every card so selecting one does not shift its content. The
+  surface token is `--card`. See the `Card` className in
+  `lib/platform-bible-react/src/components/advanced/comment-list/comment-thread.component.tsx`.
+- **Alternatives:**
+  - *A filled accent background for the selected card.* Forces unread onto a dot or bolded sender,
+    which relocates content the requirement forbade.
+  - *A ring outline.* Collides with the card's real focus ring (`focus:ring-2 focus:ring-ring`), so
+    selection and keyboard focus would render identically.
+- **Consequences:** The bar token is `--foreground`, chosen by measurement rather than by name:
+  `--primary` scores 2.38:1 against the card in paratext-dark and `--ring` scores 2.32:1 in
+  paratext-light, each below the WCAG 3:1 non-text minimum and each failing in a *different* theme,
+  while `--foreground` clears it on both the `card` and `muted` surfaces in all four themes with a
+  13.79 worst case. `active-comment-bar-contrast.test.ts` enumerates the themes structurally from
+  `index.css` and asserts both the choice and the rejection, so a theme edit that changes either
+  fails loudly. Moving every card to `bg-card` also means `--card` equals `--background` in three of
+  the four themes, so an inter-thread gap stops reading as separation and a divider becomes
+  load-bearing. **Revisit** for any list row whose background already carries state — the same
+  overload is the general case, not a comments-specific one.
 
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
