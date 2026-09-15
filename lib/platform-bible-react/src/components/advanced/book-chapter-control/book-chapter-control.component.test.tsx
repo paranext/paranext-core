@@ -56,6 +56,9 @@ beforeAll(() => {
   }
 });
 
+/** The trigger button and the search input are both comboboxes; only the trigger is named. */
+const getTrigger = () => screen.getByRole('combobox', { name: 'book-chapter-trigger' });
+
 describe('BookChapterControl imperative handle', () => {
   test('open() opens the dropdown and focuses the search input', async () => {
     const handleRef = createRef<BookChapterControlHandle>();
@@ -402,8 +405,6 @@ describe('BookChapterControl additional books', () => {
   const getProjectBooks = () => PROJECT_BOOKS;
   const getExtraBooks = () => ['REV'];
 
-  /** The trigger button and the search input are both comboboxes; only the trigger is named. */
-  const getTrigger = () => screen.getByRole('combobox', { name: 'book-chapter-trigger' });
   const getSearchInput = () => screen.getByRole('combobox', { name: '' });
 
   test('an additional book is absent from the collapsed list', async () => {
@@ -1446,12 +1447,7 @@ describe('BookChapterControl yields keys it does not own', () => {
     // And the picker still answers the next Escape, so trapping the first one costs nothing.
     await user.keyboard('{Escape}');
 
-    await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-        'aria-expanded',
-        'false',
-      ),
-    );
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
   });
 
   test('ArrowLeft moves the caret in the query instead of the preview highlight', async () => {
