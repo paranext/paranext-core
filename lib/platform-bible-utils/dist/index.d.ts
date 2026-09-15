@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -1733,6 +1733,21 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	 * `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
+	/**
+	 * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
+	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
+	 * it as a key binding.
+	 *
+	 * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
+	 * the unlocalized main menu never has it. Key names are not localized, and only the first
+	 * catalogued alternative is shown.
+	 *
+	 * A `menus.json` contribution cannot set it: the menus schema rejects it, which rejects the
+	 * extension's whole `menus.json`.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	shortcut?: string;
 };
 /**
  * Group of menu items that can be combined with other groups to form a single context menu/submenu.

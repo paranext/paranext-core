@@ -3,8 +3,10 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuPortal,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -24,10 +26,10 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { Fragment, ReactNode } from 'react';
+import { Fragment, ReactNode, useId } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
-import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
+import { getMenuSectionsWithItems, getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
 
@@ -70,6 +72,7 @@ const getGroupContent = (
                   {item.iconPathAfter && (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
+                  {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
@@ -113,6 +116,16 @@ export type TabDropdownMenuProps = {
   /** Additional css class(es) to help with unique styling of the tab dropdown menu */
   className?: string;
 
+  /**
+   * Whether to head each section with its column label. Only takes effect when two or more sections
+   * have items, since a lone section has nothing to be told apart from.
+   *
+   * Defaults to `false`, so a menu built by hand keeps its column labels hidden. Platform.Bible's
+   * tab chrome — `TabToolbar` and `TabFloatingMenu` — turns it on for the contributed menu data it
+   * renders.
+   */
+  showSectionHeadings?: boolean;
+
   /** Style variant for the app menubar component. */
   variant?: 'default' | 'muted';
 
@@ -123,9 +136,10 @@ export type TabDropdownMenuProps = {
 };
 
 /**
- * Dropdown menu designed to be used with Platform.Bible menu data. Column headers are ignored.
- * Column data is separated by a horizontal divider, so groups are not distinguishable. Tooltips are
- * displayed on hovering over menu items, if a tooltip is defined for them.
+ * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
+ * the next by a line; columns without items are left out. Groups within a column are not
+ * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
+ * row. With `showSectionHeadings`, each section is headed by its column label.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -135,10 +149,15 @@ export default function TabDropdownMenu({
   tabLabel,
   icon,
   className,
+  showSectionHeadings = false,
   variant,
   buttonVariant = 'ghost',
   id,
 }: TabDropdownMenuProps) {
+  const headingIdPrefix = useId();
+  const sections = getMenuSectionsWithItems(menuData);
+  const showHeadings = showSectionHeadings && sections.length > 1;
+
   return (
     <DropdownMenu variant={variant}>
       <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
@@ -147,23 +166,21 @@ export default function TabDropdownMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" style={{ zIndex: Z_INDEX_ABOVE_DOCK }}>
-        {Object.entries(menuData.columns)
-          .filter(([, column]) => typeof column === 'object')
-          .sort(([, a], [, b]) => {
-            if (typeof a === 'boolean' || typeof b === 'boolean') return 0;
-            return a.order - b.order;
-          })
-          .map(([columnKey], index, array) => (
+        {sections.map(({ columnKey, label }, index) => {
+          const headingId = `${headingIdPrefix}-${columnKey}`;
+          return (
             <Fragment key={columnKey}>
-              <DropdownMenuGroup>
+              <DropdownMenuGroup aria-labelledby={showHeadings ? headingId : undefined}>
+                {showHeadings && <DropdownMenuLabel id={headingId}>{label}</DropdownMenuLabel>}
                 <TooltipProvider>
                   {getGroupContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
                 </TooltipProvider>
               </DropdownMenuGroup>
 
-              {index < array.length - 1 && <DropdownMenuSeparator />}
+              {index < sections.length - 1 && <DropdownMenuSeparator />}
             </Fragment>
-          ))}
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );
