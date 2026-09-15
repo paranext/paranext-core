@@ -2,7 +2,6 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { menuDataService } from '@shared/services/menu-data.service';
@@ -50,11 +49,6 @@ vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
 vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
   localThemeService: {},
-}));
-
-// Default to power mode; individual tests override this to exercise Simple mode.
-vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
-  useIsPowerMode: vi.fn(() => true),
 }));
 
 // Default to a settled power mode; individual tests override this to exercise Simple mode and the
@@ -238,7 +232,6 @@ function renderedItemLabels(): string[] {
 describe('PlatformTabTitle zoom group in the tab menu', () => {
   afterEach(() => {
     cleanup();
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
     vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     vi.mocked(menuDataService.getWebViewMenu).mockReset();
     vi.mocked(logger.warn).mockClear();
@@ -259,7 +252,6 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
   });
 
   it('simple mode: offers exactly the zoom items', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
     await flushMenuRead();
@@ -272,7 +264,6 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
   });
 
   it('simple mode: clicking an item sends its command with the tab id', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
     await flushMenuRead();
@@ -299,7 +290,6 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
   });
 
   it('simple mode, mode not yet known: renders no menu, so a power user is never shown the simple-only menu before the mode resolves', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, false]);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
     await flushMenuRead();
@@ -307,8 +297,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     expect(screen.queryByTestId('context-menu')).toBeNull();
   });
 
-  it('simple mode reads the contributed menu too, where it used to be skipped', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+  it('simple mode reads the contributed menu on mount, same as power mode', async () => {
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
 
@@ -317,7 +306,6 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
   });
 
   it('simple mode does not read the open windows: that round trip belongs to the window group it never shows', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
     await flushMenuRead();
@@ -337,7 +325,6 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
   });
 
   it('a tab hosting no web view in simple mode offers no menu at all', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle id="tab-1" webViewType="foo.bar" text="Tab" />);
     await flushMenuRead();
@@ -354,7 +341,6 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
   });
 
   it('simple mode: drag-ignore is preserved on the tab title and carried onto the menu trigger', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = render(
       <PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />,
@@ -365,12 +351,13 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     expect(screen.getByTestId('menu-trigger')).toHaveClass('drag-ignore');
   });
 
-  it('simple mode: nothing renders before the read lands', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+  it('simple mode: nothing renders before the read lands', async () => {
     vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
 
     expect(screen.queryByTestId('context-menu')).toBeNull();
+    // Let the deferred read settle inside `act` so its state update doesn't land after the test ends.
+    await act(async () => {});
   });
 
   describe('keyboard access in Simple mode', () => {
@@ -396,7 +383,6 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
       );
 
     it('forwards a contextmenu raised on the tab into the trigger', async () => {
-      vi.mocked(useIsPowerMode).mockReturnValue(false);
       vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
       const { container } = renderInTab();
       await flushMenuRead();
