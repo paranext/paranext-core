@@ -230,22 +230,33 @@ test.describe('Comments panel content zoom in Simple mode', () => {
         .toBe(1.1);
     });
 
-    await test.step("re-pointing the panel to another project and back keeps project A's level", async () => {
+    await test.step("a re-pointed panel shows the new project's level, and project A's again on return", async () => {
+      const normalizedProjectBId = projectB.projectId.toUpperCase();
+
       await openCommentListPanel(projectB.projectId);
       await expect(panelFrame.locator('body')).toContainText('Project B comment zoom marker', {
         timeout: 90_000,
       });
+
+      // Project B has no remembered level of its own, so the re-pointed panel follows the Settings
+      // default rather than carrying project A's 110 % across with it.
+      await expect.poll(() => readFactor(panelFrame, '')).toBe(1);
+
+      // ...and project A's level must not be written into project B's memory entry either. Absence
+      // is what is being asserted, so this waits out the memory write's debounce (250 ms) with room
+      // to spare before reading, rather than polling — a poll for "not there" would pass on its
+      // first read, before a wrong write could have landed.
+      await mainPage.waitForTimeout(5_000);
+      expect(Object.keys(await readContentZoomMemory(mainPage))).not.toContain(
+        `notes:${normalizedProjectBId}:main`,
+      );
 
       await openCommentListPanel(projectA.projectId);
       await expect(panelFrame.locator('body')).toContainText('Project A comment zoom marker', {
         timeout: 90_000,
       });
 
-      // Known soft spot (TODO(PT-4582) in web-view-content-zoom.service.ts): the re-point reuses
-      // the same web view id via reloadWebView, and getWebViewDefinition spreads the previous
-      // project's own saved state — including its zoom levels — onto the new definition, so the
-      // platform's seed-from-memory step is skipped and project B's level rides along instead of
-      // project A's remembered one. That is PT-4582's fix, parallel to this ticket.
+      // Back on project A: its own remembered 110 % again.
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
     });
   });
