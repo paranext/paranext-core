@@ -36,8 +36,13 @@ test.use({
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
 
-/** The distinctive half of `%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%`. */
-const CORRECTION_MESSAGE = 'chapter marker was incorrect and was automatically corrected';
+/**
+ * How `%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%` reads for Jonah 1,
+ * the chapter every repair in this spec is made to. The chapter is part of the match on purpose:
+ * the notice has to name the chapter it repaired, which is not always the chapter on screen.
+ */
+const CORRECTION_MESSAGE =
+  'The chapter marker in Jonah 1 was incorrect and was automatically corrected';
 
 // All-caps tokens that appear nowhere in the WEB text, so a `toContainText` match is unambiguous.
 const AFTER_REPAIR_TOKEN = 'ZZAFTERREPAIR';
@@ -159,10 +164,12 @@ test.describe('scripture editor chapter-marker repair', () => {
       await clearRecordedToasts(mainPage);
       await retypeChapterNumber('5');
 
-      // Deliberately NOT asserted: that `data-number` is ever observed as "15". The repair runs
-      // within ~100ms of the keystroke, so the poisoned state is not reliably samplable — and it
-      // does not need to be. The correction notice is raised only when the repair actually changed
-      // the document, so the toast below is the proof that the gesture poisoned it.
+      // Deliberately NOT asserted: that `data-number` is ever observed as "15". The repair rides
+      // the ordinary trailing save, so the document is poisoned for the length of the 700ms
+      // debounce (measured in-page: keystroke to push-back, 766ms) and then is not — pinning a
+      // window that narrow would buy a flaky test and no coverage. It does not need pinning
+      // either: the correction notice is raised ONLY when the repair actually changed the
+      // document, so the toast below is itself the proof that the gesture poisoned it.
       await expect(chapterMarker).toHaveAttribute('data-number', '1', { timeout: 30_000 });
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
@@ -221,7 +228,9 @@ test.describe('scripture editor chapter-marker repair', () => {
       });
       await expect(editorInput).not.toContainText(FLUSH_TOKEN, { timeout: 20_000 });
 
-      // The user is still told, even though the chapter it happened in is no longer on screen.
+      // The user is still told — and the notice names Jonah 1, the chapter that was repaired,
+      // rather than leaving the reader to assume it means the Jonah 3 they are now looking at.
+      // Naming the chapter is what this assertion is for; see CORRECTION_MESSAGE.
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
         .toEqual(expect.arrayContaining([expect.stringContaining(CORRECTION_MESSAGE)]));

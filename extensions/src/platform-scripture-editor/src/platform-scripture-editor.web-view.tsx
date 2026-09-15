@@ -1292,12 +1292,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   /**
-   * Tell the user the chapter marker in the document they are editing did not match the chapter it
+   * Tell the user the chapter marker in a document they were editing did not match the chapter it
    * belongs to and was put back. A stable id so the repeated saves of a long edit update one toast
    * rather than stacking.
+   *
+   * The chapter is named rather than left implicit because the notice does not always describe what
+   * is on screen: a save carried by the chapter-switch flush repairs the chapter the user just
+   * left, so an unnamed notice would point at the chapter they are now looking at.
+   *
+   * @param book Localized name of the book the repaired chapter is in.
+   * @param chapterNum The repaired chapter's number.
    */
   const notifyChapterMarkerCorrected = useCallback(
-    () =>
+    (book: string, chapterNum: number) =>
       papi.notifications
         .send({
           notificationId: CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID,
@@ -1305,7 +1312,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             localizedStrings[
               '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%'
             ],
-            { projectName },
+            { projectName, book, chapter: chapterNum },
           ),
           severity: 'warning',
           // This is about this editor's chapter, not a generic notice, so it belongs in the window
@@ -2470,6 +2477,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
+  // The localized name of the book on screen (e.g. "Jonah"), for the chapter-marker correction
+  // notice. One key rather than the whole canon: the only book this web view ever has to name is
+  // the one it is editing. `%Book.<id>%` resolves for every canonical id — the localization service
+  // backfills the English names into the backup language — but a web view renders before the
+  // strings arrive, so an unresolved lookup falls back to the 3-letter id rather than putting a raw
+  // `%Book.JON%` in a toast.
+  const bookNameLocalizeKeys = useMemo<LocalizeKey[]>(
+    () => [`%Book.${scrRef.book}%`],
+    [scrRef.book],
+  );
+  const [bookNameLocalizedStrings] = useLocalizedStrings(bookNameLocalizeKeys);
+  const localizedBookName = useMemo(() => {
+    const localized = bookNameLocalizedStrings[`%Book.${scrRef.book}%`];
+    return localized && !localized.startsWith('%') ? localized : scrRef.book;
+  }, [bookNameLocalizedStrings, scrRef.book]);
+
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw, isUsjFromPdpLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     projectId,
@@ -2745,6 +2768,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       savedChapterSelector.chapterNum,
       savedChapterSelector.versificationStr,
     );
+    // Captured for the same reason as the selector: a save that fires after the user has navigated
+    // away must name the chapter the content was typed in, not the one now on screen.
+    const savedBookName = localizedBookName;
 
     function saveUsjToPdpIfUpdatedInternal(
       usjFromEditor = editorRef.current?.getUsj(),
@@ -2764,7 +2790,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // chapter it was scheduled for against the chapter actually on screen now.
         currentChapterKey: chapterKeyRef.current,
         applyRepairToEditor: putRepairedUsjInEditor,
-        notifyRepair: notifyChapterMarkerCorrected,
+        notifyRepair: () =>
+          notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum),
       });
 
       if (usjToSave) return saveUsjToPdpInternal(usjToSave);
@@ -2989,6 +3016,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     projectId,
     notifySyncEditBlocked,
     chapterUsjSelector,
+    localizedBookName,
     notifyChapterMarkerCorrected,
     webViewId,
   ]);

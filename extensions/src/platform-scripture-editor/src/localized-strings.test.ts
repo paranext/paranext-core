@@ -303,10 +303,12 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
 });
 
 // The notice shown when the editor's chapter marker disagreed with the chapter it belongs to and
-// was put back. Its message names the project through a placeholder, so that slot has to survive
-// any later edit to the string — without it the toast says a correction happened but not which
-// project it happened in. English only: like the `%versionHistoryCommit_*%` keys above, this string
-// ships ahead of its translation, so no `es` parity is asserted here.
+// was put back. Its message names the project AND the chapter through placeholders, so those slots
+// have to survive any later edit to the string. The chapter slots matter as much as the project
+// one: a repair carried by the chapter-switch flush describes the chapter the user just left, so a
+// message that dropped them would point the reader at whatever chapter is on screen instead.
+// English only: like the `%versionHistoryCommit_*%` keys above, this string ships ahead of its
+// translation, so no `es` parity is asserted here.
 describe('chapter marker correction notification', () => {
   const chapterMarkerCorrectedKey =
     '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%';
@@ -315,8 +317,8 @@ describe('chapter marker correction notification', () => {
     expect(localizedStrings.en[chapterMarkerCorrectedKey]).toBeTruthy();
   });
 
-  it('keeps the {projectName} slot', () => {
-    expect(localizedStrings.en[chapterMarkerCorrectedKey]).toContain('{projectName}');
+  it.each(['{projectName}', '{book}', '{chapter}'])('keeps the %s slot', (placeholder) => {
+    expect(localizedStrings.en[chapterMarkerCorrectedKey]).toContain(placeholder);
   });
 });
 
