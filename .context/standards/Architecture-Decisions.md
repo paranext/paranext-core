@@ -1168,16 +1168,23 @@ step, no automation. Just a record.
   `recomputeDblResourcesUpdateStatus` from `adr-dbl-cache-recompute-on-read` in every respect —
   same no-network rule, same non-waiting gate, same "an empty map means no answer, keep what you
   have" contract — and the two share one `InstalledProjectIdsByDblId()` pass over the project
-  collection, which also feeds the catalog projection. Post-install success is taken from
-  `InstallableResource.Install()`'s own `bool` return rather than inferred from what landed on
-  disk.
+  collection, which also feeds the catalog projection. Post-install success is decided by asking
+  disk through the same `GetInstalledProjectId` the status map uses, after an unconditional
+  `RefreshScrTexts()`; `Install()`'s `bool` is read only as a shortcut, because `true` is
+  definitive.
 - **Alternatives:** Keep inferring from a better heuristic — rejected; every heuristic here is
   guessing at a link only the project's settings record. Add a second pull command for callers to
   invoke after installing — rejected once `refreshResourceFlags` already existed; one refresh entry
-  point covers both flags. Verify the install by re-reading the collection
-  (`ScrTextCollection.IsPresent(InstalledScrText)`, or `ExistingScrText`) — rejected: the first is
-  what produced the false failure, the second cannot see a failed *update* because the previous
-  revision is still on disk and still resolves, and `Install()` reports both directly. Deriving
+  point covers both flags. Verify the install with
+  `ScrTextCollection.IsPresent(InstalledScrText)` — rejected; `RefreshScrTexts()` can replace the
+  collection's entries, so the captured instance is absent after a perfectly good install, which is
+  the false failure this decision removes. Treat `Install()`'s `bool` as the verdict — rejected
+  after decompiling `InternalInstall`: its only `true` assignment is inside the loop over the
+  bundle's `*.font` entries, so a fontless bundle installs correctly and returns `false`. That loop
+  runs after validation and migration, so `true` is trustworthy and `false` is merely unknown,
+  which is how it is used. **No mechanism here detects a failed *update***: the previous revision
+  remains on disk and still resolves, so an update that achieved nothing reports success. That gap
+  predates this decision and is not closed by it. Deriving
   `installed` from ParatextData's `Installed` property rather than from the project id — rejected
   on "one flag, one expression" grounds; the two are provably equivalent in ParatextData 9.5.0.24
   (`InstallAsDictionary` is never assigned and `ExistingDictionary` is `ldnull; ret`), so the

@@ -526,11 +526,24 @@ internal class DblResourcesDataProvider(
                 )
             );
 
-        // Install() reports its own outcome, including the paths that fail without throwing (a
-        // failed download, a bundle CheckResource rejects, an unsupported migration). Inferring
-        // success from what landed on disk instead cannot see a failed update — the previous
-        // revision is still there and still resolves.
-        if (!installableResource.Install())
+        // Install()'s bool is not a verdict on the install. Its only `true` assignment is inside
+        // InternalInstall's loop over the bundle's `*.font` entries, so a bundle carrying no font
+        // installs perfectly and returns false. It is still worth reading: that loop runs after
+        // the resource has been validated and migrated, so `true` IS definitive success and lets
+        // the disk check below be skipped.
+        var didExtractFont = installableResource.Install();
+
+        // Unconditional, and before the verdict: InternalInstall deletes the previous project
+        // before validating the replacement, so a failed install leaves the collection needing
+        // reconciliation just as much as a successful one does.
+        ScrTextCollection.RefreshScrTexts();
+
+        // For the ambiguous `false`, ask disk. ExistingScrText resolves through the DBL id recorded
+        // in the installed project's settings — the same link InstalledProjectIdsByDblId uses — so
+        // a resource that is genuinely present passes here whatever its project id turned out to
+        // be. Deliberately not IsPresent(InstalledScrText): RefreshScrTexts can replace the
+        // collection's entries, leaving the captured instance absent after a good install.
+        if (!didExtractFont && installableResource.ExistingScrText == null)
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
@@ -538,8 +551,6 @@ internal class DblResourcesDataProvider(
                     $"Resource cannot be found after attempted installation. Installation failed."
                 )
             );
-
-        ScrTextCollection.RefreshScrTexts();
 
         SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
         // A newly installed resource is a new project on disk; tell the project-list consumers
