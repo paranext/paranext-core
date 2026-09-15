@@ -275,6 +275,36 @@ describe('content-zoom bootstrap script', () => {
     );
   });
 
+  it('a focus hop through an unmarked element keeps the gesture live', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { bound } = install('wv-hop', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    // A focus change that lands outside every area has no area of its own to protect, so it is
+    // not suppressed - but nothing was spent either, since it is not the click's own move into
+    // another area.
+    vi.setSystemTime(new Date(Date.now() + 4));
+    byId('toolbar').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    // The gesture is still live: the next focus change, into a different area, is the one it
+    // protects.
+    vi.setSystemTime(new Date(Date.now() + 14));
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    expect(bound.reportContentZoomActiveAreaById).not.toHaveBeenLastCalledWith('wv-hop', 'main');
+  });
+
   it('suppresses only the first focus change after a click, not every focus change within the gesture window', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const { bound } = install('wv-one-shot', TWO_AREAS);
