@@ -26,9 +26,16 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { Fragment, ReactNode, useId } from 'react';
+import { Fragment, ReactNode, useId, useRef } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
+import {
+  getLastInteractionModality,
+  hideFocusRing,
+  QUIET_FOCUS_RING_SUPPRESSION,
+  showFocusRing,
+  trackInteractionModality,
+} from '@/utils/focus.util';
 import {
   getMenuSectionsWithItems,
   getSubMenuGroupKeyForMenuItemId,
@@ -159,14 +166,42 @@ export default function TabDropdownMenu({
   const sections = getMenuSectionsWithItems(menuData);
   const showHeadings = showSectionHeadings && sections.length > 1;
 
+  // Radix restores focus to the trigger on every close, and the tab order depends on that. The focus
+  // ring does not belong there after a pointer close, though — it would sit on a button the pointer
+  // has long left. Mark the trigger so CSS hides the ring, and clear the mark on the next keydown so
+  // keyboard users get it back.
+  trackInteractionModality();
+  // `null` is React's canonical "not yet attached" ref value; there's no undefined equivalent in the
+  // DOM/ref API (same pattern as navigation-history-buttons' button refs)
+  // eslint-disable-next-line no-null/no-null
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const restoreFocusRing = () => showFocusRing(triggerRef.current ?? undefined);
+
   return (
     <DropdownMenu variant={variant}>
       <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
-        <Button variant={buttonVariant} size="icon">
+        <Button
+          ref={triggerRef}
+          variant={buttonVariant}
+          size="icon"
+          className={QUIET_FOCUS_RING_SUPPRESSION}
+          onKeyDown={restoreFocusRing}
+          onBlur={restoreFocusRing}
+        >
           {icon ?? <MenuIcon />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" style={{ zIndex: Z_INDEX_ABOVE_DOCK }}>
+      <DropdownMenuContent
+        align="start"
+        style={{ zIndex: Z_INDEX_ABOVE_DOCK }}
+        onCloseAutoFocus={() => {
+          // Radix composes this ahead of its own restore, so the mark is in place before it
+          // focuses. Deliberately does not preventDefault: Radix's handler also resets the
+          // bookkeeping that decides when the trigger must not be refocused at all.
+          if (getLastInteractionModality() === 'pointer')
+            hideFocusRing(triggerRef.current ?? undefined);
+        }}
+      >
         {sections.map(({ columnKey, label }, index) => {
           const headingId = `${headingIdPrefix}-${columnKey}`;
           return (

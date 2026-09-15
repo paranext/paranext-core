@@ -2812,6 +2812,51 @@ step, no automation. Just a record.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
 
+## adr-menu-close-focus-restores-without-the-ring: A pointer-closed menu returns focus to its trigger without showing the focus ring
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** Radix returns focus to the trigger whenever a menu closes. The tab menu's trigger is a
+  `Button`, which styles focus with `tw:focus-visible:border-ring` and `tw:focus-visible:ring-3`, so
+  after a pointer-driven close the ring sat on the trigger while the pointer was somewhere else —
+  measured as a near-black `border-color` plus a 3px ring. Declining the focus return removes the
+  ring but drops focus to `<body>`, so the next Tab restarts at the top of the document and a screen
+  reader loses its place; `stories/guidelines/dismissal-patterns.mdx` requires returning focus to the
+  opener, citing WCAG 2.4.3.
+- **Decision:** Let Radix restore focus exactly as it always has, and suppress only the ring.
+  `TabDropdownMenu` marks the trigger with `data-quiet-focus` when the close followed a pointer
+  interaction, and CSS hides the ring while that attribute is present; the next keydown or blur
+  clears it, which is what brings the ring back for keyboard users. Which device the user last used
+  comes from the document-wide tracker in `utils/focus.util.ts`. Focus is drawn through three
+  channels and all three must go: the ring and the border yield to the attribute's Tailwind classes,
+  but `outline` is cleared **inline** by `hideFocusRing`. That asymmetry is load-bearing — Tailwind
+  emits utilities inside `@layer utilities`, and an unlayered rule in the host document outranks
+  every layered rule whatever its specificity, so a web view that styles `:focus-visible` itself
+  (the scripture editor does, in `_editor-overrides.scss`) beats any class the component could add.
+  Because `Button` carries `tw:transition-all`, such an outline animates rather than switching, so
+  even a rule whose final colour is `transparent` paints a visible line on the way there.
+- **Alternatives:** (a) **Decline the focus return** — built first and rejected: it satisfies the ring
+  complaint but breaks the tab order and the dismissal guideline. (b) **Ask the browser for an
+  unindicated focus** via `focus({ focusVisible: false })` — also built, and it works in Chromium 145,
+  but the app ships Electron 39 (Chromium 142), where Blink ignores the option and the ring returns;
+  the Storybook run passes because Playwright bundles a newer Chromium than the product. (c) **Track
+  the input device with handlers on the menu itself** — misses the Escape that Radix consumes from its
+  own document listener, so a real keyboard dismissal is misread as a pointer close. (d) **Put the
+  behavior in `DropdownMenuContent`** so every menu gets it — deferred, not rejected; see consequences.
+- **Consequences:** Only the tab menus behave this way. The application menubar and the other menu
+  triggers keep Radix's default, so the app has two close-focus behaviors until someone unifies them.
+  Between a pointer close and the user's next keystroke, focus sits on the trigger with nothing to
+  show where it is — a brief, deliberate gap in WCAG 2.4.7. The keydown that ends it clears the mark
+  before it acts, so pressing Enter paints the ring on the trigger it is about to reopen. Because the suppression is ordinary CSS rather than a browser capability, it
+  behaves the same in the shipped Electron as in a newer Chromium. Automated coverage stops at the
+  signal rather than the paint: the jsdom test pins that focus returns and that the attribute tracks
+  the closing input, and `tab-dropdown-menu-focus.stories.tsx` adds the `:focus-visible` half that
+  jsdom cannot judge. Neither can assert the ring itself — the Storybook harness does not paint the
+  trigger's ring at all, so an assertion on it would pass whatever the code did. That the attribute
+  removes a ring the user can see is confirmed by hand in the running app.
+- **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
+  found not to work in the shipped runtime.
+
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
 
 - **Date:** 2026-09-11
@@ -3508,6 +3553,38 @@ step, no automation. Just a record.
   on persisted slots.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
+
+## adr-opaque-menu-surfaces: Menu and select surfaces are opaque; shadcn's translucent menu color is not used
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** The shadcn preset applied on 2026-04-16 (`npx shadcn apply --preset b6rt8cvlC`, commit
+  `a61ca3b913c`) set `menuColor: "default-translucent"` in `lib/platform-bible-react/components.json`.
+  That gave `DropdownMenuContent`, `DropdownMenuSubContent`, `ContextMenuContent`,
+  `ContextMenuSubContent`, `MenubarContent`, `MenubarSubContent` and `SelectContent` a 70%
+  `bg-popover` plus a `::before` backdrop-blur layer. Over scripture text the menus were hard to read.
+  In a scrolling menu the blur layer scrolled away with the items, and it never covered the scrollbar
+  gutter, so the scrollbar always sat on the bare 70% background. The Simple PRD requires opaque,
+  readable menus and popovers.
+- **Decision:** Remove the translucent classes from those seven surfaces, each edit annotated
+  `// CUSTOM:`, and set `menuColor` to `"default"` so the shadcn CLI stops emitting the translucent
+  variant. Nothing in this repo reads `menuColor`; it is an input to the external CLI, and it does
+  not stop `shadcn add` from regenerating these files — only from regenerating them translucent.
+  The real backstop is `Shadcn/Overlay Surface Opacity`
+  (`lib/platform-bible-react/src/stories/shadcn-ui/overlay-surface-opacity.stories.tsx`), which opens
+  each surface in a real browser across every Storybook theme and also checks `opacity` on each
+  surface and its ancestors.
+- **Alternatives:** (a) **a higher alpha** (e.g. 95%) — still see-through over dense text, and keeps the
+  scrolling blur-layer defect. (b) **keep the blur but pin the layer** so it does not scroll — keeps a
+  see-through surface the PRD rejects, plus a compositing cost on every open menu. (c) **opaque
+  overrides at each consumer** — every present and future menu consumer would need one, and each one
+  that forgets regresses.
+- **Consequences:** Applies to Power as well as Simple, since these are shared components. A future
+  `/upgrade-shadcn` that re-applies a preset with a translucent menu color would reintroduce the
+  classes; the `// CUSTOM:` comments carry the intent through that upgrade, and the Storybook test
+  fails if the translucent background returns.
+- **Source:** PT-4535, which adopts PT-4101; the translucency arrived with the preset in commit
+  `a61ca3b913c`.
 
 ## adr-package-verifies-the-document-not-the-shipping-set: `npm run package` runs the check a patched clone can answer
 
