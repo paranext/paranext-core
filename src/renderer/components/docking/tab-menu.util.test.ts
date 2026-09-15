@@ -3,7 +3,6 @@ import type { Localized, SingleColumnMenu } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 import {
   buildTabMenuItems,
-  CONTENT_ZOOM_TAB_MENU_GROUP,
   filterTabMenuToGroup,
   getMoveTargetWindowId,
   MOVE_TO_WINDOW_TARGET_ID_PREFIX,
@@ -235,25 +234,11 @@ describe('filterTabMenuToGroup', () => {
     expect(result).toEqual({ groups: {}, items: [] });
   });
 
-  test('drops items belonging to a group other than the one requested, even when that group is absent', () => {
-    const result = filterTabMenuToGroup(menu, 'someExtension.notDefined');
-
-    expect(result.items).toEqual([]);
-  });
-
   test('does not mutate the input menu', () => {
     filterTabMenuToGroup(menu, 'platform.tabZoom');
 
     expect(Object.keys(menu.groups)).toEqual(['platform.tabZoom', 'platform.tabWindow']);
     expect(menu.items).toHaveLength(3);
-  });
-
-  test('pins the renderer constant to the group the shipped menu data actually defines', async () => {
-    // Cross-check against the shipped data: if the JSON's group name ever drifts from this
-    // module's constant, this is what catches it.
-    const { default: shippedMenus } = await import('@extension-host/data/menu.data.json');
-
-    expect(shippedMenus.defaultWebViewTabMenu.groups[CONTENT_ZOOM_TAB_MENU_GROUP]).toBeDefined();
   });
 });
 

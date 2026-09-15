@@ -681,7 +681,7 @@
   "%tab_contextMenu_moveTab_failedMayHaveClosed%": "No se pudo mover la pestaña. Es posible que la pestaña se haya cerrado; sus detalles están en el registro.",
   "%tab_contextMenu_moveTab_failedNotReopened%": "No se pudo mover la pestaña y no se pudo volver a abrir en ninguna parte, por lo que ahora está cerrada. Sus detalles están en el registro.",
   "%tab_contextMenu_moveTab_failedReopenedElsewhere%": "No se pudo mover la pestaña. Se volvió a abrir en una ventana diferente.",
-  "%tab_contextMenu_resetZoom%": "Restablecer zoom al valor predeterminado",
+  "%tab_contextMenu_resetZoom%": "Restablecer el zoom al valor predeterminado",
   "%tab_contextMenu_zoomIn%": "Acercar",
   "%tab_contextMenu_zoomOut%": "Alejar",
   "%tab_title_error%": "Error",
