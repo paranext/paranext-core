@@ -501,6 +501,72 @@ step, no automation. Just a record.
   **Revisit** as its own change, with `paratext-10-studio` in scope.
 - **Source:** the multi-agent review of #2654, finding 25.
 
+## adr-chapter-marker-repair-at-the-save-boundary: A chapter's `\c` marker is repaired on the way out, in both write layers
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ScrText.ValidateChapterNumber` (in PT9 `ParatextData/ScrText.cs:1050`) refuses a
+  chapter write whose `\c` marker disagrees with the chapter being written — a wrong number, a
+  second marker typed mid-chapter, a deleted marker, or (for any chapter after the first) any
+  content at all ahead of the marker. The refusal does not touch the editor, so the offending
+  document stays on screen and every LATER save of that chapter is refused too: editing a chapter
+  marker silently stopped the chapter saving, with nothing on screen to say so (PT-4608). Paratext 9
+  does not prevent the edit. Its editor repairs the USFM inside its own save path —
+  `UsfmEditorTextLoader.FixChapterNumbers`, in PT9
+  `ParatextBase/ScriptureEditor/UsfmEditorTextLoader.cs:355` — and reloads the editor onto the
+  repaired text with `Revert()` (same file, `:277-278`), so the typing is allowed and the document
+  is made writable on its way out. PT9 tells the user only in the mid-chapter-marker case, the one
+  shape for which `FixChapterNumbers` sets an error message (`:409`, surfaced at `:318-319`);
+  notifying on every repair is our own choice, recorded in the Decision below.
+- **Decision:** Repair at the save boundary, and do it in **both** write layers rather than picking
+  one.
+  - The renderer repairs the USJ before the PDP write
+    (`extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts`), pushes the
+    repaired document back into the editor, and notifies the user — the push-back is what stops the
+    loop, since a bad marker left on screen is repaired and reported again on every subsequent save.
+  - C# repairs the USFM inside `SetChapterUsx`/`SetChapterUsfm`
+    (`c-sharp/Projects/ChapterMarkerCorrection.cs`) as a backstop for writers that do not correct
+    their own content, silently apart from a log line.
+  - **Book-level writes are never touched.** A book legitimately carries one `\c` per chapter, so
+    only a write aimed at a single chapter knows which marker is the right one. The mechanism is
+    the call graph, not a flag: `SetBookUsfm` and `SetBookUsx` never call the corrector at all — the
+    two chapter setters are its only call sites. Both ports separately return their input untouched
+    for a non-chapter number (`c-sharp/Projects/ChapterMarkerCorrection.cs:57`,
+    `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts:138`), but that is a
+    defensive guard inside the algorithm rather than what keeps book writes safe.
+  - **Placement rule:** a restored marker for a chapter after the first goes at index 0
+    *unconditionally*. Nothing may precede it — not even an `\id` book node typed into the chapter —
+    because `verseRef.ChapterNum != 1 && parts[0] != ""` is "Text present before chapter marker."
+    (in PT9 `ParatextData/ScrText.cs:1067`), so a marker placed behind such a node yields another
+    document the writer refuses. Chapter 1 is the sole exception: its marker stays where the author
+    has it, behind the introduction, and may legitimately be absent altogether (Jude). This is the
+    one point at which the two ports can plausibly drift, and Paratext 9's table does not pin it (no
+    row puts text ahead of a later chapter's marker), so it is recorded here rather than left to be
+    re-derived.
+- **Alternatives:**
+  - **Block the edit in the editor** (refuse the keystroke, or revert the marker in place) —
+    rejected. Paratext 9 deliberately allows the typing and fixes it on save, and the editor's
+    chapter transform is written for that parity; policing marker edits in the editor would be a
+    behaviour change to the typing surface in order to work around a writer constraint.
+  - **C# only** — rejected. `useEditorPdpSync`
+    (`extensions/src/platform-scripture-editor/src/use-editor-pdp-sync.hook.ts`) defers an incoming
+    PDP update for up to `EDITOR_OWNERSHIP_WINDOW_MS` (15 s) while the editor is focused and
+    recently edited, so a backend-only correction would not reach the editor; the still-poisoned
+    editor document would simply be written over it on the next save. A correction the editor never
+    sees also cannot be explained to the user.
+  - **Renderer only** — rejected. It would leave every non-editor writer of a chapter (imports,
+    commands, future extensions) able to poison a chapter exactly as before.
+- **Consequences:** two ports of one algorithm now exist, over two different representations (USJ
+  nodes and USFM text), and they must not drift. Both are pinned to Paratext 9's own 16-row
+  `[TestCase]` table (in PT9 `ParatextBase.Tests/ScriptureEditor/UsfmEditorTextLoaderTests.cs:573`):
+  the C# port keeps all 16 rows, the USJ port keeps the 10 distinct behaviours (the other 6 rows
+  differ only in LF-vs-CRLF line endings, which USJ does not represent). Anything that changes one
+  port must change the other or explain why not. For editor traffic the C# half is expected to find
+  nothing to correct, so a log line from it is a signal that the renderer repair has a gap.
+  **Revisit** if the editor ever gains a way to reject a marker edit at the source, or if Paratext
+  relaxes the "text before chapter marker" rule.
+- **Source:** PT-4608; Paratext 9 `UsfmEditorTextLoader.FixChapterNumbers` and its test table.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
