@@ -27,6 +27,12 @@ const INDICATOR_VISIBLE_MS = 1100;
  * wheel gesture announces once, short enough to land well inside {@link INDICATOR_VISIBLE_MS}.
  */
 const INDICATOR_ANNOUNCE_QUIET_MS = 500;
+/**
+ * How long a focus change may still count as the one a click itself caused (the view putting the
+ * caret somewhere else in response to the click) rather than an unrelated focus move. See the
+ * pointerdown/focusin listeners below for the gesture this bounds.
+ */
+const GESTURE_FOCUS_MS = 200;
 
 /**
  * The rule that scales one zoom area: its own variable, else the default. The `main` area's rule
@@ -273,18 +279,29 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // pointer went down in this one. A focus change with no pointer gesture behind it - the caret
     // reaching a footnote by keyboard, or a view focusing a pane by itself - still names the active
     // area, which is why the gesture's reach is bounded rather than the focus listener simply
-    // deferring to the pointer one.
-    const GESTURE_FOCUS_MS = 200;
+    // deferring to the pointer one. Only ONE focus change is ever suppressed per click: the
+    // recorded area is cleared the instant the first focusin after the click is handled, whether
+    // or not that focusin was the one suppressed, so a later, unrelated focus move within the same
+    // window is never mistaken for the click's own.
     let pointerArea;
     let pointerTime = 0;
     const onPointerDown = (e) => {
-      pointerArea = areaOf(e.target);
+      const areaId = areaOf(e.target);
+      // Recorded only when the id is one setActive would actually accept - a click the pane never
+      // reported an area for (nested, ill-formed, or outside every marker) has no focus change of
+      // its own to protect, so it must not arm a suppression window either.
+      pointerArea = areaId !== undefined && areas.indexOf(areaId) !== -1 ? areaId : undefined;
       pointerTime = Date.now();
-      setActive(pointerArea);
+      setActive(areaId);
     };
     const onFocusIn = (e) => {
       const areaId = areaOf(e.target);
-      if (pointerArea && areaId !== pointerArea && Date.now() - pointerTime < GESTURE_FOCUS_MS) return;
+      const suppress =
+        pointerArea !== undefined &&
+        areaId !== pointerArea &&
+        Date.now() - pointerTime < ${GESTURE_FOCUS_MS};
+      pointerArea = undefined;
+      if (suppress) return;
       setActive(areaId);
     };
     window.addEventListener('pointerdown', onPointerDown, true);
