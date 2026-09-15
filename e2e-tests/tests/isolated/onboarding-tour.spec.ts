@@ -54,7 +54,10 @@ import { test, expect } from '../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import {
   clearTourDone,
+  getTourBackButton,
   getTourDialog,
+  getTourDoneButton,
+  getTourNextButton,
   getTourTotalSteps,
   getCurrentStepTitle,
   advanceTour,
@@ -86,8 +89,7 @@ async function waitForAppReadyWithTour(page: Page): Promise<void> {
 /** Walks the tour from its current step to the last one, collecting each step's title in order. */
 async function collectStepTitles(page: Page): Promise<string[]> {
   const titles: string[] = [];
-  const dialog = getTourDialog(page);
-  const nextButton = dialog.getByRole('button', { name: /^Next$/i });
+  const nextButton = getTourNextButton(page);
   // Bounded well above the real stop count so a regression cannot loop forever.
   for (let i = 0; i < 10; i += 1) {
     // Walking the tour is sequential by definition — each step must be read, then clicked past,
@@ -150,8 +152,8 @@ test.describe('Onboarding tour', () => {
     await advanceToLastStep(mainPage);
 
     // On the last step the primary button label changes to "Done".
-    await expect(dialog.getByRole('button', { name: /^Done$/i })).toBeVisible({ timeout: 5_000 });
-    await expect(dialog.getByRole('button', { name: /^Next$/i })).not.toBeVisible();
+    await expect(getTourDoneButton(mainPage)).toBeVisible({ timeout: 5_000 });
+    await expect(getTourNextButton(mainPage)).not.toBeVisible();
   });
 
   test('Back returns to the previous step', async ({ mainPage }) => {
@@ -161,7 +163,7 @@ test.describe('Onboarding tour', () => {
     await expect(dialog).toBeVisible({ timeout: 15_000 });
 
     // Back is deliberately absent on the first step, so it only appears once we have advanced.
-    await expect(dialog.getByRole('button', { name: /^Back$/i })).not.toBeVisible();
+    await expect(getTourBackButton(mainPage)).not.toBeVisible();
     expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
 
     await advanceTour(mainPage);
@@ -192,7 +194,7 @@ test.describe('Onboarding tour', () => {
 
     // Advance through all steps and click Done, which is what records completion.
     await advanceToLastStep(mainPage);
-    await dialog.getByRole('button', { name: /^Done$/i }).click();
+    await getTourDoneButton(mainPage).click();
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 
     await mainPage.reload();
@@ -284,7 +286,7 @@ test.describe('Onboarding tour in Power mode', () => {
     expect(await getCurrentStepTitle(mainPage)).toBe(PROFILE_STEP_TITLE);
 
     // One stop is both first and last, so the primary action is Done rather than Next.
-    await expect(dialog.getByRole('button', { name: /^Done$/i })).toBeVisible({ timeout: 5_000 });
-    await expect(dialog.getByRole('button', { name: /^Next$/i })).not.toBeVisible();
+    await expect(getTourDoneButton(mainPage)).toBeVisible({ timeout: 5_000 });
+    await expect(getTourNextButton(mainPage)).not.toBeVisible();
   });
 });
