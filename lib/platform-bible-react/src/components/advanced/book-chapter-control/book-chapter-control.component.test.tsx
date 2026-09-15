@@ -56,6 +56,9 @@ beforeAll(() => {
   }
 });
 
+/** The trigger button and the search input are both comboboxes; only the trigger is named. */
+const getTrigger = () => screen.getByRole('combobox', { name: 'book-chapter-trigger' });
+
 describe('BookChapterControl imperative handle', () => {
   test('open() opens the dropdown and focuses the search input', async () => {
     const handleRef = createRef<BookChapterControlHandle>();
@@ -402,8 +405,6 @@ describe('BookChapterControl additional books', () => {
   const getProjectBooks = () => PROJECT_BOOKS;
   const getExtraBooks = () => ['REV'];
 
-  /** The trigger button and the search input are both comboboxes; only the trigger is named. */
-  const getTrigger = () => screen.getByRole('combobox', { name: 'book-chapter-trigger' });
   const getSearchInput = () => screen.getByRole('combobox', { name: '' });
 
   test('an additional book is absent from the collapsed list', async () => {
@@ -1425,6 +1426,28 @@ describe('BookChapterControl yields keys it does not own', () => {
 
     expect(handleSubmit).not.toHaveBeenCalled();
     expect(getSearchInput()).toBeInTheDocument();
+  });
+
+  test('Escape closes the recent-searches list before the picker behind it', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    await user.click(screen.getByRole('button', { name: /recent/i }));
+    await screen.findAllByRole('menuitem');
+
+    // Escape has to unwind one layer at a time, or dismissing a list the user opened by accident
+    // also throws away the reference they were part-way through choosing. Nothing here implements
+    // that ordering: it comes from nesting a Radix menu inside the Radix popover, which stops the
+    // key at the innermost dismissable layer. That makes this a characterization test of a
+    // structural choice rather than of our own logic — a recent-searches list rebuilt on `Command`
+    // inside a plain `Popover` would take both layers down on one Escape with nothing else failing.
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('menuitem')).not.toBeInTheDocument());
+    expect(getSearchInput()).toBeInTheDocument();
+
+    // And the picker still answers the next Escape, so trapping the first one costs nothing.
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
   });
 
   test('ArrowLeft moves the caret in the query instead of the preview highlight', async () => {
