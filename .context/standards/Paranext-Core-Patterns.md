@@ -1223,6 +1223,27 @@ export function setScrRefSync(/* ... */): boolean {
 - Add a second module named after the service. The `*.service.ts` that already exists in each process
   grows the cache; a new one beside it is a second answer to the same question.
 
+### Per-web-view state lives in the web view definition
+
+State belonging to **one open pane** goes in that web view's `SavedWebViewDefinition.state`, written
+with `updateWebViewDefinition` (a React view reaches it with `useWebViewState`). The dock layout
+serializes it, so it survives a restart and travels with the tab when the tab moves to another window.
+
+State that must **outlive the pane** — a user-level default, or per-project memory such as "what this
+project's editor was last set to" — goes in **user settings**: a visible setting for a default the
+user controls, a hidden one for the memory.
+
+**Avoid** a parallel per-web-view store. A `Record` keyed by web view id inside a service is a second
+copy of the definition's state, and it has to be taught by hand about every open, move, reload and
+close the definition already handles.
+
+Reference: content zoom keeps the pane's own levels under `platform.contentZoomLevels` in the
+definition state, and the default and per-project memory in the `platform.webViewContentZoom` and
+`platform.webViewContentZoomMemory` settings
+(`src/renderer/services/web-view-content-zoom.service.ts`). Rationale and rejected alternatives:
+`adr-per-web-view-state-lives-in-the-definition` in
+[Architecture-Decisions.md](Architecture-Decisions.md).
+
 ### Command Naming
 
 - **Pattern:** `'{extensionName}.{commandName}'`
