@@ -5,6 +5,7 @@ import { defaultScrRef, LanguageStrings } from 'platform-bible-utils';
 import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { BookChapterControlHandle } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
+import { GRID_COLUMNS } from '@/components/advanced/book-chapter-control/book-chapter-control.utils';
 import { useRecentSearches } from '@/components/advanced/recent-searches.component';
 
 type BookChapterControlWrapperProps = {
@@ -92,8 +93,22 @@ function getDropdown() {
 }
 
 /**
- * How far (px) a chapter/verse digit's centre may sit from the centre of the cell that paints its
- * highlight. Subpixel text metrics move the measured centre a fraction of a pixel either way, so
+ * Waits for a chapter cell to carry the `data-selected` highlight.
+ *
+ * Asserting on the highlight itself matters because checking only that the popover is still visible
+ * after a keypress would pass even if the arrow keys moved nothing at all.
+ */
+async function expectChapterHighlighted(chapter: string) {
+  await waitFor(async () => {
+    await expect(
+      within(getDropdown()).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter }),
+    ).toHaveAttribute('data-selected', 'true');
+  });
+}
+
+/**
+ * How far (px) a chapter digit's center may sit from the center of the cell that paints its
+ * highlight. Subpixel text metrics move the measured center a fraction of a pixel either way, so
  * this is not zero; it is far below the shift a laid-out phantom child in `CommandItem` produces.
  */
 const MAX_DIGIT_CENTER_OFFSET_PX = 1;
@@ -103,7 +118,7 @@ const MAX_DIGIT_CENTER_OFFSET_PX = 1;
  *
  * The cell is the element that paints the highlight, so a non-zero horizontal offset means the
  * highlight and the number it belongs to disagree, and the number reads as belonging to the
- * neighbouring chapter. Uses a `Range` because the digit is a bare text node with no element of its
+ * neighboring chapter. Uses a `Range` because the digit is a bare text node with no element of its
  * own to measure.
  *
  * Only meaningful in a real browser: jsdom performs no layout and reports every rect as zero.
@@ -127,20 +142,25 @@ function measureDigitAgainstCell(cell: HTMLElement) {
 }
 
 /**
- * Asserts the digit sits centred inside the box that highlights it, and reports the measured offset
- * on failure so a regression says how far off it is rather than only that it is off.
+ * Asserts the digit sits centered inside the box that highlights it, and reports the measured
+ * offset on failure so a regression says how far off it is rather than only that it is off.
+ *
+ * The chapter and verse grids are both rendered by `NumberedItemGrid`, so measuring the chapter
+ * grid pins the layout both share; verse cells are not separately measured.
  */
-async function expectDigitAlignedWithCell(cell: HTMLElement, label: string) {
+function expectDigitAlignedWithCell(cell: HTMLElement, label: string) {
   const { digit, box, horizontalOffset } = measureDigitAgainstCell(cell);
+  const offBy = `${horizontalOffset.toFixed(1)}px`;
 
-  await expect(
-    {
-      cell: label,
-      offCentreBy: `${Math.abs(horizontalOffset) <= MAX_DIGIT_CENTER_OFFSET_PX ? 0 : horizontalOffset.toFixed(1)}px`,
-      digitInsideCell: digit.left >= box.left && digit.right <= box.right,
-    },
-    `chapter ${label}: digit centre is ${horizontalOffset.toFixed(1)}px from the centre of its highlight box`,
-  ).toEqual({ cell: label, offCentreBy: '0px', digitInsideCell: true });
+  expect(
+    Math.abs(horizontalOffset),
+    `chapter ${label}: digit center is ${offBy} from the center of its highlight box`,
+  ).toBeLessThanOrEqual(MAX_DIGIT_CENTER_OFFSET_PX);
+
+  expect(
+    digit.left >= box.left && digit.right <= box.right,
+    `chapter ${label}: digit falls outside its own highlight box (off center by ${offBy})`,
+  ).toBe(true);
 }
 
 const meta: Meta<typeof BookChapterControl> = {
@@ -716,17 +736,6 @@ export const KeyboardNavigation: Story = {
       await userEvent.click(matthewItem);
     });
 
-    // Assert on the `data-selected` highlight itself. Checking only that the popover is still
-    // visible after a keypress would pass even if the arrow keys moved nothing at all, which is
-    // exactly the behaviour these steps exist to demonstrate.
-    const expectChapterHighlighted = async (chapter: string) => {
-      await waitFor(async () => {
-        await expect(
-          within(getDropdown()).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter }),
-        ).toHaveAttribute('data-selected', 'true');
-      });
-    };
-
     await step('Verify the grid opens with the current chapter highlighted', async () => {
       await expectChapterHighlighted('15');
     });
@@ -812,50 +821,57 @@ export const ChapterHighlightAlignment: Story = {
       await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, { name: '1' });
     });
 
-    // Matthew's 28 chapters over a 6-column grid give first-column (1, 7), last-column (6),
-    // second-row (7) and two-digit (15, 28) cells, plus the current chapter (15), which renders
-    // with the filled `bg-primary` treatment rather than the default one. The popover is a fixed
-    // 280px, so there is no width axis to sweep — what varies here is digit width and the cell's
-    // position in the grid.
-    const SAMPLED_CHAPTERS = ['1', '6', '7', '15', '28'];
-
-    await step('Every sampled chapter digit is centred in its own highlight box', async () => {
-      const dropdownContent = getDropdown();
-      await Promise.all(
-        SAMPLED_CHAPTERS.map(async (chapter) => {
-          const cell = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter });
-          await expectDigitAlignedWithCell(cell, chapter);
-        }),
-      );
-    });
+    // Matthew's 28 chapters cover every grid condition that can move a digit: first column, last
+    // column, a row wrap, two-digit labels, and the current chapter (15), which renders with the
+    // filled `bg-primary` treatment rather than the default one. The column positions are derived
+    // from `GRID_COLUMNS` so they keep covering what they claim to if the grid is ever rewidened.
+    // The popover is a fixed 280px, so there is no width axis to sweep — what varies here is digit
+    // width and the cell's position in the grid.
+    const SAMPLED_CHAPTERS = [
+      '1', // first column, first row
+      `${GRID_COLUMNS}`, // last column
+      `${GRID_COLUMNS + 1}`, // first column again, one row down
+      '15', // two digits, and the current chapter's filled treatment
+      '28', // two digits, last chapter in the book
+    ];
 
     // Hover repaints the cell's background; it does not lay the cell out again. So the alignment
-    // that hover makes visible is the resting alignment measured above, which is also how the
-    // defect presents: the digit sits outside a box that only becomes visible under the pointer.
+    // hover makes visible is the resting alignment measured here, which is also how the defect
+    // presents: the digit sits outside a box that only becomes visible under the pointer.
+    await step('Every sampled chapter digit is centered in its own highlight box', async () => {
+      const dropdownContent = getDropdown();
+      // Measured one at a time: these are synchronous geometry reads, so running them concurrently
+      // buys nothing and would report whichever cell rejected first rather than the first
+      // misaligned one.
+      SAMPLED_CHAPTERS.forEach((chapter) => {
+        const cell = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter });
+        expectDigitAlignedWithCell(cell, chapter);
+      });
+    });
+
+    // Keyboard focus is styled differently from pointer hover (a ring rather than a muted
+    // background), so what the two are asserted to agree on is where the digit sits, not how the
+    // cell looks.
     await step('Keyboard focus lands on a cell whose digit is aligned the same way', async () => {
       await userEvent.keyboard('{ArrowRight}');
+      await expectChapterHighlighted('16');
 
-      const dropdownContent = getDropdown();
-      const focusedCell = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: '16' });
-      await waitFor(async () => {
-        await expect(focusedCell).toHaveAttribute('data-selected', 'true');
-      });
-
-      await expectDigitAlignedWithCell(focusedCell, '16');
+      const focusedCell = within(getDropdown()).getByRole(CHAPTER_BUTTON_ROLE, { name: '16' });
+      expectDigitAlignedWithCell(focusedCell, '16');
     });
   },
   parameters: {
     docs: {
       description: {
         story: `
-**Chapter Highlight Alignment** - Pins the geometry of the chapter grid: each digit's centre must
-sit within ${MAX_DIGIT_CENTER_OFFSET_PX}px of the centre of the cell that highlights it, and the
+**Chapter Highlight Alignment** - Pins the geometry of the chapter grid: each digit's center must
+sit within ${MAX_DIGIT_CENTER_OFFSET_PX}px of the center of the cell that highlights it, and the
 digit must lie inside that cell.
 
 Guards a defect where \`CommandItem\` laid out a trailing element the grid never shows — an
 invisible \`opacity-0\` check icon, 16px wide plus an 8px flex gap — inside a 16px content box.
 \`justify-center\` split the overflow, putting every digit 12px left of its own highlight and
-outside its left edge, so the highlight read as belonging to the neighbouring chapter. Hiding that
+outside its left edge, so the highlight read as belonging to the neighboring chapter. Hiding that
 child from layout is a single utility class, which is why this needs a test that measures rather
 than one that names a class: the class can be dropped, or a new laid-out child added upstream, with
 nothing else failing.
@@ -864,9 +880,14 @@ It measures rather than asserts a class name because the cause was upstream — 
 re-apply, a script that will run again — so the next regression may arrive by a different route and
 still have to be caught here.
 
-Both pointer and keyboard are covered: alignment, not appearance. Keyboard focus is deliberately
-styled differently from pointer hover (a ring versus a muted background), so the two are asserted to
-agree on where the digit sits, not on how the cell looks.
+The geometry is measured at rest and under keyboard focus. Hover is not measured separately: it
+repaints the cell's background rather than laying the cell out again, so the alignment hover reveals
+is the resting alignment already asserted here. Keyboard focus is deliberately styled differently
+from pointer hover (a ring versus a muted background), so what the two are asserted to agree on is
+where the digit sits, not how the cell looks.
+
+Only the chapter grid is measured. The verse grid renders through the same \`NumberedItemGrid\`, so
+it shares the layout pinned here rather than being separately asserted.
 
 Runs in Storybook's browser mode. It cannot run under jsdom, which performs no layout and reports
 every rect as zero.
