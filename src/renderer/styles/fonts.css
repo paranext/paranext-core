@@ -2,12 +2,9 @@
 
 /* #region styles downloaded from Google Fonts URL because CSP prevents outside stylesheets */
 
-/* Charis SIL's faces carry a `local()` source ahead of the `url()`, so an installed copy is used
-   when the Google-hosted subset cannot be fetched. Every other family here is `url()`-only; a
-   family whose faces all fail to load drops out of the font stack entirely rather than falling
-   back to an installed copy of the same name, so Charis SIL — the one Paratext installs and the
-   Scripture default — keeps a path that survives being offline. Re-add the `local()` sources after
-   regenerating this region from the URL below; `fonts.test.ts` fails if any of them is dropped. */
+/* Paste this region from the URL below verbatim — every face, unmodified, nothing hand-edited.
+   Installed copies of these fonts are named by the `*-Local` families in the region after it,
+   which exists precisely so this one can stay a straight copy of Google's response. */
 /* @import url('https://fonts.googleapis.com/css2?family=Cardo:ital,wght@0,400;0,700;1,400&family=Charis+SIL:ital,wght@0,400;0,700;1,400;1,700&family=Gentium+Plus:ital,wght@0,400;0,700;1,400;1,700&family=Google+Sans:wght@400&family=Noto+Sans+Syriac:wght@100..900&display=swap'); */
 
 /* gothic */
@@ -248,11 +245,8 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL'),
-    local('CharisSIL-Regular'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPDsYwZ2.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPDsYwZ2.woff2')
+    format('woff2');
   unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
 }
 /* cyrillic */
@@ -261,11 +255,8 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL'),
-    local('CharisSIL-Regular'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPnsYwZ2.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPnsYwZ2.woff2')
+    format('woff2');
   unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
 /* vietnamese */
@@ -274,11 +265,8 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL'),
-    local('CharisSIL-Regular'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPLsYwZ2.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPLsYwZ2.woff2')
+    format('woff2');
   unicode-range:
     U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
     U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
@@ -289,11 +277,8 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL'),
-    local('CharisSIL-Regular'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPPsYwZ2.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPPsYwZ2.woff2')
+    format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -305,10 +290,8 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL'),
-    local('CharisSIL-Regular'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnP3sYw.woff2') format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnP3sYw.woff2')
+    format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -319,11 +302,8 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold'),
-    local('CharisSIL-Bold'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjRXQ0SX.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjRXQ0SX.woff2')
+    format('woff2');
   unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
 }
 /* cyrillic */
@@ -332,11 +312,8 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold'),
-    local('CharisSIL-Bold'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdj1XQ0SX.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdj1XQ0SX.woff2')
+    format('woff2');
   unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
 /* vietnamese */
@@ -345,11 +322,8 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold'),
-    local('CharisSIL-Bold'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjZXQ0SX.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjZXQ0SX.woff2')
+    format('woff2');
   unicode-range:
     U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
     U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
@@ -360,11 +334,8 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold'),
-    local('CharisSIL-Bold'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjdXQ0SX.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjdXQ0SX.woff2')
+    format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -376,11 +347,8 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold'),
-    local('CharisSIL-Bold'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjlXQw.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjlXQw.woff2')
+    format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -391,11 +359,8 @@
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL Italic'),
-    local('CharisSIL-Italic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbB5yfn0.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbB5yfn0.woff2')
+    format('woff2');
   unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
 }
 /* cyrillic */
@@ -404,11 +369,8 @@
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL Italic'),
-    local('CharisSIL-Italic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcZR5yfn0.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcZR5yfn0.woff2')
+    format('woff2');
   unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
 /* vietnamese */
@@ -417,11 +379,8 @@
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL Italic'),
-    local('CharisSIL-Italic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbh5yfn0.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbh5yfn0.woff2')
+    format('woff2');
   unicode-range:
     U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
     U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
@@ -432,11 +391,8 @@
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL Italic'),
-    local('CharisSIL-Italic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbx5yfn0.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbx5yfn0.woff2')
+    format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -448,11 +404,8 @@
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src:
-    local('Charis SIL Italic'),
-    local('CharisSIL-Italic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcYR5y.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcYR5y.woff2')
+    format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -463,11 +416,8 @@
   font-style: italic;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold Italic'),
-    local('CharisSIL-BoldItalic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnTFyT9ko.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnTFyT9ko.woff2')
+    format('woff2');
   unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
 }
 /* cyrillic */
@@ -476,11 +426,8 @@
   font-style: italic;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold Italic'),
-    local('CharisSIL-BoldItalic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnRVyT9ko.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnRVyT9ko.woff2')
+    format('woff2');
   unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
 /* vietnamese */
@@ -489,11 +436,8 @@
   font-style: italic;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold Italic'),
-    local('CharisSIL-BoldItalic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnTlyT9ko.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnTlyT9ko.woff2')
+    format('woff2');
   unicode-range:
     U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
     U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
@@ -504,11 +448,8 @@
   font-style: italic;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold Italic'),
-    local('CharisSIL-BoldItalic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnT1yT9ko.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnT1yT9ko.woff2')
+    format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -520,11 +461,8 @@
   font-style: italic;
   font-weight: 700;
   font-display: swap;
-  src:
-    local('Charis SIL Bold Italic'),
-    local('CharisSIL-BoldItalic'),
-    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnQVyT.woff2')
-      format('woff2');
+  src: url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnQVyT.woff2')
+    format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -1165,6 +1103,76 @@
 
 /* #endregion styles downloaded from Google Fonts URL because CSP prevents outside stylesheets */
 
+/* #region installed copies of the Scripture fonts, for when the downloads above cannot be fetched */
+
+/*
+ * A family whose faces all fail to load does not fall back to an installed copy of the same name —
+ * it drops out of the family and moves on to the next one in the font stack. (A single face with no
+ * `unicode-range` does fall back, which is why this is easy to miss; Google Fonts always emits
+ * per-subset faces, so none of the families above get that.) With no network, then, every family in
+ * the region above is unusable even on a machine where Paratext has installed the font.
+ *
+ * These families give the stack somewhere to land. Each names the installed copy of a font above
+ * and nothing else, so it resolves iff that font is installed and otherwise falls through
+ * invisibly. They go at the END of `--scripture-font-stack`, after every real family and before
+ * the generic: a downloaded font always wins while one can be fetched, so online rendering is
+ * exactly what it would be without them, and they only come into play once nothing above can load.
+ *
+ * Only the two fonts Paratext installs are here. A family added above needs no entry; without one
+ * it simply has no offline path, as Cardo and Noto Sans Syriac have none today.
+ */
+
+@font-face {
+  font-family: 'Charis SIL Local';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Charis SIL'), local('CharisSIL-Regular');
+}
+@font-face {
+  font-family: 'Charis SIL Local';
+  font-style: normal;
+  font-weight: 700;
+  src: local('Charis SIL Bold'), local('CharisSIL-Bold');
+}
+@font-face {
+  font-family: 'Charis SIL Local';
+  font-style: italic;
+  font-weight: 400;
+  src: local('Charis SIL Italic'), local('CharisSIL-Italic');
+}
+@font-face {
+  font-family: 'Charis SIL Local';
+  font-style: italic;
+  font-weight: 700;
+  src: local('Charis SIL Bold Italic'), local('CharisSIL-BoldItalic');
+}
+@font-face {
+  font-family: 'Gentium Plus Local';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Gentium Plus'), local('GentiumPlus-Regular');
+}
+@font-face {
+  font-family: 'Gentium Plus Local';
+  font-style: normal;
+  font-weight: 700;
+  src: local('Gentium Plus Bold'), local('GentiumPlus-Bold');
+}
+@font-face {
+  font-family: 'Gentium Plus Local';
+  font-style: italic;
+  font-weight: 400;
+  src: local('Gentium Plus Italic'), local('GentiumPlus-Italic');
+}
+@font-face {
+  font-family: 'Gentium Plus Local';
+  font-style: italic;
+  font-weight: 700;
+  src: local('Gentium Plus Bold Italic'), local('GentiumPlus-BoldItalic');
+}
+
+/* #endregion installed copies of the Scripture fonts, for when the downloads above cannot be fetched */
+
 /* #region apply fonts throughout the application */
 
 /*
@@ -1182,9 +1190,20 @@ body,
  * Font for Scripture text. Add this class to any element that contains Scripture text.
  *
  * `.scripture-font` applies the font to scripture text, which is used in both `platform-bible-react`
+ *
+ * The stack is named as well as applied, because the Scripture editor needs the same order: the
+ * vendored `usj-nodes` stylesheets hand it to the editor's generated project stylesheet as
+ * `--usj-font-fallback`, so a project whose own font is unavailable falls back through this order
+ * rather than through the editor library's default chain.
  */
+:root {
+  --scripture-font-stack:
+    'Gentium Plus', 'Charis SIL', 'Cardo', 'Noto Sans Syriac', 'Google Sans', 'Gentium Plus Local',
+    'Charis SIL Local', serif;
+}
+
 .scripture-font {
-  font-family: 'Gentium Plus', 'Charis SIL', 'Cardo', 'Noto Sans Syriac', 'Google Sans', serif;
+  font-family: var(--scripture-font-stack);
 }
 
 /* #endregion apply fonts throughout the application */
