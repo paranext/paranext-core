@@ -42,13 +42,27 @@ test.use({
 
 // A fabricated all-caps token that cannot occur in the bundled WEB text, so `toContainText` /
 // `not.toContainText` are unambiguous (same rationale as type-through-save-echo.spec.ts's
-// TYPETHROUGHALPHA/BETA). "Yahweh" — the word used in earlier drafts of this spec — actually
-// occurs natively throughout Jonah 1 (vv. 1, 3, 4, 9, 10, 14 x3, 16 x2, 17 in the bundled WEB SFM),
-// which would make the paste-landed assertion pass vacuously and the undo assertion unsatisfiable.
+// TYPETHROUGHALPHA/BETA). Scripture vocabulary cannot serve here: "Yahweh", for instance, occurs
+// natively throughout Jonah 1 (vv. 1, 3, 4, 9, 10, 14 x3, 16 x2, 17 in the bundled WEB SFM), which
+// would make the paste-landed assertion pass vacuously and the undo assertion unsatisfiable.
 const PASTE_TOKEN = 'CLIPROUNDTRIPALPHA';
 // A second such token, for the `\c` step below, which needs a payload the undo step above has not
 // already removed from the document.
 const CHAPTER_PASTE_TOKEN = 'CLIPROUNDTRIPBETA';
+// Written to the OS clipboard before the copy step, so the poll that follows cannot be satisfied by
+// USFM a previous run (or a previous retry attempt) left there — see that step's own comment.
+const CLIPBOARD_SENTINEL = 'CLIPROUNDTRIPSENTINELNOTCOPIED';
+
+// `Control+C`/`V`/`Z` and `Control+Home`/`End` are the OS's own editing chords, not app
+// accelerators, so they must be spelled per-platform — macOS uses `Meta` for clipboard/undo and
+// `Meta+Arrow` for document start/end. Same pattern as navigation-history.spec.ts.
+const isMac = process.platform === 'darwin';
+const COPY_KEY = isMac ? 'Meta+C' : 'Control+C';
+const PASTE_KEY = isMac ? 'Meta+V' : 'Control+V';
+const UNDO_KEY = isMac ? 'Meta+Z' : 'Control+Z';
+const DOC_START_KEY = isMac ? 'Meta+ArrowUp' : 'Control+Home';
+const DOC_END_KEY = isMac ? 'Meta+ArrowDown' : 'Control+End';
+const SELECT_TO_DOC_END_KEY = isMac ? 'Shift+Meta+ArrowDown' : 'Shift+Control+End';
 
 test.describe('scripture editor clipboard USFM round trip', () => {
   test('Standard view copy/paste round-trips byte-faithful USFM through the real OS clipboard', async ({
@@ -77,10 +91,19 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     const bcvTrigger = mainPage.locator('button[aria-label="book-chapter-trigger"]').first();
 
     await test.step('copying a selection puts byte-faithful USFM on the OS clipboard', async () => {
+      // Overwrite whatever the OS clipboard already holds. Without this the poll below cannot tell
+      // "this copy wrote USFM" from "USFM was already there": a retry attempt (1 locally, 2 in CI)
+      // that got past the poll and then failed the one-shot `\p ` check leaves real copied USFM on
+      // the clipboard, and the next attempt's first read would pass with the copy path broken.
+      await electronApp.evaluate(
+        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+        CLIPBOARD_SENTINEL,
+      );
+
       await editorInput.click();
-      await editorInput.press('Control+Home');
-      await editorInput.press('Shift+Control+End');
-      await editorInput.press('Control+C');
+      await editorInput.press(DOC_START_KEY);
+      await editorInput.press(SELECT_TO_DOC_END_KEY);
+      await editorInput.press(COPY_KEY);
 
       // The renderer's copy handler may forward to the OS clipboard asynchronously, so poll rather
       // than reading once — a single premature read could observe a stale/empty clipboard.
@@ -104,8 +127,8 @@ test.describe('scripture editor clipboard USFM round trip', () => {
         PASTE_TOKEN,
       );
       await editorInput.click();
-      await editorInput.press('Control+End');
-      await editorInput.press('Control+V');
+      await editorInput.press(DOC_END_KEY);
+      await editorInput.press(PASTE_KEY);
       await expect(editorInput).toContainText(PASTE_TOKEN, { timeout: 20_000 });
 
       // A fully-terminated paste (`\nd …\nd* `, both opener and closer present) rebuilds
@@ -115,20 +138,33 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // required step, in case caret position affects rendering some other way.
       await editorInput.press('Home');
 
-      await expect(editorFrame.locator('span.opening[data-marker="nd"]').first()).toBeAttached({
+      // Exact counts, not `.first()` — Jonah has zero `\nd` going in, so a doubled glyph (a real
+      // failure mode the engine guards in its own unit tests) has to fail here rather than pass on
+      // whichever span happened to come first.
+      await expect(editorFrame.locator('span.opening[data-marker="nd"]')).toHaveCount(1, {
         timeout: 20_000,
       });
-      await expect(editorFrame.locator('span.closing[data-marker="nd"]').first()).toBeAttached({
+      await expect(editorFrame.locator('span.closing[data-marker="nd"]')).toHaveCount(1, {
         timeout: 20_000,
       });
     });
 
     await test.step('undoing the paste is a single step', async () => {
-      await editorInput.press('Control+Z');
+      await editorInput.press(UNDO_KEY);
       await expect(editorInput).not.toContainText(PASTE_TOKEN, { timeout: 20_000 });
+      // Both halves of the span, not just the opener: a half-reverted span would otherwise pass.
       await expect(editorFrame.locator('span.opening[data-marker="nd"]')).toHaveCount(0, {
         timeout: 20_000,
       });
+      await expect(editorFrame.locator('span.closing[data-marker="nd"]')).toHaveCount(0, {
+        timeout: 20_000,
+      });
+      // Positive control. The three assertions above are all negative, and an editor that is empty
+      // or mid-replacement satisfies every one of them — the PDP's debounced save echoes back by
+      // replacing editor content wholesale (see type-through-save-echo.spec.ts), and Playwright's
+      // negative matchers pass on the first poll that holds. Anchoring on text the undo must have
+      // restored, rather than removed, is what makes this step measure the undo.
+      await expect(editorInput).toContainText('Amittai', { timeout: 20_000 });
     });
 
     await test.step('pasting a `\\c` chapter marker cannot corrupt the open chapter', async () => {
@@ -150,8 +186,8 @@ test.describe('scripture editor clipboard USFM round trip', () => {
         CHAPTER_PASTE_TOKEN,
       );
       await editorInput.click();
-      await editorInput.press('Control+End');
-      await editorInput.press('Control+V');
+      await editorInput.press(DOC_END_KEY);
+      await editorInput.press(PASTE_KEY);
       await expect(editorInput).toContainText(CHAPTER_PASTE_TOKEN, { timeout: 20_000 });
 
       // Assert the engine's strip guarantee three independent ways: the chapter-marker block
