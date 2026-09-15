@@ -154,9 +154,31 @@
   },
   "defaultWebViewTabMenu": {
     "groups": {
+      "platform.tabZoom": { "order": 50, "isExtensible": false, "isExperimental": true },
       "platform.tabWindow": { "order": 100, "isExtensible": true, "isExperimental": true }
     },
     "items": [
+      {
+        "label": "%tab_contextMenu_zoomIn%",
+        "localizeNotes": "Tab context menu > Zoom in. Enlarges the content of this tab only; the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 100,
+        "command": "platform.webViewContentZoomIn"
+      },
+      {
+        "label": "%tab_contextMenu_zoomOut%",
+        "localizeNotes": "Tab context menu > Zoom out. Shrinks the content of this tab only; the application's own menus and toolbars are unaffected.",
+        "group": "platform.tabZoom",
+        "order": 200,
+        "command": "platform.webViewContentZoomOut"
+      },
+      {
+        "label": "%tab_contextMenu_resetZoom%",
+        "localizeNotes": "Tab context menu > Reset zoom to default. Returns the content of this tab only to the default size set in Settings.",
+        "group": "platform.tabZoom",
+        "order": 300,
+        "command": "platform.webViewContentZoomReset"
+      },
       {
         "label": "%tab_contextMenu_floatPanel%",
         "localizeNotes": "Tab context menu > Float tab",
