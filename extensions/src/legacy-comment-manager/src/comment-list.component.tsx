@@ -294,8 +294,8 @@ export function CommentListPanel({
     <div className="tw:flex tw:flex-col tw:h-full">
       {/* Sticky header: the editing-paused notice (when blocking) and the filter toolbar share one
           sticky container so both stay pinned to the top of whichever ancestor scrolls and neither
-          scrolls out of view as the comments list scrolls. See
-          {@link COMMENT_LIST_STICKY_HEADER_ELEMENT_ID} for why it carries an id. */}
+          scrolls out of view as the comments list scrolls. COMMENT_LIST_STICKY_HEADER_ELEMENT_ID
+          documents why it carries an id. */}
       <div
         id={COMMENT_LIST_STICKY_HEADER_ELEMENT_ID}
         className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0"
