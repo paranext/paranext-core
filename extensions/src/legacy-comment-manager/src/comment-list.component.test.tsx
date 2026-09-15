@@ -4,7 +4,11 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { LanguageStrings } from 'platform-bible-utils';
-import { CommentListPanel, CommentListPanelProps } from './comment-list.component';
+import {
+  CommentListPanel,
+  CommentListPanelProps,
+  COMMENT_LIST_STICKY_HEADER_ELEMENT_ID,
+} from './comment-list.component';
 import { DEFAULT_COMMENT_FILTERS, UNFILTERED } from './comment-list-filters.model';
 
 const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
@@ -58,6 +62,25 @@ describe('CommentListPanel sync-blocked notice', () => {
   it('omits the notice when isSyncBlocked is not passed (defaults to false)', () => {
     renderPanel();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('CommentListPanel sticky header', () => {
+  // The web view looks the header up by this id to measure how much of the view it covers, so the
+  // id and what it wraps are a DOM contract, not styling detail: without them a BCV-sync scroll
+  // parks the target card underneath the header.
+  it('gives the sticky header the id the web view looks it up by', () => {
+    const { container } = renderPanel();
+    const header = container.querySelector(`#${COMMENT_LIST_STICKY_HEADER_ELEMENT_ID}`);
+    expect(header).not.toBeNull();
+    expect(header?.className).toContain('tw:sticky');
+  });
+
+  it('wraps the filter toolbar, and the notice when shown, in that header', () => {
+    const { container } = renderPanel({ isSyncBlocked: true });
+    const header = container.querySelector(`#${COMMENT_LIST_STICKY_HEADER_ELEMENT_ID}`);
+    expect(header?.contains(screen.getByTestId('comment-scope-filter'))).toBe(true);
+    expect(header?.contains(screen.getByRole('status'))).toBe(true);
   });
 });
 
