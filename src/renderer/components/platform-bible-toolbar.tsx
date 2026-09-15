@@ -526,7 +526,7 @@ export function PlatformBibleToolbar() {
                 it contributes no gap-2 spacing while staying in the DOM at zero size — which is
                 how Tour skips the step.
                 In plain Platform.Bible the wrapper is always empty and the tour runs with four
-                stops rather than five: Send/Receive ships only in Paratext 10 Studio, so
+                stops rather than five: Send/Receive ships only in Paratext 10, so
                 `platformGetResources.isSendReceiveAvailable` settles to `false`, and no dotnet
                 sync can raise `hasBackendSynced` either (`GetSyncActivity` is hardcoded idle in
                 `ParatextProjectSendReceiveService`). A four-stop tour in this build is correct,

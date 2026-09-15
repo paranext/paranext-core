@@ -2858,8 +2858,9 @@ step, no automation. Just a record.
 - **Consequences:** `paratext-10-studio` generates and commits its own pair, copies it over this
   repository's in its clone before packaging, and runs `--verify-shipping-set` on every platform
   and `--verify` on Linux against its own lock. An identifier a downstream entry needs (`PSF-2.0`,
-  `OpenSSL`, `blessing`, `TCL` and `ZPL-2.1` today) is added to `allowed` here, because `allowed`
-  is what `reachableIds` walks to decide which canonical texts the committed corpus index holds.
+  `OpenSSL`, `blessing`, `TCL`, `ZPL-2.1` and `bzip2-1.0.6` today) is added to `allowed` here,
+  because `allowed` is what `reachableIds` walks to decide which canonical texts the committed
+  corpus index holds.
   The overlay reaches `build-corpus-index.ts` like every other policy reader, so a downstream that
   runs the corpus builder with it set rewrites the committed index in its clone; `corpus-texts.ts`
   asserts the index is exactly what the committed policy reaches, so such an index fails CI here
