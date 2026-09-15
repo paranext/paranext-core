@@ -947,12 +947,12 @@ step, no automation. Just a record.
     `document`-level focus trap in a single move, which is why the gate is a mount gate rather than
     a check inside each handler.
   - A fourth full-area gating sibling in the same `Main` block, `WorkspaceUpdatingOverlay`, does NOT
-    consult the latch, and that has not been examined against this entry. It carries the literal
-    marker `TODO(gating-surface-latch-audit)` at its own definition — a slug rather than a
-    `PT-XXXX`, for the reason the bullet above gives — so the open question is greppable rather than
-    living only in this log. It is a bounded
+    consult the latch, and that has not been examined against this entry. It is a bounded
     (30 s local leash) `role="status"` spinner rather than a focus-trapping dialog, so it is not an
-    obvious instance of the same problem — but it is not an established exception either.
+    obvious instance of the same problem — but it is not an established exception either. It carries
+    the literal marker `TODO(gating-surface-latch-audit)` at its own definition, so the open question
+    is greppable rather than living only in this log — a slug rather than a `PT-XXXX` for the same
+    reason `TODO(main-renderer-shutdown-relay)` above is one.
 
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
