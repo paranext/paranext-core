@@ -25,6 +25,8 @@ export function readTourDone(): boolean {
  * would report every window's writes but its own.
  */
 const TOUR_DONE_SYNC_EVENT = 'platform-bible.onboardingTourDoneChanged';
+// Mirrored by ONBOARDING_TOUR_DONE_SYNC_EVENT in e2e-tests/fixtures/helpers.ts, which dispatches
+// it after writing the flag from the Playwright context — keep the two spellings in sync.
 
 const tourDoneListeners = new Set<() => void>();
 
