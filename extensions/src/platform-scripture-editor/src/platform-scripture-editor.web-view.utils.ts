@@ -404,12 +404,17 @@ export function createInsertContextMenuItems(
 }
 
 /**
- * Matches the highlighted item of the editor's own right-click context menu — `ContextMenuPlugin`'s
- * portal, which carries both classes on its outer element and marks the
- * keyboard-or-hover-highlighted item `selected`. The same portal selector the context-menu e2e spec
- * locates the menu by.
+ * Matches the editor's own right-click context menu — `ContextMenuPlugin`'s portal, which carries
+ * both classes on its outer element and is rendered only while the menu is open. The same portal
+ * selector the context-menu e2e spec locates the menu by.
  */
-const EDITOR_CONTEXT_MENU_HIGHLIGHTED_ITEM = '.typeahead-popover.auto-embed-menu li.selected';
+const EDITOR_CONTEXT_MENU = '.typeahead-popover.auto-embed-menu';
+
+/**
+ * Matches the highlighted item of that menu — the plugin marks the keyboard-or-hover-highlighted
+ * item `selected`.
+ */
+const EDITOR_CONTEXT_MENU_HIGHLIGHTED_ITEM = `${EDITOR_CONTEXT_MENU} li.selected`;
 
 /**
  * Whether the editor's right-click context menu — not this web view — owns the Enter about to be
@@ -428,4 +433,21 @@ const EDITOR_CONTEXT_MENU_HIGHLIGHTED_ITEM = '.typeahead-popover.auto-embed-menu
  */
 export function doesEditorContextMenuOwnEnter(): boolean {
   return !!document.querySelector(EDITOR_CONTEXT_MENU_HIGHLIGHTED_ITEM);
+}
+
+/**
+ * Whether the editor's right-click context menu is open at all.
+ *
+ * Gates the marker palette's `\\` trigger. The menu has no idea the palette exists and stays open
+ * across it, and the palette then swallows the Escape that would have closed the menu (a palette
+ * session claims its keys with `stopPropagation` on `window`, one capture step above the menu's
+ * `document` listener) — leaving a menu whose highlighted item silently runs on the next Enter.
+ * Standing down keeps the menu the one thing driving the keyboard while it is up.
+ *
+ * Keyed on the menu being OPEN, not on a highlighted item: unlike Enter, the menu never acts on
+ * `\\`, so there is nothing to hand it — the point is only to not start a second keyboard mode
+ * underneath it.
+ */
+export function isEditorContextMenuOpen(): boolean {
+  return !!document.querySelector(EDITOR_CONTEXT_MENU);
 }

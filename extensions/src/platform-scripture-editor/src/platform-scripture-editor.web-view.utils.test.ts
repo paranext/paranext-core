@@ -12,6 +12,7 @@ import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
   createInsertContextMenuItems,
   doesEditorContextMenuOwnEnter,
+  isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
@@ -673,5 +674,48 @@ describe('doesEditorContextMenuOwnEnter', () => {
     other.innerHTML = '<ul><li class="item selected"><span class="text">q1</span></li></ul>';
     document.body.append(other);
     expect(doesEditorContextMenuOwnEnter()).toBe(false);
+  });
+});
+
+describe('isEditorContextMenuOpen', () => {
+  function renderContextMenu({ highlighted }: { highlighted: boolean }) {
+    const portal = document.createElement('div');
+    portal.className = 'typeahead-popover auto-embed-menu';
+    portal.innerHTML = `<div class="typeahead-popover"><ul>
+      <li class="item${highlighted ? ' selected' : ''}" role="option"><span class="text">Cut</span></li>
+    </ul></div>`;
+    document.body.append(portal);
+    return portal;
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('is false with no context menu open', () => {
+    expect(isEditorContextMenuOpen()).toBe(false);
+  });
+
+  // Unlike Enter ownership, this does NOT wait for a highlighted item: the `\\` trigger has to
+  // stand down for the whole time the menu is up, because a palette opened under it survives the
+  // Escape that would otherwise have closed the menu.
+  it('is true while the menu is open with nothing highlighted', () => {
+    renderContextMenu({ highlighted: false });
+    expect(isEditorContextMenuOpen()).toBe(true);
+  });
+
+  it('is true while an item is highlighted', () => {
+    renderContextMenu({ highlighted: true });
+    expect(isEditorContextMenuOpen()).toBe(true);
+  });
+
+  // The marker typeahead and the marker palette reuse `.typeahead-popover`; neither is the menu
+  // this gate is about, and blocking `\\` on one of those would break the palette's own reopen.
+  it('ignores a popover that is not the context menu', () => {
+    const other = document.createElement('div');
+    other.className = 'typeahead-popover';
+    other.innerHTML = '<ul><li class="item selected"><span class="text">q1</span></li></ul>';
+    document.body.append(other);
+    expect(isEditorContextMenuOpen()).toBe(false);
   });
 });
