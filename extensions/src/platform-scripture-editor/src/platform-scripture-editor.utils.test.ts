@@ -416,12 +416,14 @@ describe('convertScriptureRangeToEditorRange', () => {
   });
 
   describe('Collapsed ranges', () => {
+    // USFM offset 26 in verse 1 is the settled position right at the start of the `nd` char
+    // span's text ("GOD"), after the marker's own backslash+code: content[2] is the `p`
+    // paragraph, content[2] within that is the `nd` char node, and content[0] within that is its
+    // text
+    const expectedCollapsedLocation = { jsonPath: '$.content[2].content[2].content[0]', offset: 0 };
+
     it('collapses editorRange.end onto editorRange.start when range.end equals range.start at settled offset 0 of a char span text', async () => {
       const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN);
-      // USFM offset 26 in verse 1 is the settled position right at the start of the `nd` char
-      // span's text ("GOD"), after the marker's own backslash+code: content[2] is the `p`
-      // paragraph, content[2] within that is the `nd` char node, and content[0] within that is its
-      // text
       const point: ScriptureRange['start'] = {
         scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
         offset: 26,
@@ -430,11 +432,26 @@ describe('convertScriptureRangeToEditorRange', () => {
 
       const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
 
-      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[2].content[0]');
-      expect(getOffset(result.editorRange.start)).toBe(0);
-      // A collapsed range must resolve to the exact same location on both ends, not merely an
-      // equal-looking one computed separately
-      expect(result.editorRange.end).toBe(result.editorRange.start);
+      expect(result.editorRange.start).toEqual(expectedCollapsedLocation);
+      expect(result.editorRange.end).toEqual(result.editorRange.start);
+    });
+
+    it('collapses editorRange.end onto editorRange.start when range.end is absent (a start-only selectRange call)', async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN);
+      const point: ScriptureRange['start'] = {
+        scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+        offset: 26,
+      };
+      // `ScriptureRange.end` is required by the type, but callers cross the JSON-RPC boundary
+      // (selectRange/setAnnotation), where nothing enforces that at runtime; a narrow cast
+      // reproduces a start-only wire payload.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const range = { start: point } as ScriptureRange;
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.editorRange.start).toEqual(expectedCollapsedLocation);
+      expect(result.editorRange.end).toEqual(result.editorRange.start);
     });
   });
 

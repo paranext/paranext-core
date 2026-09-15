@@ -430,6 +430,11 @@ export async function convertScriptureRangeToEditorRange(
   // May need to use verse refs and offsets from the USFM verse location to get USJ offsets
   let endVerseRef: SerializedVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
 
+  // `ScriptureRange.end` is required by its type, but `selectRange`/`setAnnotation` receive `range`
+  // over JSON-RPC, where nothing enforces that at runtime. Treat a missing `end` as a request for a
+  // collapsed range at `start` rather than letting `determineLocationProperties` below throw on it.
+  const end = range.end ?? range.start;
+
   // Figure out the book and chapter and the jsonPaths and offsets if they're in the range
   // passed to us
   // Process the starting location
@@ -441,7 +446,7 @@ export async function convertScriptureRangeToEditorRange(
 
   // Process the ending location
   const { verseOffset: endVerseOffset, ...endLocationProperties } = determineLocationProperties(
-    range.end,
+    end,
     endVerseRef,
   );
   ({ documentLocation: endDocumentLocation, verseRef: endVerseRef } = endLocationProperties);
@@ -470,12 +475,9 @@ export async function convertScriptureRangeToEditorRange(
       : { verseRef: startVerseRef, offset: startVerseOffset },
   );
 
-  // A range with no distinct end (or one that merely repeats start) represents a single cursor
-  // position, not a selection. Collapse `endDocumentLocation` onto the already-resolved
-  // `startDocumentLocation` directly instead of converting `range.end` on its own, so both ends of
-  // the editor range are guaranteed to be the exact same location rather than two independently
-  // converted locations that are not guaranteed to agree.
-  if (!range.end || deepEqual(range.end, range.start)) endDocumentLocation = startDocumentLocation;
+  // A collapsed input (end absent, or deep-equal to start) yields the start location for both
+  // ends.
+  if (deepEqual(end, range.start)) endDocumentLocation = startDocumentLocation;
 
   endDocumentLocation ??= usjRW.usfmVerseLocationToUsjDocumentLocation(
     endVerseOffset === undefined ? endVerseRef : { verseRef: endVerseRef, offset: endVerseOffset },
