@@ -430,8 +430,8 @@ export async function convertScriptureRangeToEditorRange(
   let endVerseRef: SerializedVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
 
   // A range with no `end` is a collapsed range at `start`. `selectRange`/`setAnnotation` receive
-  // `range` over JSON-RPC, so `end` can be absent at runtime even though the type marks it
-  // optional only for that reason.
+  // `range` over JSON-RPC, where nothing enforces the shape, which is why the type marks `end`
+  // optional.
   const end = range.end ?? range.start;
 
   // Figure out the book and chapter and the jsonPaths and offsets if they're in the range

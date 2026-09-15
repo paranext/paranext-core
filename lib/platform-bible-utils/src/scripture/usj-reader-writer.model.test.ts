@@ -6,7 +6,8 @@ import type { ContentJsonPath, PropertyJsonPath } from './usj-reader-writer.mode
 // annotated `const` declarations below are what `npm run typecheck` checks (the package tsconfig
 // includes `src`, which covers this file), and the `@ts-expect-error` pins the bound from the other
 // direction — it fails typecheck if `ContentJsonPath` ever collapses to `string` and silently
-// accepts a ninth clause. The `expect` calls keep each case falsifiable when the suite is run.
+// accepts a ninth clause. The `expect` calls exist so each `it` asserts something rather than
+// having an empty body; they cannot fail at runtime — `tsc` is the only gate.
 //
 // Keep this file mirrored with the editor's copy in `@eten-tech-foundation/scripture-utilities`
 // (`packages/utilities/src/converters/usj/usj-document-location.model.test.ts`). The two

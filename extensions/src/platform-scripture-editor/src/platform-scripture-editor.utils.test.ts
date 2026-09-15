@@ -422,7 +422,7 @@ describe('convertScriptureRangeToEditorRange', () => {
     // text
     const expectedCollapsedLocation = { jsonPath: '$.content[2].content[2].content[0]', offset: 0 };
 
-    it('collapses editorRange.end onto editorRange.start when range.end equals range.start at settled offset 0 of a char span text', async () => {
+    it('resolves both ends to the same location when `range.end` equals `range.start`, at settled offset 0 of a char span text', async () => {
       const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN);
       const point: ScriptureRange['start'] = {
         scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },

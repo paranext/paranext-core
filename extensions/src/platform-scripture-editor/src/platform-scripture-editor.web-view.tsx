@@ -1364,7 +1364,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // as an unresolvable selection below, not a crash. Log it — the settled contract says this
         // cannot happen, so a hit here is a defect worth chasing, not a user mistake.
         logger.warn(
-          `Comment insertion: selection jsonPath ${selection.start.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
+          `Comment insertion: selection jsonPath start=${selection.start.jsonPath} end=${selection.end?.jsonPath ?? selection.start.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
         );
         papi.notifications.send({
           message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
