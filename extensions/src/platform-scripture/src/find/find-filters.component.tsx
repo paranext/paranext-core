@@ -125,7 +125,14 @@ export function FindFilters({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="tw:text-muted-foreground"
+                          aria-label={label}
+                        >
+                          <Info className="tw:h-3.5 tw:w-3.5" />
+                        </Button>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="tw:max-w-xs">{localizedStrings.allTextTooltip}</p>
@@ -211,7 +218,14 @@ export function FindFilters({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="tw:text-muted-foreground"
+                    aria-label={localizedStrings.ignoreWhitespaceDifferences}
+                  >
+                    <Info className="tw:h-3.5 tw:w-3.5" />
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="tw:max-w-xs">
