@@ -11,31 +11,10 @@ import { describe, expect, it } from 'vitest';
 //
 // In the gutter view (`.psc-gutter-markers`), each paragraph's marker glyph is absolutely
 // positioned at `left: calc(-(gutter width) + 0.5em - var(--para-indent))`, so `--para-indent` must
-// equal the paragraph's own text-spacing margin or the glyph lands inside the text. Likewise the
-// active focus box starts at `var(--verse-text-start)`, which must equal a hanging-indent
-// paragraph's negative `text-indent`. This test derives BOTH expectations from the base
-// text-spacing rules in the same file, so a marker that gains a margin or hanging indent without
-// matching gutter compensation fails here by construction. A hand-typed expected list cannot do
-// that: it silently encodes whatever gap existed when it was written. A small independent oracle
-// from the USFM stylesheet is kept alongside, so a base value that drifts from the spec is caught
-// too rather than being "fixed" by updating its compensation to match.
-//
-// Scope: the invariant is about margins set in these files. Commentary stylesheets and
-// project-stylesheet CSS load into the same web view later in source order and can move a marker's
-// margin away from the compensated value; they are not covered here.
-
-const dir = dirname(fileURLToPath(import.meta.url));
-
-const STYLESHEETS = [
-  { name: '_usj-nodes.scss (platform-scripture-editor)', path: resolve(dir, '_usj-nodes.scss') },
-  {
-    name: 'usj-nodes.css (platform-bible-react demo)',
-    path: resolve(
-      dir,
-      '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css',
-    ),
-  },
-];
+// equal the paragraph's own text-spacing margin or the glyph lands inside the text. The active
+// focus box also reads `--verse-text-start`, a hanging-indent paragraph's negative `text-indent`,
+// as a fallback start. Both expectations are derived from the base text-spacing rules in the same
+// file, so a marker that gains a margin or hanging indent without matching compensation fails here.
 
 /**
  * Markers whose base rules indent them but which must NOT have gutter compensation. A real table
@@ -44,9 +23,10 @@ const STYLESHEETS = [
  */
 const NOT_COMPENSATED = new Set(['tr', 'tr1', 'tr2']);
 
-// USFM stylesheet oracle (LeftMargin / FirstLineIndent in inches x 20 = vw), independent of either
-// file: https://github.com/ubsicap/usfm/blob/master/sty/usfm.sty. One marker per distinct value is
-// enough to catch a base rule drifting from the spec; completeness comes from the derivation.
+// Spot check against the USFM stylesheet (LeftMargin / FirstLineIndent in inches x 20 = vw):
+// https://github.com/ubsicap/usfm/blob/master/sty/usfm.sty. One marker per distinct value. The
+// derivation below guarantees base-to-gutter consistency, not base-to-spec; this catches a drift in
+// one of these six, and a re-sync that changes any other marker's base value is not caught here.
 const USFM_LEFT_MARGIN: Record<string, string> = {
   pi: '5vw', // 0.25"
   li1: '10vw', // 0.5"
@@ -62,6 +42,100 @@ const USFM_FIRST_LINE_INDENT: Record<string, string> = {
   q3: '-5vw', // -0.25"
   q4: '-2.5vw', // -0.125"
 };
+
+// The parser and derivation helpers follow the suites. `sheets()` runs at collection time, after
+// the module has loaded, so the stylesheet paths it reads are initialised by then.
+describe('.psc-gutter-markers.text-spacing coverage', () => {
+  const all = sheets();
+
+  describe.each(all)('$name', (entry) => {
+    const { sheet, expectedParaIndent, expectedVerseTextStart } = entry;
+
+    it('derives a non-empty expectation from the base text-spacing rules', () => {
+      // If the base parser ever reads nothing, both coverage checks below would pass vacuously.
+      expect(expectedParaIndent.size).toBeGreaterThan(40);
+      expect(expectedVerseTextStart.size).toBeGreaterThan(20);
+      // The parser must be able to see every margin it is asked to compensate.
+      expect(unreadableMarginSpellings(sheet)).toEqual([]);
+      expect(nestingProblems(sheet, 'margin-left')).toEqual([]);
+      expect(nestingProblems(sheet, 'margin-right')).toEqual([]);
+      expect(nestingProblems(sheet, 'text-indent')).toEqual([]);
+    });
+
+    it('spot-checks base margins and hanging indents against the USFM stylesheet', () => {
+      expect(pick(expectedParaIndent, Object.keys(USFM_LEFT_MARGIN))).toEqual(USFM_LEFT_MARGIN);
+      expect(pick(expectedVerseTextStart, Object.keys(USFM_FIRST_LINE_INDENT))).toEqual(
+        USFM_FIRST_LINE_INDENT,
+      );
+      // `p` has a positive first-line indent (2.5vw); only negative ones are hanging indents.
+      expect(expectedVerseTextStart.has('p')).toBe(false);
+      // The table-row exclusion is only meaningful while those markers still have a base margin.
+      const ltrMargins = resolveBaseValues(sheet, 'margin-left', 'ltr');
+      NOT_COMPENSATED.forEach((marker) => expect(ltrMargins.has(marker)).toBe(true));
+    });
+
+    it('every indented marker sets --para-indent equal to its text-spacing margin', () => {
+      // Fails loudly if a gutter rule was nested where the flat parser can't see it.
+      expect(nestingProblems(sheet, '--para-indent')).toEqual([]);
+      // Fails loudly if a gutter --para-indent rule is direction-qualified (LTR/RTL must match).
+      expect(directionQualifiedGutterRules(sheet, '--para-indent')).toEqual([]);
+      // One value serves both directions only if the base margins agree.
+      expect(directionAsymmetries(sheet, expectedParaIndent)).toEqual([]);
+      // Names each marker whose --para-indent is missing or differs from its margin.
+      expect(valueMismatches(entry.actualParaIndent, '--para-indent', expectedParaIndent)).toEqual(
+        [],
+      );
+      // Names any gutter marker that sets --para-indent without a base margin calling for it.
+      expect(
+        unexpectedMarkers(entry.actualParaIndent, '--para-indent', expectedParaIndent),
+      ).toEqual([]);
+    });
+
+    it('every hanging-indent marker sets --verse-text-start equal to its text-indent', () => {
+      expect(nestingProblems(sheet, '--verse-text-start')).toEqual([]);
+      expect(directionQualifiedGutterRules(sheet, '--verse-text-start')).toEqual([]);
+      expect(
+        valueMismatches(entry.actualVerseTextStart, '--verse-text-start', expectedVerseTextStart),
+      ).toEqual([]);
+      expect(
+        unexpectedMarkers(entry.actualVerseTextStart, '--verse-text-start', expectedVerseTextStart),
+      ).toEqual([]);
+    });
+  });
+
+  describe('the two copies agree on the gutter compensation block', () => {
+    // Each copy above is checked against its own base rules; that alone would let the copies drift
+    // in step (a value changed in both the base rule and the compensation of one copy only). The
+    // gutter block is the part that must render identically in Simple and in Storybook, so it is
+    // compared directly.
+    const [shipping, demo] = all;
+
+    it('sets the same --para-indent for the same markers', () => {
+      expect(Object.fromEntries(demo.actualParaIndent)).toEqual(
+        Object.fromEntries(shipping.actualParaIndent),
+      );
+    });
+
+    it('sets the same --verse-text-start for the same markers', () => {
+      expect(Object.fromEntries(demo.actualVerseTextStart)).toEqual(
+        Object.fromEntries(shipping.actualVerseTextStart),
+      );
+    });
+  });
+});
+
+const dir = dirname(fileURLToPath(import.meta.url));
+
+const STYLESHEETS = [
+  { name: '_usj-nodes.scss (platform-scripture-editor)', path: resolve(dir, '_usj-nodes.scss') },
+  {
+    name: 'usj-nodes.css (platform-bible-react demo)',
+    path: resolve(
+      dir,
+      '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css',
+    ),
+  },
+];
 
 type Direction = 'ltr' | 'rtl' | 'agnostic';
 
@@ -160,9 +234,9 @@ function nestingProblems({ css }: ParsedStylesheet, property: string): string[] 
 /**
  * Reads the value of one `property: value;` declaration out of a rule's declaration block.
  *
- * Only a setter of exactly that property counts: the property name must start the block or follow a
- * `;` or whitespace, so `margin-left` does not match inside `margin-left-foo` and a `var(--x)` read
- * of a custom property does not count as setting it.
+ * Only a setter of exactly that property counts. The name must start the block or follow a `;` or
+ * whitespace, so `margin-left` is not found inside `scroll-margin-left`; and it must be followed by
+ * `:`, so `margin-left-foo` and a `var(--x)` read of a custom property do not count as setting it.
  *
  * @param declarations The text between a rule's `{` and `}`.
  * @param property The property name to read, e.g. `margin-left` or `--para-indent`.
@@ -233,6 +307,18 @@ function resolveBaseValues(
       });
     });
   return new Map([...agnostic, ...directed]);
+}
+
+/**
+ * Maps each marker with an inline-start margin in EITHER direction to the margin `--para-indent`
+ * must equal: the LTR `margin-left` where there is one, else the RTL `margin-right`. Deriving from
+ * the union means a marker indented only in RTL is still required to have an entry;
+ * `directionAsymmetries` then reports that its two margins disagree.
+ */
+function resolveInlineStartMargins(sheet: ParsedStylesheet): Map<string, string> {
+  const ltr = resolveBaseValues(sheet, 'margin-left', 'ltr');
+  const rtl = resolveBaseValues(sheet, 'margin-right', 'rtl');
+  return new Map([...rtl, ...ltr]);
 }
 
 /** A length that moves the box: anything other than a zero (`0`, `0px`, `0vw`, `0in`, ...). */
@@ -334,110 +420,39 @@ function unreadableMarginSpellings({ blocks }: ParsedStylesheet): string[] {
 }
 
 /**
- * Reports markers whose RTL inline-start margin differs from their LTR one. The same
- * `--para-indent` feeds both the LTR `left` and the RTL `right` glyph calculation, so a marker
- * whose two margins disagree cannot be compensated correctly in both directions by one value.
+ * Reports markers whose RTL inline-start margin differs from their LTR one, including a margin set
+ * in only one direction. The same `--para-indent` feeds both the LTR `left` and the RTL `right`
+ * glyph calculation, so a marker whose two margins disagree cannot be compensated correctly in both
+ * directions by one value.
  */
 function directionAsymmetries(sheet: ParsedStylesheet, expected: Map<string, string>): string[] {
+  const ltr = resolveBaseValues(sheet, 'margin-left', 'ltr');
   const rtl = resolveBaseValues(sheet, 'margin-right', 'rtl');
-  return [...expected]
-    .filter(([marker, ltrValue]) => rtl.get(marker) !== ltrValue)
+  return [...expected.keys()]
+    .filter((marker) => ltr.get(marker) !== rtl.get(marker))
     .map(
-      ([marker, ltrValue]) =>
-        `.usfm_${marker}: LTR margin-left ${ltrValue} but RTL margin-right ` +
+      (marker) =>
+        `.usfm_${marker}: LTR margin-left ${ltr.get(marker) ?? 'none'} but RTL margin-right ` +
         `${rtl.get(marker) ?? 'none'}; one --para-indent cannot serve both directions`,
     );
 }
 
-const sheets = STYLESHEETS.map((entry) => {
-  const sheet = parseStylesheet(entry.path);
-  return {
-    ...entry,
-    sheet,
-    // Every base text-spacing margin-left is a paragraph indent the glyph must be pulled back by.
-    expectedParaIndent: needingCompensation(
-      resolveBaseValues(sheet, 'margin-left', 'ltr'),
-      isNonZeroLength,
-    ),
-    // Every base negative text-indent is a hanging indent the focus box must start at.
-    expectedVerseTextStart: needingCompensation(
-      resolveBaseValues(sheet, 'text-indent', 'ltr'),
-      isNegativeLength,
-    ),
-    actualParaIndent: getGutterMarkerValues(sheet, '--para-indent'),
-    actualVerseTextStart: getGutterMarkerValues(sheet, '--verse-text-start'),
-  };
-});
-
-describe.each(sheets)('$name .psc-gutter-markers.text-spacing coverage', (entry) => {
-  const { sheet, expectedParaIndent, expectedVerseTextStart } = entry;
-
-  it('derives a non-empty expectation from the base text-spacing rules', () => {
-    // If the base parser ever reads nothing, both coverage checks below would pass vacuously.
-    expect(expectedParaIndent.size).toBeGreaterThan(40);
-    expect(expectedVerseTextStart.size).toBeGreaterThan(20);
-    // The parser must be able to see every margin it is asked to compensate.
-    expect(unreadableMarginSpellings(sheet)).toEqual([]);
-    expect(nestingProblems(sheet, 'margin-left')).toEqual([]);
-    expect(nestingProblems(sheet, 'text-indent')).toEqual([]);
+/** Parses every copy and derives what its gutter block must contain. */
+function sheets() {
+  return STYLESHEETS.map((entry) => {
+    const sheet = parseStylesheet(entry.path);
+    return {
+      ...entry,
+      sheet,
+      // Every base inline-start margin is a paragraph indent the glyph must be pulled back by.
+      expectedParaIndent: needingCompensation(resolveInlineStartMargins(sheet), isNonZeroLength),
+      // Every base negative text-indent is a hanging indent the focus box can fall back to.
+      expectedVerseTextStart: needingCompensation(
+        resolveBaseValues(sheet, 'text-indent', 'ltr'),
+        isNegativeLength,
+      ),
+      actualParaIndent: getGutterMarkerValues(sheet, '--para-indent'),
+      actualVerseTextStart: getGutterMarkerValues(sheet, '--verse-text-start'),
+    };
   });
-
-  it('base margins and hanging indents match the USFM stylesheet', () => {
-    // Independent oracle: the derivation alone would accept a base rule that drifted from the spec
-    // as long as its compensation drifted with it.
-    expect(pick(expectedParaIndent, Object.keys(USFM_LEFT_MARGIN))).toEqual(USFM_LEFT_MARGIN);
-    expect(pick(expectedVerseTextStart, Object.keys(USFM_FIRST_LINE_INDENT))).toEqual(
-      USFM_FIRST_LINE_INDENT,
-    );
-    expect(expectedVerseTextStart.has('p')).toBe(false);
-    NOT_COMPENSATED.forEach((marker) => expect(expectedParaIndent.has(marker)).toBe(false));
-  });
-
-  it('every indented marker sets --para-indent equal to its text-spacing margin', () => {
-    // Fails loudly if a gutter rule was nested where the flat parser can't see it.
-    expect(nestingProblems(sheet, '--para-indent')).toEqual([]);
-    // Fails loudly if a gutter --para-indent rule is direction-qualified (LTR/RTL must match).
-    expect(directionQualifiedGutterRules(sheet, '--para-indent')).toEqual([]);
-    // One value serves both directions only if the base margins agree.
-    expect(directionAsymmetries(sheet, expectedParaIndent)).toEqual([]);
-    // Names each marker whose --para-indent is missing or differs from its margin.
-    expect(valueMismatches(entry.actualParaIndent, '--para-indent', expectedParaIndent)).toEqual(
-      [],
-    );
-    // Names any gutter marker that sets --para-indent without a base margin calling for it.
-    expect(unexpectedMarkers(entry.actualParaIndent, '--para-indent', expectedParaIndent)).toEqual(
-      [],
-    );
-  });
-
-  it('every hanging-indent marker sets --verse-text-start equal to its text-indent', () => {
-    expect(nestingProblems(sheet, '--verse-text-start')).toEqual([]);
-    expect(directionQualifiedGutterRules(sheet, '--verse-text-start')).toEqual([]);
-    expect(
-      valueMismatches(entry.actualVerseTextStart, '--verse-text-start', expectedVerseTextStart),
-    ).toEqual([]);
-    expect(
-      unexpectedMarkers(entry.actualVerseTextStart, '--verse-text-start', expectedVerseTextStart),
-    ).toEqual([]);
-  });
-});
-
-describe('the two copies agree on the gutter compensation block', () => {
-  // Each copy above is checked against its own base rules; that alone would let the copies drift
-  // in step (a value changed in both the base rule and the compensation of one copy only). The
-  // gutter block is the part that must render identically in Simple and in Storybook, so it is
-  // compared directly.
-  const [shipping, demo] = sheets;
-
-  it('sets the same --para-indent for the same markers', () => {
-    expect(Object.fromEntries(demo.actualParaIndent)).toEqual(
-      Object.fromEntries(shipping.actualParaIndent),
-    );
-  });
-
-  it('sets the same --verse-text-start for the same markers', () => {
-    expect(Object.fromEntries(demo.actualVerseTextStart)).toEqual(
-      Object.fromEntries(shipping.actualVerseTextStart),
-    );
-  });
-});
+}
