@@ -21,9 +21,8 @@
  *   (USJ → live). The browser's own selection is the oracle, not a report the editor derives back
  *   through the same model.
  * - A collapsed `selectRange` (`start` and `end` at the same location) at settled offset 0 lands the
- *   caret right after the NBSP separator, not on it and not on the marker glyph — against the
- *   browser's own selection. (The editor's own `getSelection()` report is not asserted here: the
- *   controller's cached selection does not update for an app-placed COLLAPSED selection.)
+ *   caret right after the NBSP separator, not on it and not on the marker glyph — against both the
+ *   browser's own selection and the editor's own `getSelection()` report.
  * - `setAnnotation` over those same settled offsets marks exactly those two characters — not the
  *   separator, not the two before them.
  *
@@ -323,11 +322,6 @@ test.describe('scripture editor settled positions', () => {
         REQUEST_TIMEOUT_MS,
       );
 
-      // Deliberately not asserting the editor-reported selection (getSelection()) for this step:
-      // the controller's cached selection updates for a non-collapsed app-placed selection (see
-      // the previous step) but not for a collapsed one, so that report cannot serve as an oracle
-      // here. The browser's own selection below is the only oracle this step checks.
-      //
       // The browser's own selection is the oracle for where the caret visually lands: the span's
       // content is one DOM text node holding `<NBSP>` followed by the span's text, so a caret at
       // settled offset 0 must sit at DOM offset 1 in that node — immediately after the NBSP,
@@ -346,6 +340,22 @@ test.describe('scripture editor settled positions', () => {
           { timeout: 20_000 },
         )
         .toEqual({ anchorText: NBSP + charText, anchorOffset: 1, isCollapsed: true });
+
+      // The editor reports app-placed selections explicitly, so the webViewController's own
+      // getSelection() is checked too, not just the DOM. Poll on the OFFSET, not the jsonPath: the
+      // previous step's selection already sits at this same jsonPath (offset `charText.length - 2`),
+      // so polling on jsonPath alone would match the stale selection immediately.
+      await expect
+        .poll(async () => (await readSelection())?.start?.documentLocation?.offset, {
+          timeout: 30_000,
+        })
+        .toBe(0);
+
+      const selection = await readSelection();
+      // Offset 0, not 1: the NBSP separator is display scaffolding the USJ the editor reports
+      // through does not address.
+      expect(selection?.start?.documentLocation).toEqual({ jsonPath, offset: 0 });
+      expect(selection?.end?.documentLocation).toEqual({ jsonPath, offset: 0 });
     });
 
     await test.step("an annotation over the span's last two characters marks exactly those characters", async () => {
