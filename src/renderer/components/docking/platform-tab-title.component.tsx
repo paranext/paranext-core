@@ -1,6 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsFocusedWindow } from '@renderer/hooks/use-is-focused-window.hook';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
@@ -308,13 +307,12 @@ export function PlatformTabTitle({
   webViewId,
   webViewType,
 }: PlatformTabTitleProps) {
-  const isPowerMode = useIsPowerMode();
-
-  // Simple-mode-only UI has to know the mode is settled, not merely that it is not power:
-  // `useIsPowerMode` answers `false` while the setting is still loading, so a power user would
-  // otherwise be shown the simple menu until it resolves (see the hook's own warning).
-  const [, , isModeKnown] = useInterfaceMode();
-  const isSimpleMode = isModeKnown && !isPowerMode;
+  // Simple-mode-only UI has to know the mode is settled, not merely that it is not power: while the
+  // setting is still loading `interfaceMode` reports the `'simple'` fallback, so a power user would
+  // otherwise be shown the simple menu until it resolves (see `useInterfaceMode`'s own warning).
+  const [interfaceMode, , isModeKnown] = useInterfaceMode();
+  const isPowerMode = interfaceMode === 'power';
+  const isSimpleMode = isModeKnown && interfaceMode === 'simple';
 
   const lastFlashTriggerTimeRef = useRef<number | undefined>(undefined);
 
@@ -386,9 +384,9 @@ export function PlatformTabTitle({
   // which actions apply to this tab — are read when the menu opens instead. A live subscription
   // would re-read on every contribution resync for a list that had not changed.
   //
-  // Both modes read now: Simple mode offers the zoom group, narrowed from this same contributed
-  // menu after the read lands, so a Simple-mode column pays one cross-process read per tab just as
-  // a Power-mode one does.
+  // Both modes read the same contributed menu: Simple mode narrows it to the zoom group after the
+  // read lands, so a Simple-mode column pays one cross-process read per tab just as a Power-mode
+  // one does.
   //
   // The trade this accepts: an extension installed or removed mid-session has its tab items appear
   // when the tab next mounts, not immediately.
@@ -914,8 +912,8 @@ export function PlatformTabTitle({
   // label inside it. Walking to the nearest `[role="tab"]` therefore lands on that inner element —
   // a descendant of the one the keypress reaches — where the event never arrives.
   //
-  // The forward exists wherever a menu exists, which is now both modes: a tab with no menu (no
-  // items to show) forwards nothing, since there is nothing for the forwarded event to open.
+  // The forward exists wherever a menu exists, in both modes: a tab with no menu (no items to show)
+  // forwards nothing, since there is nothing for the forwarded event to open.
   //
   // This is the whole keyboard story for the tab menu: every item in it becomes reachable at once,
   // including ones an extension contributes, rather than only the ones given their own shortcut.

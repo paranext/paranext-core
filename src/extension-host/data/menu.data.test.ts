@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
-import { CONTENT_ZOOM_COMMANDS } from '@shared/models/content-zoom.model';
+import {
+  CONTENT_ZOOM_COMMANDS,
+  CONTENT_ZOOM_TAB_MENU_GROUP,
+} from '@shared/models/content-zoom.model';
 import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
 import menuDataObject from './menu.data.json';
 
@@ -181,5 +184,11 @@ describe('defaultWebViewTabMenu zoom group', () => {
 
   test('still validates as a menu document with no duplicate group or item orders', () => {
     expect(() => new MenuDocumentCombiner(menuDataObject)).not.toThrow();
+  });
+
+  test('pins the shared model constant to the group this file actually defines', () => {
+    // Cross-check against the shipped data: if this file's group name ever drifts from the shared
+    // model's constant, this is what catches it.
+    expect(menuDataObject.defaultWebViewTabMenu.groups[CONTENT_ZOOM_TAB_MENU_GROUP]).toBeDefined();
   });
 });

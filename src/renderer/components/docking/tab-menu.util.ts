@@ -1,8 +1,17 @@
 import type { Localized, ReferencedItem, SingleColumnMenu } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
-import { CONTENT_ZOOM_COMMANDS } from '@shared/models/content-zoom.model';
+import {
+  CONTENT_ZOOM_COMMANDS,
+  CONTENT_ZOOM_TAB_MENU_GROUP,
+} from '@shared/models/content-zoom.model';
 import type { WindowSummary } from '@shared/services/window.service-model';
 import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
+
+/**
+ * Re-exported from the shared content-zoom model, which is where the rest of the zoom contract
+ * lives, so callers already importing this module's tab-menu helpers can reach it from one place.
+ */
+export { CONTENT_ZOOM_TAB_MENU_GROUP };
 
 /** A window id as this app mints them — what a generated move target's suffix must look like */
 const WINDOW_ID_PATTERN = new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
@@ -15,13 +24,6 @@ export const FLOAT_TAB_COMMAND = 'platform.floatTab';
 
 /** Contributed command that moves the tab into a window created for it */
 export const MOVE_TO_NEW_WINDOW_COMMAND = 'platform.moveWebViewToNewWindow';
-
-/**
- * Contributed group holding the per-tab content-zoom items, the only group Simple mode offers. Must
- * match the group of this name in `src/extension-host/data/menu.data.json`; this file's test pins
- * the two together by importing the shipped data.
- */
-export const CONTENT_ZOOM_TAB_MENU_GROUP = 'platform.tabZoom' satisfies ReferencedItem;
 
 /** Ids of the contributed items {@link CONTENT_ZOOM_TAB_MENU_GROUP} holds, by their command */
 const CONTENT_ZOOM_ITEM_IDS = new Set<string>(Object.values(CONTENT_ZOOM_COMMANDS));
