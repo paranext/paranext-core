@@ -5,14 +5,10 @@
  * and the rebuild it triggers are a single undo step; and pasting a `\c` chapter marker cannot
  * corrupt the open chapter, because the engine strips `\c`/`\id` bytes on external paste.
  *
- * THIS SPEC IS WRITTEN BUT HAS NOT BEEN RUN. The Electron app instance and the ports it needs
- * (1212, 8876, 9223) were held by a separate session, and the editor build this spec exercises had
- * not yet been linked into the running app, at the time this file was written. It is verified by
- * `tsc --noEmit` and `eslint` only — no attempt was made to launch the app or execute the test.
- * Tracked as PT-4201; run with `npm run test:e2e:isolated
- * scripture-editor/clipboard-usfm-round-trip` once the app/ports are free and the editor build is
- * current, then iterate on selectors/timing only — a behavior failure at this layer means the
- * underlying engine work regressed, not this spec.
+ * Run it with `npm run test:e2e:isolated scripture-editor/clipboard-usfm-round-trip`. It needs a
+ * current editor build linked into the app (the clipboard behavior it asserts lives in the editor
+ * engine, not in this repo), so a behavior failure here means that engine work regressed rather
+ * than that this spec drifted — iterate on selectors/timing only.
  *
  * The "external application" side of the round trip is Electron's main-process `clipboard` module,
  * reached via `electronApp.evaluate(({ clipboard }) => ...)`. That reads and writes the real OS
@@ -50,6 +46,9 @@ test.use({
 // occurs natively throughout Jonah 1 (vv. 1, 3, 4, 9, 10, 14 x3, 16 x2, 17 in the bundled WEB SFM),
 // which would make the paste-landed assertion pass vacuously and the undo assertion unsatisfiable.
 const PASTE_TOKEN = 'CLIPROUNDTRIPALPHA';
+// A second such token, for the `\c` step below, which needs a payload the undo step above has not
+// already removed from the document.
+const CHAPTER_PASTE_TOKEN = 'CLIPROUNDTRIPBETA';
 
 test.describe('scripture editor clipboard USFM round trip', () => {
   test('Standard view copy/paste round-trips byte-faithful USFM through the real OS clipboard', async ({
@@ -133,17 +132,27 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     });
 
     await test.step('pasting a `\\c` chapter marker cannot corrupt the open chapter', async () => {
-      // Chapter markers render as a block-level `<p class="chapter-marker usfm_c"
-      // data-marker="c">` (ChapterNode.createDOM), not an inline `span.opening` — the loaded
-      // chapter has exactly one going in, and a corrupted paste could either add a second one or
-      // replace/remove the existing one, so pin the baseline before pasting.
+      // Chapter markers render as a block-level `<p class="chapter usfm_c" data-marker="c">`
+      // (ChapterNode.createDOM), not an inline `span.opening` — the loaded chapter has exactly one
+      // going in, and a corrupted paste could either add a second one or replace/remove the
+      // existing one, so pin the baseline before pasting.
       const chapterMarker = editorFrame.locator('p.chapter[data-marker="c"]');
       await expect(chapterMarker).toHaveCount(1);
 
-      await electronApp.evaluate(({ clipboard }) => clipboard.writeText('\\c 99 '));
+      // The payload leads with a token so the paste has an observable trace. Every assertion below
+      // is already true of the PRE-paste document, so without a positive signal that the paste
+      // landed at all, this step would pass on its first (immediate) poll even if the strip had
+      // regressed and a real `\c 99` had arrived. The token also puts the `\c` mid-line rather
+      // than on a line of its own — the shape a start-of-line-anchored strip would miss — and the
+      // engine keeps the leading text while eating the marker and its payload.
+      await electronApp.evaluate(
+        ({ clipboard }, token) => clipboard.writeText(`${token} \\c 99 `),
+        CHAPTER_PASTE_TOKEN,
+      );
       await editorInput.click();
       await editorInput.press('Control+End');
       await editorInput.press('Control+V');
+      await expect(editorInput).toContainText(CHAPTER_PASTE_TOKEN, { timeout: 20_000 });
 
       // Assert the engine's strip guarantee three independent ways: the chapter-marker block
       // count is unchanged (no second one added, the existing one not corrupted away), no literal
