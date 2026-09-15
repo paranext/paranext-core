@@ -3,7 +3,9 @@
 /* #region styles downloaded from Google Fonts URL because CSP prevents outside stylesheets */
 
 /* Paste this URL's response verbatim; never hand-edit it. The fonts that need editing are in the
-   next region, which is why the families are split across two URLs. */
+   next region, which is why the families are split across two URLs. Google Sans here predates its
+   current upstream build, so re-pasting changes the application chrome font as well — intended or
+   not, notice it rather than ship it unseen. */
 /* @import url('https://fonts.googleapis.com/css2?family=Cardo:ital,wght@0,400;0,700;1,400&family=Google+Sans:wght@400&family=Noto+Sans+Syriac:wght@100..900&display=swap'); */
 
 /* gothic */

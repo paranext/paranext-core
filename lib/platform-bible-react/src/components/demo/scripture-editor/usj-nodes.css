@@ -13,7 +13,8 @@
    - `.verse-selected` and the armed-verse blink bind to this repo's `--destructive` theme token
      instead of the editor library's literal reds.
    - The table-cell box border binds to `var(--foreground, #000000)` instead of the source's
-     literal black, so it stays visible against a dark app theme.   - The source's four `local()`-only Charis SIL `@font-face` rules are dropped. */
+     literal black, so it stays visible against a dark app theme.
+   - The source's four `local()`-only Charis SIL `@font-face` rules are dropped. */
 
 /* stylelint-disable */
 

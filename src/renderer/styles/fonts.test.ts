@@ -142,6 +142,15 @@ const VENDORED_EDITOR_STYLESHEETS = [
   'lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css',
 ];
 
+/**
+ * The subset of those that actually render a generated project stylesheet, and so are the only ones
+ * where `--usj-font-fallback` has a reader. Enhanced Resources consumes none, so declaring the
+ * property there would be dead CSS the suite reported assurance for.
+ */
+const STYLESHEETS_FEEDING_THE_EDITOR = VENDORED_EDITOR_STYLESHEETS.filter(
+  (path) => !path.includes('platform-enhanced-resources'),
+);
+
 /** Read one descriptor out of a normalized `@font-face` body, stripping quotes. */
 function readDescriptor(body: string, name: string): string {
   const match = new RegExp(`(?:^|;)\\s*${name}\\s*:\\s*([^;]+)`).exec(body);
@@ -397,12 +406,14 @@ describe('Scripture fonts (src/renderer/styles/fonts.css)', () => {
     expect(parseFontFaces(vendored)).toEqual([]);
   });
 
-  it.each(VENDORED_EDITOR_STYLESHEETS)('hands the stack to the editor in %s', (path) => {
+  it.each(STYLESHEETS_FEEDING_THE_EDITOR)('hands the stack to the editor in %s', (path) => {
     // The editor's generated project stylesheet appends `var(--usj-font-fallback, serif)` to every
     // font it names. Pointing that at this stylesheet's stack is what makes a project whose own
     // font is unavailable fall through the application's Scripture order rather than the editor
     // library's default chain.
-    const vendored = readFileSync(resolve(repoRoot, path), 'utf8').replace(/\s+/g, ' ');
-    expect(vendored).toContain('--usj-font-fallback: var( --scripture-font-stack,');
+    // Matched against the unwrapped text: whether Prettier breaks the `var()` across lines depends
+    // on how long the fallback chain happens to be, which has nothing to do with what this pins.
+    const vendored = readFileSync(resolve(repoRoot, path), 'utf8');
+    expect(vendored).toMatch(/--usj-font-fallback:\s*var\(\s*--scripture-font-stack\s*,/);
   });
 });

@@ -1,0 +1,9 @@
+/*
+ * Charis SIL with real bold and italic faces, for every story that renders Scripture text.
+ *
+ * The application inlines these from paranext-core's src/renderer/styles/fonts.css into each web
+ * view; Storybook does not load that stylesheet, and the vendored `usj-nodes.css` deliberately
+ * declares no faces of its own. Loaded here rather than from a single story's stylesheet so that
+ * the footnote stories, which import `usj-nodes.css` directly, get the same faces.
+ */
+@import 'https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700;1,400;1,700&display=swap';

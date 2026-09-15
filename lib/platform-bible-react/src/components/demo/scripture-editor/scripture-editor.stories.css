@@ -8,9 +8,6 @@
  * Copied from paranext-core/extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.scss
  */
 
-/* Charis SIL with real bold and italic faces. The app inlines these from
- * src/renderer/styles/fonts.css, which Storybook does not load. */
-@import 'https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700;1,400;1,700&display=swap';
 @import './usj-nodes.css';
 @import './editor.css';
 /* @import './tailwind.css'; */

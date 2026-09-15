@@ -3,6 +3,9 @@
 // TODO: factor into a shared package (e.g. lib/platform-scripture-styles) so both
 // platform-scripture-editor and platform-enhanced-resources consume the same source.
 // Until then: keep manually in sync. Tracked in working-docs/2026-05-04-pt9-fidelity-session-1-design.md §11.
+// Divergences from that copy: the four `local()`-only Charis SIL @font-face rules are dropped (see
+// the note where they used to be), and the font rule below keeps its own narrower chain rather than
+// the application's Scripture stack.
 
 /* stylelint-disable */
 
@@ -27,22 +30,6 @@
    and an erroring face makes the family unusable at that weight and style instead of deferring to
    the declaration in src/renderer/styles/fonts.css — which drops bold and italic Scripture text
    onto a system font. */
-/* Fallback chain for the editor's generated project stylesheet, which emits
-   `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
-   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
-   points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
-   view. The literal chain is the library's, and applies where fonts.css is not loaded. */
-.usfm {
-  --usj-font-fallback: var(
-    --scripture-font-stack,
-    'Charis SIL',
-    'Times New Roman',
-    'Liberation Serif',
-    'DejaVu Serif',
-    Georgia,
-    serif
-  );
-}
 .formatted-font .usfm {
   font-family: 'Charis SIL', serif;
   font-size: 12pt;
