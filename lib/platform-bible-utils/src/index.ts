@@ -205,6 +205,12 @@ export type {
 } from './extension-contributions/menus.model';
 export { menuDocumentSchema } from './extension-contributions/menus.model';
 export type { PaletteItem } from './palette.types';
+export {
+  PROJECT_SELECTOR_CUSTOM_DATA_KEYS,
+  makeProjectSelectorCustomData,
+  recencyMapFromOrderedIds,
+} from './project-selector-custom-data';
+export type { ProjectSelectorCustomDataShape } from './project-selector-custom-data';
 export type { DblResourceData, ResourceType } from './resources.model';
 export { doesCatalogRowCoverProject } from './resources.model';
 export type {

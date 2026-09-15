@@ -92,14 +92,13 @@ function tabKey(webViewId: string, projectId: string): string {
  *   freshly-opened editors return no `scrollGroupScrRef` field. Treating "missing" as group 0
  *   matches what the editor itself shows. Non-numeric, non-undefined values (string, null) are
  *   still rejected defensively.
- * - **Lowercase projectId**: the hook lowercases the outgoing `projectId`. NOTE: an earlier comment
- *   claimed this lines the casing up with "PDP/Manage-Books APIs that return lower-case" — that was
- *   wrong. Canonical project ids are actually UPPERCASE (C# `ProjectSummary` →
- *   `Guid.ToUpperInvariant()`, `ProjectMetadata` → `id.ToUpperInvariant()`), so lowercasing here
- *   does NOT match those APIs. Consumers must therefore compare project ids CASE-INSENSITIVELY; the
- *   project-selector does so via `normalizeProjectId` (see I12). The lowercasing is retained
- *   because the other consumers (checklist, checks-side-panel) key off this shape; removing it is a
- *   separate cleanup tracked outside this change.
+ * - **Lowercase projectId**: the hook lowercases the outgoing `projectId`. This casing is NOT
+ *   canonical — canonical project ids are UPPERCASE (C# `ProjectSummary` →
+ *   `Guid.ToUpperInvariant()`, `ProjectMetadata` → `id.ToUpperInvariant()`) — so it does not line
+ *   up with those APIs, and consumers must compare project ids CASE-INSENSITIVELY; the
+ *   project-selector does so via `normalizeProjectId`. The lowercasing stays because the other
+ *   consumers (checklist, checks-side-panel) key off this shape; dropping it is a separate
+ *   cleanup.
  */
 export function useOpenProjectTabs(
   filter?: WebViewFilter,
@@ -170,7 +169,7 @@ export function useOpenProjectTabs(
         tabEntries.forEach(([tabProjectId, projectSource]) => {
           // Lowercased for backward-compatibility with existing consumers. This casing is NOT
           // authoritative — canonical project ids are UPPERCASE — so consumers must match
-          // case-insensitively (see normalizeProjectId / I12).
+          // case-insensitively (see `normalizeProjectId`).
           const normalizedProjectId = tabProjectId.toLowerCase();
           // A view that declares its own container project would otherwise yield the same key
           // twice; the declared entry is the meaningful one, so it wins.
