@@ -107,6 +107,20 @@ async function cardHeight(card: ReturnType<typeof cardLocator>): Promise<number>
   return card.evaluate((element) => element.getBoundingClientRect().height);
 }
 
+/**
+ * Closes a dock tab by web view id. `data-web-view-id` is set on `.platform-tab-title`
+ * (`platform-tab-title.component.tsx`), not on rc-dock's own `.dock-tab` element, so the close
+ * button is found via its ancestor rather than a `.dock-tab[data-web-view-id]` selector that never
+ * matches anything. The close button is only visible on the active or hovered tab
+ * (`dock-layout-wrapper.component.scss`), so hover first rather than assume the tab is active.
+ */
+async function closeDockTab(page: Page, webViewId: string): Promise<void> {
+  const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
+  const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
+  await dockTab.hover();
+  await dockTab.locator('.dock-tab-close-btn').click();
+}
+
 test.describe('comment list content zoom', () => {
   let projectA: CommentTestProject;
   let projectB: CommentTestProject;
@@ -288,7 +302,7 @@ test.describe('comment list content zoom', () => {
         .poll(async () => (await readContentZoomMemory(mainPage))[`notes:${normalizedId}:main`])
         .toBe(1.2);
 
-      await mainPage.locator(`.dock-tab[data-web-view-id="${listId}"] .dock-tab-close-btn`).click();
+      await closeDockTab(mainPage, listId);
       await openCommentList(mainPage, projectA);
       const reopenedListId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
       const reopenedListFrame = await getEditorFrame(mainPage, reopenedListId);
