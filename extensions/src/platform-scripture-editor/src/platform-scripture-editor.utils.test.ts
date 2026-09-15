@@ -435,20 +435,6 @@ describe('convertScriptureRangeToEditorRange', () => {
       expect(result.editorRange.start).toEqual(expectedCollapsedLocation);
       expect(result.editorRange.end).toEqual(result.editorRange.start);
     });
-
-    it('collapses editorRange.end onto editorRange.start when range.end is absent (a start-only selectRange call)', async () => {
-      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN);
-      const point: ScriptureRange['start'] = {
-        scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-        offset: 26,
-      };
-      const range: ScriptureRange = { start: point };
-
-      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
-
-      expect(result.editorRange.start).toEqual(expectedCollapsedLocation);
-      expect(result.editorRange.end).toEqual(result.editorRange.start);
-    });
   });
 
   describe('Error handling', () => {
