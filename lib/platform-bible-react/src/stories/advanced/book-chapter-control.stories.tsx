@@ -91,6 +91,58 @@ function getDropdown() {
   return screen.getByRole('dialog');
 }
 
+/**
+ * How far (px) a chapter/verse digit's centre may sit from the centre of the cell that paints its
+ * highlight. Subpixel text metrics move the measured centre a fraction of a pixel either way, so
+ * this is not zero; it is far below the shift a laid-out phantom child in `CommandItem` produces.
+ */
+const MAX_DIGIT_CENTER_OFFSET_PX = 1;
+
+/**
+ * Measures a grid cell's own box against the box of the digit rendered inside it.
+ *
+ * The cell is the element that paints the highlight, so a non-zero horizontal offset means the
+ * highlight and the number it belongs to disagree, and the number reads as belonging to the
+ * neighbouring chapter. Uses a `Range` because the digit is a bare text node with no element of its
+ * own to measure.
+ *
+ * Only meaningful in a real browser: jsdom performs no layout and reports every rect as zero.
+ */
+function measureDigitAgainstCell(cell: HTMLElement) {
+  const digitNode = Array.from(cell.childNodes).find(
+    (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+  );
+  if (!digitNode) throw new Error(`No digit text node in cell "${cell.textContent}"`);
+
+  const range = document.createRange();
+  range.selectNodeContents(digitNode);
+  const digit = range.getBoundingClientRect();
+  const box = cell.getBoundingClientRect();
+
+  return {
+    digit,
+    box,
+    horizontalOffset: digit.left + digit.width / 2 - (box.left + box.width / 2),
+  };
+}
+
+/**
+ * Asserts the digit sits centred inside the box that highlights it, and reports the measured offset
+ * on failure so a regression says how far off it is rather than only that it is off.
+ */
+async function expectDigitAlignedWithCell(cell: HTMLElement, label: string) {
+  const { digit, box, horizontalOffset } = measureDigitAgainstCell(cell);
+
+  await expect(
+    {
+      cell: label,
+      offCentreBy: `${Math.abs(horizontalOffset) <= MAX_DIGIT_CENTER_OFFSET_PX ? 0 : horizontalOffset.toFixed(1)}px`,
+      digitInsideCell: digit.left >= box.left && digit.right <= box.right,
+    },
+    `chapter ${label}: digit centre is ${horizontalOffset.toFixed(1)}px from the centre of its highlight box`,
+  ).toEqual({ cell: label, offCentreBy: '0px', digitInsideCell: true });
+}
+
 const meta: Meta<typeof BookChapterControl> = {
   title: 'Advanced/BookChapterControl',
   component: BookChapterControl,
@@ -735,6 +787,89 @@ This interactive test demonstrates:
 
 Each arrow step asserts which cell carries the \`data-selected\` highlight, so the grid arithmetic
 is actually exercised rather than only checking that the popover stayed open.
+        `,
+      },
+    },
+  },
+};
+
+export const ChapterHighlightAlignment: Story = {
+  args: {
+    scrRef: {
+      book: 'MAT',
+      chapterNum: 15,
+      verseNum: 1,
+    },
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the chapter grid for Matthew', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+
+      const dropdownContent = getDropdown();
+      await userEvent.click(within(dropdownContent).getByText('Matthew'));
+      await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, { name: '1' });
+    });
+
+    // Matthew's 28 chapters over a 6-column grid give first-column (1, 7), last-column (6),
+    // second-row (7) and two-digit (15, 28) cells, plus the current chapter (15), which renders
+    // with the filled `bg-primary` treatment rather than the default one. The popover is a fixed
+    // 280px, so there is no width axis to sweep — what varies here is digit width and the cell's
+    // position in the grid.
+    const SAMPLED_CHAPTERS = ['1', '6', '7', '15', '28'];
+
+    await step('Every sampled chapter digit is centred in its own highlight box', async () => {
+      const dropdownContent = getDropdown();
+      await Promise.all(
+        SAMPLED_CHAPTERS.map(async (chapter) => {
+          const cell = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter });
+          await expectDigitAlignedWithCell(cell, chapter);
+        }),
+      );
+    });
+
+    // Hover repaints the cell's background; it does not lay the cell out again. So the alignment
+    // that hover makes visible is the resting alignment measured above, which is also how the
+    // defect presents: the digit sits outside a box that only becomes visible under the pointer.
+    await step('Keyboard focus lands on a cell whose digit is aligned the same way', async () => {
+      await userEvent.keyboard('{ArrowRight}');
+
+      const dropdownContent = getDropdown();
+      const focusedCell = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: '16' });
+      await waitFor(async () => {
+        await expect(focusedCell).toHaveAttribute('data-selected', 'true');
+      });
+
+      await expectDigitAlignedWithCell(focusedCell, '16');
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Chapter Highlight Alignment** - Pins the geometry of the chapter grid: each digit's centre must
+sit within ${MAX_DIGIT_CENTER_OFFSET_PX}px of the centre of the cell that highlights it, and the
+digit must lie inside that cell.
+
+Guards a defect where \`CommandItem\` laid out a trailing element the grid never shows — an
+invisible \`opacity-0\` check icon, 16px wide plus an 8px flex gap — inside a 16px content box.
+\`justify-center\` split the overflow, putting every digit 12px left of its own highlight and
+outside its left edge, so the highlight read as belonging to the neighbouring chapter. Hiding that
+child from layout is a single utility class, which is why this needs a test that measures rather
+than one that names a class: the class can be dropped, or a new laid-out child added upstream, with
+nothing else failing.
+
+It measures rather than asserts a class name because the cause was upstream — a shadcn baseline
+re-apply, a script that will run again — so the next regression may arrive by a different route and
+still have to be caught here.
+
+Both pointer and keyboard are covered: alignment, not appearance. Keyboard focus is deliberately
+styled differently from pointer hover (a ring versus a muted background), so the two are asserted to
+agree on where the digit sits, not on how the cell looks.
+
+Runs in Storybook's browser mode. It cannot run under jsdom, which performs no layout and reports
+every rect as zero.
         `,
       },
     },
