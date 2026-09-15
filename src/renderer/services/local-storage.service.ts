@@ -51,11 +51,11 @@ const STORED_STATE_KEY_PATTERN = new RegExp(`^(.+)_${WEB_VIEW_STATE_KEY}$`);
  * {@link WINDOW_ID_SHAPE_PATTERN_SOURCE} for why this matches by shape rather than requiring an
  * RFC-4122-strict UUID.
  *
- * Deliberately narrower than the scope-suffix matcher in `window-scoped-web-view-ids.util.ts`,
- * which also accepts the numeric ids older layouts carry. What that one reads is always an id this
- * app wrote, after an anchored `-w`; what this one reads is any key in shared storage, and a bare
- * run of digits is a plausible prefix for a key belonging to someone else. Widening it to match
- * would put those keys in reach of deletion.
+ * Deliberately excludes a bare run of digits, even though the pre-durable-id scheme prefixed keys
+ * with one (see {@link OBSOLETE_WINDOW_ID_KEY_PATTERN}, which this store's own sweep already targets
+ * by its own dedicated pattern): a bare run of digits is a plausible prefix for a key belonging to
+ * someone else, and widening this pattern to match it would put those keys in reach of deletion
+ * too.
  */
 const WINDOW_ID_PATTERN = new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
 

@@ -90,7 +90,10 @@ function testTypeWebView(id: WebViewId, projectId?: string): WebViewDefinition {
  * `web-view.service-shard.move.test.ts`'s `shardOverDockLayout`), rather than the underlying
  * rc-dock layout.
  */
-function makeDockLayout(webViews: WebViewDefinition[]): PapiDockLayout {
+function makeDockLayout(
+  webViews: WebViewDefinition[],
+  updateWebViewDefinition: PapiDockLayout['updateWebViewDefinition'] = () => false,
+): PapiDockLayout {
   return {
     onLayoutChangeRef: { current: undefined },
     loadLayout: () => {},
@@ -102,17 +105,36 @@ function makeDockLayout(webViews: WebViewDefinition[]): PapiDockLayout {
           webView.webViewType === webViewType &&
           (projectId === undefined || webView.projectId === projectId),
       ),
-    updateWebViewDefinition: () => false,
+    // The real dock resolves an unspecified `activateWithoutDocumentFocus` through this same
+    // latch; this stand-in leaves it unresolved, so the injected mock's recorded call args are
+    // the request this door actually forwards rather than what a real dock's own fallback would
+    // resolve it to. That fallback is the dock's own logic — see
+    // `platform-dock-layout-storage.document-focus.test.ts`.
+    updateWebViewDefinition: (
+      webViewId: WebViewId,
+      updateInfo: Parameters<PapiDockLayout['updateWebViewDefinition']>[1],
+      shouldBringToFront: boolean | undefined,
+      activateWithoutDocumentFocus: boolean | undefined,
+    ) =>
+      updateWebViewDefinition(
+        webViewId,
+        updateInfo,
+        shouldBringToFront,
+        activateWithoutDocumentFocus,
+      ),
     simpleLayout: EMPTY_LAYOUT,
     testLayout: EMPTY_LAYOUT,
   } as unknown as PapiDockLayout;
 }
 
 /** Start the shard and register a dock layout serving the given web views */
-async function openWebViewOver(webViews: WebViewDefinition[]) {
+async function openWebViewOver(
+  webViews: WebViewDefinition[],
+  updateWebViewDefinition?: PapiDockLayout['updateWebViewDefinition'],
+) {
   const module = await import('@renderer/services/web-view.service-shard');
   await module.startWebViewServiceShard();
-  module.registerDockLayout(makeDockLayout(webViews));
+  module.registerDockLayout(makeDockLayout(webViews, updateWebViewDefinition));
   return module;
 }
 
@@ -143,6 +165,7 @@ beforeEach(() => {
   mocks.networkRequest.mockImplementation(async (requestType: string) =>
     requestType === 'windowLayout:get' ? { kind: 'empty' } : undefined,
   );
+  globalThis.wasWindowCreatedWithoutActivation = false;
 });
 
 describe("openWebView's '?' reuse search", () => {
@@ -206,6 +229,32 @@ describe("openWebView's '?' reuse search", () => {
       module.openWebView('test.type', { type: 'tab' } as Layout, { existingProjectId: 'B' }),
     ).rejects.toThrow(/existingProjectId requires existingId/);
   });
+  test('a reuse states no withholding opinion of its own, in either latch state', async () => {
+    // A reuse raises an existing tab rather than docking a new one, so it reaches the dock by a
+    // different door than a fresh open. Both doors open into the same window, and a raise that
+    // takes document focus focuses the tab's iframe — latently, until the window itself is
+    // activated — so an uncontrolled focus here carries the same caret-ownership risk as a fresh
+    // open. What this door owes is to leave the decision unspecified so the dock resolves it in the
+    // one place that fallback lives (covered against the real dock in
+    // `platform-dock-layout-storage.document-focus.test.ts`).
+    //
+    // One test, not a case and a control: the latch state cannot change what this door forwards,
+    // because the door has no opinion to state either way. A second test setting the latch the
+    // other way would assert the identical value under a name promising the opposite outcome, and
+    // neither could fail on it.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const updateWebViewDefinition = vi.fn(() => true);
+    const module = await openWebViewOver([testTypeWebView('view-a', 'A')], updateWebViewDefinition);
+
+    await module.openWebView(
+      'test.type',
+      { type: 'tab' } as Layout,
+      findOptions({ bringToFront: true }),
+    );
+
+    expect(updateWebViewDefinition).toHaveBeenCalledWith('view-a', {}, true, undefined);
+  });
+
   test('a window layout arriving on a create reports a lost race, not a routing-contract break', async () => {
     // Main resolved this window as holding the web view the caller asked to reuse, then the web
     // view left before this call arrived. The dock's own error for a `'window'` layout says the

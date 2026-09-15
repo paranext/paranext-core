@@ -165,12 +165,16 @@ jobs:
           npx electron-builder build --publish never --mac
 
       - name: Publish releases - Linux
+        id: linux-build
         if: ${{ matrix.os == env.OS_LINUX }}
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
         run: |
           npx electron-builder build --publish never --linux
+          # Before the artifact upload below: this workflow's snap is the one shared internally, so
+          # a bad one should fail here rather than be published as a build someone can install.
+          npm run assert:snap-metadata
 
       # The Linux failures worth debugging leave their evidence outside the build's own
       # output: snapcraft's log holds the real mksquashfs error rather than the bare
@@ -232,20 +236,32 @@ jobs:
           path: |
             ./release/build/*.dmg
 
+      # `!cancelled()` rather than the implicit `success()`: this workflow's snap is the one shared
+      # internally, so a build that fails the metadata check is exactly the one someone needs to
+      # unsquash to see what shipped. The default gate would discard it and keep every passing one.
+      #
+      # `nullglob` because that gate also lets this run when there is no snap at all — an earlier
+      # step failing skips the build entirely. Without it the unmatched glob survives as a literal,
+      # `mv` fails on it, and the real failure gains a second red step blaming the wrong thing.
       - name: Rename Linux snap to include GitHub Action Run ID
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
         run: |
+          shopt -s nullglob
           for file in ./release/build/*.snap; do
             newName="${file%.snap}-${{ github.run_id }}.snap"
             mv "$file" "$newName"
             echo "Renamed $file to $newName"
           done
 
+      # `!cancelled()` means this uploads snaps from failed runs as well as passing ones, so the name
+      # states which it is: `app-linux` is the build to install, `app-linux-failed` is one to
+      # investigate. Named for the step rather than the check because that step both builds and
+      # checks, so it can also fail before a snap exists — in which case the artifact is empty.
       - name: Upload Linux artifacts
-        if: ${{ matrix.os == env.OS_LINUX }}
+        if: ${{ !cancelled() && matrix.os == env.OS_LINUX }}
         uses: actions/upload-artifact@v4
         with:
-          name: app-linux
+          name: app-linux${{ steps.linux-build.outcome == 'failure' && '-failed' || '' }}
           path: |
             ./release/build/*.snap
 

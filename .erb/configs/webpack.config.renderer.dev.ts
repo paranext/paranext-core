@@ -31,7 +31,11 @@ if (!skipDLLs && !(fs.existsSync(webpackPaths.dllPath) && fs.existsSync(manifest
       'The DLL files are missing. Sit back while we build them for you with "npm run build-dll"',
     ),
   );
-  execSync('npm run postinstall');
+  // `inherit` so the chain's own diagnostics reach the terminal. `execSync` captures stdout by
+  // default, and the actionable messages here go there - `check-native-dep`'s native-dependency
+  // report, electron-builder's output, the DLL build's. Without this, a chain that exits non-zero
+  // shows only nested "Command failed" wrappers that name no cause.
+  execSync('npm run postinstall', { stdio: 'inherit' });
 }
 
 const configuration: webpack.Configuration = {
