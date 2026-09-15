@@ -1435,9 +1435,8 @@ step, no automation. Just a record.
   `onSelectionChange`, `setSelection`, `setAnnotation`, `insertNote` — read and wrote the LIVE tree,
   so a host that only ever sees `getUsj()` (`platform-scripture-editor.web-view.tsx` in this repo)
   had no way to reconcile a jsonPath captured from a selection against the document it can actually
-  read. `insertCommentAtCurrentSelection`'s pre-existing guard (`c8135b49b82`) papered over exactly
-  this mismatch by treating an unresolvable path or an out-of-range offset as recoverable rather than
-  a bug.
+  read. `insertCommentAtCurrentSelection`'s pre-existing guard papered over exactly this mismatch by
+  treating an unresolvable path or an out-of-range offset as recoverable rather than a bug.
 - **Decision:** Make every public editor position address the settled document, with the live/settled
   translation done once, inside the editor, at the API boundary. An identity fast path applies when
   nothing is pending. Otherwise each pending settle scope is materialized in a headless scratch
@@ -1462,14 +1461,16 @@ step, no automation. Just a record.
   unresolvable-path and offset-past-length checks are a fail-safe against a bug or a race, never an
   expected state. Positions anchored to a snapped-left byte round-trip lossily. `ContentJsonPath` /
   `PropertyJsonPath` were widened to eight clauses in both `platform-bible-utils` (this repo) and the
-  editor's own copy, to carry the deeper paths a scratch-scope remap can produce. Core CI needs
-  `platform-yalc` to carry the editor's `pt-4370-settled-positions` commits before this branch is
-  green. The live/settled translation runs only while something is pending, scoped per pending settle
-  scope and memoized on that scope's content, so the identity fast path keeps the common (nothing
-  pending) case free.
-- **Source:** `scripture-editors` branch `pt-4370-settled-positions`; paranext-core `c8135b49b82`
-  (the `insertCommentAtCurrentSelection` guard this decision documents) and `585d6cd76f1` /
-  `1f8905b615d` (the `ContentJsonPath`/`PropertyJsonPath` depth widening).
+  editor's own copy: real Standard-view nesting (table cell → char → nested char → text is seven
+  clauses) already exceeded the four-clause cap with nothing pending; a scratch-scope remap is a
+  secondary consumer of the same widened bound. The two declarations must be widened in lock-step, or
+  the cross-repo assignment from core's types into the editor's typed API fails to type-check. The
+  live/settled translation runs only while something is pending, scoped per pending settle scope and
+  memoized on that scope's content, so the identity fast path keeps the common (nothing pending) case
+  free.
+- **Source:** PT-4370; paranext-core PR #TBD, scripture-editors PR #TBD. The guard this decision
+  documents is `insertCommentAtCurrentSelection` in
+  `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
 
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
 
