@@ -3134,8 +3134,8 @@ step, no automation. Just a record.
   definition has to be taught by hand about every lifecycle event the definition gets for free.
   (b) **Everything in settings, keyed by web view id** — rejected: ids are minted per pane and never
   reused, so such a setting grows without bound and needs a pruning story; that cost is accepted only
-  for the memory setting, which is keyed by project and kind rather than by pane, and even there
-  pruning is its own work item (PT-4585). (c) **Everything in the definition, nothing in settings** —
+  for the memory setting, which is keyed by project and kind rather than by pane, and even there,
+  whether to prune at all is decided in PT-4585. (c) **Everything in the definition, nothing in settings** —
   rejected: a level that dies with its pane cannot answer "the same zoom next time I open this
   project", which is what Paratext 9 does (`ParatextBase/DefaultZoomMemento.cs`).
 - **Consequences:** Per-pane state travels through restart, window move and layout share for free, and
@@ -5657,8 +5657,9 @@ step, no automation. Just a record.
   every consumer of both has to handle by reading the area's variable (documented in
   `Extension-Development-Guide.md` and `Component-Builder-Patterns.md`). The Text Collection grid's
   per-resource zoom predates this decision and stays, nesting inside the grid's own area and
-  multiplying with it: it is the documented exception, not a precedent, and PT-4582 brings it onto
-  the platform mechanism. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view
-  carries a private zoom any more.
+  multiplying with it: it is the documented exception, not a precedent, and PT-4582 marks the grid
+  pane's own area around it and leaves it in place; moving it onto the platform mechanism is not
+  scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
+  private zoom any more.
 - **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
   recorded here by PT-4580.
