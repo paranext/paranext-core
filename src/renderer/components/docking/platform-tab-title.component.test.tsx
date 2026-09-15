@@ -70,6 +70,12 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
   useIsPowerMode: vi.fn(() => true),
 }));
 
+// Default to a settled mode so existing Simple-mode tests (which predate the mode-known gate) keep
+// seeing their menu decision resolve immediately.
+vi.mock('@renderer/hooks/use-interface-mode.hook', () => ({
+  useInterfaceMode: vi.fn(() => ['power', undefined, true]),
+}));
+
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
@@ -392,9 +398,13 @@ describe('PlatformTabTitle context-menu gating', () => {
     expect(screen.queryByTestId('context-menu')).toBeInTheDocument();
   });
 
-  it('simple mode: does not wrap the title in a ContextMenu', () => {
+  it('simple mode: no tab menu when the contributed menu has no zoom group', async () => {
+    // This fixture's contributed menu holds only `platform.tabWindow`, which Simple mode narrows
+    // away entirely, so the Simple-mode expectation (no menu at all) still holds even though Simple
+    // mode now performs the same mount-time read Power mode does.
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
+    await act(async () => {});
     expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
   });
 });
