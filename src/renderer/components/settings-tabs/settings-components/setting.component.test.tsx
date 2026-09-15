@@ -165,7 +165,7 @@ describe('platform.webViewContentZoom stepper', () => {
         isLoading={baseProps.isLoading}
         settingKey="platform.zoomFactor"
         setting={1.2}
-        label="Interface Scaling"
+        label="Interface scaling"
       />,
     );
     expect(screen.getByRole('textbox')).toBeInTheDocument();
