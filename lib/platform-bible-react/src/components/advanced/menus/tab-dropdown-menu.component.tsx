@@ -24,7 +24,7 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { Fragment, ReactNode } from 'react';
+import { Fragment, ReactNode, useRef } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
@@ -139,14 +139,42 @@ export default function TabDropdownMenu({
   buttonVariant = 'ghost',
   id,
 }: TabDropdownMenuProps) {
+  // Radix moves focus back to the trigger whenever the menu closes. After a pointer close, that
+  // leaves the trigger focused — showing its focus styling, and ready to reopen the menu on Enter —
+  // while the pointer is somewhere else entirely, so skip it then. Each way of closing records its
+  // own input just before Radix decides, so a menu opened with the pointer and closed from the
+  // keyboard still hands focus back to keyboard users.
+  const lastInputWasPointerRef = useRef(false);
+  const recordPointer = () => {
+    lastInputWasPointerRef.current = true;
+  };
+  const recordKeyboard = () => {
+    lastInputWasPointerRef.current = false;
+  };
+
   return (
     <DropdownMenu variant={variant}>
-      <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
+      <DropdownMenuTrigger
+        aria-label={tabLabel}
+        className={className}
+        asChild
+        id={id}
+        onPointerDown={recordPointer}
+      >
         <Button variant={buttonVariant} size="icon">
           {icon ?? <MenuIcon />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" style={{ zIndex: Z_INDEX_ABOVE_DOCK }}>
+      <DropdownMenuContent
+        align="start"
+        style={{ zIndex: Z_INDEX_ABOVE_DOCK }}
+        onPointerDown={recordPointer}
+        onPointerDownOutside={recordPointer}
+        onKeyDownCapture={recordKeyboard}
+        onCloseAutoFocus={(event) => {
+          if (lastInputWasPointerRef.current) event.preventDefault();
+        }}
+      >
         {Object.entries(menuData.columns)
           .filter(([, column]) => typeof column === 'object')
           .sort(([, a], [, b]) => {

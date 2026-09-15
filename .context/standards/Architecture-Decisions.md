@@ -2822,6 +2822,33 @@ step, no automation. Just a record.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
 
+## adr-opaque-menu-surfaces: Menu and select surfaces are opaque; shadcn's translucent menu color is not used
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** The shadcn preset applied on 2026-04-16 (`npx shadcn apply --preset b6rt8cvlC`, commit
+  `a61ca3b913c`) set `menuColor: "default-translucent"` in `lib/platform-bible-react/components.json`.
+  That gave `DropdownMenuContent`, `DropdownMenuSubContent`, `ContextMenuContent`,
+  `ContextMenuSubContent`, `MenubarContent`, `MenubarSubContent` and `SelectContent` a 70%
+  `bg-popover` plus a `::before` backdrop-blur layer. Over scripture text the menus were hard to read.
+  In a scrolling menu the blur layer scrolled away with the items, and it never covered the scrollbar
+  gutter, so the scrollbar always sat on the bare 70% background. The Simple PRD requires opaque,
+  readable menus and popovers.
+- **Decision:** Remove the translucent classes from those seven surfaces, each edit annotated
+  `// CUSTOM:`, and set `menuColor` to `"default"` so a later `shadcn add` does not regenerate them.
+  Pinned in a real browser across every Storybook theme by `Shadcn/Overlay Surface Opacity`
+  (`lib/platform-bible-react/src/stories/shadcn-ui/overlay-surface-opacity.stories.tsx`), which also
+  checks `opacity` on each surface and its ancestors.
+- **Alternatives:** (a) **a higher alpha** (e.g. 95%) — still see-through over dense text, and keeps the
+  scrolling blur-layer defect. (b) **keep the blur but pin the layer** so it does not scroll — keeps a
+  see-through surface the PRD rejects, plus a compositing cost on every open menu. (c) **opaque
+  overrides at each consumer** — every present and future menu consumer would need one, and each one
+  that forgets regresses.
+- **Consequences:** Applies to Power as well as Simple, since these are shared components. A future
+  `/upgrade-shadcn` that re-applies a preset with a translucent menu color would reintroduce the
+  classes; the `// CUSTOM:` comments carry the intent through that upgrade, and the Storybook test
+  fails if the translucent background returns.
+
 ## adr-package-verifies-the-document-not-the-shipping-set: `npm run package` runs the check a patched clone can answer
 
 - **Date:** 2026-09-04

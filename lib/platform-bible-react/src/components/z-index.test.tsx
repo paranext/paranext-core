@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render } from '@testing-library/react';
+import { ReactElement } from 'react';
+import { fireEvent, render } from '@testing-library/react';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
@@ -12,6 +13,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import {
@@ -19,8 +23,28 @@ import {
   MenubarContent,
   MenubarItem,
   MenubarMenu,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
   MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
+import { Dialog, DialogContent, DialogTitle } from '@/components/shadcn-ui/dialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/shadcn-ui/context-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/shadcn-ui/select';
 import {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_ABOVE_POPOVER,
@@ -55,6 +79,12 @@ class NoopResizeObserver implements ResizeObserver {
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
+  }
+  if (typeof Element.prototype.hasPointerCapture !== 'function') {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
   }
 });
 
@@ -211,5 +241,161 @@ describe('rendered stacking', () => {
 
     const menu = document.querySelector<HTMLElement>('[data-slot="dropdown-menu-content"]');
     expect(menu?.style.zIndex).toBe('1234');
+  });
+});
+
+/**
+ * Renders one overlay, opens it if it needs an event to open, reads the z-index it declares inline,
+ * then unmounts it so the next overlay renders into an empty document.
+ */
+function declaredZIndex(ui: ReactElement, slot: string, open?: () => void): string {
+  const { unmount } = render(ui);
+  open?.();
+  const zIndex = document.querySelector<HTMLElement>(`[data-slot="${slot}"]`)?.style.zIndex ?? '';
+  unmount();
+  return zIndex;
+}
+
+describe('the full overlay stack', () => {
+  test('orders modal backdrop < modal < overlay surfaces <= their submenus < tooltip', () => {
+    const dialog = (
+      <Dialog defaultOpen>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>title</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+    const dropdownMenu = (
+      <DropdownMenu defaultOpen>
+        <DropdownMenuTrigger>menu</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuSub open>
+            <DropdownMenuSubTrigger>more</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem>sub</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+    const contextMenu = (
+      <ContextMenu>
+        <ContextMenuTrigger>target</ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuSub open>
+            <ContextMenuSubTrigger>more</ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              <ContextMenuItem>sub</ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+    const openContextMenu = () => {
+      const target = document.querySelector('[data-slot="context-menu-trigger"]');
+      if (target) fireEvent.contextMenu(target);
+    };
+    const menubar = (
+      <Menubar defaultValue="file">
+        <MenubarMenu value="file">
+          <MenubarTrigger>File</MenubarTrigger>
+          <MenubarContent>
+            <MenubarSub open>
+              <MenubarSubTrigger>more</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarItem>sub</MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
+          </MenubarContent>
+        </MenubarMenu>
+      </Menubar>
+    );
+
+    const tiers = {
+      modalBackdrop: declaredZIndex(dialog, 'dialog-overlay'),
+      modal: declaredZIndex(dialog, 'dialog-content'),
+      popover: declaredZIndex(
+        <Popover defaultOpen>
+          <PopoverTrigger>open</PopoverTrigger>
+          <PopoverContent>body</PopoverContent>
+        </Popover>,
+        'popover-content',
+      ),
+      dropdownMenu: declaredZIndex(dropdownMenu, 'dropdown-menu-content'),
+      dropdownMenuSub: declaredZIndex(dropdownMenu, 'dropdown-menu-sub-content'),
+      contextMenu: declaredZIndex(contextMenu, 'context-menu-content', openContextMenu),
+      contextMenuSub: declaredZIndex(contextMenu, 'context-menu-sub-content', openContextMenu),
+      menubar: declaredZIndex(menubar, 'menubar-content'),
+      menubarSub: declaredZIndex(menubar, 'menubar-sub-content'),
+      select: declaredZIndex(
+        <Select defaultOpen defaultValue="one">
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value="one">one</SelectItem>
+          </SelectContent>
+        </Select>,
+        'select-content',
+      ),
+      tooltip: declaredZIndex(
+        <TooltipProvider>
+          <Tooltip defaultOpen>
+            <TooltipTrigger>hover me</TooltipTrigger>
+            <TooltipContent>tip</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>,
+        'tooltip-content',
+      ),
+    };
+
+    // Every overlay must declare a value. `Number('')` is 0, so an undeclared one would pass the
+    // comparisons below while testing nothing.
+    expect(
+      Object.entries(tiers)
+        .filter(([, zIndex]) => zIndex === '')
+        .map(([name]) => name),
+    ).toEqual([]);
+
+    expect(tiers.modalBackdrop).toBe(String(Z_INDEX_MODAL_BACKDROP));
+    expect(tiers.modal).toBe(String(Z_INDEX_MODAL));
+
+    // Popovers and the menu surfaces share one tier on purpose. A menu opened from a popover and a
+    // popover opened from a menu each have to paint over the surface they opened from, and only
+    // portal order gives both of them that (`adr-z-index-ordering-invariants`).
+    const overlaySurfaces = {
+      popover: tiers.popover,
+      dropdownMenu: tiers.dropdownMenu,
+      contextMenu: tiers.contextMenu,
+      menubar: tiers.menubar,
+      select: tiers.select,
+    };
+    expect(overlaySurfaces).toEqual({
+      popover: String(Z_INDEX_ABOVE_DOCK),
+      dropdownMenu: String(Z_INDEX_ABOVE_DOCK),
+      contextMenu: String(Z_INDEX_ABOVE_DOCK),
+      menubar: String(Z_INDEX_ABOVE_DOCK),
+      select: String(Z_INDEX_ABOVE_DOCK),
+    });
+
+    expect(Number(tiers.modal)).toBeGreaterThan(Number(tiers.modalBackdrop));
+    // A popover or menu opened from inside a dialog must be usable.
+    expect(Number(tiers.popover)).toBeGreaterThan(Number(tiers.modal));
+
+    // A submenu never sits under the menu it opened from.
+    expect(Number(tiers.dropdownMenuSub)).toBeGreaterThanOrEqual(Number(tiers.dropdownMenu));
+    expect(Number(tiers.contextMenuSub)).toBeGreaterThanOrEqual(Number(tiers.contextMenu));
+    expect(Number(tiers.menubarSub)).toBeGreaterThanOrEqual(Number(tiers.menubar));
+
+    // A tooltip clears every surface that can hold its trigger, submenus included.
+    const highestSurface = Math.max(
+      ...[
+        ...Object.values(overlaySurfaces),
+        tiers.dropdownMenuSub,
+        tiers.contextMenuSub,
+        tiers.menubarSub,
+      ].map(Number),
+    );
+    expect(Number(tiers.tooltip)).toBeGreaterThan(highestSurface);
   });
 });
