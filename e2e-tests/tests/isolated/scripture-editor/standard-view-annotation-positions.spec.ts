@@ -20,6 +20,10 @@
  * - `selectRange` over the span's last two settled offsets highlights exactly those two characters
  *   (USJ → live). The browser's own selection is the oracle, not a report the editor derives back
  *   through the same model.
+ * - A collapsed, START-ONLY `selectRange` (no `end`) at settled offset 0 lands the caret right after
+ *   the NBSP separator, not on it and not on the marker glyph — against the browser's own
+ *   selection. (The editor's own `getSelection()` report is not asserted here: the controller's
+ *   cached selection does not update for an app-placed COLLAPSED selection.)
  * - `setAnnotation` over those same settled offsets marks exactly those two characters — not the
  *   separator, not the two before them.
  *
@@ -55,23 +59,23 @@ const WEBSOCKET_PORT = 8876;
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
- * John 1:38 ends in `\wj “What are you looking for?”\wj*`, the first char span in the chapter — one
- * plain text string, so its settled offsets are the string's own indexes with nothing in between.
- *
- * CHAPTER 1 specifically: a `ScriptureRange` built from USJ document locations carries no verse
- * number, so the editor extension derives one by walking the loaded chapter's USJ for a book id
- * (`convertScriptureRangeToEditorRange` in platform-scripture-editor.utils.ts, which passes no
- * fallback book id). Only a chapter-1 USJ carries the `id` marker, so a range addressed this way
- * throws "Could not find book ID" anywhere else in a book.
+ * John 2:4 is `\wj "Woman, what does that have to do with you and me? My hour has not yet
+ * come."\wj*` — one plain text string, so its settled offsets are the string's own indexes with
+ * nothing in between. Chapter 2 deliberately: a `ScriptureRange` built from USJ document locations
+ * carries no verse number, so the editor extension derives one by walking the loaded chapter's USJ
+ * for a book id (`convertScriptureRangeToEditorRange` in platform-scripture-editor.utils.ts); only
+ * a chapter-1 USJ carries the `id` marker, so a chapter-2 target exercises that book-id fallback
+ * end to end on every `ScriptureRange` this spec sends.
  */
-const TARGET_REFERENCE = 'John 1:38';
-const TARGET_VERSE_REF = { book: 'JHN', chapterNum: 1, verseNum: 38 };
+const TARGET_REFERENCE = 'John 2:4';
+const TARGET_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 4 };
 const CHAR_MARKER = 'wj';
 /**
- * Pins the fixture data: a sample project whose first `\wj` content drifted would silently move the
- * offsets.
+ * Pins the fixture data: a sample project whose `\wj` content at this verse drifted would silently
+ * move the offsets.
  */
-const EXPECTED_CHAR_TEXT = '“What are you looking for?”';
+const EXPECTED_CHAR_TEXT =
+  '“Woman, what does that have to do with you and me? My hour has not yet come.”';
 
 /**
  * Annotation identity. The editor prefixes an externally-set annotation type with `external-` and
@@ -306,6 +310,41 @@ test.describe('scripture editor settled positions', () => {
           { timeout: 20_000 },
         )
         .toBe(charText.slice(-2));
+    });
+
+    await test.step('a collapsed selectRange at settled offset 0 lands inside the span text, not on the separator', async () => {
+      await sendPapiRequestOnce(
+        webViewControllerMethod(editorId, 'selectRange'),
+        // Start-only: `ScriptureRange.end` is optional, and omitting it is how a caller asks for a
+        // collapsed selection (a cursor position, not a range) at `start`.
+        [{ start: chapterLocation(jsonPath, 0) }],
+        WEBSOCKET_PORT,
+        REQUEST_TIMEOUT_MS,
+      );
+
+      // Deliberately not asserting the editor-reported selection (getSelection()) for this step:
+      // the controller's cached selection updates for a non-collapsed app-placed selection (see
+      // the previous step) but not for a collapsed one, so that report cannot serve as an oracle
+      // here. The browser's own selection below is the only oracle this step checks.
+      //
+      // The browser's own selection is the oracle for where the caret visually lands: the span's
+      // content is one DOM text node holding `<NBSP>` followed by the span's text, so a caret at
+      // settled offset 0 must sit at DOM offset 1 in that node — immediately after the NBSP,
+      // immediately before the first character of the span's text.
+      await expect
+        .poll(
+          async () =>
+            editorInput.evaluate((root) => {
+              const sel = root.ownerDocument.getSelection();
+              return {
+                anchorText: sel?.anchorNode?.textContent ?? undefined,
+                anchorOffset: sel?.anchorOffset ?? undefined,
+                isCollapsed: sel?.isCollapsed ?? undefined,
+              };
+            }),
+          { timeout: 20_000 },
+        )
+        .toEqual({ anchorText: NBSP + charText, anchorOffset: 1, isCollapsed: true });
     });
 
     await test.step("an annotation over the span's last two characters marks exactly those characters", async () => {
