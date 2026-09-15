@@ -2,9 +2,8 @@
 
 /* #region styles downloaded from Google Fonts URL because CSP prevents outside stylesheets */
 
-/* Paste the URL below's response here verbatim. Nothing in this region is hand-edited — the fonts
-   that need editing live in the region after it, which is why the families are split across two
-   URLs. */
+/* Paste this URL's response verbatim; never hand-edit it. The fonts that need editing are in the
+   next region, which is why the families are split across two URLs. */
 /* @import url('https://fonts.googleapis.com/css2?family=Cardo:ital,wght@0,400;0,700;1,400&family=Google+Sans:wght@400&family=Noto+Sans+Syriac:wght@100..900&display=swap'); */
 
 /* gothic */
@@ -567,27 +566,19 @@
 /* #region styles downloaded from Google Fonts URL and modified to prefer an installed copy */
 
 /*
- * Paste the URL below's response here, then give every face a `local()` source ahead of its
- * `url()`, so an installed copy is used as-is instead of downloading the same font — and, more to
- * the point, so these families still render with no network at all. A family whose faces all fail
- * to load does not fall back to an installed copy of the same name: it drops out of the family
- * entirely and lands on whatever comes next in the stack. A `local()` inside the face's own `src`
- * is the only thing that reaches the installed copy, and it has to be in the face itself — a
- * separate `local()`-only rule for the same family errors where the font is not installed, which
- * is worse than having none at all.
- *
- * These two families are the fonts Paratext installs, which is why only they are worth a paste
- * that has to be hand-edited; the rest have no installed copy to find. Give a face its `local()`
- * names by weight and style:
+ * Paste this URL's response, then add a `local()` source ahead of each `url()` so an installed copy
+ * is used instead of downloading, and these families still render offline. It has to go in the
+ * face's own `src`: a family whose faces all fail drops out of the family rather than falling back
+ * to an installed copy of the same name, and a separate `local()`-only rule errors where the font
+ * is not installed. Only these two are worth hand-editing a paste for — Paratext installs them.
  *
  *   400 normal -> local('<Family>'), local('<PostScript>-Regular')
  *   700 normal -> local('<Family> Bold'), local('<PostScript>-Bold')
  *   400 italic -> local('<Family> Italic'), local('<PostScript>-Italic')
  *   700 italic -> local('<Family> Bold Italic'), local('<PostScript>-BoldItalic')
  *
- * where <PostScript> is the family name without spaces (CharisSIL, GentiumPlus). `fonts.test.ts`
- * checks every face in this region against that table, so a missed or mistyped face fails the
- * suite rather than going unnoticed until someone is offline.
+ * <PostScript> is the family name without spaces (CharisSIL, GentiumPlus). `fonts.test.ts` checks
+ * every face against this table.
  */
 /* @import url('https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700;1,400;1,700&family=Gentium+Plus:ital,wght@0,400;0,700;1,400;1,700&display=swap'); */
 
@@ -1291,10 +1282,9 @@ body,
  *
  * `.scripture-font` applies the font to scripture text, which is used in both `platform-bible-react`
  *
- * The stack is named as well as applied, because the Scripture editor needs the same order: the
- * vendored `usj-nodes` stylesheets hand it to the editor's generated project stylesheet as
- * `--usj-font-fallback`, so a project whose own font is unavailable falls back through this order
- * rather than through the editor library's default chain.
+ * Named as well as applied: the vendored `usj-nodes` stylesheets pass it to the editor's generated
+ * project stylesheet as `--usj-font-fallback`, so an unavailable project font falls back through
+ * this same order.
  */
 :root {
   --scripture-font-stack:

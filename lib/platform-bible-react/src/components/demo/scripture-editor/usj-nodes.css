@@ -13,8 +13,7 @@
    - `.verse-selected` and the armed-verse blink bind to this repo's `--destructive` theme token
      instead of the editor library's literal reds.
    - The table-cell box border binds to `var(--foreground, #000000)` instead of the source's
-     literal black, so it stays visible against a dark app theme.   - The source's four `local()`-only Charis SIL `@font-face` rules are dropped; see the note
-     where they used to be. */
+     literal black, so it stays visible against a dark app theme.   - The source's four `local()`-only Charis SIL `@font-face` rules are dropped. */
 
 /* stylelint-disable */
 
@@ -35,21 +34,16 @@
 .align_end {
   text-align: end;
 }
-/* Charis SIL is NOT declared here. A `local()`-only font face errors on any machine that does not
-   have the font installed, and an erroring face makes the whole family unusable at that weight and
-   style rather than falling back to a working declaration of it — which drops bold and italic
-   Scripture text out of the family and onto an unrelated system font. The application declares the
-   family once, in src/renderer/styles/fonts.css; this demo pulls the same faces from Google Fonts
-   in scripture-editor.stories.css, since Storybook does not load the application's stylesheet. */
-/* The Scripture text fallback chain, published as a custom property so a generated project
-   stylesheet can put the project's own font in front of it rather than replacing it outright: the
-   editor's `generateUsjCss` emits `font-family: "<project font>", var(--usj-font-fallback, serif)`.
-   Declared on `.usfm` so it reaches the unformatted view too, where the chain itself is not applied.
-
-   Diverges from the editor library's copy, which hard-codes the chain: Platform.Bible has its own
-   deliberately ordered Scripture stack, so this points at it instead. `--scripture-font-stack`
-   comes from src/renderer/styles/fonts.css, which is inlined into every web view; the literal
-   chain after it is the library's, and is what applies anywhere fonts.css is not loaded. */
+/* Don't declare Scripture fonts here. A `local()`-only face errors where the font is not installed,
+   and an erroring face makes the family unusable at that weight and style instead of deferring to a
+   working declaration — which drops bold and italic Scripture text onto a system font. The app
+   declares Charis SIL in src/renderer/styles/fonts.css; this demo pulls it from Google Fonts in
+   scripture-editor.stories.css, since Storybook does not load that stylesheet. */
+/* Fallback chain for the editor's generated project stylesheet, which emits
+   `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
+   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
+   view. The literal chain is the library's, and applies where fonts.css is not loaded. */
 .usfm {
   --usj-font-fallback: var(
     --scripture-font-stack,

@@ -23,21 +23,15 @@
 .align_end {
   text-align: end;
 }
-/* Charis SIL is NOT declared here. The application declares it once, in
-   src/renderer/styles/fonts.css, which is inlined into every web view's srcdoc with real bold and
-   italic faces. A `local()`-only font face in this file would error on any machine that does not
-   have the font installed, and an erroring face makes the whole family unusable at that weight and
-   style rather than falling back to a working declaration of it — which drops bold and italic
-   Scripture text out of the family and onto an unrelated system font. */
-/* The Scripture text fallback chain, published as a custom property so a generated project
-   stylesheet can put the project's own font in front of it rather than replacing it outright: the
-   editor's `generateUsjCss` emits `font-family: "<project font>", var(--usj-font-fallback, serif)`.
-   Declared on `.usfm` so it reaches the unformatted view too, where the chain itself is not applied.
-
-   Diverges from the editor library's copy, which hard-codes the chain: Platform.Bible has its own
-   deliberately ordered Scripture stack, so this points at it instead. `--scripture-font-stack`
-   comes from src/renderer/styles/fonts.css, which is inlined into every web view; the literal
-   chain after it is the library's, and is what applies anywhere fonts.css is not loaded. */
+/* Don't declare Scripture fonts here. A `local()`-only face errors where the font is not installed,
+   and an erroring face makes the family unusable at that weight and style instead of deferring to
+   the declaration in src/renderer/styles/fonts.css — which drops bold and italic Scripture text
+   onto a system font. */
+/* Fallback chain for the editor's generated project stylesheet, which emits
+   `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
+   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
+   view. The literal chain is the library's, and applies where fonts.css is not loaded. */
 .usfm {
   --usj-font-fallback: var(
     --scripture-font-stack,
