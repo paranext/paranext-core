@@ -429,11 +429,6 @@ export async function convertScriptureRangeToEditorRange(
   // May need to use verse refs and offsets from the USFM verse location to get USJ offsets
   let endVerseRef: SerializedVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
 
-  // A range with no `end` is a collapsed range at `start`. `selectRange`/`setAnnotation` receive
-  // `range` over JSON-RPC, where nothing enforces the shape, which is why the type marks `end`
-  // optional.
-  const end = range.end ?? range.start;
-
   // Figure out the book and chapter and the jsonPaths and offsets if they're in the range
   // passed to us
   // Process the starting location
@@ -445,7 +440,7 @@ export async function convertScriptureRangeToEditorRange(
 
   // Process the ending location
   const { verseOffset: endVerseOffset, ...endLocationProperties } = determineLocationProperties(
-    end,
+    range.end,
     endVerseRef,
   );
   ({ documentLocation: endDocumentLocation, verseRef: endVerseRef } = endLocationProperties);

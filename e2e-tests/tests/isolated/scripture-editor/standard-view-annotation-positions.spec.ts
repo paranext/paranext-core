@@ -20,10 +20,10 @@
  * - `selectRange` over the span's last two settled offsets highlights exactly those two characters
  *   (USJ → live). The browser's own selection is the oracle, not a report the editor derives back
  *   through the same model.
- * - A collapsed, START-ONLY `selectRange` (no `end`) at settled offset 0 lands the caret right after
- *   the NBSP separator, not on it and not on the marker glyph — against the browser's own
- *   selection. (The editor's own `getSelection()` report is not asserted here: the controller's
- *   cached selection does not update for an app-placed COLLAPSED selection.)
+ * - A collapsed `selectRange` (`start` and `end` at the same location) at settled offset 0 lands the
+ *   caret right after the NBSP separator, not on it and not on the marker glyph — against the
+ *   browser's own selection. (The editor's own `getSelection()` report is not asserted here: the
+ *   controller's cached selection does not update for an app-placed COLLAPSED selection.)
  * - `setAnnotation` over those same settled offsets marks exactly those two characters — not the
  *   separator, not the two before them.
  *
@@ -313,11 +313,12 @@ test.describe('scripture editor settled positions', () => {
     });
 
     await test.step('a collapsed selectRange at settled offset 0 lands inside the span text, not on the separator', async () => {
+      const location = chapterLocation(jsonPath, 0);
       await sendPapiRequestOnce(
         webViewControllerMethod(editorId, 'selectRange'),
-        // Start-only: `ScriptureRange.end` is optional, and omitting it is how a caller asks for a
-        // collapsed selection (a cursor position, not a range) at `start`.
-        [{ start: chapterLocation(jsonPath, 0) }],
+        // `start` and `end` at the same location is how a caller asks for a collapsed selection (a
+        // cursor position, not a range) — the shape `comment-list.web-view.tsx` sends.
+        [{ start: location, end: location }],
         WEBSOCKET_PORT,
         REQUEST_TIMEOUT_MS,
       );
