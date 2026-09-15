@@ -572,7 +572,12 @@ export function CommentListPanel({
         <div className="tw:border-b tw:bg-background tw:flex tw:flex-row tw:flex-wrap tw:gap-1.5 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline">{localizedStrings['%comment_filter_button%']}</Button>
+              {/* Stable test hook: this button is the toolbar's only always-rendered control, so
+                  E2E tests anchor "the filter bar is present" on it. A test id rather than the
+                  visible label keeps those tests working in any interface language. */}
+              <Button variant="outline" data-testid="comment-filters-trigger">
+                {localizedStrings['%comment_filter_button%']}
+              </Button>
             </PopoverTrigger>
             <PopoverContent
               ref={setFiltersPopoverContentEl}

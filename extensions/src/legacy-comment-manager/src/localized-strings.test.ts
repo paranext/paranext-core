@@ -127,18 +127,8 @@ describe('legacyCommentManager sync-blocked strings', () => {
 
 describe('legacyCommentManager comment-filter strings', () => {
   // Enforce en/es parity for every comment-filter string, both directions: a key present in one
-  // language but not the other fails here rather than silently falling back to the key text (an
-  // unstyled "%comment_filter_axis_date%") or shipping an untranslated key to Spanish users.
-  COMMENT_FILTER_KEYS.forEach((key) => {
-    it(`has an English label for ${key}`, () => {
-      expect(localizedStrings.en[key]).toBeTruthy();
-    });
-
-    it(`has a Spanish label for ${key}`, () => {
-      expect(localizedStrings.es[key]).toBeTruthy();
-    });
-  });
-
+  // language but not the other fails here, and Vitest's array diff names the offending key —
+  // this single assertion subsumes what a per-key "has an English/Spanish label" test would show.
   it('defines every comment-filter key in both languages (no key present in only one)', () => {
     const englishOnly = COMMENT_FILTER_KEYS.filter(
       (key) => localizedStrings.en[key] && !localizedStrings.es[key],
@@ -148,5 +138,15 @@ describe('legacyCommentManager comment-filter strings', () => {
     );
     expect(englishOnly).toEqual([]);
     expect(spanishOnly).toEqual([]);
+  });
+
+  // The parity check above treats an empty string as "absent" on both sides, so a key defined as
+  // "" in BOTH languages would slip through undetected there. Assert non-empty values directly to
+  // close that gap — a guarantee the parity check does not make.
+  it('every comment-filter key has a non-empty value in both languages', () => {
+    const emptyInEnglish = COMMENT_FILTER_KEYS.filter((key) => !localizedStrings.en[key]);
+    const emptyInSpanish = COMMENT_FILTER_KEYS.filter((key) => !localizedStrings.es[key]);
+    expect(emptyInEnglish).toEqual([]);
+    expect(emptyInSpanish).toEqual([]);
   });
 });

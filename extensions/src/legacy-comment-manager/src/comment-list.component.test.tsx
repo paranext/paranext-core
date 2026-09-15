@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -9,12 +9,24 @@ import { CommentListPanel, CommentListPanelProps } from './comment-list.componen
 import { DEFAULT_COMMENT_FILTERS, UNFILTERED } from './comment-list-filters.model';
 
 // Radix Select scrolls its highlighted item into view on open and checks pointer capture on
-// pointerdown; jsdom implements neither.
+// pointerdown; jsdom implements neither. cmdk (the author-filter combobox's search list) uses
+// ResizeObserver, which jsdom also doesn't provide.
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
   Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
   Element.prototype.setPointerCapture = vi.fn();
   Element.prototype.releasePointerCapture = vi.fn();
+  global.ResizeObserver = class {
+    // jsdom stub: intentionally no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    observe() {}
+    // jsdom stub: intentionally no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    unobserve() {}
+    // jsdom stub: intentionally no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    disconnect() {}
+  };
 });
 
 const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
@@ -118,9 +130,24 @@ describe('CommentListPanel filter toolbar', () => {
     expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ resolved: 'all' }));
   });
 
-  it('adds no plain-text search and no sort control', () => {
+  it('adds no plain-text search and no sort control', async () => {
     // The PRD excludes both. A test keeps a well-meaning follow-up from adding them.
     renderPanel();
+
+    // Positive control: open the Filters popover, then the nested author combobox, so every
+    // control the panel can render — including the author axis's own text input, the closest thing
+    // to a search box anywhere in the panel — is actually mounted before asserting anything is
+    // absent. Without this, the assertions below would pass just as happily against a panel that
+    // rendered nothing.
+    await userEvent.click(screen.getByRole('button', { name: FILTERS_LABEL }));
+    expect(screen.getByText('Read status')).toBeInTheDocument();
+    const authorRow = screen.getByText('Author').parentElement;
+    if (!authorRow) throw new Error('Author filter row not found');
+    await userEvent.click(within(authorRow).getByRole('combobox'));
+
+    // The author axis's own input narrows the list of PROJECT USERS, not comments, so its
+    // presence is not what this assertion forbids — there is still no free-text search over the
+    // comment list itself, and no sort control anywhere in the panel.
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sort/i })).not.toBeInTheDocument();
   });
