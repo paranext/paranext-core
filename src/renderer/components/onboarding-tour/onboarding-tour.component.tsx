@@ -114,7 +114,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
       },
       {
         // Conditional stop: the sync button it anchors to renders only where Send/Receive is
-        // installed, which is Paratext 10 Studio. In plain Platform.Bible `toolbar-sync-area`
+        // installed, which is Paratext 10. In plain Platform.Bible `toolbar-sync-area`
         // stays an empty zero-size wrapper, so Tour skips this stop and the tour runs with four —
         // expected there, not a defect. Nothing here changes between the two builds.
         target: '[data-testid="toolbar-sync-area"]',

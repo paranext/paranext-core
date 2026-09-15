@@ -277,7 +277,7 @@ jobs:
           if-no-files-found: warn
 
       # Creates the tag, the draft and the generated notes, and attaches NO binaries. The release is
-      # a fixed point in Git history for the Paratext 10 Studio build to construct its own releases
+      # a fixed point in Git history for the Paratext 10 build to construct its own releases
       # from, not a download (see LICENSING.md, "The distributed application"). `artifacts` is an
       # optional input, so omitting it leaves everything else about the release intact.
       #

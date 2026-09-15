@@ -46,7 +46,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_retry%',
   '%firstRun_button_continueWithoutFinishingSetup%',
   // Referenced via {%product_name%} in the title/description/error body; formatReplacementString
-  // expands it so the app name lives in one place (and swaps cleanly for P10 Studio).
+  // expands it so the app name lives in one place (and swaps cleanly for Paratext 10).
   '%product_name%',
 ];
 

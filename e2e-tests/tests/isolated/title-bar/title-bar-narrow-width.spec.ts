@@ -116,7 +116,7 @@ test.describe('Title bar at narrow window widths', () => {
     // about why rather than leaving a green test that proves less than it looks like it does.
     // Reproducing the reported clipping needs a CROWDED bar, and two of the controls that crowd it
     // — the marketing version badge and the sync button — do not render here: the badge is driven
-    // by `marketingVersion`, which is empty in paranext-core (it is set in Paratext 10 Studio,
+    // by `marketingVersion`, which is empty in paranext-core (it is set in Paratext 10,
     // where this was reported), and send/receive is unavailable in the test environment. Without
     // them the content area is never squeezed at any width the window can actually reach, and at
     // widths narrow enough to squeeze it the bar overflows with or without the fix.
