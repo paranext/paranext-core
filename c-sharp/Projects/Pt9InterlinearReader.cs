@@ -664,7 +664,7 @@ internal static class Pt9InterlinearReader
                         (cluster.Lexemes ?? [])
                             .Select(lexeme => new Pt9InterlinearLexemeRef(
                                 lexeme.LexemeId,
-                                string.IsNullOrEmpty(lexeme.SenseId) ? null : lexeme.SenseId
+                                NullIfEmpty(lexeme.SenseId)
                             ))
                             .ToList()
                     ))

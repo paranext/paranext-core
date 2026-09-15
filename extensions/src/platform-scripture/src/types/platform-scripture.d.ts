@@ -1516,6 +1516,10 @@ declare module 'platform-scripture' {
    * while here one bad file fails the whole request, so corruption is visible and no partial
    * payload ever poses as complete data.
    *
+   * A malformed setup id in `InterlinearSetup.xml` is fatal to the whole PT9 interlinear read
+   * rather than degrading to a partial result, while legacy settings keep the more forgiving "serve
+   * as absent" behavior.
+   *
    * @experimental
    */
   export type Pt9InterlinearProjectData = {
