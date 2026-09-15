@@ -222,6 +222,50 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith('wv-late-focus', 'main');
   });
 
+  it('suppresses only the first focus change after a click, not every focus change within the gesture window', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { bound } = install('wv-one-shot', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    vi.setSystemTime(new Date(Date.now() + 14));
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // Still footnotes: the one focus change the click itself caused is suppressed.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    vi.setSystemTime(new Date(Date.now() + 150));
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // A second focus change is accepted even though it still falls inside the gesture window: the
+    // click has already spent its one suppression.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith('wv-one-shot', 'main');
+  });
+
+  it('does not arm the gesture window for a click outside every area', () => {
+    const { bound } = install('wv-outside-click', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    byId('toolbar').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The click landed on no area at all, so it never armed a suppression window: the very next
+    // focus change is accepted immediately.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-outside-click',
+      'main',
+    );
+  });
+
   it('refuses to make an area the pane never reported the active one', async () => {
     const html =
       '<div id="toolbar">bar</div>' +

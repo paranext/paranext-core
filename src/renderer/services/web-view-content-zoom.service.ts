@@ -376,6 +376,18 @@ function clearAllFallbackGraces(): void {
 }
 
 /**
+ * Drops the three maps' entries for one pane: its reported areas, its active area, and the "already
+ * warned about" set an unknown area id was logged into. Shared by every path that treats a pane's
+ * areas as belonging to content that is gone — an expired grace that found the bootstrap dead, and
+ * a genuine unmount.
+ */
+function forgetAreaState(webViewId: WebViewId): void {
+  areasByWebViewId.delete(webViewId);
+  activeAreaByWebViewId.delete(webViewId);
+  unknownAreasLoggedByWebViewId.delete(webViewId);
+}
+
+/**
  * Starts the wait during which a pane with no known areas may still be mounting content that will
  * report some, or — armed from an iframe load — during which a pane that already has areas may
  * still be showing content those areas no longer belong to. At expiry: a pane with no areas at all
@@ -399,9 +411,7 @@ function startFallbackGrace(webViewId: WebViewId): void {
       if (hasAreas) {
         // The areas belong to content this pane no longer shows; nothing will ever report over
         // them, so they are dropped rather than left to shadow the whole-iframe fallback below.
-        areasByWebViewId.delete(webViewId);
-        activeAreaByWebViewId.delete(webViewId);
-        unknownAreasLoggedByWebViewId.delete(webViewId);
+        forgetAreaState(webViewId);
       }
       fallbackAllowedWebViewIds.add(webViewId);
       pushContentZoom(webViewId);
@@ -505,9 +515,7 @@ export function forgetContentZoom(webViewId: WebViewId): void {
     ownLevelWriteTimers.delete(webViewId);
   }
   commitOwnLevels(webViewId);
-  areasByWebViewId.delete(webViewId);
-  activeAreaByWebViewId.delete(webViewId);
-  unknownAreasLoggedByWebViewId.delete(webViewId);
+  forgetAreaState(webViewId);
   clearFallbackGrace(webViewId); // also revokes a whole-iframe fallback grant, if any
 }
 
