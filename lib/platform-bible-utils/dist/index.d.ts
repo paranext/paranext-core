@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -1806,7 +1806,7 @@ export type WebViewMenu = {
 	 * panel within its own window, which never leaves the renderer. Treat a `command` here as the
 	 * name of the action, not as something to invoke through the command service.
 	 *
-	 * The platform's own group here sits at order 100, so choose another order for yours. A
+	 * The platform's own groups here sit at orders 50 and 100, so choose another order for yours. A
 	 * single-column menu buckets every group together for the duplicate-order check, so a second
 	 * group at 100 throws — and because a failed contribution is rolled back whole, that would cost
 	 * this extension its entire `menus.json`, not just its tab items.
