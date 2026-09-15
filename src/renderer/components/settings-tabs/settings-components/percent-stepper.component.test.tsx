@@ -118,4 +118,45 @@ describe('PercentStepper', () => {
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('steps by a quarter when the caller asks for it', () => {
+    const onChange = vi.fn();
+    render(
+      <PercentStepper
+        {...baseProps}
+        min={0.5}
+        max={3}
+        step={0.25}
+        value={0.5}
+        onChange={onChange}
+      />,
+    );
+    const increase = screen.getByRole('button', { name: LABELS.increase });
+    fireEvent.click(increase);
+    expect(onChange).toHaveBeenCalledWith(0.75);
+    fireEvent.click(increase);
+    expect(onChange).toHaveBeenCalledWith(1);
+  });
+
+  it('steps by five hundredths without float drift', () => {
+    const onIncrease = vi.fn();
+    const increaseRender = render(
+      <PercentStepper {...baseProps} step={0.05} value={1.1} onChange={onIncrease} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onIncrease).toHaveBeenCalledWith(1.15);
+    increaseRender.unmount();
+
+    const onDecrease = vi.fn();
+    render(<PercentStepper {...baseProps} step={0.05} value={1.1} onChange={onDecrease} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
+    expect(onDecrease).toHaveBeenCalledWith(1.05);
+  });
+
+  it('keeps the existing tenth step exact', () => {
+    const onChange = vi.fn();
+    render(<PercentStepper {...baseProps} value={2.9} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onChange).toHaveBeenCalledWith(3);
+  });
 });
