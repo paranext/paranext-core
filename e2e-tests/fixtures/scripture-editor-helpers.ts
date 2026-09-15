@@ -125,8 +125,9 @@ export interface SampleChapterRef {
 /**
  * Rewrites one chapter of the sample WEB project through its data provider — read the chapter's
  * USFM, pass it through `transform`, write the result back — so a spec can put markers the sample
- * text does not contain in front of real verses. Writes go to the isolated project root only, so
- * this is for specs that launch with `isolatedProjectRoot: true`.
+ * text does not contain in front of real verses. Call only from specs launched with
+ * `isolatedProjectRoot: true`; this helper does not check, and without that option it rewrites the
+ * developer's own copy of the sample project.
  *
  * Going through PAPI rather than editing the SFM file on disk means the write lands the same way an
  * editor save does: the provider re-parses it and every open editor for the chapter is notified.
@@ -286,6 +287,53 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
   await input.press('Enter');
   // The popover closing confirms the commit was accepted before callers assert on the outcome.
   await input.waitFor({ state: 'hidden', timeout: 10_000 });
+}
+
+/**
+ * `SIMPLE_COLUMN_MIN_WIDTH_PX` from `simple-layout.data.ts`, plus room for the rounding the dock's
+ * flex weights introduce. Assert it as an upper bound on the editor column's width after a drag to
+ * the floor, so a spec states that the drag really reached the floor rather than stopping somewhere
+ * comfortable.
+ */
+export const COLUMN_FLOOR_CEILING_PX = 310;
+
+/** Width of the Simple-mode editor column (the middle dock panel), rounded to whole pixels. */
+export async function getEditorColumnWidth(mainPage: Page): Promise<number> {
+  return mainPage
+    .locator('.dock-panel')
+    .nth(1)
+    .evaluate((el) => Math.round(el.getBoundingClientRect().width));
+}
+
+/**
+ * Drags the divider between the editor column and the resources column to the left by `distancePx`,
+ * in steps rc-dock will track. Pass `Number.POSITIVE_INFINITY` to drag as far as the window allows:
+ * the dock clamps the column at its floor, which is the state the column-floor specs are about.
+ */
+export async function dragEditorColumnDividerLeft(
+  mainPage: Page,
+  distancePx: number,
+): Promise<void> {
+  // The second divider is the one between the editor column and the resources column.
+  const divider = mainPage.locator('.dock-divider').nth(1);
+  const dividerBox = await divider.boundingBox();
+  if (!dividerBox) throw new Error('The editor/resources divider has no bounding box');
+  const startX = dividerBox.x + dividerBox.width / 2;
+  const y = dividerBox.y + dividerBox.height / 2;
+  const targetX = Math.max(1, startX - distancePx);
+  await mainPage.mouse.move(startX, y);
+  await mainPage.mouse.down();
+  // Stepped, and with a small first nudge: rc-dock's drag manager starts tracking on the first
+  // move that differs from where the press landed, so a single jump to the target does nothing.
+  const dragPath = [startX - 5];
+  for (let x = startX - 5; x > targetX; x -= 40) dragPath.push(Math.max(x - 40, targetX));
+  // Sequenced through a promise chain rather than an await-in-loop: the moves have to arrive in
+  // order.
+  await dragPath.reduce(
+    (previous, x) => previous.then(() => mainPage.mouse.move(x, y)),
+    Promise.resolve(),
+  );
+  await mainPage.mouse.up();
 }
 
 /**

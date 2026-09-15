@@ -44,19 +44,6 @@ export function englishLabel(localizeKey: string): string {
   return label;
 }
 
-function escapeForRegExp(label: string): string {
-  return label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Exact, whole-name match for an accessible name (case-insensitive, no substring matches), so "Skip
- * tour" cannot also match a hypothetical "Skip tour and hide" and "Next" cannot match a "Next
- * chapter" button elsewhere in the dialog.
- */
-function exactName(...labels: string[]): RegExp {
-  return new RegExp(`^(?:${labels.map(escapeForRegExp).join('|')})$`, 'i');
-}
-
 /** Clears the onboarding-tour completion flag from localStorage. */
 export async function clearTourDone(page: Page): Promise<void> {
   await page.evaluate((key) => {
@@ -73,11 +60,32 @@ export function getTourDialog(page: Page): Locator {
   return page.getByTestId('tour-dialog');
 }
 
+/**
+ * A tour button by its localization key, matched on the whole accessible name so "Next" cannot also
+ * match a hypothetical "Next chapter" button elsewhere in the dialog.
+ */
+function getTourButton(page: Page, localizeKey: string): Locator {
+  return getTourDialog(page).getByRole('button', { name: englishLabel(localizeKey), exact: true });
+}
+
 /** The tour's Skip button, named from `%onboardingTour_button_skip%`. */
 export function getTourSkipButton(page: Page): Locator {
-  return getTourDialog(page).getByRole('button', {
-    name: exactName(englishLabel('%onboardingTour_button_skip%')),
-  });
+  return getTourButton(page, '%onboardingTour_button_skip%');
+}
+
+/** The tour's Next button (intermediate steps), named from `%firstRun_button_next%`. */
+export function getTourNextButton(page: Page): Locator {
+  return getTourButton(page, '%firstRun_button_next%');
+}
+
+/** The tour's Back button (every step but the first), named from `%firstRun_button_back%`. */
+export function getTourBackButton(page: Page): Locator {
+  return getTourButton(page, '%firstRun_button_back%');
+}
+
+/** The tour's Done button (last step only), named from `%onboardingTour_button_done%`. */
+export function getTourDoneButton(page: Page): Locator {
+  return getTourButton(page, '%onboardingTour_button_done%');
 }
 
 /** Returns the step-counter display text (e.g. `"1 of 5"`). */
@@ -109,21 +117,12 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
  * either label so a caller need not know which step it is on.
  */
 export async function advanceTour(page: Page): Promise<void> {
-  await getTourDialog(page)
-    .getByRole('button', {
-      name: exactName(
-        englishLabel('%firstRun_button_next%'),
-        englishLabel('%onboardingTour_button_done%'),
-      ),
-    })
-    .click();
+  await getTourNextButton(page).or(getTourDoneButton(page)).click();
 }
 
 /** Clicks the Back button to return to the previous step. */
 export async function goBackTour(page: Page): Promise<void> {
-  await getTourDialog(page)
-    .getByRole('button', { name: exactName(englishLabel('%firstRun_button_back%')) })
-    .click();
+  await getTourBackButton(page).click();
 }
 
 /**
@@ -133,9 +132,7 @@ export async function goBackTour(page: Page): Promise<void> {
  * visible after the bound, the caller's next assertion fails with a clear error.
  */
 export async function advanceToLastStep(page: Page): Promise<void> {
-  const nextButton = getTourDialog(page).getByRole('button', {
-    name: exactName(englishLabel('%firstRun_button_next%')),
-  });
+  const nextButton = getTourNextButton(page);
   for (let i = 0; i < 10; i += 1) {
     // Steps are inherently sequential — must observe the current step before advancing.
     // eslint-disable-next-line no-await-in-loop
@@ -160,23 +157,30 @@ export async function skipTour(page: Page): Promise<void> {
  * and its full-screen overlay blocks all pointer events. Writing the done flag makes
  * `OnboardingTour` (which re-reads it each render) refuse to open from that point on, closing the
  * race a visibility check alone would leave; an instance that already opened before the flag landed
- * is dismissed through its own Skip button.
+ * is dismissed with Escape.
  *
- * Skip is clicked rather than Escape pressed because the tour listens for Escape on the main
- * document, and `page.keyboard` delivers to whatever has focus — which, once a scripture editor is
- * open, is the editor's iframe. A click lands on the dialog regardless of focus.
+ * The Escape is dispatched on the host `window` from page script rather than typed through
+ * `page.keyboard`: the tour's listener sits on `window` in the capture phase, so a synthetic event
+ * there reaches it whatever has DOM focus, while a typed key goes to the focused element — once a
+ * scripture editor is open, its iframe — and never leaves it. Retried briefly because the listener
+ * is attached only once the step card has rendered.
  *
- * `waitForAppReady` calls this by default. A spec that skips `waitForAppReady` (the
- * scripture-editor specs, which gate on the editor iframe instead) must call it itself before its
- * first click in the main frame.
+ * `waitForAppReady` calls this by default. A Simple-mode spec that skips `waitForAppReady` (the
+ * scripture-editor specs gate on the editor iframe instead) must call it itself before its first
+ * click in the main frame.
  */
+// TODO: suppress the tour at the fixture level (isolated.fixture.ts, with an opt-out for
+// onboarding-tour.spec.ts) so no Simple-mode spec has to remember this call.
 export async function suppressOnboardingTour(page: Page): Promise<void> {
   await page.evaluate((key) => {
     localStorage.setItem(key, 'true');
   }, ONBOARDING_TOUR_DONE_KEY);
   const tourDialog = getTourDialog(page);
-  if (await tourDialog.isVisible()) {
-    await skipTour(page);
-    await expect(tourDialog).not.toBeVisible({ timeout: 5000 });
-  }
+  if (!(await tourDialog.isVisible())) return;
+  await expect(async () => {
+    await page.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    await expect(tourDialog).not.toBeVisible({ timeout: 500 });
+  }).toPass({ timeout: 5000 });
 }
