@@ -4803,6 +4803,38 @@ step, no automation. Just a record.
   `adr-window-min-width-shared-constant`.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
 
+## adr-simple-mode-tab-menu-offers-zoom-only: Simple mode's tab menu is the platform's own contributed menu, narrowed to the content-zoom group
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Simple mode had no tab menu at all, because every item the platform's tab menu could
+  offer — floating, moving to another window — is a no-op there: floating targets a second window
+  Simple mode does not have, and moving reaches windows Simple mode does not expose. Content zoom is
+  the first per-tab action that is meaningful in both modes: zooming a tab's content behaves
+  identically whether or not a second window exists. The menu converter flattens contributed groups
+  into one list with separators, and a converted item no longer says which group it came from, so
+  narrowing a menu to one group has to happen on the contributed menu before conversion, not after.
+- **Decision:** Both interface modes read the same contributed tab menu. Simple mode narrows it to
+  the `platform.tabZoom` group before conversion; items in that group are inert on a tab whose web
+  view marks no zoom area, the same way every other tab-menu item is inert when it cannot act on the
+  current tab. A tab hosting no web view gets no menu at all in either mode. The menu renders only
+  once the interface mode is known, so a tab never briefly shows the wrong mode's menu before the
+  setting resolves.
+- **Alternatives:** **Keep Simple mode menu-less and rely on chords alone** — rejected: a keyboard
+  shortcut with no menu entry is not discoverable, and content zoom is meant to be found by browsing
+  the tab menu. **Disable items by area presence at the contribution level** — rejected: whether a
+  view marks a zoom area is a signal that only resolves asynchronously, well after the menu contract
+  is declared, so it cannot gate what the contribution itself offers. **A per-item
+  `hiddenInterfaceModes` field** — rejected: that mechanism hides individual items, but the need here
+  is to restrict an entire menu to one group, which a per-item hide cannot express without listing
+  every other item's id.
+- **Consequences:** Simple mode now pays one contributed-menu read per tab at mount, the same
+  mount-time cost Power mode already paid. The tab menu is reachable only where a tab bar is visible,
+  which in Simple mode is Column 3 alone — so the editor pane, which has no visible tab bar, needs
+  its own entry point to content zoom; that entry point is the editor's own hamburger menu, delivered
+  together with the editor's zoom areas.
+- **Source:** PT-4578 (PR #2819), epic PT-4575.
+
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
 - **Formerly:** ADR-0019
