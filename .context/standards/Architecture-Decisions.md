@@ -5908,8 +5908,9 @@ step, no automation. Just a record.
   `window` and falls back to the three PAPI commands `platform.webViewContentZoomIn` / `…Out` /
   `…Reset`, which keeps `adr-renderer-registers-no-names` intact — the names are registered by the
   router, not by the renderer — and keeps a wheel burst off the network. Main gives up the chords in
-  PT-4577 (PR #2809; before it, Windows and Linux swallowed the chords in
-  `before-input-event`): the three zoom branches are deleted, `platform.zoomIn` and
+  PT-4577 (PR #2809), the change that removes the Windows/Linux `before-input-event` zoom branches —
+  while those branches exist, main still swallows the chords there: the three zoom branches are
+  deleted, `platform.zoomIn` and
   `platform.zoomOut` stay as commands with no default chord, macOS binds explicit View-menu items
   carrying ⌘=/⌘-/⌘0 in place of the native `zoomIn`/`zoomOut`/`resetZoom` roles, and a renderer
   top-document `keydown` listener covers the case where keyboard focus is on window chrome — the tab
