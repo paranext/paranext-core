@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { Setting } from './setting.component';
 
@@ -19,15 +19,17 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 const ZOOM_STRINGS = {
   '%settings_platform_webViewContentZoom_increase%': 'Increase default zoom',
   '%settings_platform_webViewContentZoom_decrease%': 'Decrease default zoom',
-  '%settings_platform_webViewContentZoom_reset%': 'Reset default zoom to 100 %',
+  '%settings_platform_webViewContentZoom_reset%': 'Reset default zoom',
 };
 
 // Props shared by every case below; only settingKey/setting/label (and `disabled`) differ per test,
 // so each spreads this and passes just those (same idea as the renderPanel helper in
 // comment-list.component.test.tsx). Kept as a shared spread rather than a wrapper fn because
 // Setting's project/user union props make a single-typed render helper awkward, and spreading at
-// each call site keeps the inline settingKey/setting that discriminates the union. Mocks are cleared
-// between tests so the shared no-op fns can't leak call state.
+// each call site keeps the inline settingKey/setting that discriminates the union. `vi.clearAllMocks`
+// between tests resets call history on the shared no-op fns, but not a mock's `mockReturnValue`
+// implementation — the zoom describe below resets that explicitly, since it is the only one that
+// overrides `useLocalizedStrings`'s return value per test.
 const baseProps = {
   setSetting: vi.fn(),
   isLoading: false,
@@ -118,6 +120,12 @@ describe('Setting disabled forwarding', () => {
 // So these tests build their own props rather than spreading baseProps' validateProjectSetting,
 // which the `Setting` props union forbids alongside an other-setting key.
 describe('platform.webViewContentZoom stepper', () => {
+  afterEach(() => {
+    // `vi.clearAllMocks` (the top-level beforeEach) does not undo `mockReturnValue`, so without this
+    // the override set by a test here would otherwise leak into whatever test runs next.
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
   it('renders the percent stepper instead of a text box', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
     render(
@@ -157,7 +165,7 @@ describe('platform.webViewContentZoom stepper', () => {
         isLoading={baseProps.isLoading}
         settingKey="platform.zoomFactor"
         setting={1.2}
-        label="Zoom factor"
+        label="Interface Scaling"
       />,
     );
     expect(screen.getByRole('textbox')).toBeInTheDocument();

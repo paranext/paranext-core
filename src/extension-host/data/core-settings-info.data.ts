@@ -66,6 +66,7 @@ export const platformSettings: SettingsContribution = [
   // translator changes as part of day-to-day work.
   {
     label: '%settings_platform_supporter_group_label%',
+    description: '%settings_platform_supporter_group_description%',
     properties: {
       'platform.requestTimeout': {
         label: '%settings_platform_requestTimeout_label%',
