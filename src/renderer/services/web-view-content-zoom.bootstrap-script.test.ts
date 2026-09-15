@@ -76,6 +76,7 @@ describe('content-zoom bootstrap script', () => {
     // eslint-disable-next-line no-underscore-dangle
     window.__platformContentZoom?.destroy();
     window.matchMedia = originalMatchMedia;
+    vi.useRealTimers();
   });
 
   it('acts through the bound helpers on the area that has focus, with its own web view id, and consumes the key', () => {
@@ -128,6 +129,57 @@ describe('content-zoom bootstrap script', () => {
     // eslint-disable-next-line no-underscore-dangle
     const api = window.__platformContentZoom;
     expect(api?.activeArea).toBe('footnotes');
+  });
+
+  it('keeps the clicked area active when the click itself moves focus into another area', () => {
+    const { bound } = install('wv-click-wins', TWO_AREAS);
+    // The gesture a click on a footnote row is: the pointer goes down in the footnotes area, and the
+    // view answers the click by putting the caret back in the editor text (`selectNote`), so focus
+    // lands in `main` milliseconds later. The pointer says which area the user means.
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-click-wins',
+      'footnotes',
+    );
+    key({ key: '0', ctrlKey: true }, byId('toolbar'));
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-click-wins', 'footnotes');
+  });
+
+  it('follows a focus change no pointer gesture is behind, so the keyboard can pick the area', () => {
+    const { bound } = install('wv-keyboard-focus', TWO_AREAS);
+    byId('note').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-keyboard-focus',
+      'footnotes',
+    );
+  });
+
+  it('follows a focus change that comes long after the last click', () => {
+    // Only `Date` is faked: the bootstrap's own timers, the mutation observer and rAF keep running
+    // for real, so nothing but the age of the last pointer gesture changes.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { bound } = install('wv-late-focus', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    vi.setSystemTime(new Date(Date.now() + 5_000));
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith('wv-late-focus', 'main');
   });
 
   it('refuses to make an area the pane never reported the active one', async () => {
