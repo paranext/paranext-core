@@ -35,7 +35,19 @@ import {
 } from './web-view-content-zoom.service';
 
 const LEVELS = 'platform.contentZoomLevels';
+const IDENTITY = 'platform.contentZoomIdentity';
 const MEMORY = 'platform.webViewContentZoomMemory';
+
+/**
+ * The state a pane holds when its own levels are `levels`: the levels themselves plus the stamp
+ * naming the kind and identity they belong to, which the platform writes and removes with them.
+ */
+function zoomState(
+  levels: Record<string, number>,
+  identity = 'editor:PROJ-A',
+): Record<string, unknown> {
+  return { [LEVELS]: levels, [IDENTITY]: identity };
+}
 
 function makeIframe() {
   const iframe = document.createElement('iframe');
@@ -177,7 +189,7 @@ describe('web-view-content-zoom.service', () => {
   it('zooms one area in from the default, writes state and memory for that area, pushes its variable and shows the indicator there', async () => {
     await adjustContentZoom('editor-1', 1, 'main');
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
     expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1');
@@ -190,7 +202,7 @@ describe('web-view-content-zoom.service', () => {
     await adjustContentZoom('editor-1', 1, 'main');
     await adjustContentZoom('editor-1', 1, 'footnotes');
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2, footnotes: 1.1 } });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.2, footnotes: 1.1 }));
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.2, 'editor:PROJ-A:footnotes': 1.1 });
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.2');
     expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('1.1');
@@ -200,7 +212,7 @@ describe('web-view-content-zoom.service', () => {
   it('without an area id acts on the active area', async () => {
     setContentZoomActiveArea('editor-1', 'footnotes');
     await adjustContentZoom('editor-1', 1);
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { footnotes: 1.1 } });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ footnotes: 1.1 }));
   });
 
   it("reset deletes that area's level and memory entry and returns it to the default; an empty map is removed from state", async () => {
@@ -235,6 +247,8 @@ describe('web-view-content-zoom.service', () => {
     await __flushContentZoomWritesForTesting();
     expect(settingsSet).not.toHaveBeenCalled();
     memoryCallbacks.forEach((cb) => cb(settings[MEMORY]));
+    // Untouched: this pane never reported an area and was never written to, so it holds exactly the
+    // level it was set up with and no identity stamp.
     expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
   });
 
@@ -259,7 +273,7 @@ describe('web-view-content-zoom.service', () => {
     const third = adjustContentZoom('editor-1', 1, 'footnotes');
     await Promise.all([first, second, third]);
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2, footnotes: 1.1 } });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.2, footnotes: 1.1 }));
     expect(settings[MEMORY]).toEqual({
       'editor:PROJ-A:main': 1.2,
       'editor:PROJ-A:footnotes': 1.1,
@@ -281,7 +295,7 @@ describe('web-view-content-zoom.service', () => {
       expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('2');
       vi.advanceTimersByTime(250);
       expect(updateDefinition).toHaveBeenCalledTimes(2);
-      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 2 } });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 2 }));
     } finally {
       vi.useRealTimers();
     }
@@ -292,9 +306,9 @@ describe('web-view-content-zoom.service', () => {
     try {
       await adjustContentZoom('editor-1', 1, 'main');
       await adjustContentZoom('editor-1', 1, 'main');
-      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
       window.dispatchEvent(new Event('beforeunload'));
-      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.2 }));
     } finally {
       vi.useRealTimers();
     }
@@ -330,9 +344,9 @@ describe('web-view-content-zoom.service', () => {
       // its own write carries that level with it rather than leaving it behind.
       await adjustContentZoom('editor-1', 1, 'main'); // 1.3
       expect(updateDefinition).toHaveBeenCalledWith('editor-1', {
-        state: { [LEVELS]: { main: 1.3 } },
+        state: zoomState({ main: 1.3 }),
       });
-      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.3 } });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.3 }));
       expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
     } finally {
       vi.useRealTimers();
@@ -344,11 +358,11 @@ describe('web-view-content-zoom.service', () => {
     try {
       await adjustContentZoom('editor-1', 1, 'main'); // 1.1, written immediately
       await adjustContentZoom('editor-1', 1, 'main'); // 1.2, deferred into the open window
-      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
       // A re-render or a move between windows unmounts the pane while its definition lives on, so
       // the tail of the gesture has somewhere to land.
       forgetContentZoom('editor-1');
-      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.2 }));
     } finally {
       vi.useRealTimers();
     }
@@ -369,7 +383,7 @@ describe('web-view-content-zoom.service', () => {
       updateDefinition.mockClear();
       window.dispatchEvent(new Event('beforeunload'));
       expect(updateDefinition).toHaveBeenCalledWith('editor-1', {
-        state: { [LEVELS]: { main: 1.2 } },
+        state: zoomState({ main: 1.2 }),
       });
     } finally {
       vi.useRealTimers();
@@ -502,11 +516,9 @@ describe('web-view-content-zoom.service', () => {
       updateDefinition.mockClear();
       memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:footnotes': 1.4 }));
       expect(updateDefinition).toHaveBeenCalledWith('editor-1', {
-        state: { [LEVELS]: { main: 1.1, footnotes: 1.4 } },
+        state: zoomState({ main: 1.1, footnotes: 1.4 }),
       });
-      expect(definitions.get('editor-1')?.state).toEqual({
-        [LEVELS]: { main: 1.1, footnotes: 1.4 },
-      });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1, footnotes: 1.4 }));
     } finally {
       vi.useRealTimers();
     }
@@ -518,14 +530,12 @@ describe('web-view-content-zoom.service', () => {
       await adjustContentZoom('editor-1', 1, 'main'); // 1.1 at once; the burst window is open
       memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:footnotes': 1.4 }));
       vi.advanceTimersByTime(250); // the burst's trailing write lands, carrying both levels
-      expect(definitions.get('editor-1')?.state).toEqual({
-        [LEVELS]: { main: 1.1, footnotes: 1.4 },
-      });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1, footnotes: 1.4 }));
       // The deletion half of a delta exists only in the record the walk reconciled against, so the
       // pane must be counted as in line with a change it took through an open burst window: a
       // record left behind here names no area, and the level the reset gave up would stay applied.
       memoryCallbacks.forEach((cb) => cb({})); // the footnotes level is reset in another window
-      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
     } finally {
       vi.useRealTimers();
     }
@@ -538,9 +548,7 @@ describe('web-view-content-zoom.service', () => {
       cb({ 'editor:PROJ-A:main': 1.2, 'editor:PROJ-A:footnotes': 1.3 }),
     );
     expect(updateDefinition).toHaveBeenCalledTimes(1);
-    expect(definitions.get('editor-1')?.state).toEqual({
-      [LEVELS]: { main: 1.2, footnotes: 1.3 },
-    });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.2, footnotes: 1.3 }));
   });
 
   it('holds the memory write behind the debounce delay, then flushes it in one call', async () => {
@@ -568,7 +576,7 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-1', ['main', 'footnotes']);
     await adjustContentZoom('editor-1', 1, 'main');
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
     expect(showIndicator).toHaveBeenCalledWith('main', '110 %');
     expect(settingsSet).not.toHaveBeenCalled();
@@ -673,9 +681,7 @@ describe('web-view-content-zoom.service', () => {
     });
     setContentZoomAreas('editor-3', ['main', 'footnotes']);
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('editor-3')?.state).toEqual({
-      [LEVELS]: { main: 1.3, footnotes: 0.9 },
-    });
+    expect(definitions.get('editor-3')?.state).toEqual(zoomState({ main: 1.3, footnotes: 0.9 }));
     const pane = iframeFor('editor-3');
     expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.3');
     expect(cssVar(pane, '--platform-content-zoom-footnotes')).toBe('0.9');
@@ -697,7 +703,8 @@ describe('web-view-content-zoom.service', () => {
       state: { [LEVELS]: { main: 2 } },
     });
     setContentZoomAreas('editor-4', ['main', 'footnotes']);
-    expect(definitions.get('editor-4')?.state).toEqual({ [LEVELS]: { main: 2 } });
+    // Its own level is kept; the platform only adds the stamp naming the identity it belongs to.
+    expect(definitions.get('editor-4')?.state).toEqual(zoomState({ main: 2 }));
     expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-main')).toBe('2');
   });
 
@@ -718,9 +725,7 @@ describe('web-view-content-zoom.service', () => {
     settingsSet.mockClear();
     setContentZoomAreas('editor-6', ['main', 'footnotes']);
     await __flushContentZoomWritesForTesting();
-    expect(definitions.get('editor-6')?.state).toEqual({
-      [LEVELS]: { main: 1.3, footnotes: 0.9 },
-    });
+    expect(definitions.get('editor-6')?.state).toEqual(zoomState({ main: 1.3, footnotes: 0.9 }));
     const pane = iframeFor('editor-6');
     expect(cssVar(pane, '--platform-content-zoom-main')).toBe('1.3');
     expect(cssVar(pane, '--platform-content-zoom-footnotes')).toBe('0.9');
@@ -739,7 +744,7 @@ describe('web-view-content-zoom.service', () => {
       state: {},
     });
     setContentZoomAreas('editor-5', ['main']);
-    expect(definitions.get('editor-5')?.state).toEqual({ [LEVELS]: { main: 1.3 } });
+    expect(definitions.get('editor-5')?.state).toEqual(zoomState({ main: 1.3 }));
     // A memory push (live sharing) adds `footnotes` through the existing sibling-sync path, which
     // is independent of first-report seeding.
     memoryCallbacks.forEach((cb) =>
@@ -748,6 +753,95 @@ describe('web-view-content-zoom.service', () => {
     const stateAfterLiveSharing = definitions.get('editor-5')?.state;
     setContentZoomAreas('editor-5', ['main', 'footnotes']);
     expect(definitions.get('editor-5')?.state).toEqual(stateAfterLiveSharing);
+  });
+
+  it('re-seeds a pane whose identity changed since its levels were seeded', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.2, 'notes:BBB:main': 1.4 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-1', {
+      id: 'notes-1',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-1', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-1')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+    expect(cssVar(iframeFor('notes-1'), '--platform-content-zoom-main')).toBe('1.2');
+
+    // The panel is re-pointed at another project: the same web view id, and a definition the view
+    // built by spreading its own saved state — the levels above included — onto the new project.
+    definitions.set('notes-1', { ...requireDefinition('notes-1'), projectId: 'bbb' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-1') });
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-1')?.state).toEqual(zoomState({ main: 1.4 }, 'notes:BBB'));
+    expect(cssVar(iframeFor('notes-1'), '--platform-content-zoom-main')).toBe('1.4');
+  });
+
+  it('a re-pointed pane with no remembered level for the new identity drops the old levels', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.2 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-2', {
+      id: 'notes-2',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-2', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-2')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    definitions.set('notes-2', { ...requireDefinition('notes-2'), projectId: 'bbb' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-2') });
+    await __flushContentZoomWritesForTesting();
+    // Nothing is remembered for project B, so the pane follows the Settings default...
+    expect(definitions.get('notes-2')?.state).toEqual({});
+    expect(cssVar(iframeFor('notes-2'), '--platform-content-zoom-main')).toBe('1');
+    // ...and project A's level is not written back into project B's memory entry.
+    expect(settings[MEMORY]).toEqual({ 'notes:AAA:main': 1.2 });
+  });
+
+  it('does not re-seed a pane that holds its own level while its identity is unchanged', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.5 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-3', {
+      id: 'notes-3',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      // The level the user gave this pane, restored with the layout.
+      state: { [LEVELS]: { main: 1.1 } },
+    });
+    setContentZoomAreas('notes-3', ['main']);
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-3') });
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-3')?.state).toEqual(zoomState({ main: 1.1 }, 'notes:AAA'));
+    expect(cssVar(iframeFor('notes-3'), '--platform-content-zoom-main')).toBe('1.1');
+  });
+
+  it('does not hand a reset level back on the definition update the reset itself causes', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.2 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-4', {
+      id: 'notes-4',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-4', ['main']);
+    await __flushContentZoomWritesForTesting();
+    await resetContentZoom('notes-4', 'main');
+    // The reset's own definition write comes back as an update while its memory edit is still in
+    // the debounce window, so memory still remembers the level the pane just gave up.
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-4') });
+    expect(definitions.get('notes-4')?.state).toEqual({});
+    expect(cssVar(iframeFor('notes-4'), '--platform-content-zoom-main')).toBe('1');
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-4')?.state).toEqual({});
+    expect(settings[MEMORY]).toEqual({});
   });
 
   it('does nothing for an unknown web view', async () => {
@@ -791,7 +885,7 @@ describe('web-view-content-zoom.service', () => {
     await __flushContentZoomWritesForTesting();
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
     memoryCallbacks.forEach((cb) => cb(settings[MEMORY]));
-    expect(definitions.get('editor-upper')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    expect(definitions.get('editor-upper')?.state).toEqual(zoomState({ main: 1.1 }));
   });
 
   it('brings a sibling pane of the same project in line per area when the memory changes (live sharing)', async () => {
@@ -804,8 +898,8 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-2', ['main', 'footnotes']);
     showIndicator.mockClear();
     memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:footnotes': 1.4 }));
-    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { footnotes: 1.4 } });
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { footnotes: 1.4 } });
+    expect(definitions.get('editor-2')?.state).toEqual(zoomState({ footnotes: 1.4 }));
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ footnotes: 1.4 }));
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
@@ -832,7 +926,7 @@ describe('web-view-content-zoom.service', () => {
     await adjustContentZoom('editor-1', 1, 'main'); // 1.2, still only pending
     // The echo of the 1.1 write arriving after the 1.2 edit was already made locally.
     memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.1 }));
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.2 }));
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.2');
     await __flushContentZoomWritesForTesting();
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.2 });
@@ -894,7 +988,7 @@ describe('web-view-content-zoom.service', () => {
     const release = await parked;
     // A foreign window's value for the same key arrives while this window's write is in flight.
     memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 0.8 }));
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
     release();
     await flushing;
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });

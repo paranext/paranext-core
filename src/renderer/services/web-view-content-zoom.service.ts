@@ -1,6 +1,7 @@
 import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinates';
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_IDENTITY_STATE_KEY,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
   ContentZoomKind,
   DEFAULT_ZOOM_FACTOR,
@@ -462,27 +463,94 @@ function isContentZoomBootstrapAlive(webViewId: WebViewId): boolean {
   }
 }
 
+/** The value stored under {@link CONTENT_ZOOM_IDENTITY_STATE_KEY} for one pane's identity. */
+function identityStampFor(id: MemoryIdentity): string {
+  return `${id.kind}:${id.identity}`;
+}
+
+/** The identity a pane's state is stamped with, or `undefined` for a pane with no stamp. */
+function storedIdentityStamp(
+  definition: Pick<SavedWebViewDefinition, 'state'>,
+): string | undefined {
+  const value = definition.state?.[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+  return typeof value === 'string' ? value : undefined;
+}
+
 /**
- * Seeds a newly opened pane's own levels from every area {@link cachedMemory} remembers for its kind
- * and identity, so the areas its bootstrap is about to report start at the level the user chose
- * last time instead of the Settings default. A pane whose state already holds
- * {@link CONTENT_ZOOM_LEVELS_STATE_KEY} — even for a single area — is left alone: the key is never
- * written empty, so holding it at all means the pane already has a level to keep.
+ * Gives a pane the levels {@link cachedMemory} remembers for the kind and identity it shows NOW, and
+ * stamps that identity into its state ({@link CONTENT_ZOOM_IDENTITY_STATE_KEY}) so a later change of
+ * identity can be told from a pane that still shows what its levels belong to. The stamp
+ * accompanies the levels: a pane that ends up with none carries neither, here and in
+ * {@link commitOwnLevels}.
+ *
+ * Three cases, decided by the stamp:
+ *
+ * - **It matches the pane's identity** — nothing to do. Whatever the pane holds, seeded here or
+ *   chosen by the user since, belongs to what the pane shows.
+ * - **No stamp** — a newly opened pane, or one restored from a layout written before its levels were
+ *   stamped. Levels it already holds are its own and are kept — the levels key is never written
+ *   empty, so holding it at all means the pane has a level to keep — and only a pane with none
+ *   takes the remembered levels of its identity.
+ * - **It names another identity** — the pane was re-pointed at another project through the same web
+ *   view id (`reloadWebView`), and the view's own `getWebViewDefinition` spreads its previous saved
+ *   state, zoom levels included, onto the new definition. Those levels are replaced by what memory
+ *   remembers for the new identity, and removed entirely when it remembers nothing, so the pane
+ *   follows the Settings default rather than the previous project's level. A level this window gave
+ *   the pane but has not written into its definition yet belongs to the identity it was chosen for,
+ *   so it is dropped with the rest rather than being committed — and written to memory under the
+ *   new identity's key — after the re-point.
  */
-function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
+function seedFromMemory(webViewId: WebViewId): void {
   const definition = deps.getDefinition(webViewId);
   if (!definition) return;
-  // TODO(PT-4582): a pane re-pointed to another project keeps these levels; stamp the seeded
-  // identity and re-seed on mismatch.
-  if (definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state) return;
-  if (pendingOwnLevels.has(webViewId)) return;
   const id = memoryIdentityFor(definition);
   if (!id) return;
+  const stamp = identityStampFor(id);
+  const storedStamp = storedIdentityStamp(definition);
+  if (storedStamp === stamp) return;
+  const hasOwnLevels =
+    (definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state) ||
+    pendingOwnLevels.has(webViewId);
+  const state: Record<string, unknown> = { ...(definition.state ?? {}) };
+  if (storedStamp === undefined && hasOwnLevels) {
+    state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
+    deps.updateDefinition(definition.id, { state });
+    return;
+  }
+  pendingOwnLevels.delete(webViewId);
   const levels = collectMemoryLevelsFor(cachedMemory, id);
-  if (Object.keys(levels).length === 0) return;
-  deps.updateDefinition(definition.id, {
-    state: { ...(definition.state ?? {}), [CONTENT_ZOOM_LEVELS_STATE_KEY]: levels },
-  });
+  if (Object.keys(levels).length === 0) {
+    // Nothing to give this pane and nothing it may keep: a re-pointed pane's old levels and stamp
+    // go, and a pane that had neither is left exactly as it was rather than written to.
+    if (!hasOwnLevels) return;
+    delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+    delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+  } else {
+    state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+    state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
+  }
+  deps.updateDefinition(definition.id, { state });
+}
+
+/**
+ * The definition-update half of {@link seedFromMemory}: a pane whose stamp no longer names what it
+ * shows is re-seeded, and nothing else is touched.
+ *
+ * A pane with no stamp is deliberately left to its next area report. An update arrives for every
+ * write to a definition, including the platform's own: a reset removes a pane's levels and its
+ * stamp together, and the memory edit that goes with it is still in its debounce window when that
+ * update comes back, so seeding an unstamped pane here would hand the level the user just gave up
+ * straight back from {@link cachedMemory} — and take it away again when the memory write's own echo
+ * arrives.
+ */
+function reseedIfIdentityChanged(webViewId: WebViewId): void {
+  const definition = deps.getDefinition(webViewId);
+  if (!definition) return;
+  const storedStamp = storedIdentityStamp(definition);
+  if (storedStamp === undefined) return;
+  const id = memoryIdentityFor(definition);
+  if (!id || identityStampFor(id) === storedStamp) return;
+  seedFromMemory(webViewId);
 }
 
 /**
@@ -500,7 +568,7 @@ export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAr
   if (valid.length > 0) clearFallbackGrace(webViewId);
   else startFallbackGrace(webViewId);
   if ((previous === undefined || previous.length === 0) && valid.length > 0)
-    seedFromMemoryOnFirstReport(webViewId);
+    seedFromMemory(webViewId);
   areasByWebViewId.set(webViewId, valid);
   pushContentZoom(webViewId);
 }
@@ -845,8 +913,17 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
     return false;
   }
   const state: Record<string, unknown> = { ...(definition.state ?? {}) };
-  if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
-  else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+  // The identity stamp lives exactly as long as the levels it belongs to: a pane that has levels
+  // always says which project they were chosen for, and a pane that gives them up keeps no stamp
+  // that a later re-point would judge the next project's levels against.
+  if (Object.keys(levels).length === 0) {
+    delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+    delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+  } else {
+    state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+    const id = memoryIdentityFor(definition);
+    if (id) state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = identityStampFor(id);
+  }
   try {
     if (!deps.updateDefinition(webViewId, { state })) return false;
   } catch (e) {
@@ -1138,7 +1215,13 @@ export function initializeContentZoomService(
     // compared the levels would have to be right about every other way a pane's variables can go
     // stale to avoid suppressing a push the pane needed.
     deps.onDidUpdateWebView(({ webView }) => {
-      if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
+      if (!deps.getDefinition(webView.id)) return;
+      // This is where a pane's identity changes: a view re-pointed at another project keeps its web
+      // view id and updates its definition, so the levels it carries over are checked against that
+      // new identity before they are pushed. The write a re-seed makes comes back through this same
+      // event, where the stamp it just wrote ends the round.
+      reseedIfIdentityChanged(webView.id);
+      pushContentZoom(webView.id);
     });
     // Gives a debounced edit still in flight when the window closes one last chance to reach the
     // setting rather than being silently dropped. Best effort only: the flush reads the stored
