@@ -844,6 +844,43 @@ describe('web-view-content-zoom.service', () => {
     expect(settings[MEMORY]).toEqual({});
   });
 
+  it('drops a burst edit still in flight for the old identity when a re-point interrupts it, rather than writing it to the new one', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.2, 'notes:BBB:main': 0.8 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-5', {
+      id: 'notes-5',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-5', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-5')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    vi.useFakeTimers();
+    try {
+      // A burst on the OLD identity: the first edit commits at once (1.3) and opens the debounce
+      // window; the second is deferred inside it (1.4) — pending only, never written to the
+      // definition before the re-point below interrupts it.
+      await adjustContentZoom('notes-5', 1, 'main');
+      await adjustContentZoom('notes-5', 1, 'main');
+      expect(definitions.get('notes-5')?.state).toEqual(zoomState({ main: 1.3 }, 'notes:AAA'));
+
+      // The panel is re-pointed at another project mid-burst, before the trailing write lands.
+      definitions.set('notes-5', { ...requireDefinition('notes-5'), projectId: 'bbb' });
+      onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-5') });
+      expect(definitions.get('notes-5')?.state).toEqual(zoomState({ main: 0.8 }, 'notes:BBB'));
+
+      // The burst's trailing write is still scheduled — for the level it chose against the OLD
+      // identity — and must not land on top of the re-seeded state once its window closes.
+      vi.advanceTimersByTime(250);
+      expect(definitions.get('notes-5')?.state).toEqual(zoomState({ main: 0.8 }, 'notes:BBB'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does nothing for an unknown web view', async () => {
     await adjustContentZoom('nope', 1);
     expect(updateDefinition).not.toHaveBeenCalled();
