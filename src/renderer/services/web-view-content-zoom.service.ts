@@ -1,6 +1,7 @@
 import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinates';
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_IDENTITY_STATE_KEY,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
   ContentZoomKind,
   DEFAULT_ZOOM_FACTOR,
@@ -52,7 +53,7 @@ type ContentZoomDeps = {
     callback: (event: { webView: SavedWebViewDefinition }) => void,
   ) => Unsubscriber;
   getLastFocusedTabId: () => string | undefined;
-  isWindowInputBlocked: () => boolean;
+  isModalOverlayOpen: () => boolean;
   settings: {
     get: (key: SettingKey) => Promise<unknown>;
     set: (key: SettingKey, value: unknown) => Promise<unknown>;
@@ -66,8 +67,8 @@ type ContentZoomDeps = {
 
 /**
  * Whether {@link warnShardDepsNotConfigured} has already logged. These six functions — five from the
- * renderer's two window-scoped shards, plus `isWindowInputBlocked` from the window-input-blocked
- * util — only exist once the composition root (`src/renderer/index.tsx`) calls
+ * renderer's two window-scoped shards, plus `isModalOverlayOpen` from the modal-overlay util — only
+ * exist once the composition root (`src/renderer/index.tsx`) calls
  * {@link initializeContentZoomService} with them; a call routed through one of the stubs below
  * before that happens is worth one warning, not one per call.
  */
@@ -84,11 +85,11 @@ function warnShardDepsNotConfigured(): void {
 const productionDeps: ContentZoomDeps = {
   getIframe: getWebViewIframe,
   // The six functions below come from the renderer's web-view and window shards, plus the
-  // window-input-blocked util. Importing a shard here directly would create an import cycle, since
-  // both shards import this module, and `isWindowInputBlocked` travels the same seam so this
-  // module's whole window-scoped surface is composed in one place. The renderer's composition root
-  // injects its own functions through `initializeContentZoomService`; these stubs cover the window
-  // between module load and that call.
+  // modal-overlay util. Importing a shard here directly would create an import cycle, since both
+  // shards import this module, and `isModalOverlayOpen` travels the same seam so this module's
+  // whole window-scoped surface is composed in one place. The renderer's composition root injects
+  // its own functions through `initializeContentZoomService`; these stubs cover the window between
+  // module load and that call.
   getDefinition: () => {
     warnShardDepsNotConfigured();
     return undefined;
@@ -109,7 +110,7 @@ const productionDeps: ContentZoomDeps = {
     warnShardDepsNotConfigured();
     return undefined;
   },
-  isWindowInputBlocked: () => {
+  isModalOverlayOpen: () => {
     warnShardDepsNotConfigured();
     return false;
   },
@@ -176,16 +177,6 @@ const MEMORY_WRITE_DEBOUNCE_MS = 250;
 
 /** Memory edits not yet stored in the setting, keyed by memory key; `undefined` means delete. */
 const pendingMemoryWrites = new Map<string, number | undefined>();
-
-/**
- * Memory edits this window gave up on, by key, each carrying the stored level the failed write was
- * meant to replace. The pane already shows and stores the level the user chose, through its own
- * definition state, which a memory fault does not touch — so an emission carrying the superseded
- * level is not news and must not push it back into the pane. Any OTHER value is a real change from
- * elsewhere: it is applied and the entry spent, so a key is never ignored beyond the one value this
- * window failed to overwrite.
- */
-const givenUpMemoryWrites = new Map<string, { superseded: number | undefined }>();
 
 /** What a memory transaction did, so its caller can tell a write that failed from one that ran. */
 type MemoryTransactionOutcome = 'written' | 'unchanged' | 'failed';
@@ -255,7 +246,6 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   ownLevelWriteTimers.clear();
   pendingOwnLevels.clear();
   pendingMemoryWrites.clear();
-  givenUpMemoryWrites.clear();
   memoryFlushFailures = 0;
   flushMemoryWritesDebounced.cancel();
   memoryChain = Promise.resolve();
@@ -284,18 +274,12 @@ function asMemory(value: unknown): MemoryRecord {
 
 async function getDefaultZoom(): Promise<number> {
   if (cachedDefault !== undefined) return cachedDefault;
-  let read: number;
   try {
-    read = asNumber(await deps.settings.get('platform.webViewContentZoom'));
+    cachedDefault = asNumber(await deps.settings.get('platform.webViewContentZoom'));
   } catch (e) {
     logger.warn(`Content zoom: could not read the default; using 100 %. ${getErrorMessage(e)}`);
-    read = DEFAULT_ZOOM_FACTOR;
+    cachedDefault = DEFAULT_ZOOM_FACTOR;
   }
-  // The subscription this window starts before its first read delivers the current value at once,
-  // so it can fill the cache while this read is still out. That value is the setting's, and at
-  // least as fresh as this one, so it stands — and the 100 % fallback above, which is not the
-  // setting's value at all, never replaces it.
-  cachedDefault ??= read;
   return cachedDefault;
 }
 
@@ -321,18 +305,17 @@ function effectiveOwnLevels(
 /**
  * Explicit id → the window's last focused tab → nothing. Exported for tests.
  *
- * Anything holding this window's input — a modal dialog, the command palette, or one of the
- * full-screen overlays (connection lost, workspace updating, first run) — stops only the path that
- * has to guess which pane is meant: the caller named no pane, so the last focused tab is all there
- * is to go on, and that tab is behind whatever the user is actually looking at. A caller that names
- * a pane — the tab menu, a wheel or chord inside a view, an extension's command — has said which
- * pane it means and is answered whatever is on top.
+ * A modal overlay (a modal dialog or the command palette) stops only the path that has to guess
+ * which pane is meant: the caller named no pane, so the last focused tab is all there is to go on,
+ * and that tab is behind the overlay the user is actually working in. A caller that names a pane —
+ * the tab menu, a wheel or chord inside a view, an extension's command — has said which pane it
+ * means and is answered whatever is on top.
  */
 export function resolveContentZoomTarget(
   explicitWebViewId: string | undefined,
 ): WebViewId | undefined {
   if (explicitWebViewId) return explicitWebViewId;
-  if (deps.isWindowInputBlocked()) return undefined;
+  if (deps.isModalOverlayOpen()) return undefined;
   return deps.getLastFocusedTabId();
 }
 
@@ -442,12 +425,10 @@ function forgetAreaState(webViewId: WebViewId): void {
  * on; a pane that does have areas keeps them only if its current document still runs a content-zoom
  * bootstrap ({@link isContentZoomBootstrapAlive}) — otherwise those areas belonged to content that
  * is gone, so they are dropped and the pane falls back the same way a pane with no areas would.
- * Started by a pane's first empty area report ({@link setContentZoomAreas}) and by every iframe load
- * ({@link applyContentZoomForWebView}, which clears any grant left over from the previous content
- * first, so this always waits out a fresh grace rather than reusing one inherited from that
- * content, and then cancels the grace again for the panes that must not wait one out — a URL pane,
- * which is scaled whole from the start, and a pane whose definition has gone, which has nothing to
- * scale). Idempotent either way, since a grace already pending is left alone.
+ * Started by a pane's first empty area report ({@link setContentZoomAreas}) and by every non-URL
+ * iframe load ({@link applyContentZoomForWebView}, which clears any grant left over from the
+ * previous content first, so this always waits out a fresh grace rather than reusing one inherited
+ * from that content); idempotent either way, since a grace already pending is left alone.
  */
 function startFallbackGrace(webViewId: WebViewId): void {
   if (fallbackAllowedWebViewIds.has(webViewId) || fallbackGraceTimers.has(webViewId)) return;
@@ -463,18 +444,7 @@ function startFallbackGrace(webViewId: WebViewId): void {
         forgetAreaState(webViewId);
       }
       fallbackAllowedWebViewIds.add(webViewId);
-      // A timer callback has no caller to catch it, and a pane can be torn down inside this second.
-      // The id was just added to fallbackAllowedWebViewIds above, so mayScaleWholeIframe
-      // short-circuits on that disjunct and never reads the pane's definition here; what can still
-      // throw is iframe.contentDocument, on a frame that has been detached from the document. A
-      // cross-origin frame does not throw here: contentDocument is simply null for one.
-      try {
-        pushContentZoom(webViewId);
-      } catch (e) {
-        logger.warn(
-          `Content zoom: could not apply the fallback to web view ${webViewId}. ${getErrorMessage(e)}`,
-        );
-      }
+      pushContentZoom(webViewId);
     }, FALLBACK_GRACE_MS),
   );
 }
@@ -510,33 +480,94 @@ function isContentZoomBootstrapAlive(webViewId: WebViewId): boolean {
   }
 }
 
+/** The value stored under {@link CONTENT_ZOOM_IDENTITY_STATE_KEY} for one pane's identity. */
+function identityStampFor(id: MemoryIdentity): string {
+  return `${id.kind}:${id.identity}`;
+}
+
+/** The identity a pane's state is stamped with, or `undefined` for a pane with no stamp. */
+function storedIdentityStamp(
+  definition: Pick<SavedWebViewDefinition, 'state'>,
+): string | undefined {
+  const value = definition.state?.[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+  return typeof value === 'string' ? value : undefined;
+}
+
 /**
- * Seeds a newly opened pane's own levels from every area {@link cachedMemory} remembers for its kind
- * and identity, so the areas its bootstrap is about to report start at the level the user chose
- * last time instead of the Settings default. Merged per area, with the same precedence
- * {@link getInitialContentZoomForWebView} bakes into the pane's head: a level the pane's own state
- * already holds wins, and memory fills only the areas the state lacks. Seeding per area rather than
- * per pane is what lets a pane restored with one area's level still pick the other areas up — the
- * push that follows writes an inline property for every reported area, which outranks the baked
- * `:root` value, so an area missing from the state would otherwise be forced to the default.
+ * Gives a pane the levels {@link cachedMemory} remembers for the kind and identity it shows NOW, and
+ * stamps that identity into its state ({@link CONTENT_ZOOM_IDENTITY_STATE_KEY}) so a later change of
+ * identity can be told from a pane that still shows what its levels belong to. The stamp
+ * accompanies the levels: a pane that ends up with none carries neither, here and in
+ * {@link commitOwnLevels}.
+ *
+ * Three cases, decided by the stamp:
+ *
+ * - **It matches the pane's identity** — nothing to do. Whatever the pane holds, seeded here or
+ *   chosen by the user since, belongs to what the pane shows.
+ * - **No stamp** — a newly opened pane, or one restored from a layout written before its levels were
+ *   stamped. Levels it already holds are its own and are kept — the levels key is never written
+ *   empty, so holding it at all means the pane has a level to keep — and only a pane with none
+ *   takes the remembered levels of its identity.
+ * - **It names another identity** — the pane was re-pointed at another project through the same web
+ *   view id (`reloadWebView`), and the view's own `getWebViewDefinition` spreads its previous saved
+ *   state, zoom levels included, onto the new definition. Those levels are replaced by what memory
+ *   remembers for the new identity, and removed entirely when it remembers nothing, so the pane
+ *   follows the Settings default rather than the previous project's level. A level this window gave
+ *   the pane but has not written into its definition yet belongs to the identity it was chosen for,
+ *   so it is dropped with the rest rather than being committed — and written to memory under the
+ *   new identity's key — after the re-point.
  */
-function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
+function seedFromMemory(webViewId: WebViewId): void {
   const definition = deps.getDefinition(webViewId);
   if (!definition) return;
-  // TODO(PT-4582): a pane re-pointed to another project keeps these levels; stamp the seeded
-  // identity and re-seed on mismatch.
-  if (pendingOwnLevels.has(webViewId)) return;
   const id = memoryIdentityFor(definition);
   if (!id) return;
-  const existing = getOwnLevels(definition);
-  const seeded: Levels = { ...existing };
-  Object.entries(collectMemoryLevelsFor(cachedMemory, id)).forEach(([areaId, level]) => {
-    if (seeded[areaId] === undefined) seeded[areaId] = level;
-  });
-  if (Object.keys(seeded).length === Object.keys(existing).length) return;
-  deps.updateDefinition(definition.id, {
-    state: { ...(definition.state ?? {}), [CONTENT_ZOOM_LEVELS_STATE_KEY]: seeded },
-  });
+  const stamp = identityStampFor(id);
+  const storedStamp = storedIdentityStamp(definition);
+  if (storedStamp === stamp) return;
+  const hasOwnLevels =
+    (definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state) ||
+    pendingOwnLevels.has(webViewId);
+  const state: Record<string, unknown> = { ...(definition.state ?? {}) };
+  if (storedStamp === undefined && hasOwnLevels) {
+    state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
+    deps.updateDefinition(definition.id, { state });
+    return;
+  }
+  pendingOwnLevels.delete(webViewId);
+  const levels = collectMemoryLevelsFor(cachedMemory, id);
+  if (Object.keys(levels).length === 0) {
+    // Nothing to give this pane and nothing it may keep: a re-pointed pane's old levels and stamp
+    // go, and a pane that had neither is left exactly as it was rather than written to.
+    if (!hasOwnLevels) return;
+    delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+    delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+  } else {
+    state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+    state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
+  }
+  deps.updateDefinition(definition.id, { state });
+}
+
+/**
+ * The definition-update half of {@link seedFromMemory}: a pane whose stamp no longer names what it
+ * shows is re-seeded, and nothing else is touched.
+ *
+ * A pane with no stamp is deliberately left to its next area report. An update arrives for every
+ * write to a definition, including the platform's own: a reset removes a pane's levels and its
+ * stamp together, and the memory edit that goes with it is still in its debounce window when that
+ * update comes back, so seeding an unstamped pane here would hand the level the user just gave up
+ * straight back from {@link cachedMemory} — and take it away again when the memory write's own echo
+ * arrives.
+ */
+function reseedIfIdentityChanged(webViewId: WebViewId): void {
+  const definition = deps.getDefinition(webViewId);
+  if (!definition) return;
+  const storedStamp = storedIdentityStamp(definition);
+  if (storedStamp === undefined) return;
+  const id = memoryIdentityFor(definition);
+  if (!id || identityStampFor(id) === storedStamp) return;
+  seedFromMemory(webViewId);
 }
 
 /**
@@ -554,7 +585,7 @@ export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAr
   if (valid.length > 0) clearFallbackGrace(webViewId);
   else startFallbackGrace(webViewId);
   if ((previous === undefined || previous.length === 0) && valid.length > 0)
-    seedFromMemoryOnFirstReport(webViewId);
+    seedFromMemory(webViewId);
   areasByWebViewId.set(webViewId, valid);
   pushContentZoom(webViewId);
 }
@@ -606,10 +637,8 @@ export function pushContentZoom(
 ): void {
   const iframe = deps.getIframe(webViewId);
   if (!iframe) return;
-  // Only a non-URL pane that runs scripts bakes the real default into its head, and that bake
-  // awaits the same read that fills `cachedDefault`, so this fallback can never outrank a baked
-  // value. A pane that bakes none — a URL pane, or one opened with `allowScripts: false` — has no
-  // baked value for this to outrank.
+  // Only a non-URL pane bakes the real default into its head, and that bake awaits the same read
+  // that fills `cachedDefault`, so this fallback can never outrank a baked value.
   const defaultZoom = cachedDefault ?? DEFAULT_ZOOM_FACTOR;
   const root = iframe.contentDocument?.documentElement;
   root?.style.setProperty(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE, String(defaultZoom));
@@ -643,19 +672,19 @@ export function pushContentZoom(
  * runs on unmount, so the pane's id, and anything keyed by it, survives a reload). Clears any
  * fallback grace or grant left over from whatever the pane showed before — otherwise a grant the
  * old content earned would still authorize scaling the new content before its own bootstrap gets a
- * chance to report. It then arms a fresh grace exactly as if the pane had just been opened — for
- * every pane but one already known to need none — and a pane that goes on to report an area within
- * it cancels the grace as usual. What that grace can still grant is bounded by the areas the pane
- * already has: a pane that has never reported one — an HTML view opened with `allowScripts: false`,
- * say, whose bootstrap never runs — eventually gets the whole-iframe fallback, while a pane whose
- * earlier content reported areas keeps them for the length of the grace (see the paragraph below),
- * and then either for good, if the replacement content's own bootstrap is still running once the
- * grace elapses, or gives them up for that same whole-iframe fallback, if it is not. The
- * whole-iframe `zoom` a reload does not reset on its own (it lives on the host `<iframe>` element,
- * not the content a reload replaces) is cleared by the {@link pushContentZoom} below, which assigns
- * the host zoom in both directions, so the new content never renders whole-scaled on the strength
- * of the old grant. A URL pane keeps its immediate fallback and is left out of the grace:
- * {@link mayScaleWholeIframe} always allows a URL pane, so that same push reapplies it.
+ * chance to report. For a non-URL pane it then arms a fresh grace exactly as if the pane had just
+ * been opened, and a pane that goes on to report an area within it cancels the grace as usual. What
+ * that grace can still grant is bounded by the areas the pane already has: a pane that has never
+ * reported one — an HTML view opened with `allowScripts: false`, say, whose bootstrap never runs —
+ * eventually gets the whole-iframe fallback, while a pane whose earlier content reported areas
+ * keeps them for the length of the grace (see the paragraph below), and then either for good, if
+ * the replacement content's own bootstrap is still running once the grace elapses, or gives them up
+ * for that same whole-iframe fallback, if it is not. The whole-iframe `zoom` a reload does not
+ * reset on its own (it lives on the host `<iframe>` element, not the content a reload replaces) is
+ * cleared by the {@link pushContentZoom} below, which assigns the host zoom in both directions, so
+ * the new content never renders whole-scaled on the strength of the old grant. A URL pane keeps its
+ * immediate fallback and is left out of the grace: {@link mayScaleWholeIframe} always allows a URL
+ * pane, so that same push reapplies it.
  *
  * The pane's last-reported areas are deliberately kept across the load itself rather than dropped
  * here. A real load replaces the iframe's realm, so the fresh content's bootstrap reports its own
@@ -671,27 +700,11 @@ export function pushContentZoom(
  * fallback instead of keeping them forever.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
-  // Armed before the definition is read, and outside the guard below, because a read that fails
-  // must still leave the pane a grace: for a view that never runs the bootstrap this hook is the
-  // only thing that ever arms one, so a pane whose read threw here would stay unscaled for as long
-  // as it lives. Neither of these two reads the pane or its definition, so neither can fail.
   clearFallbackGrace(webViewId);
-  startFallbackGrace(webViewId);
-  // The React `onLoad` handler this runs from is a synthetic event handler, which no error boundary
-  // catches, and a late load during teardown reads a definition that is no longer there.
-  try {
-    const definition = deps.getDefinition(webViewId);
-    // Neither of these waits a grace out: a URL pane is scaled whole from the start
-    // ({@link mayScaleWholeIframe} always allows one), and a pane with no definition left has
-    // nothing to scale.
-    if (!definition || definition.contentType === WEB_VIEW_CONTENT_TYPE.URL)
-      clearFallbackGrace(webViewId);
-    pushContentZoom(webViewId);
-  } catch (e) {
-    logger.warn(
-      `Content zoom: could not apply content zoom to web view ${webViewId}. ${getErrorMessage(e)}`,
-    );
-  }
+  const definition = deps.getDefinition(webViewId);
+  if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL)
+    startFallbackGrace(webViewId);
+  pushContentZoom(webViewId);
 }
 
 /**
@@ -705,14 +718,8 @@ export function applyContentZoomForWebView(webViewId: WebViewId): void {
  * work on PT-4585.
  */
 async function readMemory(): Promise<MemoryRecord | undefined> {
-  const loadedBeforeTheRead = memoryLoaded;
   try {
     const memory = asMemory(await deps.settings.get('platform.webViewContentZoomMemory'));
-    // The subscription this window starts before its first read delivers the current record at
-    // once, so it can load the cache while that read is still out — with a record at least as
-    // fresh as the one this read carries, which is therefore the one both the cache and the caller
-    // keep. Every later read is the current record by definition and simply replaces the cache.
-    if (!loadedBeforeTheRead && memoryLoaded) return cachedMemory;
     cachedMemory = memory;
     memoryLoaded = true;
     return memory;
@@ -859,8 +866,6 @@ async function flushMemoryWrites(): Promise<void> {
   if (outcome !== 'failed') {
     memoryFlushFailures = 0;
     clearStoredMemoryWrites(flushing);
-    // The setting carries these keys now, so nothing about them is owed special treatment.
-    flushing.forEach((_level, key) => givenUpMemoryWrites.delete(key));
     return;
   }
   memoryFlushFailures += 1;
@@ -871,13 +876,6 @@ async function flushMemoryWrites(): Promise<void> {
   }
   memoryFlushFailures = 0;
   clearStoredMemoryWrites(flushing);
-  // `pendingMemoryWrites` is the echo guard as well as the retry queue, so dropping these keys would
-  // leave the next emission of the level this window failed to replace looking like news and undo
-  // the user's zoom. Each key that no newer edit has re-pended is recorded instead.
-  flushing.forEach((_level, key) => {
-    if (pendingMemoryWrites.has(key)) return;
-    givenUpMemoryWrites.set(key, { superseded: cachedMemory[key] });
-  });
   logger.warn(
     `Content zoom: giving up on ${flushing.size} memory edit(s) after ${MAX_MEMORY_FLUSH_ATTEMPTS} failed attempts.`,
   );
@@ -895,9 +893,6 @@ function writeMemory(
 ): void {
   const key = memoryKeyFor(definition, areaId);
   if (!key) return;
-  // A new edit supersedes a given-up one whichever way it goes, so the record of that older attempt
-  // has nothing left to protect.
-  givenUpMemoryWrites.delete(key);
   pendingMemoryWrites.set(key, level);
   // A rejection here only ever means a test reset canceled this write; nothing else awaits it.
   flushMemoryWritesDebounced().catch(() => {});
@@ -939,8 +934,17 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
       return false;
     }
     const state: Record<string, unknown> = { ...(definition.state ?? {}) };
-    if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
-    else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+    // The identity stamp lives exactly as long as the levels it belongs to: a pane that has levels
+    // always says which project they were chosen for, and a pane that gives them up keeps no stamp
+    // that a later re-point would judge the next project's levels against.
+    if (Object.keys(levels).length === 0) {
+      delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+      delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
+    } else {
+      state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
+      const id = memoryIdentityFor(definition);
+      if (id) state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = identityStampFor(id);
+    }
     if (!deps.updateDefinition(webViewId, { state })) return false;
   } catch (e) {
     logger.warn(
@@ -1136,13 +1140,6 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
         // need it: the setting's echo and the write's own resolution are not ordered against each
         // other, so it can arrive while the edit is still pending.
         if (pendingMemoryWrites.has(key) && pendingMemoryWrites.get(key) !== remembered) return;
-        const givenUp = givenUpMemoryWrites.get(key);
-        if (givenUp) {
-          // The level this window failed to replace is still what the setting holds; it is not news,
-          // and applying it would undo the zoom the user chose.
-          if (remembered === givenUp.superseded) return;
-          givenUpMemoryWrites.delete(key);
-        }
         if (levels[areaId] === remembered) return;
         if (remembered === undefined) delete levels[areaId];
         else levels[areaId] = remembered;
@@ -1152,12 +1149,8 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       // for nothing new: those levels are what the pane shows and they still owe a write, so the
       // change that memory delivers next is also this pane's next chance to store them.
       if (!changed && !pendingOwnLevels.has(definition.id)) return;
-      // The sibling shows the level whether or not the write reached its definition, for the same
-      // reason the acting pane does: the push reads `effectiveOwnLevels`, and a level that did not
-      // get stored stays pending there for the next write to carry.
-      const stored = setOwnLevels(definition.id, levels);
-      pushContentZoom(definition.id);
-      if (!stored) everyPaneTookItsUpdate = false;
+      if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
+      else everyPaneTookItsUpdate = false;
     } catch (e) {
       logger.warn(
         `Content zoom: could not bring web view ${definition.id} in line with memory. ${getErrorMessage(e)}`,
@@ -1169,61 +1162,15 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
 }
 
 /**
- * The Settings-default subscription. A function of its own so initialization can start it without
- * waiting on it; its body and its callback are what they have always been.
- */
-async function subscribeToDefault(): Promise<void> {
-  try {
-    await deps.settings.subscribe('platform.webViewContentZoom', (value) => {
-      if (isPlatformError(value)) {
-        logger.warn(`Content zoom: error reading the default: ${getErrorMessage(value)}`);
-        return;
-      }
-      cachedDefault = asNumber(value);
-      repushAllPanes();
-    });
-  } catch (e) {
-    logger.warn(`Content zoom: could not subscribe to the default. ${getErrorMessage(e)}`);
-  }
-}
-
-/** The memory subscription, a function of its own for the same reason as {@link subscribeToDefault}. */
-async function subscribeToMemory(): Promise<void> {
-  try {
-    await deps.settings.subscribe('platform.webViewContentZoomMemory', (value) => {
-      if (isPlatformError(value)) {
-        logger.warn(`Content zoom: error reading memory: ${getErrorMessage(value)}`);
-        return;
-      }
-      const memory = asMemory(value);
-      const previousMemory = lastSyncedMemory;
-      cachedMemory = memory;
-      memoryLoaded = true;
-      try {
-        // Only a walk in which every pane took its update may advance the record the next delta
-        // is computed against: a pane whose write did not land is retried against the same delta
-        // on the next memory change, because the deletion half of the delta exists nowhere else.
-        // A throw leaves the record where it was for the same reason.
-        if (syncSiblingsFromMemory(memory, previousMemory)) lastSyncedMemory = memory;
-      } catch (e) {
-        logger.warn(`Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`);
-      }
-    });
-  } catch (e) {
-    logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
-  }
-}
-
-/**
- * Idempotent. Wires this window for zoom — both settings subscriptions, web-view updates and the
- * unload flush — and reads the default and the remembered levels.
+ * Idempotent. Reads the default and the remembered levels, then subscribes to both and to web-view
+ * updates.
  *
  * @param shardDeps The renderer's composition root supplies the web-view and window shards'
  *   `getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView` and
- *   `getLastFocusedTabId` here, plus `isWindowInputBlocked` from the window-input-blocked util,
- *   rather than this module importing any of them directly — each would create an import cycle back
- *   through the shards. Merged into the deps in use whenever provided, even on a later call after
- *   the first initialization already ran.
+ *   `getLastFocusedTabId` here, plus `isModalOverlayOpen` from the modal-overlay util, rather than
+ *   this module importing any of them directly — each would create an import cycle back through the
+ *   shards. Merged into the deps in use whenever provided, even on a later call after the first
+ *   initialization already ran.
  */
 export function initializeContentZoomService(
   shardDeps?: Pick<
@@ -1233,17 +1180,59 @@ export function initializeContentZoomService(
     | 'getAllOpenDefinitions'
     | 'onDidUpdateWebView'
     | 'getLastFocusedTabId'
-    | 'isWindowInputBlocked'
+    | 'isModalOverlayOpen'
   >,
 ): Promise<void> {
   if (shardDeps) deps = { ...deps, ...shardDeps };
   if (initialized) return initialized;
   initialized = (async () => {
-    // Registration first: a slow settings or localization round trip must not leave this window
-    // unable to hear a Settings change, bring a sibling pane in line, or flush a pending edit when
-    // it closes. Both reads are still awaited below, so initialization still resolves only once the
-    // default and the remembered levels are in hand.
-    //
+    // The first pane's head variables need both, and neither read depends on the other.
+    // Pre-warming memory here is also what keeps `getInitialContentZoomForWebView` off the
+    // settings round trip when a read fails: without it, every eligible pane retries it.
+    await Promise.all([getDefaultZoom(), readMemory()]);
+    try {
+      cachedDefaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
+    } catch (e) {
+      cachedDefaultLabel = DEFAULT_LABEL_FALLBACK;
+      logger.warn(
+        `Content zoom: could not read the reset indicator's label; using "${DEFAULT_LABEL_FALLBACK}". ${getErrorMessage(e)}`,
+      );
+    }
+    try {
+      await deps.settings.subscribe('platform.webViewContentZoom', (value) => {
+        if (isPlatformError(value)) {
+          logger.warn(`Content zoom: error reading the default: ${getErrorMessage(value)}`);
+          return;
+        }
+        cachedDefault = asNumber(value);
+        repushAllPanes();
+      });
+    } catch (e) {
+      logger.warn(`Content zoom: could not subscribe to the default. ${getErrorMessage(e)}`);
+    }
+    try {
+      await deps.settings.subscribe('platform.webViewContentZoomMemory', (value) => {
+        if (isPlatformError(value)) {
+          logger.warn(`Content zoom: error reading memory: ${getErrorMessage(value)}`);
+          return;
+        }
+        const memory = asMemory(value);
+        const previousMemory = lastSyncedMemory;
+        cachedMemory = memory;
+        memoryLoaded = true;
+        try {
+          // Only a walk in which every pane took its update may advance the record the next delta
+          // is computed against: a pane whose write did not land is retried against the same delta
+          // on the next memory change, because the deletion half of the delta exists nowhere else.
+          // A throw leaves the record where it was for the same reason.
+          if (syncSiblingsFromMemory(memory, previousMemory)) lastSyncedMemory = memory;
+        } catch (e) {
+          logger.warn(`Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`);
+        }
+      });
+    } catch (e) {
+      logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
+    }
     // This event carries every update to a web-view definition in this window: a pane adopted from
     // another window arriving with its state, every `useWebViewState` write an extension makes,
     // every per-pane scroll-group reference write. Most of them leave zoom alone, and the push is
@@ -1256,7 +1245,13 @@ export function initializeContentZoomService(
       // loop and every later subscriber misses the update — the cost of this one reaches well past
       // zoom, which is why it is guarded even though the read only fails during teardown.
       try {
-        if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
+        if (!deps.getDefinition(webView.id)) return;
+        // This is where a pane's identity changes: a view re-pointed at another project keeps its
+        // web view id and updates its definition, so the levels it carries over are checked against
+        // that new identity before they are pushed. The write a re-seed makes comes back through
+        // this same event, where the stamp it just wrote ends the round.
+        reseedIfIdentityChanged(webView.id);
+        pushContentZoom(webView.id);
       } catch (e) {
         logger.warn(
           `Content zoom: could not push the update for web view ${webView.id}. ${getErrorMessage(e)}`,
@@ -1275,24 +1270,6 @@ export function initializeContentZoomService(
       };
       window.addEventListener('beforeunload', beforeUnloadListener);
     }
-    // Started, not awaited. A settings subscription delivers the current value immediately, so a
-    // callback may run before the reads below resolve; that only ever fills a cache from the fresher
-    // value, which is what a pane opening meanwhile should seed from.
-    const subscriptions = Promise.all([subscribeToDefault(), subscribeToMemory()]);
-    // The first pane's head variables need both, and neither read depends on the other.
-    // Pre-warming memory here is also what keeps `getInitialContentZoomForWebView` off the
-    // settings round trip when a read fails: without it, every eligible pane retries it.
-    await Promise.all([getDefaultZoom(), readMemory()]);
-    try {
-      cachedDefaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
-    } catch (e) {
-      cachedDefaultLabel = DEFAULT_LABEL_FALLBACK;
-      logger.warn(
-        `Content zoom: could not read the reset indicator's label; using "${DEFAULT_LABEL_FALLBACK}". ${getErrorMessage(e)}`,
-      );
-    }
-    // So the promise this function returns still means "fully wired".
-    await subscriptions;
   })();
   return initialized;
 }

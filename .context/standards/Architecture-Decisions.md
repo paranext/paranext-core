@@ -4073,7 +4073,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   store keyed by web view id. Content zoom is the first feature written to the rule: the pane's own
   levels are `platform.contentZoomLevels` in the definition state, the default and the per-project
   memory are `platform.webViewContentZoom` and `platform.webViewContentZoomMemory`
-  (`src/renderer/services/web-view-content-zoom.service.ts`).
+  (`src/renderer/services/web-view-content-zoom.service.ts`). Definition state that belongs to a
+  project carries the identity it belongs to: the levels are stamped with
+  `platform.contentZoomIdentity` (`kind:identity`), written and removed with them, because a pane
+  re-pointed at another project keeps its web view id and the view spreads its own saved state onto
+  the new definition — so without the stamp the previous project's levels are indistinguishable from
+  levels chosen for the new one.
 - **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
   content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
   definition has to be taught by hand about every lifecycle event the definition gets for free.
