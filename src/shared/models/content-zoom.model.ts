@@ -1,3 +1,4 @@
+import type { ReferencedItem } from 'platform-bible-utils';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import {
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
@@ -118,3 +119,10 @@ export const CONTENT_ZOOM_COMMANDS = {
   out: 'platform.webViewContentZoomOut',
   reset: 'platform.webViewContentZoomReset',
 } as const;
+
+/**
+ * Contributed group holding the per-tab content-zoom items, the only group Simple mode's tab menu
+ * offers. Must match the group of this name in `src/extension-host/data/menu.data.json`;
+ * `menu.data.test.ts` pins the two together by importing the shipped data.
+ */
+export const CONTENT_ZOOM_TAB_MENU_GROUP = 'platform.tabZoom' satisfies ReferencedItem;
