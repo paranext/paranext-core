@@ -145,6 +145,17 @@ export type ProjectSelectorGrouping = {
     a: { key: string; heading: string },
     b: { key: string; heading: string },
   ) => number;
+  /**
+   * Row order within each bucket. Omit to use the selector's canonical order (alphabetical by
+   * `shortName`). Supply one when the grouping's meaning implies an order the selector cannot know
+   * — a "most recently used" bucket is the motivating case, since alphabetical order defeats its
+   * purpose.
+   *
+   * Rows for the same project in different scroll groups compare equal, so ties fall back to the
+   * canonical order and keep a stable, predictable sequence. Ignored for `'openTabs'` and
+   * `'selection'`, and for the unknown bucket, which stays canonically ordered.
+   */
+  compareProjects?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
 
 /** One row in the project selector list. */
@@ -530,6 +541,13 @@ export function partitionByGrouping(
   if (!grouping.getGroupKey) return partitionFlat(rows);
   const buckets = new Map<string, ProjectRow[]>();
   const unknownRows: ProjectRow[] = [];
+  const { compareProjects } = grouping;
+  // Ties fall back to the canonical order so rows for one project in several scroll groups, which
+  // a caller's comparator sees as equal, keep a stable sequence.
+  const sortBucket = (bucketRows: readonly ProjectRow[]): ProjectRow[] =>
+    compareProjects
+      ? [...bucketRows].sort((a, b) => compareProjects(a.project, b.project) || compareRows(a, b))
+      : [...bucketRows].sort(compareRows);
   const { getGroupKey } = grouping;
   rows.forEach((row) => {
     const key = getGroupKey(row.project);
@@ -542,7 +560,7 @@ export function partitionByGrouping(
     else buckets.set(key, [row]);
   });
   const entries = [...buckets.entries()].map(([key, groupRows]) => {
-    const sortedRows = [...groupRows].sort(compareRows);
+    const sortedRows = sortBucket(groupRows);
     const heading =
       grouping.getSectionHeading?.(
         key,

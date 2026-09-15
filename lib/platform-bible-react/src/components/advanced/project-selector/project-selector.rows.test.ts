@@ -649,3 +649,57 @@ describe('partitionByGrouping — dispatch', () => {
     expect(sections[0].kind).toBe('flat');
   });
 });
+
+describe('partitionByGrouping — compareProjects', () => {
+  const recencyOf = (project: ProjectSelectorProject): number =>
+    typeof project.customData?.lastUsedAt === 'number' ? project.customData.lastUsedAt : 0;
+
+  // Deliberately reverse-alphabetical by recency, so canonical ordering cannot produce this result
+  // by accident.
+  const recencyProjects: ProjectSelectorProject[] = [
+    { id: 'aaa', shortName: 'AAA', fullName: 'Oldest', customData: { bucket: 'x', lastUsedAt: 1 } },
+    { id: 'bbb', shortName: 'BBB', fullName: 'Middle', customData: { bucket: 'x', lastUsedAt: 2 } },
+    { id: 'ccc', shortName: 'CCC', fullName: 'Newest', customData: { bucket: 'x', lastUsedAt: 3 } },
+    { id: 'zzz', shortName: 'ZZZ', fullName: 'No bucket' },
+  ];
+  const rows = computeRows({
+    mode: 'project',
+    projects: recencyProjects,
+    openTabs: [],
+    selection: { projectId: undefined },
+  });
+  const bucketed: ProjectSelectorGrouping = {
+    id: 'recent',
+    label: 'Recent',
+    getGroupKey: (project) =>
+      typeof project.customData?.bucket === 'string' ? project.customData.bucket : undefined,
+    unknownSectionHeading: 'Other',
+  };
+
+  it('orders rows within a bucket by the supplied comparator', () => {
+    const sections = partitionByGrouping(rows, {
+      ...bucketed,
+      compareProjects: (a, b) => recencyOf(b) - recencyOf(a),
+    });
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['ccc', 'bbb', 'aaa']);
+  });
+
+  it('falls back to canonical order when the comparator reports a tie', () => {
+    const sections = partitionByGrouping(rows, { ...bucketed, compareProjects: () => 0 });
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['aaa', 'bbb', 'ccc']);
+  });
+
+  it('uses canonical order within a bucket when no comparator is supplied', () => {
+    const sections = partitionByGrouping(rows, bucketed);
+    expect(sections[0].rows.map((r) => r.projectId)).toEqual(['aaa', 'bbb', 'ccc']);
+  });
+
+  it('leaves the unknown bucket canonically ordered', () => {
+    const sections = partitionByGrouping(rows, {
+      ...bucketed,
+      compareProjects: (a, b) => recencyOf(b) - recencyOf(a),
+    });
+    const unknown = sections.find((s) => s.label === 'Other');
+    expect(unknown?.rows.map((r) => r.projectId)).toEqual(['zzz']);
+  });
+});
