@@ -70,7 +70,9 @@ import {
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
 import { isExtraMaterialBookId } from './find/extra-material.utils';
 import {
+  MARKER_DELETION_ERROR,
   STRUCTURE_PROTECTED_ERROR,
+  markersDeletedBy,
   replacementContainsStructuralMarker,
 } from './find/structure-protection.util';
 import { LocalizedBookData, SearchTextType } from './find/find-types';
@@ -1985,10 +1987,13 @@ global.webViewComponent = function FindWebView({
           await handleStartSearchRef.current();
         }
       } catch (error) {
-        if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
+        const message = getErrorMessage(error);
+        if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
           sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+        } else if (message.includes(MARKER_DELETION_ERROR)) {
+          sonner(localizedStrings['%webView_find_replace_markerDeletionError%']);
         } else {
-          logger.error(`Error replacing result: ${getErrorMessage(error)}`);
+          logger.error(`Error replacing result: ${message}`);
         }
       } finally {
         setIsReplacing(false);
@@ -2036,8 +2041,25 @@ global.webViewComponent = function FindWebView({
       // Sync any newly loaded results into state
       if (allResults.length > resultsRef.current.length) setResults(allResults);
 
-      const visibleResultsList = allResults.filter((r) => !r.isHidden);
-      if (visibleResultsList.length === 0) return;
+      const candidateResultsList = allResults.filter((r) => !r.isHidden);
+      if (candidateResultsList.length === 0) return;
+
+      // A result whose USFM span holds markers can only be replaced by a replacement that puts them
+      // back, which a plain-text replacement never does — `replace()` refuses the whole book's
+      // batch over one such range. Skip them so the rest of the batch still goes through, and say
+      // how many were skipped rather than reporting a count that silently excludes them.
+      const visibleResultsList = candidateResultsList.filter(
+        (r) => !markersDeletedBy(r.removedMarkers ?? [], replaceTerm),
+      );
+      const skippedCount = candidateResultsList.length - visibleResultsList.length;
+      if (visibleResultsList.length === 0) {
+        sonner(
+          formatReplacementString(localizedStrings['%webView_find_replace_skippedAllResults%'], {
+            count: skippedCount.toString(),
+          }),
+        );
+        return;
+      }
 
       let isCommitSuccess = false;
       // Also commits changes to the version history
@@ -2111,18 +2133,43 @@ global.webViewComponent = function FindWebView({
         group.ranges.push({ start: r.start, end: r.end });
         group.insertions.push(Array.isArray(usfmToInsert) ? usfmToInsert[i] : usfmToInsert);
       });
-      await Promise.all(
+      // `replace()` is all-or-nothing per book, but Replace All issues one call per book. If one
+      // book's batch is refused, the books that already wrote are committed — so settle every call
+      // and roll the written books back from the snapshots before surfacing the failure. Using
+      // `Promise.all` here would jump straight to the catch, skipping the revert window below and
+      // leaving a partial cross-book write with no way to undo it.
+      const replaceOutcomes = await Promise.allSettled(
         [...bookGroupMap.values()].map(({ ranges, insertions }) =>
           replacePdp.replace(ranges, preserveCase ? insertions : insertions[0]),
         ),
       );
+      const firstReplaceRejection = replaceOutcomes.find(
+        (outcome) => outcome.status === 'rejected',
+      );
+      if (firstReplaceRejection) {
+        if (bookSnapshots.size > 0 && usfmBookPdp) {
+          const didRevert = await revertBookSnapshots(bookSnapshots, usfmBookPdp);
+          if (!didRevert)
+            logger.error('Replace all partially failed and the rollback did not succeed');
+        } else {
+          logger.error('Replace all partially failed and book snapshots were unavailable');
+        }
+        throw firstReplaceRejection.reason;
+      }
       const count = visibleResultsList.length;
-      const replacedAllToastId = sonner(
+      const replacedMessage =
         count === 1
           ? localizedStrings['%webView_find_replacedOneOccurrence%']
           : formatReplacementString(localizedStrings['%webView_find_replacedNOccurrences%'], {
               count: count.toString(),
-            }),
+            });
+      const replacedAllToastId = sonner(
+        skippedCount === 0
+          ? replacedMessage
+          : `${replacedMessage} ${formatReplacementString(
+              localizedStrings['%webView_find_replace_skippedNResults%'],
+              { count: skippedCount.toString() },
+            )}`,
       );
 
       // Commits resulting changes from the replace to the version history
@@ -2154,9 +2201,10 @@ global.webViewComponent = function FindWebView({
       // Functional form, like every other write on the replace path: `allResults` is a snapshot from
       // before the batches were loaded, so writing it directly would resurrect whatever the results
       // have become since — including results that were deliberately emptied.
+      const replacedResultKeys = new Set(visibleResultsList);
       setResults((prev) =>
         prev.map((r) => {
-          if (r.isHidden) return r;
+          if (r.isHidden || !replacedResultKeys.has(r)) return r;
           return { ...r, isReplaced: true };
         }),
       );
@@ -2188,10 +2236,13 @@ global.webViewComponent = function FindWebView({
         await handleStartSearchRef.current();
       }
     } catch (error) {
-      if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
+      const message = getErrorMessage(error);
+      if (message.includes(STRUCTURE_PROTECTED_ERROR)) {
         sonner(localizedStrings['%webView_find_replace_structureProtectedError%']);
+      } else if (message.includes(MARKER_DELETION_ERROR)) {
+        sonner(localizedStrings['%webView_find_replace_markerDeletionError%']);
       } else {
-        logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
+        logger.error(`Error replacing all results: ${message}`);
       }
     } finally {
       setIsReplacing(false);

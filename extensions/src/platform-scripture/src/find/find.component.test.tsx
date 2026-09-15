@@ -1181,3 +1181,56 @@ describe('Find — recent searches menu', () => {
     expect(await screen.findByRole('menu', { name: 'Recientes' })).toBeInTheDocument();
   });
 });
+
+describe('Find — Replace on a result whose span holds markers', () => {
+  // A boundary-spanning match's USFM span always contains the block marker that made it a
+  // boundary, so a plain-text replacement would delete it and `replace()` refuses the write. The
+  // button has to say so up front rather than raising a toast after the click.
+  const BOUNDARY_RESULT: HidableFindResult = {
+    ...RESULT,
+    removedMarkers: ['p', 'v'],
+  };
+
+  function buildReplaceProps(overrides: Partial<FindProps> = {}): FindProps {
+    return buildLifecycleProps({
+      results: [BOUNDARY_RESULT],
+      resultsByBook: new Map<string, BookResultEntry[]>([
+        ['GEN', [{ result: BOUNDARY_RESULT, originalIndex: 0 }]],
+      ]),
+      searchStatus: 'completed',
+      totalNumberOfResults: 1,
+      activeMode: 'replace',
+      replaceTerm: 'replacement',
+      isEditable: true,
+      focusedResultIndex: 0,
+      ...overrides,
+    });
+  }
+
+  it('disables Replace on a result a plain-text replacement would strip markers from', () => {
+    render(<Find {...buildReplaceProps()} />);
+
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeDisabled();
+  });
+
+  it('leaves Replace enabled once the replacement puts the same markers back', () => {
+    // Power mode's replacement field takes raw USFM, so a user can satisfy the guard. The gate is
+    // driven by the replacement term, not by the result being boundary-spanning per se.
+    render(<Find {...buildReplaceProps({ replaceTerm: 'replacement\\p \\v 2 more' })} />);
+
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeEnabled();
+  });
+
+  it('leaves Replace enabled on an ordinary result that spans no markers', () => {
+    render(
+      <Find
+        {...buildReplaceProps({
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeEnabled();
+  });
+});

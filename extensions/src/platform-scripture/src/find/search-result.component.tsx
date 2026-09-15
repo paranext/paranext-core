@@ -12,6 +12,7 @@ import {
   getReplaceTextColorClasses,
 } from './replace-preview-styles';
 import { DEFAULT_FIND_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
+import { collapseUsfmMarkersForDisplay } from './usfm-tokens.util';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
@@ -222,11 +223,14 @@ export default function SearchResult({
 
       const usfm = cachedUsfm ?? usjReaderWriter.toUsfm();
 
-      let beforeText = usfm.substring(0, startIndexInUsfm);
+      // The raw USFM carries markers the reader never sees. Collapse them so the highlighted span
+      // (and the clipboard copy built from it) reads as the searched phrase does, and so the
+      // context on either side reads the same way rather than showing markers the match doesn't.
+      let beforeText = collapseUsfmMarkersForDisplay(usfm.substring(0, startIndexInUsfm));
 
-      const text = usfm.substring(startIndexInUsfm, endIndexInUsfm);
+      const text = collapseUsfmMarkersForDisplay(usfm.substring(startIndexInUsfm, endIndexInUsfm));
 
-      let afterText = usfm.substring(endIndexInUsfm);
+      let afterText = collapseUsfmMarkersForDisplay(usfm.substring(endIndexInUsfm));
 
       if (countWords(beforeText) > WORDS_AROUND_SEARCH_RESULT) {
         beforeText = truncateText(beforeText, WORDS_AROUND_SEARCH_RESULT, true);
