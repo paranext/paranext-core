@@ -71,7 +71,7 @@ const STRINGS: LanguageStrings = {
  * and the sync-blocked notice above it, which render regardless of the list content.
  */
 function renderPanel(overrides: Partial<CommentListPanelProps> = {}) {
-  render(
+  return render(
     <CommentListPanel
       localizedStrings={STRINGS}
       isLoading={false}
@@ -252,5 +252,51 @@ describe('CommentListPanel filter dropdown localization fallback', () => {
     const options = screen.getAllByRole('option');
     expect(options.length).toBeGreaterThan(0);
     options.forEach((option) => expect(option).not.toHaveTextContent(/%.+%/));
+  });
+});
+
+describe('CommentListPanel content zoom area', () => {
+  it('exposes exactly one content zoom marker', () => {
+    const { container } = renderPanel();
+    expect(container.querySelectorAll('[data-platform-content-zoom-root]')).toHaveLength(1);
+  });
+
+  it("marks it as the view's main area (empty attribute value)", () => {
+    const { container } = renderPanel();
+    const marker = container.querySelector('[data-platform-content-zoom-root]');
+    expect(marker?.getAttribute('data-platform-content-zoom-root')).toBe('');
+  });
+
+  it("keeps the list container's layout classes", () => {
+    const { container } = renderPanel();
+    const marker = container.querySelector('[data-platform-content-zoom-root]');
+    expect(marker?.className).toContain('tw:flex-1');
+    expect(marker?.className).toContain('tw:overflow-auto');
+  });
+
+  it('leaves the filter toolbar outside the zoom area', () => {
+    const { container } = renderPanel();
+    const marker = container.querySelector('[data-platform-content-zoom-root]');
+    expect(marker?.contains(screen.getByTestId('comment-scope-filter'))).toBe(false);
+  });
+
+  it('leaves the sync-blocked notice outside the zoom area', () => {
+    const { container } = renderPanel({ isSyncBlocked: true });
+    const marker = container.querySelector('[data-platform-content-zoom-root]');
+    expect(marker?.contains(screen.getByRole('status'))).toBe(false);
+  });
+
+  it('keeps the empty-state message inside the zoom area', () => {
+    const { container } = renderPanel({ threads: [] });
+    const marker = container.querySelector('[data-platform-content-zoom-root]');
+    expect(marker?.textContent).toBe(EN_STRINGS['%no_comments%']);
+  });
+
+  it('keeps loading skeletons inside the zoom area', () => {
+    const { container } = renderPanel({ isLoading: true });
+    const marker = container.querySelector('[data-platform-content-zoom-root]');
+    expect(marker?.querySelectorAll('[data-slot="skeleton"], .tw\\:h-48').length).toBeGreaterThan(
+      0,
+    );
   });
 });
