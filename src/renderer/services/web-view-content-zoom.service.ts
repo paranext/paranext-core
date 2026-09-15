@@ -406,11 +406,15 @@ function clearAllFallbackGraces(): void {
 
 /**
  * Starts the wait during which a pane with no known areas may still be mounting content that will
- * report some. If the pane still has no area when it elapses, its content is taken to have no zoom
- * area at all and the whole-iframe fallback is applied from then on. Started by a pane's first
- * empty area report ({@link setContentZoomAreas}) and by every iframe load
- * ({@link applyContentZoomForWebView}, which clears any grant left over from the previous content
- * first, so this always waits out a fresh grace rather than reusing one inherited from that
+ * report some, or — armed from an iframe load — during which a pane that already has areas may
+ * still be showing content those areas no longer belong to. At expiry: a pane with no areas at all
+ * has its content taken to have no zoom area, and the whole-iframe fallback is applied from then
+ * on; a pane that does have areas keeps them only if its current document still runs a content-zoom
+ * bootstrap ({@link isContentZoomBootstrapAlive}) — otherwise those areas belonged to content that
+ * is gone, so they are dropped and the pane falls back the same way a pane with no areas would.
+ * Started by a pane's first empty area report ({@link setContentZoomAreas}) and by every iframe
+ * load ({@link applyContentZoomForWebView}, which clears any grant left over from the previous
+ * content first, so this always waits out a fresh grace rather than reusing one inherited from that
  * content, and then cancels the grace again for the panes that must not wait one out — a URL pane,
  * which is scaled whole from the start, and a pane whose definition has gone, which has nothing to
  * scale). Idempotent either way, since a grace already pending is left alone.
@@ -421,7 +425,15 @@ function startFallbackGrace(webViewId: WebViewId): void {
     webViewId,
     setTimeout(() => {
       fallbackGraceTimers.delete(webViewId);
-      if ((areasByWebViewId.get(webViewId) ?? []).length > 0) return;
+      const hasAreas = (areasByWebViewId.get(webViewId) ?? []).length > 0;
+      if (hasAreas && isContentZoomBootstrapAlive(webViewId)) return;
+      if (hasAreas) {
+        // The areas belong to content this pane no longer shows; nothing will ever report over
+        // them, so they are dropped rather than left to shadow the whole-iframe fallback below.
+        areasByWebViewId.delete(webViewId);
+        activeAreaByWebViewId.delete(webViewId);
+        unknownAreasLoggedByWebViewId.delete(webViewId);
+      }
       fallbackAllowedWebViewIds.add(webViewId);
       // A timer callback has no caller to catch it, and a pane can be torn down inside this second.
       // The id was just added to fallbackAllowedWebViewIds above, so mayScaleWholeIframe
@@ -445,6 +457,29 @@ function mayScaleWholeIframe(webViewId: WebViewId): boolean {
     fallbackAllowedWebViewIds.has(webViewId) ||
     deps.getDefinition(webViewId)?.contentType === WEB_VIEW_CONTENT_TYPE.URL
   );
+}
+
+/**
+ * Whether the pane's CURRENT document still has a content-zoom bootstrap running. The bootstrap
+ * publishes `window.__platformContentZoom` synchronously as it installs and removes it on teardown,
+ * so its absence means the document that reported this pane's areas is gone. Anything that cannot
+ * be determined — no iframe, no content window, a realm that refuses the read — answers `true`, so
+ * an unreadable pane keeps its areas rather than losing them on a guess.
+ */
+function isContentZoomBootstrapAlive(webViewId: WebViewId): boolean {
+  try {
+    const iframe = deps.getIframe(webViewId);
+    if (!iframe) return true;
+    const contentWindow: (Window & { __platformContentZoom?: ContentZoomWindowApi }) | undefined =
+      iframe.contentWindow ?? undefined;
+    if (!contentWindow) return true;
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    return contentWindow.__platformContentZoom !== undefined;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -587,21 +622,28 @@ export function pushContentZoom(
  * it cancels the grace as usual. What that grace can still grant is bounded by the areas the pane
  * already has: a pane that has never reported one — an HTML view opened with `allowScripts: false`,
  * say, whose bootstrap never runs — eventually gets the whole-iframe fallback, while a pane whose
- * earlier content reported areas keeps them (see the paragraph below), so replacement content that
- * never runs the bootstrap of its own is left with those areas rather than scaled whole. Clearing
- * areas on a content replacement is open work on PT-4581. The whole-iframe `zoom` a reload does not
+ * earlier content reported areas keeps them for the length of the grace (see the paragraph below),
+ * and then either for good, if the replacement content's own bootstrap is still running once the
+ * grace elapses, or gives them up for that same whole-iframe fallback, if it is not. The
+ * whole-iframe `zoom` a reload does not
  * reset on its own (it lives on the host `<iframe>` element, not the content a reload replaces) is
  * cleared by the {@link pushContentZoom} below, which assigns the host zoom in both directions, so
  * the new content never renders whole-scaled on the strength of the old grant. A URL pane keeps its
  * immediate fallback and is left out of the grace: {@link mayScaleWholeIframe} always allows a URL
  * pane, so that same push reapplies it.
  *
- * The pane's last-reported areas are deliberately kept. A real load replaces the iframe's realm, so
- * the fresh content's bootstrap reports its own areas from scratch; dropping them here instead
- * races that report — the child document's `DOMContentLoaded`, which the bootstrap reports from,
- * fires before the iframe element's `load` — and a pane that reported first would be left with no
- * areas that nothing ever re-reports, since the bootstrap only calls the parent when its area LIST
- * changes and keeps that list inside the iframe.
+ * The pane's last-reported areas are deliberately kept across the load itself rather than dropped
+ * here. A real load replaces the iframe's realm, so the fresh content's bootstrap reports its own
+ * areas from scratch; dropping them at load time instead races that report — the child document's
+ * `DOMContentLoaded`, which the bootstrap reports from, fires before the iframe element's `load` —
+ * and a pane that reported first would be left with no areas that nothing ever re-reports, since
+ * the bootstrap only calls the parent when its area LIST changes and keeps that list inside the
+ * iframe. What decides whether those areas survive the replacement is the liveness probe the grace
+ * timer runs at expiry ({@link isContentZoomBootstrapAlive}): the ordinary case is a fresh report
+ * already having cancelled the grace, but content that never reports again — `allowScripts: false`
+ * content, an in-place navigation the platform never injected into, `about:blank`, or a host that
+ * tore its own bootstrap down — has its predecessor's areas dropped in favor of the whole-iframe
+ * fallback instead of keeping them forever.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
   // Armed before the definition is read, and outside the guard below, because a read that fails
