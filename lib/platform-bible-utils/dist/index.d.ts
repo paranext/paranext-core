@@ -1219,10 +1219,10 @@ export declare class UnsubscriberAsyncList {
 	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
 	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
-	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists
-	 * sharing this list's name report the first occurrence of each outcome verbatim and then collapse
-	 * the rest into one count. So the reports are a faithful signal that late arrivals are happening,
-	 * but not a per-occurrence record — do not count log lines to count undone subscriptions.
+	 * Those reports are rate-limited: within a `LATE_ARRIVAL_REPORT_WINDOW_MS` window, lists sharing
+	 * this list's name report the first occurrence of each outcome verbatim and then collapse the
+	 * rest into one count. So the reports are a faithful signal that late arrivals are happening, but
+	 * not a per-occurrence record — do not count log lines to count undone subscriptions.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
@@ -3459,17 +3459,19 @@ export type UsjFlatTextChapterLocation = {
  * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
  * document.
  *
- * This could actually have more content clauses at the end, but TS types are limited
+ * Eight clauses covers every shape the editors render (table cell → char → nested char → text is
+ * seven). Deeper paths are valid at runtime; the type is a bound, not a rule.
  */
-export type ContentJsonPath = "" | `$` | `$.content[${number}]` | `$.content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}]`;
+export type ContentJsonPath = "" | `$` | `$.content[${number}]` | `$.content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`;
 /**
  * JSON path to the `marker` or an attribute on a {@link MarkerObject} or {@link Usj} in the current
  * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
  * if there are symbols other than underscore in the property name
  *
- * This could actually have more content clauses at the end, but TS types are limited
+ * Eight clauses covers every shape the editors render (table cell → char → nested char → text is
+ * seven). Deeper paths are valid at runtime; the type is a bound, not a rule.
  */
-export type PropertyJsonPath = "" | `$.${string}` | `$['${string}']` | `$.content[${number}].${string}` | `$.content[${number}]['${string}']` | `$.content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
+export type PropertyJsonPath = "" | `$.${string}` | `$['${string}']` | `$.content[${number}].${string}` | `$.content[${number}]['${string}']` | `$.content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
 /**
  * A JSONPath query to a {@link MarkerContent}, {@link Usj}, or property within a USJ document and
  * additional information that point to a specific location in that USJ document.

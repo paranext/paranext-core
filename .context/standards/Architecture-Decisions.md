@@ -1374,6 +1374,54 @@ step, no automation. Just a record.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
 
+## adr-editor-positions-are-settled-coordinates: The platform editor's public position API is settled coordinates, translated once at the editor boundary
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** Standard view introduced mid-edit "unsettled" document state in the platform editor:
+  while a command surface (a palette, in-progress marker input) holds a pending edit, the live
+  Lexical tree and the settled USJ document can disagree about a node's content and its indices.
+  `getUsj()` always returned the SETTLED document, but every position API — `getSelection`,
+  `onSelectionChange`, `setSelection`, `setAnnotation`, `insertNote` — read and wrote the LIVE tree,
+  so a host that only ever sees `getUsj()` (`platform-scripture-editor.web-view.tsx` in this repo)
+  had no way to reconcile a jsonPath captured from a selection against the document it can actually
+  read. `insertCommentAtCurrentSelection`'s pre-existing guard papered over exactly this mismatch by
+  treating an unresolvable path or an out-of-range offset as recoverable rather than a bug.
+- **Decision:** Make every public editor position address the settled document, with the live/settled
+  translation done once, inside the editor, at the API boundary. An identity fast path applies when
+  nothing is pending. Otherwise each pending settle scope is materialized in a headless scratch
+  Lexical editor, and positions are mapped across that re-tokenization using the engine's
+  whitespace-tolerant fragment byte anchor, plus a top-level index correction for scopes that split
+  or merge paragraphs. A USFM byte with no USJ representation (the `+` of a nested marker, the second
+  `/` of `//`, an attribute's `|`, `=`, `"`, or the space between attributes) snaps LEFT to the
+  nearest representable location, so a position anchored to one of those bytes round-trips lossily by
+  design.
+- **Alternatives:** **A PT9-style debounced settle** — rejected: the settle's caret exemption already
+  exempts exactly the node being resolved, so debouncing buys nothing there; transient palette input
+  is a declaration, not a pend, so there is nothing to debounce; and a mutating settle would push its
+  own history entries, corrupting undo. **Verse-anchored positions** — dropped: re-anchoring by verse
+  only helps when re-resolving a *stored* position against a document that has since CHANGED; it does
+  nothing for the ordinary case of reading a position back against the document as it stands right
+  now, so the relative (jsonPath + offset) API has to be supported regardless. **A live-coordinate API
+  with host-side translation** — rejected: hosts such as `platform-scripture-editor.web-view.tsx`
+  cannot see the live Lexical tree at all, only `getUsj()`'s settled snapshot, so they would have
+  nothing to translate against.
+- **Consequences:** Hosts never see live coordinates — `getSelection`, `onSelectionChange`, and every
+  other public position are guaranteed settled, so `platform-scripture-editor.web-view.tsx`'s
+  unresolvable-path and offset-past-length checks are a fail-safe against a bug or a race, never an
+  expected state. Positions anchored to a snapped-left byte round-trip lossily. `ContentJsonPath` /
+  `PropertyJsonPath` were widened to eight clauses in both `platform-bible-utils` (this repo) and the
+  editor's own copy: real Standard-view nesting (table cell → char → nested char → text is seven
+  clauses) already exceeded the four-clause cap with nothing pending; a scratch-scope remap is a
+  secondary consumer of the same widened bound. The two declarations must be widened in lock-step, or
+  the cross-repo assignment from core's types into the editor's typed API fails to type-check. The
+  live/settled translation runs only while something is pending, scoped per pending settle scope and
+  memoized on that scope's content, so the identity fast path keeps the common (nothing pending) case
+  free.
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11. The guard this decision
+  documents is `insertCommentAtCurrentSelection` in
+  `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
+
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
 
 - **Formerly:** ADR-0016
