@@ -242,11 +242,14 @@ test.describe('Comments panel content zoom in Simple mode', () => {
       // default rather than carrying project A's 110 % across with it.
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1);
 
-      // ...and project A's level must not be written into project B's memory entry either. Absence
-      // is what is being asserted, so this waits out the memory write's debounce (250 ms) with room
-      // to spare before reading, rather than polling — a poll for "not there" would pass on its
-      // first read, before a wrong write could have landed.
+      // Wait out the memory write's debounce (250 ms) with room to spare before reading again. This
+      // covers two things at once: the settled level (a plain re-read, not a poll — the reset above
+      // could pass on a transient `1` mid-reload and then settle back to project A's 1.1, and a poll
+      // would accept that transient just as readily as the real value) and the memory-key absence
+      // (a poll for "not there" would likewise pass on its first read, before a wrong write could
+      // have landed).
       await mainPage.waitForTimeout(5_000);
+      expect(await readFactor(panelFrame, '')).toBe(1);
       expect(Object.keys(await readContentZoomMemory(mainPage))).not.toContain(
         `notes:${normalizedProjectBId}:main`,
       );
