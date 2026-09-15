@@ -257,6 +257,7 @@ export function CommentItem({
                     onClick={handleCancelEdit}
                     variant="outline"
                     className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
+                    aria-label={localizedStrings['%comment_aria_cancel_edit%'] ?? 'Cancel edit'}
                   >
                     <X />
                   </Button>
@@ -265,6 +266,7 @@ export function CommentItem({
                     onClick={handleSaveEdit}
                     className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                     disabled={!hasEditorContent(editorState)}
+                    aria-label={localizedStrings['%comment_aria_save_edit%'] ?? 'Save edit'}
                   >
                     <ArrowUp />
                   </Button>

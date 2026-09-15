@@ -522,7 +522,9 @@ export declare const COMMENT_LIST_STRING_KEYS: readonly [
 	"%comment_aria_submit_comment%",
 	"%comment_aria_mark_as_read%",
 	"%comment_aria_mark_as_unread%",
-	"%comment_aria_resolve_thread%"
+	"%comment_aria_resolve_thread%",
+	"%comment_aria_cancel_edit%",
+	"%comment_aria_save_edit%"
 ];
 /**
  * Type definition for the localized strings used in the CommentList component. Handy for typing the
