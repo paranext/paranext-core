@@ -37,8 +37,17 @@
    Scripture text out of the family and onto an unrelated system font. The application declares the
    family once, in src/renderer/styles/fonts.css; this demo pulls the same faces from Google Fonts
    in scripture-editor.stories.css, since Storybook does not load the application's stylesheet. */
+/* The Scripture text fallback chain, published as a custom property so a generated project
+   stylesheet can put the project's own font in front of it rather than replacing it outright:
+   the editor's `generateUsjCss` emits `font-family: "<project font>", var(--usj-font-fallback,
+   serif)`. Declared on `.usfm` so it reaches the unformatted view too, where the chain itself is
+   not applied. */
+.usfm {
+  --usj-font-fallback:
+    'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+}
 .usfm.formatted-font {
-  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+  font-family: var(--usj-font-fallback);
   font-size: 12pt;
 }
 
