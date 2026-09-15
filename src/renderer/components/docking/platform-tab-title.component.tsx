@@ -1,6 +1,7 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsFocusedWindow } from '@renderer/hooks/use-is-focused-window.hook';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import {
@@ -10,6 +11,8 @@ import {
 } from '@renderer/services/web-view.service-shard';
 import {
   buildTabMenuItems,
+  CONTENT_ZOOM_TAB_MENU_GROUP,
+  filterTabMenuToGroup,
   FLOAT_TAB_COMMAND,
   getMoveTargetWindowId,
   MOVE_TO_NEW_WINDOW_COMMAND,
@@ -49,7 +52,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isLocalizeKey,
+  isPlatformError,
+  LocalizeKey,
+  type Localized,
+  type SingleColumnMenu,
+} from 'platform-bible-utils';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
@@ -118,7 +128,7 @@ const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 const cssHighlightDurationMilliseconds = 3000;
 
 /** A tab menu with nothing in it, for a tab whose menu has not loaded or failed to */
-const EMPTY_TAB_MENU = Object.freeze({ groups: {}, items: [] });
+const EMPTY_TAB_MENU: Localized<SingleColumnMenu> = Object.freeze({ groups: {}, items: [] });
 
 /**
  * Web view type asked for on behalf of a tab that hosts none — a dialog, or an error tab.
@@ -302,6 +312,12 @@ export function PlatformTabTitle({
 }: PlatformTabTitleProps) {
   const isPowerMode = useIsPowerMode();
 
+  // Simple-mode-only UI has to know the mode is settled, not merely that it is not power:
+  // `useIsPowerMode` answers `false` while the setting is still loading, so a power user would
+  // otherwise be shown the simple menu until it resolves (see the hook's own warning).
+  const [, , isModeKnown] = useInterfaceMode();
+  const isSimpleMode = isModeKnown && !isPowerMode;
+
   const lastFlashTriggerTimeRef = useRef<number | undefined>(undefined);
 
   // This ref will always be defined
@@ -309,10 +325,35 @@ export function PlatformTabTitle({
   const containerRef = useRef<HTMLDivElement>(undefined!);
 
   /**
+   * The tab menu as the menu data provider contributed it, unconverted. Empty until the read below
+   * lands, and for a tab whose read failed.
+   */
+  const [contributedTabMenu, setContributedTabMenu] =
+    useState<Localized<SingleColumnMenu>>(EMPTY_TAB_MENU);
+
+  /**
+   * The contributed menu as this mode offers it. Simple mode shows the zoom group alone: every
+   * other tab item is a no-op there — floating is off for its groups, and moving reaches a second
+   * window Simple mode does not have — while zooming this tab's content behaves identically in both
+   * modes.
+   *
+   * Narrowed before conversion because the converter flattens groups into one list with separators
+   * and a converted item no longer says which group it came from.
+   */
+  const tabMenuForMode = useMemo(() => {
+    if (isPowerMode) return contributedTabMenu;
+    if (isSimpleMode) return filterTabMenuToGroup(contributedTabMenu, CONTENT_ZOOM_TAB_MENU_GROUP);
+    return EMPTY_TAB_MENU;
+  }, [isPowerMode, isSimpleMode, contributedTabMenu]);
+
+  /**
    * The contributed tab menu, converted for rendering. Empty until the read below lands, and for a
    * tab whose read failed.
    */
-  const [contributedItems, setContributedItems] = useState<OverlayContextMenuItem[]>([]);
+  const contributedItems = useMemo(
+    () => convertContributionToContextMenuItems(tabMenuForMode),
+    [tabMenuForMode],
+  );
 
   const tabAria: LocalizeKey = '%tab_aria_tab%';
   // The contributed items' own keys are resolved here rather than in a second hook, so a tab asks
@@ -347,14 +388,13 @@ export function PlatformTabTitle({
   // which actions apply to this tab — are read when the menu opens instead. A live subscription
   // would re-read on every contribution resync for a list that had not changed.
   //
-  // Only where the menu can open: Simple mode renders no tab menu at all, so its fixed layout would
-  // otherwise pay one cross-process read per tab for something never shown.
+  // Both modes read now: Simple mode offers the zoom group, narrowed from this same contributed
+  // menu after the read lands, so a Simple-mode column pays one cross-process read per tab just as
+  // a Power-mode one does.
   //
   // The trade this accepts: an extension installed or removed mid-session has its tab items appear
   // when the tab next mounts, not immediately.
   useEffect(() => {
-    if (!isPowerMode) return undefined;
-
     let isStillMounted = true;
     (async () => {
       try {
@@ -366,10 +406,7 @@ export function PlatformTabTitle({
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           (webViewType as `${string}.${string}`) ?? TAB_WITHOUT_WEB_VIEW_TYPE,
         );
-        if (isStillMounted)
-          setContributedItems(
-            convertContributionToContextMenuItems(webViewMenu.tabMenu ?? EMPTY_TAB_MENU),
-          );
+        if (isStillMounted) setContributedTabMenu(webViewMenu.tabMenu ?? EMPTY_TAB_MENU);
       } catch (error) {
         // Said out loud rather than swallowed into an empty menu: the extension host logs the cause
         // at debug and without knowing which tab asked, so nothing here would otherwise explain a
@@ -383,7 +420,7 @@ export function PlatformTabTitle({
     return () => {
       isStillMounted = false;
     };
-  }, [isPowerMode, webViewType, id]);
+  }, [webViewType, id]);
 
   /**
    * What this tab can currently do, read when the menu opens rather than subscribed to. The menu
@@ -419,10 +456,8 @@ export function PlatformTabTitle({
   const latestMenuOpenRequestRef = useRef<symbol | undefined>(undefined);
 
   const handleMenuOpenChange = async (isOpen: boolean) => {
-    // Both readers of what this fetches — the move-to-new-window item and the move-to-window
-    // submenu — are removed from the menu of a tab hosting no web view, so for a dialog or an error
-    // tab the round trip and the re-render it causes are discarded in full
-    if (!isOpen || !webViewId) return;
+    // Simple mode's menu holds only the zoom items, and neither reader of this list is in it
+    if (!isOpen || !webViewId || !isPowerMode) return;
 
     // Every call here passes the same `true`, so there is no resolved value of its own to compare
     // against later the way `window-label.util.ts` compares its resolved label — a token stands in
@@ -664,52 +699,6 @@ export function PlatformTabTitle({
     };
   }, [focusSubject, id, lastSelectedScriptureNavigableWebViewId, lastFocusedTabId, isPowerMode]);
 
-  // Give this menu a keyboard path. rc-tabs renders the focusable tab as `.dock-tab-btn`, and the
-  // context-menu trigger inside it sets no tabIndex — so pressing Shift+F10 or the Menu key on a
-  // focused tab fires `contextmenu` at `.dock-tab-btn` and it bubbles UP, past the trigger, opening
-  // nothing. Forwarding that event to an element INSIDE the trigger sends it back through the
-  // trigger on its way up, which is what opens the menu.
-  //
-  // Matched by class rather than by `role="tab"`, which appears TWICE in the real tab: rc-tabs sets
-  // it on the focusable `.dock-tab-btn`, and rc-dock sets it again on the DragDropDiv holding the
-  // label inside it. Walking to the nearest `[role="tab"]` therefore lands on that inner element —
-  // a descendant of the one the keypress reaches — where the event never arrives.
-  //
-  // This is the whole keyboard story for the tab menu: every item in it becomes reachable at once,
-  // including ones an extension contributes, rather than only the ones given their own shortcut.
-  useEffect(() => {
-    if (!isPowerMode) return undefined;
-    const containerElement = containerRef.current;
-    const tabElement = containerElement?.closest('.dock-tab-btn');
-    if (!containerElement || !tabElement) return undefined;
-
-    const forwardToTrigger = (event: Event) => {
-      // Read the trigger's element now rather than closing over the one that was here at mount.
-      // This component swaps its root between the plain title and the menu-wrapped title as the
-      // contributed menu arrives, and React rebuilds the whole subtree when it does — so the
-      // element captured above is detached by the time any key reaches this, and dispatching to it
-      // would go nowhere. The tab element the listener hangs off is rc-tabs' own and survives.
-      const triggerElement = containerRef.current;
-      if (!triggerElement) return;
-
-      // Anything raised inside the trigger already reaches it by bubbling, so leave it alone: every
-      // ordinary right-click on the tab's title, and the forwarded event below on its way back up,
-      // whose target is the element it was dispatched on
-      if (event.target instanceof Node && triggerElement.contains(event.target)) return;
-
-      event.preventDefault();
-      // Carry the position across so the menu opens where the event said, which for a keyboard
-      // press is the focused tab rather than wherever the pointer happens to rest
-      const { clientX, clientY } = event instanceof MouseEvent ? event : { clientX: 0, clientY: 0 };
-      triggerElement.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY }),
-      );
-    };
-
-    tabElement.addEventListener('contextmenu', forwardToTrigger);
-    return () => tabElement.removeEventListener('contextmenu', forwardToTrigger);
-  }, [isPowerMode]);
-
   // rc-dock's DragDropDiv skips drag-start entirely when the pointerdown's native target carries
   // this class (see `onPointerDown` in `node_modules/rc-dock/es/dragdrop/DragDropDiv.js`) — the
   // library's own supported way to make part of a draggable tab non-draggable. Simple mode's
@@ -907,25 +896,70 @@ export function PlatformTabTitle({
     [webViewId, menuTargets],
   );
 
-  // Memoized, and above the Simple-mode return so it stays a hook: a single focus change re-renders
-  // every mounted tab title, because the focus subscription, useLastFocusedTabId and
+  // Memoized, and above every return so it stays a hook: a single focus change re-renders every
+  // mounted tab title, because the focus subscription, useLastFocusedTabId and
   // useLastSelectedScriptureNavigableWebViewId all fan out to all of them. Without this, each one
   // re-filters and re-maps its item list on every one of those.
-  //
-  // The Simple-mode short-circuit lives inside rather than around it, so that mode still pays
-  // nothing for a menu it never shows.
   const tabMenuItems = useMemo(
-    () =>
-      isPowerMode
-        ? buildTabMenuItems(localizedContributedItems, menuContext, emptyWindowLabel)
-        : [],
-    [isPowerMode, localizedContributedItems, menuContext, emptyWindowLabel],
+    () => buildTabMenuItems(localizedContributedItems, menuContext, emptyWindowLabel),
+    [localizedContributedItems, menuContext, emptyWindowLabel],
   );
 
-  // Simple mode: skip the tab menu entirely. Every item it offers is either a no-op here (floating
-  // is off, since the group config has floatable: false) or reaches a second window, which Simple
-  // mode does not have. Removing the menu prevents dead options from being shown.
-  if (!isPowerMode) return titleWithTooltip;
+  // Give this menu a keyboard path. rc-tabs renders the focusable tab as `.dock-tab-btn`, and the
+  // context-menu trigger inside it sets no tabIndex — so pressing Shift+F10 or the Menu key on a
+  // focused tab fires `contextmenu` at `.dock-tab-btn` and it bubbles UP, past the trigger, opening
+  // nothing. Forwarding that event to an element INSIDE the trigger sends it back through the
+  // trigger on its way up, which is what opens the menu.
+  //
+  // Matched by class rather than by `role="tab"`, which appears TWICE in the real tab: rc-tabs sets
+  // it on the focusable `.dock-tab-btn`, and rc-dock sets it again on the DragDropDiv holding the
+  // label inside it. Walking to the nearest `[role="tab"]` therefore lands on that inner element —
+  // a descendant of the one the keypress reaches — where the event never arrives.
+  //
+  // The forward exists wherever a menu exists, which is now both modes: a tab with no menu (no
+  // items to show) forwards nothing, since there is nothing for the forwarded event to open.
+  //
+  // This is the whole keyboard story for the tab menu: every item in it becomes reachable at once,
+  // including ones an extension contributes, rather than only the ones given their own shortcut.
+  useEffect(() => {
+    if (tabMenuItems.length === 0) return undefined;
+    const containerElement = containerRef.current;
+    const tabElement = containerElement?.closest('.dock-tab-btn');
+    if (!containerElement || !tabElement) return undefined;
+
+    const forwardToTrigger = (event: Event) => {
+      // Read the trigger's element now rather than closing over the one that was here at mount.
+      // This component swaps its root between the plain title and the menu-wrapped title as the
+      // contributed menu arrives, and React rebuilds the whole subtree when it does — so the
+      // element captured above is detached by the time any key reaches this, and dispatching to it
+      // would go nowhere. The tab element the listener hangs off is rc-tabs' own and survives.
+      const triggerElement = containerRef.current;
+      if (!triggerElement) return;
+
+      // Anything raised inside the trigger already reaches it by bubbling, so leave it alone: every
+      // ordinary right-click on the tab's title, and the forwarded event below on its way back up,
+      // whose target is the element it was dispatched on
+      if (event.target instanceof Node && triggerElement.contains(event.target)) return;
+
+      event.preventDefault();
+      // Carry the position across so the menu opens where the event said, which for a keyboard
+      // press is the focused tab rather than wherever the pointer happens to rest
+      const { clientX, clientY } = event instanceof MouseEvent ? event : { clientX: 0, clientY: 0 };
+      triggerElement.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY }),
+      );
+    };
+
+    tabElement.addEventListener('contextmenu', forwardToTrigger);
+    return () => tabElement.removeEventListener('contextmenu', forwardToTrigger);
+  }, [tabMenuItems.length]);
+
+  // Rendering the menu with nothing in it puts an empty styled popup on screen, since the content
+  // opens whatever its children are. A tab with nothing to offer — its read has not landed, failed,
+  // is in a mode that offers no menu for this tab, or holds a contributed menu with no items this
+  // mode shows — has no menu at all instead, which is what the overlay path does with the same
+  // problem.
+  if (tabMenuItems.length === 0) return titleWithTooltip;
 
   const handleSelect = (itemId: string) => {
     if (itemId === FLOAT_TAB_COMMAND) {
@@ -949,14 +983,15 @@ export function PlatformTabTitle({
     handleMenuCommand({ command: itemId } as Parameters<typeof handleMenuCommand>[0], id);
   };
 
-  // Rendering the menu with nothing in it puts an empty styled popup on screen, since the content
-  // opens whatever its children are. A tab with nothing to offer — its read has not landed, or
-  // failed — has no menu at all instead, which is what the overlay path does with the same problem.
-  if (tabMenuItems.length === 0) return titleWithTooltip;
-
   return (
     <ContextMenu onOpenChange={handleMenuOpenChange}>
-      <ContextMenuTrigger>{titleWithTooltip}</ContextMenuTrigger>
+      {/* rc-dock's DragDropDiv checks the exact pointerdown target rather than its ancestors (see
+          `dragIgnoreClass` above), and the trigger is itself an element the pointer can land on —
+          so Simple mode's drag-ignore marker has to be passed onto it too. In Power mode
+          `dragIgnoreClass` is `''`, so this is `undefined` and dragging is untouched. */}
+      <ContextMenuTrigger className={dragIgnoreClass.trim() || undefined}>
+        {titleWithTooltip}
+      </ContextMenuTrigger>
       <ContextMenuContent>{renderTabMenuItems(tabMenuItems, handleSelect)}</ContextMenuContent>
     </ContextMenu>
   );
