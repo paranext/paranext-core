@@ -1,13 +1,8 @@
 /**
- * E2E for the Scripture editor's per-area content zoom (PT-4581, epic PT-4575): Ctrl+wheel and the
+ * E2E for the Scripture editor's per-area content zoom: Ctrl+wheel and the
  * `platform.webViewContentZoom*` commands scale the `main` text and the `footnotes` pane
  * independently, remember each area's level per project, and share that memory with the read-only
  * viewer of the same project.
- *
- * The ticket names `e2e-tests/tests/web-view-content-zoom.spec.ts`, but that path is collected by
- * nothing: `playwright.config.ts` registers only `smoke`, `isolated` and `enhanced-resources`, and
- * this spec launches its own Electron instance, so it belongs under `tests/isolated/` per
- * `e2e-tests/CLAUDE.md` and `tests/attached/README.md`.
  *
  * Jonah 1 carries footnote callers at verses 1, 6 (twice) and 9
  * (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), so navigating to Jonah 1:1 gives the footnotes list
@@ -24,11 +19,16 @@
 import { type Frame, type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  CONTENT_ZOOM_COMMANDS,
+  ensureFootnotesVisible,
+  getEditorFrame,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
   openScriptureEditorForProject,
+  readFactor,
   SAMPLE_WEB_PROJECT_ID,
+  sendCommandWithId,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
 
@@ -36,16 +36,6 @@ test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
-
-/**
- * Names of the three content-zoom commands (registered in
- * `src/main/services/web-view.service-router.ts`).
- */
-const CONTENT_ZOOM_COMMANDS = {
-  in: 'platform.webViewContentZoomIn',
-  out: 'platform.webViewContentZoomOut',
-  reset: 'platform.webViewContentZoomReset',
-} as const;
 
 /**
  * Setting key the memory-key-shape assertion reads directly
@@ -58,33 +48,6 @@ const CONTENT_ZOOM_MEMORY_SETTING = 'platform.webViewContentZoomMemory';
  * (`web-view-content-zoom.bootstrap-script.ts`).
  */
 const INDICATOR_SELECTOR = '#platform-content-zoom-indicator';
-
-/**
- * The `<iframe data-web-view-id>` element's content frame — a real `Frame`, not a `FrameLocator`,
- * so `evaluate` can read the CSS custom properties the platform writes onto the pane's own
- * `documentElement`.
- */
-async function getEditorFrame(page: Page, webViewId: string): Promise<Frame> {
-  const handle = await page.locator(`iframe[data-web-view-id="${webViewId}"]`).elementHandle();
-  const frame = await handle?.contentFrame();
-  if (!frame) throw new Error(`Editor iframe ${webViewId} has no content frame`);
-  return frame;
-}
-
-/**
- * Reads one zoom area's effective factor straight off the CSS custom property the platform writes
- * as an inline style on the pane's `documentElement` (`pushContentZoom`'s
- * `root.style.setProperty`), so it is readable from inside the frame without going through any DOM
- * measurement. `areaId` is `''` for the `main` area.
- */
-async function readFactor(frame: Frame, areaId: string): Promise<number> {
-  const value = await frame.evaluate(
-    (variableName) =>
-      getComputedStyle(document.documentElement).getPropertyValue(variableName).trim(),
-    `--platform-content-zoom-${areaId || 'main'}`,
-  );
-  return Number(value);
-}
 
 /** Bounding box (main-frame-relative) of one zoom area's marked root element. */
 async function areaBox(
@@ -112,33 +75,6 @@ async function ctrlWheel(
   await page.keyboard.down('Control');
   await page.mouse.wheel(0, deltaY);
   await page.keyboard.up('Control');
-}
-
-/**
- * Sends a PAPI command from the renderer, exactly as a menu entry would (`window.papi` is exposed
- * on `globalThis` but not typed there). Used both for the three content-zoom commands (with an area
- * id) and for `platformScriptureEditor.toggleFootnotes` (without one).
- */
-async function sendCommandWithId(
-  page: Page,
-  commandName: string,
-  webViewId: string,
-  areaId?: string,
-): Promise<void> {
-  await page.evaluate(
-    ([cmd, id, area]) => {
-      // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as
-      // scripture-text-grid-zoom.spec.ts's afterEach cleanup).
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const win = window as unknown as {
-        papi: { commands: { sendCommand: (c: string, ...a: unknown[]) => Promise<unknown> } };
-      };
-      return area === undefined
-        ? win.papi.commands.sendCommand(cmd, id)
-        : win.papi.commands.sendCommand(cmd, id, area);
-    },
-    [commandName, webViewId, areaId] as const,
-  );
 }
 
 /** Reads the `platform.webViewContentZoomMemory` setting straight from the renderer. */
@@ -176,20 +112,6 @@ async function readActiveArea(frame: Frame): Promise<string | undefined> {
     // eslint-disable-next-line no-underscore-dangle
     return win.__platformContentZoom?.activeArea;
   });
-}
-
-/**
- * Shows the footnotes pane, tolerating that it may already be visible: Power mode's footnotes
- * auto-show/hide (`resolveFootnotesPaneAutoVisibility`) shows the pane by itself for any chapter
- * that has notes — which Jonah 1 does, by design (see the file docblock) — so sending
- * `toggleFootnotes` unconditionally would just as often HIDE an already-auto-shown pane.
- */
-async function ensureFootnotesVisible(page: Page, frame: Frame, webViewId: string): Promise<void> {
-  const footnotesRoot = frame.locator('[data-platform-content-zoom-root="footnotes"]');
-  if ((await footnotesRoot.count()) === 0) {
-    await sendCommandWithId(page, 'platformScriptureEditor.toggleFootnotes', webViewId);
-  }
-  await footnotesRoot.waitFor({ state: 'attached', timeout: 20_000 });
 }
 
 test.describe('scripture editor content zoom', () => {
@@ -260,8 +182,8 @@ test.describe('scripture editor content zoom', () => {
 
     await test.step('TC-TO "Zoom menu increments" — the command path drives the same ladder', async () => {
       // Reset first so the ladder below starts from a known rung regardless of the wheel gesture
-      // above. The tab-menu entries themselves are PT-4578's PR #2809-sibling work and are not on
-      // this branch; the explicit command is what stands in for "the Zoom menu" here.
+      // above. The explicit command stands in for "the Zoom menu" here: this spec covers the zoom
+      // mechanism itself, independent of whatever UI (tab menu, keyboard chord) drives it.
       await sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.reset, editorId, 'main');
       await expect.poll(() => readFactor(editorFrame, '')).toBe(1);
       await expect

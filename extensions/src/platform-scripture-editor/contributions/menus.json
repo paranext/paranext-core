@@ -115,21 +115,21 @@
           },
           {
             "label": "%webView_platformScriptureEditor_zoomIn%",
-            "localizeNotes": "Scripture editor top menu > Options > Zoom in. Enlarges the text of whichever area of this editor tab was used last (the Scripture text or the footnotes list); toolbars are unaffected.",
+            "localizeNotes": "Scripture editor top menu > Options > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected.",
             "group": "platformScriptureEditor.zoom",
             "order": 1,
             "command": "platform.webViewContentZoomIn"
           },
           {
             "label": "%webView_platformScriptureEditor_zoomOut%",
-            "localizeNotes": "Scripture editor top menu > Options > Zoom out. Shrinks the text of whichever area of this editor tab was used last (the Scripture text or the footnotes list); toolbars are unaffected.",
+            "localizeNotes": "Scripture editor top menu > Options > Zoom out. Shrinks the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected.",
             "group": "platformScriptureEditor.zoom",
             "order": 2,
             "command": "platform.webViewContentZoomOut"
           },
           {
             "label": "%webView_platformScriptureEditor_resetZoomToDefault%",
-            "localizeNotes": "Scripture editor top menu > Options > Reset zoom to default. Returns whichever area of this editor tab was used last (the Scripture text or the footnotes list) to the Settings default zoom.",
+            "localizeNotes": "Scripture editor top menu > Options > Reset zoom to default. Returns whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane) to the Settings default zoom.",
             "group": "platformScriptureEditor.zoom",
             "order": 3,
             "command": "platform.webViewContentZoomReset"
