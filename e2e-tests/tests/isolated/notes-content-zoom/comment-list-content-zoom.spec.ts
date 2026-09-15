@@ -92,13 +92,21 @@ function cardLocator(frame: Frame, threadId: string) {
 }
 
 /**
+ * Slack allowed on `cardTopWithinView`'s lower bound to absorb sub-pixel rounding of zoomed client
+ * rects, not the card's actual scroll position.
+ */
+const CARD_TOP_TOLERANCE_PX = 4;
+
+/**
  * How far a card's top sits below the visible top of the list, in the card's own (zoomed) pixels.
  * The visible top is the bottom edge of the sticky filter toolbar: the list's own container never
  * clips (the web-view document is what scrolls, and the zoom root travels with the content), so
  * neither the zoom root's box nor the bare viewport is the right anchor — the toolbar covers the
  * top of the viewport, and the zoom root's top moves with every scroll. Both rectangles are read in
- * one `evaluate` so they cannot be a tick apart. A card scrolled above the toolbar clamps to 0;
- * `toBeInViewport` covers that direction.
+ * one `evaluate` so they cannot be a tick apart. The result is signed: a negative value means the
+ * card's top sits ABOVE the toolbar (scrolled past it), which `toBeInViewport` alone would not
+ * catch, since the toolbar overlays the card inside the viewport rather than clipping it out.
+ * Callers must check both directions — see `CARD_TOP_TOLERANCE_PX`.
  */
 async function cardTopWithinView(
   frame: Frame,
@@ -110,16 +118,44 @@ async function cardTopWithinView(
     const toolbar = document.querySelector('[data-testid="comment-scope-filter"]');
     const element = document.querySelector(`[role="option"][id="${id}"]`);
     if (!toolbar || !element) throw new Error(`Filter toolbar or card "${id}" not found`);
-    return Math.max(
-      0,
-      element.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom,
-    );
+    return element.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom;
   }, cardId);
 }
 
 /** A card's rendered height in its own (zoomed) pixels. */
 async function cardHeight(card: ReturnType<typeof cardLocator>): Promise<number> {
   return card.evaluate((element) => element.getBoundingClientRect().height);
+}
+
+/**
+ * Waits for a BCV-sync scroll to settle with the card's top inside the visible band: at or below
+ * the sticky toolbar's bottom edge (within {@link CARD_TOP_TOLERANCE_PX}) and no further down than
+ * the card's own height.
+ *
+ * Both bounds are checked inside ONE poll on purpose. The scroll is animated and still running when
+ * the navigation call returns, so a poll on a single bound is satisfied by a position the card is
+ * merely passing through: scrolling down to a later verse the distance starts far positive, and
+ * scrolling back up to an earlier one it starts far negative — each already satisfies the opposite
+ * bound on the first sample. The polled value is a phrase rather than a boolean so a failure names
+ * which way the card missed.
+ */
+async function expectCardSettledBelowToolbar(
+  frame: Frame,
+  card: ReturnType<typeof cardLocator>,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const top = await cardTopWithinView(frame, card);
+        const height = await cardHeight(card);
+        if (top < -CARD_TOP_TOLERANCE_PX)
+          return `hidden under the toolbar by ${Math.round(-top)}px`;
+        if (top > height) return `${Math.round(top)}px below the toolbar, past its own height`;
+        return 'below the toolbar';
+      },
+      { timeout: 15_000 },
+    )
+    .toBe('below the toolbar');
 }
 
 /**
@@ -292,19 +328,18 @@ test.describe('comment list content zoom', () => {
       }
       /* eslint-enable no-await-in-loop */
 
+      // Scrolling down to a later verse, then back up to the FIRST card — the direction that a
+      // sticky header hides the target under, since the scroll stops where the card's top reaches
+      // the top of the scroll container rather than the top of the visible content.
       const gen3Card = cardLocator(listFrame, threadIds[3]);
       await navigateToolbarBcv(mainPage, 'Genesis 3:1');
       await expect(gen3Card).toBeInViewport({ timeout: 15_000 });
-      await expect
-        .poll(() => cardTopWithinView(listFrame, gen3Card), { timeout: 10_000 })
-        .toBeLessThanOrEqual(await cardHeight(gen3Card));
+      await expectCardSettledBelowToolbar(listFrame, gen3Card);
 
       const gen1Card = cardLocator(listFrame, threadIds[0]);
       await navigateToolbarBcv(mainPage, 'Genesis 1:1');
       await expect(gen1Card).toBeInViewport({ timeout: 15_000 });
-      await expect
-        .poll(() => cardTopWithinView(listFrame, gen1Card), { timeout: 10_000 })
-        .toBeLessThanOrEqual(await cardHeight(gen1Card));
+      await expectCardSettledBelowToolbar(listFrame, gen1Card);
     });
 
     await test.step('reopening the comment list restores the remembered level without any gesture', async () => {
