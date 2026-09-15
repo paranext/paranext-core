@@ -63,6 +63,8 @@ export const COMMENT_LIST_STRING_KEYS = Object.freeze([
   '%comment_aria_mark_as_read%',
   '%comment_aria_mark_as_unread%',
   '%comment_aria_resolve_thread%',
+  '%comment_aria_cancel_edit%',
+  '%comment_aria_save_edit%',
 ] as const);
 
 /**

@@ -315,6 +315,12 @@ describe('CommentThread DOM id', () => {
   });
 });
 
+/**
+ * Every background-channel class on a card, sorted. Selection must not alter this set: the channel
+ * carries read/resolved status and nothing else.
+ */
+const bgClasses = (el: Element) => (el.className.match(/\btw:bg-[\w-]+/g) ?? []).sort();
+
 describe('CommentThread selection styling', () => {
   it('the selected thread carries the leading bar and every card uses the card surface', () => {
     const { rerender } = renderThread({ isSelected: false });
@@ -336,7 +342,37 @@ describe('CommentThread selection styling', () => {
     // The structural invariant: selection must not change ANY background-channel class, not just
     // the one token being removed from it. Catches a regression to e.g. `bg-background` or
     // `bg-secondary`, which the narrower token-specific check above would miss.
-    const bgClasses = (el: Element) => (el.className.match(/\btw:bg-[\w-]+/g) ?? []).sort();
+    expect(bgClasses(selected)).toEqual(bgClasses(unselected));
+  });
+
+  // The two combinations below are the ones that showed no selection indicator at all, because the
+  // status classes used to be gated on `!isSelected`: an unread selected card matched no background
+  // rule and a resolved one had no bar to fall back on. The read/unresolved case above never broke,
+  // so it cannot stand in for them — gating the status classes again leaves it green.
+  it('keeps the unread background and adds the bar when an unread thread is selected', () => {
+    const { rerender } = renderThread({ isRead: false, isSelected: false });
+    const unselected = screen.getByRole('option');
+    expect(unselected.className).toMatch(/\bbg-accent\b/);
+
+    rerender(threadElement({ isRead: false, isSelected: true }));
+    const selected = screen.getByRole('option');
+
+    expect(selected.className).toMatch(/\bborder-foreground\b/);
+    // Unread must survive selection rather than being displaced by it.
+    expect(selected.className).toMatch(/\bbg-accent\b/);
+    expect(bgClasses(selected)).toEqual(bgClasses(unselected));
+  });
+
+  it('keeps the resolved background and adds the bar when a resolved thread is selected', () => {
+    const { rerender } = renderThread({ threadStatus: 'Resolved', isSelected: false });
+    const unselected = screen.getByRole('option');
+    expect(unselected.className).toMatch(/\bbg-muted\b/);
+
+    rerender(threadElement({ threadStatus: 'Resolved', isSelected: true }));
+    const selected = screen.getByRole('option');
+
+    expect(selected.className).toMatch(/\bborder-foreground\b/);
+    expect(selected.className).toMatch(/\bbg-muted\b/);
     expect(bgClasses(selected)).toEqual(bgClasses(unselected));
   });
 });

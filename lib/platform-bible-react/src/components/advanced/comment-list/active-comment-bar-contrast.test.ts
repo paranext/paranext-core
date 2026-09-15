@@ -35,13 +35,17 @@ describe('active-comment bar contrast', () => {
     expect(realThemes.length).toBeGreaterThan(0);
   });
 
-  // The bar sits on `card` normally and on `muted` when the active thread is also resolved. One
-  // theme passing proves nothing about the others: --primary fails this in paratext-dark and
+  // Every surface a card can take: `card` when read, `muted` when resolved, `accent` when unread.
+  // Status is independent of selection, so the bar can land on any of the three. `accent` and
+  // `muted` hold identical values in all four themes today — listing both keeps the sweep honest
+  // about what it covers rather than resting on those two tokens staying equal.
+  //
+  // One theme passing proves nothing about the others: --primary fails this in paratext-dark and
   // --ring fails it in paratext-light, in opposite directions.
   realThemes.forEach(({ name, cssVariables }) => {
     const bar = chroma(cssVariables.foreground);
 
-    (['card', 'muted'] as const).forEach((surface) => {
+    (['card', 'muted', 'accent'] as const).forEach((surface) => {
       it(`clears ${MIN_NON_TEXT_CONTRAST}:1 against --${surface} in ${name}`, () => {
         const contrast = chroma.contrast(bar, chroma(cssVariables[surface]));
         expect(contrast).toBeGreaterThanOrEqual(MIN_NON_TEXT_CONTRAST);
