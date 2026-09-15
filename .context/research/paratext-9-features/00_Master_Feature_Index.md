@@ -443,9 +443,9 @@
 - **Offline Support** → 16.7
 
 ### P
+- **Pane Zoom** → 1.18
 - **Parallel Passages Tool** → 9.2
 - **Paratext Live (Real-time Collaboration)** → 10.3
-- **Pane Zoom** → 1.18
 - **Plugin System** → 14.1
 - **Print (Basic Print)** → 15.6
 - **Progress Reports** → 11.5

@@ -66,14 +66,11 @@ export const ContentZoomRoot = forwardRef<HTMLDivElement, ContentZoomRootProps>(
       <div
         ref={ref}
         // `props` is arbitrary caller-supplied `HTMLAttributes`; enumerating them would defeat the
-        // point of forwarding them. Spread the marker attribute after `props` so `area` stays the
-        // single source of truth for it, even if `props` happens to carry a same-named attribute.
+        // point of forwarding them.
         // eslint-disable-next-line react/jsx-props-no-spreading
         {...props}
-        // Spread after `props` (not a plain attribute) so this, not a same-named entry in `props`,
-        // is always the value that lands on the element.
-        // eslint-disable-next-line react/jsx-props-no-spreading
-        {...{ [CONTENT_ZOOM_ROOT_ATTRIBUTE]: area ?? '' }}
+        // Placed after the spread so `area`, not a same-named entry in `props`, always wins.
+        data-platform-content-zoom-root={area ?? ''}
       />
     );
   },
