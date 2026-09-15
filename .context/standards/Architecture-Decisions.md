@@ -261,7 +261,7 @@ step, no automation. Just a record.
   pick a key that is genuinely free — F8/F9 are taken by chapter/book navigation in
   `src/main/verse-navigation-shortcuts.util.ts`). Do **not** build a general declarative keybinding
   API for a single shortcut. Every added branch also requires a matching `KeyboardShortcutEntry` in
-  `src/stories/keyboard-shortcuts.data.ts` (mandated by `.claude/rules/keyboard-shortcuts-catalog.md`).
+  `src/shared/data/keyboard-shortcuts.data.ts` (mandated by `.claude/rules/keyboard-shortcuts-catalog.md`).
 - **Alternatives:** (a) renderer-level global `keydown` — rejected: web-view iframes are
   `about:srcdoc`, so their key events don't bubble to the top renderer; coverage gaps unless
   duplicated into every web-view. (b) Build a declarative keybinding-contribution API — **deferred**:
@@ -2589,6 +2589,73 @@ step, no automation. Just a record.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
 
+## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Menus needed titled sections (e.g. the target design for Simple's Project menu,
+  to be implemented in PT-4534: Project / View / Insert / Tools). Every menu column already carries a
+  required, localized `label`; `TabDropdownMenu` stacked columns as divider-separated sections and
+  discarded the label. The interface-mode filter removes items, never columns, and at least one
+  shipping column (`platformScriptureEditor.info`) has no items in any mode.
+- **Decision:** `TabDropdownMenu` renders each non-empty column as a section headed by its label,
+  in every interface mode, but only when two or more non-empty sections remain. Columns with no
+  items render nothing — no heading, no separator — so hiding every item in a column hides the
+  section. Headings are opt-in per call site (`showSectionHeadings`), turned on by Platform.Bible's
+  tab chrome — `TabToolbar` and `TabFloatingMenu` — so a library consumer rendering its own menu
+  data into `TabDropdownMenu` keeps the previous unlabeled look. The menubar (whose columns are its
+  top-level triggers) and single-column context/tab menus have no section headings.
+- **Alternatives:** A `label` on menu groups — rejected: groups have none, the group schema is a
+  two-branch closed `oneOf`, and columns already express sections. Headings in Simple mode only —
+  rejected: needs the interface mode threaded into every consumer of a shared component, and
+  headings help Power too. Always heading a lone section — rejected: it only repeats the trigger.
+  Headings unconditionally for every `TabDropdownMenu` consumer — rejected: the component's
+  documented behavior was that column labels are ignored, so an out-of-repo consumer would see its
+  menus change without asking.
+- **Consequences:** Power's scripture editor and markers checklist menus gain headings. Adding a
+  column now adds a visible heading, so column labels must read as section titles. A submenu item
+  counts as content even when its submenu is empty, so a section can survive with only an empty
+  flyout in it.
+- **Source:** PT-4532 (parent PT-4530); showing headings in both interface modes was agreed during
+  implementation, 2026-09-11.
+
+## adr-menu-shortcut-hints-joined-from-catalog: Menu shortcut hints are joined from the keyboard shortcuts catalog by the menu data service
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** Menus should show the keyboard shortcut for a command. Shortcuts are handled in three
+  unrelated places (main-process `before-input-event`, `useHotkeys`, per-web-view handlers), and the
+  only per-OS display strings live in the hand-maintained catalog. The menu that most needs hints —
+  the scripture editor's Project menu — is rendered inside the extension's iframe, which cannot
+  import `src/shared`.
+- **Decision:** The catalog lives in `src/shared/data/keyboard-shortcuts.data.ts`, and an entry's
+  optional `command` names the PAPI command its chord runs. The extension-host menu data service
+  sets `MenuItemContainingCommand.shortcut` on matching items in the localized menus it serves,
+  using the first alternative for `process.platform`. Renderers only display it, and the menus
+  schema rejects it from contributions. An entry gets a `command` only if its chord works
+  everywhere those items appear, so focus-blind main-process chords (PT-4143) and view-gated
+  chords get none. `keyboard-shortcuts.data.test.ts` pins each `command`'s hint and the menus
+  that show it, and rejects a chord shared with a main-process entry.
+- **Alternatives:** A `shortcut` property in `menus.json` — rejected: every manifest would need
+  re-authoring against a closed schema, and a hint declared in a manifest sits apart from the
+  catalog entry that records its handler. Renderers reading the catalog directly — rejected:
+  extension-rendered menus cannot import it. A lookup table inside `platform-bible-react` —
+  rejected: app-specific command names in the shared component library, and a second source of
+  truth.
+- **Consequences:** Third-party extensions cannot declare hints. The unlocalized main menu (the
+  native macOS menu) carries none. Menus the editor package builds itself (its right-click menu)
+  cannot show them. The catalog is bundled into the extension host. Hints are per operating
+  system, never per view, so a chord that works only in some editor views cannot be joined. Any
+  menu that reuses a `command` inherits its hint, which `keyboard-shortcuts.data.test.ts` pins for
+  bundled menus only. Commands from extensions outside this repo cannot get hints, because
+  `command` is typed against this repo's `CommandNames` and the test scans only bundled manifests.
+  Menus built in TypeScript compile with `shortcut` set even though the schema rejects it in
+  `menus.json`. Key names are English catalog strings, not localized, so a hint reads `Ctrl+Shift+N`
+  in a translated menu; the Localization-Guide asks for key names to go through
+  `getLocalizeKeyForPhysicalKey`, and routing them there is follow-up work (PT-4629).
+- **Source:** PT-4532 (parent PT-4530); sourcing hints in the menu data service was agreed during
+  implementation, 2026-09-11.
+
 ## adr-menus-always-available-gate-at-submission: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
 
 - **Formerly:** ADR-0003
@@ -3523,7 +3590,7 @@ step, no automation. Just a record.
 - **Consequences:** Ctrl+F works only in tabs that mount the hook, so **each new scripture tab type
   is an opt-in** — the real coverage gap of the renderer-level approach, and the one thing the
   main-process handler would have given for free. Adding a tab type is one hook call plus a resolved
-  source project. The catalog entry `scripture-find` in `src/stories/keyboard-shortcuts.data.ts` lists
+  source project. The catalog entry `scripture-find` in `src/shared/data/keyboard-shortcuts.data.ts` lists
   the hook plus every mount site, so the current coverage is greppable in one place; keeping it
   accurate is what stops the gap from going unnoticed. **Revisit** if (b) is ever built, or once
   enough view-context-dependent shortcuts accumulate to justify a general channel.
