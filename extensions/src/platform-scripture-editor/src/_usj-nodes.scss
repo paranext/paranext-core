@@ -1,13 +1,11 @@
 /* Based on scripture-editors' packages/platform/src/usj-nodes.css:
    https://github.com/paranext/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (originally synced from commit ba0e846b3f1:
-   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1,
+   https://github.com/paranext/scripture-editors/commit/ba0e846b3f1,
    with the RTL/bidi gutter-marker fixes and the ::after active-text outline forwarded from the
    demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
-   When re-syncing, keep the .psc-gutter-markers.text-spacing compensation block complete: every
-   marker the base text-spacing rules indent needs an entry there, and
-   usj-nodes-scss-coverage.test.ts derives that requirement from this file, so a sync that drops
-   an entry fails the test rather than shipping a glyph over the text. */
+   When re-syncing, see the "Indent compensation" comment in the gutter section below for the
+   invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy. */
 
 /* stylelint-disable */
 
@@ -2780,8 +2778,11 @@ span.read img {
 
 /* position: relative gives absolutely-positioned gutter markers the right
    containing block. --para-indent and --verse-text-start default to 0;
-   paragraph-specific overrides follow below. */
-.psc-gutter-markers .para {
+   paragraph-specific overrides follow below. .book is included because its
+   marker glyph is positioned by the same rule as a paragraph's and reads the
+   same variable. */
+.psc-gutter-markers .para,
+.psc-gutter-markers .book {
   position: relative;
   --para-indent: 0px;
   --verse-text-start: 0px;
@@ -2847,13 +2848,16 @@ span.read img {
    Only active when .text-spacing is present (same condition as the source rules).
    pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
    respectively), so no direction restriction is needed here.
-   EVERY marker with a text-spacing margin-left above needs an entry here, or its gutter
-   glyph lands inside the text; usj-nodes-scss-coverage.test.ts derives that list from the
-   base rules and fails on any gap.
-   The tr/tr1/tr2 entries mirror their base rules for that invariant but are inert for real
-   tables: a table row renders as <tr class="table-row usfm_tr"> with an inline text-indent of
-   0, not as a .para, so the gutter glyph rule never matches it. They are kept only so the
-   compensation block stays complete for the coverage test. */
+   Invariant for THIS stylesheet: every marker its text-spacing rules give a margin-left needs
+   an entry here with the same value, or the gutter glyph lands inside the text.
+   usj-nodes-scss-coverage.test.ts derives that requirement from the base rules of this file
+   and the demo copy and fails on any gap. It says nothing about margins set elsewhere: the
+   PT9-derived commentary stylesheets (marker-styles/*.scss) and project-stylesheet CSS
+   (generateUsjCss) load into the same web view, later in source order, and can move a
+   marker's margin away from the value compensated here. Compensating those is open work.
+   Table rows (tr, tr1, tr2) deliberately have no entry: a real table row is a <tr>, not a
+   .para, so the glyph rule never matches it, and tools/pt9-css-converter strips \tr for the
+   same reason. */
 .psc-gutter-markers.text-spacing .usfm_p2 {
   --para-indent: 2.5vw;
 }
@@ -2865,9 +2869,7 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_li1,
 .psc-gutter-markers.text-spacing .usfm_ph,
 .psc-gutter-markers.text-spacing .usfm_ph1,
-.psc-gutter-markers.text-spacing .usfm_pi2,
-.psc-gutter-markers.text-spacing .usfm_tr,
-.psc-gutter-markers.text-spacing .usfm_tr1 {
+.psc-gutter-markers.text-spacing .usfm_pi2 {
   --para-indent: 10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -2881,8 +2883,7 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_lim,
 .psc-gutter-markers.text-spacing .usfm_lim1,
 .psc-gutter-markers.text-spacing .usfm_ph2,
-.psc-gutter-markers.text-spacing .usfm_pi3,
-.psc-gutter-markers.text-spacing .usfm_tr2 {
+.psc-gutter-markers.text-spacing .usfm_pi3 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
@@ -2927,7 +2928,7 @@ span.read img {
 /* --verse-text-start mirrors the text-indent values for paragraphs with a
    negative text-indent (hanging indent). These paragraphs render their first
    line to the LEFT of the element's border edge, so the active focus box
-   ::before must start at text-indent to align with the text. */
+   ::after must start at text-indent to align with the text. */
 .psc-gutter-markers.text-spacing .usfm_q,
 .psc-gutter-markers.text-spacing .usfm_q1 {
   --verse-text-start: -10vw;
@@ -2979,16 +2980,13 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_ph,
 .psc-gutter-markers.text-spacing .usfm_ph1,
 .psc-gutter-markers.text-spacing .usfm_ph2,
-.psc-gutter-markers.text-spacing .usfm_ph3,
-.psc-gutter-markers.text-spacing .usfm_tr,
-.psc-gutter-markers.text-spacing .usfm_tr1,
-.psc-gutter-markers.text-spacing .usfm_tr2 {
+.psc-gutter-markers.text-spacing .usfm_ph3 {
   --verse-text-start: -5vw;
 }
 
 /* RTL: move gutter to the right */
 .usfm.psc-gutter-markers[dir='rtl'] {
-  padding-right: 4em;
+  padding-right: var(--psc-gutter-width);
   padding-left: 10px; /* restore base value */
 }
 

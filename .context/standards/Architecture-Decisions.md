@@ -1109,6 +1109,52 @@ step, no automation. Just a record.
   open follow-up work.
 - **Source:** PR #2770.
 
+## adr-derived-stylesheet-coverage-tests: A stylesheet invariant is tested by deriving the expectation from the same file, not from a hand-typed list
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** The editor stylesheet's gutter view positions each paragraph's marker glyph at
+  `left: calc(-(gutter width) + 0.5em - var(--para-indent))`, so every marker whose text-spacing
+  rule gives it a `margin-left` needs a matching `--para-indent` entry in the gutter block, and every
+  hanging-indent marker needs a matching `--verse-text-start`. The block had been maintained by hand
+  and covered five markers out of roughly fifty; the glyph overlapped the text for the rest at every
+  window width. A regression test for the fix had to decide what "every indented marker" means. The
+  stylesheet is also vendored three times (the extension's `_usj-nodes.scss`, the
+  `platform-bible-react` demo `usj-nodes.css`, and the upstream `scripture-editors` source), each
+  re-synced by hand.
+- **Decision:** The coverage test parses the stylesheet itself into flat `selector { declarations }`
+  blocks, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
+  cascade: a `[dir='ltr']` rule beats a direction-agnostic one, table rows excluded because they never
+  render as `.para`) and the expected `--verse-text-start` map from negative `text-indent`, then
+  asserts the gutter block matches in both directions: every derived marker present with the same
+  value, and no gutter entry without a base rule calling for it. The parser's blind spots are
+  themselves asserted away — a setter nested in an at-rule, a direction-qualified gutter rule, a
+  `margin` shorthand or logical `margin-inline-*` on a marker, an LTR/RTL margin mismatch — so the
+  test fails loudly rather than passing vacuously when the stylesheet's shape moves outside what the
+  parser reads. A small hand-typed oracle from the USFM stylesheet (`usfm.sty` LeftMargin and
+  FirstLineIndent for one marker per distinct value) sits alongside, because a derivation alone
+  accepts a base rule that drifted from the spec as long as its compensation drifted with it. The
+  same test runs over both in-repo copies and compares their derived gutter maps to each other; the
+  upstream repo carries a single-file twin.
+- **Alternatives:** **A hand-typed list of expected markers** — rejected: it encodes whatever gap
+  existed when it was written and passes forever after, which is exactly how the block came to cover
+  five markers. **Assert the copies are byte-identical** — rejected: the copies legitimately diverge
+  (SCSS versus CSS, host-specific rules), so a byte comparison would either fail permanently or need a
+  hand-maintained exclusion list with the same staleness problem. **Parse with `postcss`** — declined
+  for now: the flat parser plus its blind-spot assertions is ~100 lines and reads without a dependency;
+  a real parser becomes worth it if the stylesheet grows nesting the assertions cannot exclude.
+- **Consequences:** Adding an indented marker to the base rules without compensating it fails the
+  build; so does adding a compensation nothing calls for. Re-syncing a copy from upstream is checked
+  structurally for this block, so the cross-copy pin comments in the two `usj-nodes-styles.test.ts`
+  suites cover only the rules outside it. The invariant is scoped to margins set in the file under
+  test; the PT9-derived commentary stylesheets (`marker-styles/*.scss`) and project-stylesheet CSS
+  (`generateUsjCss`) load later in source order and can move a marker's margin away from the
+  compensated value — that is open work, not covered. The pattern generalises to any "for every X in
+  this file there must be a Y" invariant over a generated or vendored asset: derive X from the asset,
+  assert the parser's blind spots, keep a small independent oracle.
+- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; upstream
+  `paranext/scripture-editors` PR #10.
+
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
 
 - **Date:** 2026-08-31

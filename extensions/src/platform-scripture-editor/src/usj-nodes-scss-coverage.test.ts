@@ -7,19 +7,22 @@ import { describe, expect, it } from 'vitest';
 // This repo carries two hand-maintained copies of scripture-editors'
 // packages/platform/src/usj-nodes.css: the extension's `_usj-nodes.scss` (what Simple renders) and
 // the platform-bible-react demo's `usj-nodes.css` (what the Storybook scripture-editor stories
-// render). Both are checked here.
+// render). Both are checked here, and their gutter blocks are checked against each other.
 //
-// In the gutter view (`.psc-gutter-markers`), each paragraph's marker glyph is absolutely positioned
-// at `left: calc(-(gutter width) + 0.5em - var(--para-indent))`, so `--para-indent` must equal the
-// paragraph's own text-spacing margin or the glyph lands inside the text. Likewise the active focus
-// box starts at `var(--verse-text-start)`, which must equal a hanging-indent paragraph's negative
-// `text-indent`. This test derives BOTH expectations from the base text-spacing rules in the same
-// file, so a marker that gains a margin or hanging indent without matching gutter compensation fails
-// here by construction. A hand-typed expected list cannot do that: it silently encodes whatever gap
-// existed when it was written.
+// In the gutter view (`.psc-gutter-markers`), each paragraph's marker glyph is absolutely
+// positioned at `left: calc(-(gutter width) + 0.5em - var(--para-indent))`, so `--para-indent` must
+// equal the paragraph's own text-spacing margin or the glyph lands inside the text. Likewise the
+// active focus box starts at `var(--verse-text-start)`, which must equal a hanging-indent
+// paragraph's negative `text-indent`. This test derives BOTH expectations from the base
+// text-spacing rules in the same file, so a marker that gains a margin or hanging indent without
+// matching gutter compensation fails here by construction. A hand-typed expected list cannot do
+// that: it silently encodes whatever gap existed when it was written. A small independent oracle
+// from the USFM stylesheet is kept alongside, so a base value that drifts from the spec is caught
+// too rather than being "fixed" by updating its compensation to match.
 //
-// Base values follow the USFM stylesheet's LeftMargin / FirstLineIndent (inches x 20 = vw):
-// https://github.com/ubsicap/usfm/blob/master/sty/usfm.sty
+// Scope: the invariant is about margins set in these files. Commentary stylesheets and
+// project-stylesheet CSS load into the same web view later in source order and can move a marker's
+// margin away from the compensated value; they are not covered here.
 
 const dir = dirname(fileURLToPath(import.meta.url));
 
@@ -34,7 +37,44 @@ const STYLESHEETS = [
   },
 ];
 
-type Block = { selectors: string; declarations: string };
+/**
+ * Markers whose base rules indent them but which must NOT have gutter compensation. A real table
+ * row is a `<tr>`, not a `.para`, so the glyph rule never matches it, and `tools/pt9-css-converter`
+ * strips `\tr` from generated sheets for the same reason.
+ */
+const NOT_COMPENSATED = new Set(['tr', 'tr1', 'tr2']);
+
+// USFM stylesheet oracle (LeftMargin / FirstLineIndent in inches x 20 = vw), independent of either
+// file: https://github.com/ubsicap/usfm/blob/master/sty/usfm.sty. One marker per distinct value is
+// enough to catch a base rule drifting from the spec; completeness comes from the derivation.
+const USFM_LEFT_MARGIN: Record<string, string> = {
+  pi: '5vw', // 0.25"
+  li1: '10vw', // 0.5"
+  q1: '15vw', // 0.75"
+  qm1: '20vw', // 1.0"
+  li4: '25vw', // 1.25"
+  lim4: '30vw', // 1.5"
+};
+const USFM_FIRST_LINE_INDENT: Record<string, string> = {
+  qm1: '-15vw', // -0.75"
+  q1: '-10vw', // -0.5"
+  li1: '-7.5vw', // -0.375"
+  q3: '-5vw', // -0.25"
+  q4: '-2.5vw', // -0.125"
+};
+
+type Direction = 'ltr' | 'rtl' | 'agnostic';
+
+/** One `.usfm_<marker>` selector from a rule, with the writing direction it is scoped to. */
+type MarkerSelector = { marker: string; direction: Direction };
+
+type Block = {
+  /** The rule's selector list, whitespace-collapsed and attribute quotes normalised to `'`. */
+  selectors: string;
+  /** Each `.usfm_<marker>` in the selector list, classified per selector, not per list. */
+  markers: MarkerSelector[];
+  declarations: string;
+};
 
 /** Everything the coverage checks need to know about one stylesheet. */
 type ParsedStylesheet = {
@@ -43,6 +83,19 @@ type ParsedStylesheet = {
   /** The stylesheet parsed as a flat list of `selector { declarations }` blocks. */
   blocks: Block[];
 };
+
+const MARKER_CLASS = /\.usfm_([a-z0-9]+)/;
+
+/**
+ * Classifies one selector (not a comma list) by the writing direction it is scoped to. Attribute
+ * quotes are normalised so `[dir="ltr"]` and `[dir='ltr']` compare equal: the copies here use
+ * single quotes, the upstream CSS double quotes.
+ */
+function directionOf(selector: string): Direction {
+  if (selector.includes("[dir='rtl']")) return 'rtl';
+  if (selector.includes("[dir='ltr']")) return 'ltr';
+  return 'agnostic';
+}
 
 /**
  * Reads a stylesheet and parses it into flat rule blocks.
@@ -55,24 +108,28 @@ type ParsedStylesheet = {
  * than deleting the rest of that declaration's line and silently shifting brace depth.
  *
  * The block regex cannot reliably read a rule nested inside another block (a media query, a
- * keyframes at-rule, or SCSS nesting), so a gutter rule wrapped in one could be mis-parsed and its
- * markers silently uncovered. `nestingProblems()` catches that by brace depth before the coverage
- * checks run.
+ * keyframes at-rule, or SCSS nesting), so a rule wrapped in one could be mis-parsed and its markers
+ * silently uncovered. `nestingProblems()` catches that by brace depth before the coverage checks
+ * run. Selector lists are split on commas and each selector classified on its own, so a group that
+ * mixes directions cannot misfile the whole group.
  */
 function parseStylesheet(path: string): ParsedStylesheet {
   const css = readFileSync(path, 'utf-8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|\s)\/\/.*$/gm, '$1');
-  const blocks = [...css.matchAll(/([^{}]+)\{([^}]+)\}/g)].map(([, selectors, declarations]) => ({
-    // Attribute quotes are normalised so `[dir="ltr"]` and `[dir='ltr']` compare equal: the two
-    // copies here use single quotes, the upstream CSS double quotes.
-    selectors: selectors.replace(/\s+/g, ' ').replace(/"/g, "'").trim(),
-    declarations,
-  }));
+  const blocks = [...css.matchAll(/([^{}]+)\{([^}]+)\}/g)].map(([, selectors, declarations]) => {
+    const normalised = selectors.replace(/\s+/g, ' ').replace(/"/g, "'").trim();
+    const markers = normalised
+      .split(',')
+      .map((selector) => selector.trim())
+      .flatMap((selector) => {
+        const marker = MARKER_CLASS.exec(selector)?.[1];
+        return marker ? [{ marker, direction: directionOf(selector) }] : [];
+      });
+    return { selectors: normalised, markers, declarations };
+  });
   return { css, blocks };
 }
-
-const MARKER_CLASS = /\.usfm_([a-z0-9]+)/g;
 
 /** Brace nesting depth at a character offset: 1 inside a top-level rule, >1 inside a nested one. */
 function braceDepthAt(css: string, index: number): number {
@@ -122,17 +179,11 @@ function isGutterBlock(selectors: string): boolean {
 }
 
 /**
- * A block is a base text-spacing rule for a paragraph marker when it is scoped by `.text-spacing`
- * but is not a gutter rule. RTL blocks are excluded: the gutter variables are direction-agnostic
- * (the RTL glyph rule reads the same `--para-indent`), so the LTR/direction-agnostic margin is the
- * one the compensation must mirror.
+ * A block is a base text-spacing rule when it is scoped by `.text-spacing` but is not a gutter
+ * rule.
  */
-function isNonRtlBaseBlock(selectors: string): boolean {
-  return (
-    selectors.includes('text-spacing') &&
-    !isGutterBlock(selectors) &&
-    !selectors.includes("[dir='rtl']")
-  );
+function isBaseBlock(selectors: string): boolean {
+  return selectors.includes('text-spacing') && !isGutterBlock(selectors);
 }
 
 /**
@@ -152,37 +203,36 @@ function getGutterMarkerValues(
     .forEach((block) => {
       const value = declarationValue(block.declarations, property);
       if (value === undefined) return;
-      [...block.selectors.matchAll(MARKER_CLASS)].forEach(([, marker]) =>
-        values.set(marker, value),
-      );
+      block.markers.forEach(({ marker }) => values.set(marker, value));
     });
   return values;
 }
 
 /**
- * Maps each `.usfm_<marker>` to the value the BASE text-spacing rules give it for `property`,
- * keeping only values `accept` approves. When a marker has both a direction-agnostic rule
- * (`.text-spacing .usfm_x`) and an LTR rule (`.text-spacing[dir='ltr'] .usfm_x`) the LTR value
- * wins, matching the cascade for an LTR document.
+ * Maps each `.usfm_<marker>` to the value the BASE text-spacing rules resolve for `property` in the
+ * given direction: a `[dir=…]` rule for that direction wins over a direction-agnostic one, matching
+ * the cascade (the qualified selector is more specific). Every value is kept here, zero included —
+ * a `margin-left: 0` LTR override must be allowed to beat an agnostic `5vw` before any filtering,
+ * or the filter would discard the winner and enforce the loser.
  */
-function getBaseMarkerValues(
+function resolveBaseValues(
   { blocks }: ParsedStylesheet,
   property: string,
-  accept: (value: string) => boolean,
+  direction: 'ltr' | 'rtl',
 ): Map<string, string> {
   const agnostic = new Map<string, string>();
-  const ltr = new Map<string, string>();
+  const directed = new Map<string, string>();
   blocks
-    .filter((block) => isNonRtlBaseBlock(block.selectors))
+    .filter((block) => isBaseBlock(block.selectors))
     .forEach((block) => {
       const value = declarationValue(block.declarations, property);
-      if (value === undefined || !accept(value)) return;
-      const target = block.selectors.includes("[dir='ltr']") ? ltr : agnostic;
-      [...block.selectors.matchAll(MARKER_CLASS)].forEach(([, marker]) =>
-        target.set(marker, value),
-      );
+      if (value === undefined) return;
+      block.markers.forEach((entry) => {
+        if (entry.direction === 'agnostic') agnostic.set(entry.marker, value);
+        else if (entry.direction === direction) directed.set(entry.marker, value);
+      });
     });
-  return new Map([...agnostic, ...ltr]);
+  return new Map([...agnostic, ...directed]);
 }
 
 /** A length that moves the box: anything other than a zero (`0`, `0px`, `0vw`, `0in`, ...). */
@@ -195,13 +245,30 @@ function isNegativeLength(value: string): boolean {
   return value.startsWith('-') && isNonZeroLength(value);
 }
 
+/** The `markers` entries of `values`, as an object, so a whole oracle can be compared in one go. */
+function pick(
+  values: Map<string, string>,
+  markers: string[],
+): { [marker: string]: string | undefined } {
+  return Object.fromEntries(markers.map((marker) => [marker, values.get(marker)]));
+}
+
+/** Keeps the entries `accept` approves, minus the markers that must never be compensated. */
+function needingCompensation(
+  resolved: Map<string, string>,
+  accept: (value: string) => boolean,
+): Map<string, string> {
+  return new Map(
+    [...resolved].filter(([marker, value]) => accept(value) && !NOT_COMPENSATED.has(marker)),
+  );
+}
+
 /** Reports each expected marker whose actual `property` value is missing or wrong. */
 function valueMismatches(
-  sheet: ParsedStylesheet,
+  actual: Map<string, string>,
   property: string,
   expected: Map<string, string>,
 ): string[] {
-  const actual = getGutterMarkerValues(sheet, property);
   return [...expected]
     .filter(([marker, value]) => actual.get(marker) !== value)
     .map(
@@ -212,16 +279,15 @@ function valueMismatches(
 
 /**
  * Reports gutter markers that set `property` but have no base rule calling for it — the reverse of
- * `valueMismatches`. This keeps the guard symmetric: a compensation the base rules don't need, or a
- * stale entry left behind after a marker loses its margin, is flagged rather than silently
- * passing.
+ * `valueMismatches`. This keeps the guard symmetric: a compensation the base rules don't need, a
+ * table-row entry, or a stale entry left behind after a marker loses its margin, is flagged rather
+ * than silently passing.
  */
 function unexpectedMarkers(
-  sheet: ParsedStylesheet,
+  actual: Map<string, string>,
   property: string,
   expected: Map<string, string>,
 ): string[] {
-  const actual = getGutterMarkerValues(sheet, property);
   return [...actual]
     .filter(([marker]) => !expected.has(marker))
     .map(
@@ -231,11 +297,10 @@ function unexpectedMarkers(
 }
 
 /**
- * Reports gutter `property` rules qualified by writing direction (`[dir=…]`). Upstream keeps the
- * gutter --para-indent/--verse-text-start values identical for LTR and RTL, so a `[dir=…]`
- * qualifier would leave one direction with no indent compensation while the coverage filter — which
- * matches on the `psc-gutter-markers` and `text-spacing` substrings and ignores the qualifier —
- * still counted the marker as covered. This keeps that asymmetry from slipping back in silently.
+ * Reports gutter `property` rules qualified by writing direction (`[dir=…]`). The gutter values are
+ * identical for LTR and RTL by design, so a qualifier would leave one direction with no indent
+ * compensation while the coverage filter — which matches on the `psc-gutter-markers` and
+ * `text-spacing` substrings and ignores the qualifier — still counted the marker as covered.
  */
 function directionQualifiedGutterRules({ blocks }: ParsedStylesheet, property: string): string[] {
   const setter = new RegExp(`${property}\\s*:`);
@@ -249,26 +314,83 @@ function directionQualifiedGutterRules({ blocks }: ParsedStylesheet, property: s
     .map((block) => `${property}: direction-qualified selector "${block.selectors}"`);
 }
 
-describe.each(STYLESHEETS)('$name .psc-gutter-markers.text-spacing coverage', ({ path }) => {
-  const sheet = parseStylesheet(path);
+/**
+ * Reports base marker rules that set a margin through a spelling `declarationValue` does not read
+ * (the `margin` shorthand or a logical `margin-inline-*`). Such a rule would give a marker a margin
+ * that neither side of the coverage check can see, so it must fail loudly rather than pass
+ * silently.
+ */
+function unreadableMarginSpellings({ blocks }: ParsedStylesheet): string[] {
+  return blocks
+    .filter((block) => isBaseBlock(block.selectors) && block.markers.length > 0)
+    .filter((block) =>
+      /(?:^|;|\s)(?:margin|margin-inline(?:-start|-end)?)\s*:/.test(block.declarations),
+    )
+    .map(
+      (block) =>
+        `"${block.selectors}" sets a margin with a spelling this test does not read; use ` +
+        `margin-left / margin-right so the gutter compensation can be derived`,
+    );
+}
 
-  // Every base text-spacing margin-left is a paragraph indent the gutter glyph must be pulled back by.
-  const expectedParaIndent = getBaseMarkerValues(sheet, 'margin-left', isNonZeroLength);
+/**
+ * Reports markers whose RTL inline-start margin differs from their LTR one. The same
+ * `--para-indent` feeds both the LTR `left` and the RTL `right` glyph calculation, so a marker
+ * whose two margins disagree cannot be compensated correctly in both directions by one value.
+ */
+function directionAsymmetries(sheet: ParsedStylesheet, expected: Map<string, string>): string[] {
+  const rtl = resolveBaseValues(sheet, 'margin-right', 'rtl');
+  return [...expected]
+    .filter(([marker, ltrValue]) => rtl.get(marker) !== ltrValue)
+    .map(
+      ([marker, ltrValue]) =>
+        `.usfm_${marker}: LTR margin-left ${ltrValue} but RTL margin-right ` +
+        `${rtl.get(marker) ?? 'none'}; one --para-indent cannot serve both directions`,
+    );
+}
 
-  // Every base negative text-indent is a hanging indent the focus box must start at.
-  const expectedVerseTextStart = getBaseMarkerValues(sheet, 'text-indent', isNegativeLength);
+const sheets = STYLESHEETS.map((entry) => {
+  const sheet = parseStylesheet(entry.path);
+  return {
+    ...entry,
+    sheet,
+    // Every base text-spacing margin-left is a paragraph indent the glyph must be pulled back by.
+    expectedParaIndent: needingCompensation(
+      resolveBaseValues(sheet, 'margin-left', 'ltr'),
+      isNonZeroLength,
+    ),
+    // Every base negative text-indent is a hanging indent the focus box must start at.
+    expectedVerseTextStart: needingCompensation(
+      resolveBaseValues(sheet, 'text-indent', 'ltr'),
+      isNegativeLength,
+    ),
+    actualParaIndent: getGutterMarkerValues(sheet, '--para-indent'),
+    actualVerseTextStart: getGutterMarkerValues(sheet, '--verse-text-start'),
+  };
+});
+
+describe.each(sheets)('$name .psc-gutter-markers.text-spacing coverage', (entry) => {
+  const { sheet, expectedParaIndent, expectedVerseTextStart } = entry;
 
   it('derives a non-empty expectation from the base text-spacing rules', () => {
     // If the base parser ever reads nothing, both coverage checks below would pass vacuously.
     expect(expectedParaIndent.size).toBeGreaterThan(40);
     expect(expectedVerseTextStart.size).toBeGreaterThan(20);
-    // Spot checks pinning the derivation to known USFM values, so a parser regression that reads
-    // the wrong property or block shows up as a wrong number rather than a shorter list.
-    expect(expectedParaIndent.get('li2')).toBe('15vw');
-    expect(expectedParaIndent.get('qm2')).toBe('20vw');
-    expect(expectedVerseTextStart.get('li2')).toBe('-7.5vw');
-    expect(expectedVerseTextStart.get('iq1')).toBe('-15vw');
+    // The parser must be able to see every margin it is asked to compensate.
+    expect(unreadableMarginSpellings(sheet)).toEqual([]);
+    expect(nestingProblems(sheet, 'margin-left')).toEqual([]);
+    expect(nestingProblems(sheet, 'text-indent')).toEqual([]);
+  });
+
+  it('base margins and hanging indents match the USFM stylesheet', () => {
+    // Independent oracle: the derivation alone would accept a base rule that drifted from the spec
+    // as long as its compensation drifted with it.
+    expect(pick(expectedParaIndent, Object.keys(USFM_LEFT_MARGIN))).toEqual(USFM_LEFT_MARGIN);
+    expect(pick(expectedVerseTextStart, Object.keys(USFM_FIRST_LINE_INDENT))).toEqual(
+      USFM_FIRST_LINE_INDENT,
+    );
     expect(expectedVerseTextStart.has('p')).toBe(false);
+    NOT_COMPENSATED.forEach((marker) => expect(expectedParaIndent.has(marker)).toBe(false));
   });
 
   it('every indented marker sets --para-indent equal to its text-spacing margin', () => {
@@ -276,16 +398,46 @@ describe.each(STYLESHEETS)('$name .psc-gutter-markers.text-spacing coverage', ({
     expect(nestingProblems(sheet, '--para-indent')).toEqual([]);
     // Fails loudly if a gutter --para-indent rule is direction-qualified (LTR/RTL must match).
     expect(directionQualifiedGutterRules(sheet, '--para-indent')).toEqual([]);
+    // One value serves both directions only if the base margins agree.
+    expect(directionAsymmetries(sheet, expectedParaIndent)).toEqual([]);
     // Names each marker whose --para-indent is missing or differs from its margin.
-    expect(valueMismatches(sheet, '--para-indent', expectedParaIndent)).toEqual([]);
+    expect(valueMismatches(entry.actualParaIndent, '--para-indent', expectedParaIndent)).toEqual(
+      [],
+    );
     // Names any gutter marker that sets --para-indent without a base margin calling for it.
-    expect(unexpectedMarkers(sheet, '--para-indent', expectedParaIndent)).toEqual([]);
+    expect(unexpectedMarkers(entry.actualParaIndent, '--para-indent', expectedParaIndent)).toEqual(
+      [],
+    );
   });
 
   it('every hanging-indent marker sets --verse-text-start equal to its text-indent', () => {
     expect(nestingProblems(sheet, '--verse-text-start')).toEqual([]);
     expect(directionQualifiedGutterRules(sheet, '--verse-text-start')).toEqual([]);
-    expect(valueMismatches(sheet, '--verse-text-start', expectedVerseTextStart)).toEqual([]);
-    expect(unexpectedMarkers(sheet, '--verse-text-start', expectedVerseTextStart)).toEqual([]);
+    expect(
+      valueMismatches(entry.actualVerseTextStart, '--verse-text-start', expectedVerseTextStart),
+    ).toEqual([]);
+    expect(
+      unexpectedMarkers(entry.actualVerseTextStart, '--verse-text-start', expectedVerseTextStart),
+    ).toEqual([]);
+  });
+});
+
+describe('the two copies agree on the gutter compensation block', () => {
+  // Each copy above is checked against its own base rules; that alone would let the copies drift
+  // in step (a value changed in both the base rule and the compensation of one copy only). The
+  // gutter block is the part that must render identically in Simple and in Storybook, so it is
+  // compared directly.
+  const [shipping, demo] = sheets;
+
+  it('sets the same --para-indent for the same markers', () => {
+    expect(Object.fromEntries(demo.actualParaIndent)).toEqual(
+      Object.fromEntries(shipping.actualParaIndent),
+    );
+  });
+
+  it('sets the same --verse-text-start for the same markers', () => {
+    expect(Object.fromEntries(demo.actualVerseTextStart)).toEqual(
+      Object.fromEntries(shipping.actualVerseTextStart),
+    );
   });
 });

@@ -1,8 +1,12 @@
 /* Based on scripture-editors' packages/platform/src/usj-nodes.css:
-   https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
+   https://github.com/paranext/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (synced from the `standard-view` branch at commit
    d95907eed30395f0b551c7ce402b9e4fbc265bea).
    Deliberate divergences from the source, each explained at its rule below:
+   - The .psc-gutter-markers.text-spacing compensation block carries entries the synced
+     commit lacked (see the "Indent compensation" comment there); the platform-scripture-editor
+     extension's usj-nodes-scss-coverage.test.ts derives the required set from this copy's own
+     base rules and asserts it matches the shipping copy, so a re-sync that drops them fails.
    - The subdued grays for `.unknown-block`/`.unknown-inline` and the empty-verse ellipsis are
      written with literal `rgba()` / a plain `var(--muted-foreground, <hex>)` instead of the
      source's `hsl(var(--muted-foreground, 215 16% 65%) / alpha)`.
@@ -2900,14 +2904,12 @@ span.read img {
    Only active when .text-spacing is present (same condition as the source rules).
    pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
    respectively), so no direction restriction is needed here.
-   EVERY marker with a text-spacing margin-left above needs an entry here, or its gutter
-   glyph lands inside the text; the platform-scripture-editor extension's
-   usj-nodes-scss-coverage.test.ts derives that list from the base rules of this copy too
-   and fails on any gap.
-   The tr/tr1/tr2 entries mirror their base rules for that invariant but are inert for real
-   tables: a table row renders as <tr class="table-row usfm_tr"> with an inline text-indent of
-   0, not as a .para, so the gutter glyph rule never matches it. They are kept only so the
-   compensation block stays complete for the coverage test. */
+   Invariant for THIS stylesheet: every marker its text-spacing rules give a margin-left needs
+   an entry here with the same value, or the gutter glyph lands inside the text. The
+   platform-scripture-editor extension's usj-nodes-scss-coverage.test.ts derives that
+   requirement from this copy's base rules and asserts the block matches the shipping copy.
+   Table rows (tr, tr1, tr2) deliberately have no entry: a real table row is a <tr>, not a
+   .para, so the glyph rule never matches it. */
 .psc-gutter-markers.text-spacing .usfm_p2 {
   --para-indent: 2.5vw;
 }
@@ -2919,9 +2921,7 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_li1,
 .psc-gutter-markers.text-spacing .usfm_ph,
 .psc-gutter-markers.text-spacing .usfm_ph1,
-.psc-gutter-markers.text-spacing .usfm_pi2,
-.psc-gutter-markers.text-spacing .usfm_tr,
-.psc-gutter-markers.text-spacing .usfm_tr1 {
+.psc-gutter-markers.text-spacing .usfm_pi2 {
   --para-indent: 10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -2935,8 +2935,7 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_lim,
 .psc-gutter-markers.text-spacing .usfm_lim1,
 .psc-gutter-markers.text-spacing .usfm_ph2,
-.psc-gutter-markers.text-spacing .usfm_pi3,
-.psc-gutter-markers.text-spacing .usfm_tr2 {
+.psc-gutter-markers.text-spacing .usfm_pi3 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
@@ -2981,7 +2980,7 @@ span.read img {
 /* --verse-text-start mirrors the text-indent values for paragraphs with a
    negative text-indent (hanging indent). These paragraphs render their first
    line to the inline-start of the element's border edge, so the active focus box
-   ::before must start at text-indent to align with the text. */
+   ::after must start at text-indent to align with the text. */
 .psc-gutter-markers.text-spacing .usfm_q,
 .psc-gutter-markers.text-spacing .usfm_q1 {
   --verse-text-start: -10vw;
@@ -3033,10 +3032,7 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_ph,
 .psc-gutter-markers.text-spacing .usfm_ph1,
 .psc-gutter-markers.text-spacing .usfm_ph2,
-.psc-gutter-markers.text-spacing .usfm_ph3,
-.psc-gutter-markers.text-spacing .usfm_tr,
-.psc-gutter-markers.text-spacing .usfm_tr1,
-.psc-gutter-markers.text-spacing .usfm_tr2 {
+.psc-gutter-markers.text-spacing .usfm_ph3 {
   --verse-text-start: -5vw;
 }
 
