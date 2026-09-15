@@ -84,13 +84,8 @@ describe('platform.firstRunComplete setting', () => {
 });
 
 describe('content zoom settings', () => {
-  it('declares the new Zoom setting last among the visible General group settings and the memory setting hidden', () => {
+  it('declares webViewContentZoom visible with the memory setting hidden', () => {
     const group = groups[0];
-    expect(visibleKeys(group)).toEqual([
-      'platform.interfaceLanguage',
-      'platform.zoomFactor',
-      'platform.webViewContentZoom',
-    ]);
     expect(group.properties['platform.webViewContentZoom']).toMatchObject({
       label: '%settings_platform_webViewContentZoom_label%',
       description: '%settings_platform_webViewContentZoom_description%',
@@ -156,6 +151,7 @@ describe('settings layout', () => {
   it('puts the supporter settings in their own group', () => {
     expect(groups).toHaveLength(2);
     expect(groups[1].label).toBe('%settings_platform_supporter_group_label%');
+    expect(groups[1].description).toBe('%settings_platform_supporter_group_description%');
     expect(visibleKeys(groups[1])).toEqual([
       'platform.requestTimeout',
       'platform.showRegistrationReminderOnStartup',
@@ -188,8 +184,23 @@ describe('settings layout', () => {
   });
 
   it('declares every setting exactly once across the groups', () => {
+    // Named explicitly (rather than a bare length) so adding, removing, or renaming a setting is a
+    // deliberate edit to this list instead of a silently-passing count.
+    const expectedKeys = [
+      'platform.interfaceLanguage',
+      'platform.zoomFactor',
+      'platform.webViewContentZoom',
+      'platform.webViewContentZoomMemory',
+      'platform.ptxUtilsMementoData',
+      'platform.paratextDataLastRegistryDataCachedTimes',
+      'platform.interfaceMode',
+      'platform.firstRunComplete',
+      'platform.syncOnStartup',
+      'platform.requestTimeout',
+      'platform.showRegistrationReminderOnStartup',
+    ];
     const all = groups.flatMap((group) => Object.keys(group.properties));
     expect(new Set(all).size).toBe(all.length);
-    expect(all).toHaveLength(11);
+    expect(all.sort()).toEqual(expectedKeys.sort());
   });
 });

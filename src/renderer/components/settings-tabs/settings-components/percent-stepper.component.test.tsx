@@ -1,12 +1,28 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { PercentStepper } from './percent-stepper.component';
+
+// Radix Tooltip (now wrapping every button) uses ResizeObserver internally; jsdom doesn't provide
+// it, so we stub a no-op implementation.
+beforeAll(() => {
+  global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    disconnect() {}
+  };
+});
 
 const LABELS = {
   increase: 'Increase default zoom',
   decrease: 'Decrease default zoom',
-  reset: 'Reset default zoom to 100 %',
+  reset: 'Reset default zoom',
 };
 const baseProps = {
   min: 0.5,
@@ -79,10 +95,10 @@ describe('PercentStepper', () => {
   it('exposes keyboard-reachable buttons with the given labels', () => {
     render(<PercentStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
     [LABELS.increase, LABELS.decrease, LABELS.reset].forEach((name) => {
-      const b = screen.getByRole('button', { name });
-      expect(b.tagName).toBe('BUTTON');
-      b.focus();
-      expect(b).toHaveFocus();
+      const button = screen.getByRole('button', { name });
+      expect(button.tagName).toBe('BUTTON');
+      button.focus();
+      expect(button).toHaveFocus();
     });
   });
 
@@ -158,5 +174,26 @@ describe('PercentStepper', () => {
     render(<PercentStepper {...baseProps} value={2.9} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
     expect(onChange).toHaveBeenCalledWith(3);
+  });
+
+  it('rounds correctly for a step given in exponential notation', () => {
+    const onChange = vi.fn();
+    render(<PercentStepper {...baseProps} step={1e-2} value={1.1} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onChange).toHaveBeenCalledWith(1.11);
+  });
+
+  it('drops the optimistic value when the prop changes to something other than what was emitted', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onChange).toHaveBeenCalledWith(1.1);
+    // An external change (e.g. another window writing the same setting) arrives instead of the
+    // platform confirming the press above; the prop is authoritative, so the display must follow it
+    // rather than keep showing the stale optimistic 110 %.
+    rerender(<PercentStepper {...baseProps} value={2} onChange={onChange} />);
+    expect(screen.getByText('200 %')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onChange).toHaveBeenCalledWith(2.1);
   });
 });
