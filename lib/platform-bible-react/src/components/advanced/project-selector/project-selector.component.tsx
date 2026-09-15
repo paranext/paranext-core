@@ -702,12 +702,10 @@ function ProjectRowView({
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
           measured on (truncation in EITHER child contributes to overflow).
-          When `fullName` is missing
-          or equal to `shortName` the second line would render the same
-          string the user already sees above (e.g. consumers that fall back
-          `fullName ?? shortName` upstream and forward an unset project
-          fullName). Suppress the muted line in that case so the row reads
-          as a single name. */}
+          The muted second line is suppressed whenever `hasDistinctFullName`
+          says there is nothing distinct to show, so the row reads as a
+          single name rather than repeating it — edit that helper, not this
+          condition, to change what counts as distinct. */}
       <span
         ref={labelRef}
         className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
@@ -742,7 +740,9 @@ function ProjectRowView({
         className="tw:max-w-xs tw:text-center"
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
-        <div className="tw:font-semibold">{row.fullName ?? row.shortName}</div>
+        <div className="tw:font-semibold">
+          {hasDistinctFullName(row) ? row.fullName : row.shortName}
+        </div>
         {tooltipHasLanguage && (
           <div className="tw:text-sm">
             {row.language}

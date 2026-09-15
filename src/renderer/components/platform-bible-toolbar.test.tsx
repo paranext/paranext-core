@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -1348,6 +1349,27 @@ describe('PlatformBibleToolbar project selector label', () => {
     renderAtStep(SHRINK_STEP.WIDE);
 
     expect(screen.getByTestId('project-picker-value')).toHaveTextContent(/^TP$/);
+  });
+
+  it('opens no tooltip on hover when the full name equals the short name', async () => {
+    // Hovering a label that already shows everything must not pop a tooltip repeating it — distinct
+    // from the abbreviation/clipped cases above, where the tooltip is exactly the point. Uses
+    // `mockReturnValue` (not `mockReturnValueOnce`) because hovering triggers a re-render, which
+    // would otherwise re-call the hook and fall back to the describe block's default mock.
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: { id: 'proj-1', fullName: 'TP', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    await userEvent.hover(screen.getByText('TP'));
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
   it('shows an error in place of the label, not alongside it', async () => {

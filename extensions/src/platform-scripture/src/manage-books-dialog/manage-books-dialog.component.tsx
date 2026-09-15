@@ -785,7 +785,7 @@ export function ManageBooksDialog({
       otherProjects.map((p) => ({
         id: p.id,
         shortName: p.shortName,
-        fullName: p.fullName ?? p.shortName,
+        fullName: p.fullName,
         versificationId: p.versificationId,
         // Group header reads "{name} versification" (lowercase), localized via a template so word
         // order can vary by language. The "Unknown
@@ -819,7 +819,7 @@ export function ManageBooksDialog({
         .map((p) => ({
           id: p.id,
           shortName: p.shortName,
-          fullName: p.fullName ?? p.shortName,
+          fullName: p.fullName,
         })),
     [otherProjects],
   );

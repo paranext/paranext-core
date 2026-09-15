@@ -11,9 +11,13 @@ const ROOTS = [
 ];
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'temp-build', 'storybook-static', '.vite']);
 
-/** The helper's own home — the one place allowed to spell these rules out in real code. */
+/**
+ * The helper's own home, plus this sweep's own file — the `EXEMPT` entries below necessarily quote
+ * the matched line's own text, which would otherwise trip the sweep over its own source.
+ */
 const SELF_REFERENTIAL_FILES = new Set([
   path.join('lib', 'platform-bible-utils', 'src', 'project-util.ts'),
+  path.join('src', 'renderer', 'components', 'projects', 'project-name-adoption.test.ts'),
 ]);
 
 /**
@@ -21,17 +25,23 @@ const SELF_REFERENTIAL_FILES = new Set([
  * inline format added to one of these files is still caught. Comment lines quoting or discussing a
  * rule are handled structurally (see `isCommentLine`), not listed here — a line-keyed exemption for
  * prose goes stale silently the moment an unrelated edit shifts the line number.
+ *
+ * Keyed on file + a distinctive substring of the matched line, not a line number — a line-number
+ * key goes stale silently as the file changes, and a stale entry can end up exempting a genuine
+ * future violation that happens to land on that same line number.
  */
-const EXEMPT = new Map<string, string>([
-  [
-    'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx:677',
-    'cmdk search haystack — five fields concatenated for matching, never rendered',
-  ],
-  [
-    'src/stories/design-ideas/home-unified.component.tsx:2870',
-    'design-ideas prototype, not shipped UI',
-  ],
-]);
+const EXEMPT: { file: string; contains: string; reason: string }[] = [
+  {
+    file: 'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx',
+    contains: 'row.rowKey} ${row.shortName} ${row.fullName',
+    reason: 'cmdk search haystack — five fields concatenated for matching, never rendered',
+  },
+  {
+    file: 'src/stories/design-ideas/home-unified.component.tsx',
+    contains: 'removeConfirmTitlePrefix} ${pendingRemove.shortName} - ${pendingRemove.fullName}',
+    reason: 'design-ideas prototype, not shipped UI',
+  },
+];
 
 /** Whether a line is a comment (line comment, block-comment body, or JSDoc/TSDoc line). */
 function isCommentLine(line: string): boolean {
@@ -69,8 +79,12 @@ function findViolations(patterns: RegExp[]): string[] {
       .flatMap((line, index) => {
         if (isCommentLine(line)) return [];
         if (!patterns.some((pattern) => pattern.test(line))) return [];
-        const site = `${relative.split(path.sep).join('/')}:${index + 1}`;
-        return EXEMPT.has(site) ? [] : [site];
+        const relativePosix = relative.split(path.sep).join('/');
+        const site = `${relativePosix}:${index + 1}`;
+        const isExempt = EXEMPT.some(
+          (entry) => entry.file === relativePosix && line.includes(entry.contains),
+        );
+        return isExempt ? [] : [site];
       });
   });
 }

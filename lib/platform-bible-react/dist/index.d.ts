@@ -2131,7 +2131,8 @@ export type ToolbarCompoundLabelProps = {
 	separator?: string;
 	/**
 	 * Render `secondary` before `primary`, for labels that read that way round — a measurement that
-	 * reads `12 pt` puts its unit last while the number is the field that must survive.
+	 * reads `12 pt` puts the number (`secondary`) first, even though `primary` (the unit, `pt`) is
+	 * still the field that must survive shrinking.
 	 */
 	secondaryFirst?: boolean;
 	/** Whether the secondary field is rendered at all. Defaults to `true`. */

@@ -80,9 +80,9 @@ function resolveLanguage(
 /**
  * Converts cheap project metadata (already fetched via `projectLookupService`) into a `ProjectItem`
  * for display, without opening a project data provider. `fullName`/`name` are optional on
- * `ProjectMetadata`, so both fall back to the project id to guarantee defined display strings (and
- * a safe sort key for callers that sort by `fullName`). A present-but-empty value passes through
- * as-is - empty FullName is a real, deliberately-supported Paratext case.
+ * `ProjectMetadata`, so both fall back to the project id to guarantee defined display strings. A
+ * present-but-empty value passes through as-is - empty FullName is a real, deliberately-supported
+ * Paratext case.
  */
 function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
   const resolved = resolveLanguage(m.language ?? '', m.languageTag ?? '');

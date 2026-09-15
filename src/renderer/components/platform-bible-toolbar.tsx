@@ -180,9 +180,9 @@ function ProjectSelectorLabel({
       // The short name identifies the project, so it leads and is the field that survives the
       // narrowest step; the full name is the one that clips and then drops.
       primary={shortName}
-      secondary={fullName}
+      secondary={hasDistinctFullName({ shortName, fullName }) ? fullName : undefined}
       separator=" - "
-      showSecondary={!isAtMinimum && hasDistinctFullName({ shortName, fullName })}
+      showSecondary={!isAtMinimum}
       fullText={formatProjectName({ shortName, fullName })}
     />
   );
