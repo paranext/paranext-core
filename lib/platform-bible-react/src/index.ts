@@ -371,7 +371,7 @@ export {
 } from './components/z-index';
 
 // Tooltip delay
-export { TOOLTIP_DELAY } from './components/tooltip-delay';
+export { TOOLTIP_DELAY_MS } from './components/tooltip-delay';
 
 // Utils
 export { cn } from './utils/shadcn-ui/utils';

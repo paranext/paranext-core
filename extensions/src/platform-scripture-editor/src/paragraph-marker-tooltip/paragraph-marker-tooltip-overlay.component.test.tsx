@@ -3,6 +3,8 @@
 import '@testing-library/jest-dom';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip-overlay.component';
+import * as tooltipUtils from './paragraph-marker-tooltip.utils';
 
 // jsdom doesn't ship a ResizeObserver, which Radix's Popper-positioned TooltipContent instantiates
 // on mount when open. A no-op stub is sufficient since these tests inspect text, not layout.
@@ -30,16 +32,18 @@ beforeAll(() => {
 });
 
 // The repo-wide alias for '@papi/frontend/react' (extensions/__test-mocks__) doesn't export
-// useLocalizedStrings, so this component needs its own mock. An empty localized-strings record
-// means every marker falls back to its raw USFM text (e.g. '\p'), which is what these tests assert
-// on — the delay behavior under test doesn't depend on the actual localized wording.
+// useLocalizedStrings, so this component needs its own mock. Echoes each requested key back as its
+// own value, matching the real hook's `defaultState[key] = key` seeding
+// (src/renderer/hooks/papi-hooks/use-localized-strings-hook.ts) — the state a consumer actually sees
+// before real translations load. Both markers used below ('p', 'q1') have real entries in
+// localizedStrings.json, so an empty-object mock would silently exercise the raw-USFM-fallback
+// branch, which is not what these tests mean to cover.
 vi.mock('@papi/frontend/react', () => ({
-  useLocalizedStrings: () => [{}],
+  useLocalizedStrings: (keys: string[]) => [
+    Object.fromEntries(keys.map((key) => [key, key])),
+    false,
+  ],
 }));
-
-// Imported after the mock so the component picks up the mocked hook.
-// eslint-disable-next-line import/first
-import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip-overlay.component';
 
 function renderEditor(enabled?: boolean) {
   return render(
@@ -58,12 +62,17 @@ function queryTooltip() {
   return screen.queryByRole('tooltip');
 }
 
+// What the mock above echoes back for each marker — i.e. what the tooltip actually shows.
+const P_TEXT = '%paragraphMenu_p_markerDescription%';
+const Q1_TEXT = '%paragraphMenu_q1_markerDescription%';
+
 beforeEach(() => {
   vi.useFakeTimers();
 });
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -83,7 +92,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(queryTooltip()).toHaveTextContent('\\p');
+    expect(queryTooltip()).toHaveTextContent(P_TEXT);
   });
 
   it('shows nothing and leaves no pending timer for a hover shorter than the delay', () => {
@@ -116,13 +125,105 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     act(() => {
       vi.advanceTimersByTime(300);
     });
-    expect(queryTooltip()).toHaveTextContent('\\p');
+    expect(queryTooltip()).toHaveTextContent(P_TEXT);
 
     // Real adjacent-paragraph hover fires mouseout(A, entering=B) then mouseover(B).
     fireEvent.mouseOut(paraA, { relatedTarget: paraB });
     fireEvent.mouseOver(paraB, { relatedTarget: paraA });
 
-    expect(queryTooltip()).toHaveTextContent('\\q1');
+    expect(queryTooltip()).toHaveTextContent(Q1_TEXT);
+  });
+
+  it('reapplies the delay once the grace period has elapsed, even across adjacent markers with no true close', () => {
+    // Pins the fix for the unbounded "already showing" shortcut: the old `if (hoveredData)` check
+    // (no time bound) would jump to A instantly below, forever, once any tooltip had shown once —
+    // this test fails against that code. Also pins that an expired grace period hides the stale
+    // tooltip immediately rather than leaving mismatched content on screen during the re-armed delay.
+    renderEditor();
+    const paraA = screen.getByText('First paragraph');
+    const paraB = screen.getByText('Second paragraph');
+
+    fireEvent.mouseOver(paraA);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(queryTooltip()).toHaveTextContent(P_TEXT);
+
+    // Adjacent transition well within the grace window: switches instantly — no advance needed.
+    fireEvent.mouseOut(paraA, { relatedTarget: paraB });
+    fireEvent.mouseOver(paraB, { relatedTarget: paraA });
+    expect(queryTooltip()).toHaveTextContent(Q1_TEXT);
+
+    // Let the grace window lapse while sitting on B (no mouseover fires for an unchanged para).
+    act(() => {
+      vi.advanceTimersByTime(301);
+    });
+
+    // Adjacent transition back to A, now outside the grace window: hides the stale tooltip
+    // immediately and re-arms the full delay, rather than leaving B's tooltip lingering.
+    fireEvent.mouseOut(paraB, { relatedTarget: paraA });
+    fireEvent.mouseOver(paraA, { relatedTarget: paraB });
+    expect(queryTooltip()).not.toBeInTheDocument();
+
+    // Nothing shown at +299 of the re-armed delay proves it's a real bounded wait, not instant.
+    act(() => {
+      vi.advanceTimersByTime(299);
+    });
+    expect(queryTooltip()).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(queryTooltip()).toHaveTextContent(P_TEXT);
+  });
+
+  it('recomputes the tooltip position at reveal time, so a scroll during the pending window is reflected', () => {
+    // Pins the fix for stale-position capture: before it, computePosition ran synchronously inside
+    // the mouseOver handler, so the assertion right after fireEvent.mouseOver below would already
+    // see 1 call.
+    const computePositionSpy = vi.spyOn(tooltipUtils, 'computePosition');
+    renderEditor();
+    const para = screen.getByText('First paragraph');
+
+    fireEvent.mouseOver(para);
+    expect(computePositionSpy).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(computePositionSpy).toHaveBeenCalledTimes(1);
+    expect(queryTooltip()).toHaveTextContent(P_TEXT);
+  });
+
+  it('does not reveal a tooltip for a paragraph removed from the DOM before the delay elapses', () => {
+    renderEditor();
+    const para = screen.getByText('First paragraph');
+
+    fireEvent.mouseOver(para);
+    // Simulates a chapter change or remote edit swapping the DOM out from under a pending hover,
+    // with no mouseout or keydown to cancel the timer.
+    para.remove();
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(queryTooltip()).not.toBeInTheDocument();
+  });
+
+  it('clears a pending timer on keydown, so typing does not reveal a stale hover', () => {
+    renderEditor();
+    const para = screen.getByText('First paragraph');
+
+    fireEvent.mouseOver(para);
+    expect(vi.getTimerCount()).toBe(1);
+
+    fireEvent.keyDown(para, { key: 'a' });
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(queryTooltip()).not.toBeInTheDocument();
   });
 
   it('clears the pending timer on unmount', () => {
@@ -133,18 +234,6 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     expect(vi.getTimerCount()).toBe(1);
 
     unmount();
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it('starts no timer while enabled is false, so a disabled overlay pays nothing for hover', () => {
-    renderEditor(false);
-    const para = screen.getByText('First paragraph');
-
-    fireEvent.mouseOver(para);
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
-    expect(queryTooltip()).not.toBeInTheDocument();
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -170,5 +259,48 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
       vi.advanceTimersByTime(1000);
     });
     expect(queryTooltip()).not.toBeInTheDocument();
+  });
+
+  it('does not reopen at a stale position, or skip the delay, on the first hover after enabled flips back true', () => {
+    // Pins the enabled-flip cleanup fix. vi.useFakeTimers() also fakes Date by default, so
+    // Date.now() stays frozen across the rerenders below with no advance — the elapsed time reads
+    // 0ms, deliberately inside the grace window, so this test isolates whether hoveredDataRef was
+    // reset on disable from the grace-period boundary (covered separately above).
+    const { rerender } = renderEditor(true);
+    const paraA = screen.getByText('First paragraph');
+    const paraB = screen.getByText('Second paragraph');
+
+    fireEvent.mouseOver(paraA);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(queryTooltip()).toHaveTextContent(P_TEXT);
+
+    rerender(
+      <ParagraphMarkerTooltipOverlay enabled={false}>
+        <p className="para usfm_p">First paragraph</p>
+        <p className="para usfm_q1">Second paragraph</p>
+      </ParagraphMarkerTooltipOverlay>,
+    );
+    expect(queryTooltip()).not.toBeInTheDocument();
+
+    rerender(
+      <ParagraphMarkerTooltipOverlay enabled>
+        <p className="para usfm_p">First paragraph</p>
+        <p className="para usfm_q1">Second paragraph</p>
+      </ParagraphMarkerTooltipOverlay>,
+    );
+    // Must not remount already-open from stale state.
+    expect(queryTooltip()).not.toBeInTheDocument();
+
+    fireEvent.mouseOver(paraB);
+    // Must earn the delay again, not take the "already showing" instant path.
+    expect(queryTooltip()).not.toBeInTheDocument();
+    expect(vi.getTimerCount()).toBe(1);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(queryTooltip()).toHaveTextContent(Q1_TEXT);
   });
 });

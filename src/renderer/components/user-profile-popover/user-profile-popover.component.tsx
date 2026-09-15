@@ -12,7 +12,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
-  TOOLTIP_DELAY,
+  TOOLTIP_DELAY_MS,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
@@ -315,7 +315,7 @@ export function UserProfilePopover() {
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+      <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
