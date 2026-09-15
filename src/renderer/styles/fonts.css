@@ -1266,6 +1266,119 @@
 
 /* #endregion styles downloaded from Google Fonts URL and modified to prefer an installed copy */
 
+/* #region installed-only faces for what the downloads above leave out */
+
+/*
+ * Google's builds of these families are not the whole font. Charis SIL is served as five subsets
+ * with no Greek at all, and both families carry only 8 of the 112 combining diacritical marks — so
+ * a Greek quotation or a transliteration run matches no downloaded face and falls out of the family
+ * mid-line, even where the complete font is installed.
+ *
+ * These faces cover exactly what the downloaded ones do not: the complement of their
+ * `unicode-range`s over the BMP, so the two sets can never compete and an erroring face here can
+ * never shadow a downloadable one. They name the installed copy and nothing else — there is nothing
+ * to download for these codepoints — so where the font is not installed they fail and the character
+ * falls through to the next family, exactly as it does today.
+ *
+ * Regenerate them whenever the region above changes: the ranges are derived from it, and
+ * `fonts.test.ts` fails if they drift into overlapping it or stop covering the rest of the BMP.
+ */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Charis SIL'), local('CharisSIL-Regular');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
+    U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
+    U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-FFFF;
+}
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 700;
+  src: local('Charis SIL Bold'), local('CharisSIL-Bold');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
+    U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
+    U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-FFFF;
+}
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 400;
+  src: local('Charis SIL Italic'), local('CharisSIL-Italic');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
+    U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
+    U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-FFFF;
+}
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 700;
+  src: local('Charis SIL Bold Italic'), local('CharisSIL-BoldItalic');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
+    U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
+    U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-FFFF;
+}
+@font-face {
+  font-family: 'Gentium Plus';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Gentium Plus'), local('GentiumPlus-Regular');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-036F,
+    U+0378-0379, U+0380-0383, U+038B, U+038D, U+03A2, U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF,
+    U+2070-209F, U+20C1-2112, U+2114-2115, U+2117-2121, U+2123-2190, U+2192, U+2194-2211,
+    U+2213-2214, U+2216-2C5F, U+2C80-2DDF, U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE,
+    U+FF00-FFFC, U+FFFE-FFFF;
+}
+@font-face {
+  font-family: 'Gentium Plus';
+  font-style: normal;
+  font-weight: 700;
+  src: local('Gentium Plus Bold'), local('GentiumPlus-Bold');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-036F,
+    U+0378-0379, U+0380-0383, U+038B, U+038D, U+03A2, U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF,
+    U+2070-209F, U+20C1-2112, U+2114-2115, U+2117-2121, U+2123-2190, U+2192, U+2194-2211,
+    U+2213-2214, U+2216-2C5F, U+2C80-2DDF, U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE,
+    U+FF00-FFFC, U+FFFE-FFFF;
+}
+@font-face {
+  font-family: 'Gentium Plus';
+  font-style: italic;
+  font-weight: 400;
+  src: local('Gentium Plus Italic'), local('GentiumPlus-Italic');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-036F,
+    U+0378-0379, U+0380-0383, U+038B, U+038D, U+03A2, U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF,
+    U+2070-209F, U+20C1-2112, U+2114-2115, U+2117-2121, U+2123-2190, U+2192, U+2194-2211,
+    U+2213-2214, U+2216-2C5F, U+2C80-2DDF, U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE,
+    U+FF00-FFFC, U+FFFE-FFFF;
+}
+@font-face {
+  font-family: 'Gentium Plus';
+  font-style: italic;
+  font-weight: 700;
+  src: local('Gentium Plus Bold Italic'), local('GentiumPlus-BoldItalic');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-036F,
+    U+0378-0379, U+0380-0383, U+038B, U+038D, U+03A2, U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF,
+    U+2070-209F, U+20C1-2112, U+2114-2115, U+2117-2121, U+2123-2190, U+2192, U+2194-2211,
+    U+2213-2214, U+2216-2C5F, U+2C80-2DDF, U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE,
+    U+FF00-FFFC, U+FFFE-FFFF;
+}
+
+/* #endregion installed-only faces for what the downloads above leave out */
+
 /* #region apply fonts throughout the application */
 
 /*

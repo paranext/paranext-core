@@ -129,6 +129,8 @@ const VERBATIM_REGION =
 /** The `#region` holding the paste that IS hand-edited, to name installed copies first. */
 const INSTALLED_FIRST_REGION =
   'styles downloaded from Google Fonts URL and modified to prefer an installed copy';
+/** The `#region` of hand-written faces covering what Google's builds of those families omit. */
+const INSTALLED_ONLY_REGION = 'installed-only faces for what the downloads above leave out';
 
 /**
  * The vendored copies of the editor's `usj-nodes` stylesheet, which are injected into the same
@@ -238,7 +240,34 @@ const verbatimCss = regionCss(VERBATIM_REGION);
 const installedFirstCss = regionCss(INSTALLED_FIRST_REGION);
 const verbatimFaces = parseFontFaces(verbatimCss);
 const installedFirstFaces = parseFontFaces(installedFirstCss);
+const installedOnlyFaces = parseFontFaces(regionCss(INSTALLED_ONLY_REGION));
+/** Every downloadable face — what the required-coverage checks below are about. */
 const fontFaces = [...verbatimFaces, ...installedFirstFaces];
+
+/** The codepoints a `unicode-range` descriptor covers. */
+function codepointsIn(unicodeRange: string): Set<number> {
+  const covered = new Set<number>();
+  unicodeRange.split(',').forEach((part) => {
+    const bounds = /^U\+([0-9A-Fa-f]+)(?:-([0-9A-Fa-f]+))?$/.exec(part.trim());
+    if (!bounds) return;
+    const start = parseInt(bounds[1], 16);
+    const end = parseInt(bounds[2] ?? bounds[1], 16);
+    for (let code = start; code <= end; code += 1) covered.add(code);
+  });
+  return covered;
+}
+
+/** Every codepoint a family declares for one weight/style pair. */
+function codepointsFor(faces: FontFace[], family: string, required: RequiredFace): Set<number> {
+  const covered = new Set<number>();
+  facesFor(faces, family, required).forEach((face) =>
+    codepointsIn(face.unicodeRange).forEach((code) => covered.add(code)),
+  );
+  return covered;
+}
+
+/** The Basic Multilingual Plane, the range the installed-only faces are the complement over. */
+const BMP_END = 0xffff;
 
 /**
  * Families served by a single variable font file spanning a weight RANGE. Their required weights
@@ -379,6 +408,45 @@ describe('Scripture fonts (src/renderer/styles/fonts.css)', () => {
       [],
     );
   });
+
+  it.each(Object.keys(INSTALLED_FIRST_FAMILIES))(
+    'covers what the downloads leave out of %s, without ever competing with them',
+    (family) => {
+      // Google's builds are not the whole font — Charis SIL is served with no Greek subset at all,
+      // and both families carry 8 of the 112 combining marks — so without these faces a Greek
+      // quotation or a transliteration run falls out of the family mid-line even where the complete
+      // font is installed. Disjointness is what keeps them safe: a face that errors because the font
+      // is not installed must never be a candidate for a codepoint a downloadable face could serve,
+      // which is the shape of the bug this whole file exists to prevent.
+      const faces = installedOnlyFaces.filter((face) => face.family === family);
+      expect(faces.length).toBeGreaterThan(0);
+      expect(faces.every((face) => face.src.includes('local(') && !face.src.includes('url('))).toBe(
+        true,
+      );
+
+      const missing = REQUIRED_FACES[family]
+        .filter((required) => facesFor(installedOnlyFaces, family, required).length === 0)
+        .map(describeFace);
+      expect(missing).toEqual([]);
+
+      // Per weight and style, not per family: a union across styles hides a single face whose range
+      // was narrowed, which is exactly what a hand-regenerated range list gets wrong.
+      REQUIRED_FACES[family].forEach((required) => {
+        const downloadable = codepointsFor(fontFaces, family, required);
+        const installedOnly = codepointsFor(installedOnlyFaces, family, required);
+        const overlap = [...installedOnly].filter((code) => downloadable.has(code));
+        const uncovered: number[] = [];
+        for (let code = 0; code <= BMP_END; code += 1) {
+          if (!downloadable.has(code) && !installedOnly.has(code)) uncovered.push(code);
+        }
+        expect({
+          face: describeFace(required),
+          overlapping: overlap.slice(0, 4).map((code) => code.toString(16)),
+          uncovered: uncovered.slice(0, 4).map((code) => code.toString(16)),
+        }).toEqual({ face: describeFace(required), overlapping: [], uncovered: [] });
+      });
+    },
+  );
 
   it('guards every family the Scripture font stack relies on', () => {
     const stack = /--scripture-font-stack:([^;]+);/.exec(css);
