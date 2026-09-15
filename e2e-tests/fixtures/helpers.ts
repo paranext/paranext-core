@@ -2300,6 +2300,60 @@ export function describeInconclusiveOverlayTimeout(originalError: unknown): Erro
  */
 export const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
 
+/**
+ * Window event the tour store listens for so a write in THIS window reaches its subscribers (a
+ * same-window `localStorage` write fires no `storage` event). Mirrors TOUR_DONE_SYNC_EVENT in
+ * src/renderer/components/onboarding-tour/onboarding-tour.store.ts — keep in sync (renderer source
+ * cannot be imported into the Playwright Node context).
+ */
+export const ONBOARDING_TOUR_DONE_SYNC_EVENT = 'platform-bible.onboardingTourDoneChanged';
+
+/**
+ * Suppress the onboarding tour, which renders a full-viewport modal that swallows pointer events —
+ * any later click (the toolbar's book-chapter control above all) then retries until it times out.
+ *
+ * Writing the done key first makes `OnboardingTour` (which re-reads it each render) refuse to open
+ * from that point on, closing the race a visibility check alone would leave; the write is paired
+ * with the store's own sync event so a tour that ALREADY opened re-reads the flag and closes
+ * itself. The Skip click below is what covers a tour that opens after the write.
+ *
+ * Dismissed by clicking "Skip tour" rather than by pressing Escape. Escape does close the tour and
+ * does persist the done flag — it routes through the same `onSkip` handler the button does (see
+ * `src/renderer/components/onboarding-tour/tour.component.tsx`, pinned by the "Escape key closes
+ * the tour" test) — but only when the keypress reaches the renderer's top-level window, where that
+ * listener lives. `page.keyboard.press` delivers to whichever frame has focus, so once focus is
+ * inside a web view's iframe the tour never sees it; clicking the button works from anywhere.
+ * Escape stays as the fallback for a step that renders no Skip button.
+ *
+ * Safe to call more than once: the key write is idempotent and the dialog is only dismissed when it
+ * is actually showing.
+ *
+ * @param page The Electron main window page
+ */
+export async function dismissOnboardingTour(page: Page): Promise<void> {
+  await page.evaluate(
+    ([key, syncEvent]) => {
+      localStorage.setItem(key, 'true');
+      // `OnboardingTour` reads the flag through `useSyncExternalStore`, and a same-window
+      // `localStorage` write fires no `storage` event — so the store only learns of the write when
+      // something else happens to re-render. The app's own `writeTourDone` dispatches this event
+      // for exactly that reason; dispatching it here makes an already-open tour close on this
+      // write rather than waiting for the Skip click below.
+      window.dispatchEvent(new Event(syncEvent));
+    },
+    [ONBOARDING_TOUR_DONE_KEY, ONBOARDING_TOUR_DONE_SYNC_EVENT],
+  );
+  // The tour-specific test id (not a generic modal-dialog selector) so an unrelated dialog — e.g. a
+  // real startup error — is never silently dismissed here.
+  const tourDialog = page.getByTestId('tour-dialog');
+  if (!(await tourDialog.isVisible())) return;
+
+  const skipButton = tourDialog.getByRole('button', { name: /skip/i });
+  if (await skipButton.isVisible().catch(() => false)) await skipButton.click();
+  else await page.keyboard.press('Escape');
+  await expect(tourDialog).not.toBeVisible({ timeout: 10_000 });
+}
+
 /** Options accepted by {@link waitForAppReady}. */
 export interface WaitForAppReadyOptions {
   /**
@@ -2328,10 +2382,8 @@ export interface WaitForAppReadyOptions {
  *
  * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour: in Simple mode with a
  * fresh profile the tour opens automatically (and asynchronously — it waits for the dock layout and
- * localized strings), and its full-screen overlay blocks all pointer events. Writing the done flag
- * makes `OnboardingTour` (which re-reads it each render) refuse to open from that point on, closing
- * the race a visibility check alone would leave; an instance that already opened before the flag
- * landed is dismissed with Escape.
+ * localized strings), and its full-screen overlay blocks all pointer events. See
+ * {@link dismissOnboardingTour}, which suites that reach the app by other paths call directly.
  */
 export async function waitForAppReady(
   page: Page,
@@ -2363,18 +2415,7 @@ export async function waitForAppReady(
     // waitForOverlayGone reported it.
     throw gateOutcome === 'inconclusive' ? describeInconclusiveOverlayTimeout(error) : error;
   }
-  if (!allowOnboardingTour) {
-    await page.evaluate((key) => {
-      localStorage.setItem(key, 'true');
-    }, ONBOARDING_TOUR_DONE_KEY);
-    // The tour-specific test id (not a generic modal-dialog selector) so an unrelated dialog —
-    // e.g. a real startup error — is never silently Escape-dismissed here.
-    const tourDialog = page.getByTestId('tour-dialog');
-    if (await tourDialog.isVisible()) {
-      await page.keyboard.press('Escape');
-      await expect(tourDialog).not.toBeVisible({ timeout: 5000 });
-    }
-  }
+  if (!allowOnboardingTour) await dismissOnboardingTour(page);
 }
 
 /**

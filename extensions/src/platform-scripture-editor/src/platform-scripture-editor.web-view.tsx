@@ -168,6 +168,9 @@ import {
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
+  createInsertContextMenuItems,
+  doesEditorContextMenuOwnEnter,
+  isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
@@ -256,6 +259,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%paragraphMenu_misc_markerDescription%',
   '%versionHistoryCommit_beforeInsertFootnote%',
   '%versionHistoryCommit_beforeInsertCrossReference%',
+  '%versionHistoryCommit_beforeInsertEndnote%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -270,6 +274,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
+  '%webView_platformScriptureEditor_insertEndnoteAtSelection%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -1526,6 +1531,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.insertMarker('x');
   }, [projectId, localizedStrings]);
 
+  /**
+   * Inserts an endnote at the current selection. Shared by the "Insert end note" context-menu item
+   * and the top-menu `platformScriptureEditor.insertEndnoteAtSelection` command (via the
+   * `webViewMessageListener` effect below). No keyboard shortcut, matching Paratext 9.
+   */
+  const insertEndnoteAtCurrentSelection = useCallback(async () => {
+    // Commits a snapshot of the project to the version history — see the footnote helper above.
+    await commitVersionHistorySnapshot(
+      projectId,
+      localizedStrings['%versionHistoryCommit_beforeInsertEndnote%'],
+      'inserting endnote',
+    );
+
+    editorRef.current?.insertMarker('fe');
+  }, [projectId, localizedStrings]);
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
@@ -1538,25 +1559,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       styleInfo,
       markerSettleDelayMs,
       hasExternalUI: true,
-      contextMenu: [
+      contextMenu: createInsertContextMenuItems(
+        localizedStrings,
         {
-          title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
-          onSelect: insertFootnoteAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
+          insertFootnote: insertFootnoteAtCurrentSelection,
+          insertCrossReference: insertCrossReferenceAtCurrentSelection,
+          insertEndnote: insertEndnoteAtCurrentSelection,
+          insertComment: insertCommentAtCurrentSelection,
         },
-        {
-          title:
-            localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
-          onSelect: insertCrossReferenceAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
-        },
-        {
-          title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
-          onSelect: insertCommentAtCurrentSelection,
-          // Disabled while sync-blocked too, so the menu reflects the frozen state.
-          isDisabled: !canUserCreateComments || isSyncBlocked,
-        },
-      ],
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+      ),
     }),
     [
       isReadOnlyEffective,
@@ -1572,6 +1584,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       insertCommentAtCurrentSelection,
       insertFootnoteAtCurrentSelection,
       insertCrossReferenceAtCurrentSelection,
+      insertEndnoteAtCurrentSelection,
     ],
   );
 
@@ -1637,12 +1650,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setFootnotesAutoShow(!current);
           break;
         }
-        case 'insertFootnoteAtSelection': {
-          await insertFootnoteAtCurrentSelection();
-          break;
-        }
-        case 'insertCrossReferenceAtSelection': {
-          await insertCrossReferenceAtCurrentSelection();
+        // `insertMarker` throws when the editor is readonly or has no scripture reference, and
+        // these three arrive from top-menu commands that are enabled regardless. The command has
+        // already resolved by the time the message lands, so a rejection here has nobody to
+        // return to — log it deliberately instead of leaving an unhandled promise, the same way
+        // the Ctrl+T shortcut below does.
+        case 'insertFootnoteAtSelection':
+        case 'insertCrossReferenceAtSelection':
+        case 'insertEndnoteAtSelection': {
+          const insertByMethod = {
+            insertFootnoteAtSelection: insertFootnoteAtCurrentSelection,
+            insertCrossReferenceAtSelection: insertCrossReferenceAtCurrentSelection,
+            insertEndnoteAtSelection: insertEndnoteAtCurrentSelection,
+          };
+          try {
+            await insertByMethod[editorMessage.method]();
+          } catch (error) {
+            logger.warn(`Error handling ${editorMessage.method}: ${getErrorMessage(error)}`);
+          }
           break;
         }
         case 'insertCommentAtSelection': {
@@ -1821,6 +1846,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     insertCommentAtCurrentSelection,
     insertFootnoteAtCurrentSelection,
     insertCrossReferenceAtCurrentSelection,
+    insertEndnoteAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
     decorations,
@@ -2226,6 +2252,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
         // Everything below runs only with no open session — the `if (session)` above returns.
         if (event.key === defaultMarkersMenuTrigger) {
+          // The editor's own right-click menu is up: leave it the only keyboard mode on screen.
+          // It stays open across a palette, and a palette session then claims Escape one capture
+          // step above the menu's listener, so the menu would survive the dismissal with its
+          // highlighted item still armed for the next Enter. See `isEditorContextMenuOpen`.
+          if (isEditorContextMenuOpen()) return;
           // ACTIVE palette: the trigger never lands, whatever the selection shape — typing
           // filters the palette, not the document. In capture phase the claim keeps Lexical
           // from ever seeing the `\`. (`passive` still selects the overlay's
@@ -2246,6 +2277,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // representation, so it serializes as a plain space: the same data problem as an unmarked
         // split.
         if (event.key === 'Enter') {
+          // The editor's own right-click menu is open with an item highlighted: that menu claims
+          // Enter itself, one capture step further down (on `document`), and never sees the press if
+          // this handler stops it here. See `doesEditorContextMenuOwnEnter`.
+          if (doesEditorContextMenuOwnEnter()) return;
           const ctx = editorRef.current?.getMarkerMenuContext();
           // Pass through untouched when there's no context, inside a note, or inside marker glyph
           // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).
