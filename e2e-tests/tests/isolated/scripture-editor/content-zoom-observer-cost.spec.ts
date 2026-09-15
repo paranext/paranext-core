@@ -142,7 +142,9 @@ async function startObserverProbe(frame: Frame): Promise<void> {
       const zeroObserver = new MutationObserver(() => scan(zero, zeroAttr));
       markedObserver.observe(document.documentElement, options);
       zeroObserver.observe(document.documentElement, options);
-      // eslint-disable-next-line no-underscore-dangle -- internal test-only probe state, not a platform contract
+      // The double underscore marks this as an internal test-only probe global, not a platform
+      // contract, and `window` has no typed slot for it.
+      // eslint-disable-next-line no-underscore-dangle, no-type-assertion/no-type-assertion
       (window as unknown as { __zoomObserverCostProbe?: unknown }).__zoomObserverCostProbe = {
         markedObserver,
         zeroObserver,
@@ -168,7 +170,9 @@ async function stopObserverProbe(frame: Frame): Promise<ObserverCostResult> {
       marked: Timing;
       zero: Timing;
     }
-    // eslint-disable-next-line no-underscore-dangle -- internal test-only probe state, not a platform contract
+    // The double underscore marks this as an internal test-only probe global, not a platform
+    // contract, and `window` has no typed slot for it.
+    // eslint-disable-next-line no-underscore-dangle, no-type-assertion/no-type-assertion
     const probe = (window as unknown as { __zoomObserverCostProbe?: Probe })
       .__zoomObserverCostProbe;
     if (!probe) throw new Error('Observer-cost probe was not started');
@@ -198,8 +202,9 @@ async function measureObserverCost(
   await startObserverProbe(frame);
   await editorInput.pressSequentially(TYPING_BURST, { delay: TYPING_DELAY_MS });
   // Deliberate wait, not a flaky sleep-for-luck: gives the trailing 700ms debounced save and its
-  // echo (see SAVE_ROUND_TRIP_BUFFER_MS) time to land before the probe disconnects.
-  // eslint-disable-next-line playwright/no-wait-for-timeout -- frame has no waitForTimeout; this waits on the PDP round trip, not app state a locator could poll
+  // echo (see SAVE_ROUND_TRIP_BUFFER_MS) time to land before the probe disconnects. A raw
+  // `setTimeout` rather than Playwright's `waitForTimeout` because this waits on the PDP round
+  // trip through a `Frame`, which has no `waitForTimeout` of its own.
   await new Promise((resolve) => {
     setTimeout(resolve, SAVE_ROUND_TRIP_BUFFER_MS);
   });
@@ -279,7 +284,8 @@ test.describe('scripture editor content-zoom observer cost', () => {
     if (!hiddenResult || !shownResult) throw new Error('Both probe windows must have run');
     const result = { hidden: hiddenResult, shown: shownResult };
 
-    // eslint-disable-next-line no-console -- deliberate: prints the numbers table for a local run
+    // Prints the numbers table for a local run; `e2e-tests/.eslintrc.json` turns `no-console` off
+    // for this package.
     console.log('content-zoom observer cost:', JSON.stringify(result, undefined, 2));
     await test.info().attach('observer-cost', {
       body: JSON.stringify(result, undefined, 2),
