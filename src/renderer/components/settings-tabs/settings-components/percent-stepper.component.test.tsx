@@ -183,7 +183,25 @@ describe('PercentStepper', () => {
     expect(onChange).toHaveBeenCalledWith(1.11);
   });
 
-  it('drops the optimistic value when the prop changes to something other than what was emitted', () => {
+  it('keeps the optimistic value while the platform confirms each press in turn', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
+    const increase = screen.getByRole('button', { name: LABELS.increase });
+    fireEvent.click(increase);
+    fireEvent.click(increase);
+    expect(onChange.mock.calls).toEqual([[1.1], [1.2]]);
+    expect(screen.getByText('120 %')).toBeInTheDocument();
+    // The platform confirms the first press; the second press's optimistic value must survive
+    // this intermediate confirmation rather than rewinding to a stale display.
+    rerender(<PercentStepper {...baseProps} value={1.1} onChange={onChange} />);
+    expect(screen.getByText('120 %')).toBeInTheDocument();
+    rerender(<PercentStepper {...baseProps} value={1.2} onChange={onChange} />);
+    expect(screen.getByText('120 %')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onChange).toHaveBeenCalledWith(1.3);
+  });
+
+  it('hands control back to a value it never emitted', () => {
     const onChange = vi.fn();
     const { rerender } = render(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
@@ -195,5 +213,19 @@ describe('PercentStepper', () => {
     expect(screen.getByText('200 %')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
     expect(onChange).toHaveBeenCalledWith(2.1);
+  });
+
+  it('settles when the latest press is confirmed out of order', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
+    const increase = screen.getByRole('button', { name: LABELS.increase });
+    fireEvent.click(increase);
+    fireEvent.click(increase);
+    expect(onChange.mock.calls).toEqual([[1.1], [1.2]]);
+    // The platform confirms the latest press directly, skipping the intermediate one.
+    rerender(<PercentStepper {...baseProps} value={1.2} onChange={onChange} />);
+    expect(screen.getByText('120 %')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onChange).toHaveBeenCalledWith(1.3);
   });
 });
