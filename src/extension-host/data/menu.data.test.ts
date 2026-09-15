@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
-import { CONTENT_ZOOM_COMMANDS } from '@shared/models/content-zoom.model';
+import {
+  CONTENT_ZOOM_COMMANDS,
+  CONTENT_ZOOM_TAB_MENU_GROUP,
+} from '@shared/models/content-zoom.model';
 import menuData from './menu.data.json';
 
 describe('defaultWebViewTabMenu zoom group', () => {
@@ -53,5 +56,11 @@ describe('defaultWebViewTabMenu zoom group', () => {
 
   it('still validates as a menu document with no duplicate group or item orders', () => {
     expect(() => new MenuDocumentCombiner(menuData)).not.toThrow();
+  });
+
+  it('pins the shared model constant to the group this file actually defines', () => {
+    // Cross-check against the shipped data: if this file's group name ever drifts from the shared
+    // model's constant, this is what catches it.
+    expect(menuData.defaultWebViewTabMenu.groups[CONTENT_ZOOM_TAB_MENU_GROUP]).toBeDefined();
   });
 });

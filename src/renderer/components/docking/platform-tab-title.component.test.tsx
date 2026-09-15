@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { PlatformTabTitle } from './platform-tab-title.component';
@@ -64,14 +64,9 @@ vi.mock('@renderer/services/theme.service', () => ({
   localThemeService: {},
 }));
 
-// Default to power mode so the existing tint tests exercise the tint; the Simple-mode suppression
-// test overrides this to false.
-vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
-  useIsPowerMode: vi.fn(() => true),
-}));
-
-// Default to a settled mode so existing Simple-mode tests (which predate the mode-known gate) keep
-// seeing their menu decision resolve immediately.
+// Default to a settled power mode so the existing tint tests exercise the tint, and Simple-mode
+// tests see their menu decision resolve immediately; individual tests override this to exercise
+// Simple mode.
 vi.mock('@renderer/hooks/use-interface-mode.hook', () => ({
   useInterfaceMode: vi.fn(() => ['power', undefined, true]),
 }));
@@ -168,7 +163,7 @@ const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
  * tab content pane (mirroring the last-selected-tint effect's walk: header → `.dock-panel` →
  * `.dock-tabpane-active`). Factored out (not just called from `renderTabTitle`) so a test can also
  * pass it to `rerender` to re-render the identical tree after changing a mock, e.g.
- * `useIsPowerMode`.
+ * `useInterfaceMode`.
  */
 function tabTitleTree(id: string, tooltip?: string) {
   return (
@@ -222,12 +217,12 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     cleanup();
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue(undefined);
     vi.mocked(useLastFocusedTabId).mockReturnValue(undefined);
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     mockFocusSubject = undefined;
   });
 
   it('does not add the last-selected class in Simple mode, even when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (the tint is Power-only)', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
     mockFocusSubject = undefined;
@@ -387,11 +382,11 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
 describe('PlatformTabTitle context-menu gating', () => {
   afterEach(() => {
     cleanup();
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
   });
 
   it('power mode: wraps the title in a ContextMenu', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
     // The tab reads its contributed menu when it mounts, and renders no menu until that lands
     await act(async () => {});
@@ -400,9 +395,9 @@ describe('PlatformTabTitle context-menu gating', () => {
 
   it('simple mode: no tab menu when the contributed menu has no zoom group', async () => {
     // This fixture's contributed menu holds only `platform.tabWindow`, which Simple mode narrows
-    // away entirely, so the Simple-mode expectation (no menu at all) still holds even though Simple
-    // mode now performs the same mount-time read Power mode does.
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    // away entirely, so the Simple-mode expectation (no menu at all) holds even though both modes
+    // perform the same mount-time read.
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
     await act(async () => {});
     expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
@@ -412,11 +407,11 @@ describe('PlatformTabTitle context-menu gating', () => {
 describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   afterEach(() => {
     cleanup();
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
   });
 
   it('hides the title text once the tab bar’s real full content no longer fits the available space', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 500);
@@ -427,7 +422,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('keeps the title text visible when the available space exceeds the tab bar’s real full content width', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 900);
     setMeasureCloneWidth(container, 500);
@@ -444,7 +439,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     // loading) — and, since the cache only ever updated while NOT collapsed, a bad value taken
     // right before collapsing could never self-correct, leaving the tab stuck icon-only forever
     // regardless of how wide the column later became (confirmed via CDP up to a 3000px window).
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
 
     setPanelWidth(container, 300);
@@ -461,7 +456,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('never observes for resize in Power mode', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     renderTabTitle('web-view-1');
     // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
     await act(async () => {});
@@ -470,7 +465,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('recomputes icon-only state when tab content mutates without a panel resize (e.g. a sibling tab’s title resolving from a loading placeholder), via the MutationObserver fallback', async () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 200);
@@ -493,7 +488,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('reflects the resolved title into aria-label once collapsed to icon-only, so a screen reader can distinguish tabs whose visible title text is hidden', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 500);
@@ -507,7 +502,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('keeps the generic aria-label while the title text is still visible (not icon-only)', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1');
     setPanelWidth(container, 900);
     setMeasureCloneWidth(container, 500);
@@ -518,7 +513,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('suppresses a tooltip that only repeats the already-visible title once there is room to show the title text', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1', 'Tab title');
     setPanelWidth(container, 900);
     setMeasureCloneWidth(container, 500);
@@ -530,7 +525,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('still shows a tooltip that mirrors the title once collapsed to icon-only, since the title text is hidden there', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1', 'Tab title');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 500);
@@ -542,7 +537,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 
   it('shows a tooltip that conveys more than the title even while the title text is already visible', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container } = renderTabTitle('web-view-1', 'Extra detail beyond the title');
     setPanelWidth(container, 900);
     setMeasureCloneWidth(container, 500);
@@ -559,16 +554,16 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     // Regression test for a real bug: the icon-only effect's early return for Power mode never
     // reset `isIconOnly`, and both modes render the tab title through the same code path that
     // applies the icon-only class — so a tab collapsed to icon-only in Simple mode stayed stuck
-    // that way after switching to Power mode at runtime (`useIsPowerMode` is a live subscription,
+    // that way after switching to Power mode at runtime (`useInterfaceMode` is a live subscription,
     // so the effect does re-run on the switch — it just didn't clear the stale state).
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
     const { container, rerender } = renderTabTitle('web-view-1');
     setPanelWidth(container, 300);
     setMeasureCloneWidth(container, 500);
     simulateColumnResize();
     expect(container.querySelector('.platform-tab-title')).toHaveClass('icon-only');
 
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
     rerender(tabTitleTree('web-view-1'));
     // The switch to Power mode makes this tab read its contributed menu; let that settle first.
     await act(async () => {});
