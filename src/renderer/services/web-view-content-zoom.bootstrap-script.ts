@@ -227,8 +227,26 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // Capture phase: the active area must update even when a descendant stops propagation before
     // the bubble phase (the same rule the wheel listener below is deliberately the exception to).
     // Every listener here is a named function so destroy() can take it off again.
-    const onPointerDown = (e) => setActive(areaOf(e.target));
-    const onFocusIn = (e) => setActive(areaOf(e.target));
+    // A click and the focus change it causes are one gesture, and the pointer is what says which
+    // area the user means: clicking a row in the Scripture editor's footnotes list makes the view
+    // put the caret back in the editor text, so focus lands in another area milliseconds after the
+    // pointer went down in this one. A focus change with no pointer gesture behind it - the caret
+    // reaching a footnote by keyboard, or a view focusing a pane by itself - still names the active
+    // area, which is why the gesture's reach is bounded rather than the focus listener simply
+    // deferring to the pointer one.
+    const GESTURE_FOCUS_MS = 200;
+    let pointerArea;
+    let pointerTime = 0;
+    const onPointerDown = (e) => {
+      pointerArea = areaOf(e.target);
+      pointerTime = Date.now();
+      setActive(pointerArea);
+    };
+    const onFocusIn = (e) => {
+      const areaId = areaOf(e.target);
+      if (pointerArea && areaId !== pointerArea && Date.now() - pointerTime < GESTURE_FOCUS_MS) return;
+      setActive(areaId);
+    };
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('focusin', onFocusIn, true);
 
