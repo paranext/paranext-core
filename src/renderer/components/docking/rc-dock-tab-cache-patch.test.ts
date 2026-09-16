@@ -3,7 +3,7 @@
 // (`module` → `es/`). Importing `rc-dock` here would test the unpatched code.
 import { TabCache } from 'rc-dock/es/DockTabs';
 import { describe, expect, it } from 'vitest';
-import { createContext } from './tab-bar-drop-zone-test.util';
+import { createDockContext } from './__tests__/tab-bar-drop-zone-test.util';
 
 /**
  * Builds `parent > child > ...` from the given tag/class specs and returns the innermost element.
@@ -58,7 +58,7 @@ function getStoredRefs(cache: TabCache): { ref: HTMLDivElement; hitAreaRef: HTML
 
 describe('patched rc-dock TabCache popup check', () => {
   it('ignores a hit area three levels under an overflow-dropdown <li>', () => {
-    const cache = new TabCache(createContext());
+    const cache = new TabCache(createDockContext());
 
     cache.getHitAreaRef(createPopupHitArea());
 
@@ -66,7 +66,7 @@ describe('patched rc-dock TabCache popup check', () => {
   });
 
   it('keeps the real hit area when the dropdown copy registers after it', () => {
-    const cache = new TabCache(createContext());
+    const cache = new TabCache(createDockContext());
     const realHitArea = createRealHitArea();
 
     cache.getHitAreaRef(realHitArea);
@@ -76,7 +76,7 @@ describe('patched rc-dock TabCache popup check', () => {
   });
 
   it('ignores a tab node two levels under an overflow-dropdown <li>', () => {
-    const cache = new TabCache(createContext());
+    const cache = new TabCache(createDockContext());
 
     cache.getRef(buildDivChain(document.body, 'ul', 'li', 'span', 'div'));
 
@@ -84,7 +84,7 @@ describe('patched rc-dock TabCache popup check', () => {
   });
 
   it('keeps a real-strip hit area even when an <li> wraps the whole dock layout', () => {
-    const cache = new TabCache(createContext());
+    const cache = new TabCache(createDockContext());
     const outerListItem = buildChain(document.body, 'ul', 'li');
     const realHitArea = createRealHitArea(outerListItem);
 
