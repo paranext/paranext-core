@@ -244,6 +244,22 @@ internal class DblResourcesDataProvider(
                             resource.DBLEntryUid.Id,
                             ""
                         );
+                        // A row has no way to say "unknown" — `installed` is a bool — so an
+                        // incomplete scan cannot be answered by staying silent the way
+                        // ProjectInstallStatus does. Ask ParatextData directly instead:
+                        // ExistingScrText resolves the project itself rather than through the
+                        // scan, so a project the scan could not read is still found.
+                        //
+                        // This is the per-row lookup the scan exists to avoid, and when it fires
+                        // it fires for every uid the scan did not name — every uninstalled
+                        // resource included. That is affordable only here: this path runs inside
+                        // FetchResourcesCore, behind an unbounded catalog download, and only when
+                        // a project's settings failed to load. The recompute, which runs on every
+                        // list refresh, must not pay it, which is why ProjectInstallStatus omits
+                        // rather than falling back.
+                        if (projectId == "" && !installedProjectIds.IsComplete)
+                            projectId =
+                                resource.ExistingScrText?.Guid.ToString().ToUpperInvariant() ?? "";
                         return new DblResourceData(
                             resource.DBLEntryUid.Id,
                             resource.DisplayName,
