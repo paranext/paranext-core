@@ -49,8 +49,9 @@
  * tab nodes at all times but clips those that overflow, so `toBeAttached()` succeeds for a clipped
  * tab while `toBeVisible()` fails. {@link activateTab} handles both cases, clicking the tab directly
  * when visible and otherwise going through the `.dock-nav-more` overflow dropdown. This mirrors
- * `clickCommentsTab` in `tests/isolated/comments-tab.spec.ts`, the proven precedent for a
- * permanent, non-closable Column 3 tab.
+ * `clickCommentsTab` in `fixtures/comment-test-helpers.ts` (shared by `comments-tab.spec.ts` and
+ * `notes-content-zoom/comments-panel-content-zoom.spec.ts`), the proven precedent for a permanent,
+ * non-closable Column 3 tab.
  */
 
 import { Frame, FrameLocator, Locator, Page } from '@playwright/test';

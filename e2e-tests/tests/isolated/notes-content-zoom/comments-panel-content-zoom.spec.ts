@@ -8,7 +8,6 @@
  * another comment spec left behind, and the fixture only starts a fresh worker when the option
  * value differs.
  */
-import { type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/comment.fixture';
 import {
   areaBox,
@@ -17,67 +16,25 @@ import {
   readContentZoomMemory,
 } from '../../../fixtures/content-zoom-helpers';
 import {
-  DEFAULT_WEBSOCKET_PORT,
-  sendPapiRequestOnce,
   waitForAppReady,
   waitForOpenWebViewIdByType,
   waitForOverlayGone,
-  waitForPapiMethodRegistered,
 } from '../../../fixtures/helpers';
 import {
   type CommentTestProject,
   cleanupCommentTestProject,
+  clickCommentsTab,
   createCommentTestProject,
   createCommentThreads,
+  openCommentListPanel,
 } from '../../../fixtures/comment-test-helpers';
 import { getEditorFrame, readFactor } from '../../../fixtures/scripture-editor-helpers';
-
-const SETTINGS_TIMEOUT_MS = 60_000;
-const OPEN_PANEL_TIMEOUT_MS = 150_000;
 
 /**
  * `webViewType` of the Comment List Panel tab in Column 3 of the simple layout. Source:
  * src/renderer/components/docking/simple-layout.data.ts
  */
 const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
-
-/**
- * Click the Comments panel's tab in Column 3, handling the rc-tabs overflow case where the tab is
- * attached but clipped by the scrollable tab bar (same approach as `comments-tab.spec.ts`'s
- * `clickCommentsTab`, reused here rather than re-derived).
- */
-async function clickCommentsPanelTab(
-  mainPage: Page,
-  panelId: string,
-  actionTimeoutMs = 30_000,
-): Promise<void> {
-  const tabTitle = mainPage.locator(`.platform-tab-title[data-web-view-id="${panelId}"]`);
-  if (await tabTitle.isVisible()) {
-    await tabTitle.click({ timeout: actionTimeoutMs });
-    return;
-  }
-  const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
-  await dockBar.locator('.dock-nav-more').hover({ timeout: actionTimeoutMs });
-  await mainPage
-    .locator('[role="listbox"] [role="option"]')
-    .filter({ has: mainPage.locator(`[data-web-view-id="${panelId}"]`) })
-    .click({ timeout: 5_000 });
-}
-
-/** Points the (worker-scoped, singleton) Comment List Panel at `projectId`. */
-async function openCommentListPanel(projectId: string): Promise<void> {
-  await waitForPapiMethodRegistered(
-    'command:legacyCommentManager.openCommentListPanel',
-    DEFAULT_WEBSOCKET_PORT,
-    SETTINGS_TIMEOUT_MS,
-  );
-  await sendPapiRequestOnce(
-    'command:legacyCommentManager.openCommentListPanel',
-    [projectId],
-    DEFAULT_WEBSOCKET_PORT,
-    OPEN_PANEL_TIMEOUT_MS,
-  );
-}
 
 // Own this spec's Electron app: a different owner string from any other comment spec, so the
 // fixture starts a fresh worker rather than inheriting another spec's layout/panel state.
@@ -120,7 +77,7 @@ test.describe('Comments panel content zoom in Simple mode', () => {
     await createCommentThreads(projectB, ['GEN 1:1'], ['Project B comment zoom marker']);
 
     await openCommentListPanel(projectA.projectId);
-    await clickCommentsPanelTab(mainPage, panelId);
+    await clickCommentsTab(mainPage, panelId);
 
     const panelFrame = await getEditorFrame(mainPage, panelId);
     await expect(panelFrame.locator('body')).toContainText('Project A comment zoom marker', {
@@ -172,7 +129,7 @@ test.describe('Comments panel content zoom in Simple mode', () => {
 
     await test.step('the tab menu drives the same ladder as the wheel', async () => {
       // `data-web-view-id` is emitted on `.platform-tab-title` (platform-tab-title.component.tsx),
-      // not on rc-dock's own `.dock-tab` ancestor — the same element `clickCommentsPanelTab`'s
+      // not on rc-dock's own `.dock-tab` ancestor — the same element `clickCommentsTab`'s
       // left-click path above targets.
       const tab = mainPage.locator(`.platform-tab-title[data-web-view-id="${panelId}"]`);
       await tab.click({ button: 'right' });

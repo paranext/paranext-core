@@ -35,6 +35,7 @@ import os from 'os';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
 import {
   addUsersToProject,
+  DEFAULT_WEBSOCKET_PORT,
   PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
@@ -63,8 +64,6 @@ const PARATEXT_PROJECTS_ROOT = path.join(
 
 /** Network object name for the Paratext project data provider factory */
 const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
-
-const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
  * Paratext app-data directories are named `Paratext<major><minor>` — `Paratext80` is 8.0,
@@ -552,6 +551,64 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
   /* eslint-enable no-await-in-loop, no-continue */
 
   throw new Error(`Failed to open comment list after 5 attempts for project ${project.shortName}`);
+}
+
+/**
+ * Clicks a project-scoped comment-list tab — the Column 3 "Comments" tab in Simple mode
+ * (`comments-tab.spec.ts`) or the per-project Comments panel tab it shares a layout with
+ * (`comments-panel-content-zoom.spec.ts`) — handling the rc-tabs overflow case where the tab is
+ * attached but clipped by the scrollable tab bar: rc-tabs renders every tab node at all times but
+ * clips those outside the visible portion, so `toBeAttached()` succeeds for a clipped tab while a
+ * direct click would miss it.
+ *
+ * @param webViewId The tab's web view id (`data-web-view-id` on `.platform-tab-title`)
+ * @param actionTimeoutMs Bounds the click/hover actions — pass a short value when calling inside a
+ *   retry loop so a blocked click (e.g. the workspace-updating overlay intercepting pointer events)
+ *   fails fast and the loop can retry, instead of burning the default 30 s action timeout
+ */
+export async function clickCommentsTab(
+  mainPage: Page,
+  webViewId: string,
+  actionTimeoutMs = 30_000,
+): Promise<void> {
+  const tabTitle = mainPage.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
+  if (await tabTitle.isVisible()) {
+    await tabTitle.click({ timeout: actionTimeoutMs });
+    return;
+  }
+  // Tab is outside the visible scroll area — open the overflow dropdown and activate it.
+  const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
+  await dockBar.locator('.dock-nav-more').hover({ timeout: actionTimeoutMs });
+  // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
+  await mainPage
+    .locator('[role="listbox"] [role="option"]')
+    .filter({ has: mainPage.locator(`[data-web-view-id="${webViewId}"]`) })
+    .click({ timeout: 5_000 });
+}
+
+/**
+ * Points the (worker-scoped, singleton) Comment List Panel — the Column 3 "Comments" tab in Simple
+ * mode — at `projectId`, via the `legacyCommentManager.openCommentListPanel` command. Shared by
+ * `comments-tab.spec.ts` (called inline for each of its test projects) and
+ * `comments-panel-content-zoom.spec.ts` (its own Power-mode panel tab).
+ */
+export async function openCommentListPanel(
+  projectId: string,
+  port = DEFAULT_WEBSOCKET_PORT,
+  registrationTimeoutMs = 60_000,
+  sendTimeoutMs = 150_000,
+): Promise<void> {
+  await waitForPapiMethodRegistered(
+    'command:legacyCommentManager.openCommentListPanel',
+    port,
+    registrationTimeoutMs,
+  );
+  await sendPapiRequestOnce(
+    'command:legacyCommentManager.openCommentListPanel',
+    [projectId],
+    port,
+    sendTimeoutMs,
+  );
 }
 
 /** Returns the frame locator for the comment list web view iframe. */
