@@ -1,4 +1,4 @@
-var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,configurable:!0,writable:!0,value:e}):n[t]=e;var q=(n,t,e)=>ht(n,typeof t!="symbol"?t+"":t,e);import{_ as vt}from"./assets/preload-helper-CTOgD26E.js";class st{constructor(){q(this,"registryByUrl",new Map);q(this,"registryById",new Map)}clear(){this.registryByUrl.clear(),this.registryById.clear()}keys(){return this.registryByUrl.keys()}add(t){this.registryByUrl.set(t.url,t),this.registryById.set(t.id,t)}register(t,e,r,a,i){const c=typeof t=="object"?t.type:t;if(typeof t=="object"){const o=t;if(o instanceof F||o instanceof M||o instanceof D||o instanceof L)throw new TypeError(`[vitest] Cannot register a mock that is already defined. Expected a JSON representation from \`MockedModule.toJSON\`, instead got "${o.type}". Use "registry.add()" to update a mock instead.`);if(o.type==="automock"){const l=F.fromJSON(o);return this.add(l),l}else if(o.type==="autospy"){const l=M.fromJSON(o);return this.add(l),l}else if(o.type==="redirect"){const l=L.fromJSON(o);return this.add(l),l}else throw o.type==="manual"?new Error("Cannot set serialized manual mock. Define a factory function manually with `ManualMockedModule.fromJSON()`."):new Error(`Unknown mock type: ${o.type}`)}if(typeof e!="string")throw new TypeError("[vitest] Mocks require a raw string.");if(typeof a!="string")throw new TypeError("[vitest] Mocks require a url string.");if(typeof r!="string")throw new TypeError("[vitest] Mocks require an id string.");if(c==="manual"){if(typeof i!="function")throw new TypeError("[vitest] Manual mocks require a factory function.");const o=new D(e,r,a,i);return this.add(o),o}else if(c==="automock"||c==="autospy"){const o=c==="automock"?new F(e,r,a):new M(e,r,a);return this.add(o),o}else if(c==="redirect"){if(typeof i!="string")throw new TypeError("[vitest] Redirect mocks require a redirect string.");const o=new L(e,r,a,i);return this.add(o),o}else throw new Error(`[vitest] Unknown mock type: ${c}`)}delete(t){this.registryByUrl.delete(t)}get(t){return this.registryByUrl.get(t)}getById(t){return this.registryById.get(t)}has(t){return this.registryByUrl.has(t)}}class F{constructor(t,e,r){q(this,"type","automock");this.raw=t,this.id=e,this.url=r}static fromJSON(t){return new M(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id}}}class M{constructor(t,e,r){q(this,"type","autospy");this.raw=t,this.id=e,this.url=r}static fromJSON(t){return new M(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}class L{constructor(t,e,r,a){q(this,"type","redirect");this.raw=t,this.id=e,this.url=r,this.redirect=a}static fromJSON(t){return new L(t.raw,t.id,t.url,t.redirect)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id,redirect:this.redirect}}}class D{constructor(t,e,r,a){q(this,"cache");q(this,"type","manual");this.raw=t,this.id=e,this.url=r,this.factory=a}async resolve(){if(this.cache)return this.cache;let t;try{t=await this.factory()}catch(e){const r=new Error('[vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock');throw r.cause=e,r}if(t===null||typeof t!="object"||Array.isArray(t))throw new TypeError(`[vitest] vi.mock("${this.raw}", factory?: () => unknown) is not returning an object. Did you mean to return an object with a "default" key?`);return this.cache=t}static fromJSON(t,e){return new D(t.raw,t.id,t.url,e)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}function bt(n,t,e={}){const r=new Array,a=new xt,i=(l,w,m)=>{try{return l[w]=m,!0}catch{return!1}},c=(l,w)=>{const m=j(l),h=m==="Module"||!!l.__esModule;for(const{key:b,descriptor:z}of G(l,h,n.globalConstructors)){if(!h&&z.get){try{Object.defineProperty(w,b,z)}catch{}continue}if(kt(b,m))continue;const u=l[b],s=a.getId(u);if(s!==void 0){r.push(()=>i(w,b,a.getMockedValue(s)));continue}const d=j(u);if(Array.isArray(u)){i(w,b,[]);continue}const T=d.includes("Function")&&typeof u=="function";if((!T||u._isMockFunction)&&d!=="Object"&&d!=="Module"){i(w,b,u);continue}if(i(w,b,T?u:{})){if(T){let y=function(){if(this instanceof w[b])for(const{key:S,descriptor:E}of G(this,!1,n.globalConstructors)){if(E.get)continue;const A=this[S];if(j(A).includes("Function")&&typeof A=="function"){const O=this[S],p=P(this,S).mockImplementation(O),C=p.mockReset;p.mockRestore=p.mockReset=()=>(C.call(p),p.mockImplementation(O),p)}}};if(!n.spyOn)throw new Error("[@vitest/mocker] `spyOn` is not defined. This is a Vitest error. Please open a new issue with reproduction.");const P=n.spyOn,N=P(w,b);if(n.type==="automock"){N.mockImplementation(y);const S=N.mockReset;N.mockRestore=N.mockReset=()=>(S.call(N),N.mockImplementation(y),N)}Object.defineProperty(w[b],"length",{value:0})}a.track(u,w[b]),c(u,w[b])}}},o=e;c(t,o);for(const l of r)l();return o}class xt{constructor(){q(this,"idMap",new Map);q(this,"mockedValueMap",new Map)}getId(t){return this.idMap.get(t)}getMockedValue(t){return this.mockedValueMap.get(t)}track(t,e){const r=this.idMap.size;return this.idMap.set(t,r),this.mockedValueMap.set(r,e),r}}function j(n){return Object.prototype.toString.apply(n).slice(8,-1)}function kt(n,t){return t.includes("Function")&&typeof n=="string"&&["arguments","callee","caller","length","name"].includes(n)}function G(n,t,e){const{Map:r,Object:a,Function:i,RegExp:c,Array:o}=e,l=new r;let w=n;do{if(w===a.prototype||w===i.prototype||w===c.prototype)break;yt(w,m=>{const h=a.getOwnPropertyDescriptor(w,m);h&&l.set(m,{key:m,descriptor:h})})}while(w=a.getPrototypeOf(w));if(t&&!l.has("default")&&"default"in n){const m=a.getOwnPropertyDescriptor(n,"default");m&&l.set("default",{key:"default",descriptor:m})}return o.from(l.values())}function yt(n,t){const e=typeof t=="function"?t:r=>t.add(r);Object.getOwnPropertyNames(n).forEach(e),Object.getOwnPropertySymbols(n).forEach(e)}const _t=/^[A-Za-z]:\//;function ct(n=""){return n&&n.replace(/\\/g,"/").replace(_t,t=>t.toUpperCase())}const zt=/^[/\\]{2}/,St=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/,qt=/^[A-Za-z]:$/,Tt=/.(\.[^./]+|\.)$/,It=function(n){if(n.length===0)return".";n=ct(n);const t=n.match(zt),e=K(n),r=n[n.length-1]==="/";return n=Nt(n,!e),n.length===0?e?"/":r?"./":".":(r&&(n+="/"),qt.test(n)&&(n+="/"),t?e?`//${n}`:`//./${n}`:e&&!K(n)?`/${n}`:n)},Ct=function(...n){let t="";for(const e of n)if(e)if(t.length>0){const r=t[t.length-1]==="/",a=e[0]==="/";r&&a?t+=e.slice(1):t+=r||a?e:`/${e}`}else t+=e;return It(t)};function Nt(n,t){let e="",r=0,a=-1,i=0,c=null;for(let o=0;o<=n.length;++o){if(o<n.length)c=n[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(e.length<2||r!==2||e[e.length-1]!=="."||e[e.length-2]!=="."){if(e.length>2){const l=e.lastIndexOf("/");l===-1?(e="",r=0):(e=e.slice(0,l),r=e.length-1-e.lastIndexOf("/")),a=o,i=0;continue}else if(e.length>0){e="",r=0,a=o,i=0;continue}}t&&(e+=e.length>0?"/..":"..",r=2)}else e.length>0?e+=`/${n.slice(a+1,o)}`:e=n.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return e}const K=function(n){return St.test(n)},Pt=function(n){if(n==="..")return"";const t=Tt.exec(ct(n));return t&&t[1]||""};var Et={reset:[0,0],bold:[1,22,"\x1B[22m\x1B[1m"],dim:[2,22,"\x1B[22m\x1B[2m"],italic:[3,23],underline:[4,24],inverse:[7,27],hidden:[8,28],strikethrough:[9,29],black:[30,39],red:[31,39],green:[32,39],yellow:[33,39],blue:[34,39],magenta:[35,39],cyan:[36,39],white:[37,39],gray:[90,39],bgBlack:[40,49],bgRed:[41,49],bgGreen:[42,49],bgYellow:[43,49],bgBlue:[44,49],bgMagenta:[45,49],bgCyan:[46,49],bgWhite:[47,49],blackBright:[90,39],redBright:[91,39],greenBright:[92,39],yellowBright:[93,39],blueBright:[94,39],magentaBright:[95,39],cyanBright:[96,39],whiteBright:[97,39],bgBlackBright:[100,49],bgRedBright:[101,49],bgGreenBright:[102,49],bgYellowBright:[103,49],bgBlueBright:[104,49],bgMagentaBright:[105,49],bgCyanBright:[106,49],bgWhiteBright:[107,49]},Rt=Object.entries(Et);function H(n){return String(n)}H.open="";H.close="";function Mt(n=!1){let t=typeof process<"u"?process:void 0,e=(t==null?void 0:t.env)||{},r=(t==null?void 0:t.argv)||[];return!("NO_COLOR"in e||r.includes("--no-color"))&&("FORCE_COLOR"in e||r.includes("--color")||(t==null?void 0:t.platform)==="win32"||n&&e.TERM!=="dumb"||"CI"in e)||typeof window<"u"&&!!window.chrome}function Lt(n=!1){let t=Mt(n),e=(c,o,l,w)=>{let m="",h=0;do m+=c.substring(h,w)+l,h=w+o.length,w=c.indexOf(o,h);while(~w);return m+c.substring(h)},r=(c,o,l=c)=>{let w=m=>{let h=String(m),b=h.indexOf(o,c.length);return~b?c+e(h,o,l,b)+o:c+h+o};return w.open=c,w.close=o,w},a={isColorSupported:t},i=c=>`\x1B[${c}m`;for(let[c,o]of Rt)a[c]=t?r(i(o[0]),i(o[1]),o[2]):H;return a}Lt();function lt(n,t){return t.forEach(function(e){e&&typeof e!="string"&&!Array.isArray(e)&&Object.keys(e).forEach(function(r){if(r!=="default"&&!(r in n)){var a=Object.getOwnPropertyDescriptor(e,r);Object.defineProperty(n,r,a.get?a:{enumerable:!0,get:function(){return e[r]}})}})}),Object.freeze(n)}function dt(n){return n&&n.__esModule&&Object.prototype.hasOwnProperty.call(n,"default")?n.default:n}var V={exports:{}},x={};/**
+var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,configurable:!0,writable:!0,value:e}):n[t]=e;var S=(n,t,e)=>ht(n,typeof t!="symbol"?t+"":t,e);import{_ as vt}from"./assets/preload-helper-CTOgD26E.js";class st{constructor(){S(this,"registryByUrl",new Map);S(this,"registryById",new Map)}clear(){this.registryByUrl.clear(),this.registryById.clear()}keys(){return this.registryByUrl.keys()}add(t){this.registryByUrl.set(t.url,t),this.registryById.set(t.id,t)}register(t,e,r,a,i){const c=typeof t=="object"?t.type:t;if(typeof t=="object"){const o=t;if(o instanceof O||o instanceof N||o instanceof $||o instanceof A)throw new TypeError(`[vitest] Cannot register a mock that is already defined. Expected a JSON representation from \`MockedModule.toJSON\`, instead got "${o.type}". Use "registry.add()" to update a mock instead.`);if(o.type==="automock"){const l=O.fromJSON(o);return this.add(l),l}else if(o.type==="autospy"){const l=N.fromJSON(o);return this.add(l),l}else if(o.type==="redirect"){const l=A.fromJSON(o);return this.add(l),l}else throw o.type==="manual"?new Error("Cannot set serialized manual mock. Define a factory function manually with `ManualMockedModule.fromJSON()`."):new Error(`Unknown mock type: ${o.type}`)}if(typeof e!="string")throw new TypeError("[vitest] Mocks require a raw string.");if(typeof a!="string")throw new TypeError("[vitest] Mocks require a url string.");if(typeof r!="string")throw new TypeError("[vitest] Mocks require an id string.");if(c==="manual"){if(typeof i!="function")throw new TypeError("[vitest] Manual mocks require a factory function.");const o=new $(e,r,a,i);return this.add(o),o}else if(c==="automock"||c==="autospy"){const o=c==="automock"?new O(e,r,a):new N(e,r,a);return this.add(o),o}else if(c==="redirect"){if(typeof i!="string")throw new TypeError("[vitest] Redirect mocks require a redirect string.");const o=new A(e,r,a,i);return this.add(o),o}else throw new Error(`[vitest] Unknown mock type: ${c}`)}delete(t){this.registryByUrl.delete(t)}get(t){return this.registryByUrl.get(t)}getById(t){return this.registryById.get(t)}has(t){return this.registryByUrl.has(t)}}class O{constructor(t,e,r){S(this,"type","automock");this.raw=t,this.id=e,this.url=r}static fromJSON(t){return new N(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id}}}class N{constructor(t,e,r){S(this,"type","autospy");this.raw=t,this.id=e,this.url=r}static fromJSON(t){return new N(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}class A{constructor(t,e,r,a){S(this,"type","redirect");this.raw=t,this.id=e,this.url=r,this.redirect=a}static fromJSON(t){return new A(t.raw,t.id,t.url,t.redirect)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id,redirect:this.redirect}}}class ${constructor(t,e,r,a){S(this,"cache");S(this,"type","manual");this.raw=t,this.id=e,this.url=r,this.factory=a}async resolve(){if(this.cache)return this.cache;let t;try{t=await this.factory()}catch(e){const r=new Error('[vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock');throw r.cause=e,r}if(t===null||typeof t!="object"||Array.isArray(t))throw new TypeError(`[vitest] vi.mock("${this.raw}", factory?: () => unknown) is not returning an object. Did you mean to return an object with a "default" key?`);return this.cache=t}static fromJSON(t,e){return new $(t.raw,t.id,t.url,e)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}function bt(n,t,e={}){const r=new Array,a=new xt,i=(l,f,m)=>{try{return l[f]=m,!0}catch{return!1}},c=(l,f)=>{const m=j(l),h=m==="Module"||!!l.__esModule;for(const{key:b,descriptor:z}of Y(l,h,n.globalConstructors)){if(!h&&z.get){try{Object.defineProperty(f,b,z)}catch{}continue}if(kt(b,m))continue;const u=l[b],s=a.getId(u);if(s!==void 0){r.push(()=>i(f,b,a.getMockedValue(s)));continue}const d=j(u);if(Array.isArray(u)){i(f,b,[]);continue}const C=d.includes("Function")&&typeof u=="function";if((!C||u._isMockFunction)&&d!=="Object"&&d!=="Module"){i(f,b,u);continue}if(i(f,b,C?u:{})){if(C){let y=function(){if(this instanceof f[b])for(const{key:U,descriptor:E}of Y(this,!1,n.globalConstructors)){if(E.get)continue;const L=this[U];if(j(L).includes("Function")&&typeof L=="function"){const B=this[U],p=q(this,U).mockImplementation(B),I=p.mockReset;p.mockRestore=p.mockReset=()=>(I.call(p),p.mockImplementation(B),p)}}};if(!n.spyOn)throw new Error("[@vitest/mocker] `spyOn` is not defined. This is a Vitest error. Please open a new issue with reproduction.");const q=n.spyOn,F=q(f,b);if(n.type==="automock"){F.mockImplementation(y);const U=F.mockReset;F.mockRestore=F.mockReset=()=>(U.call(F),F.mockImplementation(y),F)}Object.defineProperty(f[b],"length",{value:0})}a.track(u,f[b]),c(u,f[b])}}},o=e;c(t,o);for(const l of r)l();return o}class xt{constructor(){S(this,"idMap",new Map);S(this,"mockedValueMap",new Map)}getId(t){return this.idMap.get(t)}getMockedValue(t){return this.mockedValueMap.get(t)}track(t,e){const r=this.idMap.size;return this.idMap.set(t,r),this.mockedValueMap.set(r,e),r}}function j(n){return Object.prototype.toString.apply(n).slice(8,-1)}function kt(n,t){return t.includes("Function")&&typeof n=="string"&&["arguments","callee","caller","length","name"].includes(n)}function Y(n,t,e){const{Map:r,Object:a,Function:i,RegExp:c,Array:o}=e,l=new r;let f=n;do{if(f===a.prototype||f===i.prototype||f===c.prototype)break;yt(f,m=>{const h=a.getOwnPropertyDescriptor(f,m);h&&l.set(m,{key:m,descriptor:h})})}while(f=a.getPrototypeOf(f));if(t&&!l.has("default")&&"default"in n){const m=a.getOwnPropertyDescriptor(n,"default");m&&l.set("default",{key:"default",descriptor:m})}return o.from(l.values())}function yt(n,t){const e=typeof t=="function"?t:r=>t.add(r);Object.getOwnPropertyNames(n).forEach(e),Object.getOwnPropertySymbols(n).forEach(e)}const _t=/^[A-Za-z]:\//;function ct(n=""){return n&&n.replace(/\\/g,"/").replace(_t,t=>t.toUpperCase())}const zt=/^[/\\]{2}/,Ut=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/,St=/^[A-Za-z]:$/,Ct=/.(\.[^./]+|\.)$/,Tt=function(n){if(n.length===0)return".";n=ct(n);const t=n.match(zt),e=Q(n),r=n[n.length-1]==="/";return n=Ft(n,!e),n.length===0?e?"/":r?"./":".":(r&&(n+="/"),St.test(n)&&(n+="/"),t?e?`//${n}`:`//./${n}`:e&&!Q(n)?`/${n}`:n)},It=function(...n){let t="";for(const e of n)if(e)if(t.length>0){const r=t[t.length-1]==="/",a=e[0]==="/";r&&a?t+=e.slice(1):t+=r||a?e:`/${e}`}else t+=e;return Tt(t)};function Ft(n,t){let e="",r=0,a=-1,i=0,c=null;for(let o=0;o<=n.length;++o){if(o<n.length)c=n[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(e.length<2||r!==2||e[e.length-1]!=="."||e[e.length-2]!=="."){if(e.length>2){const l=e.lastIndexOf("/");l===-1?(e="",r=0):(e=e.slice(0,l),r=e.length-1-e.lastIndexOf("/")),a=o,i=0;continue}else if(e.length>0){e="",r=0,a=o,i=0;continue}}t&&(e+=e.length>0?"/..":"..",r=2)}else e.length>0?e+=`/${n.slice(a+1,o)}`:e=n.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return e}const Q=function(n){return Ut.test(n)},qt=function(n){if(n==="..")return"";const t=Ct.exec(ct(n));return t&&t[1]||""};var Et={reset:[0,0],bold:[1,22,"\x1B[22m\x1B[1m"],dim:[2,22,"\x1B[22m\x1B[2m"],italic:[3,23],underline:[4,24],inverse:[7,27],hidden:[8,28],strikethrough:[9,29],black:[30,39],red:[31,39],green:[32,39],yellow:[33,39],blue:[34,39],magenta:[35,39],cyan:[36,39],white:[37,39],gray:[90,39],bgBlack:[40,49],bgRed:[41,49],bgGreen:[42,49],bgYellow:[43,49],bgBlue:[44,49],bgMagenta:[45,49],bgCyan:[46,49],bgWhite:[47,49],blackBright:[90,39],redBright:[91,39],greenBright:[92,39],yellowBright:[93,39],blueBright:[94,39],magentaBright:[95,39],cyanBright:[96,39],whiteBright:[97,39],bgBlackBright:[100,49],bgRedBright:[101,49],bgGreenBright:[102,49],bgYellowBright:[103,49],bgBlueBright:[104,49],bgMagentaBright:[105,49],bgCyanBright:[106,49],bgWhiteBright:[107,49]},Pt=Object.entries(Et);function K(n){return String(n)}K.open="";K.close="";function Nt(n=!1){let t=typeof process<"u"?process:void 0,e=(t==null?void 0:t.env)||{},r=(t==null?void 0:t.argv)||[];return!("NO_COLOR"in e||r.includes("--no-color"))&&("FORCE_COLOR"in e||r.includes("--color")||(t==null?void 0:t.platform)==="win32"||n&&e.TERM!=="dumb"||"CI"in e)||typeof window<"u"&&!!window.chrome}function At(n=!1){let t=Nt(n),e=(c,o,l,f)=>{let m="",h=0;do m+=c.substring(h,f)+l,h=f+o.length,f=c.indexOf(o,h);while(~f);return m+c.substring(h)},r=(c,o,l=c)=>{let f=m=>{let h=String(m),b=h.indexOf(o,c.length);return~b?c+e(h,o,l,b)+o:c+h+o};return f.open=c,f.close=o,f},a={isColorSupported:t},i=c=>`\x1B[${c}m`;for(let[c,o]of Pt)a[c]=t?r(i(o[0]),i(o[1]),o[2]):K;return a}At();function lt(n,t){return t.forEach(function(e){e&&typeof e!="string"&&!Array.isArray(e)&&Object.keys(e).forEach(function(r){if(r!=="default"&&!(r in n)){var a=Object.getOwnPropertyDescriptor(e,r);Object.defineProperty(n,r,a.get?a:{enumerable:!0,get:function(){return e[r]}})}})}),Object.freeze(n)}function dt(n){return n&&n.__esModule&&Object.prototype.hasOwnProperty.call(n,"default")?n.default:n}var V={exports:{}},x={};/**
 * @license React
 * react-is.production.js
 *
@@ -6,7 +6,7 @@ var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,config
 *
 * This source code is licensed under the MIT license found in the
 * LICENSE file in the root directory of this source tree.
-*/var Z;function At(){if(Z)return x;Z=1;var n=Symbol.for("react.transitional.element"),t=Symbol.for("react.portal"),e=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.consumer"),c=Symbol.for("react.context"),o=Symbol.for("react.forward_ref"),l=Symbol.for("react.suspense"),w=Symbol.for("react.suspense_list"),m=Symbol.for("react.memo"),h=Symbol.for("react.lazy"),b=Symbol.for("react.view_transition"),z=Symbol.for("react.client.reference");function u(s){if(typeof s=="object"&&s!==null){var d=s.$$typeof;switch(d){case n:switch(s=s.type,s){case e:case a:case r:case l:case w:case b:return s;default:switch(s=s&&s.$$typeof,s){case c:case o:case h:case m:return s;case i:return s;default:return d}}case t:return d}}}return x.ContextConsumer=i,x.ContextProvider=c,x.Element=n,x.ForwardRef=o,x.Fragment=e,x.Lazy=h,x.Memo=m,x.Portal=t,x.Profiler=a,x.StrictMode=r,x.Suspense=l,x.SuspenseList=w,x.isContextConsumer=function(s){return u(s)===i},x.isContextProvider=function(s){return u(s)===c},x.isElement=function(s){return typeof s=="object"&&s!==null&&s.$$typeof===n},x.isForwardRef=function(s){return u(s)===o},x.isFragment=function(s){return u(s)===e},x.isLazy=function(s){return u(s)===h},x.isMemo=function(s){return u(s)===m},x.isPortal=function(s){return u(s)===t},x.isProfiler=function(s){return u(s)===a},x.isStrictMode=function(s){return u(s)===r},x.isSuspense=function(s){return u(s)===l},x.isSuspenseList=function(s){return u(s)===w},x.isValidElementType=function(s){return typeof s=="string"||typeof s=="function"||s===e||s===a||s===r||s===l||s===w||typeof s=="object"&&s!==null&&(s.$$typeof===h||s.$$typeof===m||s.$$typeof===c||s.$$typeof===i||s.$$typeof===o||s.$$typeof===z||s.getModuleId!==void 0)},x.typeOf=u,x}var Q;function Ot(){return Q||(Q=1,V.exports=At()),V.exports}var pt=Ot(),Bt=dt(pt),Ut=lt({__proto__:null,default:Bt},[pt]),J={exports:{}},v={};/**
+*/var G;function Lt(){if(G)return x;G=1;var n=Symbol.for("react.transitional.element"),t=Symbol.for("react.portal"),e=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.consumer"),c=Symbol.for("react.context"),o=Symbol.for("react.forward_ref"),l=Symbol.for("react.suspense"),f=Symbol.for("react.suspense_list"),m=Symbol.for("react.memo"),h=Symbol.for("react.lazy"),b=Symbol.for("react.view_transition"),z=Symbol.for("react.client.reference");function u(s){if(typeof s=="object"&&s!==null){var d=s.$$typeof;switch(d){case n:switch(s=s.type,s){case e:case a:case r:case l:case f:case b:return s;default:switch(s=s&&s.$$typeof,s){case c:case o:case h:case m:return s;case i:return s;default:return d}}case t:return d}}}return x.ContextConsumer=i,x.ContextProvider=c,x.Element=n,x.ForwardRef=o,x.Fragment=e,x.Lazy=h,x.Memo=m,x.Portal=t,x.Profiler=a,x.StrictMode=r,x.Suspense=l,x.SuspenseList=f,x.isContextConsumer=function(s){return u(s)===i},x.isContextProvider=function(s){return u(s)===c},x.isElement=function(s){return typeof s=="object"&&s!==null&&s.$$typeof===n},x.isForwardRef=function(s){return u(s)===o},x.isFragment=function(s){return u(s)===e},x.isLazy=function(s){return u(s)===h},x.isMemo=function(s){return u(s)===m},x.isPortal=function(s){return u(s)===t},x.isProfiler=function(s){return u(s)===a},x.isStrictMode=function(s){return u(s)===r},x.isSuspense=function(s){return u(s)===l},x.isSuspenseList=function(s){return u(s)===f},x.isValidElementType=function(s){return typeof s=="string"||typeof s=="function"||s===e||s===a||s===r||s===l||s===f||typeof s=="object"&&s!==null&&(s.$$typeof===h||s.$$typeof===m||s.$$typeof===c||s.$$typeof===i||s.$$typeof===o||s.$$typeof===z||s.getModuleId!==void 0)},x.typeOf=u,x}var Z;function Bt(){return Z||(Z=1,V.exports=Lt()),V.exports}var pt=Bt(),Rt=dt(pt),Dt=lt({__proto__:null,default:Rt},[pt]),X={exports:{}},v={};/**
 * @license React
 * react-is.production.min.js
 *
@@ -14,8 +14,8 @@ var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,config
 *
 * This source code is licensed under the MIT license found in the
 * LICENSE file in the root directory of this source tree.
-*/var tt;function $t(){if(tt)return v;tt=1;var n=Symbol.for("react.element"),t=Symbol.for("react.portal"),e=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.provider"),c=Symbol.for("react.context"),o=Symbol.for("react.server_context"),l=Symbol.for("react.forward_ref"),w=Symbol.for("react.suspense"),m=Symbol.for("react.suspense_list"),h=Symbol.for("react.memo"),b=Symbol.for("react.lazy"),z=Symbol.for("react.offscreen"),u;u=Symbol.for("react.module.reference");function s(d){if(typeof d=="object"&&d!==null){var T=d.$$typeof;switch(T){case n:switch(d=d.type,d){case e:case a:case r:case w:case m:return d;default:switch(d=d&&d.$$typeof,d){case o:case c:case l:case b:case h:case i:return d;default:return T}}case t:return T}}}return v.ContextConsumer=c,v.ContextProvider=i,v.Element=n,v.ForwardRef=l,v.Fragment=e,v.Lazy=b,v.Memo=h,v.Portal=t,v.Profiler=a,v.StrictMode=r,v.Suspense=w,v.SuspenseList=m,v.isAsyncMode=function(){return!1},v.isConcurrentMode=function(){return!1},v.isContextConsumer=function(d){return s(d)===c},v.isContextProvider=function(d){return s(d)===i},v.isElement=function(d){return typeof d=="object"&&d!==null&&d.$$typeof===n},v.isForwardRef=function(d){return s(d)===l},v.isFragment=function(d){return s(d)===e},v.isLazy=function(d){return s(d)===b},v.isMemo=function(d){return s(d)===h},v.isPortal=function(d){return s(d)===t},v.isProfiler=function(d){return s(d)===a},v.isStrictMode=function(d){return s(d)===r},v.isSuspense=function(d){return s(d)===w},v.isSuspenseList=function(d){return s(d)===m},v.isValidElementType=function(d){return typeof d=="string"||typeof d=="function"||d===e||d===a||d===r||d===w||d===m||d===z||typeof d=="object"&&d!==null&&(d.$$typeof===b||d.$$typeof===h||d.$$typeof===i||d.$$typeof===c||d.$$typeof===l||d.$$typeof===u||d.getModuleId!==void 0)},v.typeOf=s,v}var et;function Ft(){return et||(et=1,J.exports=$t()),J.exports}var wt=Ft(),Dt=dt(wt),jt=lt({__proto__:null,default:Dt},[wt]);const Vt=["isAsyncMode","isConcurrentMode","isContextConsumer","isContextProvider","isElement","isForwardRef","isFragment","isLazy","isMemo","isPortal","isProfiler","isStrictMode","isSuspense","isSuspenseList","isValidElementType"];Object.fromEntries(Vt.map(n=>[n,t=>jt[n](t)||Ut[n](t)]));let Jt=()=>"Promise{…}";try{const{getPromiseDetails:n,kPending:t,kRejected:e}=process.binding("util");Array.isArray(n(Promise.resolve()))&&(Jt=(r,a)=>{const[i,c]=n(r);return i===t?"Promise{<pending>}":`Promise${i===e?"!":""}{${a.inspect(c,a)}}`})}catch{}function Wt(n){const{message:t="$$stack trace error",stackTraceLimit:e=1}=n||{},r=Error.stackTraceLimit,a=Error.prepareStackTrace;Error.stackTraceLimit=e,Error.prepareStackTrace=o=>o.stack;const c=new Error(t).stack||"";return Error.prepareStackTrace=a,Error.stackTraceLimit=r,c}var W,nt;function Xt(){if(nt)return W;nt=1;var n,t,e,r,a,i,c,o,l,w,m,h,b,z,u,s,d,T,P;return b=/\/(?![*\/])(?:\[(?:(?![\]\\]).|\\.)*\]|(?![\/\\]).|\\.)*(\/[$_\u200C\u200D\p{ID_Continue}]*|\\)?/uy,h=/--|\+\+|=>|\.{3}|\??\.(?!\d)|(?:&&|\|\||\?\?|[+\-%&|^]|\*{1,2}|<{1,2}|>{1,3}|!=?|={1,2}|\/(?![\/*]))=?|[?~,:;[\](){}]/y,n=/(\x23?)(?=[$_\p{ID_Start}\\])(?:[$_\u200C\u200D\p{ID_Continue}]|\\u[\da-fA-F]{4}|\\u\{[\da-fA-F]+\})+/uy,u=/(['"])(?:(?!\1)[^\\\n\r]|\\(?:\r\n|[^]))*(\1)?/y,m=/(?:0[xX][\da-fA-F](?:_?[\da-fA-F])*|0[oO][0-7](?:_?[0-7])*|0[bB][01](?:_?[01])*)n?|0n|[1-9](?:_?\d)*n|(?:(?:0(?!\d)|0\d*[89]\d*|[1-9](?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?|0[0-7]+/y,s=/[`}](?:[^`\\$]|\\[^]|\$(?!\{))*(`|\$\{)?/y,P=/[\t\v\f\ufeff\p{Zs}]+/uy,o=/\r?\n|[\r\u2028\u2029]/y,l=/\/\*(?:[^*]|\*(?!\/))*(\*\/)?/y,z=/\/\/.*/y,e=/[<>.:={}]|\/(?![\/*])/y,t=/[$_\p{ID_Start}][$_\u200C\u200D\p{ID_Continue}-]*/uy,r=/(['"])(?:(?!\1)[^])*(\1)?/y,a=/[^<>{}]+/y,T=/^(?:[\/+-]|\.{3}|\?(?:InterpolationIn(?:JSX|Template)|NoLineTerminatorHere|NonExpressionParenEnd|UnaryIncDec))?$|[{}([,;<>=*%&|^!~?:]$/,d=/^(?:=>|[;\]){}]|else|\?(?:NoLineTerminatorHere|NonExpressionParenEnd))?$/,i=/^(?:await|case|default|delete|do|else|instanceof|new|return|throw|typeof|void|yield)$/,c=/^(?:return|throw|yield)$/,w=RegExp(o.source),W=function*(y,{jsx:N=!1}={}){var S,E,A,f,g,O,p,C,Y,I,B,k,U,_;for({length:O}=y,f=0,g="",_=[{tag:"JS"}],S=[],B=0,k=!1;f<O;){switch(C=_[_.length-1],C.tag){case"JS":case"JSNonExpressionParen":case"InterpolationInTemplate":case"InterpolationInJSX":if(y[f]==="/"&&(T.test(g)||i.test(g))&&(b.lastIndex=f,p=b.exec(y))){f=b.lastIndex,g=p[0],k=!0,yield{type:"RegularExpressionLiteral",value:p[0],closed:p[1]!==void 0&&p[1]!=="\\"};continue}if(h.lastIndex=f,p=h.exec(y)){switch(U=p[0],Y=h.lastIndex,I=U,U){case"(":g==="?NonExpressionParenKeyword"&&_.push({tag:"JSNonExpressionParen",nesting:B}),B++,k=!1;break;case")":B--,k=!0,C.tag==="JSNonExpressionParen"&&B===C.nesting&&(_.pop(),I="?NonExpressionParenEnd",k=!1);break;case"{":h.lastIndex=0,A=!d.test(g)&&(T.test(g)||i.test(g)),S.push(A),k=!1;break;case"}":switch(C.tag){case"InterpolationInTemplate":if(S.length===C.nesting){s.lastIndex=f,p=s.exec(y),f=s.lastIndex,g=p[0],p[1]==="${"?(g="?InterpolationInTemplate",k=!1,yield{type:"TemplateMiddle",value:p[0]}):(_.pop(),k=!0,yield{type:"TemplateTail",value:p[0],closed:p[1]==="`"});continue}break;case"InterpolationInJSX":if(S.length===C.nesting){_.pop(),f+=1,g="}",yield{type:"JSXPunctuator",value:"}"};continue}}k=S.pop(),I=k?"?ExpressionBraceEnd":"}";break;case"]":k=!0;break;case"++":case"--":I=k?"?PostfixIncDec":"?UnaryIncDec";break;case"<":if(N&&(T.test(g)||i.test(g))){_.push({tag:"JSXTag"}),f+=1,g="<",yield{type:"JSXPunctuator",value:U};continue}k=!1;break;default:k=!1}f=Y,g=I,yield{type:"Punctuator",value:U};continue}if(n.lastIndex=f,p=n.exec(y)){switch(f=n.lastIndex,I=p[0],p[0]){case"for":case"if":case"while":case"with":g!=="."&&g!=="?."&&(I="?NonExpressionParenKeyword")}g=I,k=!i.test(p[0]),yield{type:p[1]==="#"?"PrivateIdentifier":"IdentifierName",value:p[0]};continue}if(u.lastIndex=f,p=u.exec(y)){f=u.lastIndex,g=p[0],k=!0,yield{type:"StringLiteral",value:p[0],closed:p[2]!==void 0};continue}if(m.lastIndex=f,p=m.exec(y)){f=m.lastIndex,g=p[0],k=!0,yield{type:"NumericLiteral",value:p[0]};continue}if(s.lastIndex=f,p=s.exec(y)){f=s.lastIndex,g=p[0],p[1]==="${"?(g="?InterpolationInTemplate",_.push({tag:"InterpolationInTemplate",nesting:S.length}),k=!1,yield{type:"TemplateHead",value:p[0]}):(k=!0,yield{type:"NoSubstitutionTemplate",value:p[0],closed:p[1]==="`"});continue}break;case"JSXTag":case"JSXTagEnd":if(e.lastIndex=f,p=e.exec(y)){switch(f=e.lastIndex,I=p[0],p[0]){case"<":_.push({tag:"JSXTag"});break;case">":_.pop(),g==="/"||C.tag==="JSXTagEnd"?(I="?JSX",k=!0):_.push({tag:"JSXChildren"});break;case"{":_.push({tag:"InterpolationInJSX",nesting:S.length}),I="?InterpolationInJSX",k=!1;break;case"/":g==="<"&&(_.pop(),_[_.length-1].tag==="JSXChildren"&&_.pop(),_.push({tag:"JSXTagEnd"}))}g=I,yield{type:"JSXPunctuator",value:p[0]};continue}if(t.lastIndex=f,p=t.exec(y)){f=t.lastIndex,g=p[0],yield{type:"JSXIdentifier",value:p[0]};continue}if(r.lastIndex=f,p=r.exec(y)){f=r.lastIndex,g=p[0],yield{type:"JSXString",value:p[0],closed:p[2]!==void 0};continue}break;case"JSXChildren":if(a.lastIndex=f,p=a.exec(y)){f=a.lastIndex,g=p[0],yield{type:"JSXText",value:p[0]};continue}switch(y[f]){case"<":_.push({tag:"JSXTag"}),f++,g="<",yield{type:"JSXPunctuator",value:"<"};continue;case"{":_.push({tag:"InterpolationInJSX",nesting:S.length}),f++,g="?InterpolationInJSX",k=!1,yield{type:"JSXPunctuator",value:"{"};continue}}if(P.lastIndex=f,p=P.exec(y)){f=P.lastIndex,yield{type:"WhiteSpace",value:p[0]};continue}if(o.lastIndex=f,p=o.exec(y)){f=o.lastIndex,k=!1,c.test(g)&&(g="?NoLineTerminatorHere"),yield{type:"LineTerminatorSequence",value:p[0]};continue}if(l.lastIndex=f,p=l.exec(y)){f=l.lastIndex,w.test(p[0])&&(k=!1,c.test(g)&&(g="?NoLineTerminatorHere")),yield{type:"MultiLineComment",value:p[0],closed:p[1]!==void 0};continue}if(z.lastIndex=f,p=z.exec(y)){f=z.lastIndex,k=!1,yield{type:"SingleLineComment",value:p[0]};continue}E=String.fromCodePoint(y.codePointAt(f)),f+=E.length,g=E,k=!1,yield{type:C.tag.startsWith("JSX")?"JSXInvalid":"Invalid",value:E}}},W}Xt();var ft={keyword:["break","case","catch","continue","debugger","default","do","else","finally","for","function","if","return","switch","throw","try","var","const","while","with","new","this","super","class","extends","export","import","null","true","false","in","instanceof","typeof","void","delete"],strict:["implements","interface","let","package","private","protected","public","static","yield"]};new Set(ft.keyword);new Set(ft.strict);const rt="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",Ht=new Uint8Array(64),Yt=new Uint8Array(128);for(let n=0;n<rt.length;n++){const t=rt.charCodeAt(n);Ht[n]=t,Yt[t]=n}var at;(function(n){n[n.Empty=1]="Empty",n[n.Hash=2]="Hash",n[n.Query=3]="Query",n[n.RelativePath=4]="RelativePath",n[n.AbsolutePath=5]="AbsolutePath",n[n.SchemeRelative=6]="SchemeRelative",n[n.Absolute=7]="Absolute"})(at||(at={}));const Gt=/^[A-Za-z]:\//;function Kt(n=""){return n&&n.replace(/\\/g,"/").replace(Gt,t=>t.toUpperCase())}const Zt=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/;function Qt(){return typeof process<"u"&&typeof process.cwd=="function"?process.cwd().replace(/\\/g,"/"):"/"}const te=function(...n){n=n.map(r=>Kt(r));let t="",e=!1;for(let r=n.length-1;r>=-1&&!e;r--){const a=r>=0?n[r]:Qt();!a||a.length===0||(t=`${a}/${t}`,e=ot(a))}return t=ee(t,!e),e&&!ot(t)?`/${t}`:t.length>0?t:"."};function ee(n,t){let e="",r=0,a=-1,i=0,c=null;for(let o=0;o<=n.length;++o){if(o<n.length)c=n[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(e.length<2||r!==2||e[e.length-1]!=="."||e[e.length-2]!=="."){if(e.length>2){const l=e.lastIndexOf("/");l===-1?(e="",r=0):(e=e.slice(0,l),r=e.length-1-e.lastIndexOf("/")),a=o,i=0;continue}else if(e.length>0){e="",r=0,a=o,i=0;continue}}t&&(e+=e.length>0?"/..":"..",r=2)}else e.length>0?e+=`/${n.slice(a+1,o)}`:e=n.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return e}const ot=function(n){return Zt.test(n)},mt=/^\s*at .*(?:\S:\d+|\(native\))/m,ne=/^(?:eval@)?(?:\[native code\])?$/;function gt(n){if(!n.includes(":"))return[n];const e=/(.+?)(?::(\d+))?(?::(\d+))?$/.exec(n.replace(/^\(|\)$/g,""));if(!e)return[n];let r=e[1];if(r.startsWith("async ")&&(r=r.slice(6)),r.startsWith("http:")||r.startsWith("https:")){const a=new URL(r);a.searchParams.delete("import"),a.searchParams.delete("browserv"),r=a.pathname+a.hash+a.search}if(r.startsWith("/@fs/")){const a=/^\/@fs\/[a-zA-Z]:\//.test(r);r=r.slice(a?5:4)}return[r,e[2]||void 0,e[3]||void 0]}function re(n){let t=n.trim();if(ne.test(t)||(t.includes(" > eval")&&(t=t.replace(/ line (\d+)(?: > eval line \d+)* > eval:\d+:\d+/g,":$1")),!t.includes("@")&&!t.includes(":")))return null;const e=/((.*".+"[^@]*)?[^@]*)(@)/,r=t.match(e),a=r&&r[1]?r[1]:void 0,[i,c,o]=gt(t.replace(e,""));return!i||!c||!o?null:{file:i,method:a||"",line:Number.parseInt(c),column:Number.parseInt(o)}}function ae(n){const t=n.trim();return mt.test(t)?oe(t):re(t)}function oe(n){let t=n.trim();if(!mt.test(t))return null;t.includes("(eval ")&&(t=t.replace(/eval code/g,"eval").replace(/(\(eval at [^()]*)|(,.*$)/g,""));let e=t.replace(/^\s+/,"").replace(/\(eval code/g,"(").replace(/^.*?\s+/,"");const r=e.match(/ (\(.+\)$)/);e=r?e.replace(r[0],""):e;const[a,i,c]=gt(r?r[1]:e);let o=r&&e||"",l=a&&["eval","<anonymous>"].includes(a)?void 0:a;return!l||!i||!c?null:(o.startsWith("async ")&&(o=o.slice(6)),l.startsWith("file://")&&(l=l.slice(7)),l=l.startsWith("node:")||l.startsWith("internal:")?l:te(l),o&&(o=o.replace(/__vite_ssr_import_\d+__\./g,"")),{method:o,file:l,line:Number.parseInt(i),column:Number.parseInt(c)})}function ie(n){const t=(n==null?void 0:n.globalThisKey)||"__vitest_mocker__";function e(){return typeof globalThis[t]<"u"?globalThis[t]:new Proxy({},{get(r,a){throw new Error(`Vitest mocker was not initialized in this environment. vi.${String(a)}() is forbidden.`)}})}return{hoisted(r){if(typeof r!="function")throw new TypeError(`vi.hoisted() expects a function, but received a ${typeof r}`);return r()},mock(r,a){if(typeof r!="string")throw new TypeError(`vi.mock() expects a string path, but received a ${typeof r}`);const i=R("mock");e().queueMock(r,i,typeof a=="function"?()=>a(()=>e().importActual(r,i)):a)},unmock(r){if(typeof r!="string")throw new TypeError(`vi.unmock() expects a string path, but received a ${typeof r}`);e().queueUnmock(r,R("unmock"))},doMock(r,a){if(typeof r!="string")throw new TypeError(`vi.doMock() expects a string path, but received a ${typeof r}`);const i=R("doMock");e().queueMock(r,i,typeof a=="function"?()=>a(()=>e().importActual(r,i)):a)},doUnmock(r){if(typeof r!="string")throw new TypeError(`vi.doUnmock() expects a string path, but received a ${typeof r}`);e().queueUnmock(r,R("doUnmock"))},async importActual(r){return e().importActual(r,R("importActual"))},async importMock(r){return e().importMock(r,R("importMock"))}}}function R(n){const e=Wt({stackTraceLimit:5}).split(`
-`),r=e.findIndex(i=>i.includes(` at Object.${n}`)||i.includes(`${n}@`)),a=ae(e[r+1]);return(a==null?void 0:a.file)||""}const{now:it}=Date;class se{constructor(t,e,r,a){q(this,"registry",new st);q(this,"queue",new Set);q(this,"mockedIds",new Set);this.interceptor=t,this.rpc=e,this.spyOn=r,this.config=a}async prepare(){this.queue.size&&await Promise.all([...this.queue.values()])}async resolveFactoryModule(t){const e=this.registry.get(t);if(!e||e.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);return await e.resolve()}getFactoryModule(t){const e=this.registry.get(t);if(!e||e.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);if(!e.cache)throw new Error(`Mock ${t} wasn't resolved. This is probably a Vitest error. Please, open a new issue with reproduction.`);return e.cache}async invalidate(){const t=Array.from(this.mockedIds);t.length&&(await this.rpc.invalidate(t),await this.interceptor.invalidate(),this.registry.clear())}async importActual(t,e){const r=await this.rpc.resolveId(t,e);if(r==null)throw new Error(`[vitest] Cannot resolve "${t}" imported from "${e}"`);const a=Pt(r.id),i=new URL(r.url,location.href),c=`_vitest_original&ext${a}`,o=`${i.pathname}${i.search?`${i.search}&${c}`:`?${c}`}${i.hash}`;return this.wrapDynamicImport(()=>import(o)).then(l=>{if(!r.optimized||typeof l.default>"u")return l;const w=l.default;return w!=null&&w.__esModule?w:{...typeof w=="object"&&!Array.isArray(w)||typeof w=="function"?w:{},default:w}})}async importMock(t,e){await this.prepare();const{resolvedId:r,resolvedUrl:a,redirectUrl:i}=await this.rpc.resolveMock(t,e,{mock:"auto"}),c=this.resolveMockPath($(a));let o=this.registry.get(c);if(!o)if(i){const l=new URL(this.resolveMockPath($(i)),location.href).toString();o=new L(t,r,c,l)}else o=new F(t,r,c);if(o.type==="manual")return await o.resolve();if(o.type==="automock"||o.type==="autospy"){const l=new URL(`/@id/${r}`,location.href),w=l.search?`${l.search}&t=${it()}`:`?t=${it()}`,m=await vt(()=>import(`${l.pathname}${w}&mock=${o.type}${l.hash}`),[],import.meta.url);return this.mockObject(m,o.type)}return import(o.redirect)}mockObject(t,e="automock"){return bt({globalConstructors:{Object,Function,Array,Map,RegExp},spyOn:this.spyOn,type:e},t)}queueMock(t,e,r){const a=this.rpc.resolveMock(t,e,{mock:typeof r=="function"?"factory":r!=null&&r.spy?"spy":"auto"}).then(async({redirectUrl:i,resolvedId:c,resolvedUrl:o,needsInterop:l,mockType:w})=>{const m=this.resolveMockPath($(o));this.mockedIds.add(c);const h=typeof r=="function"?async()=>{const u=await r();return l?{default:u}:u}:void 0,b=typeof i=="string"?new URL(this.resolveMockPath($(i)),location.href).toString():null;let z;w==="manual"?z=this.registry.register("manual",t,c,m,h):w==="autospy"?z=this.registry.register("autospy",t,c,m):w==="redirect"?z=this.registry.register("redirect",t,c,m,b):z=this.registry.register("automock",t,c,m),await this.interceptor.register(z)}).finally(()=>{this.queue.delete(a)});this.queue.add(a)}queueUnmock(t,e){const r=this.rpc.resolveId(t,e).then(async a=>{if(!a)return;const i=this.resolveMockPath($(a.url));this.mockedIds.add(a.id),this.registry.delete(i),await this.interceptor.delete(i)}).finally(()=>{this.queue.delete(r)});this.queue.add(r)}wrapDynamicImport(t){return typeof t=="function"?new Promise((r,a)=>{this.prepare().finally(()=>{t().then(r,a)})}):t}resolveMockPath(t){const e=this.config,r=Ct("/@fs/",e.root);return t.startsWith(e.root)?t.slice(e.root.length):t.startsWith(r)?t.slice(r.length):t}}const ce=/(\?|&)v=\w{8}/;function $(n){return n.replace(ce,"")}class le{constructor(){q(this,"mocks",new st)}async register(t){this.mocks.add(t)}async delete(t){this.mocks.delete(t)}async invalidate(){this.mocks.clear()}}const X=n=>{switch(n){case"resolveId":return Promise.resolve({id:"",url:"",optimized:!1});case"resolveMock":return Promise.resolve({mockType:"dummy",resolvedId:"",resolvedUrl:"",redirectUrl:"",needsInterop:!1});case"invalidate":return Promise.resolve()}};class de extends se{queueMock(){}}function pe(n){const t=new de(n("__vitest_mocker__"),{resolveId(e,r){return X("resolveId")},resolveMock(e,r,a){return X("resolveMock")},async invalidate(e){return X("invalidate")}},(...e)=>globalThis.__STORYBOOK_MODULE_TEST__.spyOn(...e),{root:""});return globalThis.__vitest_mocker__=t,ie({globalThisKey:"__vitest_mocker__"})}globalThis.__STORYBOOK_MOCKER__=pe(()=>new le);function we(n,t="top"){if(!n||typeof document>"u")return;const e=document.head||document.querySelector("head"),r=e.querySelector(":first-child"),a=document.createElement("style");a.appendChild(document.createTextNode(n)),t==="top"&&r?e.insertBefore(a,r):e.appendChild(a)}we(`
+*/var tt;function Mt(){if(tt)return v;tt=1;var n=Symbol.for("react.element"),t=Symbol.for("react.portal"),e=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.provider"),c=Symbol.for("react.context"),o=Symbol.for("react.server_context"),l=Symbol.for("react.forward_ref"),f=Symbol.for("react.suspense"),m=Symbol.for("react.suspense_list"),h=Symbol.for("react.memo"),b=Symbol.for("react.lazy"),z=Symbol.for("react.offscreen"),u;u=Symbol.for("react.module.reference");function s(d){if(typeof d=="object"&&d!==null){var C=d.$$typeof;switch(C){case n:switch(d=d.type,d){case e:case a:case r:case f:case m:return d;default:switch(d=d&&d.$$typeof,d){case o:case c:case l:case b:case h:case i:return d;default:return C}}case t:return C}}}return v.ContextConsumer=c,v.ContextProvider=i,v.Element=n,v.ForwardRef=l,v.Fragment=e,v.Lazy=b,v.Memo=h,v.Portal=t,v.Profiler=a,v.StrictMode=r,v.Suspense=f,v.SuspenseList=m,v.isAsyncMode=function(){return!1},v.isConcurrentMode=function(){return!1},v.isContextConsumer=function(d){return s(d)===c},v.isContextProvider=function(d){return s(d)===i},v.isElement=function(d){return typeof d=="object"&&d!==null&&d.$$typeof===n},v.isForwardRef=function(d){return s(d)===l},v.isFragment=function(d){return s(d)===e},v.isLazy=function(d){return s(d)===b},v.isMemo=function(d){return s(d)===h},v.isPortal=function(d){return s(d)===t},v.isProfiler=function(d){return s(d)===a},v.isStrictMode=function(d){return s(d)===r},v.isSuspense=function(d){return s(d)===f},v.isSuspenseList=function(d){return s(d)===m},v.isValidElementType=function(d){return typeof d=="string"||typeof d=="function"||d===e||d===a||d===r||d===f||d===m||d===z||typeof d=="object"&&d!==null&&(d.$$typeof===b||d.$$typeof===h||d.$$typeof===i||d.$$typeof===c||d.$$typeof===l||d.$$typeof===u||d.getModuleId!==void 0)},v.typeOf=s,v}var et;function Ot(){return et||(et=1,X.exports=Mt()),X.exports}var ft=Ot(),$t=dt(ft),jt=lt({__proto__:null,default:$t},[ft]);const Vt=["isAsyncMode","isConcurrentMode","isContextConsumer","isContextProvider","isElement","isForwardRef","isFragment","isLazy","isMemo","isPortal","isProfiler","isStrictMode","isSuspense","isSuspenseList","isValidElementType"];Object.fromEntries(Vt.map(n=>[n,t=>jt[n](t)||Dt[n](t)]));let Xt=()=>"Promise{…}";try{const{getPromiseDetails:n,kPending:t,kRejected:e}=process.binding("util");Array.isArray(n(Promise.resolve()))&&(Xt=(r,a)=>{const[i,c]=n(r);return i===t?"Promise{<pending>}":`Promise${i===e?"!":""}{${a.inspect(c,a)}}`})}catch{}function Wt(n){const{message:t="$$stack trace error",stackTraceLimit:e=1}=n||{},r=Error.stackTraceLimit,a=Error.prepareStackTrace;Error.stackTraceLimit=e,Error.prepareStackTrace=o=>o.stack;const c=new Error(t).stack||"";return Error.prepareStackTrace=a,Error.stackTraceLimit=r,c}var W,nt;function Jt(){if(nt)return W;nt=1;var n,t,e,r,a,i,c,o,l,f,m,h,b,z,u,s,d,C,q;return b=/\/(?![*\/])(?:\[(?:(?![\]\\]).|\\.)*\]|(?![\/\\]).|\\.)*(\/[$_\u200C\u200D\p{ID_Continue}]*|\\)?/uy,h=/--|\+\+|=>|\.{3}|\??\.(?!\d)|(?:&&|\|\||\?\?|[+\-%&|^]|\*{1,2}|<{1,2}|>{1,3}|!=?|={1,2}|\/(?![\/*]))=?|[?~,:;[\](){}]/y,n=/(\x23?)(?=[$_\p{ID_Start}\\])(?:[$_\u200C\u200D\p{ID_Continue}]|\\u[\da-fA-F]{4}|\\u\{[\da-fA-F]+\})+/uy,u=/(['"])(?:(?!\1)[^\\\n\r]|\\(?:\r\n|[^]))*(\1)?/y,m=/(?:0[xX][\da-fA-F](?:_?[\da-fA-F])*|0[oO][0-7](?:_?[0-7])*|0[bB][01](?:_?[01])*)n?|0n|[1-9](?:_?\d)*n|(?:(?:0(?!\d)|0\d*[89]\d*|[1-9](?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?|0[0-7]+/y,s=/[`}](?:[^`\\$]|\\[^]|\$(?!\{))*(`|\$\{)?/y,q=/[\t\v\f\ufeff\p{Zs}]+/uy,o=/\r?\n|[\r\u2028\u2029]/y,l=/\/\*(?:[^*]|\*(?!\/))*(\*\/)?/y,z=/\/\/.*/y,e=/[<>.:={}]|\/(?![\/*])/y,t=/[$_\p{ID_Start}][$_\u200C\u200D\p{ID_Continue}-]*/uy,r=/(['"])(?:(?!\1)[^])*(\1)?/y,a=/[^<>{}]+/y,C=/^(?:[\/+-]|\.{3}|\?(?:InterpolationIn(?:JSX|Template)|NoLineTerminatorHere|NonExpressionParenEnd|UnaryIncDec))?$|[{}([,;<>=*%&|^!~?:]$/,d=/^(?:=>|[;\]){}]|else|\?(?:NoLineTerminatorHere|NonExpressionParenEnd))?$/,i=/^(?:await|case|default|delete|do|else|instanceof|new|return|throw|typeof|void|yield)$/,c=/^(?:return|throw|yield)$/,f=RegExp(o.source),W=function*(y,{jsx:F=!1}={}){var U,E,L,w,g,B,p,I,H,T,R,k,D,_;for({length:B}=y,w=0,g="",_=[{tag:"JS"}],U=[],R=0,k=!1;w<B;){switch(I=_[_.length-1],I.tag){case"JS":case"JSNonExpressionParen":case"InterpolationInTemplate":case"InterpolationInJSX":if(y[w]==="/"&&(C.test(g)||i.test(g))&&(b.lastIndex=w,p=b.exec(y))){w=b.lastIndex,g=p[0],k=!0,yield{type:"RegularExpressionLiteral",value:p[0],closed:p[1]!==void 0&&p[1]!=="\\"};continue}if(h.lastIndex=w,p=h.exec(y)){switch(D=p[0],H=h.lastIndex,T=D,D){case"(":g==="?NonExpressionParenKeyword"&&_.push({tag:"JSNonExpressionParen",nesting:R}),R++,k=!1;break;case")":R--,k=!0,I.tag==="JSNonExpressionParen"&&R===I.nesting&&(_.pop(),T="?NonExpressionParenEnd",k=!1);break;case"{":h.lastIndex=0,L=!d.test(g)&&(C.test(g)||i.test(g)),U.push(L),k=!1;break;case"}":switch(I.tag){case"InterpolationInTemplate":if(U.length===I.nesting){s.lastIndex=w,p=s.exec(y),w=s.lastIndex,g=p[0],p[1]==="${"?(g="?InterpolationInTemplate",k=!1,yield{type:"TemplateMiddle",value:p[0]}):(_.pop(),k=!0,yield{type:"TemplateTail",value:p[0],closed:p[1]==="`"});continue}break;case"InterpolationInJSX":if(U.length===I.nesting){_.pop(),w+=1,g="}",yield{type:"JSXPunctuator",value:"}"};continue}}k=U.pop(),T=k?"?ExpressionBraceEnd":"}";break;case"]":k=!0;break;case"++":case"--":T=k?"?PostfixIncDec":"?UnaryIncDec";break;case"<":if(F&&(C.test(g)||i.test(g))){_.push({tag:"JSXTag"}),w+=1,g="<",yield{type:"JSXPunctuator",value:D};continue}k=!1;break;default:k=!1}w=H,g=T,yield{type:"Punctuator",value:D};continue}if(n.lastIndex=w,p=n.exec(y)){switch(w=n.lastIndex,T=p[0],p[0]){case"for":case"if":case"while":case"with":g!=="."&&g!=="?."&&(T="?NonExpressionParenKeyword")}g=T,k=!i.test(p[0]),yield{type:p[1]==="#"?"PrivateIdentifier":"IdentifierName",value:p[0]};continue}if(u.lastIndex=w,p=u.exec(y)){w=u.lastIndex,g=p[0],k=!0,yield{type:"StringLiteral",value:p[0],closed:p[2]!==void 0};continue}if(m.lastIndex=w,p=m.exec(y)){w=m.lastIndex,g=p[0],k=!0,yield{type:"NumericLiteral",value:p[0]};continue}if(s.lastIndex=w,p=s.exec(y)){w=s.lastIndex,g=p[0],p[1]==="${"?(g="?InterpolationInTemplate",_.push({tag:"InterpolationInTemplate",nesting:U.length}),k=!1,yield{type:"TemplateHead",value:p[0]}):(k=!0,yield{type:"NoSubstitutionTemplate",value:p[0],closed:p[1]==="`"});continue}break;case"JSXTag":case"JSXTagEnd":if(e.lastIndex=w,p=e.exec(y)){switch(w=e.lastIndex,T=p[0],p[0]){case"<":_.push({tag:"JSXTag"});break;case">":_.pop(),g==="/"||I.tag==="JSXTagEnd"?(T="?JSX",k=!0):_.push({tag:"JSXChildren"});break;case"{":_.push({tag:"InterpolationInJSX",nesting:U.length}),T="?InterpolationInJSX",k=!1;break;case"/":g==="<"&&(_.pop(),_[_.length-1].tag==="JSXChildren"&&_.pop(),_.push({tag:"JSXTagEnd"}))}g=T,yield{type:"JSXPunctuator",value:p[0]};continue}if(t.lastIndex=w,p=t.exec(y)){w=t.lastIndex,g=p[0],yield{type:"JSXIdentifier",value:p[0]};continue}if(r.lastIndex=w,p=r.exec(y)){w=r.lastIndex,g=p[0],yield{type:"JSXString",value:p[0],closed:p[2]!==void 0};continue}break;case"JSXChildren":if(a.lastIndex=w,p=a.exec(y)){w=a.lastIndex,g=p[0],yield{type:"JSXText",value:p[0]};continue}switch(y[w]){case"<":_.push({tag:"JSXTag"}),w++,g="<",yield{type:"JSXPunctuator",value:"<"};continue;case"{":_.push({tag:"InterpolationInJSX",nesting:U.length}),w++,g="?InterpolationInJSX",k=!1,yield{type:"JSXPunctuator",value:"{"};continue}}if(q.lastIndex=w,p=q.exec(y)){w=q.lastIndex,yield{type:"WhiteSpace",value:p[0]};continue}if(o.lastIndex=w,p=o.exec(y)){w=o.lastIndex,k=!1,c.test(g)&&(g="?NoLineTerminatorHere"),yield{type:"LineTerminatorSequence",value:p[0]};continue}if(l.lastIndex=w,p=l.exec(y)){w=l.lastIndex,f.test(p[0])&&(k=!1,c.test(g)&&(g="?NoLineTerminatorHere")),yield{type:"MultiLineComment",value:p[0],closed:p[1]!==void 0};continue}if(z.lastIndex=w,p=z.exec(y)){w=z.lastIndex,k=!1,yield{type:"SingleLineComment",value:p[0]};continue}E=String.fromCodePoint(y.codePointAt(w)),w+=E.length,g=E,k=!1,yield{type:I.tag.startsWith("JSX")?"JSXInvalid":"Invalid",value:E}}},W}Jt();var wt={keyword:["break","case","catch","continue","debugger","default","do","else","finally","for","function","if","return","switch","throw","try","var","const","while","with","new","this","super","class","extends","export","import","null","true","false","in","instanceof","typeof","void","delete"],strict:["implements","interface","let","package","private","protected","public","static","yield"]};new Set(wt.keyword);new Set(wt.strict);const rt="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",Kt=new Uint8Array(64),Ht=new Uint8Array(128);for(let n=0;n<rt.length;n++){const t=rt.charCodeAt(n);Kt[n]=t,Ht[t]=n}var at;(function(n){n[n.Empty=1]="Empty",n[n.Hash=2]="Hash",n[n.Query=3]="Query",n[n.RelativePath=4]="RelativePath",n[n.AbsolutePath=5]="AbsolutePath",n[n.SchemeRelative=6]="SchemeRelative",n[n.Absolute=7]="Absolute"})(at||(at={}));const Yt=/^[A-Za-z]:\//;function Qt(n=""){return n&&n.replace(/\\/g,"/").replace(Yt,t=>t.toUpperCase())}const Gt=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/;function Zt(){return typeof process<"u"&&typeof process.cwd=="function"?process.cwd().replace(/\\/g,"/"):"/"}const te=function(...n){n=n.map(r=>Qt(r));let t="",e=!1;for(let r=n.length-1;r>=-1&&!e;r--){const a=r>=0?n[r]:Zt();!a||a.length===0||(t=`${a}/${t}`,e=ot(a))}return t=ee(t,!e),e&&!ot(t)?`/${t}`:t.length>0?t:"."};function ee(n,t){let e="",r=0,a=-1,i=0,c=null;for(let o=0;o<=n.length;++o){if(o<n.length)c=n[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(e.length<2||r!==2||e[e.length-1]!=="."||e[e.length-2]!=="."){if(e.length>2){const l=e.lastIndexOf("/");l===-1?(e="",r=0):(e=e.slice(0,l),r=e.length-1-e.lastIndexOf("/")),a=o,i=0;continue}else if(e.length>0){e="",r=0,a=o,i=0;continue}}t&&(e+=e.length>0?"/..":"..",r=2)}else e.length>0?e+=`/${n.slice(a+1,o)}`:e=n.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return e}const ot=function(n){return Gt.test(n)},mt=/^\s*at .*(?:\S:\d+|\(native\))/m,ne=/^(?:eval@)?(?:\[native code\])?$/;function gt(n){if(!n.includes(":"))return[n];const e=/(.+?)(?::(\d+))?(?::(\d+))?$/.exec(n.replace(/^\(|\)$/g,""));if(!e)return[n];let r=e[1];if(r.startsWith("async ")&&(r=r.slice(6)),r.startsWith("http:")||r.startsWith("https:")){const a=new URL(r);a.searchParams.delete("import"),a.searchParams.delete("browserv"),r=a.pathname+a.hash+a.search}if(r.startsWith("/@fs/")){const a=/^\/@fs\/[a-zA-Z]:\//.test(r);r=r.slice(a?5:4)}return[r,e[2]||void 0,e[3]||void 0]}function re(n){let t=n.trim();if(ne.test(t)||(t.includes(" > eval")&&(t=t.replace(/ line (\d+)(?: > eval line \d+)* > eval:\d+:\d+/g,":$1")),!t.includes("@")&&!t.includes(":")))return null;const e=/((.*".+"[^@]*)?[^@]*)(@)/,r=t.match(e),a=r&&r[1]?r[1]:void 0,[i,c,o]=gt(t.replace(e,""));return!i||!c||!o?null:{file:i,method:a||"",line:Number.parseInt(c),column:Number.parseInt(o)}}function ae(n){const t=n.trim();return mt.test(t)?oe(t):re(t)}function oe(n){let t=n.trim();if(!mt.test(t))return null;t.includes("(eval ")&&(t=t.replace(/eval code/g,"eval").replace(/(\(eval at [^()]*)|(,.*$)/g,""));let e=t.replace(/^\s+/,"").replace(/\(eval code/g,"(").replace(/^.*?\s+/,"");const r=e.match(/ (\(.+\)$)/);e=r?e.replace(r[0],""):e;const[a,i,c]=gt(r?r[1]:e);let o=r&&e||"",l=a&&["eval","<anonymous>"].includes(a)?void 0:a;return!l||!i||!c?null:(o.startsWith("async ")&&(o=o.slice(6)),l.startsWith("file://")&&(l=l.slice(7)),l=l.startsWith("node:")||l.startsWith("internal:")?l:te(l),o&&(o=o.replace(/__vite_ssr_import_\d+__\./g,"")),{method:o,file:l,line:Number.parseInt(i),column:Number.parseInt(c)})}function ie(n){const t=(n==null?void 0:n.globalThisKey)||"__vitest_mocker__";function e(){return typeof globalThis[t]<"u"?globalThis[t]:new Proxy({},{get(r,a){throw new Error(`Vitest mocker was not initialized in this environment. vi.${String(a)}() is forbidden.`)}})}return{hoisted(r){if(typeof r!="function")throw new TypeError(`vi.hoisted() expects a function, but received a ${typeof r}`);return r()},mock(r,a){if(typeof r!="string")throw new TypeError(`vi.mock() expects a string path, but received a ${typeof r}`);const i=P("mock");e().queueMock(r,i,typeof a=="function"?()=>a(()=>e().importActual(r,i)):a)},unmock(r){if(typeof r!="string")throw new TypeError(`vi.unmock() expects a string path, but received a ${typeof r}`);e().queueUnmock(r,P("unmock"))},doMock(r,a){if(typeof r!="string")throw new TypeError(`vi.doMock() expects a string path, but received a ${typeof r}`);const i=P("doMock");e().queueMock(r,i,typeof a=="function"?()=>a(()=>e().importActual(r,i)):a)},doUnmock(r){if(typeof r!="string")throw new TypeError(`vi.doUnmock() expects a string path, but received a ${typeof r}`);e().queueUnmock(r,P("doUnmock"))},async importActual(r){return e().importActual(r,P("importActual"))},async importMock(r){return e().importMock(r,P("importMock"))}}}function P(n){const e=Wt({stackTraceLimit:5}).split(`
+`),r=e.findIndex(i=>i.includes(` at Object.${n}`)||i.includes(`${n}@`)),a=ae(e[r+1]);return(a==null?void 0:a.file)||""}const{now:it}=Date;class se{constructor(t,e,r,a){S(this,"registry",new st);S(this,"queue",new Set);S(this,"mockedIds",new Set);this.interceptor=t,this.rpc=e,this.spyOn=r,this.config=a}async prepare(){this.queue.size&&await Promise.all([...this.queue.values()])}async resolveFactoryModule(t){const e=this.registry.get(t);if(!e||e.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);return await e.resolve()}getFactoryModule(t){const e=this.registry.get(t);if(!e||e.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);if(!e.cache)throw new Error(`Mock ${t} wasn't resolved. This is probably a Vitest error. Please, open a new issue with reproduction.`);return e.cache}async invalidate(){const t=Array.from(this.mockedIds);t.length&&(await this.rpc.invalidate(t),await this.interceptor.invalidate(),this.registry.clear())}async importActual(t,e){const r=await this.rpc.resolveId(t,e);if(r==null)throw new Error(`[vitest] Cannot resolve "${t}" imported from "${e}"`);const a=qt(r.id),i=new URL(r.url,location.href),c=`_vitest_original&ext${a}`,o=`${i.pathname}${i.search?`${i.search}&${c}`:`?${c}`}${i.hash}`;return this.wrapDynamicImport(()=>import(o)).then(l=>{if(!r.optimized||typeof l.default>"u")return l;const f=l.default;return f!=null&&f.__esModule?f:{...typeof f=="object"&&!Array.isArray(f)||typeof f=="function"?f:{},default:f}})}async importMock(t,e){await this.prepare();const{resolvedId:r,resolvedUrl:a,redirectUrl:i}=await this.rpc.resolveMock(t,e,{mock:"auto"}),c=this.resolveMockPath(M(a));let o=this.registry.get(c);if(!o)if(i){const l=new URL(this.resolveMockPath(M(i)),location.href).toString();o=new A(t,r,c,l)}else o=new O(t,r,c);if(o.type==="manual")return await o.resolve();if(o.type==="automock"||o.type==="autospy"){const l=new URL(`/@id/${r}`,location.href),f=l.search?`${l.search}&t=${it()}`:`?t=${it()}`,m=await vt(()=>import(`${l.pathname}${f}&mock=${o.type}${l.hash}`),[],import.meta.url);return this.mockObject(m,o.type)}return import(o.redirect)}mockObject(t,e="automock"){return bt({globalConstructors:{Object,Function,Array,Map,RegExp},spyOn:this.spyOn,type:e},t)}queueMock(t,e,r){const a=this.rpc.resolveMock(t,e,{mock:typeof r=="function"?"factory":r!=null&&r.spy?"spy":"auto"}).then(async({redirectUrl:i,resolvedId:c,resolvedUrl:o,needsInterop:l,mockType:f})=>{const m=this.resolveMockPath(M(o));this.mockedIds.add(c);const h=typeof r=="function"?async()=>{const u=await r();return l?{default:u}:u}:void 0,b=typeof i=="string"?new URL(this.resolveMockPath(M(i)),location.href).toString():null;let z;f==="manual"?z=this.registry.register("manual",t,c,m,h):f==="autospy"?z=this.registry.register("autospy",t,c,m):f==="redirect"?z=this.registry.register("redirect",t,c,m,b):z=this.registry.register("automock",t,c,m),await this.interceptor.register(z)}).finally(()=>{this.queue.delete(a)});this.queue.add(a)}queueUnmock(t,e){const r=this.rpc.resolveId(t,e).then(async a=>{if(!a)return;const i=this.resolveMockPath(M(a.url));this.mockedIds.add(a.id),this.registry.delete(i),await this.interceptor.delete(i)}).finally(()=>{this.queue.delete(r)});this.queue.add(r)}wrapDynamicImport(t){return typeof t=="function"?new Promise((r,a)=>{this.prepare().finally(()=>{t().then(r,a)})}):t}resolveMockPath(t){const e=this.config,r=It("/@fs/",e.root);return t.startsWith(e.root)?t.slice(e.root.length):t.startsWith(r)?t.slice(r.length):t}}const ce=/(\?|&)v=\w{8}/;function M(n){return n.replace(ce,"")}class le{constructor(){S(this,"mocks",new st)}async register(t){this.mocks.add(t)}async delete(t){this.mocks.delete(t)}async invalidate(){this.mocks.clear()}}const J=n=>{switch(n){case"resolveId":return Promise.resolve({id:"",url:"",optimized:!1});case"resolveMock":return Promise.resolve({mockType:"dummy",resolvedId:"",resolvedUrl:"",redirectUrl:"",needsInterop:!1});case"invalidate":return Promise.resolve()}};class de extends se{queueMock(){}}function pe(n){const t=new de(n("__vitest_mocker__"),{resolveId(e,r){return J("resolveId")},resolveMock(e,r,a){return J("resolveMock")},async invalidate(e){return J("invalidate")}},(...e)=>globalThis.__STORYBOOK_MODULE_TEST__.spyOn(...e),{root:""});return globalThis.__vitest_mocker__=t,ie({globalThisKey:"__vitest_mocker__"})}globalThis.__STORYBOOK_MOCKER__=pe(()=>new le);function fe(n,t="top"){if(!n||typeof document>"u")return;const e=document.head||document.querySelector("head"),r=e.querySelector(":first-child"),a=document.createElement("style");a.appendChild(document.createTextNode(n)),t==="top"&&r?e.insertBefore(a,r):e.appendChild(a)}fe(`
       @font-face {
         font-family: 'Nunito Sans';
         font-style: normal;
@@ -48,6 +48,59 @@ var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,config
         src: url('./sb-common-assets/nunito-sans-bold-italic.woff2') format('woff2');
       }
     /**
+ * Preview iframe: theme backgrounds are scoped so Docs prose (title, description) is not the same
+ * flat canvas as the story. Canvas tab fills #storybook-root; Docs uses --muted for the page;
+ * embedded previews (.sbdocs-preview) match the Story canvas including the zoom toolbar.
+ * Theme classes live on \`html\` (theme-decorator.ts). Variables: src/index.css
+ */
+
+html {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  /* Avoid painting the whole iframe — only the Storybook roots below */
+  background-color: transparent;
+}
+
+/* Story / Canvas tab */
+#storybook-root:not([hidden]) {
+  box-sizing: border-box;
+  min-height: 100vh;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Docs tab: MDX page (headings, description, args tables) — distinct from embedded preview */
+#storybook-docs:not([hidden]) {
+  box-sizing: border-box;
+  min-height: 100vh;
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* Loading states */
+.sb-preparing-story,
+.sb-preparing-docs {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/*
+ * Docs: embedded story + zoom toolbar — full theme surface (matches Canvas).
+ * Storybook’s block chrome uses its own theme background; !important aligns with our tokens.
+ */
+.sbdocs.sbdocs-preview {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.docs-story {
+  background-color: var(--background);
+}
+/**
  * Storybook-only theme palettes. This file is imported in preview.ts and is NOT shipped in the
  * library dist. Add CSS classes here that are only needed for the Storybook preview (e.g. theme
  * switcher options that are not part of the production app).
@@ -132,59 +185,419 @@ var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,config
   --sidebar-border: hsl(0 0% 100% / 0.1);
   --sidebar-ring: hsl(0 0% 45.2%);
 }
-/**
- * Preview iframe: theme backgrounds are scoped so Docs prose (title, description) is not the same
- * flat canvas as the story. Canvas tab fills #storybook-root; Docs uses --muted for the page;
- * embedded previews (.sbdocs-preview) match the Story canvas including the zoom toolbar.
- * Theme classes live on \`html\` (theme-decorator.ts). Variables: src/index.css
+/*
+ * Charis SIL for Storybook: the same faces the application declares, for every story that renders
+ * Scripture text.
+ *
+ * The application inlines src/renderer/styles/fonts.css into each web view; neither Storybook loads
+ * that stylesheet, and the vendored \`usj-nodes.css\` deliberately declares no faces of its own — so
+ * without this file a Scripture story has no Charis SIL declaration from any source and renders in
+ * a system serif with synthesized bold and italic. Both \`.storybook/preview.ts\` files load it, so a
+ * story gets the faces wherever it runs and whichever stylesheet it reaches \`usj-nodes.css\`
+ * through.
+ *
+ * Copied from fonts.css rather than \`@import\`ed from Google so that an offline or network-restricted
+ * run — \`@storybook/addon-vitest\` runs stories as tests — keeps the faces instead of silently
+ * losing them, the way the application's inlined copy does. \`fonts.test.ts\` pins every face here
+ * against fonts.css face for face, so the two cannot drift.
+ *
+ * Charis SIL only: it is the family the vendored chain leads with, and the one whose \`local()\`-only
+ * rules were removed from \`usj-nodes.css\`. The rest of the application's stack lives in fonts.css
+ * with \`--scripture-font-stack\`, which Storybook does not load.
  */
 
-html {
-  min-height: 100%;
+/* #region downloaded faces, preferring an installed copy — from fonts.css */
+
+/* cyrillic-ext */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL'),
+    local('CharisSIL-Regular'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPDsYwZ2.woff2')
+      format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
 }
 
-body {
-  margin: 0;
-  min-height: 100%;
-  /* Avoid painting the whole iframe — only the Storybook roots below */
-  background-color: transparent;
+/* cyrillic */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL'),
+    local('CharisSIL-Regular'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPnsYwZ2.woff2')
+      format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
 
-/* Story / Canvas tab */
-#storybook-root:not([hidden]) {
-  box-sizing: border-box;
-  min-height: 100vh;
-  background-color: var(--background);
-  color: var(--foreground);
+/* vietnamese */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL'),
+    local('CharisSIL-Regular'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPLsYwZ2.woff2')
+      format('woff2');
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
 }
 
-/* Docs tab: MDX page (headings, description, args tables) — distinct from embedded preview */
-#storybook-docs:not([hidden]) {
-  box-sizing: border-box;
-  min-height: 100vh;
-  background-color: var(--muted);
-  color: var(--foreground);
+/* latin-ext */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL'),
+    local('CharisSIL-Regular'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnPPsYwZ2.woff2')
+      format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
 }
 
-/* Loading states */
-.sb-preparing-story,
-.sb-preparing-docs {
-  background-color: var(--background);
-  color: var(--foreground);
+/* latin */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL'),
+    local('CharisSIL-Regular'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWK_kV3l-s-Q8govXvKnP3sYw.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+
+/* cyrillic-ext */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold'),
+    local('CharisSIL-Bold'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjRXQ0SX.woff2')
+      format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+
+/* cyrillic */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold'),
+    local('CharisSIL-Bold'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdj1XQ0SX.woff2')
+      format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+/* vietnamese */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold'),
+    local('CharisSIL-Bold'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjZXQ0SX.woff2')
+      format('woff2');
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+/* latin-ext */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold'),
+    local('CharisSIL-Bold'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjdXQ0SX.woff2')
+      format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* latin */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold'),
+    local('CharisSIL-Bold'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWJ_kV3l-s-Q8govXvKlEbJdjlXQw.woff2')
+      format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* cyrillic-ext */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL Italic'),
+    local('CharisSIL-Italic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbB5yfn0.woff2')
+      format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+
+/* cyrillic */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL Italic'),
+    local('CharisSIL-Italic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcZR5yfn0.woff2')
+      format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+/* vietnamese */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL Italic'),
+    local('CharisSIL-Italic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbh5yfn0.woff2')
+      format('woff2');
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+/* latin-ext */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL Italic'),
+    local('CharisSIL-Italic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcbx5yfn0.woff2')
+      format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* latin */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Charis SIL Italic'),
+    local('CharisSIL-Italic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWI_kV3l-s-Q8govXvKnPjcYR5y.woff2')
+      format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* cyrillic-ext */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold Italic'),
+    local('CharisSIL-BoldItalic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnTFyT9ko.woff2')
+      format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+
+/* cyrillic */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold Italic'),
+    local('CharisSIL-BoldItalic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnRVyT9ko.woff2')
+      format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+/* vietnamese */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold Italic'),
+    local('CharisSIL-BoldItalic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnTlyT9ko.woff2')
+      format('woff2');
+  unicode-range:
+    U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301,
+    U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+/* latin-ext */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold Italic'),
+    local('CharisSIL-BoldItalic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnT1yT9ko.woff2')
+      format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* latin */
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local('Charis SIL Bold Italic'),
+    local('CharisSIL-BoldItalic'),
+    url('https://fonts.gstatic.com/s/charissil/v2/oPWX_kV3l-s-Q8govXvKnPjU2jtnQVyT.woff2')
+      format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* #endregion downloaded faces, preferring an installed copy — from fonts.css */
+
+/* #region installed-only faces for what the downloads above leave out — from fonts.css */
 
 /*
- * Docs: embedded story + zoom toolbar — full theme surface (matches Canvas).
- * Storybook’s block chrome uses its own theme background; !important aligns with our tokens.
+ * Google serves Charis SIL as five subsets with no Greek at all, 8 of the 112 combining marks, and
+ * nothing above the BMP. The \`local()\`-only rules this file replaces carried no \`unicode-range\`, so
+ * wherever the font is installed they were the only face covering the rest — without these, a bare
+ * Greek alpha in a Scripture story falls out of the family mid-line and lands on Times New Roman,
+ * the next entry in the vendored chain. Disjoint from the downloads above by construction, so a
+ * face that errors because the font is not installed is never a candidate for a codepoint a
+ * downloadable face could serve.
  */
-.sbdocs.sbdocs-preview {
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Charis SIL'), local('CharisSIL-Regular');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
+    U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
+    U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
 }
 
-.docs-story {
-  background-color: var(--background);
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: normal;
+  font-weight: 700;
+  src: local('Charis SIL Bold'), local('CharisSIL-Bold');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
+    U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
+    U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
 }
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 400;
+  src: local('Charis SIL Italic'), local('CharisSIL-Italic');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
+    U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
+    U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
+}
+
+@font-face {
+  font-family: 'Charis SIL';
+  font-style: italic;
+  font-weight: 700;
+  src: local('Charis SIL Bold Italic'), local('CharisSIL-BoldItalic');
+  unicode-range:
+    U+02CD, U+02D8-02D9, U+02DB, U+0302, U+0305-0307, U+030A-0322, U+0324-0328, U+032A-03FF,
+    U+0530-1C7F, U+1C8B-1CFF, U+1DC0-1DFF, U+1F00-1FFF, U+2070-209F, U+20C1-2112, U+2114-2115,
+    U+2117-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-2C5F, U+2C80-2DDF,
+    U+2E00-A63F, U+A6A0-A71F, U+A800-FE2D, U+FE30-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
+}
+
+/* #endregion installed-only faces for what the downloads above leave out — from fonts.css */
 /* Based on scripture-editors' packages/platform/src/usj-nodes.css:
    https://github.com/paranext/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (synced from the \`standard-view\` branch at commit
@@ -200,7 +613,8 @@ body {
    - \`.verse-selected\` and the armed-verse blink bind to this repo's \`--destructive\` theme token
      instead of the editor library's literal reds.
    - The table-cell box border binds to \`var(--foreground, #000000)\` instead of the source's
-     literal black, so it stays visible against a dark app theme. */
+     literal black, so it stays visible against a dark app theme.
+   - The source's four \`local()\`-only Charis SIL \`@font-face\` rules are dropped. */
 
 /* stylelint-disable */
 
@@ -221,31 +635,36 @@ body {
 .align_end {
   text-align: end;
 }
-@font-face {
-  font-family: 'Charis SIL';
-  src:
-    local('Charis SIL'), local('Charis SIL Bold'), local('Charis SIL Bold Italic'),
-    local('Charis SIL Italic');
-  font-weight: normal;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold');
-  font-weight: bold;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Italic');
-  font-style: italic;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold Italic');
-  font-weight: bold;
-  font-style: italic;
+/* Don't declare Scripture fonts here. A \`local()\`-only face errors where the font is not installed,
+   and an erroring face makes the family unusable at that weight and style instead of deferring to a
+   working declaration — which drops bold and italic Scripture text onto a system font. The app
+   declares Charis SIL in src/renderer/styles/fonts.css; neither Storybook loads that stylesheet, so
+   .storybook/scripture-fonts.css carries a copy of the same faces — copied rather than fetched, so
+   a network-restricted run keeps them. It is loaded from BOTH Storybooks' previews rather than from
+   one story's stylesheet, because the stories that reach this file arrive by several routes and
+   through both Storybooks. fonts.test.ts pins that copy against fonts.css face for face, and fails
+   if either preview stops loading it. */
+/* Fallback chain for the editor's generated project stylesheet, which emits
+   \`font-family: "<project font>", var(--usj-font-fallback, serif)\`. On \`.usfm\` so the unformatted
+   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
+   view. The literal chain is the library's, and applies where fonts.css is not loaded. */
+.usfm {
+  --usj-font-fallback: var(
+    --scripture-font-stack,
+    'Charis SIL',
+    'Times New Roman',
+    'Liberation Serif',
+    'DejaVu Serif',
+    Georgia,
+    serif
+  );
 }
 .usfm.formatted-font {
-  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+  /* Same \`serif\` fallback the generated project rules carry: a \`var()\` whose property turns out to
+     be invalid at computed-value time takes the whole declaration with it, dropping Scripture text
+     onto the inherited UI font. */
+  font-family: var(--usj-font-fallback, serif);
   font-size: 12pt;
 }
 
@@ -3299,7 +3718,8 @@ span.read img {
    - \`.verse-selected\` and the armed-verse blink bind to this repo's \`--destructive\` theme token
      instead of the editor library's literal reds.
    - The table-cell box border binds to \`var(--foreground, #000000)\` instead of the source's
-     literal black, so it stays visible against a dark app theme. */
+     literal black, so it stays visible against a dark app theme.
+   - The source's four \`local()\`-only Charis SIL \`@font-face\` rules are dropped. */
 
 /* stylelint-disable */
 
@@ -3325,35 +3745,39 @@ span.read img {
   text-align: end;
 }
 
-@font-face {
-  font-family: 'Charis SIL';
-  src:
-    local('Charis SIL'), local('Charis SIL Bold'), local('Charis SIL Bold Italic'),
-    local('Charis SIL Italic');
-  font-weight: normal;
-}
+/* Don't declare Scripture fonts here. A \`local()\`-only face errors where the font is not installed,
+   and an erroring face makes the family unusable at that weight and style instead of deferring to a
+   working declaration — which drops bold and italic Scripture text onto a system font. The app
+   declares Charis SIL in src/renderer/styles/fonts.css; neither Storybook loads that stylesheet, so
+   .storybook/scripture-fonts.css carries a copy of the same faces — copied rather than fetched, so
+   a network-restricted run keeps them. It is loaded from BOTH Storybooks' previews rather than from
+   one story's stylesheet, because the stories that reach this file arrive by several routes and
+   through both Storybooks. fonts.test.ts pins that copy against fonts.css face for face, and fails
+   if either preview stops loading it. */
 
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold');
-  font-weight: bold;
-}
+/* Fallback chain for the editor's generated project stylesheet, which emits
+   \`font-family: "<project font>", var(--usj-font-fallback, serif)\`. On \`.usfm\` so the unformatted
+   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
+   view. The literal chain is the library's, and applies where fonts.css is not loaded. */
 
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Italic');
-  font-style: italic;
-}
-
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold Italic');
-  font-weight: bold;
-  font-style: italic;
+.usfm {
+  --usj-font-fallback: var(
+    --scripture-font-stack,
+    'Charis SIL',
+    'Times New Roman',
+    'Liberation Serif',
+    'DejaVu Serif',
+    Georgia,
+    serif
+  );
 }
 
 .usfm.formatted-font {
-  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+  /* Same \`serif\` fallback the generated project rules carry: a \`var()\` whose property turns out to
+     be invalid at computed-value time takes the whole declaration with it, dropping Scripture text
+     onto the inherited UI font. */
+  font-family: var(--usj-font-fallback, serif);
   font-size: 12pt;
 }
 
