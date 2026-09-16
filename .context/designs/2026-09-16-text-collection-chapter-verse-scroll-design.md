@@ -14,15 +14,19 @@ verse, and it does not move when the shared reference changes. In Simple mode, w
 one tab at a time, the pane is usually hidden when the reference moves and shows a stale position on
 activation.
 
-Two premises in the ticket are wrong, and building on them would produce the wrong fix:
+One premise in the ticket is wrong, and building on it would produce the wrong fix:
 
-- **The grid is not unsynced.** `main.ts:1073` pins it to scroll group 0 in Simple mode, and in its
+- **The grid is not unsynced.** `createScriptureTextGridWebViewProvider` in
+  `platform-scripture-editor`'s `main.ts` pins it to scroll group 0 in Simple mode, and in its
   default `viewMode: 'verse'` each cell renders *only* the target verse via `sliceUsjToVerse`
   (`resource-cell.component.tsx`) — there is nothing to scroll. The gap exists only on the surfaces
   that render a whole chapter: the chapter-context split pane, chapter-mode columns, and the
   single-resource full-width view.
-- **`scroll-group-sync.spec.ts` is not "Power-only".** It pins no `interfaceMode` and inherits
-  `dev-appdata/data/settings.json`, so which mode it exercises depends on the machine.
+
+The ticket's other claims about the test surface hold up. `scroll-group-sync.spec.ts` really is
+Power-pinned (`test.use({ interfaceMode: 'power' })`, a first-class `isolated.fixture` option the
+fixture asserts the app came up in) and editor-only, so Simple mode genuinely has no scroll-group
+coverage.
 
 ## Decisions
 
@@ -346,33 +350,43 @@ with scripted `scrollTop` / `scrollHeight` / `clientHeight` / `getBoundingClient
 Chapter mode requests a scroll; verse and aligned modes request none. Assert through the injected
 finder or the port's `scrollTop`, not by reaching into the hook.
 
-### `simple-mode-column-3-scroll.spec.ts` (new E2E, `e2e-tests/tests/isolated/scroll-groups/`)
+### `use-scroll-group-scr-ref.hook.test.ts` (extend) — the DoD's "pin the behavior it denied"
 
-`isolated.fixture` plus `preConfigureSettings({ 'platform.interfaceMode': 'simple',
-'platform.firstRunComplete': true })`, restored in teardown — template
-`title-bar-narrow-width.spec.ts:29-40`. Use #2781's `scripture-text-grid.page.ts` page object. One
-`test()`, per the isolated-fixture convention:
+The comment corrected in `main.ts` denied that Bible texts and Commentaries follow the group in
+Simple mode. What actually makes them follow it is the hook's `?? 0` default, and none of that
+file's existing cases covered it. Four cases, contrasting with the detached-view block above them:
+an absent `scrollGroupScrRef` reports group `0` rather than no group; an update published to group 0
+is followed; **an update published to a different group is ignored** (without which a hook that
+followed every group would pass); and a new reference is published to group 0 rather than written
+back to the view definition.
 
-1. Open the chapter-context pane by activating a Text Collection verse row.
-2. Assert a late verse's marker is `not.toBeInViewport()` — the falsifiability precondition, without
-   which step 4 can pass vacuously.
-3. Move the toolbar BCV to that verse (`navigateToolbarBcv`, as `scroll-group-sync.spec.ts:85-90`).
-4. Assert the marker `toBeInViewport()`.
-5. Assert Bible texts and Commentaries followed the same reference — the DoD item the false comment
-   at `main.ts:1115` denied.
+### No E2E, deliberately
 
-### `scroll-group-sync.spec.ts` (fix)
+The ticket's Testing Ideas never ask for E2E — they ask for a "Simple-mode scroll-group test", and
+its own framing points at `scroll-group-sync.spec.ts`, which is why an E2E looks implied. Three
+facts say the unit tests above are the better answer:
 
-Add `preConfigureSettings` pinning `platform.interfaceMode`, so it stops inheriting
-`dev-appdata/data/settings.json`.
+- **CI runs only `test:e2e:smoke`.** Neither the `isolated` nor the `enhanced-resources` project is
+  wired into CI, so no placement buys CI protection; both are local harnesses.
+- **The two candidate lanes are mutually exclusive.** `tests/isolated/` launches its own Electron
+  and its `globalSetup` aborts when port 8876 is bound — exactly the state the `cdp.fixture` specs
+  in `tests/enhanced-resources/` (which own the grid's page object) require.
+- **Opening the chapter-context pane needs a real resource in the Text Collection**, which is why
+  every existing grid spec gates on `E2E_TEST_RESOURCE_IDS` and skips without it, and why
+  `enhanced-resources` is marked local-only. Simple mode also renders no dock tabs, so a Simple
+  variant could not reuse `scroll-group-sync.spec.ts`'s shape.
+
+If a standing local harness is wanted later, it belongs in `tests/enhanced-resources/` beside the
+other grid specs, using `cdp.fixture` + `scripture-text-grid.page.ts` + `E2E_TEST_RESOURCE_IDS`, and
+labeled local-only. Verify by hand in the app meanwhile (see Commands).
 
 ### Commands
 
 ```bash
-npm test -- extensions/src/platform-scripture-editor --run
+npm test -- extensions/src/platform-scripture-editor --run   # the hook, the finders, the cell
+npm run test:core -- src/renderer/hooks/papi-hooks --run      # the group-0 default
 npm run lint     # root ignores extensions/ — also run ESLint with the extensions config, as #2781 found
 npm run build
-npm run test:e2e:isolated scroll-groups
 ```
 
 Manual, Simple mode: open the chapter-context pane from a verse row; move the toolbar BCV and watch
