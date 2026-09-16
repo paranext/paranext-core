@@ -84,11 +84,12 @@ function claimLastTabOverlap(zone: HTMLElement): void {
   const tabMidpoint = tabRect.left + tabRect.width / 2;
   const isRtl = getComputedStyle(zone).direction === 'rtl';
   const overlap = Math.max(0, isRtl ? tabMidpoint - zoneRect.right : zoneRect.left - tabMidpoint);
-  const gapAfterTab = Math.max(
+  // Not `Math.min(overlap, gap)`: a tab's midpoint can never sit past its own trailing edge, so the
+  // gap-to-trailing-edge distance below is never larger than `overlap` above.
+  const indicatorLead = Math.max(
     0,
     isRtl ? tabRect.left - zoneRect.right : zoneRect.left - tabRect.right,
   );
-  const indicatorLead = Math.min(overlap, gapAfterTab);
 
   zone.style.setProperty(OVERLAP_PROPERTY, `${overlap}px`);
   zone.style.setProperty(INDICATOR_LEAD_PROPERTY, `${indicatorLead}px`);
@@ -106,10 +107,8 @@ function claimLastTabOverlap(zone: HTMLElement): void {
  *
  * Rendered as a flex sibling of the "+" button inside `.dock-extra-content` (see `getGroups` in
  * `platform-dock-layout-positioning.util.ts`), not inside `.dock-nav-wrap`/`.dock-nav-list`. It
- * can't push a tab into the overflow dropdown: rc-tabs measures `.dock-nav-wrap`, whose width does
- * depend on its flex sibling `.dock-extra-content`, but the zone's `flex: 1 0 0; min-width: 0`
- * (`tab-bar-drop-zone.component.scss`) gives it no flex base size, so it only takes space nothing
- * else needs, and its drag-time extensions are absolutely positioned, so they add none.
+ * can't push a tab into the overflow dropdown — see the `.platform-tab-bar-drop-zone` comment in
+ * `tab-bar-drop-zone.component.scss` for why.
  */
 export function TabBarDropZone({ panelData, context }: TabBarDropZoneProps) {
   // React starts refs as null

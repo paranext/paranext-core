@@ -36,9 +36,9 @@
     // as its originating element. Anything they don't cover inside the bar would hit
     // `.dock-extra-content`, `.dock-nav` or `.dock-bar`, none of which accept a drop, so the drop
     // would silently do nothing. They are absolutely positioned rather than growing the zone's real
-    // box (padding, a negative margin, or removing the gap), which would narrow `.dock-nav-wrap`
-    // mid-drag and could push a tab into the overflow dropdown. Both reach over
-    // `.dock-extra-content`'s block padding, so the bar's full height accepts the drop.
+    // box (padding, a negative margin, or removing the gap) — the same overflow-dropdown risk the
+    // class comment above explains. Both reach over `.dock-extra-content`'s block padding, so the
+    // bar's full height accepts the drop.
     &::before,
     &::after {
       content: '';
@@ -62,10 +62,9 @@
   }
 }
 
-// A separate element from the zone above: `DockContext.setDropRect` reads its target's own
-// `getBoundingClientRect()` to position the global drop-indicator overlay, so the visible indicator
-// needs its own box — reaching back from the zone's start to the last tab's trailing edge — distinct
-// from the zone's hit area, which also covers the tab's trailing half during a drag.
+// A separate element from the zone above, reaching back from the zone's start to the last tab's
+// trailing edge — see `onDragOver` in tab-bar-drop-zone.component.tsx for why `setDropRect` targets
+// this element rather than the zone.
 .platform-tab-bar-drop-zone-indicator {
   position: absolute;
   inset-block: 0;
