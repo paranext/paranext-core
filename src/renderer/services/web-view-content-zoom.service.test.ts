@@ -962,6 +962,66 @@ describe('web-view-content-zoom.service', () => {
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
   });
 
+  /**
+   * Replaces the settings dep with one whose memory write can be made to park, so a test can hold
+   * an edit pending while the echo that write produces is delivered. Everything else behaves as the
+   * default harness, and a released write goes through the harness's own setter.
+   */
+  function useParkableMemoryWrites(): { parkNextWrite: () => Promise<() => void> } {
+    let parkWrite: ((release: () => void) => void) | undefined;
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => settings[key],
+        set: async (key: string, value: unknown) => {
+          if (key === MEMORY && parkWrite) {
+            const announce = parkWrite;
+            parkWrite = undefined;
+            await new Promise<void>((resolve) => {
+              announce(resolve);
+            });
+          }
+          return settingsSet(key, value);
+        },
+        subscribe: async (key: string, callback: (value: unknown) => void) => {
+          if (key === MEMORY) memoryCallbacks.push(callback);
+          else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
+          callback(settings[key]);
+          return async () => {};
+        },
+      },
+    });
+    return {
+      parkNextWrite: () =>
+        new Promise<() => void>((resolve) => {
+          parkWrite = resolve;
+        }),
+    };
+  }
+
+  it("brings a sibling in line with this window's own memory write when its echo arrives before the write resolves", async () => {
+    const writes = useParkableMemoryWrites();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    setContentZoomAreas('editor-2', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main');
+    const parked = writes.parkNextWrite();
+    const flushing = __flushContentZoomWritesForTesting();
+    const release = await parked;
+    // This window's own write coming back to it while the edit it carries is still pending.
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.1 }));
+    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    release();
+    await flushing;
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+  });
+
   it('writes the newest pending level when a further edit lands while the flush is reading', async () => {
     const reads = useControllableMemoryReads();
     await initializeContentZoomService();
