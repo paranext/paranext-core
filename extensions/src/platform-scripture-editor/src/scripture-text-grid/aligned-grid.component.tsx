@@ -1,5 +1,5 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useStylesheet } from 'platform-bible-react';
+import { useStylesheet, useViewVisibility } from 'platform-bible-react';
 import { Children, useRef, type ReactNode } from 'react';
 import { ALIGNED_GRID_CLASS, ALIGNED_GRID_STYLESHEET } from './aligned-grid.styles';
 import { useAlignedReferenceScroll } from './use-aligned-reference-scroll.hook';
@@ -46,7 +46,8 @@ export function AlignedGrid({ children, scrRef, ariaLabel }: AlignedGridProps) {
 
   // Only injected while this view is mounted; the rules are what make the layout work.
   useStylesheet(ALIGNED_GRID_STYLESHEET);
-  useAlignedReferenceScroll(portRef, scrRef);
+  const isViewVisible = useViewVisibility();
+  useAlignedReferenceScroll(portRef, scrRef, isViewVisible);
 
   return (
     <div

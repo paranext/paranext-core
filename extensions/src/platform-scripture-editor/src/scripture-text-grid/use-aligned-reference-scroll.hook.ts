@@ -1,5 +1,5 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useRunWhenVisible, useViewVisibility } from 'platform-bible-react';
+import { useRunWhenVisible } from 'platform-bible-react';
 import { useEffect, useRef, type RefObject } from 'react';
 import {
   findVerseBlockForVerse,
@@ -28,10 +28,13 @@ const SCROLL_MATCH_TOLERANCE_PX = 1;
  *
  * @param portRef The grid root, which is the only scroll port in this view.
  * @param scrRef The scroll-group reference to follow.
+ * @param isViewVisible Whether the view is visible, from `useViewVisibility`. Taken as a parameter
+ *   so a view calls `useViewVisibility` once however many consumers of this hook it renders.
  */
 export function useAlignedReferenceScroll(
   portRef: RefObject<HTMLElement | null>,
   scrRef: SerializedVerseRef,
+  isViewVisible: boolean,
 ): void {
   // Where this hook last left the port. A scrollTop that no longer matches means the reader moved
   // it, so the reference is left alone until it changes. `undefined` re-arms.
@@ -48,7 +51,6 @@ export function useAlignedReferenceScroll(
   // is visible — a hidden pane's scrollTop is not the reader's doing and must not stand this down.
   const hasStoodDownRef = useRef(false);
 
-  const isViewVisible = useViewVisibility();
   // An inactive dock tab has no layout: geometry reads return zero and the scroll would silently do
   // nothing. Deferring collapses every request made while hidden into one catch-up on activation
   // (`.claude/rules/cross-view-sync-hidden-views.md`).
