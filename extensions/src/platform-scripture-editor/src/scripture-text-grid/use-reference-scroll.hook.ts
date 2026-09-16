@@ -37,9 +37,14 @@ const SCROLL_MATCH_TOLERANCE_PX = 1;
  * @param isViewVisible Whether the view is visible, from `useViewVisibility`. Taken as a parameter
  *   so a view calls `useViewVisibility` once however many consumers of this hook it renders.
  * @param findTarget How to find the element representing a verse in this view's layout.
- * @param options `isEnabled` (default `true`) turns the hook off entirely — no geometry reads, no
- *   observer — for a view whose layout is scrolled by an ancestor or that has nothing to scroll to,
- *   where a React hook still has to be called unconditionally.
+ * @param options `isEnabled` (default `true`) stops the hook scrolling — no target lookup, no
+ *   geometry reads, no mutation observer — for a view whose layout is scrolled by an ancestor or
+ *   that has nothing to scroll to, where a React hook still has to be called unconditionally. It
+ *   does NOT stop the visibility subscription below, which every caller pays for because it is read
+ *   before the flag; with a per-cell caller that is one `IntersectionObserver` per cell. Taking
+ *   `isViewVisible` as a parameter instead would leave the subscription to the one consumer that
+ *   owns the view, as `useBcvSyncScroll` and `useFocusSearchOnInvoke` do — proposed on the PR that
+ *   introduced this hook.
  */
 export function useReferenceScroll(
   portRef: RefObject<HTMLElement | null>,
@@ -100,11 +105,20 @@ export function useReferenceScroll(
     appliedScrollTopRef.current = port.scrollTop;
   });
 
+  // Re-arm on every new reference: forget where this hook last left the port, and take back a
+  // stand-down, because the reader asked to go somewhere new.
+  //
+  // `isEnabled` gates the request as well as appearing in the deps. Gating keeps a disabled cell
+  // from arming `useRunWhenVisible` while hidden, which would spend two state updates on activation
+  // to run a body that returns immediately — once per cell, and every cell hosts an editor. Listing
+  // it means re-enabling also re-arms, rather than leaving the refs holding positions measured
+  // before the hook was switched on.
   useEffect(() => {
+    if (!isEnabled) return;
     appliedScrollTopRef.current = undefined;
     hasStoodDownRef.current = false;
     requestScroll();
-  }, [targetReference, requestScroll]);
+  }, [isEnabled, targetReference, requestScroll]);
 
   // The reference usually changes before the chapter it points into has rendered, and in the
   // aligned view each column arrives separately, so re-check as the DOM changes. Several editors

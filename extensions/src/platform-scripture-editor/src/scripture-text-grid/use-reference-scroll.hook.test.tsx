@@ -68,22 +68,27 @@ function renderScroll(
   { isEnabled = true, verseNum = 5 } = {},
 ) {
   const portRef: RefObject<HTMLElement | null> = { current: port };
-  // The reference the hook is currently mounted with, so a bare re-render does not silently
-  // navigate back to the initial one.
-  let currentVerseNum = verseNum;
+  // What the hook is currently mounted with, so a bare re-render does not silently navigate back to
+  // the initial reference or flip the hook off again.
+  let current = { verseNum, isEnabled };
   const { rerender } = renderHook(
-    (props: { verseNum: number }) =>
-      useReferenceScroll(portRef, reference(props.verseNum), findTarget, { isEnabled }),
-    { initialProps: { verseNum } },
+    (props: { verseNum: number; isEnabled: boolean }) =>
+      useReferenceScroll(portRef, reference(props.verseNum), findTarget, {
+        isEnabled: props.isEnabled,
+      }),
+    { initialProps: current },
   );
+  const rerenderWith = (next: Partial<typeof current>) => {
+    current = { ...current, ...next };
+    return act(() => rerender(current));
+  };
   return {
     /** Moves the reference, which re-arms the scroll. */
-    navigateTo: (next: number) => {
-      currentVerseNum = next;
-      return act(() => rerender({ verseNum: next }));
-    },
-    /** Re-renders at the same reference, which is how a visibility flip reaches the hook. */
-    reRender: () => act(() => rerender({ verseNum: currentVerseNum })),
+    navigateTo: (next: number) => rerenderWith({ verseNum: next }),
+    /** Turns the hook on or off where it stands, without remounting it. */
+    setEnabled: (next: boolean) => rerenderWith({ isEnabled: next }),
+    /** Re-renders unchanged, which is how a visibility flip reaches the hook. */
+    reRender: () => rerenderWith({}),
   };
 }
 
@@ -231,9 +236,13 @@ describe('useReferenceScroll while visible', () => {
 });
 
 describe('useReferenceScroll disabled', () => {
-  it('reads no geometry and watches nothing', async () => {
+  it('looks for no target and never moves the port', async () => {
     // Verse mode has nothing to scroll to and the aligned grid is scrolled by its root, but a React
-    // hook still has to be called, so "off" has to mean genuinely inert.
+    // hook still has to be called, so "off" has to mean "does not scroll".
+    //
+    // Scoped to the scrolling, deliberately: the visibility subscription is read before the flag
+    // and so is NOT disabled, and this test could not see it either way — `useViewVisibility` is
+    // stubbed here.
     const port = buildPort();
     const findTarget = vi.fn(() => buildTarget(port, BELOW_THE_FOLD));
 
@@ -243,5 +252,24 @@ describe('useReferenceScroll disabled', () => {
 
     expect(findTarget).not.toHaveBeenCalled();
     expect(port.scrollTop).toBe(0);
+  });
+
+  it('scrolls to the current reference when it is switched back on', () => {
+    // Being re-enabled has to re-arm, not resume from whatever was last measured: the references
+    // that passed while the hook was off never moved the port, so the position it remembers is not
+    // where the reader now is. Unreachable through the grid today, where each view mode renders the
+    // cell in a different tree and so remounts it — but this hook is exported as a general
+    // controller, and nothing about it says "mount-time constant".
+    const port = buildPort();
+    const findTarget = vi.fn(() => buildTarget(port, BELOW_THE_FOLD));
+
+    const { navigateTo, setEnabled } = renderScroll(port, findTarget, { isEnabled: false });
+    navigateTo(9);
+    expect(port.scrollTop).toBe(0);
+
+    setEnabled(true);
+
+    expect(findTarget).toHaveBeenCalledWith(port, 9);
+    expect(port.scrollTop).toBe(BELOW_THE_FOLD);
   });
 });
