@@ -1,21 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { type RefObject } from 'react';
 import { useReferenceScroll } from './use-reference-scroll.hook';
 import { type VerseTargetFinder } from './reference-scroll.utils';
 
-const { mockVisibility } = vi.hoisted(() => ({ mockVisibility: { isVisible: true } }));
-
-// Only `useViewVisibility` is stubbed: it builds an IntersectionObserver, which jsdom does not
-// provide, and a mutable flag is the visibility lever these tests need. `useRunWhenVisible` is
-// deliberately the REAL hook — the deferral and the collapse under test here are its behavior, so
-// mocking it would leave the thing being asserted unexercised.
-vi.mock('platform-bible-react', async (importOriginal) => {
-  const original = await importOriginal<typeof import('platform-bible-react')>();
-  return { ...original, useViewVisibility: () => mockVisibility.isVisible };
-});
+// Nothing is mocked here. Visibility is a parameter, so it is just a value these tests pass, and
+// `useRunWhenVisible` is deliberately the REAL hook — the deferral and the collapse under test are
+// its behavior, so stubbing it would leave the thing being asserted unexercised.
 
 const reference = (verseNum: number): SerializedVerseRef => ({
   book: 'MAT',
@@ -65,15 +58,14 @@ function buildTarget(port: HTMLElement, contentTop: number): HTMLElement {
 function renderScroll(
   port: HTMLElement,
   findTarget: VerseTargetFinder,
-  { isEnabled = true, verseNum = 5 } = {},
+  { isEnabled = true, verseNum = 5, isViewVisible = true } = {},
 ) {
   const portRef: RefObject<HTMLElement | null> = { current: port };
-  // What the hook is currently mounted with, so a bare re-render does not silently navigate back to
-  // the initial reference or flip the hook off again.
-  let current = { verseNum, isEnabled };
+  // What the hook is currently mounted with, so changing one input does not silently reset another.
+  let current = { verseNum, isEnabled, isViewVisible };
   const { rerender } = renderHook(
-    (props: { verseNum: number; isEnabled: boolean }) =>
-      useReferenceScroll(portRef, reference(props.verseNum), findTarget, {
+    (props: { verseNum: number; isEnabled: boolean; isViewVisible: boolean }) =>
+      useReferenceScroll(portRef, reference(props.verseNum), props.isViewVisible, findTarget, {
         isEnabled: props.isEnabled,
       }),
     { initialProps: current },
@@ -87,8 +79,8 @@ function renderScroll(
     navigateTo: (next: number) => rerenderWith({ verseNum: next }),
     /** Turns the hook on or off where it stands, without remounting it. */
     setEnabled: (next: boolean) => rerenderWith({ isEnabled: next }),
-    /** Re-renders unchanged, which is how a visibility flip reaches the hook. */
-    reRender: () => rerenderWith({}),
+    /** Shows or hides the view, which is what arms and consumes the deferred catch-up. */
+    setVisible: (next: boolean) => rerenderWith({ isViewVisible: next }),
   };
 }
 
@@ -102,26 +94,29 @@ async function landContent(port: HTMLElement): Promise<void> {
   });
 }
 
+const realScrollIntoView = Element.prototype.scrollIntoView;
+
 beforeEach(() => {
-  mockVisibility.isVisible = true;
   document.body.replaceChildren();
+});
+
+afterEach(() => {
+  Element.prototype.scrollIntoView = realScrollIntoView;
 });
 
 describe('useReferenceScroll while hidden', () => {
   it('defers the scroll until the tab is shown, then performs it once', () => {
     // In Simple mode this is the common path, not the edge: column 3 shows one tab at a time, so
     // the reference usually moves while the pane is hidden and has no layout to measure.
-    mockVisibility.isVisible = false;
     const port = buildPort();
     const findTarget = vi.fn(() => buildTarget(port, BELOW_THE_FOLD));
 
-    const { reRender } = renderScroll(port, findTarget);
+    const { setVisible } = renderScroll(port, findTarget, { isViewVisible: false });
 
     expect(findTarget).not.toHaveBeenCalled();
     expect(port.scrollTop).toBe(0);
 
-    mockVisibility.isVisible = true;
-    reRender();
+    setVisible(true);
 
     expect(port.scrollTop).toBe(BELOW_THE_FOLD);
   });
@@ -129,19 +124,17 @@ describe('useReferenceScroll while hidden', () => {
   it('collapses navigation while hidden into one catch-up at the latest reference', () => {
     // Replaying each skipped reference would scroll the reader through verses they never asked to
     // see, and only the last one is where they actually are.
-    mockVisibility.isVisible = false;
     const port = buildPort();
     const findTarget = vi.fn(() => buildTarget(port, BELOW_THE_FOLD));
 
-    const { navigateTo, reRender } = renderScroll(port, findTarget);
+    const { navigateTo, setVisible } = renderScroll(port, findTarget, { isViewVisible: false });
     navigateTo(11);
     navigateTo(12);
     navigateTo(13);
 
     expect(findTarget).not.toHaveBeenCalled();
 
-    mockVisibility.isVisible = true;
-    reRender();
+    setVisible(true);
 
     expect(findTarget).toHaveBeenCalledTimes(1);
     expect(findTarget).toHaveBeenCalledWith(port, 13);
@@ -151,18 +144,19 @@ describe('useReferenceScroll while hidden', () => {
     // There is nothing to animate from on activation — the pane had no layout a moment ago — so an
     // animated catch-up would just be a visible lurch. `.claude/rules/cross-view-sync-hidden-views`
     // requires the instant consume.
-    mockVisibility.isVisible = false;
     const port = buildPort();
     port.scrollTo = vi.fn();
+    // Restored in afterEach: this is a prototype shared with every other test file in the worker,
+    // and leaving a spy on it makes unrelated suites fail intermittently.
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
 
-    const { reRender } = renderScroll(
+    const { setVisible } = renderScroll(
       port,
       vi.fn(() => buildTarget(port, BELOW_THE_FOLD)),
+      { isViewVisible: false },
     );
-    mockVisibility.isVisible = true;
-    reRender();
+    setVisible(true);
 
     expect(port.scrollTop).toBe(BELOW_THE_FOLD);
     expect(port.scrollTo).not.toHaveBeenCalled();
@@ -239,10 +233,6 @@ describe('useReferenceScroll disabled', () => {
   it('looks for no target and never moves the port', async () => {
     // Verse mode has nothing to scroll to and the aligned grid is scrolled by its root, but a React
     // hook still has to be called, so "off" has to mean "does not scroll".
-    //
-    // Scoped to the scrolling, deliberately: the visibility subscription is read before the flag
-    // and so is NOT disabled, and this test could not see it either way — `useViewVisibility` is
-    // stubbed here.
     const port = buildPort();
     const findTarget = vi.fn(() => buildTarget(port, BELOW_THE_FOLD));
 

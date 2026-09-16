@@ -27,6 +27,12 @@ type ScriptureTextGridProps = {
   resources: GridResource[];
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
+  /**
+   * Whether this web view is rendered, from `useViewVisibility` at the web view's root — owned
+   * there alongside `scrRef` rather than asked for here, so the one answer is subscribed to once
+   * however many cells this renders.
+   */
+  isViewVisible: boolean;
   /** Accessible name for the list/group region (the web view passes the localized tab title). */
   ariaLabel?: string;
   /**
@@ -96,6 +102,7 @@ export function ScriptureTextGrid({
   resources,
   scrRef,
   setScrRef,
+  isViewVisible,
   ariaLabel,
   viewMode = 'verse',
   chapterContext,
@@ -252,6 +259,7 @@ export function ScriptureTextGrid({
               key={resource.resourceId}
               resource={resource}
               scrRef={scrRef}
+              isViewVisible={isViewVisible}
               setScrRef={setScrRef}
               cellViewMode="aligned"
               className="tw:min-w-0"
@@ -301,6 +309,7 @@ export function ScriptureTextGrid({
             zoomMenuLabels={zoomMenuLabels}
             scrRef={scrRef}
             setScrRef={setScrRef}
+            isViewVisible={isViewVisible}
             viewMode="chapter"
           />
         </div>
@@ -344,6 +353,7 @@ export function ScriptureTextGrid({
             resource={resource}
             scrRef={scrRef}
             setScrRef={setScrRef}
+            isViewVisible={isViewVisible}
             cellViewMode="chapter"
             className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
             reorder={buildReorder(resource)}
@@ -443,6 +453,7 @@ export function ScriptureTextGrid({
               zoomMenuLabels={zoomMenuLabels}
               scrRef={scrRef}
               setScrRef={setScrRef}
+              isViewVisible={isViewVisible}
               viewMode={viewMode}
               showDragHandle={reorder ? true : undefined}
               reorderHandleLabel={reorder?.handleLabel}
@@ -501,6 +512,7 @@ export function ScriptureTextGrid({
                 zoomMenuLabels={zoomMenuLabels}
                 scrRef={scrRef}
                 setScrRef={setScrRef}
+                isViewVisible={isViewVisible}
                 viewMode="chapter"
               />
             </div>
