@@ -6,6 +6,13 @@ import { Unsubscriber } from 'platform-bible-utils';
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
 
 /**
+ * How far below the scroll viewport's top edge a scrolled-to range's first line lands. The same
+ * breathing room `scrollToVerse` leaves above a verse number, so jumping to a match and jumping to
+ * a verse look alike.
+ */
+export const RANGE_SCROLL_TOP_OFFSET = VERSE_NUMBER_SCROLL_OFFSET;
+
+/**
  * Interval time in ms to wait between polling the document to see if the editor has finished
  * loading. Hope to be obsoleted by a way to listen for the editor to finish loading
  */
@@ -231,18 +238,34 @@ function getTopWithinScrollContainer(elementRect: DOMRect, scrollContainer: HTML
 }
 
 /**
+ * The verse marker element for a verse number in the editor content. Matches on the number alone —
+ * there is no book or chapter in the selector, so whatever chapter is on screen answers.
+ *
+ * @param verseNum The verse number; below 1 there is no marker
+ * @returns The verse marker element if found; otherwise undefined
+ */
+export function getVerseElement(verseNum: number): HTMLElement | undefined {
+  if (verseNum < 1) return undefined;
+  return (
+    document.querySelector<HTMLElement>(
+      `.editor-container span[data-marker="v"][data-number="${verseNum}"]`,
+    ) ?? undefined
+  );
+}
+
+/**
  * Scrolls to the verse marker at the specified verse ref within the editor content.
  *
  * @param verseRef The verse ref whose matching verse marker to scroll to
+ * @param behavior `'smooth'` for a move the user watches; `'instant'` to catch up a view that was
+ *   hidden when the move was asked for
  * @returns The verse marker's DOM element if found; otherwise undefined
  */
-export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undefined {
-  const verseElement =
-    verseRef.verseNum < 1
-      ? undefined
-      : (document.querySelector<HTMLElement>(
-          `.editor-container span[data-marker="v"][data-number="${verseRef.verseNum}"]`,
-        ) ?? undefined);
+export function scrollToVerse(
+  verseRef: SerializedVerseRef,
+  behavior: ScrollBehavior = 'smooth',
+): HTMLElement | undefined {
+  const verseElement = getVerseElement(verseRef.verseNum);
 
   // Scroll if we find the verse or we're at the start of the chapter. Discovering the scroll
   // container (a getComputedStyle + reflow ancestor walk) is deferred until inside this guard so the
@@ -266,14 +289,152 @@ export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undef
           ) - VERSE_NUMBER_SCROLL_OFFSET
         : 0;
 
-      scrollContainerElement.scrollTo({
-        behavior: 'smooth',
-        top: verseOffsetTop,
-      });
+      scrollContainerElement.scrollTo({ behavior, top: verseOffsetTop });
     }
   }
 
   return verseElement;
+}
+
+/**
+ * Decides where to scroll so a range — a find match, a check result — is in view, or that it
+ * already is. All values are in the scroll container's content coordinates (the space `scrollTop`
+ * lives in).
+ *
+ * The end state is spelled out because "scroll until visible" is the rule that parks a range's
+ * leading edge against the bottom of the viewport, with the text itself still out of sight:
+ *
+ * - A range already FULLY inside the viewport stays put, so stepping between results on one screen
+ *   does not make the text jump.
+ * - Otherwise the range's first line lands {@link RANGE_SCROLL_TOP_OFFSET} below the top edge.
+ * - A range taller than the viewport follows the same rule: its start is what a reader looks for, so
+ *   the start is in view and the rest runs off the bottom.
+ * - The target is clamped to the container's scroll range, so a range at the very start or end of a
+ *   chapter lands wherever the chapter's own edge allows — still fully in view.
+ *
+ * @returns The `scrollTop` to scroll to, or `undefined` when the range is already fully in view
+ */
+export function computeRangeScrollTop({
+  rangeTop,
+  rangeBottom,
+  scrollTop,
+  clientHeight,
+  scrollHeight,
+}: {
+  rangeTop: number;
+  rangeBottom: number;
+  scrollTop: number;
+  clientHeight: number;
+  scrollHeight: number;
+}): number | undefined {
+  if (rangeTop >= scrollTop && rangeBottom <= scrollTop + clientHeight) return undefined;
+  const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
+  return Math.min(Math.max(rangeTop - RANGE_SCROLL_TOP_OFFSET, 0), maxScrollTop);
+}
+
+/**
+ * The DOM range of the current selection, when that selection is inside the editor content.
+ *
+ * Lexical writes the DOM selection when the engine applies a selection whether or not the editor
+ * has focus, so this reads where `EditorRef.setSelection` actually put the selection, in the
+ * coordinates of the text on screen. Scoped to `.editor-container` because the footnote and comment
+ * editors render their own content outside it, and a selection there is not in the chapter text.
+ *
+ * @returns The selection's range, or `undefined` when nothing is selected in the editor content
+ */
+export function getEditorSelectionRange(): Range | undefined {
+  const selection = document.getSelection();
+  if (!selection || selection.rangeCount === 0) return undefined;
+  const range = selection.getRangeAt(0);
+  const { commonAncestorContainer } = range;
+  const element =
+    commonAncestorContainer instanceof Element
+      ? commonAncestorContainer
+      : commonAncestorContainer.parentElement;
+  return element?.closest('.editor-container') ? range : undefined;
+}
+
+/**
+ * Everything a scroll-to-range decision needs to read from the DOM: the range's own top and height
+ * within its scroll container, and that container's current scroll position and size — the inputs
+ * {@link computeRangeScrollTop} takes.
+ */
+export interface RangeScrollGeometry {
+  /** The container that actually scrolls the range into view */
+  scrollContainer: HTMLElement;
+  /** The range's top edge, in the container's scroll coordinate space */
+  rangeTop: number;
+  /** The range's height */
+  rangeHeight: number;
+  /** The container's current `scrollTop` */
+  scrollTop: number;
+  /** The container's current `clientHeight` */
+  clientHeight: number;
+  /** The container's current `scrollHeight` */
+  scrollHeight: number;
+}
+
+/**
+ * Measures everything a scroll-to-range decision needs, from the real scroll container, in one pass
+ * — the single measurement path both `scrollToRange` and the settle loop in `useScrollToRange`
+ * read, so the two can never sample different elements and disagree about whether the layout has
+ * finished growing.
+ *
+ * @param range The DOM range to measure; must be inside the editor content
+ * @returns The range's and container's geometry, or `undefined` when there is no layout to measure
+ *   (inside a `display: none` iframe every rect is zeros) or no scrollable ancestor exists
+ */
+export function measureRangeScrollGeometry(range: Range): RangeScrollGeometry | undefined {
+  const rect = range.getBoundingClientRect();
+  if (rect.top === 0 && rect.left === 0 && rect.width === 0 && rect.height === 0) return undefined;
+
+  const startElement =
+    range.startContainer instanceof HTMLElement
+      ? range.startContainer
+      : range.startContainer.parentElement;
+  const scrollContainer = startElement ? findScrollContainer(startElement) : undefined;
+  if (!scrollContainer) return undefined;
+
+  return {
+    scrollContainer,
+    rangeTop: getTopWithinScrollContainer(rect, scrollContainer),
+    rangeHeight: rect.height,
+    scrollTop: scrollContainer.scrollTop,
+    clientHeight: scrollContainer.clientHeight,
+    scrollHeight: scrollContainer.scrollHeight,
+  };
+}
+
+/**
+ * Scrolls the editor so a DOM range is in view, landing where {@link computeRangeScrollTop} says.
+ *
+ * Measures the range itself rather than its verse: a verse's start can be on screen while the text
+ * in it is still below the fold.
+ *
+ * @param range The DOM range to bring into view; must be inside the editor content
+ * @param behavior `'smooth'` for a jump the user watches; `'instant'` to catch up a view that was
+ *   hidden when the jump was asked for
+ * @returns `true` when the range was measured, whether or not it needed a scroll; `false` when it
+ *   has no layout to measure (inside a `display: none` iframe every rect is zeros), so the caller
+ *   can fall back
+ */
+export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
+  const rect = range.getBoundingClientRect();
+  if (rect.top === 0 && rect.left === 0 && rect.width === 0 && rect.height === 0) return false;
+
+  const geometry = measureRangeScrollGeometry(range);
+  // No scroll container: nothing overflows, so everything is already in view.
+  if (!geometry) return true;
+
+  const targetTop = computeRangeScrollTop({
+    rangeTop: geometry.rangeTop,
+    rangeBottom: geometry.rangeTop + geometry.rangeHeight,
+    scrollTop: geometry.scrollTop,
+    clientHeight: geometry.clientHeight,
+    scrollHeight: geometry.scrollHeight,
+  });
+  if (targetTop !== undefined) geometry.scrollContainer.scrollTo({ behavior, top: targetTop });
+  return true;
 }
 
 /**
@@ -394,8 +555,9 @@ export function hasNewScrollTarget(
 
 /**
  * Max ms to wait for a verse scroll to become possible before giving up — the rAF retry in the
- * model text panel and the settle loop in the resource text panel both bound themselves with it.
- * The usual reason for reaching it is a verse marker genuinely absent from the USJ (a `\v 16-17`
- * range publishes no marker for 17).
+ * model text panel, the settle loop in the resource text panel, and the settle loop in
+ * `useScrollToRange` (this extension's range-jump hook) all bound themselves with it. The usual
+ * reason for reaching it is a verse marker genuinely absent from the USJ (a `\v 16-17` range
+ * publishes no marker for 17).
  */
 export const SCROLL_MAX_WAIT_MS = 2000;

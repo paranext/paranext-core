@@ -53,7 +53,7 @@
  * permanent, non-closable Column 3 tab.
  */
 
-import { Frame, FrameLocator, Locator, Page } from '@playwright/test';
+import { ElectronApplication, Frame, FrameLocator, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
@@ -71,6 +71,7 @@ import {
 import {
   EDITOR_HAMBURGER_SELECTOR,
   findScriptureEditorFrame,
+  navigateToolbarBcv,
 } from '../../../fixtures/scripture-editor-helpers';
 
 // The layout this suite's assertions are written against — in particular the Column 3 tab overflow
@@ -449,6 +450,185 @@ async function openFiltersPanel(frame: FrameLocator): Promise<void> {
  */
 function firstResultCard(frame: FrameLocator): Locator {
   return frame.locator('[role="button"][aria-pressed]').first();
+}
+
+/** Where a piece of chapter text sits relative to the editor's scrolling viewport. */
+interface TextGeometry {
+  /** Top of the text in px below the scroll viewport's top edge; negative means above it */
+  matchTop: number;
+  /** Bottom of the text in px below the scroll viewport's top edge */
+  matchBottom: number;
+  viewportHeight: number;
+  viewportWidth: number;
+  scrollTop: number;
+}
+
+/**
+ * Measures the first occurrence of `text` in the editor's chapter content against the element that
+ * actually scrolls that content.
+ *
+ * Locates the text itself rather than reading the editor's selection or Find's highlight: the
+ * editor positions its scroll from the selection, so measuring the selection would let a wrong
+ * selection pass, and Find's highlight is not guaranteed to survive a chapter load. Native
+ * `indexOf` over scripture text is acceptable here only because every needle this suite uses is
+ * plain ASCII with no combining marks after it in the WEB text.
+ *
+ * @returns `undefined` when the editor has no scrolling content or the text is not in the chapter
+ */
+async function readTextGeometry(
+  editorFrame: Frame,
+  text: string,
+): Promise<TextGeometry | undefined> {
+  return editorFrame.evaluate((needle) => {
+    const editorContainer = document.querySelector<HTMLElement>('.editor-container');
+    if (!editorContainer) return undefined;
+    // Same discovery as `findScrollContainer` in editor-dom.util.ts: the nearest ancestor that is
+    // styled scrollable AND overflows.
+    let scroller: HTMLElement | null = editorContainer;
+    while (scroller) {
+      const { overflowY } = getComputedStyle(scroller);
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        scroller.scrollHeight > scroller.clientHeight
+      )
+        break;
+      scroller = scroller.parentElement;
+    }
+    if (!scroller) return undefined;
+
+    const walker = document.createTreeWalker(editorContainer, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node && !(node.textContent ?? '').includes(needle)) node = walker.nextNode();
+    if (!node) return undefined;
+
+    const start = (node.textContent ?? '').indexOf(needle);
+    const range = document.createRange();
+    range.setStart(node, start);
+    range.setEnd(node, start + needle.length);
+    const rect = range.getBoundingClientRect();
+    const viewportTop = scroller.getBoundingClientRect().top + scroller.clientTop;
+    return {
+      matchTop: rect.top - viewportTop,
+      matchBottom: rect.bottom - viewportTop,
+      viewportHeight: scroller.clientHeight,
+      viewportWidth: scroller.clientWidth,
+      scrollTop: scroller.scrollTop,
+    };
+  }, text);
+}
+
+/**
+ * Waits until `text` is in the chapter and has stopped moving — two reads 250 ms apart agree — and
+ * answers where it came to rest. Smooth scrolling means a single read can catch the text
+ * mid-flight.
+ */
+async function waitForGeometryToSettle(
+  editorFrame: Frame,
+  text: string,
+  timeout = 30_000,
+): Promise<TextGeometry> {
+  let previous: TextGeometry | undefined;
+  let settled: TextGeometry | undefined;
+  await expect(async () => {
+    const current = await readTextGeometry(editorFrame, text);
+    const isResting =
+      !!current &&
+      !!previous &&
+      current.scrollTop === previous.scrollTop &&
+      current.matchTop === previous.matchTop;
+    previous = current;
+    expect(isResting).toBe(true);
+    settled = current;
+  }).toPass({ timeout, intervals: [250] });
+  if (!settled) throw new Error(`"${text}" never settled in the editor`);
+  return settled;
+}
+
+/**
+ * Navigates the editor to `reference` and pins its scroll to the top or bottom of the chapter, so a
+ * test starts from a known position rather than wherever the previous test's jump left it.
+ *
+ * @param settleText Text in the target chapter used to confirm the chapter is loaded and at rest
+ */
+async function showEditorAt(
+  mainPage: Page,
+  editorFrame: Frame,
+  reference: string,
+  settleText: string,
+  pinTo: 'top' | 'bottom',
+): Promise<TextGeometry> {
+  await navigateToolbarBcv(mainPage, reference);
+  await waitForGeometryToSettle(editorFrame, settleText);
+  await editorFrame.evaluate((edge) => {
+    let scroller: HTMLElement | null = document.querySelector<HTMLElement>('.editor-container');
+    while (scroller) {
+      const { overflowY } = getComputedStyle(scroller);
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        scroller.scrollHeight > scroller.clientHeight
+      )
+        break;
+      scroller = scroller.parentElement;
+    }
+    if (scroller) scroller.scrollTop = edge === 'top' ? 0 : scroller.scrollHeight;
+  }, pinTo);
+  return waitForGeometryToSettle(editorFrame, settleText);
+}
+
+/** Asserts the text came to rest entirely inside the editor's scroll viewport. */
+async function expectFullyInView(editorFrame: Frame, text: string): Promise<TextGeometry> {
+  const geometry = await waitForGeometryToSettle(editorFrame, text);
+  expect(geometry.matchTop).toBeGreaterThanOrEqual(0);
+  expect(geometry.matchBottom).toBeLessThanOrEqual(geometry.viewportHeight);
+  return geometry;
+}
+
+/**
+ * How far below the scroll viewport's top edge a scrolled-to match's first line should land.
+ * Mirrors `RANGE_SCROLL_TOP_OFFSET` in
+ * `extensions/src/platform-scripture-editor/src/editor-dom.util.ts`.
+ */
+const EXPECTED_MATCH_TOP_OFFSET = 80;
+
+/** How far the resting position may drift from that offset — a couple of lines of font metrics. */
+const MATCH_TOP_TOLERANCE = 50;
+
+/**
+ * Asserts a jump that had to scroll came to rest with the MATCH's own first line just below the top
+ * of the viewport — not merely somewhere on screen.
+ *
+ * This is what separates scrolling to the match from scrolling to the start of its verse. Both
+ * leave the match "visible" whenever the verse is short, so a visibility-only assertion cannot tell
+ * them apart: measured against the verse-start behaviour, a mid-verse match rests ~150 px lower
+ * than this band allows, because the verse's start takes the offset instead.
+ */
+async function expectLandedAtTop(editorFrame: Frame, text: string): Promise<TextGeometry> {
+  const geometry = await expectFullyInView(editorFrame, text);
+  expect(geometry.matchTop).toBeGreaterThanOrEqual(EXPECTED_MATCH_TOP_OFFSET - MATCH_TOP_TOLERANCE);
+  expect(geometry.matchTop).toBeLessThanOrEqual(EXPECTED_MATCH_TOP_OFFSET + MATCH_TOP_TOLERANCE);
+  return geometry;
+}
+
+/**
+ * Resizes the first app window's content area to `width`, keeping its height, and returns a
+ * function that restores the original size.
+ */
+async function setWindowContentWidth(
+  electronApp: ElectronApplication,
+  width: number,
+): Promise<() => Promise<void>> {
+  const original = await electronApp.evaluate(({ BrowserWindow }, newWidth) => {
+    const [appWindow] = BrowserWindow.getAllWindows();
+    const [originalWidth, originalHeight] = appWindow.getContentSize();
+    appWindow.setContentSize(newWidth, originalHeight);
+    return { width: originalWidth, height: originalHeight };
+  }, width);
+  return async () => {
+    await electronApp.evaluate(({ BrowserWindow }, size) => {
+      const [appWindow] = BrowserWindow.getAllWindows();
+      appWindow.setContentSize(size.width, size.height);
+    }, original);
+  };
 }
 
 /**
@@ -1004,5 +1184,152 @@ test.describe('Scope Switching', () => {
       if (await resultsMessage(frame).isVisible()) return;
       throw new Error('Waiting for scope-change search to complete');
     }).toPass({ timeout: 30_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: jumping to a result scrolls the editor to the match
+// ---------------------------------------------------------------------------
+
+/**
+ * Occurs once in the whole Bible, at the very end of Matthew 5:22 — several lines below its own
+ * verse's start, in a chapter tall enough for the match to still reach the top of the viewport.
+ *
+ * Both properties are load-bearing. A match close to its verse start, or one near the end of a
+ * chapter too short to scroll further, comes to rest in the same place whether the editor scrolls
+ * to the verse or to the match, and so cannot tell the two apart.
+ */
+const MID_CHAPTER_TERM = 'in danger of the fire of Gehenna';
+/** Occurs first in Genesis 14:1, the top of a 24-verse chapter. */
+const CHAPTER_START_TERM = 'Ellasar';
+/** Occurs once in Genesis, in 10:32 — the chapter's last verse. */
+const CHAPTER_END_TERM = 'divided from these';
+/** A name from Matthew 1, used to confirm the editor is resting on that chapter. */
+const OTHER_CHAPTER_SETTLE_TERM = 'Zerubbabel';
+/** Content width that squeezes the editor column well below its width at the suite's 1280 px. */
+const NARROW_WINDOW_WIDTH = 960;
+
+test.describe('Jumping to a result scrolls the editor to the match', () => {
+  test('same chapter: a match below the fold scrolls into view', async ({ mainPage }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const before = await showEditorAt(
+      mainPage,
+      editorFrame,
+      'Matthew 5:1',
+      MID_CHAPTER_TERM,
+      'top',
+    );
+    // Positive control: the match starts below the viewport, so an editor that does not scroll fails.
+    expect(before.matchTop).toBeGreaterThan(before.viewportHeight);
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
+    await firstResultCard(frame).click();
+
+    const after = await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM);
+    expect(after.scrollTop).not.toBe(before.scrollTop);
+  });
+
+  test('different chapter: the match lands fully in view, not against the bottom edge', async ({
+    mainPage,
+  }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
+    // Positive control: the match's chapter is not what the editor is showing.
+    expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
+    await firstResultCard(frame).click();
+
+    await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM);
+  });
+
+  test('different chapter, opened with a double-click: the match lands fully in view', async ({
+    mainPage,
+  }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
+    expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, MID_CHAPTER_TERM);
+    await firstResultCard(frame).dblclick();
+
+    await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM);
+  });
+
+  test('a match at the start of a chapter scrolls up into view', async ({ mainPage }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const before = await showEditorAt(
+      mainPage,
+      editorFrame,
+      'Genesis 14:24',
+      CHAPTER_START_TERM,
+      'bottom',
+    );
+    // Positive control: the match is above the viewport.
+    expect(before.matchBottom).toBeLessThan(0);
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, CHAPTER_START_TERM);
+    await firstResultCard(frame).click();
+
+    await expectFullyInView(editorFrame, CHAPTER_START_TERM);
+  });
+
+  test('a match at the end of a chapter scrolls into view', async ({ mainPage }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const before = await showEditorAt(
+      mainPage,
+      editorFrame,
+      'Genesis 10:1',
+      CHAPTER_END_TERM,
+      'top',
+    );
+    expect(before.matchTop).toBeGreaterThan(before.viewportHeight);
+
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, CHAPTER_END_TERM);
+    await firstResultCard(frame).click();
+
+    await expectFullyInView(editorFrame, CHAPTER_END_TERM);
+  });
+
+  test('at a narrow width, same-chapter and different-chapter matches land in view', async ({
+    mainPage,
+    electronApp,
+  }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    const wide = await showEditorAt(mainPage, editorFrame, 'Matthew 5:1', MID_CHAPTER_TERM, 'top');
+    const restoreWindowSize = await setWindowContentWidth(electronApp, NARROW_WINDOW_WIDTH);
+    try {
+      const narrow = await showEditorAt(
+        mainPage,
+        editorFrame,
+        'Matthew 5:1',
+        MID_CHAPTER_TERM,
+        'top',
+      );
+      // Positive control: the editor really is narrower, or this only repeats the full-width case.
+      expect(narrow.viewportWidth).toBeLessThan(wide.viewportWidth);
+      expect(narrow.matchTop).toBeGreaterThan(narrow.viewportHeight);
+
+      const sameChapterFrame = await openFindPanel(mainPage);
+      await fillSearchAndWaitForResults(sameChapterFrame, MID_CHAPTER_TERM);
+      await firstResultCard(sameChapterFrame).click();
+      await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM);
+
+      await showEditorAt(mainPage, editorFrame, 'Matthew 1:1', OTHER_CHAPTER_SETTLE_TERM, 'top');
+      // Positive control: the match's chapter is not what the editor is showing.
+      expect(await readTextGeometry(editorFrame, MID_CHAPTER_TERM)).toBeUndefined();
+
+      const otherChapterFrame = await openFindPanel(mainPage);
+      await fillSearchAndWaitForResults(otherChapterFrame, MID_CHAPTER_TERM);
+      await firstResultCard(otherChapterFrame).click();
+      await expectLandedAtTop(editorFrame, MID_CHAPTER_TERM);
+    } finally {
+      await restoreWindowSize();
+    }
   });
 });

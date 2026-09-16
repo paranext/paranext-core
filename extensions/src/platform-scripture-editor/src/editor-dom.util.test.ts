@@ -16,12 +16,17 @@ import { afterEach, beforeAll, describe, expect, it, vi, Mock } from 'vitest';
 import {
   BASELINE_PROBE_ATTRIBUTE,
   clampTopToVisibleArea,
+  computeRangeScrollTop,
   findScrollContainer,
+  getEditorSelectionRange,
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
   measureBaselineOffset,
+  measureRangeScrollGeometry,
   paraAtPoint,
+  RANGE_SCROLL_TOP_OFFSET,
   scrollToAnnotation,
+  scrollToRange,
   scrollToVerse,
 } from './editor-dom.util';
 
@@ -308,6 +313,27 @@ describe('scrollToVerse', () => {
     expect(verseElement).toBeDefined();
     expect(wrapperScrollTo).not.toHaveBeenCalled();
     expect(editorContainerScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('scrolls with the requested behavior', () => {
+    const { wrapperScrollTo } = buildEditorDom();
+
+    scrollToVerse({ book: 'OBA', chapterNum: 1, verseNum: 15 }, 'instant');
+
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'instant', top: 1420 });
+  });
+
+  it('does not scroll to a verse that only exists inside a bridge', () => {
+    // `\v 18-19` publishes one marker numbered "18-19", so neither 18 nor 19 matches. This pins the
+    // limit of the fallback a range jump uses when it cannot measure the selection.
+    const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
+    const bridgedVerse = document.createElement('span');
+    bridgedVerse.setAttribute('data-marker', 'v');
+    bridgedVerse.setAttribute('data-number', '18-19');
+    editorContainer.append(bridgedVerse);
+
+    expect(scrollToVerse({ book: 'GEN', chapterNum: 10, verseNum: 19 })).toBeUndefined();
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
   });
 });
 
@@ -602,5 +628,197 @@ describe('paraAtPoint', () => {
 
     expect(paraAtPoint(10, 20)).not.toBe(staleTarget);
     expect(paraAtPoint(10, 20)).toBeUndefined();
+  });
+});
+
+describe('computeRangeScrollTop', () => {
+  // Content 5000 tall, a 900 px viewport currently scrolled to 1000: visible band [1000, 1900].
+  const viewport = { scrollTop: 1000, clientHeight: 900, scrollHeight: 5000 };
+
+  it('leaves a range that is already fully in view where it is', () => {
+    expect(
+      computeRangeScrollTop({ ...viewport, rangeTop: 1200, rangeBottom: 1220 }),
+    ).toBeUndefined();
+  });
+
+  it('counts a range exactly filling the viewport as in view', () => {
+    expect(
+      computeRangeScrollTop({ ...viewport, rangeTop: 1000, rangeBottom: 1900 }),
+    ).toBeUndefined();
+  });
+
+  it('puts a range below the viewport just under the top edge, not against the bottom edge', () => {
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 3094, rangeBottom: 3114 })).toBe(
+      3094 - RANGE_SCROLL_TOP_OFFSET,
+    );
+  });
+
+  it('scrolls a range the bottom edge cuts off instead of accepting its visible start', () => {
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 1850, rangeBottom: 1920 })).toBe(
+      1850 - RANGE_SCROLL_TOP_OFFSET,
+    );
+  });
+
+  it('puts a range above the viewport just under the top edge', () => {
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 400, rangeBottom: 420 })).toBe(
+      400 - RANGE_SCROLL_TOP_OFFSET,
+    );
+  });
+
+  it('keeps the start of a range taller than the viewport in view', () => {
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 3000, rangeBottom: 4500 })).toBe(
+      3000 - RANGE_SCROLL_TOP_OFFSET,
+    );
+  });
+
+  it('clamps to the top of the content for a range at the start of the chapter', () => {
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 30, rangeBottom: 50 })).toBe(0);
+  });
+
+  it('clamps to the end of the content for a range at the end of the chapter', () => {
+    // maxScrollTop = 5000 - 900 = 4100; the range at 4950 is then 850 px down a 900 px viewport.
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 4950, rangeBottom: 4970 })).toBe(4100);
+  });
+});
+
+describe('getEditorSelectionRange', () => {
+  afterEach(() => {
+    document.getSelection()?.removeAllRanges();
+  });
+
+  function selectText(parent: HTMLElement, content: string, start: number, end: number): void {
+    const text = document.createTextNode(content);
+    parent.append(text);
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, end);
+    document.getSelection()?.addRange(range);
+  }
+
+  it('returns the selection when it is inside the editor content', () => {
+    const { editorContainer } = buildEditorDom({ verseNumbers: [] });
+    selectText(editorContainer, 'to Lasha.', 3, 8);
+
+    expect(getEditorSelectionRange()?.toString()).toBe('Lasha');
+  });
+
+  it('ignores a selection outside the editor content, such as a footnote popover', () => {
+    buildEditorDom({ verseNumbers: [] });
+    const popover = document.createElement('div');
+    document.body.append(popover);
+    selectText(popover, 'footnote text', 0, 8);
+
+    expect(getEditorSelectionRange()).toBeUndefined();
+  });
+
+  it('returns undefined when nothing is selected', () => {
+    buildEditorDom({ verseNumbers: [] });
+
+    expect(getEditorSelectionRange()).toBeUndefined();
+  });
+});
+
+/** A range over a span in the editor content whose viewport rect is stubbed (jsdom has no layout) */
+function rangeInEditor(editorContainer: HTMLElement, top: number, height: number): Range {
+  const span = document.createElement('span');
+  span.textContent = 'Lasha';
+  editorContainer.append(span);
+  const range = document.createRange();
+  range.selectNodeContents(span);
+  Object.defineProperty(range, 'getBoundingClientRect', {
+    value: () => new DOMRect(0, top, height === 0 ? 0 : 40, height),
+    configurable: true,
+  });
+  return range;
+}
+
+describe('measureRangeScrollGeometry', () => {
+  it('measures the range against the container that actually scrolls, not .editor-container', () => {
+    const { editorContainer } = buildEditorDom({ verseNumbers: [] });
+
+    const geometry = measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20));
+
+    expect(geometry).toEqual({
+      scrollContainer: editorContainer.parentElement?.parentElement, // the wrapper
+      rangeTop: 2094,
+      rangeHeight: 20,
+      scrollTop: 0,
+      clientHeight: VIEWPORT_HEIGHT,
+      scrollHeight: CONTENT_HEIGHT,
+    });
+  });
+
+  it('reads the discovered container geometry, not .editor-container’s, when they differ', () => {
+    // .editor-container is styled overflow-y: auto but grown to content height, so it does not
+    // qualify; only the wrapper's clientHeight/scrollHeight should appear in the result.
+    const { editorContainer, wrapper } = buildEditorDom({ verseNumbers: [] });
+    wrapper.scrollTop = 500;
+
+    const geometry = measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20));
+
+    expect(geometry?.scrollContainer).toBe(wrapper);
+    expect(geometry?.scrollTop).toBe(500);
+    expect(geometry?.clientHeight).toBe(VIEWPORT_HEIGHT);
+    expect(geometry?.scrollHeight).toBe(CONTENT_HEIGHT);
+  });
+
+  it('returns undefined when the range has no layout (the all-zero-rect case)', () => {
+    const { editorContainer } = buildEditorDom({ verseNumbers: [] });
+
+    expect(measureRangeScrollGeometry(rangeInEditor(editorContainer, 0, 0))).toBeUndefined();
+  });
+
+  it('returns undefined when nothing scrollable exists', () => {
+    const { editorContainer } = buildEditorDom({ verseNumbers: [], wrapperScrolls: false });
+
+    expect(measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20))).toBeUndefined();
+  });
+});
+
+describe('scrollToRange', () => {
+  it('scrolls the element that actually scrolls so the range lands just under the top', () => {
+    const { editorContainer, wrapperScrollTo, editorContainerScrollTo } = buildEditorDom({
+      verseNumbers: [],
+    });
+
+    const didMeasure = scrollToRange(rangeInEditor(editorContainer, 2094, 20), 'smooth');
+
+    expect(didMeasure).toBe(true);
+    expect(editorContainerScrollTo).not.toHaveBeenCalled();
+    // scrollTop 0 + rect top 2094 - container top 0 - offset 80 = 2014 (max scroll is 3000 - 900 = 2100)
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 2014 });
+  });
+
+  it('passes the requested behavior through, so a catch-up can jump instantly', () => {
+    const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
+
+    scrollToRange(rangeInEditor(editorContainer, 2094, 20), 'instant');
+
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'instant', top: 2014 });
+  });
+
+  it('reports a measurement but does not scroll when the range is already in view', () => {
+    const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
+
+    expect(scrollToRange(rangeInEditor(editorContainer, 400, 20), 'smooth')).toBe(true);
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('reports a measurement but does not scroll when the content does not overflow', () => {
+    const { editorContainer, wrapperScrollTo } = buildEditorDom({
+      verseNumbers: [],
+      wrapperScrolls: false,
+    });
+
+    expect(scrollToRange(rangeInEditor(editorContainer, 2094, 20), 'smooth')).toBe(true);
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('reports no measurement, and does not scroll, when the range has no layout', () => {
+    // Inside a display: none iframe every rect is all zeros.
+    const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
+
+    expect(scrollToRange(rangeInEditor(editorContainer, 0, 0), 'smooth')).toBe(false);
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
   });
 });

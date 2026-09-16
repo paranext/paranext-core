@@ -68,6 +68,7 @@ import {
   UndoRedoButtons,
   isMacOs,
   usePromise,
+  useViewVisibility,
 } from 'platform-bible-react';
 import {
   clearPaletteSessionIfCurrent,
@@ -133,7 +134,13 @@ import {
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
-import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import {
+  getVerseElement,
+  runOnFirstLoad,
+  scrollToAnnotation,
+  scrollToVerse,
+} from './editor-dom.util';
+import { toChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -1240,6 +1247,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [viewType, isPowerMode]);
 
   /**
+   * {@link toChapterKey} of the chapter the engine was last handed content for. A jump into another
+   * chapter waits on this rather than on a delay, because selecting before the engine has the new
+   * chapter resolves the range against the old one. State rather than a ref so the waiting jump
+   * re-runs when it changes.
+   */
+  const [editorChapterKey, setEditorChapterKey] = useState<string | undefined>(undefined);
+  /**
+   * The chapter this render's content subscription is for. `useEditorPdpSync` applies content in
+   * the commit of the render that delivered it, so this is the chapter of the content being
+   * applied.
+   */
+  const renderedChapterKeyRef = useRef(toChapterKey(scrRef));
+  renderedChapterKeyRef.current = toChapterKey(scrRef);
+  /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
    * the editor's USJ silently removes all annotations
    *
@@ -1248,6 +1269,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const setEditorUsj = useRef((usj: Usj) => {
     editorRef.current?.setUsj(usj);
     clearAnnotationInfo.current();
+    setEditorChapterKey(renderedChapterKeyRef.current);
+  });
+
+  const isViewVisible = useViewVisibility();
+  // Jumps to a range — Find, Checks, Comments — select and scroll the range itself into view; see
+  // `computeRangeScrollTop` in editor-dom.util.ts for exactly where it lands.
+  //
+  // Hidden case: those panels drive this editor from elsewhere, and in Power mode they can share its
+  // tab stack. The selection is applied at once; the scroll waits for this tab to be shown, then
+  // runs once, instantly, for the latest request. See `useScrollToRange`.
+  const { requestScrollToRange, isRangeScrollTarget } = useScrollToRange({
+    editorRef,
+    editorChapterKey,
+    isViewVisible,
   });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
@@ -1312,8 +1347,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       ),
     [localizedStrings, isStructureProtected, notifyStructureProtected, restoreEditorSelection],
   );
-
-  const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
 
   const insertCommentAtCurrentSelection = useCallback(() => {
     const selection = currentSelectionRef.current;
@@ -1585,16 +1618,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           const { scrRef: targetScrRef, range } = editorMessage;
           logger.debug(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
 
-          if (compareScrRefs(scrRef, targetScrRef) !== 0) {
-            // Need to update scr ref, let the editor load the Scripture text at the new scrRef,
-            // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
-            // which will set the range after a short wait time in a `useEffect` below
-            setScrRefWithScroll(targetScrRef);
-            nextSelectionRange.current = range;
-          }
-          // We're on the right scr ref. Go ahead and set the selection
-          else editorRef.current?.setSelection(range);
-
+          // Requested before navigating, so the jump records the chapter it started from.
+          requestScrollToRange(range, targetScrRef);
+          // Keeps the scroll group on the range's verse. The verse scroll this sets off stands down
+          // for a reference a range scroll owns (see the scroll effect below).
+          if (compareScrRefs(scrRef, targetScrRef) !== 0) setScrRefWithScroll(targetScrRef);
           break;
         }
         case 'updateDecorations': {
@@ -1823,6 +1851,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     insertCrossReferenceAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
+    requestScrollToRange,
     decorations,
     setDecorations,
     setFootnotesPaneVisible,
@@ -3233,7 +3262,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // TODO: hook into the editor and detect when it has loaded somehow
       const cancelRunOnLoad = runOnFirstLoad(() => {
         hasFirstRetrievedScripture.current = true;
-        scrollToVerse(scrRef);
+        // A range scroll (a find match, a check result) owns where this reference lands, exactly as
+        // the reference-scroll effect below defers to it — this poll runs every 100ms, so a jump
+        // landing in that window must not be overwritten by a plain verse-start scroll.
+        if (!isRangeScrollTarget(scrRef)) scrollToVerse(scrRef);
         editorRef.current?.focus();
         // On Load, the editor sets the selection to `scrRef`. Since this is an internal change, we
         // don't want to scroll again when we get this scrRef back from the PDP, so we set
@@ -3246,9 +3278,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     // Do nothing in destructor since we didn't do anything. TypeScript requires a returned function
     return () => {};
-  }, [usjFromPdp, scrRef]);
+  }, [usjFromPdp, scrRef, isRangeScrollTarget]);
 
-  // Scroll the selected verse and selection range into view
+  // Scroll the selected verse into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
@@ -3264,25 +3296,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     let highlightedVerseElement: HTMLElement | undefined;
 
-    // Queue up the next selection range to be set and clear it so we don't accidentally set the
-    // range to the wrong thing
-    const nextRange = nextSelectionRange.current;
-    nextSelectionRange.current = undefined;
-
     // Wait before scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
-      // Scroll to and add a highlight to the current verse element
-      highlightedVerseElement = scrollToVerse(scrRef);
+      // A range scroll (a find match, a check result) owns where this reference lands. Scrolling to
+      // the verse as well would drag a match low in a long verse back off screen, so only highlight.
+      highlightedVerseElement = isRangeScrollTarget(scrRef)
+        ? getVerseElement(scrRef.verseNum)
+        : scrollToVerse(scrRef);
       highlightedVerseElement?.classList.add('highlighted');
 
       // Clear the internal verse ref since we've handled it and also clear the volatile
       // allow-scroll flag so this special-casing only happens once.
       internalVerseLocationRef.current = undefined;
       allowScrollForInternalRef.current = false;
-
-      // Set the selection if the selection was set to something as part of this scr ref change
-      if (nextRange) editorRef.current?.setSelection(nextRange);
     }, EDITOR_LOAD_DELAY_TIME);
 
     return () => {
@@ -3293,7 +3320,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Remove highlight from the current verse element
       highlightedVerseElement?.classList.remove('highlighted');
     };
-  }, [scrRef]);
+  }, [scrRef, isRangeScrollTarget]);
 
   const onCommentEditorCancel = useCallback(() => {
     // Remove the pending annotation if one was created
