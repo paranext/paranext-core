@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { ProjectSelectorGrouping } from 'platform-bible-react/experimental';
 import {
   ManageBooksDialog,
   type ManageBooksDialogBookInfo,
@@ -144,5 +145,98 @@ describe('ManageBooksDialog launch parameters', () => {
 
     expect(isSectionActive('create')).toBe(true);
     expect(isBookSelected(container, 'EXO')).toBe(true);
+  });
+});
+
+describe('ManageBooksDialog project pickers', () => {
+  // The dialog's project rows carry no language or last-used data, so a picker offering those axes
+  // would file every row under a single "Unknown" heading. Asserting only the options a picker DOES
+  // offer would still pass if the restriction were deleted, so the absence of the unsupported axes
+  // is the load-bearing half of these tests.
+  const WIRING_GROUPINGS: ProjectSelectorGrouping[] = [
+    { id: 'openTabs', label: 'Open tabs' },
+    {
+      id: 'type',
+      label: 'Type',
+      getGroupKey: (project) =>
+        typeof project.customData?.type === 'string' ? project.customData.type : undefined,
+    },
+    {
+      id: 'lastUsed',
+      label: 'Last used',
+      getGroupKey: (project) =>
+        typeof project.customData?.lastUsedAt === 'number' ? 'recent' : undefined,
+    },
+  ];
+
+  // `projectId` ('WEB') is the dialog's own project and is excluded from the "other projects" the
+  // Based-on picker lists, so two MORE projects are needed to produce two versification buckets.
+  const VERSIFIED_PROJECTS: ManageBooksDialogProject[] = [
+    { id: 'WEB', shortName: 'WEB', name: 'World English Bible', versificationId: '4' },
+    { id: 'VUL', shortName: 'VUL', name: 'Vulgate', versificationId: '3' },
+    { id: 'KJV', shortName: 'KJV', name: 'King James Version', versificationId: '4' },
+  ];
+
+  const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+
+  /** Grouping options the open group-by menu offers, in order, by visible label. */
+  const groupingChoices = () =>
+    screen.getAllByRole('menuitemradio').map((item) => item.textContent?.trim());
+
+  /** Opens a picker, then the group-by menu whose trigger lives inside that picker's popover. */
+  async function openGroupingMenu(user: ReturnType<typeof setupUser>, trigger: HTMLElement) {
+    await user.click(trigger);
+    // `findBy` throws when two pickers are open, so this can never silently resolve to the wrong one.
+    await user.click(await screen.findByRole('button', { name: 'Group by' }));
+  }
+
+  it('offers the sidebar picker every grouping the wiring layer supplies', async () => {
+    const user = setupUser();
+    render(dialog({ projectSelectorGroupings: WIRING_GROUPINGS }));
+
+    const rail = await screen.findByTestId('manage-books-sidebar-project-trigger');
+    // The rail trigger stays disabled until the project list loads, which would swallow a click.
+    await waitFor(() => expect(within(rail).getByRole('combobox')).toBeEnabled());
+    await openGroupingMenu(user, within(rail).getByRole('combobox'));
+
+    await waitFor(() =>
+      expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Type', 'Last used']),
+    );
+  });
+
+  it('narrows the copy source picker to the groupings its rows carry data for', async () => {
+    const user = setupUser();
+    render(dialog({ initialSection: 'copy', projectSelectorGroupings: WIRING_GROUPINGS }));
+
+    await waitFor(() => expect(isSectionActive('copy')).toBe(true));
+    await openGroupingMenu(user, screen.getByRole('combobox', { name: 'Select project' }));
+
+    // MANAGE_BOOKS_COPY_FROM_GROUPING_IDS is an allow-list: 'lastUsed' is deliberately absent
+    // because the dialog's rows carry no recency data, so offering it would bucket everything
+    // under one heading.
+    await waitFor(() => expect(groupingChoices()).toEqual(['None', 'Open tabs', 'Type']));
+    expect(screen.queryByRole('menuitemradio', { name: 'Last used' })).not.toBeInTheDocument();
+  });
+
+  it('locks the create reference picker to versification with no way to regroup it', async () => {
+    const user = setupUser();
+    render(
+      dialog({
+        initialSection: 'create',
+        loadProjects: () => VERSIFIED_PROJECTS,
+        projectSelectorGroupings: WIRING_GROUPINGS,
+      }),
+    );
+
+    await waitFor(() => expect(isSectionActive('create')).toBe(true));
+    const reference = await screen.findByTestId('manage-books-create-reference-trigger');
+    await user.click(within(reference).getByRole('combobox'));
+
+    // Versification is the only axis worth switching to here, so the picker passes it as the sole
+    // grouping — which locks the list to it and drops the group-by affordance rather than
+    // exposing an inert one-item toggle.
+    await waitFor(() => expect(screen.getByText('English versification')).toBeInTheDocument());
+    expect(screen.getByText('Vulgate versification')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Group by' })).not.toBeInTheDocument();
   });
 });

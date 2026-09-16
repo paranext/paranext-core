@@ -70,7 +70,7 @@ function sidebar() {
 }
 
 describe('SettingsSidebar project picker', () => {
-  it('offers no view-options control in the project picker', async () => {
+  it('offers no group-by control in the project picker', async () => {
     const user = setupUser();
     render(sidebar());
 
@@ -78,10 +78,10 @@ describe('SettingsSidebar project picker', () => {
 
     // The sidebar has no open-tab data, so every grouping the menu could offer yields the same flat
     // list. Asserting that the picker's rows render would pass just as happily with the restriction
-    // deleted, so the absence of the view-options affordance is the load-bearing assertion: it is
+    // deleted, so the absence of the group-by affordance is the load-bearing assertion: it is
     // the only control that opens the grouping menu.
     expect(await screen.findByText('World English Bible')).toBeInTheDocument();
-    expect(screen.queryByLabelText('View options')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Group by')).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
   });
 });
