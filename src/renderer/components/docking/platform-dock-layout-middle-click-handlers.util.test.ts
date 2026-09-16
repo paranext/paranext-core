@@ -1,12 +1,13 @@
+import { createElement } from 'react';
+import type { BoxData, PanelData, TabData } from 'rc-dock';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installMiddleClickTabBarHandlers } from './platform-dock-layout-middle-click-handlers.util';
 
 /**
- * Builds a DOM tree standing in for what rc-dock/rc-tabs actually render: a `root` (where the
- * handlers attach, mirroring `DockLayout.getRootElement()`) containing a `.dock-bar` (rc-tabs' own
- * tab-row `DragDropDiv`) with two tab headers — each a `[role="tab"]` `DragDropDiv` wrapping a
- * title div (carrying `data-tab-header-id`/`data-tab-closable`, mirroring `PlatformTabTitle`'s own
- * root) and a close-button div as DOM siblings — plus an unclaimed strip past them (the "+"
+ * Builds a DOM tree standing in for what rc-dock/rc-tabs actually render: a `root` containing a
+ * `.dock-bar` (rc-tabs' own tab-row `DragDropDiv`) with two tab headers — each a `[role="tab"]`
+ * `DragDropDiv` wrapping a title div (carrying `data-tab-header-id`, mirroring `PlatformTabTitle`'s
+ * own root) and a close-button div as DOM siblings — plus an unclaimed strip past them (the "+"
  * button/empty remainder, covered only by `.dock-bar` itself) and a sibling panel-content area
  * outside any tab bar. Also builds a SEPARATE tree appended directly to `document.body`, sibling to
  * `root` rather than nested inside it, standing in for rc-tabs' "more" overflow dropdown — which
@@ -17,13 +18,12 @@ function buildDockLayoutTree() {
   const dockBar = document.createElement('div');
   dockBar.className = 'dock-bar';
 
-  function buildTabHeader(id: string, closable: boolean) {
+  function buildTabHeader(id: string) {
     const header = document.createElement('div');
     header.setAttribute('role', 'tab');
     const title = document.createElement('div');
     title.className = 'platform-tab-title';
     title.dataset.tabHeaderId = id;
-    title.dataset.tabClosable = String(closable);
     const closeButton = document.createElement('div');
     closeButton.className = 'dock-tab-close-btn';
     header.appendChild(title);
@@ -31,12 +31,16 @@ function buildDockLayoutTree() {
     return { header, title, closeButton };
   }
 
-  const closableTab = buildTabHeader('tab-1', true);
-  const nonClosableTab = buildTabHeader('tab-2', false);
+  const closableTab = buildTabHeader('tab-1');
+  const nonClosableTab = buildTabHeader('tab-2');
+  const unknownClosabilityTab = buildTabHeader('tab-4');
+  const missingTab = buildTabHeader('tab-missing');
+  const panelIdTab = buildTabHeader('panel-1');
   const barRemainder = document.createElement('div');
 
-  dockBar.appendChild(closableTab.header);
-  dockBar.appendChild(nonClosableTab.header);
+  [closableTab, nonClosableTab, unknownClosabilityTab, missingTab, panelIdTab].forEach(
+    ({ header }) => dockBar.appendChild(header),
+  );
   dockBar.appendChild(barRemainder);
   root.appendChild(dockBar);
 
@@ -48,19 +52,38 @@ function buildDockLayoutTree() {
   // relationship `rc-trigger`'s default `document.body` portal has to the dock layout's own root.
   const dropdown = document.createElement('div');
   dropdown.className = 'dock-dropdown';
-  const dropdownTab = buildTabHeader('tab-3', true);
+  const dropdownTab = buildTabHeader('tab-3');
   dropdown.appendChild(dropdownTab.header);
   document.body.appendChild(dropdown);
 
   return {
-    root,
     dockBar,
     barRemainder,
     panelContent,
     closableTab,
     nonClosableTab,
+    unknownClosabilityTab,
+    missingTab,
+    panelIdTab,
     dropdownTab,
   };
+}
+
+function tab(id: string, closable: boolean | undefined): TabData {
+  return { id, title: id, content: createElement('div'), closable };
+}
+
+const dockItems = new Map<string, PanelData | TabData | BoxData>([
+  ['tab-1', tab('tab-1', true)],
+  ['tab-2', tab('tab-2', false)],
+  ['tab-3', tab('tab-3', true)],
+  ['tab-4', tab('tab-4', undefined)],
+  ['panel-1', { id: 'panel-1', tabs: [] }],
+]);
+
+/** Stands in for `DockLayout.find`, answering from {@link dockItems} */
+function findTab(tabId: string) {
+  return dockItems.get(tabId);
 }
 
 function dispatchMouseDown(target: Element, button: number) {
@@ -83,9 +106,9 @@ function dispatchAuxClick(target: Element, button: number) {
  */
 let installedCleanups: (() => void)[] = [];
 
-/** Calls `installMiddleClickTabBarHandlers` and tracks the cleanup for `afterEach` to run. */
-function install(...args: Parameters<typeof installMiddleClickTabBarHandlers>) {
-  const removeHandlers = installMiddleClickTabBarHandlers(...args);
+/** Installs the handlers on `document` and tracks the cleanup for `afterEach` to run. */
+function install(onCloseTab: (tabId: string) => void = vi.fn()) {
+  const removeHandlers = installMiddleClickTabBarHandlers(document, { findTab, onCloseTab });
   installedCleanups.push(removeHandlers);
   return removeHandlers;
 }
@@ -102,7 +125,7 @@ describe('installMiddleClickTabBarHandlers', () => {
       const tree = buildDockLayoutTree();
       const onBubble = vi.fn();
       tree.dockBar.addEventListener('mousedown', onBubble);
-      install(tree.root, { onTabMiddleClick: vi.fn() });
+      install();
 
       const notPrevented = dispatchMouseDown(tree.closableTab.title, 1);
 
@@ -114,7 +137,7 @@ describe('installMiddleClickTabBarHandlers', () => {
       const tree = buildDockLayoutTree();
       const onBubble = vi.fn();
       tree.dockBar.addEventListener('mousedown', onBubble);
-      install(tree.root, { onTabMiddleClick: vi.fn() });
+      install();
 
       dispatchMouseDown(tree.barRemainder, 1);
 
@@ -125,7 +148,7 @@ describe('installMiddleClickTabBarHandlers', () => {
       const tree = buildDockLayoutTree();
       const onBubble = vi.fn();
       tree.dropdownTab.header.addEventListener('mousedown', onBubble);
-      install(tree.root, { onTabMiddleClick: vi.fn() });
+      install();
 
       const notPrevented = dispatchMouseDown(tree.dropdownTab.title, 1);
 
@@ -137,7 +160,7 @@ describe('installMiddleClickTabBarHandlers', () => {
       const tree = buildDockLayoutTree();
       const onBubble = vi.fn();
       tree.panelContent.addEventListener('mousedown', onBubble);
-      install(tree.root, { onTabMiddleClick: vi.fn() });
+      install();
 
       const notPrevented = dispatchMouseDown(tree.panelContent, 1);
 
@@ -149,7 +172,7 @@ describe('installMiddleClickTabBarHandlers', () => {
       const tree = buildDockLayoutTree();
       const onBubble = vi.fn();
       tree.dockBar.addEventListener('mousedown', onBubble);
-      install(tree.root, { onTabMiddleClick: vi.fn() });
+      install();
 
       const notPrevented = dispatchMouseDown(tree.closableTab.title, 0);
 
@@ -161,72 +184,101 @@ describe('installMiddleClickTabBarHandlers', () => {
   describe('close on middle click', () => {
     it('closes a closable tab when the middle click lands on its title', () => {
       const tree = buildDockLayoutTree();
-      const onTabMiddleClick = vi.fn();
-      install(tree.root, { onTabMiddleClick });
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
 
       dispatchAuxClick(tree.closableTab.title, 1);
 
-      expect(onTabMiddleClick).toHaveBeenCalledExactlyOnceWith('tab-1');
+      expect(onCloseTab).toHaveBeenCalledExactlyOnceWith('tab-1');
     });
 
     it('closes a closable tab when the middle click lands on its close button, a DOM sibling of the title', () => {
       const tree = buildDockLayoutTree();
-      const onTabMiddleClick = vi.fn();
-      install(tree.root, { onTabMiddleClick });
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
 
       dispatchAuxClick(tree.closableTab.closeButton, 1);
 
-      expect(onTabMiddleClick).toHaveBeenCalledExactlyOnceWith('tab-1');
+      expect(onCloseTab).toHaveBeenCalledExactlyOnceWith('tab-1');
     });
 
     it('does nothing when the middle click lands on a non-closable tab', () => {
       const tree = buildDockLayoutTree();
-      const onTabMiddleClick = vi.fn();
-      install(tree.root, { onTabMiddleClick });
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
 
       dispatchAuxClick(tree.nonClosableTab.title, 1);
 
-      expect(onTabMiddleClick).not.toHaveBeenCalled();
+      expect(onCloseTab).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the dock layout gives the tab no closable flag, as rc-dock’s close button does', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      dispatchAuxClick(tree.unknownClosabilityTab.title, 1);
+
+      expect(onCloseTab).not.toHaveBeenCalled();
+    });
+
+    it('does nothing, without throwing, when the dock layout no longer has the tab', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      expect(() => dispatchAuxClick(tree.missingTab.title, 1)).not.toThrow();
+      expect(onCloseTab).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the header’s id finds a panel rather than a tab', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      dispatchAuxClick(tree.panelIdTab.title, 1);
+
+      expect(onCloseTab).not.toHaveBeenCalled();
     });
 
     it('closes a closable tab rendered inside rc-tabs’ overflow dropdown, even though it portals outside the dock layout root', () => {
       const tree = buildDockLayoutTree();
-      const onTabMiddleClick = vi.fn();
-      install(tree.root, { onTabMiddleClick });
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
 
       dispatchAuxClick(tree.dropdownTab.title, 1);
 
-      expect(onTabMiddleClick).toHaveBeenCalledExactlyOnceWith('tab-3');
+      expect(onCloseTab).toHaveBeenCalledExactlyOnceWith('tab-3');
     });
 
     it('does nothing for a left-button auxclick', () => {
       const tree = buildDockLayoutTree();
-      const onTabMiddleClick = vi.fn();
-      install(tree.root, { onTabMiddleClick });
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
 
       dispatchAuxClick(tree.closableTab.title, 0);
 
-      expect(onTabMiddleClick).not.toHaveBeenCalled();
+      expect(onCloseTab).not.toHaveBeenCalled();
     });
 
     it('does nothing for a right-button auxclick', () => {
       const tree = buildDockLayoutTree();
-      const onTabMiddleClick = vi.fn();
-      install(tree.root, { onTabMiddleClick });
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
 
       dispatchAuxClick(tree.closableTab.title, 2);
 
-      expect(onTabMiddleClick).not.toHaveBeenCalled();
+      expect(onCloseTab).not.toHaveBeenCalled();
     });
 
     it('does nothing when the click event targets something with no tab-header ancestor — the real browser’s own behavior for a press that started on a tab but was released elsewhere, which retargets `auxclick` to the nearest common ancestor of the two', () => {
       const tree = buildDockLayoutTree();
-      const onTabMiddleClick = vi.fn();
-      install(tree.root, { onTabMiddleClick });
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
 
       dispatchAuxClick(tree.panelContent, 1);
 
-      expect(onTabMiddleClick).not.toHaveBeenCalled();
+      expect(onCloseTab).not.toHaveBeenCalled();
     });
   });
 
@@ -235,15 +287,15 @@ describe('installMiddleClickTabBarHandlers', () => {
       const tree = buildDockLayoutTree();
       const onBubble = vi.fn();
       tree.dockBar.addEventListener('mousedown', onBubble);
-      const onTabMiddleClick = vi.fn();
-      const removeHandlers = install(tree.root, { onTabMiddleClick });
+      const onCloseTab = vi.fn();
+      const removeHandlers = install(onCloseTab);
 
       removeHandlers();
       dispatchMouseDown(tree.closableTab.title, 1);
       dispatchAuxClick(tree.closableTab.title, 1);
 
       expect(onBubble).toHaveBeenCalledTimes(1);
-      expect(onTabMiddleClick).not.toHaveBeenCalled();
+      expect(onCloseTab).not.toHaveBeenCalled();
     });
   });
 });

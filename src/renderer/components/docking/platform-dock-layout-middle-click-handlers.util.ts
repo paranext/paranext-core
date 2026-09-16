@@ -1,20 +1,20 @@
+import type { BoxData, PanelData, TabData } from 'rc-dock';
+import { isTab } from './docking-framework-internal.model';
+
 /** `MouseEvent.button` value for the middle (auxiliary) mouse button, shared by every check below. */
-export const MIDDLE_MOUSE_BUTTON = 1;
+const MIDDLE_MOUSE_BUTTON = 1;
 
 export type MiddleClickTabBarHandlersOptions = {
-  /**
-   * Called when a middle-button click lands on a closable tab's header, wherever it currently
-   * renders. Receives the tab id read from the pressed tab's own `data-tab-header-id` attribute
-   * (see {@link PlatformTabTitle}).
-   */
-  onTabMiddleClick: (tabId: string) => void;
+  /** Looks a tab up in the dock layout at click time; its `closable` gates the close */
+  findTab: (tabId: string) => PanelData | TabData | BoxData | undefined;
+  /** Called with the id of a closable tab whose header received a middle click */
+  onCloseTab: (tabId: string) => void;
 };
 
 /**
- * Reads back the id and closable state {@link PlatformTabTitle} stamps onto its own root element
- * (`data-tab-header-id` / `data-tab-closable`) from a middle-click's target, if that target landed
- * on a closable tab's header. Returns `undefined` for every other target, including a non-closable
- * tab's header.
+ * Reads back the tab id {@link PlatformTabTitle} stamps onto its own root element
+ * (`data-tab-header-id`) from a middle-click's target, if that target landed on a tab's header.
+ * Returns `undefined` for every other target.
  *
  * Walks up to the nearest `[role="tab"]` ancestor rather than matching `data-tab-header-id`
  * directly on (or as an ancestor of) the target, because a press can land on the close (X) button
@@ -26,12 +26,10 @@ export type MiddleClickTabBarHandlersOptions = {
  * (`OperationNode.js` wraps the identical `tab.tab` element in a `MenuItem`), so this lookup
  * resolves a tab the same way regardless of which of the two places it currently renders in.
  */
-function readClosableTabId(target: EventTarget | null): string | undefined {
+function readTabHeaderId(target: EventTarget | null): string | undefined {
   if (!(target instanceof Element)) return undefined;
-  const tabHeader = target.closest('[role="tab"]');
-  const tabIdHolder = tabHeader?.querySelector<HTMLElement>('[data-tab-header-id]');
-  if (tabIdHolder?.dataset.tabClosable !== 'true') return undefined;
-  return tabIdHolder.dataset.tabHeaderId;
+  return target.closest('[role="tab"]')?.querySelector<HTMLElement>('[data-tab-header-id]')?.dataset
+    .tabHeaderId;
 }
 
 /**
@@ -39,37 +37,33 @@ function readClosableTabId(target: EventTarget | null): string | undefined {
  * rc-dock can render a tab header: blocking the middle button from arming any of rc-dock's own drag
  * gestures, and closing a closable tab on a clean middle click.
  *
- * Both listeners are installed on `rootElement.ownerDocument` rather than `rootElement` itself
- * (rc-dock's `DockLayout.getRootElement()`, an ancestor of every tab bar in the layout) because one
- * of the two places a tab header can render is NOT a descendant of `rootElement` at all: rc-tabs'
+ * Both listeners are installed on the document rather than the dock layout's root element because
+ * one of the two places a tab header can render is NOT a descendant of that root at all: rc-tabs'
  * own "more" overflow dropdown (`OperationNode.js`) passes no `getPopupContainer` to the `Dropdown`
  * it renders, so `rc-trigger` falls back to its own default and mounts the dropdown's whole popup
  * as a child of `document.body` — a portal that preserves React's synthetic event bubbling but not
- * native DOM bubbling, so a listener on `rootElement` (an ancestor only in the React tree) never
- * sees a native event dispatched inside it. `document` is an ancestor of both the main tab bar and
- * that portaled popup, so installing there is what makes a single pair of listeners cover both.
+ * native DOM bubbling. `document` is an ancestor of both the main tab bar and that portaled popup,
+ * so installing there is what makes a single pair of listeners cover both.
  *
  * Drag-blocking stays scoped to `.dock-bar` (the main tab bar's own row, including the "+" button
  * and the empty strip past it — none of which is a `[role="tab"]`) and `.dock-dropdown` (rc-tabs'
  * overflow popup) so it never reaches into unrelated `role="tab"` UI elsewhere in the app (e.g. a
- * `Tabs` component in a dialog). Closing does not need that scoping: `readClosableTabId` above is
- * already specific to a tab this component renders, wherever it is.
+ * `Tabs` component in a dialog). Closing does not need that scoping: `readTabHeaderId` above only
+ * finds headers {@link PlatformTabTitle} renders, wherever they are.
  *
  * Middle-click has no keyboard equivalent to give a tab header — it targets a physical mouse button
  * a keyboard cannot press — and today closing a tab has no keyboard-accessible path at all:
  * rc-dock's own close (X) button (`dock-tab-close-btn` in `DockTabs.js`) is a plain, non-focusable
  * `<div onClick>`, not a `<button>`, so it is reachable by neither Tab nor a screen reader.
  *
- * @param rootElement The dock layout's root DOM node (rc-dock's `DockLayout.getRootElement()`).
+ * @param targetDocument The document the dock layout renders in.
  * @param options See {@link MiddleClickTabBarHandlersOptions}.
  * @returns A cleanup function that removes both listeners.
  */
 export function installMiddleClickTabBarHandlers(
-  rootElement: HTMLElement,
-  { onTabMiddleClick }: MiddleClickTabBarHandlersOptions,
+  targetDocument: Document,
+  { findTab, onCloseTab }: MiddleClickTabBarHandlersOptions,
 ): () => void {
-  const targetDocument = rootElement.ownerDocument;
-
   const blockMiddleButtonDrag = (event: MouseEvent) => {
     if (event.button !== MIDDLE_MOUSE_BUTTON) return;
     if (!(event.target instanceof Element) || !event.target.closest('.dock-bar, .dock-dropdown'))
@@ -84,8 +78,11 @@ export function installMiddleClickTabBarHandlers(
 
   const closeTabOnMiddleClick = (event: MouseEvent) => {
     if (event.button !== MIDDLE_MOUSE_BUTTON) return;
-    const tabId = readClosableTabId(event.target);
-    if (tabId) onTabMiddleClick(tabId);
+    const tabId = readTabHeaderId(event.target);
+    if (!tabId) return;
+    // An unset `closable` counts as not closable, as it does for rc-dock's close button
+    const tab = findTab(tabId);
+    if (isTab(tab) && tab.closable) onCloseTab(tabId);
   };
 
   targetDocument.addEventListener('mousedown', blockMiddleButtonDrag, { capture: true });
