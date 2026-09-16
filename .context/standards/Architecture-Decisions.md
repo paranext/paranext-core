@@ -619,10 +619,14 @@ step, no automation. Just a record.
     rebuild and `platform-yalc` move; and because it has to handle the pending, unsettled literal
     case inside the marker-edit tiers, which is the genuinely hard part.
 - **Consequences:** after a correction the caret sits in the marker glyph, where typed characters
-  are marker bytes that the next repair corrects away again — the same fight any autocorrect has,
-  and bounded by the notice that explains it. Undo and redo history is emptied by every repair, so a
-  user cannot undo back past a correction; that is a known limitation carried on PT-4608 rather than
-  a property anyone should rely on. **Every annotation is cleared too** — a load replaces the node
+  are marker bytes that the next repair corrects away again — the same fight any autocorrect has.
+  **None of this is announced.** The notice says only that the marker did not match the chapter and
+  was corrected; it does not say where the caret was put, that undo history is gone, or that
+  annotations were cleared. That is deliberate — one sentence a reader can take in beats a warning
+  nobody finishes — but it means the losses below are unmitigated, not merely explained. Undo and
+  redo history is emptied by every repair, so a user cannot undo back past a correction; that is a
+  known limitation carried on PT-4608 rather than a property anyone should rely on.
+  **Every annotation is cleared too** — a load replaces the node
   map, and the `TypedMarkNode`s that carry annotations live only in that tree, never in USJ. That is
   not new to the repair (it is true of every `setEditorUsj` call, including the ordinary PDP echo)
   and the local bookkeeping already follows it: `setEditorUsj` runs `clearAnnotationInfo`. What is
@@ -636,7 +640,13 @@ step, no automation. Just a record.
   offset the util computes encodes the editor's glyph byte layout, which no unit test can check
   from this repo, so it is pinned end to end instead
   (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts` reads the web view's own
-  DOM selection). **Revisit** when the editor grows a chapter-repair primitive of its own.
+  DOM selection). That end-to-end cover is of a RENUMBERED marker and stands for a RESTORED one
+  because the two are the same shape: `caretTarget` addresses the marker's first content item — the
+  glyph the editor renders — and a chapter node holds no content in USJ either way, since the parser
+  emits it childless. That equivalence is pinned in
+  `chapter-marker-repair.util.test.ts` ("renumbers and synthesizes markers of the same childless
+  shape"), because it is a property of the parser that nothing else here would notice changing.
+  **Revisit** when the editor grows a chapter-repair primitive of its own.
 - **Source:** PT-4608 hand QA.
 
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping

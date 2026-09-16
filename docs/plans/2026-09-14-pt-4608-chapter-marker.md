@@ -36,7 +36,7 @@ C# .NET 8 / NUnit (`c-sharp`, `c-sharp-tests`).
 - **Comments must be forward-facing.** Do not write `PT-4608`, "previously", "used to", "the review
   found", or any narration of this change into source comments. See
   `.claude/rules/code-quality/forward-facing-comments.md`. The ticket number belongs in the commit
-  message only. A `TODO(PT-XXXX)` for *deferred* work is the one legitimate ID.
+  message only. A `TODO(PT-XXXX)` for _deferred_ work is the one legitimate ID.
 - **Never suppress a lint/type error** you can fix by restructuring. See
   `.claude/rules/code-quality/eslint-disable-discipline.md`.
 - **Send/Receive write gate:** Task 5 adds no new write site. Do not add
@@ -52,18 +52,18 @@ behaviour table is `UsfmEditorTextLoaderTests.FixChapterNumbers`
 (`~/source/repos/Paratext/ParatextBase.Tests/ScriptureEditor/UsfmEditorTextLoaderTests.cs`, line
 573). Transcribed here as `(expected, input, chapterNumber)`:
 
-| # | input USFM | chapter | expected USFM | note |
-|---|---|---|---|---|
-| 1 | `1\r\n2\r\n` | -1 | unchanged | invalid chapter number → no change |
-| 2 | `1\r\n2\r\n` | 1 | unchanged | chapter 1 need not have a `\c` |
-| 3 | `junk\r\n\c 2\n` | 1 | `junk\r\n\c 1\r\n` | if chapter 1 has a number it must be 1 |
-| 4 | `\ip p1\r\n\c 1\r\n\ip p2\r\n\c 1\r\n\p p3\r\n` | 1 | `\ip p1\r\n\ip p2\r\n\c 1\r\n\p p3\r\n` | take the first `\c` *not* in the introduction |
-| 5 | `\ip p1\r\n\c 1\r\n\p p2\r\n\c 1\n\p p3\n` | 1 | `\ip p1\r\n\c 1\r\n\p p2\r\n\p p3\r\n` | same rule; the first `\c` here is not intro-followed |
-| 6 | `\c 2\r\n1\r\n2\r\n` | 2 | unchanged | already correct |
-| 7 | `1\r\n2\r\n` | 2 | `\c 2\r\n1\r\n2\r\n` | missing marker is restored at the start |
-| 8 | `\c 3\r\n1\r\n2\r\n` | 2 | `\c 2\r\n1\r\n2\r\n` | wrong number is corrected |
-| 9 | `\c 2\r\n1\r\n\c 2\r\n2\r\n` | 2 | `\c 2\r\n1\r\n2\r\n` | extra marker removed |
-| 10 | `\c \s Section Head` | 2 | `\c 2\r\n\s Section Head` | numberless `\c` gets its number |
+| #   | input USFM                                      | chapter | expected USFM                           | note                                                 |
+| --- | ----------------------------------------------- | ------- | --------------------------------------- | ---------------------------------------------------- |
+| 1   | `1\r\n2\r\n`                                    | -1      | unchanged                               | invalid chapter number → no change                   |
+| 2   | `1\r\n2\r\n`                                    | 1       | unchanged                               | chapter 1 need not have a `\c`                       |
+| 3   | `junk\r\n\c 2\n`                                | 1       | `junk\r\n\c 1\r\n`                      | if chapter 1 has a number it must be 1               |
+| 4   | `\ip p1\r\n\c 1\r\n\ip p2\r\n\c 1\r\n\p p3\r\n` | 1       | `\ip p1\r\n\ip p2\r\n\c 1\r\n\p p3\r\n` | take the first `\c` _not_ in the introduction        |
+| 5   | `\ip p1\r\n\c 1\r\n\p p2\r\n\c 1\n\p p3\n`      | 1       | `\ip p1\r\n\c 1\r\n\p p2\r\n\p p3\r\n`  | same rule; the first `\c` here is not intro-followed |
+| 6   | `\c 2\r\n1\r\n2\r\n`                            | 2       | unchanged                               | already correct                                      |
+| 7   | `1\r\n2\r\n`                                    | 2       | `\c 2\r\n1\r\n2\r\n`                    | missing marker is restored at the start              |
+| 8   | `\c 3\r\n1\r\n2\r\n`                            | 2       | `\c 2\r\n1\r\n2\r\n`                    | wrong number is corrected                            |
+| 9   | `\c 2\r\n1\r\n\c 2\r\n2\r\n`                    | 2       | `\c 2\r\n1\r\n2\r\n`                    | extra marker removed                                 |
+| 10  | `\c \s Section Head`                            | 2       | `\c 2\r\n\s Section Head`               | numberless `\c` gets its number                      |
 
 Rows 4 and 5 are the chapter-1 introduction rule: PT9 starts at the LAST `\c` and walks backwards,
 moving its choice to each earlier `\c` that is **not** immediately followed by an `\i…` marker. The
@@ -88,14 +88,23 @@ the save loop testable without a component harness.
   `resolveUsjToSaveToPdp` from `./debounced-pdp-save.util`.
 - Produces, for Task 3:
   ```ts
-  export interface ChapterMarkerRepairResult { usj: Usj; didRepair: boolean }
-  export function repairChapterMarkers(usj: Usj, expectedChapterNum: number): ChapterMarkerRepairResult
-  export interface ChapterSavePreparation { repairedUsj: Usj | undefined; usjToSave: Usj | undefined }
+  export interface ChapterMarkerRepairResult {
+    usj: Usj;
+    didRepair: boolean;
+  }
+  export function repairChapterMarkers(
+    usj: Usj,
+    expectedChapterNum: number,
+  ): ChapterMarkerRepairResult;
+  export interface ChapterSavePreparation {
+    repairedUsj: Usj | undefined;
+    usjToSave: Usj | undefined;
+  }
   export function prepareUsjForChapterSave(
     usjFromEditor: Usj,
     usjFromPdp: Usj | undefined,
     expectedChapterNum: number,
-  ): ChapterSavePreparation
+  ): ChapterSavePreparation;
   ```
 
 ### Semantics to implement
@@ -149,10 +158,7 @@ Create `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.
 ```ts
 import { describe, expect, it } from 'vitest';
 import { Usj, MarkerContent } from '@eten-tech-foundation/scripture-utilities';
-import {
-  prepareUsjForChapterSave,
-  repairChapterMarkers,
-} from './chapter-marker-repair.util';
+import { prepareUsjForChapterSave, repairChapterMarkers } from './chapter-marker-repair.util';
 
 /** A USJ document from a flat list of content items. */
 function usjOf(...content: MarkerContent[]): Usj {
@@ -188,10 +194,7 @@ describe('repairChapterMarkers — Paratext 9 FixChapterNumbers parity', () => {
   });
 
   it('forces a chapter-1 marker to number 1 (PT9 row 3)', () => {
-    const { usj, didRepair } = repairChapterMarkers(
-      usjOf(para('p', 'junk'), chapter('2')),
-      1,
-    );
+    const { usj, didRepair } = repairChapterMarkers(usjOf(para('p', 'junk'), chapter('2')), 1);
     expect(didRepair).toBe(true);
     expect(usj.content).toEqual([para('p', 'junk'), chapter('1')]);
   });
@@ -216,12 +219,7 @@ describe('repairChapterMarkers — Paratext 9 FixChapterNumbers parity', () => {
       1,
     );
     expect(didRepair).toBe(true);
-    expect(usj.content).toEqual([
-      para('ip', 'p1'),
-      chapter('1'),
-      para('p', 'p2'),
-      para('p', 'p3'),
-    ]);
+    expect(usj.content).toEqual([para('ip', 'p1'), chapter('1'), para('p', 'p2'), para('p', 'p3')]);
   });
 
   it('leaves a correct chapter 2 alone (PT9 row 6)', () => {
@@ -238,10 +236,7 @@ describe('repairChapterMarkers — Paratext 9 FixChapterNumbers parity', () => {
   });
 
   it('corrects an edited chapter number (PT9 row 8)', () => {
-    const { usj, didRepair } = repairChapterMarkers(
-      usjOf(chapter('3'), para('p', 'body')),
-      2,
-    );
+    const { usj, didRepair } = repairChapterMarkers(usjOf(chapter('3'), para('p', 'body')), 2);
     expect(didRepair).toBe(true);
     expect(usj.content).toEqual([chapter('2'), para('p', 'body')]);
   });
@@ -350,10 +345,7 @@ describe('prepareUsjForChapterSave', () => {
       3,
     );
     expect(secondPass.repairedUsj).toBeUndefined();
-    expect(secondPass.usjToSave?.content).toEqual([
-      chapter('3'),
-      para('p', 'body edited twice'),
-    ]);
+    expect(secondPass.usjToSave?.content).toEqual([chapter('3'), para('p', 'body edited twice')]);
   });
 });
 ```
@@ -433,19 +425,19 @@ git commit -m "PT-4608: Port PT9's FixChapterNumbers to USJ as a save-path repai
 ### What to change
 
 **(a) Move the chapter-key ref above the save region.** `chapterKey`/`chapterKeyRef` are currently
-declared around line 2921, *after* `saveUsjToPdpIfUpdated` (line 2680). The save path needs to know
+declared around line 2921, _after_ `saveUsjToPdpIfUpdated` (line 2680). The save path needs to know
 whether the chapter it is saving is the one on screen, so move this block — the comment and both
 lines — to immediately **before** the `// #region PDP Save Write Path` marker:
 
 ```ts
-  // The chapter currently loaded, kept in a ref so the debounced save's fire (below) can compare
-  // the chapter active NOW against the chapter a pending save was scheduled for (see
-  // `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an effect —
-  // so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it already
-  // reflects the NEW chapter and the guard sees the mismatch.
-  const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum, scrRef.versificationStr);
-  const chapterKeyRef = useRef(chapterKey);
-  chapterKeyRef.current = chapterKey;
+// The chapter currently loaded, kept in a ref so the debounced save's fire (below) can compare
+// the chapter active NOW against the chapter a pending save was scheduled for (see
+// `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an effect —
+// so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it already
+// reflects the NEW chapter and the guard sees the mismatch.
+const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum, scrRef.versificationStr);
+const chapterKeyRef = useRef(chapterKey);
+chapterKeyRef.current = chapterKey;
 ```
 
 Leave the wording of that comment as it is — it is still accurate. Every existing reader of
@@ -455,34 +447,34 @@ Leave the wording of that comment as it is — it is still accurate. Every exist
 preparation call and act on a repair:
 
 ```ts
-    function saveUsjToPdpIfUpdatedInternal(
-      usjFromEditor = editorRef.current?.getUsj(),
-    ): Promise<boolean> {
-      if (!usjFromEditor) return Promise.resolve(false);
+function saveUsjToPdpIfUpdatedInternal(
+  usjFromEditor = editorRef.current?.getUsj(),
+): Promise<boolean> {
+  if (!usjFromEditor) return Promise.resolve(false);
 
-      // An open command surface's in-progress input is excluded by the editor itself
-      // (`setTransientInput`), so what arrives here is already the document we mean to save.
-      const { repairedUsj, usjToSave } = prepareUsjForChapterSave(
-        correctEditorUsjVersion(usjFromEditor),
-        usjFromPdp,
-        savedChapterSelector.chapterNum,
-      );
+  // An open command surface's in-progress input is excluded by the editor itself
+  // (`setTransientInput`), so what arrives here is already the document we mean to save.
+  const { repairedUsj, usjToSave } = prepareUsjForChapterSave(
+    correctEditorUsjVersion(usjFromEditor),
+    usjFromPdp,
+    savedChapterSelector.chapterNum,
+  );
 
-      if (repairedUsj) {
-        // The repaired document has to reach the editor too, or the bad marker stays on screen and
-        // every later save repairs and re-reports it forever. Only when this save targets the
-        // chapter still on screen: a cross-chapter flush runs through the CAPTURED chapter's
-        // closure, and the editor has already moved on to different content.
-        if (savedChapterKey === chapterKeyRef.current) {
-          usjSentToPdp.current = repairedUsj;
-          setEditorUsj.current(repairedUsj);
-        }
-        notifyChapterMarkerCorrected();
-      }
-
-      if (usjToSave) return saveUsjToPdpInternal(usjToSave);
-      return Promise.resolve(false);
+  if (repairedUsj) {
+    // The repaired document has to reach the editor too, or the bad marker stays on screen and
+    // every later save repairs and re-reports it forever. Only when this save targets the
+    // chapter still on screen: a cross-chapter flush runs through the CAPTURED chapter's
+    // closure, and the editor has already moved on to different content.
+    if (savedChapterKey === chapterKeyRef.current) {
+      usjSentToPdp.current = repairedUsj;
+      setEditorUsj.current(repairedUsj);
     }
+    notifyChapterMarkerCorrected();
+  }
+
+  if (usjToSave) return saveUsjToPdpInternal(usjToSave);
+  return Promise.resolve(false);
+}
 ```
 
 `savedChapterSelector` is the `chapterUsjSelector` this closure captured, and `savedChapterKey` is
@@ -505,34 +497,35 @@ its chapter key. Add both just inside the `useMemo` callback, above
 **(c) The notification.** Add alongside `notifyStructureProtected` (around line 1273):
 
 ```ts
-  /**
-   * Tell the user the chapter marker in the document they are editing did not match the chapter it
-   * belongs to and was put back. A stable id so the repeated saves of a long edit update one toast
-   * rather than stacking.
-   */
-  const notifyChapterMarkerCorrected = useCallback(
-    () =>
-      papi.notifications.send({
+/**
+ * Tell the user the chapter marker in the document they are editing did not match the chapter it
+ * belongs to and was put back. A stable id so the repeated saves of a long edit update one toast
+ * rather than stacking.
+ */
+const notifyChapterMarkerCorrected = useCallback(
+  () =>
+    papi.notifications
+      .send({
         notificationId: CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID,
         message: formatReplacementString(
           localizedStrings['%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%'],
           { projectName },
         ),
         severity: 'warning',
-      }).catch((error) => {
-        logger.warn(
-          `Error notifying about a corrected chapter marker: ${getErrorMessage(error)}`,
-        );
+      })
+      .catch((error) => {
+        logger.warn(`Error notifying about a corrected chapter marker: ${getErrorMessage(error)}`);
       }),
-    [localizedStrings, projectName],
-  );
+  [localizedStrings, projectName],
+);
 ```
 
 Declare the id near the other module constants (around `PERMISSIONS_EXCEPTION_REGEX`, line 381):
 
 ```ts
 /** Notification id for the chapter-marker correction, so repeats update one toast. */
-const CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID = 'platform-scripture-editor-chapter-marker-corrected';
+const CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID =
+  'platform-scripture-editor-chapter-marker-corrected';
 ```
 
 **(d) Dependency lists.** Add `chapterUsjSelector` and `notifyChapterMarkerCorrected` to the
@@ -544,7 +537,7 @@ alphabetical position its key sorts to among the other
 `%webView_platformScriptureEditor_error_*%` entries:
 
 ```json
-"%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%": "Project {projectName}: The chapter marker was incorrect and was automatically corrected.",
+"%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%": "Project {projectName}: The chapter marker in {book} {chapter} did not match the chapter, so it was corrected.",
 ```
 
 Do **not** add an `es` translation — the Spanish entries that exist came from translators, and
@@ -640,8 +633,11 @@ Sequential after Task 2 — same file.
 - Produces:
   ```ts
   export type SaveFailureKind = 'syncEditBlocked' | 'permissions' | 'unknown';
-  export function classifySaveFailure(errorMessage: string): SaveFailureKind
-  export function shouldReportSaveFailure(kind: SaveFailureKind, lastReportedKind: SaveFailureKind | undefined): boolean
+  export function classifySaveFailure(errorMessage: string): SaveFailureKind;
+  export function shouldReportSaveFailure(
+    kind: SaveFailureKind,
+    lastReportedKind: SaveFailureKind | undefined,
+  ): boolean;
   ```
 
 ### What to change
@@ -675,7 +671,7 @@ In the web view:
 
   Keep the existing sync-edit-blocked and permissions arms exactly as they are, just gated by
   `shouldReportSaveFailure` too. It still returns whether the rejection was one of the two
-  *recoverable* kinds, because `saveUsjToPdpInternal`'s catch uses that answer to decide whether to
+  _recoverable_ kinds, because `saveUsjToPdpInternal`'s catch uses that answer to decide whether to
   restore `usjFromPdp` — an unknown failure must NOT trigger that restore.
 
 - On a save that succeeds (`saveUsjToPdpInternal` returning after a ran write with no throw), clear

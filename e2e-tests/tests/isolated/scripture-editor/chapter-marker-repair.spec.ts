@@ -44,7 +44,7 @@ test.use({
  * the notice has to name the chapter it repaired, which is not always the chapter on screen.
  */
 const CORRECTION_MESSAGE =
-  'The chapter marker in Jonah 1 was incorrect and was automatically corrected';
+  'The chapter marker in Jonah 1 did not match the chapter, so it was corrected';
 
 // All-caps tokens that appear nowhere in the WEB text, so a `toContainText` match is unambiguous.
 const AFTER_REPAIR_TOKEN = 'ZZAFTERREPAIR';

@@ -17,7 +17,7 @@ The editor deliberately lets the user retype a chapter glyph: `$chapterNodeTrans
 (`markerEditTier1.utils.ts`). A typed mid-chapter `\c` likewise tokenizes into a second
 `ChapterNode`. Both are intentional Paratext 9 parity.
 
-Nothing then reconciles that chapter document against the chapter it actually *is*. The save runs
+Nothing then reconciles that chapter document against the chapter it actually _is_. The save runs
 
 ```
 saveUsjToPdpRaw → setChapterUSJ → setChapterUSX → C# SetChapterUsx
@@ -26,11 +26,11 @@ saveUsjToPdpRaw → setChapterUSJ → setChapterUSX → C# SetChapterUsx
 
 and `ValidateChapterNumber` (`Paratext/ParatextData/ScrText.cs`) throws `ChapterizationException`:
 
-| gesture (chapter 3) | USFM sent | rejection |
-| ------------------- | --------- | --------- |
-| edit `\c 3` → `\c 5` | `\c 5 …` | `Wrong chapter number` |
+| gesture (chapter 3)     | USFM sent       | rejection                           |
+| ----------------------- | --------------- | ----------------------------------- |
+| edit `\c 3` → `\c 5`    | `\c 5 …`        | `Wrong chapter number`              |
 | type `\c 5` mid-chapter | `\c 3 … \c 5 …` | `Multiple chapter markers present.` |
-| delete `\c 3` | `…` | `No chapter marker present.` |
+| delete `\c 3`           | `…`             | `No chapter marker present.`        |
 
 Because the poisoned `\c` stays in the editor document, **every** later debounced save of that
 chapter is rejected identically. Saving is dead for that chapter until the user navigates away.
@@ -90,14 +90,14 @@ export function repairChapterMarkers(
 
 Node-for-node translation of `FixChapterNumbers`:
 
-| PT9 (USFM) | here (USJ) |
-| ---------- | ---------- |
-| `Regex.Matches(usfm, @"\\c\s+\d*(\r\n)?")` | every `type: 'chapter'` item |
-| chapter 1, zero `\c` → no change | same; an intro-only chapter 1 is legal |
-| chapter 1, pick the first `\c` *not* followed by `\i…` | the earliest top-level chapter node whose next sibling is not a `type: 'para'` with an `i`-prefixed marker; otherwise the last one |
-| chapter > 1, `\c N` goes at position 0 | the anchor moves before the first non-`book` item |
-| remove every other `\c` | delete every other chapter node, nested ones included (a nested chapter node is never legal) |
-| `errorMessage` when count > 1 | `didRepair` — one message covers every case |
+| PT9 (USFM)                                             | here (USJ)                                                                                                                         |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `Regex.Matches(usfm, @"\\c\s+\d*(\r\n)?")`             | every `type: 'chapter'` item                                                                                                       |
+| chapter 1, zero `\c` → no change                       | same; an intro-only chapter 1 is legal                                                                                             |
+| chapter 1, pick the first `\c` _not_ followed by `\i…` | the earliest top-level chapter node whose next sibling is not a `type: 'para'` with an `i`-prefixed marker; otherwise the last one |
+| chapter > 1, `\c N` goes at position 0                 | the anchor moves before the first non-`book` item                                                                                  |
+| remove every other `\c`                                | delete every other chapter node, nested ones included (a nested chapter node is never legal)                                       |
+| `errorMessage` when count > 1                          | `didRepair` — one message covers every case                                                                                        |
 
 `didRepair` is true when the returned document differs from the input: the anchor was renumbered,
 moved, inserted, or an extra chapter node was removed. The input is never mutated.
@@ -136,7 +136,7 @@ New localized string:
 
 ```
 %webView_platformScriptureEditor_error_chapterMarkerCorrected_format%
-  "Project {projectName}: The chapter marker was incorrect and was automatically corrected."
+  "Project {projectName}: The chapter marker in {book} {chapter} did not match the chapter, so it was corrected."
 ```
 
 Severity `warning`, sent with a stable `notificationId` so repeats update one toast.
@@ -175,8 +175,8 @@ untouched.
 
 It does not weaken PT9's deliberate `InvalidOperationException` tripwire ("Attempt to overwrite
 chapter X with chapter Y"), which lives in a different branch of `ValidateChapterNumber` and stays
-reachable: the repair normalizes the *incoming* chapter USFM, while that check compares the incoming
-chapter number against the *existing* chapter on disk.
+reachable: the repair normalizes the _incoming_ chapter USFM, while that check compares the incoming
+chapter number against the _existing_ chapter on disk.
 
 ## Testing
 
@@ -198,7 +198,7 @@ Both repairs are pinned to the same PT9 table so the two layers cannot drift sil
 
 Core only. No `scripture-editors` change and therefore no `platform-yalc` move.
 
-Out of scope: inserting a *new* chapter (PT-4614, deliberately sequenced behind this issue), the
+Out of scope: inserting a _new_ chapter (PT-4614, deliberately sequenced behind this issue), the
 `\id`-line backslash menu (PT-4613), and the paste path (PT-4201, which already strips `\c`/`\id`
 from pasted lines on its own branch).
 
