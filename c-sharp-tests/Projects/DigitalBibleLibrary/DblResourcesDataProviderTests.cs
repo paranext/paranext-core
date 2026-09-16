@@ -291,9 +291,9 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var installedProjectIds = DblResourcesDataProvider.InstalledProjectIdsByDblId();
 
-            Assert.That(installedProjectIds.Keys, Is.EquivalentTo(new[] { "97196133a859179b" }));
+            Assert.That(installedProjectIds.ProjectIdsByDblId.Keys, Is.EquivalentTo(new[] { "97196133a859179b" }));
             Assert.That(
-                installedProjectIds["97196133a859179b"],
+                installedProjectIds.ProjectIdsByDblId["97196133a859179b"],
                 Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
             );
         }
@@ -326,6 +326,48 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         /// reads an absent key as "the backend said nothing, keep what you have" and an empty
         /// string as "not installed", so collapsing the two would make a removal undetectable.
         /// </summary>
+        /// <summary>
+        /// An incomplete pass cannot tell "the scan skipped a project it could not read" from
+        /// "this resource is not installed", and the TypeScript persists what it is told. Omitting
+        /// the uid leaves the cached row alone; an empty string would demote an installed resource
+        /// and write that to user data, after which the picker reclassifies it as non-DBL.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_OmitsAnAbsentUidWhenTheScanWasIncomplete()
+        {
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string>(),
+                    IsComplete: false
+                )
+            );
+
+            Assert.That(installStatus.ContainsKey("97196133a859179b"), Is.False);
+        }
+
+        /// <summary>
+        /// An incomplete pass still reports what it did find — omitting those too would stop a
+        /// genuine install from ever being recognised.
+        /// </summary>
+        [Test]
+        public void ProjectInstallStatus_StillReportsWhatAnIncompleteScanFound()
+        {
+            var resources = new[] { ResourceWithUid("97196133a859179b") };
+
+            var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
+                resources,
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string> { ["97196133a859179b"] = "PROJ-HBKENG" },
+                    IsComplete: false
+                )
+            );
+
+            Assert.That(installStatus["97196133a859179b"], Is.EqualTo("PROJ-HBKENG"));
+        }
+
         [Test]
         public void ProjectInstallStatus_ReportsAnEmptyStringForAnUninstalledResource()
         {
@@ -333,7 +375,10 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var installStatus = DblResourcesDataProvider.ProjectInstallStatus(
                 resources,
-                new Dictionary<string, string>()
+                new DblResourcesDataProvider.InstalledResourceProjects(
+                    new Dictionary<string, string>(),
+                    IsComplete: true
+                )
             );
 
             Assert.That(installStatus.ContainsKey("97196133a859179b"), Is.True);
@@ -356,7 +401,7 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var installedProjectIds = DblResourcesDataProvider.InstalledProjectIdsByDblId();
 
-            Assert.That(installedProjectIds.Keys, Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" }));
+            Assert.That(installedProjectIds.ProjectIdsByDblId.Keys, Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" }));
         }
     }
 }
