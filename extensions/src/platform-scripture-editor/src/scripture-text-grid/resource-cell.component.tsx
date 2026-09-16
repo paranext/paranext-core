@@ -50,6 +50,12 @@ type ResourceCellProps = {
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
   /**
+   * Whether this web view is rendered, from `useViewVisibility` at the web view's root. A prop
+   * rather than a hook call here because a cell is rendered once per resource, and the answer is
+   * the same for all of them — see {@link useReferenceScroll}.
+   */
+  isViewVisible: boolean;
+  /**
    * `'chapter'` and `'aligned'` both feed the editor the whole chapter; `'verse'` feeds only the
    * reference's verse. `'aligned'` additionally asks the editor for its block-verse layout, which
    * wraps each verse in a positionable element so the grid can put verse N of every resource on one
@@ -86,6 +92,7 @@ export function ResourceCell({
   resourceRef,
   scrRef,
   setScrRef,
+  isViewVisible,
   viewMode = 'chapter',
   zoom,
   zoomMenuLabels,
@@ -193,7 +200,7 @@ export function ResourceCell({
   // defers while the dock tab is inactive and consumes one catch-up on activation, instantly —
   // `scrollPortToBlock` is `scrollTop` arithmetic, so there is nothing to animate from. In Simple
   // mode that is the common path, not the edge: column 3 shows one tab at a time.
-  useReferenceScroll(contentRef, scrRef, findVerseMarkerForVerse, {
+  useReferenceScroll(contentRef, scrRef, isViewVisible, findVerseMarkerForVerse, {
     isEnabled: viewMode === 'chapter',
   });
   // Give the editor this resource's valid markers so it recognizes them (footnote/apparatus and
