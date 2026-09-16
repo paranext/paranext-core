@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { ComponentProps, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 
 vi.mock('@papi/frontend', () => ({
@@ -106,6 +108,29 @@ describe('FootnotesLayout close button', () => {
     // pane's layout reserves room for it.
     expect(closeButton.parentElement?.querySelector('[role="listbox"]')).toBeTruthy();
   });
+
+  it('takes the first turn in the pane, ahead of the notes', async () => {
+    const user = userEvent.setup();
+    renderPane();
+    const closeButton = screen.getByRole('button', { name: 'Close footnotes pane' });
+    const pane = closeButton.parentElement;
+    if (!pane) throw new Error('close button is not inside the pane');
+    const rows = screen.getAllByRole('option');
+
+    // The close button is rendered before the list, so it is the pane's first tab stop even though
+    // it floats over the list's top corner - dismissing the pane is one press from entering it.
+    const paneTabStops = [...pane.querySelectorAll<HTMLElement>('button, [tabindex]')].filter(
+      (element) => element.tabIndex >= 0,
+    );
+    expect(paneTabStops[0]).toBe(closeButton);
+
+    // And from there Tab reads down the notes one at a time.
+    closeButton.focus();
+    await user.tab();
+    expect(rows[0]).toHaveFocus();
+    await user.tab();
+    expect(rows[1]).toHaveFocus();
+  });
 });
 
 describe('FootnotesLayout reporting that the user left the pane', () => {
@@ -138,6 +163,63 @@ describe('FootnotesLayout reporting that the user left the pane', () => {
     fireEvent.blur(row, { relatedTarget: null });
     expect(onPaneFocusChange).toHaveBeenLastCalledWith(false);
     expect(onPaneFocusLeft).not.toHaveBeenCalled();
+  });
+
+  it('stays silent while focus moves into an overlay the row editor opened', () => {
+    // The row editor's note-type and caller dropdowns and its marker menu all render through a
+    // React portal at `document.body` (shadcn's `dropdown-menu.tsx` / `popover.tsx` wrap their
+    // content in a Radix `Portal`), so they are outside the pane's DOM even though the pane is
+    // what put them on screen. Reporting that as leaving the pane ends the editing session, which
+    // unmounts the very overlay the user just opened - the controls would be unusable.
+    const onPaneFocusLeft = vi.fn();
+    renderPane({
+      onPaneFocusLeft,
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => (
+        <>
+          <input data-testid="row-editor" />
+          {createPortal(
+            <div data-slot="dropdown-menu-content">
+              <button type="button" data-testid="overlay-item">
+                Cross-reference
+              </button>
+            </div>,
+            document.body,
+          )}
+        </>
+      ),
+    });
+    screen.getByTestId('row-editor').focus();
+
+    screen.getByTestId('overlay-item').focus();
+
+    expect(onPaneFocusLeft).not.toHaveBeenCalled();
+  });
+
+  it('still reports a move to an unrelated element rendered at the document root', () => {
+    // The overlay exemption above is scoped to overlay CONTENT, so clicking something else that
+    // happens to live outside the pane's subtree is still the user moving on.
+    const onPaneFocusLeft = vi.fn();
+    renderPane({
+      onPaneFocusLeft,
+      editingFootnoteIndex: 1,
+      renderEditingFootnote: () => (
+        <>
+          <input data-testid="row-editor" />
+          {createPortal(
+            <button type="button" data-testid="plain-portal">
+              elsewhere
+            </button>,
+            document.body,
+          )}
+        </>
+      ),
+    });
+    screen.getByTestId('row-editor').focus();
+
+    screen.getByTestId('plain-portal').focus();
+
+    expect(onPaneFocusLeft).toHaveBeenCalledTimes(1);
   });
 
   it('stays silent while focus moves within the pane', () => {

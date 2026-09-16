@@ -2,6 +2,7 @@ import {
   FocusEvent,
   PropsWithChildren,
   ReactNode,
+  RefObject,
   useCallback,
   useEffect,
   useRef,
@@ -37,6 +38,31 @@ const footnoteHeaderWidthPx = 50;
 const minimumEditorWidthPx = 100;
 const minimumFootnotesPaneWidthPercent = 10;
 const maximumFootnotesPaneWidthPercent = 50;
+
+/**
+ * Overlay content the pane's own row editor puts on screen. Radix renders dropdown and popover
+ * content through a React portal at `document.body`, so it is nowhere inside the pane's DOM even
+ * though the pane is what opened it - the row editor's note-type and caller dropdowns and its
+ * marker menu are all this shape.
+ */
+const paneOverlaySelector = '[data-slot="dropdown-menu-content"], [data-slot="popover-content"]';
+
+/**
+ * Whether a focus target counts as still being in the pane, including {@link paneOverlaySelector}
+ * content.
+ *
+ * Erring toward "inside" is deliberate: a dropdown opened elsewhere in this web view also matches,
+ * so a session can outlive a gesture PT9 would have ended it on. The other way round ends the
+ * editing session - and with it the overlay - the instant the user opens one of the row editor's
+ * own dropdowns, which makes those controls unusable.
+ */
+function isInsidePaneOrItsOverlays(
+  target: Element,
+  paneContainerRef: RefObject<HTMLDivElement | null>,
+): boolean {
+  if (paneContainerRef.current?.contains(target)) return true;
+  return !!target.closest(paneOverlaySelector);
+}
 
 export type FootnotesLayoutProps = PropsWithChildren<{
   usj: Usj;
@@ -477,7 +503,8 @@ export function FootnotesLayout({
       // Focus landing on another element inside the pane (the list to the row editor and back)
       // never leaves it. A null `relatedTarget` — focus going nowhere, e.g. the window losing it —
       // does count as leaving, matching what the user sees: no caret in the pane.
-      if (event.relatedTarget && paneContainerRef.current?.contains(event.relatedTarget)) return;
+      if (event.relatedTarget && isInsidePaneOrItsOverlays(event.relatedTarget, paneContainerRef))
+        return;
       if (!paneHasFocusRef.current) return;
       paneHasFocusRef.current = false;
       onPaneFocusChange?.(false);
