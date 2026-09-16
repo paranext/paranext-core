@@ -1003,6 +1003,38 @@ describe('web-view-content-zoom.service', () => {
     expect(updateDefinition).not.toHaveBeenCalled();
   });
 
+  it('warns and still pushes the pane variables when a re-point write throws', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.2, 'notes:BBB:main': 1.4 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-10', {
+      id: 'notes-10',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-10', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-10')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    definitions.set('notes-10', { ...requireDefinition('notes-10'), projectId: 'bbb' });
+    updateDefinition.mockImplementation(() => {
+      throw new Error('local storage quota exceeded');
+    });
+    vi.mocked(logger.warn).mockClear();
+    // Dirtied so the assertion below can tell whether pushContentZoom actually ran, rather than
+    // merely trusting that a throwing re-seed left it untouched.
+    iframeFor('notes-10').contentDocument?.documentElement.style.setProperty(
+      '--platform-content-zoom-default',
+      'dirty',
+    );
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-10') });
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('notes-10'));
+    // The push after the re-seed attempt still ran despite the throw: the default variable it
+    // always sets was overwritten from the dirtied sentinel above.
+    expect(cssVar(iframeFor('notes-10'), '--platform-content-zoom-default')).toBe('1');
+  });
+
   it("clears the pane's own-level write timer when a re-point drops its pending levels, so the next edit under the new identity commits at once", async () => {
     settings[MEMORY] = { 'notes:AAA:main': 1.2, 'notes:BBB:main': 0.8 };
     __setContentZoomDepsForTesting({});
