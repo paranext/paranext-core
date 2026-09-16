@@ -9,8 +9,9 @@ export type FootnoteLayout = 'horizontal' | 'vertical';
  * The offset origin is the note's CONTENT: every character run the note contains, including a
  * leading `fr`/`xo` target reference, which PT9's notes pane and `FootnoteItem` alike render inline
  * at the head of the note text. It excludes everything that is display rather than content — the
- * caller (`FootnoteItem` renders it in a separate header div) and the USFM markers themselves
- * (`.marker` spans; see `isMarkerText` in `footnote-caret.utils.ts`).
+ * caller (`FootnoteItem` renders it in a separate header div), the USFM markers themselves
+ * (`.marker` spans) and the note's `\cat` category, which is a field on the note rather than part
+ * of its content (see `isDisplayText` in `footnote-caret.utils.ts`).
  *
  * That origin is the note's USJ text, NOT any one rendering of it, which is what lets a position
  * captured over a read-only row resolve inside a live editor: the editor adds its own display

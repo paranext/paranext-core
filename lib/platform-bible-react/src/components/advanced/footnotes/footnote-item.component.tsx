@@ -8,7 +8,7 @@ import { FootnoteItemProps } from './footnotes.types';
  * PT9 separates a marker from the text it introduces with a no-break space (`Standard.xslt`'s
  * `openmarker`), so a wrapping row never strands a marker at the end of a line. It is rendered
  * INSIDE the `.marker` span - unlike PT9, which emits it as a sibling - so that everything a caret
- * offset must skip as marker chrome is reachable from one selector (see `isMarkerText` in
+ * offset must skip as marker chrome is reachable from one selector (see `isDisplayText` in
  * `footnote-caret.utils.ts`).
  */
 const MARKER_SEPARATOR = '\u00a0';
@@ -191,6 +191,11 @@ export function FootnoteItem({
     // `\cat` delimits the value but is not a style for it. The value is the note's data and stays
     // visible either way; the `\cat` glyphs are marker display and follow the same switch every
     // other marker in this component does.
+    //
+    // The class is also what keeps the whole run out of the caret origin (`isDisplayText` in
+    // `footnote-caret.utils.ts`): the category is a FIELD on the note, not part of its `content`,
+    // and the editor builds its own category display as `attribute`-typed text, which
+    // `EditorRef.selectNoteTextOffset` skips.
     <span className="note-category">
       {showMarkers && <span className="marker">{`\\cat${MARKER_SEPARATOR}`}</span>}
       {footnote.category}
