@@ -614,6 +614,11 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
   const hasOwnLevels = Boolean(
     definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state,
   );
+  // Read once and reused by both checks below: neither the `hasOwnLevels` return nor the
+  // `memoryLoaded` return touches this map, so a pane whose pending write already names `stamp` is
+  // the same fact whichever of the two paths asks it.
+  const pendingWrite = pendingOwnLevelWrites.get(webViewId);
+  const pendingWriteMatchesStamp = pendingWrite !== undefined && pendingWrite.identity === stamp;
   if (storedStamp === undefined) {
     if (hasOwnLevels) {
       // Committed-levels half of "no stamp, and the pane already has something of its own" above.
@@ -622,16 +627,16 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
       });
       return;
     }
-    const pendingWrite = pendingOwnLevelWrites.get(webViewId);
-    if (pendingWrite && pendingWrite.identity === stamp) return; // same case, pending-write half.
+    if (pendingWriteMatchesStamp) return; // same case, pending-write half.
     // Either a genuinely brand-new pane with nothing of its own, committed or pending, or a pending
     // write that predates a re-point. Both fall through below exactly like a stamped re-point does.
   }
   // "Otherwise" above -- including its one exception, a pending write already chosen for the
-  // identity being seeded NOW, which is kept rather than overwritten by what memory remembers.
+  // identity being seeded NOW, which is kept rather than overwritten by what memory remembers. When
+  // `storedStamp` was undefined, this was already ruled out just above; it is only still live here
+  // for a pane whose stamp names a different identity.
   if (!memoryLoaded) return;
-  const pendingWrite = pendingOwnLevelWrites.get(webViewId);
-  if (pendingWrite && pendingWrite.identity === stamp) return;
+  if (pendingWriteMatchesStamp) return;
   pendingOwnLevelWrites.delete(webViewId);
   const ownLevelTimer = ownLevelWriteTimers.get(webViewId);
   if (ownLevelTimer !== undefined) {
