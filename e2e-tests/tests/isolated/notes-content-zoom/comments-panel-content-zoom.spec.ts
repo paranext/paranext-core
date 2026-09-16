@@ -8,9 +8,16 @@
  * another comment spec left behind, and the fixture only starts a fresh worker when the option
  * value differs.
  */
-import { type Frame, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/comment.fixture';
 import {
+  areaBox,
+  ctrlWheel,
+  INDICATOR_SELECTOR,
+  readContentZoomMemory,
+} from '../../../fixtures/content-zoom-helpers';
+import {
+  DEFAULT_WEBSOCKET_PORT,
   sendPapiRequestOnce,
   waitForAppReady,
   waitForOpenWebViewIdByType,
@@ -25,7 +32,6 @@ import {
 } from '../../../fixtures/comment-test-helpers';
 import { getEditorFrame, readFactor } from '../../../fixtures/scripture-editor-helpers';
 
-const DEFAULT_WEBSOCKET_PORT = 8876;
 const SETTINGS_TIMEOUT_MS = 60_000;
 const OPEN_PANEL_TIMEOUT_MS = 150_000;
 
@@ -34,56 +40,6 @@ const OPEN_PANEL_TIMEOUT_MS = 150_000;
  * src/renderer/components/docking/simple-layout.data.ts
  */
 const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
-
-/**
- * Setting key the memory-key-shape assertion reads directly
- * (`src/renderer/services/web-view-content-zoom.service.ts`).
- */
-const CONTENT_ZOOM_MEMORY_SETTING = 'platform.webViewContentZoomMemory';
-
-/**
- * The `id` the platform's zoom indicator badge is created with
- * (`web-view-content-zoom.bootstrap-script.ts`).
- */
-const INDICATOR_SELECTOR = '#platform-content-zoom-indicator';
-
-/** Bounding box (panel-frame-relative) of one zoom area's marked root element. */
-async function areaBox(
-  frame: Frame,
-  areaId: string,
-): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).boundingBox();
-  if (!box) throw new Error(`Zoom area "${areaId}" has no bounding box`);
-  return box;
-}
-
-/**
- * Ctrl+wheel over the centre of `box` (main-frame-relative coordinates, as `areaBox` returns).
- * `deltaY: -120` zooms in, `+120` zooms out. Does not itself wait for the effect — callers poll the
- * resulting factor, never a bare timeout, since a fixed wait would race the debounced write.
- */
-async function ctrlWheel(
-  page: Page,
-  box: { x: number; y: number; width: number; height: number },
-  deltaY: number,
-): Promise<void> {
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.keyboard.down('Control');
-  await page.mouse.wheel(0, deltaY);
-  await page.keyboard.up('Control');
-}
-
-/** Reads the `platform.webViewContentZoomMemory` setting straight from the renderer. */
-async function readContentZoomMemory(page: Page): Promise<Record<string, number>> {
-  return page.evaluate((settingKey) => {
-    // The renderer exposes `papi` on `globalThis`, untyped here.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as {
-      papi: { settings: { get: (key: string) => Promise<Record<string, number>> } };
-    };
-    return win.papi.settings.get(settingKey);
-  }, CONTENT_ZOOM_MEMORY_SETTING);
-}
 
 /**
  * Click the Comments panel's tab in Column 3, handling the rc-tabs overflow case where the tab is

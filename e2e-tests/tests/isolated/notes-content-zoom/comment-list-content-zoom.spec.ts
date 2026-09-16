@@ -19,6 +19,12 @@ import {
   createCommentThreads,
   openCommentList,
 } from '../../../fixtures/comment-test-helpers';
+import {
+  ctrlWheel,
+  INDICATOR_SELECTOR,
+  readContentZoomMemory,
+  readIndicatorText,
+} from '../../../fixtures/content-zoom-helpers';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
 import {
   CONTENT_ZOOM_COMMANDS,
@@ -38,53 +44,6 @@ const COMMENT_LIST_WEBVIEW_TYPE = 'legacyCommentManager.commentList';
  * `src/shared/models/web-view.model.ts`).
  */
 const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
-
-/**
- * Setting key the memory-key-shape assertion reads directly
- * (`src/renderer/services/web-view-content-zoom.service.ts`).
- */
-const CONTENT_ZOOM_MEMORY_SETTING = 'platform.webViewContentZoomMemory';
-
-/**
- * The `id` the platform's zoom indicator badge is created with
- * (`web-view-content-zoom.bootstrap-script.ts`).
- */
-const INDICATOR_SELECTOR = '#platform-content-zoom-indicator';
-
-/**
- * Ctrl+wheel over the centre of `box` (main-frame-relative coordinates, as `boundingBox` returns).
- * `deltaY: -120` zooms in, `+120` zooms out. Does not itself wait for the effect — callers poll the
- * resulting factor, never a bare timeout, since geometry inside a zoomed frame moves and a fixed
- * wait would race the debounced write.
- */
-async function ctrlWheel(
-  page: Page,
-  box: { x: number; y: number; width: number; height: number },
-  deltaY: number,
-): Promise<void> {
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.keyboard.down('Control');
-  await page.mouse.wheel(0, deltaY);
-  await page.keyboard.up('Control');
-}
-
-/** Reads the `platform.webViewContentZoomMemory` setting straight from the renderer. */
-async function readContentZoomMemory(page: Page): Promise<Record<string, number>> {
-  return page.evaluate((settingKey) => {
-    // The renderer exposes `papi` on `globalThis`, untyped here.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const win = window as unknown as {
-      papi: { settings: { get: (key: string) => Promise<Record<string, number>> } };
-    };
-    return win.papi.settings.get(settingKey);
-  }, CONTENT_ZOOM_MEMORY_SETTING);
-}
-
-/** Indicator text with whitespace stripped, so the narrow no-break space before `%` doesn't matter. */
-async function readIndicatorText(frame: Frame): Promise<string | undefined> {
-  const text = await frame.locator(INDICATOR_SELECTOR).textContent();
-  return text?.replace(/\s/gu, '');
-}
 
 /** Locates a rendered comment thread card by its thread id (the id `createCommentThreads` returns). */
 function cardLocator(frame: Frame, threadId: string) {
@@ -233,6 +192,10 @@ test.describe('comment list content zoom', () => {
     const listId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
     const editorId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_EDITOR_WEBVIEW_TYPE);
     const listFrame = await getEditorFrame(mainPage, listId);
+    // Set by the "reopening" step below; closed by the next step before it opens project B's list,
+    // so that list's own `waitForOpenWebViewIdByType` (a bare find by type) cannot resolve to this
+    // one instead of the fresh id project B's list opens with.
+    let reopenedListId: string | undefined;
 
     // Baseline: a fresh pane's cards read the Settings default (1), unscaled.
     await expect.poll(() => readFactor(listFrame, '')).toBe(1);
@@ -252,9 +215,11 @@ test.describe('comment list content zoom', () => {
 
       const cardBoxAfter = await cardBefore.boundingBox();
       if (!cardBoxAfter) throw new Error('Comment card not found after zoom');
+      // A tight tolerance around the actual 1.1 factor: a wide band (e.g. 0.99–1.21) would also
+      // accept a ratio of 1.0, so a missing marker that left the whole-iframe fallback scaling
+      // nothing would pass unnoticed.
       const ratio = cardBoxAfter.height / cardBoxBefore.height;
-      expect(ratio).toBeGreaterThan(1.1 * 0.9);
-      expect(ratio).toBeLessThan(1.1 * 1.1);
+      expect(ratio).toBeCloseTo(1.1, 1);
 
       const toolbarBoxZoomed = await scopeTrigger.boundingBox();
       if (!toolbarBoxZoomed) throw new Error('Filter toolbar not found after zoom');
@@ -358,12 +323,18 @@ test.describe('comment list content zoom', () => {
 
       await closeDockTab(mainPage, listId);
       await openCommentList(mainPage, projectA);
-      const reopenedListId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
+      reopenedListId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
       const reopenedListFrame = await getEditorFrame(mainPage, reopenedListId);
       await expect.poll(() => readFactor(reopenedListFrame, '')).toBe(1.2);
     });
 
     await test.step("a different project's comment list inherits nothing from the first", async () => {
+      if (!reopenedListId)
+        throw new Error('test setup: no reopened list id from the previous step');
+      // Close project A's list first: project B's own list must start at the default independent of
+      // A, and leaving A's list open would let `waitForOpenWebViewIdByType` below (a bare find by
+      // type) resolve to A's still-open id instead of the fresh one project B's list opens with.
+      await closeDockTab(mainPage, reopenedListId);
       await createCommentThreads(projectB, ['GEN 1:1'], ['Zoom test comment for project B']);
       await openCommentList(mainPage, projectB);
       const projectBListId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_WEBVIEW_TYPE);
