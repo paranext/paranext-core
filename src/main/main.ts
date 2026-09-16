@@ -1690,15 +1690,15 @@ async function main() {
       forgetWindowWithholding(windowId);
       forgetWindowBounce(windowId);
 
+      // After the announcement above, which is synchronous and must not wait on a disk write, and
+      // before the unsubscribers below, which spend the network service's whole registration retry
+      // failing against a renderer that is already gone.
+      cancelPendingBoundsCapture();
       // What this window's disappearance means for its entry. A deliberate close — the app stays up
       // — takes the entry with it, and the structure is rewritten without it below so the window
       // does not come back next session. A window going down with the app is NOT leaving the
       // structure: it has to be there next session, so its entry stays — including in every flush
       // still queued behind this moment.
-      // After the announcement above, which is synchronous and must not wait on a disk write, and
-      // before the unsubscribers below, which spend the network service's whole registration retry
-      // failing against a renderer that is already gone.
-      cancelPendingBoundsCapture();
       // A window closed because the interface mode changed is not leaving the structure either: it
       // is meant to come back when the user switches to power again, so its entry stays exactly as
       // it does for a window going down with the app. A window still waiting for its content is the
