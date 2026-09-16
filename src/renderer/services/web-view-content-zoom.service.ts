@@ -561,39 +561,42 @@ function resolveIdentityState(webViewId: WebViewId): IdentityState | undefined {
  * adds the stamp together with the levels it carries, so counting a merely pending one here too
  * would risk stamping a pane ahead of a level it does not actually have yet.
  *
- * Four cases, decided by the identity and the stamp:
+ * Decided by the identity, the stamp, and any pending write:
  *
  * - **No identity at all** (`id` is `undefined` — a project id this pane's kind cannot resolve, for
  *   instance) — nothing this window could seed the pane with either way, so whatever levels it
  *   already holds are left exactly as they are.
  * - **The stamp matches the pane's identity** — nothing to do. Whatever the pane holds, seeded here
  *   or chosen by the user since, belongs to what the pane shows.
- * - **No stamp, and a pending write chosen for this same identity** — a newly opened pane, one
- *   restored from a layout written before its levels were stamped, or one whose only own-level
- *   commit so far has failed. A level it already holds (committed) is its own and is kept — the
- *   levels key is never written empty, so holding it at all means the pane has a level to keep —
- *   and a level it holds only as a still-pending, uncommitted write for the identity it shows RIGHT
- *   NOW ({@link pendingOwnLevelWrites}) is left alone the same way: there is no committed stamp to
- *   say it changed FROM anything, and the write is not stale, so it survives untouched and gets its
- *   stamp together with its levels once a later commit finally lands. Only a pane with neither
- *   takes the remembered levels of its identity, below.
- * - **The stamp names another identity, OR a pending write was chosen for one** — either the pane was
- *   re-pointed at another project through the same web view id (`reloadWebView`, with the view's
- *   own `getWebViewDefinition` spreading its previous saved state onto the new definition) after
- *   its levels were stamped, or it was re-pointed before its first commit ever landed, so no stamp
- *   exists to show the change but the level still pending belongs to a project the pane no longer
- *   shows. Either way, whatever the pane holds is replaced by what memory remembers for the new
- *   identity, and removed entirely when it remembers nothing, so the pane follows the Settings
- *   default rather than the previous project's level — and any pending write is dropped along with
- *   it, together with the open burst-write timer it was sitting in, so the new identity's own next
- *   edit still gets the "first edit of a burst is written at once" guarantee instead of waiting out
- *   a window that belonged to the old identity. A drop here is a courtesy, not the only guard: a
- *   pending write that reaches {@link commitOwnLevels} before this function gets the chance — the
- *   debounce timer firing on its own, `forgetContentZoom`, or the unload flush — is checked and
- *   dropped there too, rather than being stamped with whatever identity the pane shows at commit
- *   time. This whole case is skipped while {@link memoryLoaded} is still `false`: an unread
- *   {@link cachedMemory} is `{}` by construction, not evidence that nothing is remembered, and
- *   trusting it here would drop a restored pane's levels for nothing to replace them with. Left
+ * - **No stamp, and the pane already has something of its own for the identity it shows RIGHT NOW** —
+ *   a committed level (the levels key is never written empty, so holding it at all means the pane
+ *   has a level to keep — a newly opened pane, one restored from a layout written before its levels
+ *   were stamped, or one whose only own-level commit so far has failed), or a level held only as a
+ *   still-pending, uncommitted write chosen for this same identity ({@link pendingOwnLevelWrites}).
+ *   Either way there is no committed stamp to say it changed FROM anything, so it survives
+ *   untouched (the pending write keeps its open burst timer too) and gets its stamp together with
+ *   its levels once a later commit finally lands.
+ * - **Otherwise — a genuinely fresh pane with nothing of its own at all, OR the stamp names another
+ *   identity, OR a pending write was chosen for one** — either the pane has never had anything
+ *   seeded or committed, or it was re-pointed at another project through the same web view id
+ *   (`reloadWebView`, with the view's own `getWebViewDefinition` spreading its previous saved state
+ *   onto the new definition) after its levels were stamped, or it was re-pointed before its first
+ *   commit ever landed, so no stamp exists to show the change but the level still pending belongs
+ *   to a project the pane no longer shows. Whatever the pane holds is replaced by what memory
+ *   remembers for the identity it shows now, and removed entirely when it remembers nothing, so the
+ *   pane follows the Settings default rather than the previous project's level — and any pending
+ *   write still standing is dropped along with it, together with the open burst-write timer it was
+ *   sitting in, so the identity's own next edit still gets the "first edit of a burst is written at
+ *   once" guarantee instead of waiting out a window that belonged to another identity. The one
+ *   exception is a pending write already chosen for the identity being seeded NOW — the pane's own
+ *   not-yet- committed edit for what it already shows — which is kept rather than overwritten by
+ *   what memory remembers, the same way the previous case keeps one. A drop here is a courtesy, not
+ *   the only guard: a pending write that reaches {@link commitOwnLevels} before this function gets
+ *   the chance — the debounce timer firing on its own, `forgetContentZoom`, or the unload flush —
+ *   is checked and dropped there too, rather than being stamped with whatever identity the pane
+ *   shows at commit time. This whole case is skipped while {@link memoryLoaded} is still `false`: an
+ *   unread {@link cachedMemory} is `{}` by construction, not evidence that nothing is remembered,
+ *   and trusting it here would drop a restored pane's levels for nothing to replace them with. Left
  *   alone, the pane keeps its stale stamp (or stale pending write) until its next fresh first-area
  *   report re-seeds it from scratch ({@link setContentZoomAreas}) — a definition update alone does
  *   not re-run this check, since {@link reseedIfIdentityChanged} returns early for a pane with no
@@ -611,12 +614,12 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
   const hasOwnLevels = Boolean(
     definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state,
   );
-  const state: Record<string, unknown> = { ...(definition.state ?? {}) };
   if (storedStamp === undefined) {
     if (hasOwnLevels) {
-      // Committed-levels half of "no stamp, and a pending write chosen for this same identity" above.
-      state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
-      deps.updateDefinition(definition.id, { state });
+      // Committed-levels half of "no stamp, and the pane already has something of its own" above.
+      deps.updateDefinition(webViewId, {
+        state: { ...definition.state, [CONTENT_ZOOM_IDENTITY_STATE_KEY]: stamp },
+      });
       return;
     }
     const pendingWrite = pendingOwnLevelWrites.get(webViewId);
@@ -624,19 +627,18 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
     // Either a genuinely brand-new pane with nothing of its own, committed or pending, or a pending
     // write that predates a re-point. Both fall through below exactly like a stamped re-point does.
   }
-  // "The stamp names another identity, OR a pending write was chosen for one" above -- except a
-  // pending write already chosen for the identity being seeded NOW, which is the pane's own edit
-  // for what it currently shows: it is kept, along with its open burst timer, for a later commit or
-  // retry to land, rather than being overwritten by what memory remembers for that same identity.
+  // "Otherwise" above -- including its one exception, a pending write already chosen for the
+  // identity being seeded NOW, which is kept rather than overwritten by what memory remembers.
   if (!memoryLoaded) return;
-  const pendingForThisSeed = pendingOwnLevelWrites.get(webViewId);
-  if (pendingForThisSeed && pendingForThisSeed.identity === stamp) return;
+  const pendingWrite = pendingOwnLevelWrites.get(webViewId);
+  if (pendingWrite && pendingWrite.identity === stamp) return;
   pendingOwnLevelWrites.delete(webViewId);
   const ownLevelTimer = ownLevelWriteTimers.get(webViewId);
   if (ownLevelTimer !== undefined) {
     clearTimeout(ownLevelTimer);
     ownLevelWriteTimers.delete(webViewId);
   }
+  const state: Record<string, unknown> = { ...(definition.state ?? {}) };
   const levels = collectMemoryLevelsFor(cachedMemory, id);
   if (Object.keys(levels).length === 0) {
     // Nothing to give this pane and nothing it may keep: a re-pointed pane's old levels and stamp
@@ -648,7 +650,7 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
     state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
     state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
   }
-  deps.updateDefinition(definition.id, { state });
+  deps.updateDefinition(webViewId, { state });
 }
 
 /**
@@ -665,9 +667,9 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
 function reseedIfIdentityChanged(webViewId: WebViewId): void {
   const resolved = resolveIdentityState(webViewId);
   if (!resolved) return;
-  const { id, stamp, storedStamp } = resolved;
-  if (storedStamp === undefined) return;
-  if (!id || stamp === storedStamp) return;
+  // The only check that is load-bearing here: `seedFromMemory` re-checks `!id` and
+  // `stamp === storedStamp` itself, so re-checking them before delegating would only repeat them.
+  if (resolved.storedStamp === undefined) return;
   seedFromMemory(webViewId, resolved);
 }
 
@@ -704,7 +706,11 @@ export function setContentZoomActiveArea(webViewId: WebViewId, areaId: ContentZo
  * or moved — and the definition the levels belong to commonly outlives it. On a genuine close there
  * is no definition left to write them into, and {@link commitOwnLevels} drops the pending levels
  * itself. If the definition is still there but that write fails, the levels stay pending — this
- * function does not clear them — for the next edit of the pane or the unload flush to retry.
+ * function does not clear them — for the next edit of the pane or the unload flush to retry. A
+ * third outcome belongs to {@link commitOwnLevels} alone: a pending write whose recorded identity no
+ * longer matches what the pane resolves to now is dropped outright rather than committed, since the
+ * pane has moved on to another project (or to none) since the write was chosen, and writing the old
+ * level now would misattribute it.
  */
 export function forgetContentZoom(webViewId: WebViewId): void {
   const timer = ownLevelWriteTimers.get(webViewId);
