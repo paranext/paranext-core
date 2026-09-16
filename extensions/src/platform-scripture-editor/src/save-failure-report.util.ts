@@ -29,7 +29,7 @@ export type SaveFailureKind = 'syncEditBlocked' | 'permissions' | 'unknown';
 /**
  * Which kind of rejection `errorMessage` describes.
  *
- * @param errorMessage - The message the backend rejected the write with.
+ * @param errorMessage The message the backend rejected the write with.
  */
 export function classifySaveFailure(errorMessage: string): SaveFailureKind {
   if (SYNC_EDIT_BLOCKED_REGEX.test(errorMessage)) return 'syncEditBlocked';
@@ -46,8 +46,8 @@ export function classifySaveFailure(errorMessage: string): SaveFailureKind {
  * failure turns into a different one, or when a save has succeeded in between and cleared the
  * memory.
  *
- * @param kind - The kind of the rejection just received.
- * @param lastReportedKind - The kind last reported to the user, or `undefined` when nothing is
+ * @param kind The kind of the rejection just received.
+ * @param lastReportedKind The kind last reported to the user, or `undefined` when nothing is
  *   outstanding (nothing has failed yet, or a save has succeeded since).
  */
 export function shouldReportSaveFailure(
@@ -84,8 +84,8 @@ export interface SaveFailureResponse {
  * document with an older snapshot and record the older one as last-sent, leaving the editor and the
  * PDP out of step until the next delivery arrives.
  *
- * @param errorMessage - The message the backend rejected the write with.
- * @param lastReportedKind - The kind last reported to the user, or `undefined` when nothing is
+ * @param errorMessage The message the backend rejected the write with.
+ * @param lastReportedKind The kind last reported to the user, or `undefined` when nothing is
  *   outstanding (nothing has failed yet, or a save has got through since).
  */
 export function planSaveFailureResponse(

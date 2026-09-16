@@ -211,6 +211,39 @@ describe('prepareUsjForChapterSave', () => {
     expect(usjToSave?.content).toEqual([chapter('3'), para('p', 'body edited')]);
   });
 
+  // The repair exists to fix what the USER's editing produced. A document that still matches the
+  // PDP byte for byte is the PDP's own content on display, so repairing it would have the editor
+  // rewrite — and write back — a chapter nobody touched. A blank chapter is the case that makes
+  // this more than tidiness: it carries no chapter marker at all (the state `EmptyChapterView` is
+  // built around), so every chapter after the first would otherwise be turned into a bare chapter
+  // marker, saved, and announced as a correction, simply by being opened.
+  describe('leaves alone a document that still matches what the PDP holds', () => {
+    const storedShapes: [label: string, content: MarkerContent[]][] = [
+      ['a blank chapter', []],
+      ['a chapter holding only an empty paragraph', [para('p', '')]],
+      ['a stored chapter whose marker names another chapter', [chapter('7'), para('p', 'body')]],
+    ];
+
+    it.each(storedShapes)('%s', (_label, content) => {
+      const stored = usjOf(...content);
+      const preparation = prepareUsjForChapterSave(usjOf(...content), stored, 5);
+      expect(preparation.repairedUsj).toBeUndefined();
+      expect(preparation.usjToSave).toBeUndefined();
+      expect(preparation.caretTarget).toBeUndefined();
+    });
+  });
+
+  it('repairs a blank chapter once the user has actually typed into it', () => {
+    const stored = usjOf();
+    const { repairedUsj, usjToSave } = prepareUsjForChapterSave(
+      usjOf(para('p', 'first words')),
+      stored,
+      5,
+    );
+    expect(repairedUsj?.content).toEqual([chapter('5'), para('p', 'first words')]);
+    expect(usjToSave?.content).toEqual([chapter('5'), para('p', 'first words')]);
+  });
+
   it('keeps saving a SECOND edit made after a repair — the dead-save-loop regression', () => {
     const fromPdp = usjOf(chapter('3'), para('p', 'body'));
     const firstPass = prepareUsjForChapterSave(

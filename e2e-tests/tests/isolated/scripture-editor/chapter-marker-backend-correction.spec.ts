@@ -81,7 +81,7 @@ test.describe('chapter-marker correction in the project data provider', () => {
     await test.step('a wrong chapter number is put back rather than refused', async () => {
       // Without the correction this write is rejected outright ("Wrong chapter number"), so the
       // request below rejects and the test fails before reaching any assertion — which is exactly
-      // the failure the editor used to inflict on the user silently.
+      // the silent, unsurfaced save failure this correction exists to prevent.
       await setChapterUsfm(original.replace(/\\c\s+2/, '\\c 9'));
 
       const stored = await getChapterUsfm();

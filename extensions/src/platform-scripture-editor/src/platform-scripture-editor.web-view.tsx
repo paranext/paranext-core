@@ -82,6 +82,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  isLocalizeKey,
   isPlatformError,
   isString,
   isWhiteSpace,
@@ -389,12 +390,23 @@ const getViewOptionsForType = (
   return paragraphStructure;
 };
 
-/** Notification id for the chapter-marker correction, so repeats update one toast. */
-const CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID =
-  'platform-scripture-editor-chapter-marker-corrected';
-
-/** Notification id for a save the backend refused, so a repeating failure updates one toast. */
-const SAVE_FAILED_NOTIFICATION_ID = 'platform-scripture-editor-save-failed';
+/**
+ * Notification ids for one editor's own save notices, so its own repeats update one toast each.
+ *
+ * Scoped to the editor rather than fixed per message, because an id is shared by everything that
+ * sends under it. Two editors open on two projects under a fixed id would each see the other's
+ * correction notice replace their own — and, worse, `papi.notifications.dismiss` is routed to every
+ * window that might be showing the id (`dismissInOwningWindows` in
+ * `src/main/services/notification.service-router.ts`), so one editor's recovered save would take
+ * down another editor's still-standing "could not be saved" notice while that editor goes on
+ * failing, with its report already spent.
+ */
+function getSaveNotificationIds(webViewId: string) {
+  return {
+    chapterMarkerCorrected: `platform-scripture-editor-chapter-marker-corrected-${webViewId}`,
+    saveFailed: `platform-scripture-editor-save-failed-${webViewId}`,
+  };
+}
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
@@ -1291,6 +1303,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [],
   );
 
+  /** This editor's own notification ids. See {@link getSaveNotificationIds}. */
+  const saveNotificationIds = useMemo(() => getSaveNotificationIds(webViewId), [webViewId]);
+
   /**
    * Tell the user the chapter marker in a document they were editing did not match the chapter it
    * belongs to and was put back. A stable id so the repeated saves of a long edit update one toast
@@ -1307,7 +1322,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     (book: string, chapterNum: number) =>
       papi.notifications
         .send({
-          notificationId: CHAPTER_MARKER_CORRECTED_NOTIFICATION_ID,
+          notificationId: saveNotificationIds.chapterMarkerCorrected,
           message: formatReplacementString(
             localizedStrings[
               '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%'
@@ -1316,7 +1331,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           ),
           severity: 'warning',
           // This is about this editor's chapter, not a generic notice, so it belongs in the window
-          // holding the editor. Routing is also what makes the shared `notificationId` coalesce: an
+          // holding the editor. Routing is also what makes the reused `notificationId` coalesce: an
           // update that lands in a different window has never seen the id and opens a SECOND toast
           // instead of merging. The save that raises this can fire from the window-blur flush —
           // i.e. precisely when this window is no longer the focused one.
@@ -1327,7 +1342,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             `Error notifying about a corrected chapter marker: ${getErrorMessage(error)}`,
           );
         }),
-    [localizedStrings, projectName, webViewId],
+    [localizedStrings, projectName, saveNotificationIds, webViewId],
   );
 
   /**
@@ -2490,7 +2505,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [bookNameLocalizedStrings] = useLocalizedStrings(bookNameLocalizeKeys);
   const localizedBookName = useMemo(() => {
     const localized = bookNameLocalizedStrings[`%Book.${scrRef.book}%`];
-    return localized && !localized.startsWith('%') ? localized : scrRef.book;
+    return localized && !isLocalizeKey(localized) ? localized : scrRef.book;
   }, [bookNameLocalizedStrings, scrRef.book]);
 
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw, isUsjFromPdpLoading] = useProjectData(
@@ -2754,8 +2769,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // A caret restore waiting on a chapter-marker repair's push-back to load (see
   // `putRepairedUsjInEditor`). Held so a second repair replaces the wait rather than stacking a
-  // second one behind it.
+  // second one behind it, and so an editor that goes away inside the wait takes the wait with it
+  // rather than leaving it to reach for an editor that is no longer there.
   const pendingCaretRestoreTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(pendingCaretRestoreTimeout.current);
+    },
+    [],
+  );
 
   // #region PDP Save Write Path
 
@@ -2877,29 +2899,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       try {
         if (kind === 'syncEditBlocked') {
+          // The one transient notice of the three: `SyncBlockedBanner` holds this state in view for
+          // as long as it lasts, so the toast does not have to.
           await notifySyncEditBlocked();
-        } else if (kind === 'permissions') {
-          await papi.notifications.send({
-            severity: 'error',
-            message: formatReplacementString(
-              localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
-              { projectName },
-            ),
-          });
         } else {
           await papi.notifications.send({
-            notificationId: SAVE_FAILED_NOTIFICATION_ID,
+            notificationId: saveNotificationIds.saveFailed,
             message: formatReplacementString(
-              localizedStrings['%webView_platformScriptureEditor_error_saveFailed_format%'],
+              localizedStrings[
+                kind === 'permissions'
+                  ? '%webView_platformScriptureEditor_error_permissions_format%'
+                  : '%webView_platformScriptureEditor_error_saveFailed_format%'
+              ],
               { projectName },
             ),
             severity: 'error',
             // Stays up until a save gets through and dismisses it. An auto-closing toast would be
             // the bug this notice exists to prevent: the kind is reported once per run of identical
             // rejections, so once it closed itself the chapter would go on silently failing to save
-            // with nothing on screen to say so.
+            // with nothing on screen to say so. The two kinds share one id because only one of them
+            // can be outstanding at a time — a rejection that changes kind should reword the notice
+            // already on screen, not open a second one beside it.
             duration: 0,
-            // This is about this editor's chapter, and routing is also what makes the shared
+            // This is about this editor's chapter, and routing is also what makes the reused
             // `notificationId` coalesce: an update that lands in a different window has never seen
             // the id and opens a SECOND toast instead of merging.
             webViewId,
@@ -2963,11 +2985,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // This write came back with no rejection to classify — whether or not the PDP then
         // declined the set — so the failure the user was told about is no longer outstanding.
         // Forget it, so the next rejection is worth reporting even if it is the same kind, and
-        // take down the generic save-failed toast, which is the one that stays up under a stable id
+        // take down the save-failed toast, which is the one that stays up under a stable id
         // until something dismisses it. Dismissing an id that was never sent is a no-op.
         if (lastReportedSaveFailureKind.current !== undefined) {
           lastReportedSaveFailureKind.current = undefined;
-          papi.notifications.dismiss(SAVE_FAILED_NOTIFICATION_ID).catch((error: unknown) => {
+          papi.notifications.dismiss(saveNotificationIds.saveFailed).catch((error: unknown) => {
             logger.warn(`Error dismissing the save-failed notification: ${getErrorMessage(error)}`);
           });
         }
@@ -3057,6 +3079,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     chapterUsjSelector,
     localizedBookName,
     notifyChapterMarkerCorrected,
+    saveNotificationIds,
     webViewId,
   ]);
 

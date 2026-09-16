@@ -632,8 +632,9 @@ step, no automation. Just a record.
   pre-existing and accepted, not something the repair introduced. Anyone revisiting it should know
   that `destroyed` is the wrong value to reuse: the published contract defines it as "when the text
   the annotation was on is completely deleted", so a consumer acting on it could discard data whose
-  text is intact. No annotation set in this repo carries an `interactionCommand` today. The caret offset the util computes encodes the editor's glyph
-  byte layout, which no unit test can check from this repo, so it is pinned end to end instead
+  text is intact. No annotation set in this repo carries an `interactionCommand` today. The caret
+  offset the util computes encodes the editor's glyph byte layout, which no unit test can check
+  from this repo, so it is pinned end to end instead
   (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts` reads the web view's own
   DOM selection). **Revisit** when the editor grows a chapter-repair primitive of its own.
 - **Source:** PT-4608 hand QA.

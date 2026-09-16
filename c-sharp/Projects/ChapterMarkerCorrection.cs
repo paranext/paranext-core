@@ -98,7 +98,10 @@ internal static partial class ChapterMarkerCorrection
         {
             var marker = chapterMarkers[i];
             // Read from the line break the marker ends with, so what is tested is whether the next
-            // line starts an introduction marker.
+            // line starts an introduction marker. The offset is Paratext 9's own
+            // (`capture.Index + capture.Length - 2`), so keep it: reading from the end of the match
+            // instead looks like the same thing and is not, because the regex's trailing line break
+            // is optional and a marker that matched without one would then be read differently.
             var markerLineBreakIndex = marker.Index + marker.Length - StringUtils.Crlf.Length;
             if (!StartsWithAt(usfm, markerLineBreakIndex, $"{StringUtils.Crlf}\\i"))
                 keepIndex = marker.Index;

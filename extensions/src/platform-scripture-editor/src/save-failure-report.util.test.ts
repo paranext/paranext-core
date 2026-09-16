@@ -40,7 +40,10 @@ describe('shouldReportSaveFailure', () => {
     expect(shouldReportSaveFailure('permissions', 'unknown')).toBe(true);
   });
 
-  it('reports again after a success cleared the memory', () => {
+  // A run of identical rejections reports once, but a success in between clears the memory, so the
+  // SAME kind striking again afterwards is news rather than a repeat.
+  it('reports the same kind again once a success has cleared the memory', () => {
+    expect(shouldReportSaveFailure('unknown', 'unknown')).toBe(false);
     expect(shouldReportSaveFailure('unknown', undefined)).toBe(true);
   });
 });

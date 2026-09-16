@@ -2542,6 +2542,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    /// <summary>
+    /// Writes <paramref name="data"/> as the USFM of the chapter <paramref name="verseRef"/> names.
+    /// </summary>
+    /// <remarks>
+    /// The chapter markers in <paramref name="data"/> are made to agree with that chapter before
+    /// the write (see <see cref="ChapterMarkerCorrection"/>), so what is stored is not always
+    /// byte-for-byte what was passed in — a wrong number, an extra marker, or a missing one is
+    /// corrected rather than refused. Paratext rejects all three outright, and the rejection leaves
+    /// whatever produced them in place, so every later write of the chapter fails too; correcting
+    /// here is what keeps a single bad marker from stopping the chapter from being written at all.
+    /// A caller that needs the stored form should read it back.
+    /// </remarks>
     public bool SetChapterUsfm(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
@@ -2832,6 +2844,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return SetBookUsfmInScope(verseRef, usfm);
     }
 
+    /// <summary>
+    /// Writes <paramref name="data"/> as the USX of the chapter <paramref name="verseRef"/> names.
+    /// </summary>
+    /// <remarks>
+    /// Corrects the chapter markers before writing, on the same terms as
+    /// <see cref="SetChapterUsfm"/>.
+    /// </remarks>
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();

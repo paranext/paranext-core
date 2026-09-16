@@ -118,6 +118,46 @@ internal class ChapterMarkerCorrectionTests
         });
     }
 
+    /// <summary>
+    /// A chapter's alternate (<c>\ca</c>), published (<c>\cp</c>) and chapter-label (<c>\cl</c>)
+    /// numbering must survive a correction untouched. Nothing but
+    /// <see cref="ChapterMarkerCorrection"/>'s own regex keeps it safe — the markers all begin
+    /// <c>\c</c>, and only the whitespace the pattern demands after that <c>\c</c> tells them apart
+    /// from a chapter marker — so a later loosening of that pattern would silently strip a
+    /// project's alternate numbering with nothing else to catch it. The USJ port pins the same
+    /// thing (<c>chapter-marker-repair.util.test.ts</c>).
+    /// </summary>
+    [TestCase(
+        "\\c 2\r\n\\ca 3\\ca*\r\n\\cl Chapter Two\r\n\\cp B\r\n\\p\r\n\\v 1 text\r\n",
+        "\\c 2\r\n\\ca 3\\ca*\r\n\\cl Chapter Two\r\n\\cp B\r\n\\p\r\n\\v 1 text\r\n",
+        2,
+        TestName = "Alternate and published chapter numbering needs no correction"
+    )]
+    [TestCase(
+        "\\c 2\r\n\\ca 3\\ca*\r\n\\cl Chapter Two\r\n\\cp B\r\n\\p\r\n\\v 1 text\r\n",
+        "\\c 7\r\n\\ca 3\\ca*\r\n\\cl Chapter Two\r\n\\cp B\r\n\\p\r\n\\v 1 text\r\n",
+        2,
+        TestName = "Alternate and published chapter numbering survives a correction"
+    )]
+    public void FixChapterMarkers_KeepsAlternateAndPublishedNumbering(
+        string expected,
+        string usfm,
+        int chapterNum
+    )
+    {
+        var result = ChapterMarkerCorrection.FixChapterMarkers(
+            usfm,
+            chapterNum,
+            out var wasCorrected
+        );
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo(expected));
+            Assert.That(wasCorrected, Is.EqualTo(result != usfm));
+        });
+    }
+
     [Test]
     public void FixChapterMarkers_LeavesBookLevelUsfmAlone()
     {

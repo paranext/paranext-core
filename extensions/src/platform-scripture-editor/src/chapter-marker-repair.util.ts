@@ -23,6 +23,7 @@ import {
 } from '@eten-tech-foundation/scripture-utilities';
 import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
 import { resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
+import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 /** USJ `type` of a `\c` chapter marker node. */
 const CHAPTER_TYPE = 'chapter';
@@ -100,10 +101,10 @@ function isIntroductionPara(item: MarkerContent | undefined): boolean {
  * Nodes are rebuilt only along the path where something was actually removed, so an untouched
  * subtree comes back as the very same object.
  *
- * @param item - The top-level content item to clean.
- * @param parentIndexes - Content indexes from the top-level item down to `item`, for reporting a
+ * @param item The top-level content item to clean.
+ * @param parentIndexes Content indexes from the top-level item down to `item`, for reporting a
  *   removal's place; `[]` for the top-level item itself.
- * @param reportRemoval - Called with each removal's place, outermost-first and in content order.
+ * @param reportRemoval Called with each removal's place, outermost-first and in content order.
  */
 function withoutNestedChapters(
   item: MarkerContent,
@@ -161,7 +162,7 @@ function chooseAnchor(
  * name, a separator, the number, and a trailing space — held in the marker's first content item, so
  * the position just past the number is the length of everything ahead of it.
  *
- * @param chapterIndexes - Content indexes addressing the chapter marker itself.
+ * @param chapterIndexes Content indexes addressing the chapter marker itself.
  */
 function caretAfterChapterNumber(
   chapterIndexes: number[],
@@ -190,7 +191,10 @@ function toRepairResult(
   repairedContent: MarkerContent[],
   caretTarget: SelectionRange | undefined,
 ): ChapterMarkerRepairResult {
-  const didRepair = JSON.stringify(repairedContent) !== JSON.stringify(usj.content);
+  // The across-iframes comparison rather than `deepEqual`: a false "these differ" here reports a
+  // repair that was not made, which pushes the document back into the editor and toasts the user on
+  // every save of an ordinary edit.
+  const didRepair = !deepEqualAcrossIframes(repairedContent, usj.content);
   return {
     usj: didRepair ? { ...usj, content: repairedContent } : usj,
     didRepair,
@@ -208,8 +212,8 @@ function toRepairResult(
  * alternate numbering survive the repair. The input document is never mutated; when nothing needs
  * repairing it is returned as-is.
  *
- * @param usj - The chapter document as the editor holds it.
- * @param expectedChapterNum - The chapter that document is supposed to be.
+ * @param usj The chapter document as the editor holds it.
+ * @param expectedChapterNum The chapter that document is supposed to be.
  */
 export function repairChapterMarkers(
   usj: Usj,
@@ -222,10 +226,11 @@ export function repairChapterMarkers(
   // Nested chapter markers go first and unconditionally: they are never legal USJ, they reach the
   // writer as a `\c` all the same, and they must not survive even the paths below that leave the
   // document's own top-level markers alone.
-  const nestedRemovals = new Map<number, NestedRemoval>();
+  /** Where the FIRST nested chapter marker the strip removed used to sit, if it removed any. */
+  let firstNestedRemoval: { topLevelIndex: number; removal: NestedRemoval } | undefined;
   const strippedContent = usj.content.map((item, index) =>
     withoutNestedChapters(item, [], (removal) => {
-      if (!nestedRemovals.has(index)) nestedRemovals.set(index, removal);
+      if (!firstNestedRemoval) firstNestedRemoval = { topLevelIndex: index, removal };
     }),
   );
 
@@ -241,8 +246,8 @@ export function repairChapterMarkers(
   function nestedRemovalCaretTarget(
     toRepairedIndex: (index: number) => number,
   ): SelectionRange | undefined {
-    const [topLevelIndex, removal] = [...nestedRemovals.entries()][0] ?? [];
-    if (topLevelIndex === undefined || !removal) return undefined;
+    if (!firstNestedRemoval) return undefined;
+    const { topLevelIndex, removal } = firstNestedRemoval;
     return caretAtRemovalBoundary(
       [toRepairedIndex(topLevelIndex), ...removal.parentIndexes],
       removal.childIndex,
@@ -292,27 +297,22 @@ export function repairChapterMarkers(
   // has no such place, so the surviving marker takes the caret instead.
   const didChangeNumber = anchor?.chapterObject.number !== expected;
   const removedTopLevelEntry = chapterEntries.find((entry) => entry.index !== anchor?.index);
-  const followingItem =
+  const followingItemIndex =
     removedTopLevelEntry && removedTopLevelEntry.index + 1 < strippedContent.length
       ? removedTopLevelEntry.index + 1
       : undefined;
+  const caretAtChapterNumber = caretAfterChapterNumber(
+    [insertIndex],
+    repairedChapterObject.marker ?? CHAPTER_MARKER,
+    expected,
+  );
   let caretTarget: SelectionRange | undefined;
   if (didChangeNumber) {
-    caretTarget = caretAfterChapterNumber(
-      [insertIndex],
-      repairedChapterObject.marker ?? CHAPTER_MARKER,
-      expected,
-    );
-  } else if (followingItem !== undefined) {
-    caretTarget = caretAtRemovalBoundary([mapTopLevelIndex(followingItem)], 0);
+    caretTarget = caretAtChapterNumber;
+  } else if (followingItemIndex !== undefined) {
+    caretTarget = caretAtRemovalBoundary([mapTopLevelIndex(followingItemIndex)], 0);
   } else {
-    caretTarget =
-      nestedRemovalCaretTarget(mapTopLevelIndex) ??
-      caretAfterChapterNumber(
-        [insertIndex],
-        repairedChapterObject.marker ?? CHAPTER_MARKER,
-        expected,
-      );
+    caretTarget = nestedRemovalCaretTarget(mapTopLevelIndex) ?? caretAtChapterNumber;
   }
 
   return toRepairResult(
@@ -342,20 +342,32 @@ export interface ChapterSavePreparation {
  * Decides what a chapter save should write and whether the editor's own document must be corrected
  * first.
  *
- * The repair runs BEFORE the compare against what the PDP already holds, so a repair that lands the
- * document back on the PDP's content still reports `repairedUsj` (the editor is still holding a
- * document Paratext would reject, and the user still needs telling) while reporting nothing to
- * save.
+ * Only a document that has MOVED away from what the PDP holds is repaired. A document still equal
+ * to the PDP's is the PDP's own content, displayed — nothing in it came from the user, so there is
+ * nothing of the user's to repair, and correcting stored content belongs to the backend backstop
+ * (`ChapterMarkerCorrection`) rather than to a view that happens to be showing it. A legitimately
+ * blank chapter is what makes this gate matter rather than merely tidy: it carries no `\c` node at
+ * all — the state `EmptyChapterView` is built around — so without the gate every chapter after the
+ * first would be "repaired" into a bare chapter marker, written to the project, and announced as a
+ * correction, on being opened and with no edit behind it.
  *
- * @param usjFromEditor - The editor's settled document.
- * @param usjFromPdp - What the PDP currently holds for this chapter, if anything.
- * @param expectedChapterNum - The chapter the editor is editing.
+ * Once past that gate the repair runs BEFORE the compare against what the PDP holds, so a repair
+ * that lands the document back on the PDP's content still reports `repairedUsj` (the editor is
+ * still holding a document Paratext would reject, and the user still needs telling) while reporting
+ * nothing to save.
+ *
+ * @param usjFromEditor The editor's settled document.
+ * @param usjFromPdp What the PDP currently holds for this chapter, if anything.
+ * @param expectedChapterNum The chapter the editor is editing.
  */
 export function prepareUsjForChapterSave(
   usjFromEditor: Usj,
   usjFromPdp: Usj | undefined,
   expectedChapterNum: number,
 ): ChapterSavePreparation {
+  if (!resolveUsjToSaveToPdp(usjFromEditor, usjFromPdp))
+    return { repairedUsj: undefined, usjToSave: undefined, caretTarget: undefined };
+
   const {
     usj: repaired,
     didRepair,
@@ -384,12 +396,12 @@ export function prepareUsjForChapterSave(
  * `applyRepairToEditor` is responsible for its own failures: the PDP write has to run even when the
  * editor refuses the repaired document, because it is that write which un-poisons the chapter.
  *
- * @param preparation - What {@link prepareUsjForChapterSave} returned for this save.
- * @param savedChapterKey - The chapter this save was scheduled for.
- * @param currentChapterKey - The chapter the editor is showing now.
- * @param applyRepairToEditor - Puts the repaired document back into the editor and the caret back
+ * @param preparation What {@link prepareUsjForChapterSave} returned for this save.
+ * @param savedChapterKey The chapter this save was scheduled for.
+ * @param currentChapterKey The chapter the editor is showing now.
+ * @param applyRepairToEditor Puts the repaired document back into the editor and the caret back
  *   where the correction was made. Must not throw.
- * @param notifyRepair - Tells the user the chapter marker was corrected.
+ * @param notifyRepair Tells the user the chapter marker was corrected.
  * @returns The document to write to the PDP, or `undefined` when there is nothing to write.
  */
 export function applyChapterSavePreparation({
