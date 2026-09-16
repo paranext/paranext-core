@@ -291,7 +291,7 @@ describe('web-view-content-zoom.service', () => {
     updateDefinition.mockImplementation(applyDefinitionUpdate);
     window.dispatchEvent(new Event('beforeunload'));
     expect(updateDefinition).toHaveBeenCalledWith('editor-1', {
-      state: { [LEVELS]: { main: 1.1 } },
+      state: zoomState({ main: 1.1 }),
     });
   });
 
@@ -492,7 +492,7 @@ describe('web-view-content-zoom.service', () => {
       getDefinitionThrows = false;
       window.dispatchEvent(new Event('beforeunload'));
       await vi.advanceTimersByTimeAsync(0);
-      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
+      expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.2 }));
     } finally {
       vi.useRealTimers();
     }
@@ -1610,11 +1610,11 @@ describe('web-view-content-zoom.service', () => {
     const release = await parked;
     // This window's own write coming back to it while the edit it carries is still pending.
     memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.1 }));
-    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    expect(definitions.get('editor-2')?.state).toEqual(zoomState({ main: 1.1 }));
     release();
     await flushing;
     expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
-    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.1 } });
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
   });
 
   it('writes the newest pending level when a further edit lands while the flush is reading', async () => {
