@@ -978,10 +978,13 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       let changed = false;
       areas.forEach((areaId) => {
         const key = buildContentZoomMemoryKey(id.kind, id.identity, areaId);
-        // A newer local edit for this key hasn't reached the setting yet; this echo predates it, so
-        // applying it would revert the area until the newer write's own echo arrives.
-        if (pendingMemoryWrites.has(key)) return;
         const remembered = isValidZoomFactor(memory[key]) ? memory[key] : undefined;
+        // An echo carrying something other than what this window has pending for the key predates
+        // that edit, so applying it would revert the area until the newer write's own echo arrives.
+        // An echo carrying exactly the pending value IS that write coming back, and the siblings
+        // need it: the setting's echo and the write's own resolution are not ordered against each
+        // other, so it can arrive while the edit is still pending.
+        if (pendingMemoryWrites.has(key) && pendingMemoryWrites.get(key) !== remembered) return;
         if (levels[areaId] === remembered) return;
         if (remembered === undefined) delete levels[areaId];
         else levels[areaId] = remembered;
