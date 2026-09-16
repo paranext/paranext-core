@@ -29,10 +29,11 @@ export type WindowEntryDispositionInput = {
  * A window closing because the interface mode changed is meant to come back on the way to power,
  * and its entry is what a later reopen creates it from.
  *
- * A window whose renderer was given up on after crash-looping keeps its entry too, and that is what
- * makes offering to close it safe: the window is dead either way, so the only question is whether
- * the user also loses its tabs. Without this, closing it would rewrite the structure without it and
- * the layout would be gone, leaving a relaunch as the only way out of a dead window.
+ * A window whose renderer was given up on after crash-looping keeps its entry too, so that
+ * accepting the offer to close it costs the user nothing: the window is dead either way, and its
+ * tabs are still there next launch. The price is that a layout which reliably kills its renderer is
+ * rebuilt on every launch and every switch back to power, with no way out from inside the app —
+ * `TODO(PT-4636)` is where the recovery policy for that case is decided.
  *
  * The exception, for the last two but deliberately NOT for a quit: a window still waiting for the
  * content it was created to receive has nothing in its entry, so keeping it would resurrect a blank
