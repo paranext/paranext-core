@@ -60,8 +60,11 @@ internal class UserCommentFiltersSettingTests : PapiTestBase
     [Test]
     public void GetUserCommentFilters_AfterSet_ReturnsStoredSelection()
     {
+        // A non-default version (nothing was stored before this, so no downgrade check applies)
+        // so a provider that threaded the wrong string into FromXml would be caught here.
         var input = new CommentFilterSelection
         {
+            DataVersion = "1.1.0",
             Preset = "unresolved",
             ScopeFilter = "current-chapter",
         };
@@ -70,6 +73,7 @@ internal class UserCommentFiltersSettingTests : PapiTestBase
         var result = _provider.GetUserCommentFilters();
         Assert.That(result.Preset, Is.EqualTo("unresolved"));
         Assert.That(result.ScopeFilter, Is.EqualTo("current-chapter"));
+        Assert.That(result.DataVersion, Is.EqualTo("1.1.0"));
     }
 
     // --- File is written at the right path ---
