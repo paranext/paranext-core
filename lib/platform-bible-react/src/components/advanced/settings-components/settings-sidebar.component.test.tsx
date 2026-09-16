@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { type LanguageStrings } from 'platform-bible-utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SidebarProvider } from '@/components/shadcn-ui/sidebar';
 import {
@@ -53,7 +54,7 @@ const PROJECTS_GROUP_LABEL = 'Projects';
 const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
 
 /** The sidebar with the minimum wiring it needs; it must live inside a SidebarProvider. */
-function sidebar() {
+function sidebar(projectSelectorLocalizedStrings?: LanguageStrings) {
   return (
     <SidebarProvider>
       <SettingsSidebar
@@ -64,6 +65,7 @@ function sidebar() {
         extensionsSidebarGroupLabel="Extensions"
         projectsSidebarGroupLabel={PROJECTS_GROUP_LABEL}
         buttonPlaceholderText="Select a project"
+        projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
       />
     </SidebarProvider>
   );
@@ -83,5 +85,33 @@ describe('SettingsSidebar project picker', () => {
     expect(await screen.findByText('World English Bible')).toBeInTheDocument();
     expect(screen.queryByLabelText('Group by')).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
+  });
+
+  it('leaves the picker on its English defaults when no strings are supplied', async () => {
+    const user = setupUser();
+    render(sidebar());
+
+    await user.click(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL }));
+
+    expect(await screen.findByPlaceholderText('Search projects & resources')).toBeInTheDocument();
+  });
+
+  it('localizes the picker popover from the supplied strings', async () => {
+    const user = setupUser();
+    render(
+      sidebar({
+        '%projectSelector_searchPlaceholder%': 'Buscar proyectos y recursos',
+        '%projectSelector_commandEmptyMessage%': 'No se encontraron proyectos',
+      }),
+    );
+
+    await user.click(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL }));
+
+    // The picker's own strings come from the supplied block, while the trigger's placeholder and
+    // accessible name stay on the sidebar's dedicated props -- the two channels are merged, not
+    // exclusive.
+    expect(await screen.findByPlaceholderText('Buscar proyectos y recursos')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Search projects & resources')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL })).toBeInTheDocument();
   });
 });
