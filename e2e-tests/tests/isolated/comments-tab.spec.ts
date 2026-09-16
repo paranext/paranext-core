@@ -399,12 +399,12 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await mainPage.keyboard.press('Enter');
     await expect(dropdown).toBeHidden({ timeout: 10_000 });
 
-    // Assert the OUTCOME, not merely that the dropdown closed. The preset options list "All notes"
-    // first; ArrowDown from the selected "All notes" lands on "Unresolved notes assigned to me", so
-    // the trigger must now display it. This fails if Enter closed the dropdown without committing a
-    // value, or re-selected the same value — cases a bare toBeHidden() (satisfied even by the
-    // toolbar re-rendering) would pass.
-    await expect(presetFilter).toContainText('Unresolved notes assigned to me');
+    // Assert the OUTCOME, not merely that the dropdown closed. The preset options list "All
+    // comments" first; ArrowDown from the selected "All comments" lands on "Unresolved comments
+    // assigned to me", so the trigger must now display it. This fails if Enter closed the dropdown
+    // without committing a value, or re-selected the same value — cases a bare toBeHidden()
+    // (satisfied even by the toolbar re-rendering) would pass.
+    await expect(presetFilter).toContainText('Unresolved comments assigned to me');
   });
 
   test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
