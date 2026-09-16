@@ -969,7 +969,7 @@ describe('window-close sync de-duplication across windows', () => {
     expect(allRequestedProjectIds()).toEqual(['shared-project', 'shared-project']);
   });
 
-  it('syncs the project again after an unexpected error took the first window past its dispatch', async () => {
+  it('syncs the project again after an unexpected error took the first window past its claim', async () => {
     // An error anywhere between choosing the projects and the request settling must still hand them
     // back, or the next closing window would be left unable to sync them for the life of the app.
     mockSettingsGet.mockResolvedValue('simple');
@@ -984,6 +984,47 @@ describe('window-close sync de-duplication across windows', () => {
     await performWindowCloseTasks('3');
 
     expect(allRequestedProjectIds()).toEqual(['shared-project']);
+  });
+
+  it('hands back what it claimed when the line naming a sibling’s projects throws', async () => {
+    // The line saying which projects a sibling already covers is written with this window's own
+    // projects already claimed, so a failure there has to hand them back like any other: a claim
+    // nothing releases would keep every later close from syncing that project for the life of the
+    // app.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews(
+        windowId === '2'
+          ? [writableEditor('shared-project')]
+          : [writableEditor('shared-project'), writableEditor('crowded-window-project')],
+      ),
+    );
+    const releasers = holdSyncsByProjectIds();
+    mockLoggerInfo.mockImplementation((message) => {
+      if (`${message}`.includes('Not syncing') && `${message}`.includes('closing window 3'))
+        throw new Error('unexpected logging failure');
+    });
+
+    try {
+      startWindowCloseTasksWithoutWaiting('2');
+      await vi.waitFor(() => expect(releasers.has('shared-project')).toBe(true));
+      // Window 3 leaves out the shared project, says so, and the saying of it fails
+      await performWindowCloseTasks('3');
+    } finally {
+      releasers.forEach((release) => release());
+      await settleReleasedSyncs();
+    }
+
+    mockLoggerInfo.mockImplementation(() => {});
+    mockRequestNoRetry.mockResolvedValue(undefined);
+    await performWindowCloseTasks('4');
+
+    // Window 4 had both open, and both are still syncable — window 3's own project above all
+    expect(allRequestedProjectIds()).toEqual([
+      'shared-project',
+      'shared-project',
+      'crowded-window-project',
+    ]);
   });
 
   it('asks for no project twice when three windows close together for a mode switch', async () => {

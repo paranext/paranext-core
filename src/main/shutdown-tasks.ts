@@ -140,6 +140,10 @@ const inFlightWindowCloseSyncs = new Set<Promise<void>>();
  *
  * Keyed by project id alone rather than by window: a project is either being sent or it is not, and
  * which window is sending it changes nothing for the window that has to leave it out.
+ *
+ * The accepted consequence: a sibling's concurrent duplicate no longer accidentally retries a
+ * project whose first request failed — the shutdown sync still covers it as long as a surviving
+ * window has it open.
  */
 const projectIdsSyncingForWindowClose = new Set<string>();
 
@@ -150,15 +154,19 @@ const projectIdsSyncingForWindowClose = new Set<string>();
  * The check and the claim are one synchronous step, and the caller dispatches without awaiting in
  * between, so two windows closing together cannot both come away holding the same project.
  *
+ * Claims and says nothing about it: every claim has to be released, and the caller is the only
+ * place that can guard a claim from the moment it exists, so the logging belongs there rather than
+ * here.
+ *
  * @param projectIds Projects the closing window had open, already de-duplicated within the window
- * @param closingWindowId Window that is closing
- * @returns The projects this window's sync is responsible for; may be empty when a sibling covers
- *   all of them
+ * @returns The projects this window's sync is responsible for — `claimedProjectIds`, which may be
+ *   empty when a sibling covers all of them — and `projectIdsCoveredBySibling`, the ones it is
+ *   leaving out
  */
-function claimProjectIdsForWindowCloseSync(
-  projectIds: string[],
-  closingWindowId: string,
-): string[] {
+function claimProjectIdsForWindowCloseSync(projectIds: string[]): {
+  claimedProjectIds: string[];
+  projectIdsCoveredBySibling: string[];
+} {
   const claimedProjectIds: string[] = [];
   const projectIdsCoveredBySibling: string[] = [];
   projectIds.forEach((projectId) => {
@@ -168,14 +176,7 @@ function claimProjectIdsForWindowCloseSync(
       claimedProjectIds.push(projectId);
     }
   });
-  // Said at the same level as the "Syncing the projects of…" line it explains: without it, a log
-  // shows a window syncing fewer projects than it had open with nothing to distinguish that from
-  // work being dropped.
-  if (projectIdsCoveredBySibling.length > 0)
-    logger.info(
-      `Not syncing ${projectIdsCoveredBySibling.join(', ')} for closing window ${closingWindowId}: another closing window's sync is already sending them`,
-    );
-  return claimedProjectIds;
+  return { claimedProjectIds, projectIdsCoveredBySibling };
 }
 
 /** Give up a closing window's claims, so a later close can sync those projects again. */
@@ -323,19 +324,28 @@ async function performWindowCloseTasksInternal(
   // Claimed immediately before the dispatch below, with nothing awaited in between:
   // runBoundedShutdownSync invokes its callback synchronously, so the claim and the request go out
   // in one tick and no sibling close can interleave between them.
-  const projectIdsToSync = claimProjectIdsForWindowCloseSync(projectIds, closingWindowId);
-  // Every project this window had open is already going out with a sibling's sync, so there is
-  // nothing left for this one to send.
-  if (projectIdsToSync.length === 0) return;
+  const { claimedProjectIds, projectIdsCoveredBySibling } =
+    claimProjectIdsForWindowCloseSync(projectIds);
 
   try {
+    // Said at the same level as the "Syncing the projects of…" line it explains: without it, a log
+    // shows a window syncing fewer projects than it had open with nothing to distinguish that from
+    // work being dropped.
+    if (projectIdsCoveredBySibling.length > 0)
+      logger.info(
+        `Not syncing ${projectIdsCoveredBySibling.join(', ')} for closing window ${closingWindowId}: another closing window's sync already covers ${projectIdsCoveredBySibling.length === 1 ? 'it' : 'them'}`,
+      );
+    // Every project this window had open is already going out with a sibling's sync, so there is
+    // nothing left for this one to send.
+    if (claimedProjectIds.length === 0) return;
+
     logger.info(
-      `Syncing the projects of closing window ${closingWindowId}: ${projectIdsToSync.join(', ')}`,
+      `Syncing the projects of closing window ${closingWindowId}: ${claimedProjectIds.join(', ')}`,
     );
     const settlement = await runBoundedShutdownSync(`window ${closingWindowId} close sync`, () =>
       networkService.requestNoRetry(
         serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
-        projectIdsToSync,
+        claimedProjectIds,
       ),
     );
     // The already-warned settlements (`failed`, `timedOut`) add nothing here
@@ -345,9 +355,10 @@ async function performWindowCloseTasksInternal(
     // Released here rather than when the request itself settles: runBoundedShutdownSync returns
     // after AUTO_SYNC_MAX_DURATION_MS whether or not the sync did, and a claim that outlived its
     // bounded wait would keep every later close from ever syncing that project again. The `try`
-    // starts at the log line on purpose — that is the one statement here that can throw, and a
-    // claim stranded by it would last for the life of the process.
-    releaseProjectIdsFromWindowCloseSync(projectIdsToSync);
+    // opens immediately after the claim so that every statement below it, the log lines included,
+    // runs guarded — a claim stranded by a throw would last for the life of the process — and
+    // releasing an empty claim on the way out of the early return is a no-op.
+    releaseProjectIdsFromWindowCloseSync(claimedProjectIds);
   }
 }
 
