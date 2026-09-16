@@ -5432,8 +5432,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   mount-time cost Power mode already paid. The tab menu is reachable only where a tab bar is visible,
   which in Simple mode is Column 3 alone — so the editor pane, which has no visible tab bar, needs
   its own entry point to content zoom; that entry point is the editor's own hamburger menu, delivered
-  together with the editor's zoom areas.
-- **Source:** PT-4578 (PR #2819), epic PT-4575.
+  together with the editor's zoom areas. Product narrowed PT-4578's scope on 2026-09-16: the tab-menu
+  route to content zoom is required only where Simple mode already has a visible, interactive tab bar
+  — Column 3 — not on the editor's own tab, whose hamburger menu is its sole entry point instead. The
+  headless Column 1/2 tab bars keep their existing `pointer-events: none`; this feature does not make
+  them interactive to reach that parity.
+- **Source:** PT-4578 (PR #2821), epic PT-4575.
 
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
@@ -6383,14 +6387,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   code. The bootstrap prefers in-process functions the window's web-view shard binds on the iframe's
   `window` and falls back to the three PAPI commands `platform.webViewContentZoomIn` / `…Out` /
   `…Reset`, which keeps `adr-renderer-registers-no-names` intact — the names are registered by the
-  router, not by the renderer — and keeps a wheel burst off the network. Main gives up the chords in
-  PT-4577 (PR #2809), the change that removes the Windows/Linux `before-input-event` zoom branches —
-  while those branches exist, main still swallows the chords there: the three zoom branches are
-  deleted, `platform.zoomIn` and
-  `platform.zoomOut` stay as commands with no default chord, macOS binds explicit View-menu items
-  carrying ⌘=/⌘-/⌘0 in place of the native `zoomIn`/`zoomOut`/`resetZoom` roles, and a renderer
-  top-document `keydown` listener covers the case where keyboard focus is on window chrome — the tab
-  bar, the reference box, a toolbar button — where no iframe sees the key at all.
+  router, not by the renderer — and keeps a wheel burst off the network. Main gave up the chords in
+  PT-4577 (PR #2821): the three Windows/Linux `before-input-event` zoom branches were deleted,
+  `platform.zoomIn` and `platform.zoomOut` stay as commands with no default chord, macOS binds
+  explicit View-menu items carrying ⌘=/⌘-/⌘0 in place of the native `zoomIn`/`zoomOut`/`resetZoom`
+  roles, and a renderer top-document `keydown` listener covers the case where keyboard focus is on
+  window chrome — the tab bar, the reference box, a toolbar button — where no iframe sees the key at
+  all.
 - **Alternatives:** (a) **Keep it in main and route to the focused window** — rejected: main knows the
   window, not the pane and not the area; the same objection `adr-per-web-view-ctrl-f-for-find`
   records. (b) **A renderer window-level listener that forwards keys into the right iframe** —
@@ -6413,7 +6416,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once.
   **Revisit** if a second platform-injected shortcut appears
   — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
-- **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2809,
+- **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
 
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
