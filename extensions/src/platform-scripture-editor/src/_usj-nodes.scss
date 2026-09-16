@@ -5,7 +5,8 @@
    with the RTL/bidi gutter-marker fixes and the ::after active-text outline forwarded from the
    demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
    When re-syncing, see the "Indent compensation" comment in the gutter section below for the
-   invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy. */
+   invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy.
+   The source's four `local()`-only Charis SIL @font-face rules are dropped. */
 
 /* stylelint-disable */
 
@@ -26,31 +27,31 @@
 .align_end {
   text-align: end;
 }
-@font-face {
-  font-family: 'Charis SIL';
-  src:
-    local('Charis SIL'), local('Charis SIL Bold'), local('Charis SIL Bold Italic'),
-    local('Charis SIL Italic');
-  font-weight: normal;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold');
-  font-weight: bold;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Italic');
-  font-style: italic;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold Italic');
-  font-weight: bold;
-  font-style: italic;
+/* Don't declare Scripture fonts here. A `local()`-only face errors where the font is not installed,
+   and an erroring face makes the family unusable at that weight and style instead of deferring to
+   the declaration in src/renderer/styles/fonts.css — which drops bold and italic Scripture text
+   onto a system font. */
+/* Fallback chain for the editor's generated project stylesheet, which emits
+   `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
+   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
+   view. The literal chain is the library's, and applies where fonts.css is not loaded. */
+.usfm {
+  --usj-font-fallback: var(
+    --scripture-font-stack,
+    'Charis SIL',
+    'Times New Roman',
+    'Liberation Serif',
+    'DejaVu Serif',
+    Georgia,
+    serif
+  );
 }
 .usfm.formatted-font {
-  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+  /* Same `serif` fallback the generated project rules carry: a `var()` whose property turns out to
+     be invalid at computed-value time takes the whole declaration with it, dropping Scripture text
+     onto the inherited UI font. */
+  font-family: var(--usj-font-fallback, serif);
   font-size: 12pt;
 }
 
