@@ -549,9 +549,14 @@ describe('Scripture fonts (src/renderer/styles/fonts.css)', () => {
     // faces and the installed-only complement. Anything that changes a Charis SIL face in fonts.css
     // — a regenerated paste, a widened range, a new `local()` name — fails here until the copy
     // follows.
-    const storybookFaces = parseFontFaces(
-      readFileSync(resolve(repoRoot, STORYBOOK_FONTS_STYLESHEET), 'utf8'),
-    );
+    const storybookCss = readFileSync(resolve(repoRoot, STORYBOOK_FONTS_STYLESHEET), 'utf8');
+    // Copied, not fetched. An `@import` of a font provider would satisfy the face-for-face
+    // comparison below — it adds no `@font-face` of its own — while putting the faces back behind a
+    // live request, which `@storybook/addon-vitest` makes silently and without failing. Checked
+    // with comments stripped: that file's own prose explains why it is not an `@import`, and the
+    // explanation must not be what trips or satisfies the guard on the code.
+    expect(storybookCss.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/@import/);
+    const storybookFaces = parseFontFaces(storybookCss);
     const identify = (face: FontFace) => `${face.weight}/${face.style} ${face.unicodeRange}`;
     const byIdentity = (left: FontFace, right: FontFace) =>
       identify(left).localeCompare(identify(right));

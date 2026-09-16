@@ -38,10 +38,12 @@
 /* Don't declare Scripture fonts here. A `local()`-only face errors where the font is not installed,
    and an erroring face makes the family unusable at that weight and style instead of deferring to a
    working declaration — which drops bold and italic Scripture text onto a system font. The app
-   declares Charis SIL in src/renderer/styles/fonts.css; Storybook does not load that stylesheet, so
-   it pulls the same faces from Google Fonts in .storybook/scripture-fonts.css, loaded from the
-   preview rather than from one story's stylesheet so the stories that import this file directly get
-   them too. */
+   declares Charis SIL in src/renderer/styles/fonts.css; neither Storybook loads that stylesheet, so
+   .storybook/scripture-fonts.css carries a copy of the same faces — copied rather than fetched, so
+   a network-restricted run keeps them. It is loaded from BOTH Storybooks' previews rather than from
+   one story's stylesheet, because the stories that reach this file arrive by several routes and
+   through both Storybooks. fonts.test.ts pins that copy against fonts.css face for face, and fails
+   if either preview stops loading it. */
 /* Fallback chain for the editor's generated project stylesheet, which emits
    `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
    view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
