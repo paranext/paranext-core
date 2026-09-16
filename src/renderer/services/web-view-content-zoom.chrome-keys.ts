@@ -3,8 +3,8 @@ import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 
 /**
- * The zoom actions and dialog-open query {@link registerContentZoomChromeKeys} calls, injected so
- * this module does not import the content-zoom service or the dialog-open query directly.
+ * The zoom actions and the modal-overlay query {@link registerContentZoomChromeKeys} calls, injected
+ * so this module does not import the content-zoom service or the modal-overlay query directly.
  */
 export type ContentZoomChromeKeysDeps = {
   adjustContentZoom: (
@@ -13,7 +13,7 @@ export type ContentZoomChromeKeysDeps = {
     areaId?: ContentZoomAreaId,
   ) => Promise<void>;
   resetContentZoom: (webViewId: WebViewId | undefined, areaId?: ContentZoomAreaId) => Promise<void>;
-  isAnyDialogOpen: () => boolean;
+  isModalOverlayOpen: () => boolean;
 };
 
 /** Ctrl (or ⌘) is required. Alt is excluded, because Ctrl+Alt chords carry their own meanings. */
@@ -65,17 +65,18 @@ function actionFor(e: KeyboardEvent): ChordAction | undefined {
  * Calls the injected actions with no web view id and no area id, so the content-zoom service
  * resolves the window's active tab and that tab's active area on its own.
  *
- * No-ops while a dialog is open ({@link ContentZoomChromeKeysDeps.isAnyDialogOpen}): dialogs are out
- * of scope for content zoom, and a dialog's own use of these keys, if any, must not be shadowed by
- * this listener.
+ * No-ops while a modal overlay is open ({@link ContentZoomChromeKeysDeps.isModalOverlayOpen}): a
+ * modal dialog or the command palette is what the user is working in, it is out of scope for
+ * content zoom, and its own use of these keys, if any, must not be shadowed by this listener. A
+ * non-modal docked dialog stops nothing — the user keeps working in the panes behind it.
  *
- * @param deps The zoom actions and dialog-open query to call.
+ * @param deps The zoom actions and the modal-overlay query to call.
  * @returns A function that removes the listener.
  */
 export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): () => void {
   const onKeyDown = (e: KeyboardEvent): void => {
     if (!isChordModifier(e)) return;
-    if (deps.isAnyDialogOpen()) return;
+    if (deps.isModalOverlayOpen()) return;
     if (isInsideIframe(e.target)) return;
     const action = actionFor(e);
     if (!action) return;
