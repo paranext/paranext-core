@@ -5900,9 +5900,9 @@ declare module 'papi-shared-types' {
     };
     /**
      * The zoom factor that applies to the entire application, including menus and toolbars. 1.0 is
-     * the default. Allowed range is 0.5 to 3.0. Written from Settings, by the `platform.zoomIn` /
-     * `platform.zoomOut` commands, and by the application's own zoom keyboard shortcuts; per-pane
-     * content zoom is `platform.webViewContentZoom`.
+     * the default. Allowed range is 0.5 to 3.0. Written from Settings and by the `platform.zoomIn`
+     * and `platform.zoomOut` commands; no keyboard shortcut changes it — the zoom chords drive
+     * per-pane content zoom, which is `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
