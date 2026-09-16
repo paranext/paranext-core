@@ -1061,6 +1061,43 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
   });
 
+  it('drops a stale pending write whose identity predates a re-point that occurred before its first commit ever landed', async () => {
+    settings[MEMORY] = { 'notes:BBB:main': 0.8 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-8', {
+      id: 'notes-8',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-8', ['main']); // nothing remembered for project A, so this seeds nothing
+
+    // Every commit attempt fails, so the level chosen below is tagged pending under project A's
+    // identity but never reaches state, and so never gets a stamp either.
+    updateDefinition.mockImplementation(() => false);
+    await adjustContentZoom('notes-8', 1, 'main');
+    expect(definitions.get('notes-8')?.state).toEqual({});
+
+    // Re-pointed to project B before that pending write's first commit ever landed: with no stamp
+    // to compare against, the platform's own re-point check (`reseedIfIdentityChanged`) cannot yet
+    // tell this happened, so it is deliberately a no-op here.
+    definitions.set('notes-8', { ...requireDefinition('notes-8'), projectId: 'bbb' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-8') });
+    expect(definitions.get('notes-8')?.state).toEqual({});
+
+    // The pane's content is replaced and its bootstrap reports fresh — the platform's first real
+    // chance to notice the identity moved out from under the still-pending write.
+    forgetContentZoom('notes-8'); // the retry this makes also fails; the stale entry survives
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    updateDefinition.mockClear();
+    setContentZoomAreas('notes-8', ['main']);
+
+    // Project B's own remembered level lands — not project A's stale, never-committed level, which
+    // would otherwise have been silently attributed to project B once a later retry finally landed.
+    expect(definitions.get('notes-8')?.state).toEqual(zoomState({ main: 0.8 }, 'notes:BBB'));
+  });
+
   it('treats a non-string identity stamp as no stamp at all', async () => {
     definitions.set('editor-8', {
       id: 'editor-8',
