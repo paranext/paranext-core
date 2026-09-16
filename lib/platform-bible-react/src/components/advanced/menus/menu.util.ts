@@ -3,6 +3,8 @@ import {
   GroupsInMultiColumnMenu,
   Localized,
   MenuColumnWithHeader,
+  MenuGroupDetailsInColumn,
+  MenuGroupDetailsInSubMenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
 
@@ -58,6 +60,29 @@ export function getSortedMenuColumns(columns: Localized<ColumnsWithHeaders>): Me
   );
 }
 
+/**
+ * Whether a group's items render under `columnOrSubMenuKey`: either the group names it as its
+ * `column`, or the group is the one keyed by it, which is how a submenu addresses its own group.
+ *
+ * `TabDropdownMenu` picks a column's groups with this and {@link getMenuSectionsWithItems} decides
+ * which columns have something to show with it, so "this column renders nothing" can never mean two
+ * different things.
+ *
+ * @param groupKey The key the group is stored under
+ * @param group The group itself
+ * @param columnOrSubMenuKey The key of the column or submenu being rendered
+ * @returns `true` if the group's items belong under `columnOrSubMenuKey`
+ */
+export function isGroupUnderColumnOrSubMenu(
+  groupKey: string,
+  group: Localized<MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu>,
+  columnOrSubMenuKey: string,
+): boolean {
+  return (
+    ('column' in group && group.column === columnOrSubMenuKey) || groupKey === columnOrSubMenuKey
+  );
+}
+
 /** A column of a multi-column menu that has something to show */
 export type MenuSection = {
   /** Key of the column */
@@ -75,13 +100,14 @@ export type MenuSection = {
  */
 export function getMenuSectionsWithItems(menuData: Localized<MultiColumnMenu>): MenuSection[] {
   const groupKeysWithItems = new Set(menuData.items.map((item) => item.group));
-  const columnKeysWithItems = new Set(
-    Object.entries(menuData.groups).flatMap(([groupKey, group]) =>
-      // A group with no `column` belongs to a submenu, so it contributes to no column of this menu
-      'column' in group && groupKeysWithItems.has(groupKey) ? [group.column] : [],
-    ),
+  const groupsWithItems = Object.entries(menuData.groups).filter(([groupKey]) =>
+    groupKeysWithItems.has(groupKey),
   );
   return getSortedMenuColumns(menuData.columns)
-    .filter(({ columnKey }) => columnKeysWithItems.has(columnKey))
+    .filter(({ columnKey }) =>
+      groupsWithItems.some(([groupKey, group]) =>
+        isGroupUnderColumnOrSubMenu(groupKey, group, columnKey),
+      ),
+    )
     .map(({ columnKey, column }) => ({ columnKey, label: column.label }));
 }

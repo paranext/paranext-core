@@ -101,4 +101,36 @@ describe('getMenuSectionsWithItems', () => {
 
     expect(sections.map(({ columnKey }) => columnKey)).toEqual(['platform.app']);
   });
+
+  it('gives a section to a column that a group of the same key fills, as the menu renders it', () => {
+    // `TabDropdownMenu` renders a group whose KEY is the column key under that column, so a column
+    // filled only that way still has something to show
+    const sections = getMenuSectionsWithItems({
+      ...MENU_WITH_SUBMENU,
+      groups: {
+        ...MENU_WITH_SUBMENU.groups,
+        'platformScriptureEditor.tools': {
+          order: 2,
+          menuItem: 'platformScriptureEditor.unusedMenuItem',
+        },
+      },
+      items: [
+        ...MENU_WITH_SUBMENU.items.filter(
+          (item) => item.group !== 'platformScriptureEditor.inventories',
+        ),
+        {
+          label: 'Open Markers Inventory…',
+          localizeNotes: '',
+          group: 'platformScriptureEditor.tools',
+          order: 1,
+          command: 'platformScripture.openMarkersInventory',
+        },
+      ],
+    });
+
+    expect(sections.map(({ columnKey }) => columnKey)).toEqual([
+      'platform.app',
+      'platformScriptureEditor.tools',
+    ]);
+  });
 });
