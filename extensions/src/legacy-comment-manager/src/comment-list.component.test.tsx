@@ -318,8 +318,8 @@ describe('CommentListPanel content zoom area', () => {
   it('keeps loading skeletons inside the zoom area', () => {
     const { container } = renderPanel({ isLoading: true });
     const marker = container.querySelector('[data-platform-content-zoom-root]');
-    expect(marker?.querySelectorAll('[data-slot="skeleton"], .tw\\:h-48').length).toBeGreaterThan(
-      0,
-    );
+    // `Skeleton` always emits `data-slot="skeleton"` (a deterministic attribute), so the count
+    // asserted here is exact rather than "at least one" — the component renders 10.
+    expect(marker?.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(10);
   });
 });

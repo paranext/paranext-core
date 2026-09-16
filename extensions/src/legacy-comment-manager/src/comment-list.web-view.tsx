@@ -617,6 +617,9 @@ global.webViewComponent = function CommentListWebView({
       // the header instead. Re-read each time: the header grows when the editing-paused notice
       // appears. The height is in the document's own pixels — the header sits outside the
       // content-zoom root, so neither it nor `scroll-padding-top` is scaled by the zoom level.
+      // Setting the padding on `documentElement` is correct only while the web-view document itself
+      // is the scroller; a future layout that bounds this view's height (PT-4173) would move the
+      // scroller to a bounded container instead, and this padding would need to move with it.
       const stickyHeader = document.getElementById(COMMENT_LIST_STICKY_HEADER_ELEMENT_ID);
       if (stickyHeader)
         document.documentElement.style.scrollPaddingTop = `${stickyHeader.getBoundingClientRect().height}px`;
