@@ -73,7 +73,12 @@ function renderParagraphs(
       // and they hold no state of their own.
       // eslint-disable-next-line react/no-array-index-key
       <p className="notetext" key={`${parentMarker ?? 'note'}-p${i}`}>
-        {isFirst && !hasBodyContent && ZERO_WIDTH_NO_BREAK_SPACE}
+        {/* Display, not content: an empty note has no text, so the placeholder that keeps the
+            line clickable must stay outside the caret offset origin (`isDisplayText` in
+            `footnote-caret.utils.ts` recognizes it by this class). */}
+        {isFirst && !hasBodyContent && (
+          <span className="note-placeholder">{ZERO_WIDTH_NO_BREAK_SPACE}</span>
+        )}
         {isFirst && leadingContent}
         {renderContent(parentMarker, para, showMarkers)}
         {isLast && footnoteClosing}
@@ -86,7 +91,6 @@ function renderContent(
   parentMarker: string | undefined,
   content?: MarkerContent[],
   showMarkers = true,
-  allowUnmarkedText = true,
   isNestedContent = false,
 ): React.ReactNode {
   if (!content || content.length === 0) return undefined;
@@ -97,22 +101,9 @@ function renderContent(
     // collides on. Content is rendered in source order and never reordered, so the index is stable.
     const key = `${parentMarker ?? 'note'}-${index}`;
     if (typeof footnotePart === 'string') {
-      if (allowUnmarkedText) {
-        const classes = cn(`usfm_${parentMarker}`);
-        return (
-          <span key={key} className={classes}>
-            {footnotePart}
-          </span>
-        );
-      }
       return (
-        <span
-          key={key}
-          className="tw:inline-flex tw:items-center tw:gap-1 tw:underline tw:decoration-destructive"
-        >
-          <AlertCircle className="tw:h-4 tw:w-4 tw:fill-destructive" />
-          <span>{footnotePart}</span>
-          <AlertCircle className="tw:h-4 tw:w-4 tw:fill-destructive" />
+        <span key={key} className={cn(`usfm_${parentMarker}`)}>
+          {footnotePart}
         </span>
       );
     }
@@ -152,7 +143,7 @@ function renderMarkerObject(
           aria-label="Missing marker"
         />
       )}
-      {renderContent(marker, markerObj.content, showMarkers, true, true)}
+      {renderContent(marker, markerObj.content, showMarkers, /* isNestedContent */ true)}
       {marker && showMarkers && isRunClosed(markerObj) && (
         <span className="marker">{`\\${markerName}*`}</span>
       )}

@@ -605,6 +605,19 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'footnote-pane-close-editor',
+    purpose: 'Stop editing the open note in the footnotes pane, keeping the edits',
+    category: 'Editing',
+    // The pane's row editor applies its edits live, so there is nothing to discard - Escape is its
+    // explicit dismissal, and it hands focus back to the note's row.
+    context: 'Footnotes pane, in the note row editor',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
     id: 'footnote-pane-move-between-notes',
     purpose: 'Move to the previous/next note in the footnotes pane',
     category: 'Navigation',
@@ -615,8 +628,23 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Footnotes pane, from the list or a note row',
     keys: {
       macOS: '↑ / ↓',
-      windows: 'Up Arrow / Down Arrow',
-      linux: 'Up Arrow / Down Arrow',
+      windows: '↑ / ↓',
+      linux: '↑ / ↓',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-move-between-rows',
+    purpose: 'Move to the previous/next note row in the footnotes pane',
+    category: 'Navigation',
+    // Every row is its own tab stop rather than the list being one, so Tab walks the notes.
+    context: 'Footnotes pane',
+    keys: {
+      macOS: '⇥ / ⇧⇥',
+      windows: 'Tab / Shift+Tab',
+      linux: 'Tab / Shift+Tab',
     },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',

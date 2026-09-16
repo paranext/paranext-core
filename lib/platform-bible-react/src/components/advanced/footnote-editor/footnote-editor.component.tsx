@@ -96,7 +96,14 @@ export interface FootnoteEditorProps {
   onClose: () => void;
   /** The scripture reference for the parent editor */
   scrRef: SerializedVerseRef;
-  /** The unique note key to identify the note being edited used to apply changes to the note */
+  /**
+   * The unique note key to identify the note being edited used to apply changes to the note.
+   *
+   * Read at apply time, not at load time: a new key on its own does NOT reload the editor's
+   * document, because an inline session's own live-apply re-keys the note it is editing on every
+   * apply and reloading there would discard the caret and anything still inside the apply debounce.
+   * To load a different note, hand over a new `noteOps` ARRAY IDENTITY (alongside its key).
+   */
   noteKey: string | undefined;
   /** View options of the parent editor */
   editorOptions: EditorOptions;
@@ -1139,6 +1146,18 @@ export default function FootnoteEditor({
           return;
         }
 
+        // The inline surface renders no Cancel/Close control - its edits apply live - so Escape
+        // is its explicit dismissal, and the only one that does not require a pointer. It ends
+        // the session KEEPING what was typed (`closeAndSave`'s inline branch just flushes the
+        // pending apply); there is no draft to discard. A palette session claims Escape above,
+        // to cancel the palette rather than the session.
+        if (inline && event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          closeAndSaveRef.current();
+          return;
+        }
+
         // Enter with the DOM caret OUTSIDE the note content (Radix's
         // open-autofocus can park it at the wrapper-para start; Lexical's keydown path follows
         // the DOM) plain-splits the wrapper instead of inserting `\fp`. Enter has no legitimate
@@ -1220,6 +1239,16 @@ export default function FootnoteEditor({
       } else if (showMarkersMenu && event.key === 'Escape') {
         event.preventDefault();
         setShowMarkersMenu(false);
+      } else if (
+        inline &&
+        event.key === 'Escape' &&
+        editorInput &&
+        document.activeElement === editorInput
+      ) {
+        // Same explicit dismissal as the editable-mode branch above; the markers menu claims
+        // Escape first when it is open.
+        event.preventDefault();
+        closeAndSaveRef.current();
       }
     };
 
@@ -1229,6 +1258,7 @@ export default function FootnoteEditor({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [
+    inline,
     showMarkersMenu,
     showInlineMarkersMenu,
     defaultMarkerMenuTrigger,
@@ -1297,7 +1327,10 @@ export default function FootnoteEditor({
         className={cn('footnote-editor tw:grid tw:gap-[12px]', inline && 'tw:w-full')}
       >
         <div className="tw:flex">
-          <div className="tw:flex tw:gap-4">
+          {/* Wraps rather than overflowing: the inline editor's row is only as wide as the
+              footnotes pane, which the user can drag down to a fraction of the editor's width,
+              and a non-wrapping cluster of two labelled dropdowns plus undo/redo needs ~250px. */}
+          <div className="tw:flex tw:flex-wrap tw:gap-4">
             <FootnoteTypeDropdown
               isTypeSwitchable={isTypeSwitchable}
               noteType={noteType}
@@ -1357,7 +1390,7 @@ export default function FootnoteEditor({
               />
             </EditorKeyboardShortcuts>
           </div>
-          <div className="tw:absolute tw:bottom-0 tw:right-0">
+          <div className="tw:absolute tw:bottom-0 tw:end-0">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

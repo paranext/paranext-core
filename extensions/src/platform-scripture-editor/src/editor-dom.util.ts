@@ -353,6 +353,25 @@ export function focusPaneNoteEditor(): HTMLElement | undefined {
 }
 
 /**
+ * Puts DOM focus on the footnotes pane's selected row, which is where a row-editing session was
+ * opened from. Call it after ending a session from inside the row editor (Escape): the editor is
+ * unmounting, so without this focus falls to the document body and the next keystroke goes
+ * nowhere.
+ *
+ * Scoped to the pane's list, like {@link focusPaneNoteEditor}.
+ *
+ * @returns The selected row element, or `undefined` when the pane has no selected row
+ */
+export function focusPaneSelectedRow(): HTMLElement | undefined {
+  const row =
+    document.querySelector<HTMLElement>('[role="listbox"] [role="option"][aria-selected="true"]') ??
+    undefined;
+  row?.focus();
+
+  return row;
+}
+
+/**
  * Whether an incoming reference is this view's own echo — the reference it just published coming
  * back through its scroll group.
  *

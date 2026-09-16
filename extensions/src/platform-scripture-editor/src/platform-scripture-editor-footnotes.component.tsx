@@ -11,11 +11,16 @@ import {
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   Button,
+  EmptyState,
   FootnoteCaretPosition,
   FootnoteList,
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -185,8 +190,8 @@ export function FootnotesLayout({
     const selectedRow = paneContainerRef.current?.querySelector(
       '[role="option"][aria-selected="true"]',
     );
-    // The row is a roving-tabindex `li`, so it takes focus directly. Scrolling is left on: the
-    // list reveals the row for the same request, and suppressing it here would fight that.
+    // Rows are `li`s in the Tab order, so the selected row takes focus directly. Scrolling is left
+    // on: the list reveals the row for the same request, and suppressing it here would fight that.
     if (selectedRow instanceof HTMLElement) selectedRow.focus({ preventScroll: false });
   }, [selectedFootnote]);
 
@@ -553,20 +558,36 @@ export function FootnotesLayout({
                 pane spends all of its height on notes. Held clear of the scrollbar so that stays
                 grabbable, carrying the pane's own background so the note text it covers does not
                 read through it, and above the z-10 a focused row raises itself to. */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="tw:absolute tw:top-0 tw:z-20 tw:h-6 tw:w-6 tw:bg-sidebar"
-              style={{ insetInlineEnd: listScrollbarWidthPx }}
-              aria-label={localizedStrings['%webView_footnoteList_close%']}
-              onClick={onClose}
-            >
-              <X className="tw:h-4 tw:w-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tw:absolute tw:top-0 tw:z-20 tw:h-6 tw:w-6 tw:bg-sidebar"
+                    style={{ insetInlineEnd: listScrollbarWidthPx }}
+                    aria-label={localizedStrings['%webView_footnoteList_close%']}
+                    onClick={onClose}
+                  >
+                    <X className="tw:h-4 tw:w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{localizedStrings['%webView_footnoteList_close%']}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {/* The close button floats over the list's first row, so that row alone reserves
+                trailing room for it - the pane keeps all of its height for notes without the
+                button painting over the first note's text. */}
             <div
               ref={setFootnoteListWrapperRef}
-              className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+              className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li:first-of-type]:pe-7"
             >
+              {footnotes.length === 0 && (
+                <EmptyState
+                  className="tw:p-2"
+                  message={localizedStrings['%webView_footnoteList_empty%']}
+                />
+              )}
               <FootnoteList
                 classNameForItems="scripture-font"
                 listId={footnoteListKey}
@@ -574,6 +595,7 @@ export function FootnotesLayout({
                 footnotes={footnotes}
                 showMarkers={showMarkers}
                 formatCaller={showMarkers ? (c) => c : undefined}
+                ariaLabel={localizedStrings['%webView_footnoteList_header%']}
                 selectedFootnote={selectedFootnote?.footnote}
                 // The wrapper state object is minted fresh on every selection application (pane
                 // click or focus request), so its identity is the "reveal the row again" signal —

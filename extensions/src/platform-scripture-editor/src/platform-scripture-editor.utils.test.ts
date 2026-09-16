@@ -5,7 +5,12 @@ import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
-import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
+import {
+  USJ_TYPE,
+  USJ_VERSION,
+  type MarkerObject,
+  type Usj,
+} from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
   decideNoteCallerClickAction,
@@ -40,6 +45,7 @@ import {
   resolveResourceContentState,
   resolveCallerHighlight,
   resolveNoteEditingSurface,
+  shouldPublishPaneDocument,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -3176,6 +3182,39 @@ describe('resolveCallerHighlight', () => {
     expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
     expect(resolveCallerHighlight({ isStandardView: false, ...paneState })).toBeUndefined();
     expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
+  });
+});
+
+describe('shouldPublishPaneDocument (the pane repaints only when its notes change)', () => {
+  const note = (text: string): MarkerObject => ({
+    type: 'note',
+    marker: 'f',
+    caller: '+',
+    content: [{ type: 'char', marker: 'ft', content: [text] }],
+  });
+
+  it('publishes the first document the pane ever sees', () => {
+    expect(shouldPublishPaneDocument([note('a')], undefined)).toBe(true);
+  });
+
+  it('skips a document whose notes are unchanged', () => {
+    // The typing hot path: every keystroke in the Scripture body re-settles the document and
+    // changes no note. Republishing there re-renders the whole web view per character.
+    expect(shouldPublishPaneDocument([note('a')], [note('a')])).toBe(false);
+  });
+
+  it("publishes when a note's content changed", () => {
+    expect(shouldPublishPaneDocument([note('a')], [note('b')])).toBe(true);
+  });
+
+  it('publishes when a note was added or removed', () => {
+    expect(shouldPublishPaneDocument([note('a'), note('b')], [note('a')])).toBe(true);
+    expect(shouldPublishPaneDocument([], [note('a')])).toBe(true);
+  });
+
+  it('publishes a document whose notes could not be read', () => {
+    // A document this reader cannot walk must never wedge the pane on a stale note list.
+    expect(shouldPublishPaneDocument(undefined, [note('a')])).toBe(true);
   });
 });
 

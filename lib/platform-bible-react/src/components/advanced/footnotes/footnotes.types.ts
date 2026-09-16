@@ -65,6 +65,12 @@ export interface FootnoteItemProps {
 
 /** Interface defining the properties for the FootnoteList component */
 export interface FootnoteListProps {
+  /**
+   * Localized accessible name for the list, announced by screen readers when focus reaches a row.
+   *
+   * @default 'Footnotes'
+   */
+  ariaLabel?: string;
   /** Optional additional class name for styling */
   className?: string;
   /** Optional additional class name for styling the `Card` for each `FootnoteItem` in the list */

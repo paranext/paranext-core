@@ -963,6 +963,12 @@ export interface FootnoteItemProps {
 }
 /** Interface defining the properties for the FootnoteList component */
 export interface FootnoteListProps {
+	/**
+	 * Localized accessible name for the list, announced by screen readers when focus reaches a row.
+	 *
+	 * @default 'Footnotes'
+	 */
+	ariaLabel?: string;
 	/** Optional additional class name for styling */
 	className?: string;
 	/** Optional additional class name for styling the `Card` for each `FootnoteItem` in the list */
@@ -1049,8 +1055,8 @@ export interface FootnoteListProps {
  * @param clientY Viewport Y of the click.
  * @param rowElement The row's root element; the offset is computed over the text of its
  *   `.textual-note-body` descendant - the note's character runs, excluding the caller (rendered in
- *   the row's header cell), the rendered USFM markers and the `\cat` category run (see
- *   `isDisplayText`).
+ *   the row's header cell), the rendered USFM markers, the `\cat` category run and the empty-note
+ *   placeholder (see `isDisplayText`).
  * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
  *   (no browser support, click outside the body text, empty note).
  */
@@ -1118,7 +1124,14 @@ export interface FootnoteEditorProps {
 	onClose: () => void;
 	/** The scripture reference for the parent editor */
 	scrRef: SerializedVerseRef;
-	/** The unique note key to identify the note being edited used to apply changes to the note */
+	/**
+	 * The unique note key to identify the note being edited used to apply changes to the note.
+	 *
+	 * Read at apply time, not at load time: a new key on its own does NOT reload the editor's
+	 * document, because an inline session's own live-apply re-keys the note it is editing on every
+	 * apply and reloading there would discard the caret and anything still inside the apply debounce.
+	 * To load a different note, hand over a new `noteOps` ARRAY IDENTITY (alongside its key).
+	 */
 	noteKey: string | undefined;
 	/** View options of the parent editor */
 	editorOptions: EditorOptions;
@@ -1240,7 +1253,7 @@ export declare function FootnoteItem({ footnote, layout, formatCaller, showMarke
  * `renderEditingFootnote` (see those props), which swaps that row's display for a rendered editor
  * (e.g. an inline `FootnoteEditor`) while every other row stays read-only.
  */
-export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, selectionRequest, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, onFootnoteEditRequested, editingFootnoteIndex, renderEditingFootnote, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteList({ ariaLabel, className, classNameForItems, footnotes, layout, listId, selectedFootnote, selectionRequest, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, onFootnoteEditRequested, editingFootnoteIndex, renderEditingFootnote, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 /** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
 export type ScopeWithRange = Scope | "range";

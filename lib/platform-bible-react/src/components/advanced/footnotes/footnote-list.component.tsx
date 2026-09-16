@@ -40,6 +40,7 @@ function getAdjacentFocusableIndex(
  * (e.g. an inline `FootnoteEditor`) while every other row stays read-only.
  */
 export function FootnoteList({
+  ariaLabel = 'Footnotes',
   className,
   classNameForItems,
   footnotes,
@@ -207,11 +208,12 @@ export function FootnoteList({
     // Every row is its own tab stop (see the row `tabIndex` below), so the list is not one as
     // well - a stop here would put an extra, contentless press between whatever precedes the list
     // and its first note. It stays programmatically focusable (`-1`) because arrow-key navigation
-    // starts by focusing it.
+    // starts by focusing it. With NO rows there is no row to be that stop, so the list takes the
+    // turn itself rather than leaving the region unreachable by keyboard.
     <div
       role="listbox"
-      aria-label="Footnotes"
-      tabIndex={-1}
+      aria-label={ariaLabel}
+      tabIndex={footnotes.length === 0 ? 0 : -1}
       className={cn('tw:h-full tw:overflow-y-auto', className)}
       onKeyDown={handleListKeyDown}
     >

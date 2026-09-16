@@ -156,6 +156,21 @@ describe('getCaretPositionFromClick', () => {
     expect(getCaretPositionFromClick(10, 10, row)).toEqual({ utf16Offset: 6 }); // '1.11' + 2
   });
 
+  // `FootnoteItem` renders a U+FEFF placeholder as the body of a note with no content at all, so
+  // the row keeps its height and stays clickable. It is display, not content: an empty note's text
+  // is empty, so counting the placeholder would resolve a click anywhere on that row to offset 1 -
+  // past the end of a note with nothing in it.
+  it('excludes the empty-note placeholder from the offset', () => {
+    const row = makeRow('<p class="notetext"><span class="note-placeholder">\ufeff</span></p>');
+    const textNode = row.querySelector('.note-placeholder')?.firstChild;
+    // jsdom has no layout: stub the browser caret API to a known position
+    caretApiDocument().caretPositionFromPoint = vi
+      .fn()
+      .mockReturnValue({ offsetNode: textNode, offset: 1 });
+
+    expect(getCaretPositionFromClick(10, 10, row)).toEqual({ utf16Offset: 0 });
+  });
+
   it("returns 'end' when no caret API is available", () => {
     const row = makeRow('<p><span>abc</span></p>');
     // jsdom: document.caretPositionFromPoint is undefined by default

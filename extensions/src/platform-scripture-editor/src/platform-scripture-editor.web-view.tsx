@@ -142,6 +142,7 @@ import {
 } from './decorations.util';
 import {
   focusPaneNoteEditor,
+  focusPaneSelectedRow,
   runOnFirstLoad,
   scrollToAnnotation,
   scrollToNoteCaller,
@@ -181,6 +182,7 @@ import {
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
+  shouldPublishPaneDocument,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
@@ -287,6 +289,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
   '%webView_footnoteList_close%',
+  '%webView_footnoteList_empty%',
+  '%webView_footnoteList_header%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -966,18 +970,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * Publishes the editor's document to the pane, but only when the NOTES in it differ from what the
-   * pane already holds.
-   *
-   * Typing in the Scripture body changes the document on every keystroke and the note list on none
-   * of them, and publishing regardless re-renders this whole web view — the Scripture editor
-   * included — per character, which is felt as typing lag with the pane open. Editing inside a row
-   * editor does change a note, but only once per live-apply debounce, so the pane still repaints as
-   * fast as anything it shows actually changes.
-   *
-   * That makes `liveEditorUsj`'s guarantee "a document whose NOTES are current" rather than "the
-   * current document" — which is what the pane and `EditorRef.getNoteIndex` have to agree on. A
-   * comparison that throws publishes, so a document this reader cannot walk can never wedge the
-   * pane on stale notes.
+   * pane already holds — see {@link shouldPublishPaneDocument} for why, and for the rule itself.
    */
   const publishLiveEditorUsjIfNotesChanged = useCallback((usj: Usj) => {
     let notes: MarkerObject[] | undefined;
@@ -991,12 +984,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           `pane anyway: ${getErrorMessage(e)}`,
       );
     }
-    if (
-      notes &&
-      publishedPaneNotesRef.current &&
-      deepEqualAcrossIframes(notes, publishedPaneNotesRef.current)
-    )
-      return;
+    if (!shouldPublishPaneDocument(notes, publishedPaneNotesRef.current)) return;
     publishedPaneNotesRef.current = notes;
     setLiveEditorUsj(usj);
   }, []);
@@ -3376,6 +3364,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [footnotesPaneRendered, closeFootnoteEditor]);
 
   /**
+   * Ends a row-editing session from INSIDE the row editor (its Escape dismissal), and puts focus
+   * back on the row it was opened from.
+   *
+   * The focus move has to wait for the commit that swaps the editor out for the read-only row: the
+   * row element the session was opened on does not exist until then, and the unmounting editor
+   * would otherwise drop focus on the document body, where the next keystroke goes nowhere.
+   * `setTimeout` rather than `requestAnimationFrame` because rAF does not run in a `display: none`
+   * iframe (an inactive dock tab), where this would then never fire at all.
+   */
+  const closePaneFootnoteEditorFromInside = useCallback(() => {
+    closeFootnoteEditor(false);
+    setTimeout(() => focusPaneSelectedRow(), 0);
+  }, [closeFootnoteEditor]);
+
+  /**
    * Renders the row editor the footnotes pane swaps in for `paneEditingIndex`'s row. Inline mode
    * has no Save/Cancel: edits apply live (debounced) to the main editor through `parentEditorRef`
    * and flush when the row unmounts. Everything else matches the popover's editor, so the two
@@ -3390,7 +3393,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         noteOps={editingNoteOps.current}
         noteKey={editingNoteKey.current}
         initialCaretPosition={paneEditingCaret}
-        onClose={() => closeFootnoteEditor(false)}
+        onClose={closePaneFootnoteEditorFromInside}
         onNoteEdit={onFootnoteEditorNoteEdit}
         scrRef={scrRef}
         editorOptions={options}
@@ -3402,7 +3405,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     ),
     [
       paneEditingCaret,
-      closeFootnoteEditor,
+      closePaneFootnoteEditorFromInside,
       onFootnoteEditorNoteEdit,
       scrRef,
       options,

@@ -1,12 +1,12 @@
 import { FootnoteCaretPosition } from './footnotes.types';
 
 /** Row classes whose text is display rather than note content (see {@link isDisplayText}). */
-const DISPLAY_ONLY_CLASSES = ['marker', 'note-category'];
+const DISPLAY_ONLY_CLASSES = ['marker', 'note-category', 'note-placeholder'];
 
 /**
  * Whether a text node inside the note body is rendered display rather than note text.
  *
- * Two kinds of display ride inside `.textual-note-body`:
+ * Three kinds of display ride inside `.textual-note-body`:
  *
  * - `.marker` spans: `FootnoteItem` renders USFM markers as visible text, but a marker is display,
  *   not content.
@@ -14,12 +14,15 @@ const DISPLAY_ONLY_CLASSES = ['marker', 'note-category'];
  *   note rather than part of its `content`, so it is outside the offset origin even though the
  *   value is the note's own data; the row also supplies a separating space of its own there when
  *   markers are hidden, which no file byte backs.
+ * - `.note-placeholder`: the U+FEFF `FootnoteItem` renders for a note with no content at all, so the
+ *   row keeps its height and stays clickable. No file byte backs it either, so counting it would
+ *   resolve a click on an EMPTY note to offset 1.
  *
- * Both are outside the offset origin {@link FootnoteCaretPosition} defines, and the editor excludes
- * its own rendering of each from that same origin (`EditorRef.selectNoteTextOffset` skips marker
- * nodes and `attribute`-typed text, which is what the category's display run is built as). Both
- * sides must, or an offset captured over the row resolves off by the length of everything the two
- * renderings disagree about before the click.
+ * All three are outside the offset origin {@link FootnoteCaretPosition} defines, and the editor
+ * excludes its own rendering of each from that same origin (`EditorRef.selectNoteTextOffset` skips
+ * marker nodes and `attribute`-typed text, which is what the category's display run is built as,
+ * and an empty note has nothing to walk). Both sides must, or an offset captured over the row
+ * resolves off by the length of everything the two renderings disagree about before the click.
  */
 function isDisplayText(node: Node, body: HTMLElement): boolean {
   let ancestor = node.parentElement;
@@ -55,8 +58,8 @@ function firstTextNodeWithin(node: Node): Text | undefined {
  * @param clientY Viewport Y of the click.
  * @param rowElement The row's root element; the offset is computed over the text of its
  *   `.textual-note-body` descendant - the note's character runs, excluding the caller (rendered in
- *   the row's header cell), the rendered USFM markers and the `\cat` category run (see
- *   `isDisplayText`).
+ *   the row's header cell), the rendered USFM markers, the `\cat` category run and the empty-note
+ *   placeholder (see `isDisplayText`).
  * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
  *   (no browser support, click outside the body text, empty note).
  */

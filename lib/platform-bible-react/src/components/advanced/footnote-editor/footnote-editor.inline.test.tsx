@@ -7,9 +7,11 @@ import type { DeltaOpInsertNoteEmbed, EditorRef } from '@eten-tech-foundation/pl
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import FootnoteEditor, {
+  INLINE_APPLY_DEBOUNCE_MS,
   type FootnoteEditorHandle,
 } from '@/components/advanced/footnote-editor/footnote-editor.component';
 import type { FootnoteEditorLocalizedStrings } from '@/components/advanced/footnote-editor/footnote-editor.types';
+import { editableView } from '@/components/advanced/footnote-editor/footnote-editor.fixtures';
 
 // ---- Editorial stub harness ------------------------------------------------
 // No test in this package renders the real Lexical `Editorial` (heavy, flaky in
@@ -41,7 +43,10 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
       latestEditorialProps.onUsjChange = props.onUsjChange;
       // The component only calls the subset of EditorRef methods in editorRefMock
       useImperativeHandle(ref, () => editorRefMock);
-      return <div data-testid="editorial-stub" className="editor-input" />;
+      // `tabIndex` so jsdom will accept `focus()` on it: the real `.editor-input` is a
+      // contenteditable, which is focusable, and the key handlers under test all gate on the
+      // editor holding DOM focus.
+      return <div data-testid="editorial-stub" className="editor-input" tabIndex={-1} />;
     },
   );
   EditorialStub.displayName = 'Editorial';
@@ -314,7 +319,7 @@ describe('FootnoteEditor inline live-apply', () => {
     });
 
     expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
     // Proves the debounce carried the LATEST edit ('edit 3'), not an earlier coalesced one.
     expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-live', 'edit 3');
@@ -345,7 +350,7 @@ describe('FootnoteEditor inline live-apply', () => {
       content: [{ type: 'para' }],
     });
 
-    unmount(); // before the 300ms debounce elapses
+    unmount(); // before the apply debounce elapses
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
   });
 
@@ -418,7 +423,7 @@ describe('FootnoteEditor inline live-apply', () => {
       content: [{ type: 'para' }],
     });
 
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
     expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-updated', 'edit 2');
   });
@@ -452,7 +457,7 @@ describe('FootnoteEditor inline live-apply', () => {
       type: 'USJ',
       version: '3.1',
       content: [{ type: 'para' }],
-    }); // schedules the 300ms debounce
+    }); // schedules the apply debounce
 
     // Immediate-apply path, still inside the debounce window: a book/chapter change triggers
     // closeAndSave via the component's useLayoutEffect, applying immediately.
@@ -469,7 +474,7 @@ describe('FootnoteEditor inline live-apply', () => {
     );
 
     // If the pending debounce wasn't cancelled, it would fire again here - a redundant duplicate.
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
     // Unmounting flushes any *still*-pending apply - must not add a further redundant call either.
     unmount();
 
@@ -509,7 +514,7 @@ describe('FootnoteEditor inline live-apply', () => {
       content: [{ type: 'para' }],
     });
 
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
     expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
   });
 
@@ -542,7 +547,7 @@ describe('FootnoteEditor inline live-apply', () => {
       content: [{ type: 'para' }],
     });
 
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
     expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
   });
 
@@ -573,7 +578,7 @@ describe('FootnoteEditor inline live-apply', () => {
       content: [{ type: 'para' }],
     });
 
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
     expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-changed', 'after');
 
@@ -583,7 +588,7 @@ describe('FootnoteEditor inline live-apply', () => {
       version: '3.1',
       content: [{ type: 'para' }],
     });
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
   });
 
@@ -739,7 +744,7 @@ describe('FootnoteEditor inline live-apply', () => {
         type: 'USJ',
         version: '3.1',
         content: [{ type: 'para' }],
-      }); // schedules the 300ms debounce for note A's edit
+      }); // schedules the apply debounce for note A's edit
 
       // Still inside the debounce window: the consumer swaps in note B (new noteOps identity, new
       // noteKey) on this SAME mounted instance - the load effect reloads in place.
@@ -820,5 +825,54 @@ describe('FootnoteEditor inline live-apply', () => {
       expect(editorRefMock.selectNote).toHaveBeenCalledWith(0);
       expect(editorRefMock.selectNoteTextOffset).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('FootnoteEditor inline Escape dismissal', () => {
+  /** Focuses the stubbed editor input and sends Escape to it the way the browser would. */
+  function pressEscapeInEditor(container: HTMLElement) {
+    const editorInput = container.querySelector<HTMLElement>('.editor-input');
+    if (!editorInput) throw new Error('no editor input rendered');
+    editorInput.focus();
+    editorInput.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+  }
+
+  // The inline surface renders no Cancel/Close control - its edits apply live - so Escape is the
+  // only explicit way to end a row-editing session, and the only one that needs no pointer.
+  it.each([
+    { name: 'in editable marker mode (Standard view)', editorOptions: { view: editableView } },
+    { name: 'in the default marker mode', editorOptions: {} },
+  ])('ends the session on Escape $name', async ({ editorOptions }) => {
+    vi.useFakeTimers();
+    const { container, props } = renderEditor({ inline: true, editorOptions });
+    await vi.runAllTimersAsync();
+
+    pressEscapeInEditor(container);
+
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the popover surface alone - it has its own Cancel button', async () => {
+    vi.useFakeTimers();
+    const { container, props } = renderEditor({ editorOptions: { view: editableView } });
+    await vi.runAllTimersAsync();
+
+    pressEscapeInEditor(container);
+
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('ignores Escape pressed outside the editor', async () => {
+    vi.useFakeTimers();
+    const { props } = renderEditor({ inline: true, editorOptions: { view: editableView } });
+    await vi.runAllTimersAsync();
+
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+
+    expect(props.onClose).not.toHaveBeenCalled();
   });
 });
