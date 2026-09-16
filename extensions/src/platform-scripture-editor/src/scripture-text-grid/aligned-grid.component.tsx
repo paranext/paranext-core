@@ -2,7 +2,8 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useStylesheet, useViewVisibility } from 'platform-bible-react';
 import { Children, useRef, type ReactNode } from 'react';
 import { ALIGNED_GRID_CLASS, ALIGNED_GRID_STYLESHEET } from './aligned-grid.styles';
-import { useAlignedReferenceScroll } from './use-aligned-reference-scroll.hook';
+import { findVerseBlockForVerse } from './reference-scroll.utils';
+import { useReferenceScroll } from './use-reference-scroll.hook';
 
 /**
  * Narrowest a column may become before the grid scrolls sideways instead of shrinking further.
@@ -47,7 +48,9 @@ export function AlignedGrid({ children, scrRef, ariaLabel }: AlignedGridProps) {
   // Only injected while this view is mounted; the rules are what make the layout work.
   useStylesheet(ALIGNED_GRID_STYLESHEET);
   const isViewVisible = useViewVisibility();
-  useAlignedReferenceScroll(portRef, scrRef, isViewVisible);
+  // The block-verse layout's anchor: one placed element per verse, which this root's row rules
+  // position. A chapter cell scrolls itself against the inline layout's marker spans instead.
+  useReferenceScroll(portRef, scrRef, isViewVisible, findVerseBlockForVerse);
 
   return (
     <div
