@@ -202,18 +202,21 @@ const flushMemoryWritesDebounced = debounce(flushMemoryWrites, MEMORY_WRITE_DEBO
  */
 const OWN_LEVEL_WRITE_DEBOUNCE_MS = 250;
 
-/** Levels given to a pane in this window but not yet written into its definition, by pane id. */
-const pendingOwnLevels = new Map<WebViewId, Levels>();
-
 /**
- * The identity stamp ({@link identityStampFor}) the pane showed when its entry in
- * {@link pendingOwnLevels} was last set, or `undefined` when the pane had no resolvable identity at
- * that moment. Kept in step with `pendingOwnLevels` (set together in {@link setOwnLevels}, cleared
- * together everywhere `pendingOwnLevels` is cleared) so {@link seedFromMemory} can tell a pending
- * write chosen for the pane's CURRENT identity from one that predates a re-point the pane's own
- * definition stamp never caught up to, because no commit for it had landed yet either.
+ * A pane's levels given in this window but not yet written into its definition, paired with the
+ * identity stamp ({@link identityStampFor}) the pane showed when the write was chosen — `undefined`
+ * when the pane had no resolvable identity at that moment, which is a fact about the write, not the
+ * absence of one: a pending write with no resolvable identity still has an entry here, and only a
+ * pane with NO entry at all has nothing pending. Kept as one record (set whole in
+ * {@link setOwnLevels}, cleared whole everywhere it is cleared) so {@link seedFromMemory} and
+ * {@link commitOwnLevels} can each tell a pending write chosen for the pane's CURRENT identity from
+ * one that predates a re-point the pane's own definition stamp never caught up to, because no
+ * commit for it had landed yet either.
  */
-const pendingOwnLevelsIdentity = new Map<WebViewId, string | undefined>();
+const pendingOwnLevelWrites = new Map<
+  WebViewId,
+  { levels: Levels; identity: string | undefined }
+>();
 
 /** The open burst window per pane: while one is running, a further edit is deferred into it. */
 const ownLevelWriteTimers = new Map<WebViewId, ReturnType<typeof setTimeout>>();
@@ -254,8 +257,7 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   unknownAreasLoggedByWebViewId.clear();
   ownLevelWriteTimers.forEach((timer) => clearTimeout(timer));
   ownLevelWriteTimers.clear();
-  pendingOwnLevels.clear();
-  pendingOwnLevelsIdentity.clear();
+  pendingOwnLevelWrites.clear();
   pendingMemoryWrites.clear();
   memoryFlushFailures = 0;
   flushMemoryWritesDebounced.cancel();
@@ -310,7 +312,7 @@ function effectiveOwnLevels(
   definition: Pick<SavedWebViewDefinition, 'id' | 'state'> | undefined,
 ): Levels {
   if (!definition) return {};
-  return pendingOwnLevels.get(definition.id) ?? getOwnLevels(definition);
+  return pendingOwnLevelWrites.get(definition.id)?.levels ?? getOwnLevels(definition);
 }
 
 /**
@@ -510,9 +512,9 @@ function storedIdentityStamp(
  * identity can be told from a pane that still shows what its levels belong to. The stamp
  * accompanies the levels: a pane that ends up with none carries neither, here and in
  * {@link commitOwnLevels} — which is also why `hasOwnLevels` below is read from committed state
- * alone, never from a write still sitting in {@link pendingOwnLevels}: that write's own commit adds
- * the stamp together with the levels it carries, so counting a merely pending one here too would
- * risk stamping a pane ahead of a level it does not actually have yet.
+ * alone, never from a write still sitting in {@link pendingOwnLevelWrites}: that write's own commit
+ * adds the stamp together with the levels it carries, so counting a merely pending one here too
+ * would risk stamping a pane ahead of a level it does not actually have yet.
  *
  * Four cases, decided by the identity and the stamp:
  *
@@ -526,9 +528,9 @@ function storedIdentityStamp(
  *   commit so far has failed. A level it already holds (committed) is its own and is kept — the
  *   levels key is never written empty, so holding it at all means the pane has a level to keep —
  *   and a level it holds only as a still-pending, uncommitted write for the identity it shows RIGHT
- *   NOW ({@link pendingOwnLevelsIdentity}) is left alone the same way: there is no committed stamp
- *   to say it changed FROM anything, and the write is not stale, so it survives untouched and gets
- *   its stamp together with its levels once a later commit finally lands. Only a pane with neither
+ *   NOW ({@link pendingOwnLevelWrites}) is left alone the same way: there is no committed stamp to
+ *   say it changed FROM anything, and the write is not stale, so it survives untouched and gets its
+ *   stamp together with its levels once a later commit finally lands. Only a pane with neither
  *   takes the remembered levels of its identity, below.
  * - **The stamp names another identity, OR a pending write was chosen for one** — either the pane was
  *   re-pointed at another project through the same web view id (`reloadWebView`, with the view's
@@ -568,7 +570,8 @@ function seedFromMemory(webViewId: WebViewId): void {
       deps.updateDefinition(definition.id, { state });
       return;
     }
-    if (pendingOwnLevels.has(webViewId) && pendingOwnLevelsIdentity.get(webViewId) === stamp) {
+    const pendingWrite = pendingOwnLevelWrites.get(webViewId);
+    if (pendingWrite && pendingWrite.identity === stamp) {
       // The pending write was chosen for the identity the pane shows right now: not stale, and
       // there is no stamp to have changed FROM, so this is not a re-point either. See the "no stamp,
       // and a pending write chosen for this same identity" case above.
@@ -582,8 +585,7 @@ function seedFromMemory(webViewId: WebViewId): void {
   // case just above. See the doc comment's last case for why this is skipped until memory has
   // actually loaded.
   if (!memoryLoaded) return;
-  pendingOwnLevels.delete(webViewId);
-  pendingOwnLevelsIdentity.delete(webViewId);
+  pendingOwnLevelWrites.delete(webViewId);
   const ownLevelTimer = ownLevelWriteTimers.get(webViewId);
   if (ownLevelTimer !== undefined) {
     clearTimeout(ownLevelTimer);
@@ -971,23 +973,38 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
  * with the level the user chose. {@link effectiveOwnLevels} reads them meanwhile, so the pane goes
  * on showing that level while its definition lags behind it.
  *
+ * Commits only under the identity the write was chosen for. A pending write's own identity
+ * (recorded alongside its levels — see {@link pendingOwnLevelWrites}) is compared against what the
+ * pane shows right now, and a mismatch drops the write instead of committing it: the pane has moved
+ * on to another identity since the write was chosen (a re-point {@link reseedIfIdentityChanged} has
+ * not yet caught, because no stamp existed for it to compare against), and writing the old level
+ * now would stamp it as the new identity's own. The pane is left to re-seed itself from its next
+ * fresh area report, which reads what the identity it shows now actually remembers.
+ *
  * A failure anywhere in here — the definition read included, which throws once the dock layout is
  * gone — is logged and reported as `false` rather than left to propagate: this runs from a burst's
  * debounce timer and from the `beforeunload` flush, where a throw would either have no handler at
  * all or would stop the memory flush that runs right after it.
  */
 function commitOwnLevels(webViewId: WebViewId): boolean {
-  const levels = pendingOwnLevels.get(webViewId);
-  if (!levels) return true;
+  const pending = pendingOwnLevelWrites.get(webViewId);
+  if (!pending) return true;
   try {
     const definition = deps.getDefinition(webViewId);
     if (!definition) {
       // The pane is gone, so there is no definition left to write the levels into and no later
       // attempt that could find one; keeping them pending would only hold a closed pane's entry.
-      pendingOwnLevels.delete(webViewId);
-      pendingOwnLevelsIdentity.delete(webViewId);
+      pendingOwnLevelWrites.delete(webViewId);
       return false;
     }
+    if (pending.identity !== undefined) {
+      const currentId = memoryIdentityFor(definition);
+      if (!currentId || identityStampFor(currentId) !== pending.identity) {
+        pendingOwnLevelWrites.delete(webViewId);
+        return true;
+      }
+    }
+    const { levels } = pending;
     const state: Record<string, unknown> = { ...(definition.state ?? {}) };
     // The identity stamp lives exactly as long as the levels it belongs to: a pane that has levels
     // always says which project they were chosen for, and a pane that gives them up keeps no stamp
@@ -1007,8 +1024,7 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
     );
     return false;
   }
-  pendingOwnLevels.delete(webViewId);
-  pendingOwnLevelsIdentity.delete(webViewId);
+  pendingOwnLevelWrites.delete(webViewId);
   return true;
 }
 
@@ -1019,14 +1035,17 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
  * the open window and written once when it closes. Reads go through {@link effectiveOwnLevels}
  * meanwhile, so what the pane shows is always the newest level.
  *
- * Also stamps {@link pendingOwnLevelsIdentity} with the pane's identity right now, so a later
- * {@link seedFromMemory} call can tell this write apart from one that predates a re-point.
+ * Also records the pane's identity right now alongside the levels (see
+ * {@link pendingOwnLevelWrites}), so a later {@link seedFromMemory} or {@link commitOwnLevels} call
+ * can tell this write apart from one that predates a re-point.
  */
 function setOwnLevels(webViewId: WebViewId, levels: Levels): boolean {
-  pendingOwnLevels.set(webViewId, levels);
   const currentDefinition = deps.getDefinition(webViewId);
   const currentId = currentDefinition ? memoryIdentityFor(currentDefinition) : undefined;
-  pendingOwnLevelsIdentity.set(webViewId, currentId ? identityStampFor(currentId) : undefined);
+  pendingOwnLevelWrites.set(webViewId, {
+    levels,
+    identity: currentId ? identityStampFor(currentId) : undefined,
+  });
   if (ownLevelWriteTimers.has(webViewId)) return true;
   if (!commitOwnLevels(webViewId)) return false;
   ownLevelWriteTimers.set(
@@ -1043,7 +1062,7 @@ function setOwnLevels(webViewId: WebViewId, levels: Levels): boolean {
 function flushOwnLevelWrites(): void {
   ownLevelWriteTimers.forEach((timer) => clearTimeout(timer));
   ownLevelWriteTimers.clear();
-  [...pendingOwnLevels.keys()].forEach((webViewId) => commitOwnLevels(webViewId));
+  [...pendingOwnLevelWrites.keys()].forEach((webViewId) => commitOwnLevels(webViewId));
 }
 
 /** Sets or deletes one area's level among the pane's levels. */
@@ -1210,7 +1229,7 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       // A pane whose levels have not reached its definition yet is written even when this delta asks
       // for nothing new: those levels are what the pane shows and they still owe a write, so the
       // change that memory delivers next is also this pane's next chance to store them.
-      if (!changed && !pendingOwnLevels.has(definition.id)) return;
+      if (!changed && !pendingOwnLevelWrites.has(definition.id)) return;
       if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
       else everyPaneTookItsUpdate = false;
     } catch (e) {
