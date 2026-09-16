@@ -1,6 +1,21 @@
-/** Finding, and scrolling to, a verse row in the aligned grid. */
+/**
+ * Finding, and scrolling to, the verse a reference names — in either Text Collection layout.
+ *
+ * The port math is shared. The lookup is not: the aligned grid's block-verse layout wraps each
+ * verse in a placed element, while a chapter cell's inline layout emits only a marker span, so
+ * there is one finder per layout and callers pass the one their view renders.
+ */
 
 import { MAX_ALIGNED_VERSE_ROWS } from './aligned-grid.styles';
+import { parseVerseRange } from './verse-display.utils';
+
+/**
+ * Finds the element to bring into view for a verse, searched within one scroll port.
+ *
+ * Returning `undefined` means "nothing has rendered yet", which callers use to tell that from "the
+ * verse is missing" and leave their pending scroll armed.
+ */
+export type VerseTargetFinder = (port: ParentNode, verseNum: number) => HTMLElement | undefined;
 
 /**
  * Whether the grid's generated row rules place a block carrying this `data-verse-start`.
@@ -63,6 +78,64 @@ export function findVerseBlockForVerse(
   });
   // A reference above every block (an intro verse 0) belongs at the top of the passage.
   return best ?? firstBlock;
+}
+
+/** The inline layout's verse anchor. `data-number` may be a range (`"14-15"`) or partial (`"3a"`). */
+const VERSE_MARKER_SELECTOR = 'span[data-marker="v"][data-number]';
+
+/**
+ * The verse marker to scroll to for a reference, in a cell rendering the editor's inline layout.
+ *
+ * The chapter-mode counterpart of {@link findVerseBlockForVerse}, and deliberately the same rule:
+ * prefer a marker starting exactly at the verse, else the nearest marker starting before it. That
+ * fallback is what lands a reference inside a bridge — `\v 14-15` emits no `[data-number="15"]`, so
+ * an exact match alone never resolves verse 15. It also puts a reference in a versification gap on
+ * the preceding verse, and a reference above the first marker (verse 0 front matter) at the top of
+ * the chapter.
+ *
+ * Unlike {@link findVerseBlockForVerse} there is no upper bound to respect: the inline layout places
+ * no verse on a fixed row, so every rendered marker is a candidate.
+ *
+ * Sub-verse markers (`\v 3a`, `\v 3b`) both resolve to verse 3 and the earlier one wins, which puts
+ * the reader at the start of the verse. The aligned layout's equivalent collision is worse — both
+ * blocks land on one row and overlap — and is tracked upstream as PT-4559.
+ *
+ * @param port Element containing the rendered markers — one cell's content box.
+ * @param verseNum Verse to scroll to.
+ * @returns The marker to bring into view, or `undefined` when none has rendered yet.
+ */
+export function findVerseMarkerForVerse(
+  port: ParentNode,
+  verseNum: number,
+): HTMLElement | undefined {
+  // The common case — the reference names a verse the chapter starts — is answerable without
+  // collecting every marker, and this runs on each frame in which the cell's editor mutates.
+  if (Number.isInteger(verseNum) && verseNum >= 1) {
+    const exact = port.querySelector<HTMLElement>(
+      `span[data-marker="v"][data-number="${verseNum}"]`,
+    );
+    if (exact) return exact;
+  }
+
+  const markers = [...port.querySelectorAll<HTMLElement>(VERSE_MARKER_SELECTOR)];
+  const [firstMarker] = markers;
+  if (!firstMarker) return undefined;
+  // A non-finite verse can only come from a malformed reference; nothing is "nearest" to it, so the
+  // top of the chapter is the only defensible answer (and matches a verse-0 reference).
+  if (!Number.isFinite(verseNum)) return firstMarker;
+
+  let best: HTMLElement | undefined;
+  let bestStart = Number.NEGATIVE_INFINITY;
+  markers.forEach((marker) => {
+    const { start } = parseVerseRange(marker.dataset.number ?? '');
+    // `<=` on the running best keeps the EARLIER of two markers sharing a start, which is what puts
+    // a sub-verse reference at `3a` rather than `3b`.
+    if (!Number.isFinite(start) || start > verseNum || start <= bestStart) return;
+    best = marker;
+    bestStart = start;
+  });
+  // A reference above every marker belongs at the top of the chapter.
+  return best ?? firstMarker;
 }
 
 /**
