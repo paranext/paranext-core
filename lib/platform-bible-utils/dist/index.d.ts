@@ -4960,10 +4960,11 @@ export type DblResourceData = {
  * The prefix branch is a best-effort fallback, not an invariant. A resource project's id is
  * unrelated to the DBL entry it was installed from: ParatextData records the entry uid in the
  * project's settings and matches on that, so the prefix holds for many installed resources and not
- * for others. The authoritative answer is the `projectId` the backend reports, which is why the
- * exact match is tried first. Note the prefix test is a fallthrough, not an `else`: a reconciled
- * row whose exact match _fails_ is still tested by prefix, and for such a row a prefix hit can only
- * be a different project. See `adr-dbl-install-status-from-backend`.
+ * for others. The `projectId` the backend reports is authoritative, so the exact match is tried
+ * first — but the prefix test is a fallthrough, not an `else`, so a row naming project A can still
+ * claim a prefix-sharing project B. `buildLocalNonDblResources` depends on that today, which is
+ * what makes tightening it a behaviour change rather than a cleanup. See
+ * `adr-dbl-install-status-from-backend`.
  *
  * Both branches require the row to have been reconciled against disk at least once (`installed`, or
  * a non-empty `projectId`). A never-synced row carries `installed: false, projectId: ''`, and

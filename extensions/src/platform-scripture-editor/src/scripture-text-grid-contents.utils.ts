@@ -182,13 +182,14 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  *   display.
  * @param options.downloaded When provided, downloaded-but-unlisted projects are appended to
  *   `bottom` as unchecked, non-removable rows. Omit to skip — PT-4171 will wire this up.
- * @param options.dblResources Catalog rows, needed to tell whether a downloaded project is already
- *   listed. Without them a resource whose project id and DBL entry uid diverge is listed twice.
+ * @param options.dblResources Catalog rows, required alongside `downloaded`: resolving a reference
+ *   needs them, and without them a resource whose project id and DBL entry uid diverge is listed
+ *   twice. Required rather than optional so PT-4171 cannot wire up `downloaded` alone.
  */
 export function getViewOptionsTexts(
   sources: TextCollectionSources,
   resolveLongName?: (reference: BibleTextReference) => string | undefined,
-  options?: { downloaded?: DownloadedResource[]; dblResources?: DblResourceData[] },
+  options?: { downloaded: DownloadedResource[]; dblResources: DblResourceData[] },
 ): { top: ViewOptionsTextEntry[]; bottom: ViewOptionsTextEntry[] } {
   const { adminReferenced, userReferenced, overlay } = sources;
   const adminOwned = getAdminOwnedEntries(adminReferenced, overlay);
