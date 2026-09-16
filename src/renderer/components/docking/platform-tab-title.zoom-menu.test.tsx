@@ -7,7 +7,7 @@ import { resolveContentZoomArea } from '@renderer/services/web-view-content-zoom
 import { sendCommand } from '@shared/services/command.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { logger } from '@shared/services/logger.service';
-import { PlatformTabTitle } from './platform-tab-title.component';
+import { __resetTabMenuCacheForTesting, PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
 
@@ -254,6 +254,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     vi.mocked(logger.warn).mockClear();
     vi.mocked(sendCommand).mockReset();
     vi.mocked(resolveContentZoomArea).mockReset();
+    __resetTabMenuCacheForTesting();
   });
 
   it('power mode: the zoom group precedes the window group', async () => {
