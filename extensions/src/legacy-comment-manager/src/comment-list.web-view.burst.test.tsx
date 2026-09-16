@@ -4,11 +4,13 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { useCallback, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
+import type { SerializedVerseRef } from '@sillsdev/scripture';
+import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import {
   CommentFilters,
   DEFAULT_COMMENT_FILTERS,
+  DEFAULT_SCOPE_FILTER,
   ScopeFilter,
-  UNFILTERED,
 } from './comment-list-filters.model';
 
 // vi.mock factories are hoisted above imports, so anything they close over must be created via
@@ -28,7 +30,13 @@ const mocks = vi.hoisted(() => {
     recordSelfInitiatedNavigation: vi.fn(),
     cancelPendingSyncScroll: vi.fn(),
   };
-  return { panelPropsLog, bcvSyncScroll };
+  /**
+   * Every selector object the web view has passed to `CommentThreads`, in render order. A stable
+   * reference between two entries means the real PDP hook would see an unchanged selector and skip
+   * re-subscribing; a new reference means it would tear down and re-establish the subscription.
+   */
+  const commentThreadSelectorLog: LegacyCommentThreadSelector[] = [];
+  return { panelPropsLog, bcvSyncScroll, commentThreadSelectorLog };
 });
 
 vi.mock('@papi/frontend', () => ({
@@ -42,7 +50,12 @@ vi.mock('@papi/frontend', () => ({
 
 vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: vi.fn(() => [{}]),
-  useProjectData: vi.fn(() => ({ CommentThreads: vi.fn(() => [[], vi.fn(), false]) })),
+  useProjectData: vi.fn(() => ({
+    CommentThreads: (selector: LegacyCommentThreadSelector) => {
+      mocks.commentThreadSelectorLog.push(selector);
+      return [[], vi.fn(), false];
+    },
+  })),
   useProjectDataProvider: vi.fn(() => ({})),
   useWebViewController: vi.fn(() => undefined),
 }));
@@ -87,8 +100,7 @@ import './comment-list.web-view';
 
 /**
  * A working stand-in for the `useWebViewState` prop: a real keyed React state hook over a plain
- * map, seeded so the view mounts with an editor wired (which lets the scope axis pass through to
- * the panel un-coerced).
+ * map, seeded so the view mounts with an editor wired.
  */
 function makeUseWebViewState(seed: Record<string, unknown>): UseWebViewStateHook {
   const store = new Map<string, unknown>(Object.entries(seed));
@@ -124,7 +136,40 @@ const useWebViewScrollGroupScrRefFake: UseWebViewScrollGroupScrRefHook = () => [
   undefined,
 ];
 
-function renderCommentListWebView() {
+/**
+ * A working stand-in for the `useWebViewScrollGroupScrRef` prop: a real `useState`-backed hook
+ * whose value a test can push from outside via {@link ControllableScrRef.setScrRef}, so a test can
+ * simulate the window's scroll group moving.
+ */
+type ControllableScrRef = {
+  hook: UseWebViewScrollGroupScrRefHook;
+  setScrRef: (nextScrRef: SerializedVerseRef) => void;
+};
+
+function makeControllableScrRef(initialScrRef: SerializedVerseRef): ControllableScrRef {
+  // Captured by the hook on every render so `setScrRef` below always drives the fiber's own
+  // setState rather than a stale one from an earlier render.
+  let latestSetScrRef: ((nextScrRef: SerializedVerseRef) => void) | undefined;
+  // Named with the `use` prefix (rather than the returned `hook` property name) so
+  // eslint-plugin-react-hooks recognizes the `useState` call below as a hook call.
+  const useControllableScrRef: UseWebViewScrollGroupScrRefHook = () => {
+    const [scrRef, setScrRef] = useState(initialScrRef);
+    latestSetScrRef = setScrRef;
+    return [scrRef, vi.fn(), 0, vi.fn(), undefined];
+  };
+  return {
+    hook: useControllableScrRef,
+    setScrRef: (nextScrRef) => {
+      if (!latestSetScrRef)
+        throw new Error('useWebViewScrollGroupScrRef has not rendered yet; render first');
+      latestSetScrRef(nextScrRef);
+    },
+  };
+}
+
+function renderCommentListWebView(
+  useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook = useWebViewScrollGroupScrRefFake,
+) {
   const CommentListWebView = globalThis.webViewComponent;
   render(
     <CommentListWebView
@@ -132,7 +177,7 @@ function renderCommentListWebView() {
       id="comment-list-1"
       projectId="project-1"
       useWebViewState={makeUseWebViewState({ editorWebViewId: 'editor-1' })}
-      useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRefFake}
+      useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRef}
       updateWebViewDefinition={vi.fn()}
     />,
   );
@@ -152,6 +197,7 @@ function latestPanelProps() {
 describe('setFilters messages replayed in a burst', () => {
   beforeEach(() => {
     mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
   });
 
   afterEach(() => {
@@ -168,13 +214,13 @@ describe('setFilters messages replayed in a burst', () => {
     // burst — instead of against what the first message just applied — skips it and leaves the
     // narrowed filters applied for good.
     act(() => {
-      dispatchSetFilters({ filters: { resolved: 'resolved' }, scopeFilter: 'current-chapter' });
+      dispatchSetFilters({ filters: { preset: 'resolved' }, scopeFilter: 'current-chapter' });
       dispatchSetFilters({});
     });
 
     await waitFor(() => {
       expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS);
-      expect(latestPanelProps().scopeFilter).toBe(UNFILTERED);
+      expect(latestPanelProps().scopeFilter).toBe(DEFAULT_SCOPE_FILTER);
     });
   });
 
@@ -187,7 +233,7 @@ describe('setFilters messages replayed in a burst', () => {
     // against a snapshot taken before the panel change makes it look like a no-op, so the user's
     // narrowed filters stay applied and the programmatic open shows the wrong view for good.
     act(() => {
-      latestPanelProps().onFiltersChange({ ...DEFAULT_COMMENT_FILTERS, resolved: 'resolved' });
+      latestPanelProps().onFiltersChange({ preset: 'resolved' });
       dispatchSetFilters({});
     });
 
@@ -203,28 +249,93 @@ describe('setFilters messages replayed in a burst', () => {
       dispatchSetFilters({});
     });
 
-    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe(UNFILTERED));
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe(DEFAULT_SCOPE_FILTER));
   });
 
   it('still skips a genuinely identical repeat, minting no new filters object', async () => {
     renderCommentListWebView();
     act(() => {
-      dispatchSetFilters({ filters: { resolved: 'resolved' } });
+      dispatchSetFilters({ filters: { preset: 'resolved' } });
     });
     await waitFor(() =>
       expect(latestPanelProps().filters).toEqual({
-        ...DEFAULT_COMMENT_FILTERS,
-        resolved: 'resolved',
+        preset: 'resolved',
       }),
     );
     const appliedFilters = latestPanelProps().filters;
 
     act(() => {
-      dispatchSetFilters({ filters: { resolved: 'resolved' } });
+      dispatchSetFilters({ filters: { preset: 'resolved' } });
     });
 
     // The same object, not merely an equal one: an accepted repeat would mint a new-but-equal
     // filters object, churning the CommentThreads subscription the equal-values skip protects
     expect(latestPanelProps().filters).toBe(appliedFilters);
+  });
+});
+
+function latestCommentThreadSelector() {
+  return mocks.commentThreadSelectorLog[mocks.commentThreadSelectorLog.length - 1];
+}
+
+describe('current-* scope scrRef wiring', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('re-queries at the new position when scoped to current-verse', async () => {
+    const scrRefControls = makeControllableScrRef({ book: 'MRK', chapterNum: 1, verseNum: 1 });
+    renderCommentListWebView(scrRefControls.hook);
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    act(() => {
+      latestPanelProps().onScopeFilterChange('current-verse');
+    });
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe('current-verse'));
+    const selectorBeforeMove = latestCommentThreadSelector();
+    expect(selectorBeforeMove.scriptureRanges?.[0]?.start).toEqual({
+      book: 'MRK',
+      chapterNum: 1,
+      verseNum: 1,
+    });
+
+    act(() => {
+      scrRefControls.setScrRef({ book: 'MRK', chapterNum: 1, verseNum: 5 });
+    });
+
+    const selectorAfterMove = latestCommentThreadSelector();
+    // A different object, not merely a differently-valued one: current-verse resolves against the
+    // live reference, so a verse move must tear down and re-establish the PDP subscription rather
+    // than reuse the pre-move selector.
+    expect(selectorAfterMove).not.toBe(selectorBeforeMove);
+    expect(selectorAfterMove.scriptureRanges?.[0]?.start).toEqual({
+      book: 'MRK',
+      chapterNum: 1,
+      verseNum: 5,
+    });
+  });
+
+  it('does not resubscribe on a verse move when scoped to all-books', async () => {
+    const scrRefControls = makeControllableScrRef({ book: 'MRK', chapterNum: 1, verseNum: 1 });
+    renderCommentListWebView(scrRefControls.hook);
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    // The default scope is all-books; confirm the query has no scripture range before moving on,
+    // so the "no resubscribe" assertion below isn't vacuously true for some other reason.
+    const selectorBeforeMove = latestCommentThreadSelector();
+    expect(selectorBeforeMove.scriptureRanges).toBeUndefined();
+
+    act(() => {
+      scrRefControls.setScrRef({ book: 'MRK', chapterNum: 1, verseNum: 5 });
+    });
+
+    // Same object, not merely an equal one: all-books ignores scrRef entirely, so a verse move
+    // must not mint a new-but-equal selector that would needlessly tear down and re-establish the
+    // PDP subscription.
+    expect(latestCommentThreadSelector()).toBe(selectorBeforeMove);
   });
 });
