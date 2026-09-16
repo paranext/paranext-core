@@ -918,12 +918,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
 
-  /** Hides the footnotes pane and returns focus to the text, as PT9's pane close button does. */
-  const hideFootnotesPane = useCallback(() => {
-    setFootnotesPaneVisible(false);
-    editorRef.current?.focus();
-  }, [setFootnotesPaneVisible]);
-
   const isPowerModeRef = useRef(isPowerMode);
 
   useEffect(() => {
@@ -1532,7 +1526,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Opening the paragraph switcher's Radix popover takes focus off `.editor-input`, where Lexical's
   // blur processing can null the selection — and `formatPara` needs one, so the retag would refuse.
-  // The `\` and Enter palettes restore it the same way before they apply.
+  // The `\` and Enter palettes restore it the same way before they apply, and so does every path
+  // that hands focus back to the text (see `returnFocusToScriptureText`).
   const restoreEditorSelection = useCallback(() => {
     restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
   }, []);
@@ -3257,20 +3252,40 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     closeFootnoteEditorRef.current = closeFootnoteEditor;
   }, [closeFootnoteEditor]);
 
+  /**
+   * Hands DOM focus back to the Scripture text after a note-editing surface closes — the popover,
+   * or the footnotes pane itself.
+   *
+   * Closing either would otherwise drop focus onto the document body (the popover's anchor is a
+   * positioning div nothing can focus, and a dismissed pane is gone), and the next keystroke would
+   * go nowhere.
+   *
+   * The caret is put back FIRST: the editor was blurred the whole time the other surface held
+   * focus, and Lexical's blur processing can null the live selection, at which point `focus()`
+   * falls back to selecting the document end — dropping the caret at the bottom of the chapter and
+   * scrolling there. The palette paths restore it the same way before they apply.
+   */
+  const returnFocusToScriptureText = useCallback(() => {
+    restoreEditorSelection();
+    editorRef.current?.focus();
+  }, [restoreEditorSelection]);
+
+  /** Hides the footnotes pane and returns focus to the text, as PT9's pane close button does. */
+  const hideFootnotesPane = useCallback(() => {
+    // End an open row session BEFORE the caret moves. Ending it FLUSHES the row editor's pending
+    // apply (see `closeFootnoteEditor`), and that apply has to land while the session still owns
+    // it: refocusing the text would otherwise end the session through the pane's own focus-out,
+    // one step too late, leaving the note's last edit to arrive as an unattributed insert.
+    if (paneEditingIndexRef.current !== undefined) closeFootnoteEditor(false);
+    setFootnotesPaneVisible(false);
+    returnFocusToScriptureText();
+  }, [closeFootnoteEditor, setFootnotesPaneVisible, returnFocusToScriptureText]);
+
   /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
   const onFootnoteEditorClose = useCallback(() => {
     closeFootnoteEditor(true);
-    // The popover held DOM focus, and its anchor is a positioning div nothing can focus, so
-    // closing it would otherwise drop focus onto the document body and the next keystroke would
-    // go nowhere. Hand focus back to the text, as closing the footnotes pane does.
-    //
-    // The editor was blurred the whole time the popover was open, and Lexical's blur processing
-    // can null the live selection; `focus()` with no selection falls back to selecting the
-    // document end, which would drop the caret at the bottom of the chapter. Put the caret back
-    // from the focus-out capture first, as the palette paths do.
-    restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
-    editorRef.current?.focus();
-  }, [closeFootnoteEditor]);
+    returnFocusToScriptureText();
+  }, [closeFootnoteEditor, returnFocusToScriptureText]);
 
   /**
    * Called by FootnoteEditor's onNoteEdit prop on every user edit inside the note editor, on either
