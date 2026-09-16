@@ -83,7 +83,7 @@ describe('web-view-content-zoom.service', () => {
   let iframe: HTMLIFrameElement;
   const showIndicator = vi.fn();
   let lastFocused: string | undefined;
-  let dialogOpen = false;
+  let modalOverlayOpen = false;
   /** One iframe per pane, since the production `getIframe` is keyed by web view id. */
   const iframes = new Map<string, HTMLIFrameElement>();
   function iframeFor(webViewId: string): HTMLIFrameElement {
@@ -108,7 +108,7 @@ describe('web-view-content-zoom.service', () => {
     showIndicator.mockClear();
     vi.mocked(logger.warn).mockClear();
     lastFocused = undefined;
-    dialogOpen = false;
+    modalOverlayOpen = false;
     document.body.innerHTML = '';
     iframes.clear();
     iframe = iframeFor('editor-1');
@@ -128,7 +128,7 @@ describe('web-view-content-zoom.service', () => {
         return () => false;
       },
       getLastFocusedTabId: () => lastFocused,
-      isAnyDialogOpen: () => dialogOpen,
+      isModalOverlayOpen: () => modalOverlayOpen,
       settings: {
         get: async (key: string) => settings[key],
         set: settingsSet,
@@ -157,10 +157,10 @@ describe('web-view-content-zoom.service', () => {
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
 
-  it('resolves nothing while a dialog is open, whether or not an explicit id or a last-focused tab exists', () => {
+  it('lets a modal overlay stop only the no-id path; an explicitly targeted pane still resolves', () => {
     lastFocused = 'editor-1';
-    dialogOpen = true;
-    expect(resolveContentZoomTarget('editor-1')).toBeUndefined();
+    modalOverlayOpen = true;
+    expect(resolveContentZoomTarget('editor-1')).toBe('editor-1');
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
 
@@ -837,9 +837,15 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
-  it('does nothing while a dialog is open', async () => {
-    dialogOpen = true;
+  it('still acts on an explicitly targeted pane while a modal overlay is open, and on none without an id', async () => {
+    modalOverlayOpen = true;
     await adjustContentZoom('editor-1', 1);
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
+    expect(showIndicator).toHaveBeenCalledTimes(1);
+    updateDefinition.mockClear();
+    showIndicator.mockClear();
+    lastFocused = 'editor-1';
+    await adjustContentZoom(undefined, 1);
     expect(updateDefinition).not.toHaveBeenCalled();
     expect(showIndicator).not.toHaveBeenCalled();
   });
