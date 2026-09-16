@@ -139,6 +139,7 @@ describe('content-zoom chord rule parity: window-chrome keys vs. in-view bootstr
         adjustContentZoom,
         resetContentZoom,
         isModalOverlayOpen: () => false,
+        canContentZoomAct: () => true,
       });
       try {
         document.body.dispatchEvent(new KeyboardEvent('keydown', eventInit(keyCase, modifiers)));
