@@ -29,18 +29,24 @@ import {
   serialize,
 } from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
-import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
+import type { CommentFilterSelection, LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
 import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
   applyFilterOverrides,
   buildCommentThreadSelector,
   CommentFilters,
+  DEFAULT_COMMENT_FILTERS,
   DEFAULT_SCOPE_FILTER,
+  isCommentPreset,
+  isScopeFilter,
   ScopeFilter,
   scopeFieldsUsed,
 } from './comment-list-filters.model';
-import { resolveSetFiltersMessage } from './comment-list-web-view-message.util';
+import {
+  CurrentCommentListView,
+  resolveSetFiltersMessage,
+} from './comment-list-web-view-message.util';
 import type { CommentListScrollTarget } from './comment-list-scroll.utils';
 import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
@@ -48,6 +54,37 @@ import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-block
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
+
+/**
+ * Placeholder returned by the `UserCommentFilters` hook before the stored selection has loaded.
+ * Never shown to the user: the panel stays in its loading state (see `isLoading` below) until the
+ * real value arrives, so this value's contents don't matter beyond satisfying the hook's type.
+ */
+const LOADING_USER_COMMENT_FILTERS: CommentFilterSelection = {
+  dataVersion: '',
+  preset: DEFAULT_COMMENT_FILTERS.preset,
+  scopeFilter: DEFAULT_SCOPE_FILTER,
+};
+
+/**
+ * Narrows a stored comment-filter selection's preset and scope to values this build recognizes. The
+ * C# provider deliberately does not validate either field on write (the preset/scope sets live in
+ * TypeScript), so a blank value or one written by a newer build passes through the round trip
+ * unchanged. This is the ONLY place a stored selection's preset/scope are read — every other axis
+ * value in this component is already known-valid (from the panel's own controls or a same-process
+ * `setFilters` message) — so resolving it here keeps an unrecognized value from ever reaching
+ * `buildCommentThreadSelector`, whose preset switch throws outside its closed set.
+ */
+function narrowStoredSelection(selection: CommentFilterSelection): CurrentCommentListView {
+  return {
+    filters: {
+      preset: isCommentPreset(selection.preset) ? selection.preset : DEFAULT_COMMENT_FILTERS.preset,
+    },
+    scopeFilter: isScopeFilter(selection.scopeFilter)
+      ? selection.scopeFilter
+      : DEFAULT_SCOPE_FILTER,
+  };
+}
 
 const COMMENT_LIST_PANEL_ICON_URLS: TabIconUrls = {
   lightDefault: 'papi-extension://legacyCommentManager/assets/message-square.svg',
@@ -174,34 +211,105 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  // Plain useState (deliberately NOT persisted, unlike scopeFilter below): the orthogonal filter
-  // axes are treated as ephemeral per-view state and reset to their defaults when the view reloads on
-  // a project switch. Only the scope axis persists, because "Current chapter" is a viewing mode a
-  // user sets once and expects to carry across projects. If you unify these, re-check the project-
-  // switch behavior both ways before changing it.
-  const [filters, setFilters] = useState<CommentFilters>(() =>
-    applyFilterOverrides(initialFilters),
-  );
-  // Persisted (not plain useState) so the user's scope choice survives the iframe reload that a
-  // project switch triggers (reloadWebView rebuilds the srcNonce, which destroys and recreates the
-  // React root). Seeded from the one-shot initialScopeFilter on first mount; the persisted value
-  // wins on every later (re)mount.
-  const [scopeFilter, setScopeFilter] = useWebViewState<ScopeFilter>(
-    'scopeFilter',
-    initialScopeFilter ?? DEFAULT_SCOPE_FILTER,
+  // A brand-new view's requested override (e.g. the S/R conflict link), captured once on mount —
+  // before the one-shot-seed effect below clears it — so the hydration effect can still read it
+  // after the stored selection finishes loading. `undefined` means this view opened plain, so
+  // hydration below should follow the user's stored selection instead.
+  const initialOverrideRef = useRef<CurrentCommentListView | undefined>(
+    initialFilters !== undefined || initialScopeFilter !== undefined
+      ? {
+          filters: applyFilterOverrides(initialFilters),
+          scopeFilter: initialScopeFilter ?? DEFAULT_SCOPE_FILTER,
+        }
+      : undefined,
   );
 
-  // Consume the one-shot seed exactly once. The useState initializers above already read it
-  // synchronously on first render, so clear it from persistent web view state now. Otherwise an
-  // in-session remount that re-runs this component (e.g. dragging the tab to another dock region)
-  // would re-read the stale seed and snap the user's live filter changes back to the original
-  // programmatic request.
+  // Plain useState, hydrated once (see the effect below) from either the mount-time override above
+  // or this user's stored selection for this project — never from useWebViewState, since a filter
+  // selection is now a per-user, per-project preference the C# provider persists, not per-view UI
+  // state. Holding it in local state (rather than deriving it every render from the PDP hook's
+  // value) is what lets a `setFilters` message or a panel change show immediately without waiting
+  // on the write's round trip, and what lets a `setFilters` message override the display without
+  // that override ever reaching the stored selection.
+  const [filters, setFilters] = useState<CommentFilters>(
+    () => initialOverrideRef.current?.filters ?? DEFAULT_COMMENT_FILTERS,
+  );
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(
+    () => initialOverrideRef.current?.scopeFilter ?? DEFAULT_SCOPE_FILTER,
+  );
+
+  /**
+   * Latest applied filters/scope, readable from the stable message listener without re-subscribing
+   * it. Lets an incoming `setFilters` message compare against the view's current values so a
+   * same-value re-send (see `resolveSetFiltersMessage`) can skip the `useState` setter entirely
+   * instead of minting a new-but-equal `CommentFilters` object.
+   *
+   * EVERY path that changes the view writes this ref synchronously — the message handler below, the
+   * panel's own change handlers, and the stored-selection hydration effect alike. The sync effect
+   * only lands after a render, and a buffered burst of messages (or a message arriving on the heels
+   * of a panel change) happens with no render in between: whatever comes next would compare against
+   * the state from before, and a real change that happens to equal that stale snapshot would be
+   * skipped for good. The effect stays as the backstop that folds in any state change reaching this
+   * component another way.
+   */
+  const currentViewRef = useRef<CurrentCommentListView>({ filters, scopeFilter });
+  useEffect(() => {
+    currentViewRef.current = { filters, scopeFilter };
+  }, [filters, scopeFilter]);
+
+  // Consume the one-shot seed exactly once. The ref above already captured it synchronously on
+  // first render, so clear it from persistent web view state now. Otherwise an in-session remount
+  // that re-runs this component (e.g. dragging the tab to another dock region) would re-read the
+  // stale seed and snap the user's live filter changes back to the original programmatic request.
   useEffect(() => {
     if (initialFilters !== undefined) setInitialFilters(undefined);
     if (initialScopeFilter !== undefined) setInitialScopeFilter(undefined);
   }, [initialFilters, initialScopeFilter, setInitialFilters, setInitialScopeFilter]);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
+
+  const [userCommentFiltersPossiblyError, setUserCommentFilters, isLoadingUserCommentFilters] =
+    useProjectData('legacyCommentManager.comments', projectId).UserCommentFilters(
+      undefined,
+      LOADING_USER_COMMENT_FILTERS,
+    );
+
+  const storedUserCommentFilters = useMemo<CommentFilterSelection>(() => {
+    if (isPlatformError(userCommentFiltersPossiblyError)) {
+      logger.warn(
+        `Error getting the stored comment filter selection: ${getErrorMessage(userCommentFiltersPossiblyError)}`,
+      );
+      return LOADING_USER_COMMENT_FILTERS;
+    }
+    return userCommentFiltersPossiblyError;
+  }, [userCommentFiltersPossiblyError]);
+
+  /**
+   * Whether `filters`/`scopeFilter` are ready to show: either a mount-time override (see
+   * `initialOverrideRef`) already fixed them with no need to wait on storage, or this user's stored
+   * selection has resolved and been applied below. Read by the panel's `isLoading` prop so the list
+   * never renders the pre-hydration defaults — a stored selection reopens the panel to what it was
+   * left on, not to a flash of the default view first.
+   */
+  const [isHydrated, setIsHydrated] = useState(() => initialOverrideRef.current !== undefined);
+
+  /**
+   * Hydrates `filters`/`scopeFilter` from this user's stored selection the first time it resolves.
+   * Skipped entirely when a mount-time override already seeded them (`isHydrated` starts `true` in
+   * that case) — matching how a later `setFilters` message overrides the display without
+   * persisting, a programmatic open's initial values win over the stored selection too. Runs once:
+   * after hydration, `filters`/`scopeFilter` are driven only by the panel's own changes and by
+   * messages, never passively re-synced from a later provider update, so a change this view just
+   * made or was told to show is never clobbered by a stale read racing behind it.
+   */
+  useEffect(() => {
+    if (isHydrated || isLoadingUserCommentFilters) return;
+    const restored = narrowStoredSelection(storedUserCommentFilters);
+    setFilters(restored.filters);
+    setScopeFilter(restored.scopeFilter);
+    currentViewRef.current = restored;
+    setIsHydrated(true);
+  }, [isHydrated, isLoadingUserCommentFilters, storedUserCommentFilters]);
 
   // Fetch current user's registration data on mount
   useEffect(() => {
@@ -277,30 +385,37 @@ global.webViewComponent = function CommentListWebView({
   }, [safeCommentThreads]);
 
   /**
-   * Latest applied filters/scope, readable from the stable message listener without re-subscribing
-   * it. Lets an incoming `setFilters` message compare against the view's current values so a
-   * same-value re-send (see `resolveSetFiltersMessage`) can skip the `useState`/`useWebViewState`
-   * setter entirely instead of minting a new-but-equal `CommentFilters` object.
-   *
-   * EVERY path that changes the view writes this ref synchronously — the message handler below and
-   * the panel's own change handlers alike. The effect only lands after a render, and both a
-   * buffered burst of messages and a message arriving on the heels of a panel change happen with no
-   * render in between: whatever comes next would compare against the state from before, and a real
-   * change that happens to equal that stale snapshot would be skipped for good. The effect stays as
-   * the backstop that folds in any state change reaching this component another way.
+   * Writes the whole selection to this user's stored preference for this project, preserving
+   * `dataVersion` exactly as last read — only the provider stamps a version, and only on a write it
+   * accepts. Used by the panel's own change handlers below; a `setFilters` message never calls
+   * this, which is what keeps a programmatic override from persisting past the view that requested
+   * it.
    */
-  const currentViewRef = useRef({ filters, scopeFilter });
-  useEffect(() => {
-    currentViewRef.current = { filters, scopeFilter };
-  }, [filters, scopeFilter]);
+  const persistUserCommentFilters = useCallback(
+    (selection: CurrentCommentListView) => {
+      if (!setUserCommentFilters) {
+        logger.debug('Comments PDP is not yet available for setUserCommentFilters');
+        return;
+      }
+      setUserCommentFilters({
+        dataVersion: storedUserCommentFilters.dataVersion,
+        preset: selection.filters.preset,
+        scopeFilter: selection.scopeFilter,
+      }).catch((error) =>
+        logger.error(`Failed to save the comment filter selection: ${getErrorMessage(error)}`),
+      );
+    },
+    [setUserCommentFilters, storedUserCommentFilters.dataVersion],
+  );
 
   /** Apply a filter change the user made in the panel — see {@link currentViewRef} for the ref */
   const handleFiltersChange = useCallback(
     (newFilters: CommentFilters) => {
       currentViewRef.current = { ...currentViewRef.current, filters: newFilters };
       setFilters(newFilters);
+      persistUserCommentFilters(currentViewRef.current);
     },
-    [setFilters],
+    [persistUserCommentFilters],
   );
 
   /** Apply a scope change the user made in the panel — see {@link currentViewRef} for the ref */
@@ -308,8 +423,9 @@ global.webViewComponent = function CommentListWebView({
     (newScopeFilter: ScopeFilter) => {
       currentViewRef.current = { ...currentViewRef.current, scopeFilter: newScopeFilter };
       setScopeFilter(newScopeFilter);
+      persistUserCommentFilters(currentViewRef.current);
     },
-    [setScopeFilter],
+    [persistUserCommentFilters],
   );
 
   const isViewVisible = useViewVisibility();
@@ -437,10 +553,9 @@ global.webViewComponent = function CommentListWebView({
     return () => {
       window.removeEventListener('message', messageListener);
     };
-    // setFilters is a stable useState setter (the linter treats it as stable, so it's omitted).
-    // setScopeFilter is a useWebViewState setter — also stable (memoized on its constant key) — but
-    // the linter can't prove that, so it's listed to satisfy react-hooks/exhaustive-deps.
-  }, [trySelectThread, cancelPendingSyncScroll, setScopeFilter]);
+    // setFilters and setScopeFilter are stable useState setters (the linter treats them as
+    // stable, so both are omitted).
+  }, [trySelectThread, cancelPendingSyncScroll]);
 
   // Process any pending thread selection once data finishes loading
   useEffect(() => {
@@ -675,7 +790,9 @@ global.webViewComponent = function CommentListWebView({
     <>
       <CommentListPanel
         localizedStrings={localizedStrings}
-        isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
+        isLoading={
+          isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName || !isHydrated
+        }
         threads={safeCommentThreads}
         currentUser={currentUserName}
         filters={filters}
