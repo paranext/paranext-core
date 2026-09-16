@@ -64,6 +64,23 @@ const scopeToGranularity = {
   'current-verse': 'verse',
 } as const satisfies Record<Exclude<ScopeFilter, 'all-books'>, 'book' | 'chapter' | 'verse'>;
 
+/**
+ * Which scrRef fields each scope's query granularity actually reads: `book` granularity ignores
+ * chapter/verse, `chapter` granularity ignores verse, and `all-books` reads nothing (it sends no
+ * scriptureRanges at all). A caller driving a live reference (e.g. the web view following the
+ * window's scroll group) uses this to freeze the fields a scope doesn't need to constants, so a
+ * change to an unused field can't invalidate an identity-based memo of the query and force a
+ * needless PDP resubscribe. `satisfies Record<ScopeFilter, ...>` makes a scope added to the union
+ * without an entry here a compile error, rather than a silent fall-through that freezes every field
+ * for the new scope.
+ */
+export const scopeFieldsUsed = {
+  'all-books': { book: false, chapterNum: false, verseNum: false },
+  'current-book': { book: true, chapterNum: false, verseNum: false },
+  'current-chapter': { book: true, chapterNum: true, verseNum: false },
+  'current-verse': { book: true, chapterNum: true, verseNum: true },
+} as const satisfies Record<ScopeFilter, { book: boolean; chapterNum: boolean; verseNum: boolean }>;
+
 /** True when the preset is at its default, i.e. no preset filtering is applied. */
 export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
   return filters.preset === DEFAULT_COMMENT_FILTERS.preset;

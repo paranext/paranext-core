@@ -38,6 +38,7 @@ import {
   CommentFilters,
   DEFAULT_SCOPE_FILTER,
   ScopeFilter,
+  scopeFieldsUsed,
 } from './comment-list-filters.model';
 import { resolveSetFiltersMessage } from './comment-list-web-view-message.util';
 import type { CommentListScrollTarget } from './comment-list-scroll.utils';
@@ -226,16 +227,20 @@ global.webViewComponent = function CommentListWebView({
   // Every `current-*` scope follows the window's scroll group live, whether or not this list is
   // wired to an editor — the scroll group always holds a position. A verse move must not tear down
   // and re-establish the subscription (which re-runs the C# query and flashes the skeletons) for a
-  // field the active scope's query granularity doesn't use, so each field is frozen to a constant
-  // except where the active scope actually needs it: `all-books` queries no range at all, `current-
-  // book` only needs the book, `current-chapter` needs book + chapter, and `current-verse` needs all
-  // three.
-  const scopeNeedsBook = scopeFilter !== 'all-books';
-  const scopeNeedsChapterNum = scopeFilter === 'current-chapter' || scopeFilter === 'current-verse';
-  const scopeNeedsVerseNum = scopeFilter === 'current-verse';
-  const scopeBook = scopeNeedsBook ? scrRef.book : '';
-  const scopeChapterNum = scopeNeedsChapterNum ? scrRef.chapterNum : 0;
-  const scopeVerseNum = scopeNeedsVerseNum ? scrRef.verseNum : 0;
+  // field the active scope's query granularity doesn't use, so each field is frozen to a sentinel
+  // ('' for book, 0 for chapterNum/verseNum — not a real reference component, just "not part of
+  // this scope's query") unless `scopeFieldsUsed` says the active scope reads it.
+  //
+  // Hidden pane: this reacts to the scroll group the same whether or not this tab is visible
+  // (rc-dock keeps a hidden pane's iframe mounted and running). That is deliberate, not deferred:
+  // the reaction is data-driven — it re-runs the PDP query, not a layout measurement — so it stays
+  // correct while hidden and shows the right result the moment the tab is activated; there is no
+  // stale state to catch up on. The accepted cost is an extra PDP query per scroll-group move for a
+  // pane nobody can currently see.
+  const fieldsUsed = scopeFieldsUsed[scopeFilter];
+  const scopeBook = fieldsUsed.book ? scrRef.book : '';
+  const scopeChapterNum = fieldsUsed.chapterNum ? scrRef.chapterNum : 0;
+  const scopeVerseNum = fieldsUsed.verseNum ? scrRef.verseNum : 0;
 
   // These presets filter on the current user, and an empty assignedTo means "unassigned" to the
   // provider — so hold the loading state rather than querying with a blank name.
