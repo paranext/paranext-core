@@ -29,6 +29,8 @@ import {
   resolveDisplayVerseNum,
   sliceUsjToVerse,
 } from './verse-display.utils';
+import { findVerseMarkerForVerse } from './reference-scroll.utils';
+import { useReferenceScroll } from './use-reference-scroll.hook';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
@@ -175,6 +177,25 @@ export function ResourceCell({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+
+  // This cell's own scroll port, when it has one. React's ref API requires `null` here.
+  // eslint-disable-next-line no-null/no-null
+  const contentRef = useRef<HTMLDivElement>(null);
+  // Chapter surfaces render a whole chapter in a short port — the chapter-context split, a chapter
+  // column, the single-resource view — so they have to follow the scroll group's verse themselves.
+  // The other two modes deliberately do not:
+  //   - verse mode has nothing to scroll to; `sliceUsjToVerse` has already reduced the cell to the
+  //     reference's verse;
+  //   - aligned mode hands its scrolling to the grid root, which owns the only port in that view
+  //     (`contentOverflow="visible"`), and `AlignedGrid` runs this same hook there.
+  //
+  // Hidden case (`.claude/rules/cross-view-sync-hidden-views.md`): handled inside the hook, which
+  // defers while the dock tab is inactive and consumes one catch-up on activation, instantly —
+  // `scrollPortToBlock` is `scrollTop` arithmetic, so there is nothing to animate from. In Simple
+  // mode that is the common path, not the edge: column 3 shows one tab at a time.
+  useReferenceScroll(contentRef, scrRef, findVerseMarkerForVerse, {
+    isEnabled: viewMode === 'chapter',
+  });
   // Give the editor this resource's valid markers so it recognizes them (footnote/apparatus and
   // other resource-specific markers) instead of rendering them inline as raw text. Mirrors the
   // resource-text-panel render path this cell reuses.
@@ -287,6 +308,7 @@ export function ResourceCell({
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
       // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.
       contentOverflow={viewMode === 'aligned' ? 'visible' : 'auto'}
+      contentRef={contentRef}
       zoomFactor={zoomFactor}
       // The aligned grid's content wrapper is a subgrid box, so scaling it would scale the shared
       // row tracks along with the text; the factor rides down to the verse blocks instead.
