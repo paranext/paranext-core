@@ -12,19 +12,15 @@ export type MiddleClickTabBarHandlersOptions = {
 };
 
 /**
- * Reads back the tab id {@link PlatformTabTitle} stamps onto its own root element
- * (`data-tab-header-id`) from a middle-click's target, if that target landed on a tab's header.
- * Returns `undefined` for every other target.
+ * Reads the tab id {@link PlatformTabTitle} stamps as `data-tab-header-id` from a click target
+ * anywhere on a tab header, or `undefined` if the target is not on one. It goes through the
+ * `[role="tab"]` element rc-dock wraps around the title, close button and hit area, because the
+ * latter two are siblings of the title, not its descendants.
  *
- * Walks up to the nearest `[role="tab"]` ancestor rather than matching `data-tab-header-id`
- * directly on (or as an ancestor of) the target, because a press can land on the close (X) button
- * or the hit area — DOM siblings of the title div `data-tab-header-id` is stamped on, not its
- * ancestors or descendants (`DockTabs.js`'s `TabCache.render()` renders a tab's `DragDropDiv` — the
- * element carrying `role="tab"` — as the parent of three siblings: the title, the close button, and
- * the hit area). That same `DragDropDiv` is what rc-tabs' own "more" overflow dropdown re-renders
- * unchanged inside a `.dock-dropdown-menu-item` once a tab no longer fits the visible bar
- * (`OperationNode.js` wraps the identical `tab.tab` element in a `MenuItem`), so this lookup
- * resolves a tab the same way regardless of which of the two places it currently renders in.
+ * `getTabInfoByElement` is not used here because (1) it falls back to the panel's `activeId`, so a
+ * middle click on the empty strip past "+" would close the active tab, and (2) tab headers in the
+ * overflow dropdown render under `rc-tabs-N-more-popup-<key>` ids that its `TAB_HEADER_ID_REGEX`
+ * can't match, and the portal has no `.dock-layout` ancestor.
  */
 function readTabHeaderId(target: EventTarget | null): string | undefined {
   if (!(target instanceof Element)) return undefined;
@@ -33,28 +29,13 @@ function readTabHeaderId(target: EventTarget | null): string | undefined {
 }
 
 /**
- * Installs the native listeners that make a tab's middle-button gesture behave correctly wherever
- * rc-dock can render a tab header: blocking the middle button from arming any of rc-dock's own drag
- * gestures, and closing a closable tab on a clean middle click.
+ * Installs the listeners that stop a middle press on a tab header from arming rc-dock's drags and
+ * close a closable tab on a middle click.
  *
- * Both listeners are installed on the document rather than the dock layout's root element because
- * one of the two places a tab header can render is NOT a descendant of that root at all: rc-tabs'
- * own "more" overflow dropdown (`OperationNode.js`) passes no `getPopupContainer` to the `Dropdown`
- * it renders, so `rc-trigger` falls back to its own default and mounts the dropdown's whole popup
- * as a child of `document.body` — a portal that preserves React's synthetic event bubbling but not
- * native DOM bubbling. `document` is an ancestor of both the main tab bar and that portaled popup,
- * so installing there is what makes a single pair of listeners cover both.
- *
- * Drag-blocking stays scoped to `.dock-bar` (the main tab bar's own row, including the "+" button
- * and the empty strip past it — none of which is a `[role="tab"]`) and `.dock-dropdown` (rc-tabs'
- * overflow popup) so it never reaches into unrelated `role="tab"` UI elsewhere in the app (e.g. a
- * `Tabs` component in a dialog). Closing does not need that scoping: `readTabHeaderId` above only
- * finds headers {@link PlatformTabTitle} renders, wherever they are.
- *
- * Middle-click has no keyboard equivalent to give a tab header — it targets a physical mouse button
- * a keyboard cannot press — and today closing a tab has no keyboard-accessible path at all:
- * rc-dock's own close (X) button (`dock-tab-close-btn` in `DockTabs.js`) is a plain, non-focusable
- * `<div onClick>`, not a `<button>`, so it is reachable by neither Tab nor a screen reader.
+ * They listen on the document because rc-tabs' overflow dropdown renders tab headers outside the
+ * dock layout: rc-dock's `DockTabs` passes no `getPopupContainer` to rc-tabs, so rc-trigger portals
+ * the dropdown into `document.body`. Drag-blocking is scoped to `.dock-bar` and `.dock-dropdown` so
+ * it leaves other `role="tab"` UI in the app alone.
  *
  * @param targetDocument The document the dock layout renders in.
  * @param options See {@link MiddleClickTabBarHandlersOptions}.
@@ -85,12 +66,11 @@ export function installMiddleClickTabBarHandlers(
     if (isTab(tab) && tab.closable) onCloseTab(tabId);
   };
 
+  // rc-dock arms drags from React `onMouseDown`/`onMouseDownCapture` for every button but the right
+  // one, and React listens at its root container; a capture listener on `document` runs first.
   targetDocument.addEventListener('mousedown', blockMiddleButtonDrag, { capture: true });
-  // Bubble phase: nothing on a tab header's path stops `auxclick` (rc-dock and rc-tabs only ever
-  // register `onClick`, which the primary button alone triggers), and `auxclick` — unlike
-  // `mousedown` — targets the nearest common ancestor of the mousedown/mouseup targets, so a press
-  // that starts on a tab and is released elsewhere already closes nothing: the common ancestor
-  // moves above the tab header once the release lands outside it, and this handler never runs.
+  // Closes on the click, not the press. `auxclick` targets the common ancestor of press and
+  // release, so a press dragged off the tab resolves to no tab.
   targetDocument.addEventListener('auxclick', closeTabOnMiddleClick);
 
   return () => {

@@ -4,14 +4,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installMiddleClickTabBarHandlers } from './platform-dock-layout-middle-click-handlers.util';
 
 /**
- * Builds a DOM tree standing in for what rc-dock/rc-tabs actually render: a `root` containing a
- * `.dock-bar` (rc-tabs' own tab-row `DragDropDiv`) with two tab headers — each a `[role="tab"]`
- * `DragDropDiv` wrapping a title div (carrying `data-tab-header-id`, mirroring `PlatformTabTitle`'s
- * own root) and a close-button div as DOM siblings — plus an unclaimed strip past them (the "+"
- * button/empty remainder, covered only by `.dock-bar` itself) and a sibling panel-content area
- * outside any tab bar. Also builds a SEPARATE tree appended directly to `document.body`, sibling to
- * `root` rather than nested inside it, standing in for rc-tabs' "more" overflow dropdown — which
- * `rc-trigger` portals to `document.body` (see the handlers module's own doc comment for why).
+ * Builds a simplified stand-in for the dock layout's DOM: a `root` holding rc-dock's `.dock-bar`
+ * (`DockTabBar`) with tab headers — each one `[role="tab"]` element around a title (carrying
+ * `data-tab-header-id`, like `PlatformTabTitle`) and a close button — plus the strip past the tabs
+ * and some panel content outside the bar. A separate `.dock-dropdown` appended to `document.body`
+ * stands in for rc-tabs' overflow dropdown (see the handlers module for why it renders there).
+ *
+ * A real header nests two `[role="tab"]` elements (rc-tabs' `.dock-tab-btn` around rc-dock's
+ * `DragDropDiv`); the handlers work from either. The dock layout's middle-click contract test
+ * checks these details against a real rc-dock render; this file also covers the dropdown, which
+ * that test cannot render.
  */
 function buildDockLayoutTree() {
   const root = document.createElement('div');
