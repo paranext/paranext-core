@@ -232,7 +232,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Zoom the focused zoom area of the pane in by 10 % (the area containing keyboard focus, else the area last used)',
     category: 'Zoom',
     context:
-      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
     // The handler also accepts `=` (the unshifted key sharing the `+` cap), the numpad `+` key, and
     // Ctrl+Shift+`=` — the `+` key itself on US/UK layouts — so the published `Ctrl++` is literally the working chord.
     keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
@@ -248,7 +248,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Zoom the focused zoom area of the pane out by 10 %',
     category: 'Zoom',
     context:
-      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
     // The handler also accepts the numpad `-` key.
     keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
     locations: [
@@ -264,7 +264,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Return the focused zoom area of the pane to the default zoom set in Settings (not to 100 %)',
     category: 'Zoom',
     context:
-      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
     // The handler also accepts the numpad `0` key.
     keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
     locations: [

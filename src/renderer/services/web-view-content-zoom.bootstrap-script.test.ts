@@ -290,6 +290,56 @@ describe('content-zoom bootstrap script', () => {
     );
   });
 
+  it('lets the focus a Tab moves pick the area, because the user asked for that move', () => {
+    const { bound } = install('wv-tab', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    // A Tab is a deliberate focus move, so the focus change that follows it is the user's, not the
+    // view's answer to the click.
+    key({ key: 'Tab' });
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith('wv-tab', 'main');
+  });
+
+  it('does not let a zoom chord pressed after a click spend the click’s protection', () => {
+    const { bound } = install('wv-chord-after-click', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // Only a Tab counts: any other key — a chord pressed inside the gesture window above all —
+    // would otherwise hand the click's own answering refocus the area the user just left.
+    key({ key: '=', ctrlKey: true });
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    expect(bound.reportContentZoomActiveAreaById).not.toHaveBeenLastCalledWith(
+      'wv-chord-after-click',
+      'main',
+    );
+  });
+
+  it('leaves the active area alone when a Tab’s focus lands back inside the clicked area', () => {
+    const { bound } = install('wv-tab-inside', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    bound.reportContentZoomActiveAreaById.mockClear();
+
+    key({ key: 'Tab' });
+    byId('note').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    expect(bound.reportContentZoomActiveAreaById).not.toHaveBeenCalled();
+  });
+
   it('lets a right-click make its area active but arms no suppression window', () => {
     const { bound } = install('wv-right-click', TWO_AREAS);
     // A right-click opens a context menu; it says which area the user is pointing at, but it moves
