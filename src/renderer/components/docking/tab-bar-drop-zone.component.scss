@@ -1,4 +1,4 @@
-@use '../../styles/vars';
+@use './tab-bar-metrics';
 
 // This class only sets sizing for the invisible drop zone itself; its position and its "grow to
 // fill leftover space" behavior come from the `.dock-nav > .dock-extra-content` flex rules in
@@ -26,34 +26,38 @@
   // `tab-bar-drop-zone.component.tsx`, set by `claimLastTabOverlap`, which explains why the zone
   // covers the last tab's trailing half).
   &[data-dragging] {
-    // Flex items already paint in order-modified (not raw DOM) order, so `.dock-extra-content`
-    // (`order: 2` in `dock-layout-wrapper.component.scss`) already paints over `.dock-nav-wrap`
-    // (`order: 1`) without this — z-index makes that outcome explicit rather than relying on an
-    // implicit flex-painting rule.
+    // z-index 1 lifts the zone and its drag-time hit extensions above the last tab (inside the
+    // positioned `.dock-nav-wrap`) and the non-positioned "+". rc-dock's `.dock-drop-edge`
+    // (z-index 100) is moved below the tab bar in dock-layout-wrapper.component.scss, so it no longer
+    // overlaps the bar.
     z-index: 1;
 
-    // Hit area over the last tab's trailing half. Absolutely positioned, so it never changes the
-    // zone's own box and can't feed back into the bar's flex layout or rc-tabs' overflow math.
-    &::before {
-      content: '';
-      position: absolute;
-      inset-block: 0;
-      inset-inline-end: 100%;
-      width: var(--tab-bar-drop-zone-overlap, 0);
-    }
-
-    // The flex `gap` between this zone and the "+" button (`.dock-extra-content`'s `gap` rule in
-    // `dock-layout-wrapper.component.scss`) belongs to neither flex item, so a drop released over it
-    // hits `.dock-extra-content` itself, which registers no drop handler, and is silently ignored.
-    // Extend the zone's own hit area across that gap with a pseudo-element rather than growing its
-    // real box (padding, a negative margin, or removing the gap) — any of those would narrow
-    // `.dock-nav-wrap` mid-drag and could push a tab into the overflow dropdown while dragging.
+    // Drag-time hit extensions. Whatever they cover hits the zone, since a pseudo-element hit-tests
+    // as its originating element. Anything they don't cover inside the bar would hit
+    // `.dock-extra-content`, `.dock-nav` or `.dock-bar`, none of which accept a drop, so the drop
+    // would silently do nothing. They are absolutely positioned rather than growing the zone's real
+    // box (padding, a negative margin, or removing the gap), which would narrow `.dock-nav-wrap`
+    // mid-drag and could push a tab into the overflow dropdown. Both reach over
+    // `.dock-extra-content`'s block padding, so the bar's full height accepts the drop.
+    &::before,
     &::after {
       content: '';
       position: absolute;
-      inset-block: 0;
-      inset-inline-end: (-1 * vars.$space--sm);
-      width: vars.$space--sm;
+      inset-block: calc(-1 * var(--tab-header-to-content-gap, 0px));
+    }
+
+    // Backward: the zone's own box plus the last tab's trailing half.
+    &::before {
+      inset-inline-start: calc(-1 * var(--tab-bar-drop-zone-overlap, 0px));
+      inset-inline-end: 0;
+    }
+
+    // Forward: the flex gap before "+", "+" itself (moved to the bar's end during a drag) and the
+    // bar's trailing padding. "+" isn't positioned, so this paints and hit-tests above it.
+    &::after {
+      inset-inline-start: 100%;
+      width: tab-bar-metrics.$tab-bar-extra-gap + tab-bar-metrics.$panel-button-size +
+        tab-bar-metrics.$tab-bar-padding-inline;
     }
   }
 }

@@ -1,5 +1,6 @@
 @use '../../styles/vars';
 @use './dock-panel-button-base';
+@use './tab-bar-metrics';
 
 /*
 This file styles with SCSS because rc-dock doesn't give us good ways to render with Tailwind.  I also comes with a lot of opinionated styling that we need to undo, so you'll see a lot of rules that use `unset`. We use `unset` instead of the literal initial values to connote their intention: undoing rc-dock's styling.
@@ -211,8 +212,17 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
   background: unset;
-  padding-inline: vars.$space--xs;
+  padding-inline: tab-bar-metrics.$tab-bar-padding-inline;
   border: unset;
+}
+
+// rc-dock places its edge-split drop layer (`.dock-drop-edge`, z-index 100, Power mode's
+// `dropMode="edge"`) 30px below the panel's top, sized for its own tab bar. This app's tab bar is
+// taller, so without this the layer would cover the bar's bottom strip and a tab dropped there would
+// split the layout instead of joining the bar. rc-dock computes split directions from this layer's
+// own rect, so moving its top keeps the edge-split areas around the panel content intact.
+.dock-layout .dock-panel.dock-style-platform-bible .dock-drop-edge {
+  top: tab-bar-metrics.$tab-bar-height;
 }
 
 /*   Visually reorder children to have the New Tab (+) button immediately after the tabs.
@@ -278,9 +288,9 @@ body:has(> .dragging-layer.dock-style-platform-bible)
 
 .dock-panel.dock-style-platform-bible .dock-nav-operations:not(.dock-nav-operations-hidden),
 .dock-panel.dock-style-platform-bible .dock-extra-content {
-  gap: vars.$space--sm;
+  gap: tab-bar-metrics.$tab-bar-extra-gap;
   padding-block: var(--tab-header-to-content-gap);
-  height: 30px;
+  height: tab-bar-metrics.$panel-button-size;
   display: flex;
   align-items: center;
 }
