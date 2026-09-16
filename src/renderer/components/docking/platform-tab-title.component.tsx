@@ -239,9 +239,11 @@ function renderTabMenuItems(
       <ContextMenuItem
         key={key}
         disabled={item.disabled}
-        // Guarded here rather than left to the primitive: the click still reaches this handler
-        // through the underlying DOM element regardless of the disabled styling, so a disabled item
-        // needs the same explicit no-op every other disabled control in this menu system gets.
+        // Guarded here rather than left to the primitive: this item wires a raw `onClick`, not
+        // Radix's own `onSelect`, and Radix's disabled gating only intercepts `onSelect` —
+        // `disabled` on its own leaves the item merely styled as disabled
+        // (`data-disabled:pointer-events-none`, which stops a pointer but not a keyboard activation
+        // or a synthetic click). This guard is what actually makes `disabled` inert.
         onClick={() => {
           if (item.disabled) return;
           onSelect(item.id);
@@ -439,18 +441,16 @@ export function PlatformTabTitle({
     [contributedItems, localizedStrings],
   );
 
-  // Read once per web view type for the life of the process, rather than subscribed to and rather
-  // than once per tab mount. The platform's own items are a fixed contribution, and the two things
-  // that do change while a tab lives — which windows are open, and which actions apply to this tab —
-  // are read when the menu opens instead. A live subscription would re-read on every contribution
-  // resync for a list that had not changed.
+  // A process-lifetime cache keyed by web view type. The platform's own items are a fixed
+  // contribution; the two things that do change while a tab lives — which windows are open, and
+  // which actions apply to this tab — are read when the menu opens instead, so the cache never has
+  // to track them.
   //
   // Both modes read the same contributed menu: Simple mode narrows it to the zoom group after the
   // read lands, so a Simple-mode column shares the same cached read a Power-mode one does.
   //
-  // The trade this accepts: an extension installed or removed mid-session has its tab items appear
-  // only once the window reloads (the type's cached read survives until then), not at the next tab
-  // mount of that type the way an uncached read would.
+  // An extension installed or removed mid-session shows its tab items only at the next window
+  // reload — the cache for its web view type survives until then.
   useEffect(() => {
     let isStillMounted = true;
     (async () => {

@@ -83,15 +83,17 @@ function actionFor(e: KeyboardEvent): ChordAction | undefined {
 export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): () => void {
   const onKeyDown = (e: KeyboardEvent): void => {
     if (!isChordModifier(e)) return;
-    // A deliberate fast path, not duplication: `canContentZoomAct` below already answers false
-    // behind a modal overlay (its resolver refuses a chord that carries no ids), but asking here
-    // costs nothing and keeps this listener's overlay contract its own — checkable without a
-    // resolvable pane, and unaffected by whatever the service decides to resolve next.
-    if (deps.isModalOverlayOpen()) return;
     if (isInsideIframe(e.target)) return;
     const action = actionFor(e);
     if (!action) return;
     if (!isAllowedShiftState(e, action)) return;
+    // A deliberate fast path, not duplication: `canContentZoomAct` below already answers false
+    // behind a modal overlay (its resolver refuses a chord that carries no ids), but asking here
+    // keeps this listener's overlay contract its own — checkable without a resolvable pane, and
+    // unaffected by whatever the service decides to resolve next. Checked only after the action and
+    // shift-state filters above (not before), so the overlay-map scan runs for a genuine zoom chord
+    // and not for every Ctrl/⌘ combination this capture-phase window listener sees.
+    if (deps.isModalOverlayOpen()) return;
     if (!deps.canContentZoomAct()) return;
     e.preventDefault();
     const promise =
