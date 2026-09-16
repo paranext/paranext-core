@@ -6814,8 +6814,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   phase; the Text Collection grid's per-resource zoom does exactly that
   (`extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts`).
   On macOS the chord arrives through the menu accelerator rather than through the iframe, so it
-  resolves the pane's *active* area rather than the area holding the caret; the bootstrap's `focusin`
-  tracking keeps the two equal in practice. **Revisit** if a second platform-injected shortcut appears
+  resolves the pane's *active* area rather than the area holding the caret; the bootstrap's
+  `pointerdown`/`focusin` tracking re-converges the two, except while a click's own answering refocus
+  into another area is being suppressed — that one move is held off so the clicked area stays the
+  target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once.
+  **Revisit** if a second platform-injected shortcut appears
   — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2809,
   chord ownership), epic PT-4575.
