@@ -54,6 +54,9 @@ internal class UserCommentFiltersSettingTests : PapiTestBase
         var result = _provider.GetUserCommentFilters();
         Assert.That(result.Preset, Is.EqualTo("all"));
         Assert.That(result.ScopeFilter, Is.EqualTo("all-books"));
+        // CommentFilterSelection has no named default-version constant (unlike
+        // ResourceReferenceList.CurrentDataVersion), so the default is pinned as a literal here.
+        Assert.That(result.DataVersion, Is.EqualTo("1.0.0"));
     }
 
     [Test]
