@@ -4,34 +4,34 @@ export const MIDDLE_MOUSE_BUTTON = 1;
 export type MiddleClickTabBarHandlersOptions = {
   /**
    * Called when a middle-button click lands on a closable tab's header, wherever it currently
-   * renders. Receives the tab id read from the pressed tab's own `data-tab-id` attribute (see
-   * {@link PlatformTabTitle}).
+   * renders. Receives the tab id read from the pressed tab's own `data-tab-header-id` attribute
+   * (see {@link PlatformTabTitle}).
    */
   onTabMiddleClick: (tabId: string) => void;
 };
 
 /**
  * Reads back the id and closable state {@link PlatformTabTitle} stamps onto its own root element
- * (`data-tab-id` / `data-tab-closable`) from a middle-click's target, if that target landed on a
- * closable tab's header. Returns `undefined` for every other target, including a non-closable tab's
- * header.
+ * (`data-tab-header-id` / `data-tab-closable`) from a middle-click's target, if that target landed
+ * on a closable tab's header. Returns `undefined` for every other target, including a non-closable
+ * tab's header.
  *
- * Walks up to the nearest `[role="tab"]` ancestor rather than matching `data-tab-id` directly on
- * (or as an ancestor of) the target, because a press can land on the close (X) button or the hit
- * area — DOM siblings of the title div `data-tab-id` is stamped on, not its ancestors or
- * descendants (`DockTabs.js`'s `TabCache.render()` renders a tab's `DragDropDiv` — the element
- * carrying `role="tab"` — as the parent of three siblings: the title, the close button, and the hit
- * area). That same `DragDropDiv` is what rc-tabs' own "more" overflow dropdown re-renders unchanged
- * inside a `.dock-dropdown-menu-item` once a tab no longer fits the visible bar (`OperationNode.js`
- * wraps the identical `tab.tab` element in a `MenuItem`), so this lookup resolves a tab the same
- * way regardless of which of the two places it currently renders in.
+ * Walks up to the nearest `[role="tab"]` ancestor rather than matching `data-tab-header-id`
+ * directly on (or as an ancestor of) the target, because a press can land on the close (X) button
+ * or the hit area — DOM siblings of the title div `data-tab-header-id` is stamped on, not its
+ * ancestors or descendants (`DockTabs.js`'s `TabCache.render()` renders a tab's `DragDropDiv` — the
+ * element carrying `role="tab"` — as the parent of three siblings: the title, the close button, and
+ * the hit area). That same `DragDropDiv` is what rc-tabs' own "more" overflow dropdown re-renders
+ * unchanged inside a `.dock-dropdown-menu-item` once a tab no longer fits the visible bar
+ * (`OperationNode.js` wraps the identical `tab.tab` element in a `MenuItem`), so this lookup
+ * resolves a tab the same way regardless of which of the two places it currently renders in.
  */
 function readClosableTabId(target: EventTarget | null): string | undefined {
   if (!(target instanceof Element)) return undefined;
   const tabHeader = target.closest('[role="tab"]');
-  const tabIdHolder = tabHeader?.querySelector<HTMLElement>('[data-tab-id]');
+  const tabIdHolder = tabHeader?.querySelector<HTMLElement>('[data-tab-header-id]');
   if (tabIdHolder?.dataset.tabClosable !== 'true') return undefined;
-  return tabIdHolder.dataset.tabId;
+  return tabIdHolder.dataset.tabHeaderId;
 }
 
 /**

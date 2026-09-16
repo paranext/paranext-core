@@ -5,12 +5,12 @@ import { installMiddleClickTabBarHandlers } from './platform-dock-layout-middle-
  * Builds a DOM tree standing in for what rc-dock/rc-tabs actually render: a `root` (where the
  * handlers attach, mirroring `DockLayout.getRootElement()`) containing a `.dock-bar` (rc-tabs' own
  * tab-row `DragDropDiv`) with two tab headers — each a `[role="tab"]` `DragDropDiv` wrapping a
- * title div (carrying `data-tab-id`/`data-tab-closable`, mirroring `PlatformTabTitle`'s own root)
- * and a close-button div as DOM siblings — plus an unclaimed strip past them (the "+" button/empty
- * remainder, covered only by `.dock-bar` itself) and a sibling panel-content area outside any tab
- * bar. Also builds a SEPARATE tree appended directly to `document.body`, sibling to `root` rather
- * than nested inside it, standing in for rc-tabs' "more" overflow dropdown — which `rc-trigger`
- * portals to `document.body` (see the handlers module's own doc comment for why).
+ * title div (carrying `data-tab-header-id`/`data-tab-closable`, mirroring `PlatformTabTitle`'s own
+ * root) and a close-button div as DOM siblings — plus an unclaimed strip past them (the "+"
+ * button/empty remainder, covered only by `.dock-bar` itself) and a sibling panel-content area
+ * outside any tab bar. Also builds a SEPARATE tree appended directly to `document.body`, sibling to
+ * `root` rather than nested inside it, standing in for rc-tabs' "more" overflow dropdown — which
+ * `rc-trigger` portals to `document.body` (see the handlers module's own doc comment for why).
  */
 function buildDockLayoutTree() {
   const root = document.createElement('div');
@@ -22,7 +22,7 @@ function buildDockLayoutTree() {
     header.setAttribute('role', 'tab');
     const title = document.createElement('div');
     title.className = 'platform-tab-title';
-    title.dataset.tabId = id;
+    title.dataset.tabHeaderId = id;
     title.dataset.tabClosable = String(closable);
     const closeButton = document.createElement('div');
     closeButton.className = 'dock-tab-close-btn';

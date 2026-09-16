@@ -883,11 +883,9 @@ export function PlatformTabTitle({
             // a screen reader announces every icon-only tab in this column identically.
             aria-label={isIconOnly ? title : tabLabel}
             data-web-view-id={webViewId}
-            // Read by `platform-dock-layout-middle-click-handlers.util.ts` to resolve a middle
-            // click anywhere on this tab's header (including rc-tabs' "more" overflow dropdown,
-            // which re-renders this same element) back to a tab id, and to gate that close on
-            // whether this tab allows it.
-            data-tab-id={id}
+            // Resolves a middle click on this header to its tab; see
+            // `platform-dock-layout-middle-click-handlers.util.ts`
+            data-tab-header-id={id}
             data-tab-closable={isClosable}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>

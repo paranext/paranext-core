@@ -631,19 +631,34 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
   });
 });
 
-describe('PlatformTabTitle data-tab-id / data-tab-closable attributes', () => {
-  // Read by `platform-dock-layout-middle-click-handlers.util.ts` to resolve a middle click
-  // anywhere on a tab header back to a tab id and its closable state.
+describe('PlatformTabTitle header id attribute', () => {
   afterEach(() => {
     cleanup();
   });
 
-  it('stamps this tab’s id and closable state onto its root element', () => {
-    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" isClosable />);
+  it('marks its root with data-tab-header-id, leaving data-tab-id to the tab’s panel', () => {
+    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" />);
 
     const header = container.querySelector('.platform-tab-title');
-    expect(header).toHaveAttribute('data-tab-id', 'tab-1');
-    expect(header).toHaveAttribute('data-tab-closable', 'true');
+    expect(header).toHaveAttribute('data-tab-header-id', 'tab-1');
+    expect(header).not.toHaveAttribute('data-tab-id');
+  });
+});
+
+describe('PlatformTabTitle data-tab-closable attribute', () => {
+  // Read by `platform-dock-layout-middle-click-handlers.util.ts` to gate a middle-click close on
+  // whether the tab allows it.
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('stamps this tab’s closable state onto its root element', () => {
+    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" isClosable />);
+
+    expect(container.querySelector('.platform-tab-title')).toHaveAttribute(
+      'data-tab-closable',
+      'true',
+    );
   });
 
   it('stamps data-tab-closable="false" when isClosable is explicitly false', () => {
