@@ -1071,9 +1071,11 @@ function createResourceTextPanelProvider(
       currentResourceTextPanelProjectIds.delete(webViewType);
       // Re-read every call so mode changes are picked up at open/replace/restore time.
       const interfaceMode = await papi.settings.get('platform.interfaceMode');
-      // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
-      // commentaries are read-only reference panels that navigate independently; they are
-      // not scroll-synced with the scripture editor in simple mode.
+      // Deliberately leaves `scrollGroupScrRef` alone rather than pinning it to 0 the way the
+      // editor and the Text Collection do. These panels inherit whatever the saved layout carries,
+      // and an absent value resolves to scroll group 0 (`use-scroll-group-scr-ref.hook.ts`), so in
+      // simple mode they do follow the shared reference. Pinning would additionally overwrite a
+      // power-mode user's explicit choice of a different group.
       return {
         ...savedWebView,
         title,
