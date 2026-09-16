@@ -622,7 +622,17 @@ step, no automation. Just a record.
   are marker bytes that the next repair corrects away again — the same fight any autocorrect has,
   and bounded by the notice that explains it. Undo and redo history is emptied by every repair, so a
   user cannot undo back past a correction; that is a known limitation carried on PT-4608 rather than
-  a property anyone should rely on. The caret offset the util computes encodes the editor's glyph
+  a property anyone should rely on. **Every annotation is cleared too** — a load replaces the node
+  map, and the `TypedMarkNode`s that carry annotations live only in that tree, never in USJ. That is
+  not new to the repair (it is true of every `setEditorUsj` call, including the ordinary PDP echo)
+  and the local bookkeeping already follows it: `setEditorUsj` runs `clearAnnotationInfo`. What is
+  NOT announced outward is the clearing itself: a per-annotation removal normally sends the
+  annotation's `interactionCommand` with a `TypedMarkRemovalCause`, but a wholesale clear fires no
+  `onRemove` at all, so nothing is sent, and the editor exposes no event for it either. This is
+  pre-existing and accepted, not something the repair introduced. Anyone revisiting it should know
+  that `destroyed` is the wrong value to reuse: the published contract defines it as "when the text
+  the annotation was on is completely deleted", so a consumer acting on it could discard data whose
+  text is intact. No annotation set in this repo carries an `interactionCommand` today. The caret offset the util computes encodes the editor's glyph
   byte layout, which no unit test can check from this repo, so it is pinned end to end instead
   (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts` reads the web view's own
   DOM selection). **Revisit** when the editor grows a chapter-repair primitive of its own.
