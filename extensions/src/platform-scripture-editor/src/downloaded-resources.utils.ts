@@ -119,13 +119,17 @@ export function matchesDownloaded(
 function resolveReferenced(
   item: EffectiveResourceReference,
   dblResources: DblResourceData[],
+  dblResourcesByUid: ReadonlyMap<string, DblResourceData>,
 ): PickerResource | undefined {
   const isAdminLocked =
     (isProjectReference(item) || isDblResourceReference(item)) && !!item.isInTextCollection;
   if (isDblResourceReference(item)) {
     // No catalog row means nothing can be said about the reference's type or local project, and a
     // guessed type would leak it into a type-filtered view as a blank row.
-    const dbl = dblResources.find((r) => r.dblEntryUid === item.id);
+    // Through the same index `matchesDownloaded` uses. Resolving a uid two different ways in one
+    // file is how a resource goes missing entirely: dropped here for want of an exact match, and
+    // filtered out of the extras below because the case-insensitive lookup there did match.
+    const dbl = dblResourcesByUid.get(item.id.toLowerCase());
     if (!dbl) return undefined;
     return {
       reference: item,
@@ -215,10 +219,10 @@ export function buildPickerResources(
   downloaded: DownloadedResource[],
   dblResources: DblResourceData[],
 ): PickerResource[] {
-  const referenced = effectiveItems
-    .map((item) => resolveReferenced(item, dblResources))
-    .filter((r): r is PickerResource => r !== undefined);
   const dblResourcesByUid = indexDblResourcesByUid(dblResources);
+  const referenced = effectiveItems
+    .map((item) => resolveReferenced(item, dblResources, dblResourcesByUid))
+    .filter((r): r is PickerResource => r !== undefined);
   const extras = downloaded
     .filter(
       (project) =>

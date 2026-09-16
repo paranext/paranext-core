@@ -158,6 +158,36 @@ describe('buildPickerResources', () => {
     projectId: 'proj-web',
   };
 
+  // The two halves of this function resolve a uid independently. When they disagreed on casing the
+  // resource vanished outright: dropped from `referenced` for want of an exact match, and filtered
+  // out of `extras` because the case-insensitive lookup there did match.
+  it('keeps a DblResourceReference whose uid casing differs from its catalog row', () => {
+    const referenceWithUpperUid: EffectiveResourceReference[] = [
+      { type: 'dblResource', name: 'TNCV', id: '07FF1D5C6A53CB05', source: 'admin' },
+    ];
+    const catalogRowWithLowerUid: DblResourceData = {
+      ...webDblResource,
+      dblEntryUid: '07ff1d5c6a53cb05',
+      displayName: 'TNCV',
+      projectId: '9D60FD8F4A6E03BE',
+    };
+    const downloadedProject = {
+      projectId: '9D60FD8F4A6E03BE',
+      name: 'TNCV',
+      fullName: 'Thai New Contemporary Version',
+      language: 'Thai',
+    };
+
+    const rows = buildPickerResources(
+      referenceWithUpperUid,
+      [downloadedProject],
+      [catalogRowWithLowerUid],
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].projectId).toBe('9D60FD8F4A6E03BE');
+  });
+
   it('maps referenced items and preserves admin lock + source', () => {
     const rows = buildPickerResources(effective, [], [webDblResource]);
     expect(rows).toHaveLength(1);
