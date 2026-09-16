@@ -240,7 +240,7 @@ internal class DblResourcesDataProvider(
                         // `installed` and `projectId` come from one lookup, the same one
                         // RecomputeDblResourcesInstallStatus uses, because the front end reads the
                         // flag as "there is a project id I can open".
-                        var projectId = installedProjectIds.GetValueOrDefault(
+                        var projectId = installedProjectIds.ProjectIdsByDblId.GetValueOrDefault(
                             resource.DBLEntryUid.Id,
                             ""
                         );
@@ -302,7 +302,10 @@ internal class DblResourcesDataProvider(
                 if (!gateTaken || !_hasFetchedResources)
                     return [];
 
-                return ProjectUpdateStatus(_resources, InstalledProjectIdsByDblId());
+                return ProjectUpdateStatus(
+                    _resources,
+                    InstalledProjectIdsByDblId().ProjectIdsByDblId
+                );
             }
             finally
             {
@@ -343,7 +346,7 @@ internal class DblResourcesDataProvider(
         // front end leaves a row absent from the map exactly as it is. What it cannot report while
         // offline is a removal, since a removed resource is simply absent.
         if (!_hasFetchedResources)
-            return Task.Run(InstalledProjectIdsByDblId);
+            return Task.Run(() => InstalledProjectIdsByDblId().ProjectIdsByDblId);
 
         return Task.Run(() =>
         {
@@ -368,13 +371,14 @@ internal class DblResourcesDataProvider(
     /// Projects a catalog into "which local project is this installed as", keyed by DBL entry uid.
     /// </summary>
     /// <param name="resources">The catalog entries to report on.</param>
-    /// <param name="installedProjectIds">
-    /// Local project id per installed uid, from <see cref="InstalledProjectIdsByDblId"/>. An entry
-    /// outside this map is reported as not installed.
+    /// <param name="installed">
+    /// The pass over the project collection, from <see cref="InstalledProjectIdsByDblId"/>. An
+    /// absent uid is reported as not installed only when that pass saw every project; otherwise it
+    /// is omitted, which the caller reads as "no answer for this row".
     /// </param>
     internal static Dictionary<string, string> ProjectInstallStatus(
         IEnumerable<InstallableResource> resources,
-        IReadOnlyDictionary<string, string> installedProjectIds
+        InstalledResourceProjects installed
     )
     {
         Dictionary<string, string> installStatus = [];
@@ -383,12 +387,16 @@ internal class DblResourcesDataProvider(
             var dblEntryUid = resource.DBLEntryUid?.Id;
             if (dblEntryUid == null)
                 continue;
+            var projectId = installed.ProjectIdsByDblId.GetValueOrDefault(dblEntryUid, "");
+            // "The scan skipped a project it could not read" and "this resource is not installed"
+            // are indistinguishable from here, and the caller persists what it is told. Saying
+            // nothing leaves the cached row as it is; a wrong empty string demotes an installed
+            // resource and writes that to user storage.
+            if (projectId == "" && !installed.IsComplete)
+                continue;
             // TryAdd, not the indexer, for the same reason as ProjectUpdateStatus: a duplicate uid
             // resolves to the entry FindResource's FirstOrDefault picks.
-            installStatus.TryAdd(
-                dblEntryUid,
-                installedProjectIds.GetValueOrDefault(dblEntryUid, "")
-            );
+            installStatus.TryAdd(dblEntryUid, projectId);
         }
         return installStatus;
     }
@@ -413,9 +421,25 @@ internal class DblResourcesDataProvider(
     /// reaching here without a uid would be reported as not installed, which is what
     /// ParatextData already returns for anything uninstalled.
     /// </remarks>
-    internal static Dictionary<string, string> InstalledProjectIdsByDblId()
+    /// <summary>
+    /// The result of one pass over the project collection: what was found, and whether the pass
+    /// saw everything.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="IsComplete"/> is false when a project could not be read at all. The scan
+    /// cannot name which one — reading the project is what failed — so a caller that would
+    /// otherwise report "not installed" for an absent uid has to fall back to saying nothing about
+    /// it, rather than asserting an answer the pass was not in a position to give.
+    /// </remarks>
+    internal readonly record struct InstalledResourceProjects(
+        Dictionary<string, string> ProjectIdsByDblId,
+        bool IsComplete
+    );
+
+    internal static InstalledResourceProjects InstalledProjectIdsByDblId()
     {
         Dictionary<string, string> installedProjectIds = [];
+        var isComplete = true;
         foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
         {
             try
@@ -431,6 +455,7 @@ internal class DblResourcesDataProvider(
             }
             catch (Exception e)
             {
+                isComplete = false;
                 // Both reads above touch project settings, which fault on a corrupt Settings.xml.
                 // Skipping the project costs at most one row an accurate flag; letting the
                 // exception escape would fault the whole recheck and leave every row stale for the
@@ -442,7 +467,7 @@ internal class DblResourcesDataProvider(
                 );
             }
         }
-        return installedProjectIds;
+        return new InstalledResourceProjects(installedProjectIds, isComplete);
     }
 
     /// <summary>
