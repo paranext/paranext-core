@@ -30,6 +30,7 @@ import { isModalOverlayOpen } from '@renderer/services/modal-overlay-open.util';
 import { registerContentZoomChromeKeys } from '@renderer/services/web-view-content-zoom.chrome-keys';
 import {
   adjustContentZoom,
+  canContentZoomActOnActiveTarget,
   initializeContentZoomService,
   resetContentZoom,
 } from '@renderer/services/web-view-content-zoom.service';
@@ -154,7 +155,12 @@ initConnectionLostService();
       logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
     );
     // The returned unsubscriber is discarded: this listener runs for the window's lifetime.
-    registerContentZoomChromeKeys({ adjustContentZoom, resetContentZoom, isModalOverlayOpen });
+    registerContentZoomChromeKeys({
+      adjustContentZoom,
+      resetContentZoom,
+      isModalOverlayOpen,
+      canContentZoomAct: canContentZoomActOnActiveTarget,
+    });
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
