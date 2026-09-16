@@ -293,11 +293,16 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     let pointerTime = 0;
     const onPointerDown = (e) => {
       const areaId = areaOf(e.target);
-      // Recorded only when the id is one setActive would actually accept - a click the pane never
-      // reported an area for (nested, ill-formed, or outside every marker) has no focus change of
-      // its own to protect, so it must not arm a suppression window either.
-      pointerArea = areaId !== undefined && areas.indexOf(areaId) !== -1 ? areaId : undefined;
-      pointerTime = Date.now();
+      // Recorded only when the id is one setActive would actually accept, and only for the primary
+      // button - a click the pane never reported an area for (nested, ill-formed, or outside every
+      // marker), and a right- or middle-click, which opens a menu and moves no caret, have no focus
+      // change of their own to protect, so they must not arm a suppression window either. Both
+      // still say which area the user is pointing at, so both still set it active.
+      const arms = e.button === 0 && areaId !== undefined && areas.indexOf(areaId) !== -1;
+      pointerArea = arms ? areaId : undefined;
+      // The monotonic clock, so a backward system-clock step cannot make a gesture look fresh
+      // forever.
+      pointerTime = performance.now();
       setActive(areaId);
     };
     const onFocusIn = (e) => {
@@ -306,7 +311,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         pointerArea !== undefined &&
         areaId !== undefined &&
         areaId !== pointerArea &&
-        Date.now() - pointerTime < ${GESTURE_FOCUS_MS};
+        performance.now() - pointerTime < ${GESTURE_FOCUS_MS};
       if (suppress) {
         pointerArea = undefined;
         return;
