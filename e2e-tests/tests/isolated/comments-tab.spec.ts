@@ -407,7 +407,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await expect(presetFilter).toContainText('Unresolved comments assigned to me');
   });
 
-  test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
+  test('Comments tab scope filter offers all four scopes in Simple mode (PT-4070)', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });

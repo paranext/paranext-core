@@ -38,10 +38,6 @@ export function isCommentPreset(value: string): value is CommentPreset {
 
 export const DEFAULT_COMMENT_FILTERS: CommentFilters = { preset: 'all' };
 
-// Paratext 9's literal "assigned to the whole team" token (UserFilter/CommentTags): threads assigned
-// to the team carry this exact `AssignedUser` value.
-export const TEAM_ASSIGNED_USER = 'Team';
-
 // --- Scope axis (how much Scripture the list covers) ---
 
 export const DEFAULT_SCOPE_FILTER: ScopeFilter = 'all-books';
