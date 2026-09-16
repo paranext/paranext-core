@@ -1470,11 +1470,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * @param usj The USJ to set in the editor
    */
   const setEditorUsj = useRef((usj: Usj) => {
-    // A reload replaces every Lexical key, the note a row editor is bound to included, so no pane
-    // session can survive it — one left open would keep applying into a note that is gone. The
-    // incoming document is authoritative: it overwrites anything the row editor had not applied
+    // A reload replaces every Lexical key, the note the open editor is bound to included, so no
+    // note session survives it on EITHER surface — one left open would keep applying into a note
+    // that is gone, and `replaceEmbedUpdate` can only log the stale key and drop the edit. The
+    // incoming document is authoritative: it overwrites anything the note editor had not applied
     // yet, exactly as it overwrites the rest of the chapter.
-    if (paneEditingIndexRef.current !== undefined) closeFootnoteEditorRef.current(false);
+    if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
     editorRef.current?.setUsj(usj);
     setLiveEditorUsj(usj);
     clearAnnotationInfo.current();
