@@ -3,6 +3,8 @@ import { isTab } from './docking-framework-internal.model';
 
 /** `MouseEvent.button` value for the middle (auxiliary) mouse button, shared by every check below. */
 const MIDDLE_MOUSE_BUTTON = 1;
+const REPEAT_CLOSE_GUARD_MS = 500;
+const REPEAT_CLOSE_MAX_DISTANCE_PX = 4;
 
 export type MiddleClickTabBarHandlersOptions = {
   /** Looks a tab up in the dock layout at click time; its `closable` gates the close */
@@ -57,13 +59,31 @@ export function installMiddleClickTabBarHandlers(
     event.stopPropagation();
   };
 
+  let lastClose: { at: number; x: number; y: number } | undefined;
+
   const closeTabOnMiddleClick = (event: MouseEvent) => {
     if (event.button !== MIDDLE_MOUSE_BUTTON) return;
     const tabId = readTabHeaderId(event.target);
     if (!tabId) return;
+
+    // Closing a tab slides its neighbour under a stationary pointer, so a quick second click would
+    // close a tab the user never aimed at. Ignore one repeat within the common double-click time
+    // and REPEAT_CLOSE_MAX_DISTANCE_PX on each axis.
+    const previousClose = lastClose;
+    lastClose = undefined;
+    if (
+      previousClose &&
+      performance.now() - previousClose.at < REPEAT_CLOSE_GUARD_MS &&
+      Math.abs(event.screenX - previousClose.x) <= REPEAT_CLOSE_MAX_DISTANCE_PX &&
+      Math.abs(event.screenY - previousClose.y) <= REPEAT_CLOSE_MAX_DISTANCE_PX
+    )
+      return;
+
     // An unset `closable` counts as not closable, as it does for rc-dock's close button
     const tab = findTab(tabId);
-    if (isTab(tab) && tab.closable) onCloseTab(tabId);
+    if (!isTab(tab) || !tab.closable) return;
+    onCloseTab(tabId);
+    lastClose = { at: performance.now(), x: event.screenX, y: event.screenY };
   };
 
   // rc-dock arms drags from React `onMouseDown`/`onMouseDownCapture` for every button but the right

@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import type { BoxData, PanelData, TabData } from 'rc-dock';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installMiddleClickTabBarHandlers } from './platform-dock-layout-middle-click-handlers.util';
 
 /**
@@ -94,9 +94,9 @@ function dispatchMouseDown(target: Element, button: number) {
   );
 }
 
-function dispatchAuxClick(target: Element, button: number) {
+function dispatchAuxClick(target: Element, button: number, screenX = 0, screenY = 0) {
   return target.dispatchEvent(
-    new MouseEvent('auxclick', { bubbles: true, cancelable: true, button }),
+    new MouseEvent('auxclick', { bubbles: true, cancelable: true, button, screenX, screenY }),
   );
 }
 
@@ -281,6 +281,142 @@ describe('installMiddleClickTabBarHandlers', () => {
       dispatchAuxClick(tree.panelContent, 1);
 
       expect(onCloseTab).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('repeat middle click on the tab that slid under the pointer', () => {
+    let now = 0;
+
+    beforeEach(() => {
+      now = 1000;
+      vi.spyOn(performance, 'now').mockImplementation(() => now);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    /** Middle-clicks the closable tab's title `msLater` after the previous click, at `(x, y)` */
+    function middleClickClosableTab(
+      tree: ReturnType<typeof buildDockLayoutTree>,
+      msLater: number,
+      x: number,
+      y: number,
+    ) {
+      now += msLater;
+      dispatchAuxClick(tree.closableTab.title, 1, x, y);
+    }
+
+    it('ignores a second middle click at the same spot 200ms after one that closed a tab', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      middleClickClosableTab(tree, 0, 100, 50);
+      middleClickClosableTab(tree, 200, 100, 50);
+
+      expect(onCloseTab).toHaveBeenCalledOnce();
+    });
+
+    it('ignores a second middle click that lands within 4px on both axes', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      middleClickClosableTab(tree, 0, 100, 50);
+      middleClickClosableTab(tree, 200, 104, 46);
+
+      expect(onCloseTab).toHaveBeenCalledOnce();
+    });
+
+    it('closes on a second middle click at the same spot 600ms later', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      middleClickClosableTab(tree, 0, 100, 50);
+      middleClickClosableTab(tree, 600, 100, 50);
+
+      expect(onCloseTab).toHaveBeenCalledTimes(2);
+    });
+
+    it('closes on a second middle click 200ms later but 20px away', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      middleClickClosableTab(tree, 0, 100, 50);
+      middleClickClosableTab(tree, 200, 120, 50);
+
+      expect(onCloseTab).toHaveBeenCalledTimes(2);
+    });
+
+    it('closes on a second middle click 200ms later but 5px away vertically', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      middleClickClosableTab(tree, 0, 100, 50);
+      middleClickClosableTab(tree, 200, 100, 55);
+
+      expect(onCloseTab).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not arm after a middle click on a non-closable tab', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      dispatchAuxClick(tree.nonClosableTab.title, 1, 100, 50);
+      middleClickClosableTab(tree, 200, 100, 50);
+
+      expect(onCloseTab).toHaveBeenCalledExactlyOnceWith('tab-1');
+    });
+
+    it('does not arm after a middle click on a tab the dock layout no longer has', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      dispatchAuxClick(tree.missingTab.title, 1, 100, 50);
+      middleClickClosableTab(tree, 200, 100, 50);
+
+      expect(onCloseTab).toHaveBeenCalledExactlyOnceWith('tab-1');
+    });
+
+    it('does not arm after a middle click on the tab-bar strip past every tab', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      dispatchAuxClick(tree.barRemainder, 1, 100, 50);
+      middleClickClosableTab(tree, 200, 100, 50);
+
+      expect(onCloseTab).toHaveBeenCalledExactlyOnceWith('tab-1');
+    });
+
+    it('ignores only one repeat: a third click at the same spot, still within 500ms of the first, closes', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      middleClickClosableTab(tree, 0, 100, 50);
+      middleClickClosableTab(tree, 200, 100, 50);
+      middleClickClosableTab(tree, 200, 100, 50);
+
+      expect(onCloseTab).toHaveBeenCalledTimes(2);
+    });
+
+    it('closes on a third click at the same spot 700ms after the first, after the ignored second', () => {
+      const tree = buildDockLayoutTree();
+      const onCloseTab = vi.fn();
+      install(onCloseTab);
+
+      middleClickClosableTab(tree, 0, 100, 50);
+      middleClickClosableTab(tree, 200, 100, 50);
+      middleClickClosableTab(tree, 500, 100, 50);
+
+      expect(onCloseTab).toHaveBeenCalledTimes(2);
     });
   });
 
