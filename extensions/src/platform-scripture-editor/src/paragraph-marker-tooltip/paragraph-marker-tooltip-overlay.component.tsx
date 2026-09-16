@@ -45,9 +45,34 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Set to true by keydown so the tooltip stays hidden until the mouse actually moves.
   const suppressUntilMoveRef = useRef(false);
+  // Set to true whenever a hide fires from a genuine "left the editor's hover territory" path
+  // (mouseout/mouseleave/blur). Blocks handleMouseOver from arming a fresh reveal timer until the
+  // cursor is observed at a screen position different from lastClientPosRef (see below) or a real
+  // scroll happens. Guards against the editor's own DOM churn (e.g. an active-paragraph decoration
+  // swap) redispatching a synthetic mouseout/mouseover pair at a stationary cursor: without this,
+  // that synthetic pair reads as "left, then re-entered" and restarts the delay, producing a
+  // repeating open/close pulse with no real mouse movement at all. Plain `mousemove` isn't a
+  // reliable enough signal to clear this on its own — the same DOM churn that fires synthetic
+  // mouseover/mouseout also fires a synthetic mousemove at the cursor's unchanged position, so the
+  // gate below compares actual coordinates instead of trusting the event type.
+  const awaitingRealMoveRef = useRef(false);
+  // Last screen position (clientX/clientY) seen on any mouse event. A synthetic, DOM-churn-driven
+  // event reuses the cursor's last real position verbatim; comparing against this is what lets
+  // handleMouseOver/handleMouseOut/handleMouseMove tell a genuine move from a churn-triggered one.
+  const lastClientPosRef = useRef<{ x: number; y: number } | undefined>(undefined);
   // Keeps the trigger at the last known paragraph position while the tooltip closes, so the
   // close animation doesn't jump to top:0 and appear above the editor.
   const lastPositionRef = useRef<TooltipPosition>({ top: 0, left: 0 });
+  // Keeps the last-shown marker available while the tooltip closes, for the same reason as
+  // lastPositionRef: Radix's Presence keeps TooltipContent mounted for its fade-out-0/zoom-out-95
+  // exit animation (tooltip.tsx) after hoveredData already goes undefined, so rendering tooltipText
+  // straight off hoveredData?.marker during that window would fade out an already-empty box instead
+  // of the real content (the same defect destructive-key-confirmation.component.tsx's
+  // useFrozenWhileClosed exists to fix). That hook isn't reused here: it only re-captures its frozen
+  // snapshot on the closed→open edge, so it would freeze on whichever marker was showing when the
+  // tooltip FIRST opened rather than the last one shown before it closed — wrong for this component,
+  // where the grace-period switch (below) changes the marker repeatedly while staying open.
+  const lastMarkerRef = useRef<string | undefined>(undefined);
   // Mirrors `hoveredData` synchronously. State commits are async, so a handler reading `hoveredData`
   // from its render closure can observe a value that's already stale by the time it runs.
   // `updateHoveredData`/`revealHoveredData` below are the only places allowed to write either this
@@ -64,19 +89,30 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   const blockMarkerKeys = useMemo<LocalizeKey[]>(() => Object.values(blockMarkerToBlockNames), []);
   const [localizedStrings] = useLocalizedStrings(blockMarkerKeys);
 
-  const descriptionKey = hoveredData?.marker
-    ? blockMarkerToBlockNames[hoveredData.marker]
-    : undefined;
+  // Falls back to the last-shown marker while closing (see lastMarkerRef) so the exit animation
+  // fades real content instead of an empty box.
+  const displayMarker = hoveredData?.marker ?? lastMarkerRef.current;
+  const descriptionKey = displayMarker ? blockMarkerToBlockNames[displayMarker] : undefined;
   const localizedDescription = descriptionKey ? localizedStrings[descriptionKey] : undefined;
   // For markers not yet in blockMarkerToBlockNames, fall back to the raw USFM marker (e.g. \sp).
   // The \\ is intentional: it produces a single backslash so the tooltip reads as a USFM marker.
-  const tooltipText =
-    localizedDescription ?? (hoveredData?.marker ? `\\${hoveredData.marker}` : '');
+  const tooltipText = localizedDescription ?? (displayMarker ? `\\${displayMarker}` : '');
 
   const clearHoverTimer = useCallback(() => {
     if (hoverTimerRef.current !== undefined) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = undefined;
+    }
+  }, []);
+
+  // Call from every mouse handler with the event's clientX/clientY. Clears awaitingRealMoveRef
+  // only if the cursor's screen position actually changed since the last call — a DOM-churn-driven
+  // synthetic event reuses the cursor's current (unchanged) position, so it leaves the flag set.
+  const noteRealPointerActivity = useCallback((e: { clientX: number; clientY: number }) => {
+    const last = lastClientPosRef.current;
+    if (!last || last.x !== e.clientX || last.y !== e.clientY) {
+      lastClientPosRef.current = { x: e.clientX, y: e.clientY };
+      awaitingRealMoveRef.current = false;
     }
   }, []);
 
@@ -102,6 +138,7 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
 
   const handleMouseOver = useCallback(
     (e: React.MouseEvent) => {
+      noteRealPointerActivity(e);
       // e.target is EventTarget; cast to Element for DOM traversal via .closest()
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const para = (e.target as Element).closest<HTMLElement>(EDITOR_PARA_SELECTOR);
@@ -128,6 +165,7 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
             // directly to the new marker with no further delay.
             const pos = computePosition(para, anchor, scroller);
             lastPositionRef.current = pos;
+            lastMarkerRef.current = marker;
             revealHoveredData({ ...pos, marker });
           } else {
             if (hoveredDataRef.current) {
@@ -137,6 +175,7 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
               // period is treated as an implicit close.
               updateHoveredData(undefined);
             }
+            if (awaitingRealMoveRef.current) return;
             // Arm a delayed reveal. Position — and paragraph validity — are (re)computed at fire
             // time from the live refs, not now: computing eagerly here and closing over the result
             // would reveal at a stale position if the user scrolls during the pending window, and
@@ -152,6 +191,7 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
               if (!pendingMarker) return;
               const pos = computePosition(pendingPara, pendingAnchor, pendingScroller);
               lastPositionRef.current = pos;
+              lastMarkerRef.current = pendingMarker;
               revealHoveredData({ ...pos, marker: pendingMarker });
             }, TOOLTIP_DELAY_MS);
           }
@@ -160,11 +200,12 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
       }
       updateHoveredData(undefined);
     },
-    [clearHoverTimer, revealHoveredData, updateHoveredData],
+    [clearHoverTimer, noteRealPointerActivity, revealHoveredData, updateHoveredData],
   );
 
   const handleMouseOut = useCallback(
     (e: React.MouseEvent) => {
+      noteRealPointerActivity(e);
       // Fires when the cursor leaves any element. Use relatedTarget to detect when the cursor
       // truly exits into non-paragraph territory (editor whitespace, chrome, etc.), catching
       // the stale-tooltip case that onMouseOver alone misses when the cursor stops moving.
@@ -180,24 +221,34 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
         currentParaRef.current = undefined;
         clearHoverTimer();
         updateHoveredData(undefined);
+        awaitingRealMoveRef.current = true;
       }
     },
-    [clearHoverTimer, updateHoveredData],
+    [clearHoverTimer, noteRealPointerActivity, updateHoveredData],
   );
 
-  const handleMouseMove = useCallback(() => {
-    if (!suppressUntilMoveRef.current) return;
-    suppressUntilMoveRef.current = false;
-    // Reset currentParaRef so the next mouseover (on any element boundary) re-shows the tooltip.
-    currentParaRef.current = undefined;
-  }, []);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      noteRealPointerActivity(e);
+      if (!suppressUntilMoveRef.current) return;
+      suppressUntilMoveRef.current = false;
+      // Reset currentParaRef so the next mouseover (on any element boundary) re-shows the tooltip.
+      currentParaRef.current = undefined;
+    },
+    [noteRealPointerActivity],
+  );
 
-  const handleMouseLeave = useCallback(() => {
-    suppressUntilMoveRef.current = false;
-    currentParaRef.current = undefined;
-    clearHoverTimer();
-    updateHoveredData(undefined);
-  }, [clearHoverTimer, updateHoveredData]);
+  const handleMouseLeave = useCallback(
+    (e: React.MouseEvent) => {
+      noteRealPointerActivity(e);
+      suppressUntilMoveRef.current = false;
+      currentParaRef.current = undefined;
+      clearHoverTimer();
+      updateHoveredData(undefined);
+      awaitingRealMoveRef.current = true;
+    },
+    [clearHoverTimer, noteRealPointerActivity, updateHoveredData],
+  );
 
   // Accessibility companion for onMouseOver: hide tooltip when focus moves outside the editor
   const handleFocus = useCallback(() => {
@@ -215,6 +266,7 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
         currentParaRef.current = undefined;
         clearHoverTimer();
         updateHoveredData(undefined);
+        awaitingRealMoveRef.current = true;
       }
     },
     [clearHoverTimer, updateHoveredData],
@@ -246,6 +298,7 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
     };
 
     const handleScroll = () => {
+      awaitingRealMoveRef.current = false;
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(() => {
         const para = currentParaRef.current;
@@ -317,7 +370,19 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
                 left: hoveredData?.left ?? lastPositionRef.current.left,
               }}
             />
-            <TooltipContent side="top" align="start" showArrow={false}>
+            {/* pointer-events-none: this is a non-interactive, informational-only tooltip, and
+                TooltipContent portals to document.body — outside the wrapper div this component's
+                own hover tracking is scoped to. Without this, a cursor resting near the rendered
+                box's edge (it can visually overlap the paragraph it describes) reads as "left
+                paragraph territory" in handleMouseOut, hiding the tooltip out from under the
+                cursor, which re-exposes the paragraph beneath and re-triggers handleMouseOver —
+                a self-interference loop that pulsates the tooltip on and off. */}
+            <TooltipContent
+              side="top"
+              align="start"
+              showArrow={false}
+              className="tw:pointer-events-none"
+            >
               {tooltipText}
             </TooltipContent>
           </Tooltip>
