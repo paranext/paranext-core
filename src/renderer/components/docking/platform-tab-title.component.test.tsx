@@ -6,7 +6,7 @@ import { useIsFocusedWindow } from '@renderer/hooks/use-is-focused-window.hook';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
-import { PlatformTabTitle } from './platform-tab-title.component';
+import { __resetTabMenuCacheForTesting, PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
 
@@ -136,6 +136,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  __resetTabMenuCacheForTesting();
 });
 
 /**
