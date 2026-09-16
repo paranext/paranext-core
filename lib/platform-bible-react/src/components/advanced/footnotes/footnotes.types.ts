@@ -87,7 +87,12 @@ export interface FootnoteListProps {
   layout?: FootnoteLayout;
   /**
    * ID provided by the caller that should change whenever the list changes (due to additions,
-   * deletions or — unlikely — reordering) )
+   * deletions or — unlikely — reordering).
+   *
+   * Changing it re-mints every read-only row. The row named by
+   * {@link FootnoteListProps.editingFootnoteIndex} is exempt: it hosts a live editor holding state
+   * no prop carries, and it stays mounted across list-id changes so a note added or removed
+   * elsewhere cannot discard an edit in progress.
    */
   listId: string | number;
   /** The currently selected footnote (or undefined if none) */

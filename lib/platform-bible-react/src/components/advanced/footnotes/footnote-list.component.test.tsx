@@ -448,3 +448,52 @@ describe('FootnoteList row swap', () => {
     expect(rows[2]).toHaveFocus();
   });
 });
+
+describe('FootnoteList editing-row identity', () => {
+  /** Stands in for a row editor: counts its mounts the way a document-load effect would run. */
+  function countingEditor(onMount: () => void) {
+    function RowEditor() {
+      useEffect(onMount, [onMount]);
+      return <div data-testid="editor-slot">editor</div>;
+    }
+    return function renderRow() {
+      return <RowEditor />;
+    };
+  }
+
+  it('keeps the editing row mounted when a note added elsewhere re-mints the list id', () => {
+    const onMount = vi.fn();
+    const renderEditingFootnote = countingEditor(onMount);
+    const { rerender } = render(
+      <FootnoteList
+        footnotes={footnotes}
+        listId={1}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={renderEditingFootnote}
+      />,
+    );
+    expect(onMount).toHaveBeenCalledTimes(1);
+
+    // A note added ahead of the one being edited: one more note, a new list id (the consumer's
+    // signal that the rows are new), and the edited note has moved down a row.
+    rerender(
+      <FootnoteList
+        footnotes={[footnotes[0], ...footnotes]}
+        listId={2}
+        editingFootnoteIndex={2}
+        renderEditingFootnote={renderEditingFootnote}
+      />,
+    );
+
+    expect(onMount).toHaveBeenCalledTimes(1);
+  });
+
+  it('still remints read-only rows when the list id changes', () => {
+    const { container, rerender } = render(<FootnoteList footnotes={footnotes} listId={1} />);
+    const firstRowBefore = container.querySelectorAll('li[role="option"]')[0];
+
+    rerender(<FootnoteList footnotes={[footnotes[0], ...footnotes]} listId={2} />);
+
+    expect(container.querySelectorAll('li[role="option"]')[0]).not.toBe(firstRowBefore);
+  });
+});

@@ -429,6 +429,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [showFootnoteEditor]);
 
   const editingNoteKey = useRef<string | undefined>(undefined);
+  /**
+   * The note the open editing session loaded, and — through its ARRAY IDENTITY — that editor's
+   * reload signal (see {@link editingNoteOpsBaseline}).
+   *
+   * Deliberately NOT refreshed by the row editor's own live-applies, so these ops go stale relative
+   * to what the user has typed while a row session is open. That is safe only because the row
+   * editor does not remount mid-session: `FootnoteList` gives the row being edited a key that no
+   * list change re-mints. A remount would reload the session's document from HERE, dropping
+   * everything typed since and then writing it back over the note, so a change that can remount the
+   * row has to refresh these ops in place (mutating the array, never replacing it — a new identity
+   * reloads the mounted editor).
+   */
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
   /**
    * What the note editor's loaded document currently holds, for the "did this note change

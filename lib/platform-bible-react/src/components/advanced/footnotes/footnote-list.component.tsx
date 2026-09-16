@@ -8,6 +8,12 @@ import { FootnoteListProps } from './footnotes.types';
 import { getCaretPositionFromClick } from './footnote-caret.utils';
 
 /**
+ * React key for the row rendered as an editor. Deliberately independent of `listId` and of the
+ * row's index - see where it is used.
+ */
+const EDITING_ROW_KEY = 'editing-row';
+
+/**
  * Returns the nearest row index adjacent to `from` in `direction`, hopping over `editingIndex` -
  * that row isn't a selectable option while it's being edited, and it renders no `ref`/`tabIndex`
  * for keyboard focus to land on. Falls back to `from` if there's no other row to move to (e.g. a
@@ -222,8 +228,16 @@ export function FootnoteList({
       >
         {footnotes.map((footnote, idx) => {
           const isSelected = footnote === selectedFootnote;
-          const key = `${listId}-${idx}`;
           const isEditing = idx === editingFootnoteIndex && !!renderEditingFootnote;
+          // A new `listId` re-mints every row, which is exactly what a consumer asks for by
+          // changing it: the notes it parsed are new objects at new positions. The row being
+          // EDITED is the exception. It hosts a live editor holding state no prop carries - a
+          // caret, an undo history, edits not yet applied - and it is bound to one note that
+          // `editingFootnoteIndex` follows as notes come and go ahead of it. Re-minting that row
+          // because an unrelated note was added or removed remounts the editor, which reloads its
+          // document from whatever the consumer hands it and discards everything typed since. So
+          // the editing row keeps a key no list change touches.
+          const key = isEditing ? EDITING_ROW_KEY : `${listId}-${idx}`;
           // Only render separator if not the last item. Shared by both branches below so vertical
           // layout keeps its separator after the editing row too, and so the two branches return
           // the same Fragment shape (avoids an unnecessary remount when toggling edit mode).
