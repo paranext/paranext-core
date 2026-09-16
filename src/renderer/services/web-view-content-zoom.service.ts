@@ -506,6 +506,34 @@ function storedIdentityStamp(
   return typeof value === 'string' ? value : undefined;
 }
 
+/** The identity bits {@link seedFromMemory} and {@link reseedIfIdentityChanged} both need. */
+type IdentityState = {
+  definition: SavedWebViewDefinition;
+  id: MemoryIdentity | undefined;
+  /** `identityStampFor(id)`, or `undefined` when `id` is. */
+  stamp: string | undefined;
+  storedStamp: string | undefined;
+};
+
+/**
+ * Resolves a pane's definition, its current memory identity and stamp, and the stamp already stored
+ * in its state — the four values {@link reseedIfIdentityChanged} reads to decide whether to re-seed,
+ * and {@link seedFromMemory} reads again to actually do it. Computed once here and passed through
+ * ({@link reseedIfIdentityChanged} → `seedFromMemory`) rather than twice, since neither the
+ * definition read nor the identity lookup has any reason to disagree with itself a moment later.
+ */
+function resolveIdentityState(webViewId: WebViewId): IdentityState | undefined {
+  const definition = deps.getDefinition(webViewId);
+  if (!definition) return undefined;
+  const id = memoryIdentityFor(definition);
+  return {
+    definition,
+    id,
+    stamp: id ? identityStampFor(id) : undefined,
+    storedStamp: storedIdentityStamp(definition),
+  };
+}
+
 /**
  * Gives a pane the levels {@link cachedMemory} remembers for the kind and identity it shows NOW, and
  * stamps that identity into its state ({@link CONTENT_ZOOM_IDENTITY_STATE_KEY}) so a later change of
@@ -542,48 +570,44 @@ function storedIdentityStamp(
  *   default rather than the previous project's level — and any pending write is dropped along with
  *   it, together with the open burst-write timer it was sitting in, so the new identity's own next
  *   edit still gets the "first edit of a burst is written at once" guarantee instead of waiting out
- *   a window that belonged to the old identity (or being committed under the old identity's
- *   now-stale level, had it survived to reach {@link commitOwnLevels}, which stamps whatever
- *   identity the pane shows at commit time). This whole case is skipped while {@link memoryLoaded}
- *   is still `false`: an unread {@link cachedMemory} is `{}` by construction, not evidence that
- *   nothing is remembered, and trusting it here would drop a restored pane's levels for nothing to
- *   replace them with. Left alone, the pane keeps its stale stamp (or stale pending write) until
- *   this web view's definition updates again, which re-runs this same check.
+ *   a window that belonged to the old identity. A drop here is a courtesy, not the only guard: a
+ *   pending write that reaches {@link commitOwnLevels} before this function gets the chance — the
+ *   debounce timer firing on its own, `forgetContentZoom`, or the unload flush — is checked and
+ *   dropped there too, rather than being stamped with whatever identity the pane shows at commit
+ *   time. This whole case is skipped while {@link memoryLoaded} is still `false`: an unread
+ *   {@link cachedMemory} is `{}` by construction, not evidence that nothing is remembered, and
+ *   trusting it here would drop a restored pane's levels for nothing to replace them with. Left
+ *   alone, the pane keeps its stale stamp (or stale pending write) until its next fresh first-area
+ *   report re-seeds it from scratch ({@link setContentZoomAreas}) — a definition update alone does
+ *   not re-run this check, since {@link reseedIfIdentityChanged} returns early for a pane with no
+ *   stored stamp.
  */
-function seedFromMemory(webViewId: WebViewId): void {
-  const definition = deps.getDefinition(webViewId);
-  if (!definition) return;
-  const id = memoryIdentityFor(definition);
+function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void {
+  const resolved = precomputed ?? resolveIdentityState(webViewId);
+  if (!resolved) return;
+  const { definition, id, stamp, storedStamp } = resolved;
   // No identity to seed from or check the stamp against: whatever levels the pane already holds are
-  // left exactly as they are, re-point or not, since nothing here could replace them anyway.
+  // left exactly as they are, re-point or not, since nothing here could replace them anyway. See
+  // "No identity at all" above.
   if (!id) return;
-  const stamp = identityStampFor(id);
-  const storedStamp = storedIdentityStamp(definition);
-  if (storedStamp === stamp) return;
+  if (storedStamp === stamp) return; // "The stamp matches the pane's identity" above.
   const hasOwnLevels = Boolean(
     definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state,
   );
   const state: Record<string, unknown> = { ...(definition.state ?? {}) };
   if (storedStamp === undefined) {
     if (hasOwnLevels) {
+      // Committed-levels half of "no stamp, and a pending write chosen for this same identity" above.
       state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
       deps.updateDefinition(definition.id, { state });
       return;
     }
     const pendingWrite = pendingOwnLevelWrites.get(webViewId);
-    if (pendingWrite && pendingWrite.identity === stamp) {
-      // The pending write was chosen for the identity the pane shows right now: not stale, and
-      // there is no stamp to have changed FROM, so this is not a re-point either. See the "no stamp,
-      // and a pending write chosen for this same identity" case above.
-      return;
-    }
+    if (pendingWrite && pendingWrite.identity === stamp) return; // same case, pending-write half.
     // Either a genuinely brand-new pane with nothing of its own, committed or pending, or a pending
-    // write that predates a re-point (chosen for an identity the pane no longer shows). Both fall
-    // through below exactly like a stamped re-point does.
+    // write that predates a re-point. Both fall through below exactly like a stamped re-point does.
   }
-  // Reached for a genuine re-point (stamp names another identity) and for the "stale pending write"
-  // case just above. See the doc comment's last case for why this is skipped until memory has
-  // actually loaded.
+  // "The stamp names another identity, OR a pending write was chosen for one" above.
   if (!memoryLoaded) return;
   pendingOwnLevelWrites.delete(webViewId);
   const ownLevelTimer = ownLevelWriteTimers.get(webViewId);
@@ -617,13 +641,12 @@ function seedFromMemory(webViewId: WebViewId): void {
  * arrives.
  */
 function reseedIfIdentityChanged(webViewId: WebViewId): void {
-  const definition = deps.getDefinition(webViewId);
-  if (!definition) return;
-  const storedStamp = storedIdentityStamp(definition);
+  const resolved = resolveIdentityState(webViewId);
+  if (!resolved) return;
+  const { id, stamp, storedStamp } = resolved;
   if (storedStamp === undefined) return;
-  const id = memoryIdentityFor(definition);
-  if (!id || identityStampFor(id) === storedStamp) return;
-  seedFromMemory(webViewId);
+  if (!id || stamp === storedStamp) return;
+  seedFromMemory(webViewId, resolved);
 }
 
 /**
@@ -1016,6 +1039,7 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
       state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
       const id = memoryIdentityFor(definition);
       if (id) state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = identityStampFor(id);
+      else delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
     }
     if (!deps.updateDefinition(webViewId, { state })) return false;
   } catch (e) {
