@@ -243,6 +243,33 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
+  it('shows a zoom step whose definition write failed, and still shares it', async () => {
+    updateDefinition.mockImplementation(() => false);
+    await adjustContentZoom('editor-1', 1, 'main');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
+    expect(showIndicator).toHaveBeenCalledWith('main', '110 %');
+    await __flushContentZoomWritesForTesting();
+    expect(settings[MEMORY]).toEqual({ 'editor:PROJ-A:main': 1.1 });
+    // The retry guard still applies: the level stayed pending because the write above failed, so
+    // the next opportunity to write it — here, the unload flush — carries it.
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    window.dispatchEvent(new Event('beforeunload'));
+    expect(updateDefinition).toHaveBeenCalledWith('editor-1', {
+      state: { [LEVELS]: { main: 1.1 } },
+    });
+  });
+
+  it('shows a reset whose definition write failed, and still drops the shared level', async () => {
+    requireDefinition('editor-1').state = { [LEVELS]: { main: 1.4 } };
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.4 };
+    updateDefinition.mockImplementation(() => false);
+    await resetContentZoom('editor-1', 'main');
+    expect(showIndicator).toHaveBeenCalledWith('main', 'Default · 100 %');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1');
+    await __flushContentZoomWritesForTesting();
+    expect(settings[MEMORY]).toEqual({});
+  });
+
   it('coalesces an un-awaited burst of adjustments into one memory write per key', async () => {
     const first = adjustContentZoom('editor-1', 1, 'main');
     const second = adjustContentZoom('editor-1', 1, 'main');

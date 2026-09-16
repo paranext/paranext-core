@@ -832,11 +832,11 @@ function writeOwnLevel(
   definition: SavedWebViewDefinition,
   areaId: ContentZoomAreaId,
   level: number | undefined,
-): boolean {
+): void {
   const levels: Levels = { ...effectiveOwnLevels(definition) };
   if (level === undefined) delete levels[areaId];
   else levels[areaId] = level;
-  return setOwnLevels(definition.id, levels);
+  setOwnLevels(definition.id, levels);
 }
 
 /**
@@ -866,7 +866,10 @@ export async function adjustContentZoom(
   const current = effectiveOwnLevels(definition)[area] ?? defaultZoom;
   const next = adjustZoomFactor(current, deltaSteps);
   if (next === current) return;
-  if (!writeOwnLevel(definition, area, next)) return;
+  // The pane shows the level regardless of whether this write reaches the definition:
+  // pushContentZoom reads effectiveOwnLevels, and a level that did not get stored stays pending for
+  // the next write.
+  writeOwnLevel(definition, area, next);
   writeMemory(definition, area, next);
   pushContentZoom(target, { areaId: area, text: formatZoomPercent(next) });
 }
@@ -887,7 +890,7 @@ export async function resetContentZoom(
   // Only a pane that actually holds its own level for the area has anything to give up — and only
   // then may the shared key go, which every sibling pane of this identity follows.
   if (effectiveOwnLevels(definition)[area] !== undefined) {
-    if (!writeOwnLevel(definition, area, undefined)) return;
+    writeOwnLevel(definition, area, undefined);
     writeMemory(definition, area, undefined);
   }
   // The label is read once at initialization, so the factor reaches the pane without waiting on a
