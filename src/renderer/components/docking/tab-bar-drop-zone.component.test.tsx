@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DockContext, DragState, PanelData } from 'rc-dock';
+import { DockContext, DragState, DropDirection, PanelData } from 'rc-dock';
 import {
   TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE,
   TabBarDropZone,
@@ -298,13 +298,15 @@ describe('TabBarDropZone', () => {
     // claimed the indicator. A shared (rather than per-zone) source token would let one zone's leave
     // wrongly clear a different zone's still-active claim.
     let activeSource: unknown;
-    const setDropRect = vi.fn((_element: unknown, direction: string, source: unknown) => {
-      if (direction === 'remove') {
-        if (source === activeSource) activeSource = undefined;
-        return;
-      }
-      activeSource = source;
-    });
+    const setDropRect = vi.fn(
+      (_element: HTMLElement, direction: DropDirection | undefined, source: unknown) => {
+        if (direction === 'remove') {
+          if (source === activeSource) activeSource = undefined;
+          return;
+        }
+        activeSource = source;
+      },
+    );
     const context = createDockContext({ setDropRect });
     const panelA = createPanel({ id: 'panel-a' });
     const panelB = createPanel({ id: 'panel-b' });
