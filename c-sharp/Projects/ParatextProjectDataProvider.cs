@@ -2119,9 +2119,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return new CommentFilterSelection();
 
         ValidateUserSettingVersion(schemaVersion, "CommentFilters");
-        var selection = CommentFilterSelection.FromXml(content);
-        selection.DataVersion = schemaVersion!;
-        return selection;
+        return CommentFilterSelection.FromXml(content, schemaVersion!);
     }
 
     public bool SetUserCommentFilters(object? value)
@@ -2143,7 +2141,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
-    public bool ResetUserCommentFilters(object? param = null)
+    public bool ResetUserCommentFilters()
     {
         GetUserProjectSettings().RemoveSetting("CommentFilters");
         SendDataUpdateEvent(
