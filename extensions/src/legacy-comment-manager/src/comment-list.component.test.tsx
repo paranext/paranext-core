@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -129,5 +129,20 @@ describe('CommentListPanel filter toolbar', () => {
       'aria-disabled',
       'true',
     );
+  });
+
+  it('offers exactly the preset and scope dropdowns and no other filter control', () => {
+    // The PRD excludes free-text search over comments and any sort control. Asserting the toolbar's
+    // full contents catches an addition whatever it is called and whatever locale it renders in,
+    // where naming the forbidden roles would only catch the spellings we happened to predict.
+    renderPanel();
+
+    const toolbar = screen.getByTestId('comment-preset-filter').closest('div');
+    if (!toolbar) throw new Error('expected the preset dropdown to sit in a toolbar container');
+
+    expect(within(toolbar).getAllByRole('combobox')).toHaveLength(2);
+    expect(within(toolbar).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(within(toolbar).queryByRole('searchbox')).not.toBeInTheDocument();
+    expect(within(toolbar).queryByRole('button')).not.toBeInTheDocument();
   });
 });
