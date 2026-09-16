@@ -30,6 +30,8 @@ const OVERLAP_PROPERTY = '--tab-bar-drop-zone-overlap';
  * edge rather than after the gap that follows it. See {@link claimLastTabOverlap}.
  */
 const INDICATOR_LEAD_PROPERTY = '--tab-bar-drop-zone-indicator-lead';
+/** Narrowest indicator, in px, the zone shows; `onDragOver` rejects the drag below this. */
+const MIN_INDICATOR_WIDTH = 1;
 
 /**
  * Clears a zone's claimed drop indicator. rc-dock's own `.d.ts` types `setDropRect`'s `element`
@@ -70,9 +72,12 @@ function clearLastTabOverlap(zone: HTMLElement): void {
  * {@link INDICATOR_LEAD_PROPERTY}), so writing them never changes the zone's own box or the bar's
  * flex layout, and the rects read here are the same before and after a previous claim. The overlap
  * reaches back to the last tab's midpoint; the indicator only reaches back to the tab's trailing
- * edge, and never further than the overlap. When the zone already starts before that edge (a
- * crowded bar clips the last tab under the zone) the indicator doesn't lead at all, and when it
- * starts before the midpoint nothing is covered.
+ * edge.
+ *
+ * The tab is covered only when the zone starts at or after its trailing edge and will show an
+ * indicator. Otherwise (a crowded bar clips the last tab under a zone with no width left) the zone
+ * would reject the drop there, and rc-dock's walk from the zone never reaches the tab, so the tab's
+ * visible trailing half would silently ignore a drop it accepts on its own.
  */
 function claimLastTabOverlap(zone: HTMLElement): void {
   const tabs = zone.closest('.dock-nav')?.querySelectorAll<HTMLElement>('.dock-nav-list .dock-tab');
@@ -83,13 +88,12 @@ function claimLastTabOverlap(zone: HTMLElement): void {
   const zoneRect = zone.getBoundingClientRect();
   const tabMidpoint = tabRect.left + tabRect.width / 2;
   const isRtl = getComputedStyle(zone).direction === 'rtl';
-  const overlap = Math.max(0, isRtl ? tabMidpoint - zoneRect.right : zoneRect.left - tabMidpoint);
-  // Not `Math.min(overlap, gap)`: a tab's midpoint can never sit past its own trailing edge, so the
-  // gap-to-trailing-edge distance below is never larger than `overlap` above.
-  const indicatorLead = Math.max(
-    0,
-    isRtl ? tabRect.left - zoneRect.right : zoneRect.left - tabRect.right,
-  );
+  const gapToTab = isRtl ? tabRect.left - zoneRect.right : zoneRect.left - tabRect.right;
+  const indicatorLead = Math.max(0, gapToTab);
+  const coversTab = gapToTab >= 0 && indicatorLead + zoneRect.width >= MIN_INDICATOR_WIDTH;
+  const overlap = coversTab
+    ? Math.max(0, isRtl ? tabMidpoint - zoneRect.right : zoneRect.left - tabMidpoint)
+    : 0;
 
   zone.style.setProperty(OVERLAP_PROPERTY, `${overlap}px`);
   zone.style.setProperty(INDICATOR_LEAD_PROPERTY, `${indicatorLead}px`);
@@ -127,8 +131,9 @@ export function TabBarDropZone({ panelData, context }: TabBarDropZoneProps) {
     const indicator = indicatorRef.current;
     // A zero-width indicator (a zone squeezed to nothing on a crowded bar, with no gap to lead back
     // over) has nothing visible to show, and `.dock-drop-indicator`'s ring shadow would still paint
-    // around it, so leave the drop to whatever lies beneath.
-    if (!source || !indicator || indicator.getBoundingClientRect().width < 1) {
+    // around it, so this zone takes no drop. `claimLastTabOverlap` leaves the last tab uncovered in
+    // that case, so the tab still takes drops on its own.
+    if (!source || !indicator || indicator.getBoundingClientRect().width < MIN_INDICATOR_WIDTH) {
       state.reject();
       return;
     }

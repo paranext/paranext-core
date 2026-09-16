@@ -437,16 +437,18 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
   beforeEach(resetTestDoubles);
 
   /**
-   * Renders one tab bar whose last tab spans x:[500, 600] (midpoint 550) and whose zone starts at
-   * `zoneStart`, then drives a drag start carrying `dragData` through the captured listener.
+   * Renders one tab bar whose last tab spans x:[500, 600] (midpoint 550) and whose zone spans
+   * x:[zoneStart, zoneEnd], then drives a drag start carrying `dragData` through the captured
+   * listener.
    */
   function startDragOverLtrBar(
     zoneStart: number,
     dragData: Record<string, unknown> = { tab: createTab() },
+    zoneEnd = 900,
   ): HTMLElement {
     const { tabs, zoneElement } = renderTabBarFixture(createPanel(), createDockContext());
     stubRect(tabs[1], { left: 500, right: 600, width: 100 });
-    stubRect(zoneElement, { left: zoneStart, right: 900, width: 900 - zoneStart });
+    stubRect(zoneElement, { left: zoneStart, right: zoneEnd, width: zoneEnd - zoneStart });
     const onDragStateChange = getCapturedDragStateListener();
     createDragState(dragData, DOCK_ID);
     onDragStateChange(DOCK_ID);
@@ -470,11 +472,52 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('8px');
   });
 
-  it('does not lead the indicator backward when the zone already starts over the last tab', () => {
-    // A crowded bar clips the last tab under the zone: the zone starts 10px before its trailing edge.
+  // rc-dock's hit-test walk goes up from the zone and never reaches the tab, so any part of the tab
+  // the zone covers must be a part the zone accepts, or a drop there does nothing.
+  it('covers nothing when the zone starts over the last tab (a crowded bar clips the tab under it)', () => {
+    // The zone starts 10px before the tab's trailing edge, past its midpoint, with no width left.
+    const zoneElement = startDragOverLtrBar(590, undefined, 590);
+
+    expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
+  });
+
+  it('covers nothing when the zone starts over the last tab, even with room of its own', () => {
     const zoneElement = startDragOverLtrBar(590);
 
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('40px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
+  });
+
+  it('covers nothing when a zero-width zone starts exactly at the last tab’s trailing edge', () => {
+    // No gap to lead back over and no width: the indicator would be empty, so the zone rejects.
+    const zoneElement = startDragOverLtrBar(600, undefined, 600);
+
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
+  });
+
+  it('still covers the tab when a zero-width zone leads its indicator back over a gap', () => {
+    const zoneElement = startDragOverLtrBar(608, undefined, 608);
+
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('58px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('8px');
+  });
+
+  it('covers nothing when a right-to-left zone starts over the last tab', () => {
+    const { tabs, zoneElement } = renderTabBarFixture(createPanel(), createDockContext());
+    zoneElement.style.direction = 'rtl';
+    // Last tab spans x:[400, 500] (midpoint 450); the zone's right edge (its logical start in RTL)
+    // is at x:410 — inside the tab, past its midpoint — with no width left.
+    stubRect(tabs[1], { left: 400, right: 500, width: 100 });
+    stubRect(zoneElement, { left: 410, right: 410, width: 0 });
+    const onDragStateChange = getCapturedDragStateListener();
+    createDragState({ tab: createTab() }, DOCK_ID);
+
+    onDragStateChange(DOCK_ID);
+
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
   });
 
