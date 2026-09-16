@@ -41,6 +41,8 @@ describe('resolveSetFiltersMessage', () => {
 
     expect(resolved.filtersChanged).toBe(true);
     expect(resolved.filters).toEqual({ preset: 'resolved' });
+    // The scope wasn't touched by this message, so its computation must stay independent.
+    expect(resolved.scopeFilterChanged).toBe(false);
   });
 
   it('reports a scope change when the scope actually differs', () => {
@@ -50,6 +52,8 @@ describe('resolveSetFiltersMessage', () => {
 
     expect(resolved.scopeFilterChanged).toBe(true);
     expect(resolved.scopeFilter).toBe('current-chapter');
+    // The preset wasn't touched by this message, so its computation must stay independent.
+    expect(resolved.filtersChanged).toBe(false);
   });
 
   it('treats an omitted scope as the default for comparison, not as "unchanged"', () => {
@@ -81,7 +85,9 @@ describe('resolveSetFiltersMessage', () => {
 
   it('resolves an omitted scope to the all-books default, never undefined, when only the preset is set', () => {
     // Pins the crash this function guards against: a setFilters message that narrows only the
-    // preset (e.g. a Send/Receive conflict link) must still leave the view on a valid scope.
+    // preset (e.g. a Send/Receive conflict link) must still leave the view on a valid scope. The
+    // 'conflict' preset is representative of that real caller but has no bearing on the scope
+    // computation itself — any preset would exercise the same path.
     const current = { filters: DEFAULT_COMMENT_FILTERS, scopeFilter: DEFAULT_SCOPE_FILTER };
 
     const resolved = resolveSetFiltersMessage({ filters: { preset: 'conflict' } }, current);

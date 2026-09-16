@@ -16,6 +16,7 @@ import type {
 import { serialize } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
+import { presetToLabelKey, scopeFilterToLabelKey } from './comment-list-filters.model';
 import {
   LEGACY_COMMENT_USJ_PDPF_ID,
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
@@ -432,30 +433,20 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
                 type: 'object',
                 description:
                   'Comment-filter preset to pre-apply; an unspecified preset resets to all',
-                // This enum duplicates the CommentPreset union (legacy-comment-manager.d.ts). Keep it
-                // in sync by hand until a codegen step derives this schema from the types.
+                // The enum is derived from presetToLabelKey's keys, so it always matches the
+                // CommentPreset union exactly.
                 properties: {
                   preset: {
                     type: 'string',
-                    enum: [
-                      'all',
-                      'unresolved-assigned-to-me',
-                      'unresolved',
-                      'unread-assigned-to-me',
-                      'unread',
-                      'unread-and-unresolved',
-                      'resolved',
-                      'unsaved',
-                      'conflict',
-                    ],
+                    enum: Object.keys(presetToLabelKey),
                   },
                 },
               },
               scopeFilterToSet: {
                 type: 'string',
-                // This enum duplicates the ScopeFilter union (legacy-comment-manager.d.ts). Keep it in
-                // sync by hand until a codegen step derives this schema from the types.
-                enum: ['all-books', 'current-book', 'current-chapter', 'current-verse'],
+                // The enum is derived from scopeFilterToLabelKey's keys, so it always matches the
+                // ScopeFilter union exactly.
+                enum: Object.keys(scopeFilterToLabelKey),
                 description: 'Scope to pre-apply; omitting it resets scope to all-books',
               },
             },
