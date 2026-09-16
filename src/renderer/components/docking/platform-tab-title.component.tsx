@@ -141,6 +141,53 @@ const EMPTY_TAB_MENU: Localized<SingleColumnMenu> = Object.freeze({ groups: {}, 
  */
 const TAB_WITHOUT_WEB_VIEW_TYPE = 'platform.tab';
 
+/**
+ * Process-lifetime cache of each web view type's contributed tab menu, keyed by the effective type
+ * (see {@link TAB_WITHOUT_WEB_VIEW_TYPE}). Every tab of a given type shares the SAME read rather
+ * than each firing its own cross-process request at mount — Simple mode alone opens several web
+ * views on the startup path, and most tabs in a layout share a handful of types.
+ *
+ * A rejected read is deliberately NOT kept here (see {@link getContributedTabMenu}), so this only
+ * ever holds a promise that is pending or has resolved.
+ */
+const contributedTabMenuCache = new Map<string, Promise<Localized<SingleColumnMenu>>>();
+
+/**
+ * Reads a web view type's contributed tab menu, sharing one read across every tab of that type for
+ * the life of the process rather than one per tab mount.
+ *
+ * A failed read is not cached: it is removed the moment it rejects, so the next tab of this type
+ * gets a fresh attempt instead of inheriting a promise that can only ever reject.
+ */
+function getContributedTabMenu(
+  webViewType: string | undefined,
+): Promise<Localized<SingleColumnMenu>> {
+  const key = webViewType ?? TAB_WITHOUT_WEB_VIEW_TYPE;
+  const cached = contributedTabMenuCache.get(key);
+  if (cached) return cached;
+
+  const read = menuDataService
+    .getWebViewMenu(
+      // Assume the web view type is correctly formatted; it has already been checked where it is set
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      key as `${string}.${string}`,
+    )
+    .then((webViewMenu) => webViewMenu.tabMenu ?? EMPTY_TAB_MENU);
+  read.catch(() => contributedTabMenuCache.delete(key));
+
+  contributedTabMenuCache.set(key, read);
+  return read;
+}
+
+/**
+ * Test-only: clears the cache above so each test starts with none of a previous test's reads still
+ * cached. The cache is otherwise never cleared — see {@link getContributedTabMenu}.
+ */
+// eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
+export function __resetTabMenuCacheForTesting(): void {
+  contributedTabMenuCache.clear();
+}
+
 /** Render converted menu items into the context-menu primitives, submenus and all */
 function renderTabMenuItems(
   items: OverlayContextMenuItem[],
@@ -390,30 +437,26 @@ export function PlatformTabTitle({
     [contributedItems, localizedStrings],
   );
 
-  // Read once when the tab mounts, rather than subscribed to. The platform's own items are a fixed
-  // contribution, and the two things that do change while a tab lives — which windows are open, and
-  // which actions apply to this tab — are read when the menu opens instead. A live subscription
-  // would re-read on every contribution resync for a list that had not changed.
+  // Read once per web view type for the life of the process, rather than subscribed to and rather
+  // than once per tab mount. The platform's own items are a fixed contribution, and the two things
+  // that do change while a tab lives — which windows are open, and which actions apply to this tab —
+  // are read when the menu opens instead. A live subscription would re-read on every contribution
+  // resync for a list that had not changed.
   //
   // Both modes read the same contributed menu: Simple mode narrows it to the zoom group after the
-  // read lands, so a Simple-mode column pays one cross-process read per tab just as a Power-mode
-  // one does.
+  // read lands, so a Simple-mode column shares the same cached read a Power-mode one does.
   //
   // The trade this accepts: an extension installed or removed mid-session has its tab items appear
-  // when the tab next mounts, not immediately.
+  // only once the window reloads (the type's cached read survives until then), not at the next tab
+  // mount of that type the way an uncached read would.
   useEffect(() => {
     let isStillMounted = true;
     (async () => {
       try {
         // Every tab has a tab menu. One hosting no web view has no type to look a contributed menu
-        // up by, and the data provider answers an unrecognized name with the platform's own items
-        const webViewMenu = await menuDataService.getWebViewMenu(
-          // Assume the web view type is correctly formatted; it has already been checked where it
-          // is set
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          (webViewType as `${string}.${string}`) ?? TAB_WITHOUT_WEB_VIEW_TYPE,
-        );
-        if (isStillMounted) setContributedTabMenu(webViewMenu.tabMenu ?? EMPTY_TAB_MENU);
+        // up by, and the cache answers an unrecognized name with the platform's own items
+        const tabMenu = await getContributedTabMenu(webViewType);
+        if (isStillMounted) setContributedTabMenu(tabMenu);
       } catch (error) {
         // Said out loud rather than swallowed into an empty menu: the extension host logs the cause
         // at debug and without knowing which tab asked, so nothing here would otherwise explain a
