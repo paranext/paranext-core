@@ -12,6 +12,7 @@ public static class ProjectDataType
     public const string EXTENSION_DATA = "ExtensionData";
     public const string SETTING = "Setting";
     public const string TEXT_COLLECTION_OVERLAY = "TextCollectionOverlay";
+    public const string USER_COMMENT_FILTERS = "UserCommentFilters";
     public const string USER_MODEL_TEXTS = "UserModelTexts";
     public const string USER_REFERENCED_PROJECTS_AND_RESOURCES =
         "UserReferencedProjectsAndResources";
