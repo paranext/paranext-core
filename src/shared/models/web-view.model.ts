@@ -343,6 +343,12 @@ export const MAIN_CONTENT_ZOOM_AREA = 'main';
  * id to factor. An area with no entry follows the default from Settings. Written only by the
  * platform; web views may read it.
  *
+ * A web view whose `getWebViewDefinition` rebuilds its own definition on re-point (a
+ * `reloadWebView` pointed at another project through the same web view id) must carry its saved
+ * `state` through wholesale, by spreading it rather than copying only the keys the view itself
+ * uses: the platform stores a companion identity stamp next to this key, and a view that dropped
+ * either one while rebuilding would lose the platform's re-point re-seed silently.
+ *
  * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
  * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
  * equal to this constant.
