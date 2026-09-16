@@ -485,34 +485,35 @@ declare module 'legacy-comment-manager' {
 
   // #region Comment filter axis types (shared with comment-list-filters.model.ts)
 
-  /** Resolved-status filter axis: all threads, only unresolved, or only resolved. */
-  export type ResolvedFilter = 'all' | 'unresolved' | 'resolved';
-  /** Read-status filter axis: all threads, only unread, or only read (for the current user). */
-  export type ReadFilter = 'all' | 'unread' | 'read';
-  /** Note-type filter axis: all notes, only conflict notes, or only regular comments. */
-  export type TypeFilter = 'all' | 'conflicts' | 'comments';
-  /** Assignment filter axis: all threads, assigned to me, assigned to the team, or unassigned. */
-  export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
   /**
-   * Date filter axis: the closed set of presets the toolbar stores. Distinct from {@link DateFilter}
-   * above, which is the richer shape the selector itself carries — a preset is resolved to one of
-   * those at query-build time.
+   * The named filter presets the comment toolbar offers. A single closed set rather than orthogonal
+   * axes: these are the combinations users actually work in, and the axes are not offered
+   * separately, so composing them would be unreachable flexibility.
+   *
+   * `unsaved` is the one preset with no selector clause — a draft is client-side state the data
+   * provider has never heard of, so it is applied after the query rather than within it.
    */
-  export type DatePresetFilter = 'all' | 'today' | 'last-7-days' | 'last-30-days';
+  export type CommentPreset =
+    | 'all'
+    | 'unresolved-assigned-to-me'
+    | 'unresolved'
+    | 'unread-assigned-to-me'
+    | 'unread'
+    | 'unread-and-unresolved'
+    | 'resolved'
+    | 'unsaved'
+    | 'conflict';
 
-  /** The six orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
+  /** The comment-filter selection. */
   export type CommentFilters = {
-    resolved: ResolvedFilter;
-    read: ReadFilter;
-    type: TypeFilter;
-    assignment: AssignmentFilter;
-    date: DatePresetFilter;
-    /** A project-user name to filter comment authorship by, or the `'all'` sentinel. */
-    author: string;
+    preset: CommentPreset;
   };
 
-  /** Scope axis: current chapter vs all books. */
-  export type ScopeFilter = 'unfiltered' | 'current-chapter';
+  /**
+   * Scripture scope. The three `current-*` values follow the window's scroll-group reference live,
+   * and resolve against it whether or not this list follows an editor.
+   */
+  export type ScopeFilter = 'all-books' | 'current-book' | 'current-chapter' | 'current-verse';
 
   // #endregion
 
