@@ -5415,11 +5415,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   into one list with separators, and a converted item no longer says which group it came from, so
   narrowing a menu to one group has to happen on the contributed menu before conversion, not after.
 - **Decision:** Both interface modes read the same contributed tab menu. Simple mode narrows it to
-  the `platform.tabZoom` group before conversion; items in that group are inert on a tab whose web
-  view marks no zoom area, the same way every other tab-menu item is inert when it cannot act on the
-  current tab. A tab hosting no web view gets no menu at all in either mode. The menu renders only
-  once the interface mode is known, so a tab never briefly shows the wrong mode's menu before the
-  setting resolves.
+  the `platform.tabZoom` group before conversion; items in that group are shown disabled on a tab
+  whose web view marks no zoom area, read from the content-zoom resolver at the moment the menu
+  opens. A tab hosting no web view gets no menu at all in either mode. The menu renders only once the
+  interface mode is known, so a tab never briefly shows the wrong mode's menu before the setting
+  resolves.
 - **Alternatives:** **Keep Simple mode menu-less and rely on chords alone** — rejected: a keyboard
   shortcut with no menu entry is not discoverable, and content zoom is meant to be found by browsing
   the tab menu. **Disable items by area presence at the contribution level** — rejected: whether a
