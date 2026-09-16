@@ -35,7 +35,6 @@ import {
   LaunchElectronAppOptions,
   sendPapiRequestOnce,
   waitForAppReady,
-  WINDOW_ID_SHAPE_SOURCE,
 } from '../../../fixtures/helpers';
 import {
   WEBSOCKET_PORT,
@@ -56,29 +55,6 @@ const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
   isolatedProjectRoot: true,
   envOverrides: { DEV_NOISY: 'false' },
 };
-
-/**
- * The window-scope suffix a window appends to the web view ids of any layout it loads. Mirrors the
- * durable-id branch of `WINDOW_SUFFIX_PATTERN` in
- * `src/renderer/components/docking/window-scoped-web-view-ids.util.ts` (not imported here — the e2e
- * project cannot resolve the app's path aliases), built from the shared
- * {@link WINDOW_ID_SHAPE_SOURCE} mirror since the suffix is a window id. Deliberately not that
- * pattern's legacy bare-digit alternative too: every window in an isolated test run is created
- * fresh and so always mints a durable id, never the pre-durable-id numeric form a saved-from-disk
- * layout can still carry.
- */
-const WINDOW_SCOPE_SUFFIX_PATTERN = new RegExp(`-w${WINDOW_ID_SHAPE_SOURCE}$`, 'i');
-
-/**
- * A tab id without the window suffix a tab carries.
- *
- * A tab's `data-web-view-id` is the web view id plus the id of the window it is in, so the same web
- * view restored into a different window carries a different tab id. Comparing what a window held
- * before a switch with what it holds after one has to compare the web views, not the windows.
- */
-function stripWindowScope(tabId: string): string {
-  return tabId.replace(WINDOW_SCOPE_SUFFIX_PATTERN, '');
-}
 
 /** How long a switch may take to settle before a poll gives up */
 const SWITCH_SETTLE_TIMEOUT_MS = 120_000;
@@ -282,12 +258,10 @@ test.describe('switching interface mode', () => {
       'the reopened window to hold the web views it had before the switch',
     );
 
-    // Compared with the per-window suffix stripped: a tab's id is built from the web view id plus
-    // the id of the window holding it, and the reopened window is a NEW window — so the raw ids
-    // could never match however correct the restore was.
-    expect((await getHeldWebViewIds(reopened)).map(stripWindowScope)).toEqual(
-      tabsBefore.map(stripWindowScope),
-    );
+    // The web view ids themselves, not just how many there are: the entry is kept so the window
+    // comes back holding what it held, and a restore that produced the right NUMBER of tabs from
+    // the wrong source would already have satisfied the poll above.
+    expect(await getHeldWebViewIds(reopened)).toEqual(tabsBefore);
     expectNoFaultsWhileRunning(output);
   });
 

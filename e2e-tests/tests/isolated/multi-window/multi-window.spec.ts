@@ -50,10 +50,12 @@
  *
  * With `DEV_NOISY=false` and no saved layout (fresh user-data dir per test), the FIRST window loads
  * the single-Home-tab layout from `src/renderer/testing/test-layout.data.ts` (the fallback for a
- * profile with no saved window structure), whose fixed web view id makes the per-window
- * `-w{windowId}` scoping suffix directly observable. A window created mid-session docks Home by
- * design — its own freshly minted Home tab, not loaded from any shared layout — so window 2 in
- * these tests renders exactly that one tab and nothing more.
+ * profile with no saved window structure), so every test starts from exactly one known tab. That
+ * layout's web view id is a slot identity: each materialization mints the web view a fresh id
+ * (`mintFreshWebViewIds` in `src/renderer/components/docking/mint-web-view-ids.util.ts`), so a
+ * window's Home tab id is read off the DOM rather than predicted. A window created mid-session
+ * docks Home by design — its own freshly minted Home tab, not loaded from any shared layout — so
+ * window 2 in these tests renders exactly that one tab and nothing more.
  *
  * ## Log capture
  *
