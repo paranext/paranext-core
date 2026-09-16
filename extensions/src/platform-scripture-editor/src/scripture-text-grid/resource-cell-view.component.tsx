@@ -14,7 +14,14 @@ import {
 } from 'platform-bible-react';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
-import { ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  ReactNode,
+  useCallback,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type Ref,
+} from 'react';
 import { ALIGNED_ZOOM_PROPERTY, type AlignedZoomStyle } from './aligned-grid.styles';
 import { ResourceCellState } from './resource-cell.utils';
 import {
@@ -102,6 +109,14 @@ export type ResourceCellViewProps = {
    * ancestor's grid, and cells that scrolled separately would drift out of alignment anyway.
    */
   contentOverflow?: 'auto' | 'visible';
+  /**
+   * Ref to this cell's scrollable content box, for a caller that scrolls the cell itself
+   * (`contentOverflow="auto"`) — a chapter surface following the scroll-group reference.
+   *
+   * Only the header layout wires it. The inline layout's verse row has nothing to scroll to, since
+   * the cell is already reduced to the reference's verse.
+   */
+  contentRef?: Ref<HTMLDivElement>;
   /** Current zoom factor for this resource (1 = default). */
   zoomFactor?: number;
   /**
@@ -241,6 +256,7 @@ export function ResourceCellView({
   emptyMessage,
   nameDisplay = 'header',
   contentOverflow = 'auto',
+  contentRef,
   zoomFactor,
   zoomTarget = 'box',
   canZoomIn = true,
@@ -457,6 +473,7 @@ export function ResourceCellView({
             ) : undefined}
           </div>
           <div
+            ref={contentRef}
             data-cell-content
             className={`tw:flex-1 ${contentOverflowClass}`}
             style={contentStyle}
