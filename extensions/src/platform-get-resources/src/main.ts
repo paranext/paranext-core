@@ -196,10 +196,10 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
       }
 
       const installStatus = await readInstallStatus();
-      // An empty map is not an answer: the backend's catalog has not loaded yet, another DBL
-      // operation held the provider, or the catalog really is empty — and it reports all three the
-      // same way. Reconciling against it would mark every installed resource not-installed and
-      // persist that, so leave the flags alone until there is something to act on.
+      // An empty map is not an answer: another DBL operation held the provider, or nothing is
+      // installed and the catalog has not loaded — and it reports both the same way. Reconciling
+      // against it would mark every installed resource not-installed and persist that, so leave
+      // the flags alone until there is something to act on.
       if (!installStatus || Object.keys(installStatus).length === 0) {
         logger.debug(
           'Skipped a resource flag sync: the backend reported no install status, so the flags are left as they are',

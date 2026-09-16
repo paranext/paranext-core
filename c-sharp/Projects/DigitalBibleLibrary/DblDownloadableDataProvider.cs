@@ -325,15 +325,25 @@ internal class DblResourcesDataProvider(
     /// </remarks>
     /// <returns>
     /// The local project id of each catalogued resource, keyed by DBL entry uid, empty for one that
-    /// is not installed. The dictionary itself is empty when the catalog has not loaded yet or when
-    /// another DBL operation holds the gate; callers must read that as "no answer" and keep the
-    /// values they have, never as "nothing is installed".
+    /// is not installed. Before the catalog has loaded the result names only the resources that are
+    /// installed, which is the same contract seen from the other side: a uid absent from the map is
+    /// one the backend did not report on, and the caller keeps what it has. The dictionary itself
+    /// is empty when another DBL operation holds the gate, or when nothing is installed and the
+    /// catalog has not loaded; callers must read that as "no answer", never as "nothing is
+    /// installed".
     /// </returns>
     [NetworkTimeout(UPDATE_STATUS_NETWORK_TIMEOUT)]
     internal Task<Dictionary<string, string>> RecomputeDblResourcesInstallStatus()
     {
+        // Answer from disk alone when the catalog has never loaded — the whole of startup, and
+        // every session of a user who is offline, since _hasFetchedResources is set only by a
+        // successful DBL fetch. Unlike the update recheck, this question does not need the catalog:
+        // install status is a property of what is on the machine. The local scan names only
+        // installed resources, which is a complete answer for each uid it contains, because the
+        // front end leaves a row absent from the map exactly as it is. What it cannot report while
+        // offline is a removal, since a removed resource is simply absent.
         if (!_hasFetchedResources)
-            return Task.FromResult(new Dictionary<string, string>());
+            return Task.Run(InstalledProjectIdsByDblId);
 
         return Task.Run(() =>
         {

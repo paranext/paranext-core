@@ -56,10 +56,12 @@ declare module 'platform-get-resources' {
      * entry it was installed from, so matching a catalog row to a local project by id — exactly or
      * by prefix — is guesswork that fails for any resource whose ids diverge.
      *
-     * Shares every caveat of {@link recomputeDblResourcesUpdateStatus}: never contacts the DBL,
-     * gives up rather than blocking when the provider is busy, and returns an empty map when the
-     * catalog has not been fetched this session. Read an empty map as "no answer" and keep the
-     * values you have — reading it as "nothing is installed" would clear every installed flag.
+     * Never contacts the DBL, and gives up rather than blocking when the provider is busy. Unlike
+     * {@link recomputeDblResourcesUpdateStatus} it still answers before the catalog has been fetched
+     * — install status is a property of the machine, not of the catalog — but names only the
+     * resources that are installed until the catalog arrives, and cannot report a removal in that
+     * state. Read an empty map as "no answer" and keep the values you have; reading it as "nothing
+     * is installed" would clear every installed flag.
      *
      * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
      *   string for one that is not installed.
