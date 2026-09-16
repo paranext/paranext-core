@@ -37,6 +37,7 @@ These belong to no subset; run them by path (see "How to run").
 ## Subdirectories
 
 - `comment-assignment/` (one Electron per worker) — tests for assigning comments to users
+- `docking/` (one Electron per test) — tests for dropping dragged tabs onto a tab bar's empty space and for tab-row stability while a drag starts
 - `find/` (one Electron per worker) — tests for the find/replace flow
 - `first-run/` (one Electron per test) — tests for the first-run wizard (PT-4175 / PT-4179)
 - `multi-window/` (one Electron per test, except `window-layout-persistence.spec.ts` and two tests
