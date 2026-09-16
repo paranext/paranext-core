@@ -72,7 +72,12 @@ one of these.
     stays whatever the fixture hardcoded. The other launch
     fixtures seed the declared value and then assert the app came up in it, so there is nothing
     extra to declare and nothing to forget. Attach-mode suites cannot seed, so `cdp.fixture` keeps an
-    assert-only `test.use({ requiredInterfaceMode })` instead. Either way the check confirms the app
+    assert-only `test.use({ requiredInterfaceMode })` instead. `enhanced-resources.fixture.ts` is a
+    second instance of the same inert-plain-value shape: it supplies `requiredInterfaceMode: 'power'`
+    as a plain value rather than an option, because Playwright's types reject a derived test
+    re-declaring an option its base already declares — so `test.use({ requiredInterfaceMode })` in a
+    spec on that fixture is silently inert too. A spec in that suite needing a different mode imports
+    `cdp.fixture` directly, as `tests/enhanced-resources/text-collection-schema.spec.ts` does. Either way the check confirms the app
     IS in that mode — which is what the layout depends on — rather than proving a particular seed is
     what put it there; for `'simple'` an app that was never pinned satisfies it, because that is the
     contributed default. It reads `platform.interfaceMode` from the settings service over PAPI, NOT

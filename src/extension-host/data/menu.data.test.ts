@@ -13,7 +13,8 @@ const readLocalization = (file: string): Record<string, string> =>
 
 const en = readLocalization('en.json');
 const es = readLocalization('es.json');
-const metadata: Record<string, { fallbackKey?: string }> = readLocalization('metadata.json');
+const metadata: Record<string, { fallbackKey?: string; deprecationInfo?: unknown }> =
+  readLocalization('metadata.json');
 
 const COMMUNITY_SUPPORT_KEY = '%mainMenu_helpInfo_visitCommunitySupportPage%';
 const RETIRED_FAQS_KEY = '%mainMenu_helpInfo_visitFAQsPage%';
@@ -45,18 +46,37 @@ describe('Help menu community support label', () => {
   });
 });
 
-describe('The retired FAQs key stays resolvable', () => {
-  // Localized string values are immutable once shipped, so the rename adds a key rather than
-  // editing this one. Anything still holding the old key keeps working.
+describe('The retired FAQs key redirects to the new one', () => {
+  /**
+   * Localized string values are immutable once shipped, so the relabel adds a key rather than
+   * editing this one, and routes the retired key at the new one.
+   *
+   * The retired key's own values have to be gone for that redirect to do anything:
+   * `getLocalizedString` returns `initialLanguageData[localizeKey]` and only consults `fallbackKey`
+   * when that misses, so a retired key that keeps its value resolves to the old label forever and
+   * the redirect is inert. Removing the values is what makes a consumer still holding the old key
+   * render "Community support".
+   */
   test.each([
     ['en', en],
     ['es', es],
-  ])('%s still carries the retired key', (_, locale) => {
-    expect(locale[RETIRED_FAQS_KEY]).toBeTruthy();
+  ])('%s no longer carries the retired key, so the redirect is reachable', (_, locale) => {
+    expect(locale[RETIRED_FAQS_KEY]).toBeUndefined();
   });
 
   test('is redirected at the new key', () => {
     expect(metadata[RETIRED_FAQS_KEY]?.fallbackKey).toBe(COMMUNITY_SUPPORT_KEY);
+  });
+
+  // `deprecatedStringsByKey` warns on use of a deprecated key, but only when it carries this.
+  test('is marked deprecated so its remaining consumers are logged', () => {
+    expect(metadata[RETIRED_FAQS_KEY]?.deprecationInfo).toBeDefined();
+  });
+
+  test('redirects at a key that actually resolves in both shipped locales', () => {
+    const { fallbackKey } = metadata[RETIRED_FAQS_KEY] ?? {};
+    expect(fallbackKey && en[fallbackKey]).toBeTruthy();
+    expect(fallbackKey && es[fallbackKey]).toBeTruthy();
   });
 });
 

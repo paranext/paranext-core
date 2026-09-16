@@ -97,6 +97,71 @@ function hasCommand(menu: Awaited<ReturnType<typeof getMainMenuInMode>>, command
   return menu.items.some((item) => 'command' in item && item.command === command);
 }
 
+/** Every entry the main menu offers in `mode`, by command — or by id for a submenu root. */
+function entriesIn(menu: Awaited<ReturnType<typeof getMainMenuInMode>>): string[] {
+  return menu.items.map((item) => ('command' in item ? item.command : item.id)).sort();
+}
+
+describe('The shipped main menu is pinned exactly, per mode', () => {
+  /**
+   * The gating suites below name the items they care about, so they cannot see an item nobody
+   * thought to name. Groups marked `isExtensible` accept contributions from any extension, which
+   * means a new menu entry can reach Simple without this repo's menu document changing at all —
+   * exactly the regression the per-item checks cannot catch. Comparing the whole list makes any
+   * such addition fail here, naming the new command in the diff.
+   *
+   * `helloRock3.*` is in both lists deliberately: it ships main menu items with no
+   * `hiddenInterfaceModes`, so it is a live example of that hazard rather than an oversight. Its
+   * presence in the Simple list is the thing this test exists to make visible.
+   *
+   * Update these lists only alongside a deliberate decision about whether the item belongs in each
+   * mode — never to make a failing run green.
+   */
+  const SIMPLE_MAIN_MENU = [
+    'helloRock3.createNewProject',
+    'helloRock3.deleteProject',
+    'helloRock3.openProject',
+    'helloRock3.projectSubmenu',
+    'platform.about',
+    'platform.openSettings',
+    'platform.quit',
+    'platform.showOnboardingTour',
+    'platform.usersnapReportIssue',
+    'platform.usersnapSubmitIdea',
+    'platform.visitFAQsPage',
+  ];
+
+  const POWER_MAIN_MENU = [
+    'helloRock3.createNewProject',
+    'helloRock3.deleteProject',
+    'helloRock3.openProject',
+    'helloRock3.projectSubmenu',
+    'paratextRegistration.showParatextRegistration',
+    'platform.about',
+    'platform.createWindow',
+    'platform.openDeveloperDocumentationUrl',
+    'platform.openSettings',
+    'platform.quit',
+    'platform.showOnboardingTour',
+    'platform.usersnapReportIssue',
+    'platform.usersnapSubmitIdea',
+    'platform.visitFAQsPage',
+    'platform.visitFeatureRoadmapPage',
+    'platform.visitGettingStartedPage',
+    'platformEnhancedResources.openEnhancedResource',
+    'platformGetResources.openHome',
+    'platformLexicalTools.openDictionary',
+  ];
+
+  test('Simple offers exactly these entries', async () => {
+    expect(entriesIn(await getMainMenuInMode('simple'))).toEqual(SIMPLE_MAIN_MENU);
+  });
+
+  test('Power offers exactly these entries', async () => {
+    expect(entriesIn(await getMainMenuInMode('power'))).toEqual(POWER_MAIN_MENU);
+  });
+});
+
 describe('Shipped menu contributions are discovered', () => {
   /**
    * Every assertion below reasons about the combined menu, so a scan that silently found nothing
