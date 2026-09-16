@@ -2272,9 +2272,8 @@ async function main() {
     {
       method: {
         summary:
-          'Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
-          'Has no default keyboard shortcut: the Ctrl/⌘ +/-/0 chords belong to per-pane content ' +
-          'zoom (platform.webViewContentZoomIn / …Out / …Reset).',
+          "Increase all windows' zoom level — menus, toolbars and content — by 10 %. Has no " +
+          'default keyboard shortcut; per-pane content zoom uses platform.webViewContentZoomIn.',
         params: [],
         result: {
           name: 'return value',
@@ -2292,9 +2291,8 @@ async function main() {
     {
       method: {
         summary:
-          'Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. ' +
-          'Has no default keyboard shortcut: the Ctrl/⌘ +/-/0 chords belong to per-pane content ' +
-          'zoom (platform.webViewContentZoomIn / …Out / …Reset).',
+          "Decrease all windows' zoom level — menus, toolbars and content — by 10 %. Has no " +
+          'default keyboard shortcut; per-pane content zoom uses platform.webViewContentZoomOut.',
         params: [],
         result: {
           name: 'return value',
