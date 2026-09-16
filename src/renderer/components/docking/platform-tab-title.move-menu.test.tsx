@@ -9,7 +9,7 @@ import { menuDataService } from '@shared/services/menu-data.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { describeWebViewMoveFailure } from '@shared/models/web-view-move.model';
-import { PlatformTabTitle } from './platform-tab-title.component';
+import { __resetTabMenuCacheForTesting, PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
 
@@ -187,6 +187,12 @@ const CONTRIBUTED_TAB_MENU: Awaited<ReturnType<typeof menuDataService.getWebView
 
 beforeEach(() => {
   vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(CONTRIBUTED_TAB_MENU);
+});
+
+// The cache is process-lifetime in the real app; reset between tests so one test's read isn't
+// silently reused (and never re-requested) by the next.
+afterEach(() => {
+  __resetTabMenuCacheForTesting();
 });
 
 /**
@@ -391,6 +397,39 @@ describe('PlatformTabTitle reading its contributed menu', () => {
 
     await waitFor(() => expect(menuDataService.getWebViewMenu).toHaveBeenCalledWith('foo.bar'));
     expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares one read across two tabs of the same web view type', async () => {
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    render(<PlatformTabTitle id="tab-2" webViewId="web-view-2" webViewType="foo.bar" text="Tab" />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Float Tab')).toHaveLength(2);
+    });
+    expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads again for a different web view type — the positive control for the case above', async () => {
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    render(<PlatformTabTitle id="tab-2" webViewId="web-view-2" webViewType="foo.baz" text="Tab" />);
+
+    await waitFor(() => {
+      expect(menuDataService.getWebViewMenu).toHaveBeenCalledWith('foo.bar');
+      expect(menuDataService.getWebViewMenu).toHaveBeenCalledWith('foo.baz');
+    });
+    expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache a failed read, so the next tab of that type gets a fresh attempt', async () => {
+    vi.mocked(menuDataService.getWebViewMenu).mockRejectedValueOnce(new Error('provider is down'));
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await waitFor(() => expect(logger.warn).toHaveBeenCalled());
+
+    // The second tab's mount asks again rather than inheriting the first tab's rejected read
+    render(<PlatformTabTitle id="tab-2" webViewId="web-view-2" webViewType="foo.bar" text="Tab" />);
+
+    await waitFor(() => expect(screen.getByText('Float Tab')).toBeInTheDocument());
+    expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(2);
   });
 
   it('reads the contributed menu in Simple mode too, where only the zoom group is offered', async () => {
