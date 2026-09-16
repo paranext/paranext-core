@@ -267,6 +267,14 @@ export function ScriptureTextGrid({
   // `gridRef` is attached here so `useResourceZoomInput` has a non-null container; `data-resource-id`
   // lets the hook identify the resource from any event target inside the cell, and
   // `data-project-id` lets a focused element be traced back to the resource holding the caret.
+  //
+  // This wrapper deliberately does NOT scroll, and the flex chain down to the cell is load-bearing.
+  // The reference scroll drives the CELL's content box (`contentRef` in `ResourceCell`), and that
+  // box only becomes a scroll port when an ancestor constrains the cell's height:
+  // `ResourceCellView`'s root is `flex flex-col` with no height of its own, so it takes one only as
+  // a stretched flex item. Scrolling here instead would leave that box unable to overflow, and a
+  // scroll-group move would silently do nothing on this surface alone. Same chain as the
+  // chapter-context split below; the chapter row reaches the same end with `overflow-y-hidden`.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
     return (
@@ -276,16 +284,18 @@ export function ScriptureTextGrid({
         aria-label={ariaLabel}
         data-project-id={onlyResource.projectId}
         data-resource-id={onlyResource.resourceId}
-        className="tw:h-full tw:min-h-0 tw:overflow-auto"
+        className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:overflow-hidden"
       >
-        <ResourceCell
-          resourceRef={onlyResource}
-          scrRef={scrRef}
-          setScrRef={setScrRef}
-          viewMode="chapter"
-          zoom={zoom}
-          zoomMenuLabels={zoomMenuLabels}
-        />
+        <div className="tw:flex tw:min-h-0 tw:flex-1">
+          <ResourceCell
+            resourceRef={onlyResource}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            viewMode="chapter"
+            zoom={zoom}
+            zoomMenuLabels={zoomMenuLabels}
+          />
+        </div>
       </div>
     );
   }
