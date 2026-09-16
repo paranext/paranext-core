@@ -6,6 +6,7 @@ import {
   CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
+  CONTENT_ZOOM_UNNESTED_CLAUSE,
   DEFAULT_ZOOM_FACTOR,
   getContentZoomCssVariable,
   RESERVED_CONTENT_ZOOM_AREA_ID,
@@ -28,20 +29,20 @@ const INDICATOR_ANNOUNCE_QUIET_MS = 500;
  * names both spellings of its marker — the empty value a view writes when it names no area, and the
  * id itself — so that a marker carrying an id no rule was generated for (an invalid id, or one this
  * pane has neither a remembered level for nor the bootstrap accepted at runtime) is left unscaled
- * instead of quietly following `main`. Nesting is no part of that guarantee and cannot be: these
- * selectors are generated with no knowledge of the view's DOM, so a nested marker matches whenever
- * its id has a rule — always the case for `main`/the empty value, and the case for any named id
- * that is also a legitimate area elsewhere in the view — and CSS `zoom` compounds, so such a marker
- * scales by the product of its own area's factor and its ancestor area's. The runtime
- * `collectAreas` refuses to report a nested area, so its level never changes from what is baked
- * here; keeping markers un-nested is the view's side of the contract. A named (non-`main`) area's
- * rule comes from {@link CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE}, the same template the bootstrap's
- * own runtime `ensureRule` substitutes into, so the two never spell a named area's rule
- * differently.
+ * instead of quietly following `main`. Every clause also carries
+ * {@link CONTENT_ZOOM_UNNESTED_CLAUSE}, so a marker nested inside another marker matches no rule at
+ * all — the same marker the runtime `collectAreas` refuses to report, keeping the CSS and the
+ * report in agreement about which markers are areas. Without that clause a nested marker would
+ * match whenever its id also has a rule (always true for `main`/the empty value, and true for any
+ * named id that is also a legitimate area elsewhere in the view), and CSS `zoom` compounds, so it
+ * would scale by the product of its own area's factor and its ancestor area's while the report
+ * never reflected that level. A named (non-`main`) area's rule comes from
+ * {@link CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE}, the same template the bootstrap's own runtime
+ * `ensureRule` substitutes into, so the two never spell a named area's rule differently.
  */
 function areaRule(areaId: string): string {
   if (areaId === MAIN_CONTENT_ZOOM_AREA) {
-    const selector = `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}=""],[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${MAIN_CONTENT_ZOOM_AREA}"]`;
+    const selector = `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}=""]${CONTENT_ZOOM_UNNESTED_CLAUSE},[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${MAIN_CONTENT_ZOOM_AREA}"]${CONTENT_ZOOM_UNNESTED_CLAUSE}`;
     return `${selector}{zoom:var(${getContentZoomCssVariable(areaId)},var(${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE},1))}`;
   }
   return CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE.split(CONTENT_ZOOM_AREA_ID_PLACEHOLDER).join(areaId);

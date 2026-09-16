@@ -684,10 +684,10 @@ describe('content-zoom bootstrap script', () => {
       ':root{--platform-content-zoom-default:1.3;--platform-content-zoom-main:1.2;--platform-content-zoom-footnotes:0.9}',
     );
     expect(style).toContain(
-      '[data-platform-content-zoom-root=""],[data-platform-content-zoom-root="main"]{zoom:var(--platform-content-zoom-main,var(--platform-content-zoom-default,1))}',
+      '[data-platform-content-zoom-root=""]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])),[data-platform-content-zoom-root="main"]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])){zoom:var(--platform-content-zoom-main,var(--platform-content-zoom-default,1))}',
     );
     expect(style).toContain(
-      '[data-platform-content-zoom-root="footnotes"]{zoom:var(--platform-content-zoom-footnotes,var(--platform-content-zoom-default,1))}',
+      '[data-platform-content-zoom-root="footnotes"]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])){zoom:var(--platform-content-zoom-footnotes,var(--platform-content-zoom-default,1))}',
     );
   });
 
@@ -736,6 +736,16 @@ describe('content-zoom bootstrap script', () => {
     malformed.id = 'malformed';
     malformed.setAttribute('data-platform-content-zoom-root', 'Bad Id');
     document.body.appendChild(malformed);
+    // "footnotes" and the empty (main) value each have a rule of their own already, unlike "inner"
+    // above — nesting them still has to match no rule, not just an id nobody generated a rule for.
+    const nestedFootnotes = document.createElement('div');
+    nestedFootnotes.id = 'nestedFootnotes';
+    nestedFootnotes.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    byId('main').appendChild(nestedFootnotes);
+    const nestedMain = document.createElement('div');
+    nestedMain.id = 'nestedMain';
+    nestedMain.setAttribute('data-platform-content-zoom-root', '');
+    byId('foot').appendChild(nestedMain);
     await nextFrame();
     const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
     const selectors = sheet
@@ -749,6 +759,8 @@ describe('content-zoom bootstrap script', () => {
     expect(selectors.some((selector) => byId('foot').matches(selector))).toBe(true);
     expect(selectors.some((selector) => byId('nested').matches(selector))).toBe(false);
     expect(selectors.some((selector) => byId('malformed').matches(selector))).toBe(false);
+    expect(selectors.some((selector) => byId('nestedFootnotes').matches(selector))).toBe(false);
+    expect(selectors.some((selector) => byId('nestedMain').matches(selector))).toBe(false);
   });
 });
 
