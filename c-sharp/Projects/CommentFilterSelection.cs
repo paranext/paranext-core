@@ -7,7 +7,7 @@ namespace Paranext.DataProvider.Projects;
 /// <c>{projectDirectory}/Extensions/UserSettings-{userId}.xml</c>, so two people on the same
 /// project keep independent selections.
 /// </summary>
-public class CommentFilterSelection
+public record CommentFilterSelection
 {
     /// <summary>
     /// Not serialized by <see cref="ToXml"/>/<see cref="FromXml"/>: the schema version travels

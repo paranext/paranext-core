@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using NUnit.Framework;
 using Paranext.DataProvider.Projects;
 
@@ -11,7 +12,6 @@ public class CommentFilterSelectionTests
     {
         var selection = new CommentFilterSelection
         {
-            DataVersion = "1.0.0",
             Preset = "unread-and-unresolved",
             ScopeFilter = "current-verse",
         };
@@ -27,7 +27,7 @@ public class CommentFilterSelectionTests
     {
         // A file written by an older build, or a hand-edited one, must not throw — an absent
         // selection is simply the default view rather than a corrupt setting.
-        var restored = CommentFilterSelection.FromXml(new System.Xml.Linq.XElement("Items"));
+        var restored = CommentFilterSelection.FromXml(new XElement("Items"));
 
         Assert.That(restored.Preset, Is.EqualTo("all"));
         Assert.That(restored.ScopeFilter, Is.EqualTo("all-books"));
@@ -37,16 +37,19 @@ public class CommentFilterSelectionTests
     public void PassesThroughAPresentButBlankValueRatherThanDefaulting()
     {
         // Distinguishes "absent" from "present but blank": a hand-edited or truncated write can
-        // leave an empty element. C# does not validate preset values against the known set — that
-        // set lives in TypeScript — so it passes the blank value through unchanged and lets the
-        // frontend resolve it, the same as it would any other value this build doesn't recognize.
-        var items = new System.Xml.Linq.XElement(
+        // leave an empty element. C# does not validate preset/scope values against the known sets
+        // — those sets live in TypeScript — so it passes a blank value through unchanged for both
+        // fields and lets the frontend resolve it, the same as it would any other value this build
+        // doesn't recognize.
+        var items = new XElement(
             "Items",
-            new System.Xml.Linq.XElement("Preset", "")
+            new XElement("Preset", ""),
+            new XElement("ScopeFilter", "")
         );
 
         var restored = CommentFilterSelection.FromXml(items);
 
         Assert.That(restored.Preset, Is.EqualTo(""));
+        Assert.That(restored.ScopeFilter, Is.EqualTo(""));
     }
 }
