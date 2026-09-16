@@ -105,12 +105,21 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
     }
   }, []);
 
-  // Call from every mouse handler with the event's clientX/clientY. Clears awaitingRealMoveRef
-  // only if the cursor's screen position actually changed since the last call — a DOM-churn-driven
-  // synthetic event reuses the cursor's current (unchanged) position, so it leaves the flag set.
+  // Call from every mouse handler with the event's clientX/clientY. Clears awaitingRealMoveRef only
+  // if the cursor's screen position changed by more than a couple of pixels since the last call — a
+  // physical mouse is never perfectly stationary (hand tremor alone shifts clientX/clientY by a
+  // pixel or two even when the user believes they're holding still), so an exact-equality check
+  // reopened this gate on jitter alone, letting the next DOM-churn-driven mouseover arm a fresh
+  // reveal timer that then fired for real ~300ms later. A DOM-churn-driven synthetic event reuses
+  // the cursor's exact current position, so it never exceeds this threshold either way.
   const noteRealPointerActivity = useCallback((e: { clientX: number; clientY: number }) => {
+    const REAL_MOVE_THRESHOLD_PX = 3;
     const last = lastClientPosRef.current;
-    if (!last || last.x !== e.clientX || last.y !== e.clientY) {
+    if (
+      !last ||
+      Math.abs(last.x - e.clientX) > REAL_MOVE_THRESHOLD_PX ||
+      Math.abs(last.y - e.clientY) > REAL_MOVE_THRESHOLD_PX
+    ) {
       lastClientPosRef.current = { x: e.clientX, y: e.clientY };
       awaitingRealMoveRef.current = false;
     }
