@@ -36,9 +36,8 @@ import {
   applyFilterOverrides,
   buildCommentThreadSelector,
   CommentFilters,
-  resolveEffectiveScopeFilter,
+  DEFAULT_SCOPE_FILTER,
   ScopeFilter,
-  UNFILTERED,
 } from './comment-list-filters.model';
 import { resolveSetFiltersMessage } from './comment-list-web-view-message.util';
 import type { CommentListScrollTarget } from './comment-list-scroll.utils';
@@ -182,13 +181,13 @@ global.webViewComponent = function CommentListWebView({
   const [filters, setFilters] = useState<CommentFilters>(() =>
     applyFilterOverrides(initialFilters),
   );
-  // Persisted (not plain useState) so the user's scope choice — the "Current chapter" capability this
-  // panel adds — survives the iframe reload that a project switch triggers (reloadWebView rebuilds
-  // the srcNonce, which destroys and recreates the React root). Seeded from the one-shot
-  // initialScopeFilter on first mount; the persisted value wins on every later (re)mount.
+  // Persisted (not plain useState) so the user's scope choice survives the iframe reload that a
+  // project switch triggers (reloadWebView rebuilds the srcNonce, which destroys and recreates the
+  // React root). Seeded from the one-shot initialScopeFilter on first mount; the persisted value
+  // wins on every later (re)mount.
   const [scopeFilter, setScopeFilter] = useWebViewState<ScopeFilter>(
     'scopeFilter',
-    initialScopeFilter ?? UNFILTERED,
+    initialScopeFilter ?? DEFAULT_SCOPE_FILTER,
   );
 
   // Consume the one-shot seed exactly once. The useState initializers above already read it
@@ -224,28 +223,26 @@ global.webViewComponent = function CommentListWebView({
     };
   }, []);
 
-  // "Current chapter" needs a live reference to follow: the Column 3 panel follows the active
-  // project's scroll group, and an editor-anchored list follows its wired editor. A cross-project
-  // open has neither.
-  const canScopeToCurrentChapter = isCommentListPanel || !!editorWebViewId;
+  // Every `current-*` scope follows the window's scroll group live, whether or not this list is
+  // wired to an editor — the scroll group always holds a position. A verse move must not tear down
+  // and re-establish the subscription (which re-runs the C# query and flashes the skeletons) for a
+  // field the active scope's query granularity doesn't use, so each field is frozen to a constant
+  // except where the active scope actually needs it: `all-books` queries no range at all, `current-
+  // book` only needs the book, `current-chapter` needs book + chapter, and `current-verse` needs all
+  // three.
+  const scopeNeedsBook = scopeFilter !== 'all-books';
+  const scopeNeedsChapterNum = scopeFilter === 'current-chapter' || scopeFilter === 'current-verse';
+  const scopeNeedsVerseNum = scopeFilter === 'current-verse';
+  const scopeBook = scopeNeedsBook ? scrRef.book : '';
+  const scopeChapterNum = scopeNeedsChapterNum ? scrRef.chapterNum : 0;
+  const scopeVerseNum = scopeNeedsVerseNum ? scrRef.verseNum : 0;
 
-  // Coerce a "current chapter" scope this list can't honor (no live reference) back to all-books, so
-  // the displayed value, the offered options, and the query all agree. See the helper for the full
-  // rationale; it lives in the model so the same rule drives both the display and the query below.
-  const effectiveScopeFilter = resolveEffectiveScopeFilter(scopeFilter, canScopeToCurrentChapter);
-
-  // The selector only uses scrRef when the scope is the current chapter; in the all-books view a
-  // verse move must not tear down and re-establish the subscription (which re-runs the C# query and
-  // flashes the skeletons). Freeze the scrRef inputs to constants unless the chapter scope is
-  // active.
-  const usesChapterScope = effectiveScopeFilter !== UNFILTERED;
-  const scopeBook = usesChapterScope ? scrRef.book : '';
-  const scopeChapterNum = usesChapterScope ? scrRef.chapterNum : 0;
-
-  // While the "assigned to me" axis is selected but the current user's name hasn't loaded yet, the
-  // query can't filter by user and would briefly show every thread. Hold the loading state until the
-  // name resolves so the panel shows skeletons instead of that flash.
-  const isAwaitingCurrentUserName = filters.assignment === 'assigned-to-me' && !currentUserName;
+  // These presets filter on the current user, and an empty assignedTo means "unassigned" to the
+  // provider — so hold the loading state rather than querying with a blank name.
+  const isAwaitingCurrentUserName =
+    (filters.preset === 'unresolved-assigned-to-me' ||
+      filters.preset === 'unread-assigned-to-me') &&
+    !currentUserName;
 
   const [commentThreads, , isLoadingCommentThreads] = useProjectData(
     'legacyCommentManager.comments',
@@ -255,16 +252,11 @@ global.webViewComponent = function CommentListWebView({
       () =>
         buildCommentThreadSelector({
           filters,
-          scopeFilter: effectiveScopeFilter,
-          // verseNum is meaningless in a chapter-granularity range — the C# query matches on
-          // book + chapter only — so freeze it to 0. This keeps a same-chapter verse move from
-          // minting a new-but-equal selector object that would needlessly tear down and
-          // re-establish the PDP subscription (re-running the full query) on the panel, which
-          // follows verse-granularity scroll-group moves (PT-4070).
-          scrRef: { book: scopeBook, chapterNum: scopeChapterNum, verseNum: 0 },
+          scopeFilter,
+          scrRef: { book: scopeBook, chapterNum: scopeChapterNum, verseNum: scopeVerseNum },
           currentUserName,
         }),
-      [scopeBook, scopeChapterNum, effectiveScopeFilter, filters, currentUserName],
+      [scopeBook, scopeChapterNum, scopeVerseNum, scopeFilter, filters, currentUserName],
     ),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
@@ -412,7 +404,7 @@ global.webViewComponent = function CommentListWebView({
       if (data?.method === 'setFilters') {
         logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
         // A setFilters message sets the ENTIRE view deterministically, exactly like a fresh open:
-        // unspecified filter axes reset to 'all' and an omitted scope resets to UNFILTERED, so the
+        // an unspecified preset resets to 'all' and an omitted scope resets to 'all-books', so the
         // programmatic open (e.g. the S/R conflict link) shows exactly the requested view — nothing
         // carries over from prior state.
         //
@@ -683,13 +675,8 @@ global.webViewComponent = function CommentListWebView({
         currentUser={currentUserName}
         filters={filters}
         onFiltersChange={handleFiltersChange}
-        // Pass the coerced value so the displayed dropdown value stays in sync with the hidden
-        // option and the query when this list can't scope to the current chapter.
-        scopeFilter={effectiveScopeFilter}
+        scopeFilter={scopeFilter}
         onScopeFilterChange={handleScopeFilterChange}
-        // When false (a cross-project open with no live reference), the "current chapter" option
-        // stays hidden rather than scoping to an unrelated ref.
-        canScopeToCurrentChapter={canScopeToCurrentChapter}
         // While an automatic Send/Receive is syncing this project, show a slim "editing paused"
         // notice and disable the write affordances (via the gated capability callbacks below).
         isSyncBlocked={isSyncBlocked}

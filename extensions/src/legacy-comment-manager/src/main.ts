@@ -16,7 +16,6 @@ import type {
 import { serialize } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
-import { SCOPE_FILTER_CURRENT_CHAPTER, UNFILTERED } from './comment-list-filters.model';
 import {
   LEGACY_COMMENT_USJ_PDPF_ID,
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
@@ -248,19 +247,6 @@ async function openCommentList(
   const editorWebViewId = editorContextApplies ? webViewId : undefined;
   if (!editorContextApplies) editorScrollGroupId = undefined;
 
-  // A cross-project target has no editor to derive "current chapter" from, so a current-chapter
-  // scope would filter against a stale/blank ref. Fall back to all-books (UNFILTERED) in that case.
-  // UNFILTERED rather than undefined keeps the new-view and reused-view paths consistent: on a reused
-  // view it makes needsSetFilters true so an actual setFilters is sent (undefined would leave a
-  // reused view stale while a new view mounted at all-books — the same call diverging by view state).
-  let effectiveScopeFilterToSet = options.scopeFilterToSet;
-  if (!editorContextApplies && effectiveScopeFilterToSet === SCOPE_FILTER_CURRENT_CHAPTER) {
-    logger.warn(
-      'openCommentList: dropping current-chapter scope for a cross-project target (no editor context); using all-books',
-    );
-    effectiveScopeFilterToSet = UNFILTERED;
-  }
-
   if (!projectId) {
     logger.debug('No project!');
     return undefined;
@@ -276,7 +262,7 @@ async function openCommentList(
     editorScrollGroupId,
     editorWebViewId,
     initialFilters: options.filtersToSet,
-    initialScopeFilter: effectiveScopeFilterToSet,
+    initialScopeFilter: options.scopeFilterToSet,
   };
   const commentListWebViewId = await papi.webViews.openWebView(
     commentListWebViewType,
@@ -297,7 +283,7 @@ async function openCommentList(
   // same-value re-send a no-op rather than churning React/query state. Only fetch the controller
   // when there is actually something to send — so a filters-only open skips it entirely and can't
   // fail on a transient controller-lookup miss.
-  const needsSetFilters = !!options.filtersToSet || effectiveScopeFilterToSet !== undefined;
+  const needsSetFilters = !!options.filtersToSet || options.scopeFilterToSet !== undefined;
   const needsSelectThread = !!options.threadIdToSelect;
   if (commentListWebViewId && (needsSetFilters || needsSelectThread)) {
     const commentListController = await papi.webViews.getWebViewController(
@@ -311,7 +297,7 @@ async function openCommentList(
         pendingActions.push(
           `apply filters ${serialize({
             filters: options.filtersToSet,
-            scopeFilter: effectiveScopeFilterToSet,
+            scopeFilter: options.scopeFilterToSet,
           })}`,
         );
       if (needsSelectThread) pendingActions.push(`select thread ${options.threadIdToSelect}`);
@@ -325,7 +311,7 @@ async function openCommentList(
     // setFilters BEFORE selectThread so the selection lands within the final filtered view rather
     // than being filtered out by a subsequent re-query.
     if (needsSetFilters)
-      await commentListController.setFilters(options.filtersToSet, effectiveScopeFilterToSet);
+      await commentListController.setFilters(options.filtersToSet, options.scopeFilterToSet);
 
     // Scroll to the specified thread in the comment list.
     if (options.threadIdToSelect)
