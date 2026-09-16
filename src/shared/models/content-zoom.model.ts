@@ -61,6 +61,16 @@ export const RESERVED_CONTENT_ZOOM_AREA_ID = CONTENT_ZOOM_DEFAULT_CSS_VARIABLE.s
 export const CONTENT_ZOOM_AREA_ID_PLACEHOLDER = 'AREA_ID';
 
 /**
+ * Appended to every zoom-area attribute clause so a marker nested inside another marker matches no
+ * zoom rule: `:not([ATTR] [ATTR])` fails for an element that has an ancestor also carrying the
+ * attribute, which is exactly the shape `collectAreas` (the bootstrap's runtime scan) refuses to
+ * report — so the rule and the report agree on which markers are areas. `:where(...)` holds the
+ * clause's specificity at zero, so appending it never changes which of two otherwise-competing
+ * rules wins.
+ */
+export const CONTENT_ZOOM_UNNESTED_CLAUSE = `:where(:not([${CONTENT_ZOOM_ROOT_ATTRIBUTE}] [${CONTENT_ZOOM_ROOT_ATTRIBUTE}]))`;
+
+/**
  * The CSS rule that scales one NAMED zoom area (not `main`, whose rule also matches the marker's
  * empty value and is baked separately): its own variable, else the default. Both the head-splice
  * helper (`areaRule` in the bootstrap-script module) and the bootstrap's own runtime `ensureRule`
@@ -69,7 +79,7 @@ export const CONTENT_ZOOM_AREA_ID_PLACEHOLDER = 'AREA_ID';
  * shared function for this at runtime — it executes as injected source text inside the web view,
  * not as an import — so it inlines this template and substitutes the placeholder itself.
  */
-export const CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE = `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${CONTENT_ZOOM_AREA_ID_PLACEHOLDER}"]{zoom:var(${CONTENT_ZOOM_CSS_VARIABLE_PREFIX}${CONTENT_ZOOM_AREA_ID_PLACEHOLDER},var(${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE},1))}`;
+export const CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE = `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${CONTENT_ZOOM_AREA_ID_PLACEHOLDER}"]${CONTENT_ZOOM_UNNESTED_CLAUSE}{zoom:var(${CONTENT_ZOOM_CSS_VARIABLE_PREFIX}${CONTENT_ZOOM_AREA_ID_PLACEHOLDER},var(${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE},1))}`;
 
 /** The CSS custom property carrying one zoom area's effective factor. */
 export function getContentZoomCssVariable(areaId: string): string {

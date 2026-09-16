@@ -350,8 +350,10 @@ export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
  * Attribute a web view puts on each element that wraps one zoom area's content (below its own
  * toolbar, outside dividers and headers). The attribute value is the area id; an empty value is the
  * {@link MAIN_CONTENT_ZOOM_AREA} area. The platform's injected stylesheet applies `zoom:
- * var(--platform-content-zoom-<area>)` to it. Areas must not nest. Web views without this attribute
- * ignore per-area zoom input and are scaled whole at the Settings default.
+ * var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored — matched
+ * by neither the platform's stylesheet nor its report of the view's areas — so nesting never
+ * compounds one area's zoom into another's. Web views without this attribute ignore per-area zoom
+ * input and are scaled whole at the Settings default.
  *
  * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
  * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
