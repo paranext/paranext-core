@@ -27,7 +27,7 @@ declare module 'platform-get-resources' {
    * ParatextData matches on — so nothing in the local project list identifies the catalog row it
    * belongs to.
    */
-  export type DblResourceInstallStatus = { [dblEntryUid: string]: string };
+  export type DblResourceInstallStatus = { [dblEntryUid: string]: string | undefined };
 
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
