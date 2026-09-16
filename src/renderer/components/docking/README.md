@@ -99,6 +99,8 @@ tests don't see the patch unless they import `rc-dock/es/...` directly
 Policy: patch rc-dock to fix its bugs, not to add features; build features app-side (see
 `adr-tab-bar-drop-zone-app-side-target` in `.context/standards/Architecture-Decisions.md`).
 
+---
+
 ## rc-dock internals we depend on
 
 Check each of these when upgrading rc-dock or rc-tabs, then run the docking unit tests and

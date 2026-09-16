@@ -28,8 +28,8 @@
   &[data-dragging] {
     // z-index 1 lifts the zone and its drag-time hit extensions above the last tab (inside the
     // positioned `.dock-nav-wrap`) and the non-positioned "+". rc-dock's `.dock-drop-edge`
-    // (z-index 100) is moved below the tab bar in dock-layout-wrapper.component.scss, so it no longer
-    // overlaps the bar.
+    // (z-index 100) is positioned below the tab bar in dock-layout-wrapper.component.scss, so it
+    // does not overlap the bar.
     z-index: 1;
 
     // Drag-time hit extensions. Whatever they cover hits the zone, since a pseudo-element hit-tests

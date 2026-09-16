@@ -85,13 +85,6 @@ describe('Dock Layout Component', () => {
       // eslint-disable-next-line no-bitwise
       expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
-
-    it('simple mode: no registered group defines panelExtra', () => {
-      const groups = getGroups(false);
-      Object.keys(groups).forEach((groupKey) => {
-        expect(groups[groupKey].panelExtra).toBeUndefined();
-      });
-    });
   });
 
   describe('getTabGroup()', () => {

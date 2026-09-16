@@ -58,6 +58,16 @@ describe('resolveTabBarDropZoneSource', () => {
     expect(resolveTabBarDropZoneSource(createDockContext(), panel)).toBe(tab);
   });
 
+  // Both sides lack a group here, so only the missing-group check itself can reject the drag.
+  it('rejects a tab with no group, even over a panel with no group', () => {
+    const tab = createTab({ group: undefined });
+    createDragState({ tab }, DOCK_ID);
+
+    expect(
+      resolveTabBarDropZoneSource(createDockContext(), createPanel({ group: undefined })),
+    ).toBeUndefined();
+  });
+
   it('rejects a tab from a tabLocked group', () => {
     const tab = createTab();
     createDragState({ tab }, DOCK_ID);
@@ -81,6 +91,19 @@ describe('resolveTabBarDropZoneSource', () => {
 
     expect(
       resolveTabBarDropZoneSource(createDockContext(), createPanel({ id: 'target-panel' })),
+    ).toBeUndefined();
+  });
+
+  // Both sides lack a group here, so only the missing-group check itself can reject the drag.
+  it('rejects a whole-panel drag with no group, even over a panel with no group', () => {
+    const panel = createPanel({ id: 'source-panel', group: undefined });
+    createDragState({ panel }, DOCK_ID);
+
+    expect(
+      resolveTabBarDropZoneSource(
+        createDockContext(),
+        createPanel({ id: 'target-panel', group: undefined }),
+      ),
     ).toBeUndefined();
   });
 
