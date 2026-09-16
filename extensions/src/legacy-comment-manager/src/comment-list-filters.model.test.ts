@@ -1,253 +1,97 @@
 import { describe, expect, it } from 'vitest';
-import type { CommentFilters, ScopeFilter } from './comment-list-filters.model';
+import type { CommentPreset, ScopeFilter } from './comment-list-filters.model';
 import {
-  areCommentFiltersAtDefault,
-  applyFilterOverrides,
   buildCommentThreadSelector,
   DEFAULT_COMMENT_FILTERS,
-  isAssignmentFilter,
-  isDatePresetFilter,
-  isReadFilter,
-  isResolvedFilter,
+  DEFAULT_SCOPE_FILTER,
+  isCommentPreset,
   isScopeFilter,
-  isTypeFilter,
-  resolveEffectiveScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
-  TEAM_ASSIGNED_USER,
-  toAuthorOptions,
-  UNASSIGNED_USER,
-  UNFILTERED,
+  presetToLabelKey,
+  scopeFilterToLabelKey,
 } from './comment-list-filters.model';
 
-const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+const scrRef = { book: 'GEN', chapterNum: 3, verseNum: 5 };
 
-function build(
-  overrides: Partial<CommentFilters>,
-  scopeFilter: ScopeFilter = UNFILTERED,
-  now: Date = new Date(),
-) {
+function build(preset: CommentPreset, scopeFilter: ScopeFilter = DEFAULT_SCOPE_FILTER) {
   return buildCommentThreadSelector({
-    filters: { ...DEFAULT_COMMENT_FILTERS, ...overrides },
+    filters: { preset },
     scopeFilter,
     scrRef,
     currentUserName: 'Donna',
-    now,
   });
 }
 
-describe('buildCommentThreadSelector', () => {
-  it('returns an empty selector when every axis is "all" and scope is unfiltered', () => {
-    expect(build({})).toEqual({});
+describe('presets', () => {
+  it('contributes nothing at its default', () => {
+    expect(DEFAULT_COMMENT_FILTERS).toEqual({ preset: 'all' });
+    expect(build('all')).toEqual({});
   });
 
-  it('maps each axis to its own selector clause', () => {
-    expect(build({ resolved: 'unresolved' })).toEqual({ isResolved: false });
-    expect(build({ resolved: 'resolved' })).toEqual({ isResolved: true });
-    expect(build({ read: 'unread' })).toEqual({ isRead: false });
-    expect(build({ read: 'read' })).toEqual({ isRead: true });
-    expect(build({ type: 'conflicts' })).toEqual({ type: 'Conflict' });
-    expect(build({ type: 'comments' })).toEqual({ type: 'Normal' });
-    expect(build({ assignment: 'assigned-to-me' })).toEqual({ assignedTo: 'Donna' });
-    expect(build({ assignment: 'team' })).toEqual({ assignedTo: 'Team' });
-    expect(build({ assignment: 'unassigned' })).toEqual({ assignedTo: '' });
-  });
-
-  it('holds the assigned-to-me filter until the current user name has loaded', () => {
-    // While the name is still empty we must not emit assignedTo:'' — that now means UNASSIGNED_USER
-    // ("unassigned"), so we'd query the wrong threads. The web view shows a loading state instead.
-    const selector = buildCommentThreadSelector({
-      filters: { ...DEFAULT_COMMENT_FILTERS, assignment: 'assigned-to-me' },
-      scopeFilter: UNFILTERED,
-      scrRef,
-      currentUserName: '',
-    });
-    expect(selector).toEqual({});
-  });
-
-  it('ANDs axes together — the PT-4027 unresolved-conflicts view', () => {
-    expect(build({ type: 'conflicts', resolved: 'unresolved' })).toEqual({
-      type: 'Conflict',
-      isResolved: false,
-    });
-  });
-
-  it('reaches the old "unresolved assigned to me" preset by composition', () => {
-    expect(build({ resolved: 'unresolved', assignment: 'assigned-to-me' })).toEqual({
+  it('maps each preset to its selector clauses', () => {
+    expect(build('unresolved')).toEqual({ isResolved: false });
+    expect(build('resolved')).toEqual({ isResolved: true });
+    expect(build('unread')).toEqual({ isRead: false });
+    expect(build('unread-and-unresolved')).toEqual({ isRead: false, isResolved: false });
+    expect(build('conflict')).toEqual({ type: 'Conflict' });
+    expect(build('unresolved-assigned-to-me')).toEqual({
       isResolved: false,
       assignedTo: 'Donna',
     });
+    expect(build('unread-assigned-to-me')).toEqual({ isRead: false, assignedTo: 'Donna' });
   });
 
-  it('composes filters with the current-chapter scope', () => {
-    const selector = build({ resolved: 'unresolved' }, SCOPE_FILTER_CURRENT_CHAPTER);
-    expect(selector.isResolved).toBe(false);
-    expect(selector.scriptureRanges).toEqual([
-      {
-        granularity: 'chapter',
-        start: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-        end: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-      },
-    ]);
-  });
-});
-
-describe('resolveEffectiveScopeFilter', () => {
-  it('passes the scope through unchanged when the list can scope to the current chapter', () => {
-    expect(resolveEffectiveScopeFilter(SCOPE_FILTER_CURRENT_CHAPTER, true)).toBe(
-      SCOPE_FILTER_CURRENT_CHAPTER,
-    );
-    expect(resolveEffectiveScopeFilter(UNFILTERED, true)).toBe(UNFILTERED);
+  it('contributes no selector clause for the unsaved preset', () => {
+    // A draft is client-side state; the provider cannot filter on it. The query must therefore be
+    // unnarrowed by the preset, leaving the caller to apply the draft rule itself.
+    expect(build('unsaved')).toEqual({});
   });
 
-  it('coerces current-chapter to unfiltered when the list cannot scope to the current chapter', () => {
-    expect(resolveEffectiveScopeFilter(SCOPE_FILTER_CURRENT_CHAPTER, false)).toBe(UNFILTERED);
+  it('omits assignedTo until the current user name has loaded', () => {
+    // An empty assignedTo means "unassigned" to the provider, so filtering on a blank name would
+    // silently show the wrong threads rather than none.
+    const selector = buildCommentThreadSelector({
+      filters: { preset: 'unresolved-assigned-to-me' },
+      scopeFilter: DEFAULT_SCOPE_FILTER,
+      scrRef,
+      currentUserName: '',
+    });
+    expect(selector).toEqual({ isResolved: false });
   });
 
-  it('leaves an already-unfiltered scope alone when it cannot scope to the current chapter', () => {
-    expect(resolveEffectiveScopeFilter(UNFILTERED, false)).toBe(UNFILTERED);
+  it('has a label key for every preset and rejects anything else', () => {
+    expect(Object.keys(presetToLabelKey).every(isCommentPreset)).toBe(true);
+    expect(isCommentPreset('unread')).toBe(true);
+    expect(isCommentPreset('assigned-to-team')).toBe(false);
   });
 });
 
-// Each axis type-guard should accept exactly its own label-key values and reject anything else. A
-// typo in one of the `*ToLabelKey` maps would surface as a guard no longer accepting a known value.
-const guardCases: [string, (value: string) => boolean, string[]][] = [
-  ['isScopeFilter', isScopeFilter, ['current-chapter', 'unfiltered']],
-  ['isResolvedFilter', isResolvedFilter, ['all', 'unresolved', 'resolved']],
-  ['isReadFilter', isReadFilter, ['all', 'unread', 'read']],
-  ['isTypeFilter', isTypeFilter, ['all', 'conflicts', 'comments']],
-  ['isAssignmentFilter', isAssignmentFilter, ['all', 'assigned-to-me', 'team', 'unassigned']],
-];
-
-describe.each(guardCases)('%s', (_name, guard, validValues) => {
-  it('accepts its known values', () => {
-    validValues.forEach((value) => expect(guard(value)).toBe(true));
+describe('scope', () => {
+  it('contributes nothing at its default', () => {
+    expect(DEFAULT_SCOPE_FILTER).toBe('all-books');
+    expect(build('all', 'all-books')).toEqual({});
   });
 
-  it('rejects unknown values', () => {
-    expect(guard('bogus')).toBe(false);
-    expect(guard('')).toBe(false);
-  });
-});
-
-describe('areCommentFiltersAtDefault', () => {
-  it('is true when every axis is at its "all" default', () => {
-    expect(areCommentFiltersAtDefault(DEFAULT_COMMENT_FILTERS)).toBe(true);
-  });
-
-  it('is false when any axis is not "all"', () => {
-    expect(areCommentFiltersAtDefault({ ...DEFAULT_COMMENT_FILTERS, resolved: 'unresolved' })).toBe(
-      false,
-    );
-    expect(areCommentFiltersAtDefault({ ...DEFAULT_COMMENT_FILTERS, assignment: 'team' })).toBe(
-      false,
-    );
-  });
-});
-
-describe('applyFilterOverrides', () => {
-  it('returns the defaults when given no overrides', () => {
-    expect(applyFilterOverrides()).toEqual(DEFAULT_COMMENT_FILTERS);
-    expect(applyFilterOverrides(undefined)).toEqual(DEFAULT_COMMENT_FILTERS);
-    expect(applyFilterOverrides({})).toEqual(DEFAULT_COMMENT_FILTERS);
+  it('maps each scope to a range at the matching granularity', () => {
+    const at = (scope: ScopeFilter) => build('all', scope).scriptureRanges?.[0];
+    expect(at('current-book')).toEqual({
+      granularity: 'book',
+      start: scrRef,
+      end: scrRef,
+    });
+    expect(at('current-chapter')?.granularity).toBe('chapter');
+    expect(at('current-verse')?.granularity).toBe('verse');
   });
 
-  it('applies the given axes over the defaults', () => {
-    expect(applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' })).toEqual({
-      resolved: 'unresolved',
-      read: 'all',
-      type: 'conflicts',
-      assignment: 'all',
-      date: 'all',
-      author: 'all',
+  it('combines independently with a preset', () => {
+    expect(build('unresolved', 'current-verse')).toEqual({
+      isResolved: false,
+      scriptureRanges: [{ granularity: 'verse', start: scrRef, end: scrRef }],
     });
   });
 
-  it('resets unspecified axes to "all" rather than merging with a prior selection', () => {
-    // The whole point: overrides are applied onto DEFAULT, not onto the caller's current filters,
-    // so a programmatic open shows exactly the requested view.
-    expect(applyFilterOverrides({ read: 'unread' })).toEqual({
-      resolved: 'all',
-      read: 'unread',
-      type: 'all',
-      assignment: 'all',
-      date: 'all',
-      author: 'all',
-    });
-  });
-
-  it('does not mutate DEFAULT_COMMENT_FILTERS', () => {
-    applyFilterOverrides({ type: 'conflicts' });
-    expect(DEFAULT_COMMENT_FILTERS.type).toBe('all');
-  });
-
-  it('resets a present-but-null axis to its default (null survives the JSON command bus)', () => {
-    // `undefined` is stripped over the command bus, but `null` survives. A null axis must reset to
-    // its default — leaking it would blank the dropdown while the query still behaves as 'all'. The
-    // web view's setFilters handler applies exactly these semantics via applyFilterOverrides.
-    const overridesWithNull: Partial<CommentFilters> = JSON.parse('{ "type": null }');
-    expect(applyFilterOverrides(overridesWithNull)).toEqual(DEFAULT_COMMENT_FILTERS);
-  });
-});
-
-describe('date filter', () => {
-  it('contributes nothing when the axis is at its "all" default', () => {
-    expect(build({ date: 'all' })).toEqual({});
-  });
-
-  it('maps each preset to an inclusive "after" bound', () => {
-    const now = new Date('2026-09-14T15:30:00.000Z');
-    expect(build({ date: 'today' }, UNFILTERED, now).dateFilter).toEqual({
-      after: '2026-09-14T00:00:00.000Z',
-    });
-    expect(build({ date: 'last-7-days' }, UNFILTERED, now).dateFilter).toEqual({
-      after: '2026-09-07T00:00:00.000Z',
-    });
-    expect(build({ date: 'last-30-days' }, UNFILTERED, now).dateFilter).toEqual({
-      after: '2026-08-15T00:00:00.000Z',
-    });
-  });
-
-  it('resolves "today" against the clock at query time, not at selection time', () => {
-    // The whole point of storing a preset rather than a timestamp: an app left open overnight must
-    // not keep querying yesterday.
-    const beforeMidnight = build(
-      { date: 'today' },
-      UNFILTERED,
-      new Date('2026-09-14T23:59:00.000Z'),
-    );
-    const afterMidnight = build(
-      { date: 'today' },
-      UNFILTERED,
-      new Date('2026-09-15T00:01:00.000Z'),
-    );
-    expect(beforeMidnight.dateFilter).not.toEqual(afterMidnight.dateFilter);
-  });
-
-  it('treats an unknown string as not a date preset', () => {
-    expect(isDatePresetFilter('last-year')).toBe(false);
-    expect(isDatePresetFilter('today')).toBe(true);
-  });
-});
-
-describe('author filter', () => {
-  it('contributes nothing when the axis is at its "all" default', () => {
-    expect(build({ author: 'all' })).toEqual({});
-  });
-
-  it('maps a chosen author to the selector author field', () => {
-    expect(build({ author: 'Ana Kuznetsova' })).toEqual({ author: 'Ana Kuznetsova' });
-  });
-
-  it('offers project users as options, never the Team or unassigned sentinels', () => {
-    // findAssignableUsers returns assignment targets, which include "Team" and "". Neither is ever
-    // the author of a comment.
-    expect(toAuthorOptions(['Ana', TEAM_ASSIGNED_USER, 'Ian', UNASSIGNED_USER])).toEqual([
-      'Ana',
-      'Ian',
-    ]);
-  });
-
-  it('returns no options rather than throwing when the user list has not loaded', () => {
-    expect(toAuthorOptions(undefined)).toEqual([]);
+  it('has a label key for every scope and rejects anything else', () => {
+    expect(Object.keys(scopeFilterToLabelKey).every(isScopeFilter)).toBe(true);
+    expect(isScopeFilter('current-verse')).toBe(true);
+    expect(isScopeFilter('unfiltered')).toBe(false);
   });
 });
