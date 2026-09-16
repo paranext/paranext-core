@@ -1324,6 +1324,41 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('keeps a pending write already chosen for the identity a re-seed is about to stamp, instead of overwriting it with what memory remembers for that identity', async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.2, 'notes:BBB:main': 0.8 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-14', {
+      id: 'notes-14',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-14', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    // Re-pointed to project B directly, as a real re-point's state-spread would leave it -- this
+    // window has not been notified yet, so the stamp in state still names project A.
+    definitions.set('notes-14', { ...requireDefinition('notes-14'), projectId: 'bbb' });
+
+    // The user zooms before any re-seed for the re-point has run, and that write's own commit fails.
+    updateDefinition.mockImplementation(() => false);
+    await adjustContentZoom('notes-14', 1, 'main'); // chosen under project B's identity: 1.3, pending
+    expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    // The re-point's own definition update arrives -- the platform's first chance to notice it.
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-14') });
+    // The user's still-pending 1.3 must survive: it was already chosen for the identity this
+    // re-seed is stamping, so it must not be replaced by project B's remembered 0.8.
+    expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    // A later retry lands the user's own edit, not memory's remembered level.
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-14')?.state).toEqual(zoomState({ main: 1.3 }, 'notes:BBB'));
+  });
+
   it('treats a non-string identity stamp as no stamp at all', async () => {
     definitions.set('editor-8', {
       id: 'editor-8',
