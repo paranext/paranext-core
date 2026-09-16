@@ -483,7 +483,7 @@ declare module 'legacy-comment-manager' {
 
   // #endregion
 
-  // #region Comment filter axis types (shared with comment-list-filters.model.ts)
+  // #region Comment filter types (shared with comment-list-filters.model.ts)
 
   /**
    * The named filter presets the comment toolbar offers. A single closed set rather than orthogonal
@@ -529,13 +529,12 @@ declare module 'legacy-comment-manager' {
     selectThread(threadId: string): Promise<void>;
     /**
      * Set the comment-list view deterministically, exactly as a fresh open would. `filters` is
-     * applied on top of the default (all) filters — unspecified axes reset to 'all', they are NOT
-     * merged with the user's current selection — and an omitted `scopeFilter` resets scope to
-     * 'unfiltered' (all books). The result is the requested view with nothing carried over from
-     * prior state.
+     * applied on top of the default (all) filters — an unspecified preset resets to 'all', it is
+     * NOT merged with the user's current selection — and an omitted `scopeFilter` resets scope to
+     * 'all-books'. The result is the requested view with nothing carried over from prior state.
      *
-     * @param filters Comment-filter axes to apply; unspecified axes reset to 'all'.
-     * @param scopeFilter Scope to apply; omitting it resets scope to 'unfiltered' (all books).
+     * @param filters Comment-filter preset to apply; an unspecified preset resets to 'all'.
+     * @param scopeFilter Scope to apply; omitting it resets scope to 'all-books'.
      */
     setFilters(filters?: Partial<CommentFilters>, scopeFilter?: ScopeFilter): Promise<void>;
   }>;
@@ -548,9 +547,9 @@ declare module 'legacy-comment-manager' {
      * the S/R results dialog). Takes precedence over the project derived from `webViewId`.
      */
     projectId?: string | undefined;
-    /** Comment-filter axes to pre-apply (unspecified axes reset to 'all'). */
+    /** Comment-filter preset to pre-apply (an unspecified preset resets to 'all'). */
     filtersToSet?: Partial<CommentFilters> | undefined;
-    /** Scope to pre-apply; an omitted value resets scope to `'unfiltered'` (all books). */
+    /** Scope to pre-apply; an omitted value resets scope to `'all-books'`. */
     scopeFilterToSet?: ScopeFilter | undefined;
   };
 
@@ -579,7 +578,7 @@ declare module 'papi-shared-types' {
      * @param options Additional options for opening the comment list WebView. `options.projectId`
      *   targets a project directly, taking precedence over the project derived from `webViewId`
      *   (e.g. for callers that are not that project's own web view). `options.filtersToSet` and
-     *   `options.scopeFilterToSet` pre-apply comment-filter axes/scope on open or focus.
+     *   `options.scopeFilterToSet` pre-apply a comment-filter preset/scope on open or focus.
      * @returns The ID of the comment list WebView that was opened or focused, or `undefined` if no
      *   project ID could be determined
      * @throws If the comment list WebView controller cannot be obtained to apply the requested
