@@ -1,9 +1,9 @@
 /**
  * Dropping a dragged tab onto a tab bar's empty space, end to end with rc-dock's real drag manager.
  *
- * Every dock panel's tab bar carries an invisible drop zone (`tab-bar-drop-zone.component.tsx`)
- * that fills the space after the tabs, so releasing a dragged tab anywhere in that space appends it
- * as the panel's last tab. rc-dock hit-tests by painted element under the pointer and moves the "+"
+ * Every Power-mode tab bar carries an invisible drop zone (`tab-bar-drop-zone.component.tsx`) that
+ * fills the space after the tabs, so releasing a dragged tab anywhere in that space appends it as
+ * the panel's last tab. rc-dock hit-tests by painted element under the pointer and moves the "+"
  * button while a drag is in progress, so only a real drag in a real window can show whether every
  * point of that space accepts the drop — unit tests with a mocked layout cannot.
  *
@@ -12,8 +12,8 @@
  * 1. The zone's remainder appends a tab dragged within its own panel.
  * 2. Every part of ANOTHER panel's empty bar space appends: the gap before "+", "+" itself, the bar's
  *    end padding, and the bar's lower band when the pointer arrives from the panel's content.
- * 3. Starting a drag on a crowded bar does not move the tabs, and the drop indicator stays inside the
- *    bar.
+ * 3. Starting a drag on a crowded bar does not move the tabs; the squeezed zone refuses the drop, and
+ *    a neighboring tab's drop indicator stays inside the bar.
  *
  * Everything is asserted on web view ids read from the tab titles, never on tab counts alone.
  *
@@ -55,8 +55,12 @@ async function tabIdsOf(page: Page, panelId: string): Promise<string[]> {
   return (await readBars(page)).find((bar) => bar.panelId === panelId)?.tabIds ?? [];
 }
 
+function panelSelector(panelId: string): string {
+  return `.dock-panel[data-dockid="${panelId}"]`;
+}
+
 function panelLocator(page: Page, panelId: string) {
-  return page.locator(`.dock-panel[data-dockid="${panelId}"]`);
+  return page.locator(panelSelector(panelId));
 }
 
 function tabButton(page: Page, webViewId: string) {
@@ -74,6 +78,36 @@ async function rectOf(page: Page, selector: string): Promise<Rect> {
       const { left, right, top, bottom, width } = element.getBoundingClientRect();
       return { left, right, top, bottom, width };
     });
+}
+
+/** The global drop indicator's horizontal extent, or `undefined` while rc-dock hides it. */
+async function readDropIndicator(page: Page): Promise<{ left: number; right: number } | undefined> {
+  const extent = await page.locator(DROP_INDICATOR).evaluate((indicator) => {
+    if (getComputedStyle(indicator).display === 'none') return false;
+    const { left, right } = indicator.getBoundingClientRect();
+    return { left, right };
+  });
+  return extent || undefined;
+}
+
+/**
+ * Poll `read` until two readings 400ms apart agree, and answer the second. rc-tabs animates a row
+ * scroll over 0.3s and rc-dock's drop indicator moves over 0.1s, so a single reading can catch
+ * either mid-move.
+ */
+async function readWhenSettled<T>(page: Page, read: () => Promise<T>): Promise<T> {
+  let settled: { value: T } | undefined;
+  await expect(async () => {
+    const first: unknown = await read();
+    await page.waitForTimeout(400);
+    const second = await read();
+    // Widened to `unknown`: Playwright's matcher typing can't resolve on an unconstrained generic.
+    const secondReading: unknown = second;
+    expect(secondReading).toEqual(first);
+    settled = { value: second };
+  }).toPass({ timeout: 10_000 });
+  if (!settled) throw new Error('no settled reading');
+  return settled.value;
 }
 
 /** Which panel holds `webViewId`, or `undefined` if none does. */
@@ -218,7 +252,7 @@ test.describe('tab-bar drop zone', () => {
     expect(await tabIdsOf(page, panelId)).toEqual([homeId, newTab1, newTab2]);
 
     await test.step('drag Home to 75% across the zone', async () => {
-      const panel = `.dock-panel[data-dockid="${panelId}"]`;
+      const panel = panelSelector(panelId);
       await dragTabTo(page, homeId, async () => {
         let point: Point = { x: 0, y: 0 };
         await expect(async () => {
@@ -249,44 +283,44 @@ test.describe('tab-bar drop zone', () => {
   test("every part of another panel's empty bar space appends a dropped tab", async ({
     mainPage: page,
   }) => {
-    const { panelId: panelA } = await setUp(page);
+    const { panelId: panelIdA } = await setUp(page);
     const movers = [
-      await addNewTab(page, panelA),
-      await addNewTab(page, panelA),
-      await addNewTab(page, panelA),
-      await addNewTab(page, panelA),
+      await addNewTab(page, panelIdA),
+      await addNewTab(page, panelIdA),
+      await addNewTab(page, panelIdA),
+      await addNewTab(page, panelIdA),
     ];
-    const { panelId: panelB } = await openPanelToTheRight(page);
-    const b = `.dock-panel[data-dockid="${panelB}"]`;
+    const { panelId: panelIdB } = await openPanelToTheRight(page);
+    const panelB = panelSelector(panelIdB);
 
-    const plusCentre = async (): Promise<Point> => {
-      const plus = await rectOf(page, `${b} .new-tab-button`);
-      const bar = await rectOf(page, `${b} .dock-bar`);
+    const plusCenter = async (): Promise<Point> => {
+      const plus = await rectOf(page, `${panelB} .new-tab-button`);
+      const bar = await rectOf(page, `${panelB} .dock-bar`);
       return { x: (plus.left + plus.right) / 2, y: (bar.top + bar.bottom) / 2 };
     };
 
     await test.step('gap between zone and "+"', async () => {
       await dragTabTo(page, movers[0], async () => {
-        const zone = await rectOf(page, `${b} .platform-tab-bar-drop-zone`);
-        const plus = await rectOf(page, `${b} .new-tab-button`);
-        const { y } = await plusCentre();
+        const zone = await rectOf(page, `${panelB} .platform-tab-bar-drop-zone`);
+        const plus = await rectOf(page, `${panelB} .new-tab-button`);
+        const { y } = await plusCenter();
         return { x: (zone.right + plus.left) / 2, y };
       });
-      await expectAppendedTo(page, movers[0], panelB, panelA, 'gap');
+      await expectAppendedTo(page, movers[0], panelIdB, panelIdA, 'gap');
     });
 
-    await test.step('"+" button centre', async () => {
-      await dragTabTo(page, movers[1], plusCentre);
-      await expectAppendedTo(page, movers[1], panelB, panelA, '"+" centre');
+    await test.step('"+" button center', async () => {
+      await dragTabTo(page, movers[1], plusCenter);
+      await expectAppendedTo(page, movers[1], panelIdB, panelIdA, '"+" center');
     });
 
     await test.step('bar end padding', async () => {
       await dragTabTo(page, movers[2], async () => {
-        const bar = await rectOf(page, `${b} .dock-bar`);
-        const { y } = await plusCentre();
+        const bar = await rectOf(page, `${panelB} .dock-bar`);
+        const { y } = await plusCenter();
         return { x: bar.right - 2, y };
       });
-      await expectAppendedTo(page, movers[2], panelB, panelA, 'bar end padding');
+      await expectAppendedTo(page, movers[2], panelIdB, panelIdA, 'bar end padding');
     });
 
     await test.step("bar's lower band, reached from the content area", async () => {
@@ -295,21 +329,21 @@ test.describe('tab-bar drop zone', () => {
         page,
         movers[3],
         async () => {
-          const zone = await rectOf(page, `${b} .platform-tab-bar-drop-zone`);
-          const plus = await rectOf(page, `${b} .new-tab-button`);
-          const bar = await rectOf(page, `${b} .dock-bar`);
+          const zone = await rectOf(page, `${panelB} .platform-tab-bar-drop-zone`);
+          const plus = await rectOf(page, `${panelB} .new-tab-button`);
+          const bar = await rectOf(page, `${panelB} .dock-bar`);
           return { x: zone.left + 0.75 * (plus.left - zone.left), y: bar.bottom - 4 };
         },
         async () => {
-          const panelRect = await rectOf(page, b);
-          const bar = await rectOf(page, `${b} .dock-bar`);
+          const panelRect = await rectOf(page, panelB);
+          const bar = await rectOf(page, `${panelB} .dock-bar`);
           return {
             x: (panelRect.left + panelRect.right) / 2,
             y: (bar.bottom + panelRect.bottom) / 2,
           };
         },
       );
-      await expectAppendedTo(page, movers[3], panelB, panelA, 'lower band');
+      await expectAppendedTo(page, movers[3], panelIdB, panelIdA, 'lower band');
       await expect
         .soft(page.locator('.dock-panel[data-dockid]'), 'no panel created by the lower-band drop')
         .toHaveCount(panelCountBefore);
@@ -320,15 +354,15 @@ test.describe('tab-bar drop zone', () => {
     mainPage: page,
   }) => {
     const { panelId } = await setUp(page);
-    const panel = `.dock-panel[data-dockid="${panelId}"]`;
+    const panel = panelSelector(panelId);
     const operations = page.locator(`${panel} .dock-nav-operations`);
 
     await test.step('crowd the bar until tabs overflow', async () => {
       for (let i = 0; i < 40; i++) {
         // Sequential on purpose: each tab must land before overflow is read again
         // eslint-disable-next-line no-await-in-loop
-        const hidden = await operations.evaluate((el) =>
-          el.classList.contains('dock-nav-operations-hidden'),
+        const hidden = await operations.evaluate((operationsElement) =>
+          operationsElement.classList.contains('dock-nav-operations-hidden'),
         );
         if (!hidden) return;
         // Sequential on purpose: tabs are added one at a time
@@ -338,42 +372,40 @@ test.describe('tab-bar drop zone', () => {
       await expect(operations).not.toHaveClass(/dock-nav-operations-hidden/);
     });
 
-    /** The tab row's geometry and which tabs are fully inside the visible wrap. */
+    /** The tab row's geometry, which tabs are fully inside the visible wrap, and the last tab. */
     const measure = async () =>
       page.locator(`${panel} .dock-nav-wrap`).evaluate((wrap) => {
         const wrapRect = wrap.getBoundingClientRect();
         const list = wrap.querySelector('.dock-nav-list');
-        const visible: { id: string; right: number }[] = [];
+        const visible: { id: string; left: number; right: number }[] = [];
         wrap.querySelectorAll('.dock-tab').forEach((tab) => {
-          const r = tab.getBoundingClientRect();
-          const id = tab.querySelector('.platform-tab-title[data-web-view-id]');
-          if (id && r.left >= wrapRect.left - 0.5 && r.right <= wrapRect.right + 0.5)
-            visible.push({ id: id.getAttribute('data-web-view-id') ?? '', right: r.right });
+          const tabRect = tab.getBoundingClientRect();
+          const title = tab.querySelector('.platform-tab-title[data-web-view-id]');
+          if (title && tabRect.left >= wrapRect.left - 0.5 && tabRect.right <= wrapRect.right + 0.5)
+            visible.push({
+              id: title.getAttribute('data-web-view-id') ?? '',
+              left: tabRect.left,
+              right: tabRect.right,
+            });
         });
+        const titles = wrap.querySelectorAll('.dock-tab .platform-tab-title[data-web-view-id]');
         return {
           wrapWidth: wrapRect.width,
           transform: list ? getComputedStyle(list).transform : '',
           visible,
+          lastTabId: titles[titles.length - 1]?.getAttribute('data-web-view-id') ?? '',
         };
       });
 
-    await test.step('wait for the tab row to settle', async () => {
+    const before = await test.step('wait for the tab row to settle', async () => {
       // A new tab first shows its title's raw localization key, which is wider than the resolved
       // title. When it resolves, rc-tabs re-scrolls the row and animates the move over 0.3s, so a
       // row read any earlier is not the one a drag starts from.
       await expect(
         page.locator(`${panel} .dock-nav-list .platform-tab-title-text`, { hasText: '%' }),
       ).toHaveCount(0, { timeout: 30_000 });
-      await expect(async () => {
-        const first = await measure();
-        await page.waitForTimeout(400);
-        const second = await measure();
-        expect(second.transform).toBe(first.transform);
-        expect(second.visible).toEqual(first.visible);
-      }).toPass({ timeout: 10_000 });
+      return readWhenSettled(page, measure);
     });
-
-    const before = await measure();
     expect(before.visible.length).toBeGreaterThan(2);
     // Pressing a tab focuses it, and rc-tabs scrolls a focused tab into view by its own measure,
     // which ignores `.dock-nav-wrap`'s inline padding: a tab at either edge can move a few px on
@@ -382,17 +414,10 @@ test.describe('tab-bar drop zone', () => {
 
     await test.step('start dragging a tab in the middle of the row', async () => {
       await startDrag(page, dragged.id);
-      await page.evaluate(
-        () =>
-          new Promise<void>((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-          }),
-      );
-      await page.waitForTimeout(300);
     });
 
     try {
-      const during = await measure();
+      const during = await readWhenSettled(page, measure);
       expect
         .soft(Math.abs(during.wrapWidth - before.wrapWidth), 'wrap width')
         .toBeLessThanOrEqual(0.5);
@@ -404,21 +429,41 @@ test.describe('tab-bar drop zone', () => {
         )
         .toEqual(before.visible.map((tab) => tab.id));
 
-      await test.step('hover the zone', async () => {
+      const bar = await rectOf(page, `${panel} .dock-bar`);
+
+      await test.step('hover the gap before "+": the squeezed zone refuses the drop', async () => {
         const zone = await rectOf(page, `${panel} .platform-tab-bar-drop-zone`);
         const plus = await rectOf(page, `${panel} .new-tab-button`);
-        const bar = await rectOf(page, `${panel} .dock-bar`);
-        const x = zone.width > 2 ? (zone.left + zone.right) / 2 : plus.left - 2;
-        await page.mouse.move(x, (bar.top + bar.bottom) / 2, { steps: 10 });
-        await page.waitForTimeout(300);
-        const lastVisibleRight = (await measure()).visible.at(-1)?.right ?? bar.left;
-        const indicator = page.locator(DROP_INDICATOR);
-        if (await indicator.isVisible()) {
-          const box = await indicator.boundingBox();
-          if (!box) throw new Error('visible indicator has no box');
-          expect.soft(box.x + box.width, 'indicator right edge').toBeLessThanOrEqual(bar.right);
-          expect.soft(box.x, 'indicator left edge').toBeGreaterThanOrEqual(lastVisibleRight - 1);
-        }
+        // A crowded bar leaves the zone no width, so it refuses the drop rather than draw a
+        // zero-width indicator.
+        expect.soft(zone.width, 'zone width on a crowded bar').toBeLessThan(1);
+        await page.mouse.move(plus.left - 2, (bar.top + bar.bottom) / 2, { steps: 10 });
+        expect(await readWhenSettled(page, () => readDropIndicator(page))).toBeUndefined();
+      });
+
+      await test.step("hover a neighboring tab's trailing half", async () => {
+        // Not the bar's last tab: during a drag the zone may claim that one's trailing half.
+        const neighbor = during.visible
+          .filter((tab) => tab.id !== dragged.id && tab.id !== during.lastTabId)
+          .at(-1);
+        if (!neighbor) throw new Error('no visible tab to hover');
+        const neighborBox = await tabButton(page, neighbor.id).boundingBox();
+        if (!neighborBox) throw new Error(`tab ${neighbor.id} has no box`);
+        await page.mouse.move(
+          neighborBox.x + 0.75 * neighborBox.width,
+          neighborBox.y + neighborBox.height / 2,
+          { steps: 10 },
+        );
+        // rc-dock's own after-tab indicator, centered on the tab's trailing edge.
+        const indicator = await readWhenSettled(page, () => readDropIndicator(page));
+        expect(indicator, 'after-tab drop indicator').toBeDefined();
+        if (!indicator) return;
+        expect.soft(indicator.left, 'indicator left edge').toBeGreaterThanOrEqual(bar.left);
+        expect.soft(indicator.right, 'indicator right edge').toBeLessThanOrEqual(bar.right);
+        expect.soft(indicator.left, 'indicator reaches the tab edge').toBeLessThan(neighbor.right);
+        expect
+          .soft(indicator.right, 'indicator reaches past the tab edge')
+          .toBeGreaterThan(neighbor.right);
       });
     } finally {
       await page.keyboard.press('Escape');
