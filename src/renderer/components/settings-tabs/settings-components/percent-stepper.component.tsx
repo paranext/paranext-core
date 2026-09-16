@@ -110,6 +110,15 @@ export function PercentStepper({
     onChange(next);
   };
 
+  // A bounded button stays a real, focusable `<button>` with `aria-disabled` instead of the native
+  // `disabled` attribute — a native `disabled` button drops out of the tab order and can't host a
+  // Radix `TooltipTrigger`, which would make the reason for the bound unreachable by keyboard.
+  // `onClick` is guarded explicitly (rather than relying on the browser to withhold the click)
+  // because `aria-disabled` does not stop the click event from firing.
+  const decreaseDisabled = disabled || value <= min;
+  const increaseDisabled = disabled || value >= max;
+  const resetDisabled = disabled || value === defaultValue;
+
   return (
     <TooltipProvider>
       <ButtonGroup aria-label={groupLabel} className={className}>
@@ -120,8 +129,12 @@ export function PercentStepper({
               variant="outline"
               size="icon"
               aria-label={labels.decrease}
-              disabled={disabled || value <= min}
-              onClick={() => emit((baseline) => baseline - step)}
+              aria-disabled={decreaseDisabled || undefined}
+              className="tw:aria-disabled:opacity-50"
+              onClick={() => {
+                if (decreaseDisabled) return;
+                emit((baseline) => baseline - step);
+              }}
             >
               <Minus />
             </Button>
@@ -143,8 +156,12 @@ export function PercentStepper({
               variant="outline"
               size="icon"
               aria-label={labels.increase}
-              disabled={disabled || value >= max}
-              onClick={() => emit((baseline) => baseline + step)}
+              aria-disabled={increaseDisabled || undefined}
+              className="tw:aria-disabled:opacity-50"
+              onClick={() => {
+                if (increaseDisabled) return;
+                emit((baseline) => baseline + step);
+              }}
             >
               <Plus />
             </Button>
@@ -158,8 +175,12 @@ export function PercentStepper({
               variant="ghost"
               size="icon"
               aria-label={labels.reset}
-              disabled={disabled || value === defaultValue}
-              onClick={() => emit(() => defaultValue)}
+              aria-disabled={resetDisabled || undefined}
+              className="tw:aria-disabled:opacity-50"
+              onClick={() => {
+                if (resetDisabled) return;
+                emit(() => defaultValue);
+              }}
             >
               <RotateCcw />
             </Button>
