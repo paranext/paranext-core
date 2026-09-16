@@ -53,7 +53,7 @@ export function resolveTabBarDropZoneSource(
   if (panel) {
     if (panel.panelLock) return undefined;
     if (!panel.group || panel.group !== targetPanel.group) return undefined;
-    if (panel === targetPanel) return undefined;
+    if (panel.id === targetPanel.id) return undefined;
     return panel;
   }
 

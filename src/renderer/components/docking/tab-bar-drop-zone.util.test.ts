@@ -1,31 +1,32 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resolveTabBarDropZoneSource } from './tab-bar-drop-zone.util';
 import {
-  createContext,
+  createDockContext,
   createDragState,
   createPanel,
   createTab,
   DOCK_ID,
-} from './tab-bar-drop-zone-test.util';
+  OTHER_GROUP,
+  resetDragStateStore,
+} from './__tests__/tab-bar-drop-zone-test.util';
 
 describe('resolveTabBarDropZoneSource', () => {
   beforeEach(() => {
-    // Clear rc-dock's shared drag-data store so tests can't see a previous test's seeded drag.
-    createDragState(undefined, undefined);
+    resetDragStateStore();
   });
 
   it('accepts a tab dragged from a panel in the same group', () => {
     const tab = createTab();
     createDragState({ tab }, DOCK_ID);
 
-    expect(resolveTabBarDropZoneSource(createContext(), createPanel())).toBe(tab);
+    expect(resolveTabBarDropZoneSource(createDockContext(), createPanel())).toBe(tab);
   });
 
   it('rejects a tab dragged from a different group', () => {
-    const tab = createTab({ group: 'group-b' });
+    const tab = createTab({ group: OTHER_GROUP });
     createDragState({ tab }, DOCK_ID);
 
-    expect(resolveTabBarDropZoneSource(createContext(), createPanel())).toBeUndefined();
+    expect(resolveTabBarDropZoneSource(createDockContext(), createPanel())).toBeUndefined();
   });
 
   it("rejects a tab dragged onto its own panel's bar when it is already that panel's last tab", () => {
@@ -35,7 +36,7 @@ describe('resolveTabBarDropZoneSource', () => {
     panel.tabs = [first, tab];
     createDragState({ tab }, DOCK_ID);
 
-    expect(resolveTabBarDropZoneSource(createContext(), panel)).toBeUndefined();
+    expect(resolveTabBarDropZoneSource(createDockContext(), panel)).toBeUndefined();
   });
 
   it("rejects a tab dragged onto its own panel's bar when it is that panel's only tab", () => {
@@ -44,7 +45,7 @@ describe('resolveTabBarDropZoneSource', () => {
     panel.tabs = [tab];
     createDragState({ tab }, DOCK_ID);
 
-    expect(resolveTabBarDropZoneSource(createContext(), panel)).toBeUndefined();
+    expect(resolveTabBarDropZoneSource(createDockContext(), panel)).toBeUndefined();
   });
 
   it("accepts a tab dragged onto its own panel's bar when it is not the last tab (moves it to the end)", () => {
@@ -54,13 +55,13 @@ describe('resolveTabBarDropZoneSource', () => {
     panel.tabs = [tab, last];
     createDragState({ tab }, DOCK_ID);
 
-    expect(resolveTabBarDropZoneSource(createContext(), panel)).toBe(tab);
+    expect(resolveTabBarDropZoneSource(createDockContext(), panel)).toBe(tab);
   });
 
-  it("rejects a tab from a tabLocked source group, mirroring DockPanel's own tabs-square gate", () => {
+  it('rejects a tab from a tabLocked group', () => {
     const tab = createTab();
     createDragState({ tab }, DOCK_ID);
-    const context = createContext({ getGroup: () => ({ tabLocked: true }) });
+    const context = createDockContext({ getGroup: () => ({ tabLocked: true }) });
 
     expect(resolveTabBarDropZoneSource(context, createPanel())).toBeUndefined();
   });
@@ -69,17 +70,17 @@ describe('resolveTabBarDropZoneSource', () => {
     const panel = createPanel({ id: 'source-panel' });
     createDragState({ panel }, DOCK_ID);
 
-    expect(resolveTabBarDropZoneSource(createContext(), createPanel({ id: 'target-panel' }))).toBe(
-      panel,
-    );
+    expect(
+      resolveTabBarDropZoneSource(createDockContext(), createPanel({ id: 'target-panel' })),
+    ).toBe(panel);
   });
 
   it('rejects a whole-panel drag from a different group', () => {
-    const panel = createPanel({ id: 'source-panel', group: 'group-b' });
+    const panel = createPanel({ id: 'source-panel', group: OTHER_GROUP });
     createDragState({ panel }, DOCK_ID);
 
     expect(
-      resolveTabBarDropZoneSource(createContext(), createPanel({ id: 'target-panel' })),
+      resolveTabBarDropZoneSource(createDockContext(), createPanel({ id: 'target-panel' })),
     ).toBeUndefined();
   });
 
@@ -88,20 +89,32 @@ describe('resolveTabBarDropZoneSource', () => {
     createDragState({ panel }, DOCK_ID);
 
     expect(
-      resolveTabBarDropZoneSource(createContext(), createPanel({ id: 'target-panel' })),
+      resolveTabBarDropZoneSource(createDockContext(), createPanel({ id: 'target-panel' })),
     ).toBeUndefined();
   });
 
-  it('rejects a whole-panel drag over its own bar (would otherwise duplicate the panel — rc-dock issue ticlo/rc-dock#226)', () => {
+  // Accepting this would duplicate the panel — rc-dock issue ticlo/rc-dock#226.
+  it('rejects a whole-panel drag over its own bar', () => {
     const panel = createPanel();
     createDragState({ panel }, DOCK_ID);
 
-    expect(resolveTabBarDropZoneSource(createContext(), panel)).toBeUndefined();
+    expect(resolveTabBarDropZoneSource(createDockContext(), panel)).toBeUndefined();
+  });
+
+  // The self-drop guard compares ids, not object identity: rc-dock replaces `PanelData` objects on
+  // layout changes (`Algorithm` clone/replacePanel), so `DragState` can still hold a stale copy of
+  // the target panel captured at drag start.
+  it('rejects a whole-panel drag whose data is a stale copy of the target panel', () => {
+    const targetPanel = createPanel({ id: 'source-panel' });
+    const staleCopy = { ...targetPanel };
+    createDragState({ panel: staleCopy }, DOCK_ID);
+
+    expect(resolveTabBarDropZoneSource(createDockContext(), targetPanel)).toBeUndefined();
   });
 
   it('rejects when the drag carries neither a tab nor a panel for this dock', () => {
     createDragState({ tab: createTab() }, 'a-different-dock-id');
 
-    expect(resolveTabBarDropZoneSource(createContext(), createPanel())).toBeUndefined();
+    expect(resolveTabBarDropZoneSource(createDockContext(), createPanel())).toBeUndefined();
   });
 });

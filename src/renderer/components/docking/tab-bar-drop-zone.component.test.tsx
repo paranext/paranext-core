@@ -8,12 +8,14 @@ import {
   TabBarDropZone,
 } from './tab-bar-drop-zone.component';
 import {
-  createContext,
+  createDockContext,
   createDragState,
   createPanel,
   createTab,
   DOCK_ID,
-} from './tab-bar-drop-zone-test.util';
+  OTHER_GROUP,
+  resetDragStateStore,
+} from './__tests__/tab-bar-drop-zone-test.util';
 
 interface MockDragDropDivProps {
   getRef?: React.Ref<HTMLDivElement>;
@@ -74,6 +76,23 @@ function getCapturedHandlers(): MockDragDropDivProps {
   if (!lastCall) throw new Error('DragDropDiv was not rendered');
   const [props] = lastCall;
   return props;
+}
+
+/**
+ * The handlers for every `DragDropDiv` rendered so far, in render order — for a test that mounts
+ * more than one zone and needs to drive each one's handlers independently (`getCapturedHandlers`
+ * only ever returns the most recent).
+ */
+function getAllCapturedHandlers(): MockDragDropDivProps[] {
+  return mockDragDropDivProps.mock.calls.map(([props]) => props);
+}
+
+/** Clears the mocked rc-dock hooks and drag-data store between tests. */
+function resetTestDoubles(): void {
+  mockDragDropDivProps.mockClear();
+  addDragStateListenerMock.mockClear();
+  removeDragStateListenerMock.mockClear();
+  resetDragStateStore();
 }
 
 /** The callback `TabBarDropZone` most recently passed to `addDragStateListener`. */
@@ -152,17 +171,11 @@ function renderTabBarFixture(
 }
 
 describe('TabBarDropZone', () => {
-  beforeEach(() => {
-    mockDragDropDivProps.mockClear();
-    addDragStateListenerMock.mockClear();
-    removeDragStateListenerMock.mockClear();
-    // Clear rc-dock's shared drag-data store between tests.
-    createDragState(undefined, undefined);
-  });
+  beforeEach(resetTestDoubles);
 
   it('accepts a same-group tab drag and shows the indicator on the inner indicator element', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
     const indicatorElement = stubVisibleIndicator(screen.getByTestId('drop-zone'));
     const { onDragOverT } = getCapturedHandlers();
@@ -182,7 +195,7 @@ describe('TabBarDropZone', () => {
 
   it('rejects a same-group tab drag while the indicator has no width, without showing it', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
     stubRect(getIndicatorElement(screen.getByTestId('drop-zone')), {
       left: 600,
@@ -205,11 +218,11 @@ describe('TabBarDropZone', () => {
 
   it('rejects a different-group tab drag and does not show the indicator', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
     const { onDragOverT } = getCapturedHandlers();
 
-    const tab = createTab({ group: 'group-b' });
+    const tab = createTab({ group: OTHER_GROUP });
     const state = createDragState({ tab }, DOCK_ID);
     const acceptSpy = vi.spyOn(state, 'accept');
     const rejectSpy = vi.spyOn(state, 'reject');
@@ -223,28 +236,8 @@ describe('TabBarDropZone', () => {
 
   it('clears the indicator on leave, using the same source token the accept call used', () => {
     const panel = createPanel();
-    const context = createContext();
-    render(<TabBarDropZone panelData={panel} context={context} />);
-    stubVisibleIndicator(screen.getByTestId('drop-zone'));
-    const { onDragOverT, onDragLeaveT } = getCapturedHandlers();
-
-    const tab = createTab();
-    const state = createDragState({ tab }, DOCK_ID);
-    onDragOverT?.(state);
-    const claimedSource = vi.mocked(context.setDropRect).mock.calls[0][2];
-
-    onDragLeaveT?.(state);
-
-    // Asserting the literal `null` the component passes, matching rc-dock's own
-    // `setDropRect(null, 'remove', ...)` clearing contract.
-    // eslint-disable-next-line no-null/no-null
-    expect(context.setDropRect).toHaveBeenLastCalledWith(null, 'remove', claimedSource);
-  });
-
-  it('clears the indicator on unmount, using the same source token the accept call used', () => {
-    const panel = createPanel();
-    const context = createContext();
-    const { unmount } = render(<TabBarDropZone panelData={panel} context={context} />);
+    const context = createDockContext();
+    const { rerender } = render(<TabBarDropZone panelData={panel} context={context} />);
     stubVisibleIndicator(screen.getByTestId('drop-zone'));
     const { onDragOverT } = getCapturedHandlers();
 
@@ -253,17 +246,93 @@ describe('TabBarDropZone', () => {
     onDragOverT?.(state);
     const claimedSource = vi.mocked(context.setDropRect).mock.calls[0][2];
 
-    unmount();
+    // Re-rendering between the claim and the leave is what tells a token that stays stable across
+    // renders (a ref) apart from one rebuilt every render: only the latter would hand `onDragLeaveT`
+    // a different object than the one `onDragOverT` claimed with. `toBe`, not `toHaveBeenCalledWith`,
+    // is what makes that distinction visible: both tokens are content-less `{}`s, so a matcher's deep
+    // equality would call them equal even when they are two different objects.
+    rerender(<TabBarDropZone panelData={panel} context={context} />);
+    const { onDragLeaveT } = getCapturedHandlers();
 
+    onDragLeaveT?.(state);
+
+    const lastCall = vi.mocked(context.setDropRect).mock.calls.at(-1);
     // Asserting the literal `null` the component passes, matching rc-dock's own
     // `setDropRect(null, 'remove', ...)` clearing contract.
     // eslint-disable-next-line no-null/no-null
-    expect(context.setDropRect).toHaveBeenLastCalledWith(null, 'remove', claimedSource);
+    expect(lastCall?.[0]).toBeNull();
+    expect(lastCall?.[1]).toBe('remove');
+    expect(lastCall?.[2]).toBe(claimedSource);
+  });
+
+  it('clears the indicator on unmount, using the same source token the accept call used', () => {
+    const panel = createPanel();
+    const context = createDockContext();
+    const { rerender, unmount } = render(<TabBarDropZone panelData={panel} context={context} />);
+    stubVisibleIndicator(screen.getByTestId('drop-zone'));
+    const { onDragOverT } = getCapturedHandlers();
+
+    const tab = createTab();
+    const state = createDragState({ tab }, DOCK_ID);
+    onDragOverT?.(state);
+    const claimedSource = vi.mocked(context.setDropRect).mock.calls[0][2];
+
+    // See the sibling "on leave" test above for why the re-render matters and why the assertion
+    // below uses `toBe` on the extracted argument rather than `toHaveBeenCalledWith`.
+    rerender(<TabBarDropZone panelData={panel} context={context} />);
+
+    unmount();
+
+    const lastCall = vi.mocked(context.setDropRect).mock.calls.at(-1);
+    // Asserting the literal `null` the component passes, matching rc-dock's own
+    // `setDropRect(null, 'remove', ...)` clearing contract.
+    // eslint-disable-next-line no-null/no-null
+    expect(lastCall?.[0]).toBeNull();
+    expect(lastCall?.[1]).toBe('remove');
+    expect(lastCall?.[2]).toBe(claimedSource);
+  });
+
+  it("does not clear another zone's claim when this zone leaves with a distinct source token", () => {
+    // A fake that mirrors rc-dock's own `setDropRect` semantics (`DockDropSquare`'s clear clause):
+    // a `'remove'` only takes effect when its `source` matches whichever source most recently
+    // claimed the indicator. A shared (rather than per-zone) source token would let one zone's leave
+    // wrongly clear a different zone's still-active claim.
+    let activeSource: unknown;
+    const setDropRect = vi.fn((_element: unknown, direction: string, source: unknown) => {
+      if (direction === 'remove') {
+        if (source === activeSource) activeSource = undefined;
+        return;
+      }
+      activeSource = source;
+    });
+    const context = createDockContext({ setDropRect });
+    const panelA = createPanel({ id: 'panel-a' });
+    const panelB = createPanel({ id: 'panel-b' });
+    render(
+      <>
+        <TabBarDropZone panelData={panelA} context={context} />
+        <TabBarDropZone panelData={panelB} context={context} />
+      </>,
+    );
+    const [zoneA, zoneB] = screen.getAllByTestId('drop-zone');
+    stubVisibleIndicator(zoneA);
+    stubVisibleIndicator(zoneB);
+    const [handlersA, handlersB] = getAllCapturedHandlers();
+
+    const stateA = createDragState({ tab: createTab() }, DOCK_ID);
+    handlersA.onDragOverT?.(stateA);
+    const stateB = createDragState({ tab: createTab() }, DOCK_ID);
+    handlersB.onDragOverT?.(stateB);
+    const activeAfterBClaimed = activeSource;
+
+    handlersA.onDragLeaveT?.(stateA);
+
+    expect(activeSource).toBe(activeAfterBClaimed);
   });
 
   it('calls dockMove(tab, panelData, "middle") on drop for a tab source', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
     const { onDropT } = getCapturedHandlers();
 
@@ -277,7 +346,7 @@ describe('TabBarDropZone', () => {
 
   it('does nothing on drop when the drag no longer resolves to a valid source', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
     const { onDropT } = getCapturedHandlers();
 
@@ -288,37 +357,32 @@ describe('TabBarDropZone', () => {
     expect(context.dockMove).not.toHaveBeenCalled();
   });
 
-  it(
-    'accepts a whole-panel drag from another panel in the same group (the shape a re-docked ' +
-      "single-tab float uses — DockTabs.ts starts a float panel's drag as `panel` data, not " +
-      '`tab`) and shows the indicator',
-    () => {
-      const targetPanel = createPanel({ id: 'target-panel' });
-      const context = createContext();
-      render(<TabBarDropZone panelData={targetPanel} context={context} />);
-      const indicatorElement = stubVisibleIndicator(screen.getByTestId('drop-zone'));
-      const { onDragOverT, onDropT } = getCapturedHandlers();
+  // The common source of `panel` drag data is dragging an already-docked panel by its bar; a
+  // re-docked single-tab float is the same shape, since `TabCache.onDragStart` starts a single-tab
+  // float panel's drag as `panel` data too, not `tab` (rc-dock/src/DockTabs.tsx).
+  it('accepts and docks a same-group whole-panel drag (e.g. a re-docked float)', () => {
+    const targetPanel = createPanel({ id: 'target-panel' });
+    const context = createDockContext();
+    render(<TabBarDropZone panelData={targetPanel} context={context} />);
+    const indicatorElement = stubVisibleIndicator(screen.getByTestId('drop-zone'));
+    const { onDragOverT, onDropT } = getCapturedHandlers();
 
-      const floatPanel = createPanel({ id: 'float-panel' });
-      const state = createDragState({ panel: floatPanel }, DOCK_ID);
-      const acceptSpy = vi.spyOn(state, 'accept');
+    const floatPanel = createPanel({ id: 'float-panel' });
+    const state = createDragState({ panel: floatPanel }, DOCK_ID);
+    const acceptSpy = vi.spyOn(state, 'accept');
 
-      onDragOverT?.(state);
-      expect(acceptSpy).toHaveBeenCalled();
-      expect(context.setDropRect).toHaveBeenCalledWith(
-        indicatorElement,
-        'middle',
-        expect.anything(),
-      );
+    onDragOverT?.(state);
+    expect(acceptSpy).toHaveBeenCalled();
+    expect(context.setDropRect).toHaveBeenCalledWith(indicatorElement, 'middle', expect.anything());
 
-      onDropT?.(state);
-      expect(context.dockMove).toHaveBeenCalledWith(floatPanel, targetPanel, 'middle');
-    },
-  );
+    onDropT?.(state);
+    expect(context.dockMove).toHaveBeenCalledWith(floatPanel, targetPanel, 'middle');
+  });
 
-  it('rejects a whole-panel drag over its own bar (would otherwise duplicate the panel — rc-dock issue ticlo/rc-dock#226)', () => {
+  // Accepting this would duplicate the panel — rc-dock issue ticlo/rc-dock#226.
+  it('rejects a whole-panel drag over its own bar', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
     const { onDragOverT } = getCapturedHandlers();
 
@@ -333,7 +397,7 @@ describe('TabBarDropZone', () => {
 
   it('rejects a panelLocked whole-panel drag', () => {
     const targetPanel = createPanel({ id: 'target-panel' });
-    const context = createContext();
+    const context = createDockContext();
     render(<TabBarDropZone panelData={targetPanel} context={context} />);
     const { onDragOverT } = getCapturedHandlers();
 
@@ -351,7 +415,7 @@ describe('TabBarDropZone', () => {
     const panel = createPanel();
     const tab = createTab({ parent: panel });
     panel.tabs = [tab];
-    const context = createContext();
+    const context = createDockContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
     const { onDragOverT, onDropT } = getCapturedHandlers();
 
@@ -368,13 +432,7 @@ describe('TabBarDropZone', () => {
 });
 
 describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
-  beforeEach(() => {
-    mockDragDropDivProps.mockClear();
-    addDragStateListenerMock.mockClear();
-    removeDragStateListenerMock.mockClear();
-    // Clear rc-dock's shared drag-data store between tests.
-    createDragState(undefined, undefined);
-  });
+  beforeEach(resetTestDoubles);
 
   /**
    * Renders one tab bar whose last tab spans x:[500, 600] (midpoint 550) and whose zone starts at
@@ -384,7 +442,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
     zoneStart: number,
     dragData: Record<string, unknown> = { tab: createTab() },
   ): HTMLElement {
-    const { tabs, zoneElement } = renderTabBarFixture(createPanel(), createContext());
+    const { tabs, zoneElement } = renderTabBarFixture(createPanel(), createDockContext());
     stubRect(tabs[1], { left: 500, right: 600, width: 100 });
     stubRect(zoneElement, { left: zoneStart, right: 900, width: 900 - zoneStart });
     const onDragStateChange = getCapturedDragStateListener();
@@ -428,7 +486,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
 
   it('measures from the zone’s right edge when the fixture is right-to-left', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     const { tabs, zoneElement } = renderTabBarFixture(panel, context);
     zoneElement.style.direction = 'rtl';
     // Last tab spans x:[400, 500] (midpoint 450); the zone's right edge (its logical start in RTL)
@@ -446,10 +504,10 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
   });
 
   it('measures each zone against its own tab bar', () => {
-    const first = renderTabBarFixture(createPanel({ id: 'panel-1' }), createContext());
+    const first = renderTabBarFixture(createPanel({ id: 'panel-1' }), createDockContext());
     stubRect(first.tabs[1], { left: 500, right: 600, width: 100 });
     stubRect(first.zoneElement, { left: 608, right: 900, width: 292 });
-    const second = renderTabBarFixture(createPanel({ id: 'panel-2' }), createContext());
+    const second = renderTabBarFixture(createPanel({ id: 'panel-2' }), createDockContext());
     stubRect(second.tabs[1], { left: 1000, right: 1040, width: 40 });
     stubRect(second.zoneElement, { left: 1044, right: 1400, width: 356 });
     createDragState({ tab: createTab() }, DOCK_ID);
@@ -468,7 +526,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
 
   it('does not mark the zone when the drag carries neither tab nor panel data for this dock (e.g. a divider resize)', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     const { tabs, zoneElement } = renderTabBarFixture(panel, context);
     stubRect(tabs[1], { left: 500, right: 600, width: 100 });
     stubRect(zoneElement, { left: 650, right: 900, width: 250 });
@@ -484,7 +542,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
 
   it('does nothing when the tab bar has no tabs', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     render(
       <div className="dock-nav">
         <div className="dock-nav-wrap">
@@ -508,7 +566,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
 
   it('clears the marker and custom properties when the drag ends', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     const { tabs, zoneElement } = renderTabBarFixture(panel, context);
     stubRect(tabs[1], { left: 500, right: 600, width: 100 });
     stubRect(zoneElement, { left: 650, right: 900, width: 250 });
@@ -529,7 +587,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
 
   it('removes the drag-state listener on unmount, using the same callback that was added', () => {
     const panel = createPanel();
-    const context = createContext();
+    const context = createDockContext();
     const { unmount } = render(<TabBarDropZone panelData={panel} context={context} />);
     const listener = getCapturedDragStateListener();
 

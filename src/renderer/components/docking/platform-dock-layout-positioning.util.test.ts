@@ -13,7 +13,7 @@ import {
   TAB_GROUP,
   TAB_GROUP_RESOURCES,
 } from './platform-dock-layout-positioning.util';
-import { createContext, createPanel } from './tab-bar-drop-zone-test.util';
+import { createDockContext, createPanel } from './__tests__/tab-bar-drop-zone-test.util';
 
 /** Minimal WebView {@link TabInfo} fixture for `getTabGroup` tests. */
 function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo {
@@ -43,6 +43,7 @@ describe('Dock Layout Component', () => {
       expect(groups[TAB_GROUP].maximizable).toBe(false);
       expect(groups[TAB_GROUP].floatable).toBe(false);
       expect(groups[TAB_GROUP].animated).toBe(false);
+      expect(groups[TAB_GROUP].disableDock).toBeUndefined();
     });
 
     it('simple mode: returns TAB_GROUP with tabLocked and without panelExtra', () => {
@@ -52,6 +53,7 @@ describe('Dock Layout Component', () => {
       expect(groups[TAB_GROUP].maximizable).toBe(false);
       expect(groups[TAB_GROUP].floatable).toBe(false);
       expect(groups[TAB_GROUP].animated).toBe(false);
+      expect(groups[TAB_GROUP].disableDock).toBeUndefined();
     });
 
     it('simple mode: registers HEADLESS_GROUP and TAB_GROUP_RESOURCES with locked config', () => {
@@ -61,17 +63,27 @@ describe('Dock Layout Component', () => {
         expect(groups[groupKey].panelExtra).toBeUndefined();
         expect(groups[groupKey].maximizable).toBe(false);
         expect(groups[groupKey].floatable).toBe(false);
+        expect(groups[groupKey].disableDock).toBeUndefined();
       });
     });
 
-    it('power mode: panelExtra renders both the new-tab button and the tab-bar drop zone', () => {
+    it('power mode: panelExtra renders both the new-tab button and the tab-bar drop zone, in that order', () => {
       const { panelExtra } = getGroups(true)[TAB_GROUP];
       if (!panelExtra) throw new Error('Expected power mode TAB_GROUP to define panelExtra');
 
-      const { container } = render(panelExtra(createPanel(), createContext()));
+      const { container } = render(panelExtra(createPanel(), createDockContext()));
+      const newTabButton = container.querySelector('.new-tab-button');
+      const dropZone = container.querySelector('.platform-tab-bar-drop-zone');
+      if (!newTabButton || !dropZone)
+        throw new Error('Expected both the "+" button and the drop zone to render');
 
-      expect(container.querySelector('.new-tab-button')).toBeInTheDocument();
-      expect(container.querySelector('.platform-tab-bar-drop-zone')).toBeInTheDocument();
+      // Outside a drag both keep their default flex order, so this DOM order is what actually
+      // positions "+" before the drop zone at rest (only the drag-time CSS rule in
+      // dock-layout-wrapper.component.scss moves "+" to the bar's end).
+      const position = newTabButton.compareDocumentPosition(dropZone);
+      // Node.compareDocumentPosition's contract is a bitmask.
+      // eslint-disable-next-line no-bitwise
+      expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
     it('simple mode: no registered group defines panelExtra', () => {
