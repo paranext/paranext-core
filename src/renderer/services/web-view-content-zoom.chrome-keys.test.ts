@@ -21,6 +21,7 @@ describe('registerContentZoomChromeKeys', () => {
   let adjustContentZoom: ReturnType<typeof vi.fn>;
   let resetContentZoom: ReturnType<typeof vi.fn>;
   let isModalOverlayOpen: ReturnType<typeof vi.fn>;
+  let canContentZoomAct: ReturnType<typeof vi.fn>;
   let unsubscribe: () => void;
 
   beforeEach(() => {
@@ -28,10 +29,12 @@ describe('registerContentZoomChromeKeys', () => {
     adjustContentZoom = vi.fn().mockResolvedValue(undefined);
     resetContentZoom = vi.fn().mockResolvedValue(undefined);
     isModalOverlayOpen = vi.fn().mockReturnValue(false);
+    canContentZoomAct = vi.fn().mockReturnValue(true);
     unsubscribe = registerContentZoomChromeKeys({
       adjustContentZoom,
       resetContentZoom,
       isModalOverlayOpen,
+      canContentZoomAct,
     });
   });
 
@@ -123,6 +126,34 @@ describe('registerContentZoomChromeKeys', () => {
     const event = dispatchKeyDown(document.body, { key: '=', ctrlKey: true });
     expect(adjustContentZoom).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('leaves the key alone when nothing can zoom, so an unadapted pane does not swallow it', () => {
+    canContentZoomAct.mockReturnValue(false);
+    const event = dispatchKeyDown(document.body, { key: '=', ctrlKey: true });
+    expect(adjustContentZoom).not.toHaveBeenCalled();
+    expect(resetContentZoom).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('does not ask whether anything can zoom for a key it would not act on anyway', () => {
+    dispatchKeyDown(document.body, { key: 'k', ctrlKey: true });
+    dispatchKeyDown(document.body, { key: '-', ctrlKey: true, shiftKey: true });
+    expect(canContentZoomAct).not.toHaveBeenCalled();
+  });
+
+  it('acts even when a descendant stops propagation before the bubble phase', () => {
+    const container = document.createElement('div');
+    const child = document.createElement('div');
+    container.appendChild(child);
+    document.body.appendChild(container);
+    // The reference box's book/chapter picker and the recent-searches list stop every keydown they
+    // see, unconditionally, in exactly this shape.
+    container.addEventListener('keydown', (e) => e.stopPropagation());
+    const event = dispatchKeyDown(child, { key: '=', ctrlKey: true });
+    expect(adjustContentZoom).toHaveBeenCalledWith(undefined, 1);
+    expect(event.defaultPrevented).toBe(true);
+    container.remove();
   });
 
   it('does not act when the event target is a web view iframe', () => {
