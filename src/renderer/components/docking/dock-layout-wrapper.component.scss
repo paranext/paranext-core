@@ -265,8 +265,8 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 // carrying the dragged group's `dock-style-*` classes to `<body>` for tab and tab-group drags
 // only (a divider drag carries no group), so the button never moves while a panel is resized.
 body:has(> .dragging-layer.dock-style-platform-bible)
-  .dock-nav
-  > .dock-extra-content
+  .dock-panel.dock-style-platform-bible
+  .dock-extra-content
   > .new-tab-button {
   order: 1;
 }
