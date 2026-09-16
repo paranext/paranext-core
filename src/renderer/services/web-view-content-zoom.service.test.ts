@@ -23,6 +23,7 @@ import {
   __setContentZoomDepsForTesting,
   adjustContentZoom,
   applyContentZoomForWebView,
+  canContentZoomActOnActiveTarget,
   forgetContentZoom,
   getInitialContentZoomForWebView,
   initializeContentZoomService,
@@ -172,6 +173,17 @@ describe('web-view-content-zoom.service', () => {
     expect(resolveContentZoomArea('editor-1', undefined)).toBe('footnotes');
     setContentZoomAreas('editor-1', []);
     expect(resolveContentZoomArea('editor-1', undefined)).toBeUndefined();
+  });
+
+  it('answers whether a request carrying no ids has both a pane and an area to act on', () => {
+    expect(canContentZoomActOnActiveTarget()).toBe(false);
+    lastFocused = 'editor-1';
+    expect(canContentZoomActOnActiveTarget()).toBe(true);
+    setContentZoomAreas('editor-1', []);
+    expect(canContentZoomActOnActiveTarget()).toBe(false);
+    setContentZoomAreas('editor-1', ['main']);
+    modalOverlayOpen = true;
+    expect(canContentZoomActOnActiveTarget()).toBe(false);
   });
 
   it('zooms one area in from the default, writes state and memory for that area, pushes its variable and shows the indicator there', async () => {

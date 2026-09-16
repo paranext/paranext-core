@@ -348,6 +348,18 @@ export function resolveContentZoomArea(
 }
 
 /**
+ * Whether a zoom request carrying neither a web view id nor an area id would find something to act
+ * on: the window's active pane, and an area in it. Answers the question the window-chrome chord
+ * listener has to ask before it consumes a keystroke, and it is synchronous because both halves
+ * read state this module already holds.
+ */
+export function canContentZoomActOnActiveTarget(): boolean {
+  const target = resolveContentZoomTarget(undefined);
+  if (!target) return false;
+  return resolveContentZoomArea(target, undefined) !== undefined;
+}
+
+/**
  * How long a pane whose bootstrap reported no zoom areas yet may stay unscaled while its content
  * mounts. Scaling the whole iframe is the fallback for a view that marks no area at all; applying
  * it during the moments before an adapted view's React tree has mounted would scale its chrome too,
