@@ -138,6 +138,12 @@ export function findVerseMarkerForVerse(
     const { start } = parseVerseRange(marker.dataset.number ?? '');
     // `<=` on the running best keeps the EARLIER of two markers sharing a start, which is what puts
     // a sub-verse reference at `3a` rather than `3b`.
+    //
+    // This nearest-start-wins scan is deliberately the same rule as `findVerseBlockForVerse`'s
+    // above, tie-break included — the two layouts should not disagree about which verse a
+    // reference belongs to. Change one and change the other. They are written out twice rather
+    // than shared because the block finder belongs to the aligned grid and is still under review;
+    // fold them into one helper once that settles.
     if (!Number.isFinite(start) || start > verseNum || start <= bestStart) return;
     best = marker;
     bestStart = start;
@@ -166,18 +172,34 @@ function getFirstVisibleY(port: HTMLElement): number {
 }
 
 /**
- * Whether any part of `block` is showing, counting the sticky header as covered rather than
- * visible.
+ * Whether `block` is showing in `port`, counting anything behind a sticky header as covered rather
+ * than visible.
  *
- * @param port The scroll port (the grid root).
- * @param block The verse block to test.
- * @returns True when the reader can see some of the block.
+ * Two rules, because the layouts aim this at different things:
+ *
+ * - A target SHORTER than the visible area has to fit inside it completely. A chapter cell's target
+ *   is a one-line verse marker whose verse text follows _after_ it, so a marker clipped at the
+ *   bottom edge would count as "showing" while the reader sees a verse number and none of its verse
+ *   — and the leave-a-visible-verse-alone rule would then decline to scroll.
+ * - A target TALLER than the visible area can never fit, so any part showing counts. That is the
+ *   aligned grid's whole verse block, where scrolling back to the top would fight a reader who is
+ *   part-way through a long verse.
+ *
+ * @param port The scroll port — the grid root in the aligned view, the cell's content box in a
+ *   chapter cell.
+ * @param block The verse block or marker to test.
+ * @returns True when the reader can see the target.
  */
 export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolean {
   const blockRect = block.getBoundingClientRect();
-  return (
-    blockRect.bottom > getFirstVisibleY(port) && blockRect.top < port.getBoundingClientRect().bottom
-  );
+  const firstVisibleY = getFirstVisibleY(port);
+  const portBottom = port.getBoundingClientRect().bottom;
+  // A port reporting no visible area — a hidden pane, or an environment that lays nothing out —
+  // takes the permissive rule below, since no height can be less than zero. Demanding a target fit
+  // inside nothing would call everything hidden and scroll for it.
+  if (blockRect.height < portBottom - firstVisibleY)
+    return blockRect.top >= firstVisibleY && blockRect.bottom <= portBottom;
+  return blockRect.bottom > firstVisibleY && blockRect.top < portBottom;
 }
 
 /**
