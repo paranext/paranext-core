@@ -1,31 +1,13 @@
 /**
- * Keyboard-chord cases for content zoom (Ctrl+`=`/`+`, Ctrl+`-`, Ctrl+`0`), written and gated.
- *
- * SKIPPED for two independent reasons:
- *
- * 1. Product behavior: on Windows and Linux, `src/main/main.ts` claims Ctrl+`=`/`+`, Ctrl+`-` and
- *    Ctrl+`0` app-wide in its `before-input-event` handler and routes them to the app-wide
- *    `zoomIn`/`zoomOut`/`resetZoomFactor`, so a real user's chord over a Scripture editor pane
- *    never reaches the web view's own bootstrap-script listener at all. Until PT-4577 makes that
- *    claim area-aware, the chord can never reach the code these cases exercise.
- * 2. Harness limitation, independent of (1): even once PT-4577 lands, Playwright drives the keyboard
- *    through CDP's `Input.dispatchKeyEvent`, which injects at the renderer level and never passes
- *    through `before-input-event` — the same limitation the skipped keyboard test in
- *    `e2e-tests/tests/isolated/navigation-history/navigation-history.spec.ts` documents. So these
- *    cases would go green while the product is broken — a false positive, worse than a skip, since
- *    Playwright's injection never exercises the code path the fix changes either way.
- *
- * Re-enable once PT-4577 lands AND OS-level key injection (e.g. xdotool into the Xvfb display) is
- * available to actually drive the chord through the OS input path `before-input-event` listens on.
- * Until then, the same code paths (the bootstrap's `onWheel`/`onKeyDown` handlers and the command
- * path) are covered by the wheel and command steps in `content-zoom.spec.ts`.
- *
- * `e2e-tests/reporters/no-silent-skips.reporter.ts` only fails a run for a test whose
- * `expectedStatus` is not `skipped`, so this describe-scope `test.skip` is accepted and does not
- * fail a run.
- *
- * Do NOT delete the test bodies below: they document the intended end-to-end behavior and are ready
- * to re-enable once both blockers lift.
+ * Keyboard-chord cases for content zoom (Ctrl+`=`/`+`, Ctrl+`-`, Ctrl+`0`) over a Scripture editor
+ * pane: one on the main text area, one on a footnote area to prove area targeting. `main.ts` no
+ * longer claims these chords app-wide — its `before-input-event` handler has no zoom branches, and
+ * app-wide zoom now runs through `adjustZoomFactor` behind `platform.zoomIn`/`platform.zoomOut` —
+ * so the chord reaches the web view. CDP's `Input.dispatchKeyEvent` (`mainPage.keyboard.press`) is
+ * OS-level input that lands on whatever holds focus, including inside an iframe, so it drives the
+ * in-iframe `keydown` listener in `web-view-content-zoom.bootstrap-script.ts` that is now the
+ * handler for these chords — see `marker-palette-trigger-focus.spec.ts` for the same in-iframe CDP
+ * precedent.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
@@ -45,14 +27,6 @@ test.use({
 });
 
 test.describe('scripture editor content zoom — keyboard chords', () => {
-  // See the file docblock for the two independent reasons this whole file is gated.
-  test.skip(
-    true,
-    'Ctrl+=/-/0 are claimed app-wide by main.ts before-input-event until PT-4577 makes that area-aware, ' +
-      'AND Playwright cannot drive before-input-event at all (CDP injects at the renderer level) — ' +
-      'these cases would pass while the product is broken.',
-  );
-
   test('Ctrl+= zooms the text area in two steps, Ctrl+- zooms out, Ctrl+0 resets', async ({
     mainPage,
   }) => {
