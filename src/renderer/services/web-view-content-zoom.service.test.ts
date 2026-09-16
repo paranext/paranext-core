@@ -1248,6 +1248,82 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-11')?.state).toEqual(zoomState({ main: 1.2 }, 'editor:PROJ-A'));
   });
 
+  it("does not let an in-burst pending write for the OLD identity be read as the NEW identity's own level when an unrelated memory push walks the panes before this one is re-seeded", async () => {
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-12', {
+      id: 'notes-12',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-12', ['main']); // nothing remembered for A, so this seeds nothing
+
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('notes-12', 1, 'main'); // 1.1, committed at once under project A
+      await adjustContentZoom('notes-12', 1, 'main'); // 1.2, only pending -- the burst window is open
+
+      // The shared definition is re-pointed to project B by a write this window has not been
+      // notified of yet (`onDidUpdateWebView` has not fired), coming back with fresh, unstamped
+      // state -- exactly what `getWebViewDefinition` hands back for content that was never seeded.
+      definitions.set('notes-12', {
+        id: 'notes-12',
+        webViewType: 'legacyCommentManager.commentListPanel',
+        projectId: 'bbb',
+        state: {},
+      });
+
+      // An unrelated memory key changes, which walks every open pane through `syncSiblingsFromMemory`.
+      memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-Z:main': 1.9 }));
+      expect(definitions.get('notes-12')?.state).toEqual({});
+
+      // The burst's own trailing write -- still carrying the level chosen under project A -- must be
+      // dropped rather than committed once its window closes: the pane no longer matches the
+      // identity that write was chosen for.
+      vi.advanceTimersByTime(250);
+      expect(definitions.get('notes-12')?.state).toEqual({});
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts a user zoom step from the pane's NEW identity effective level, not from a same-window pending write left over from the old one", async () => {
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-13', {
+      id: 'notes-13',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-13', ['main']);
+
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('notes-13', 1, 'main'); // 1.1, committed at once under project A
+      await adjustContentZoom('notes-13', 1, 'main'); // 1.2, only pending -- burst window still open
+
+      definitions.set('notes-13', {
+        id: 'notes-13',
+        webViewType: 'legacyCommentManager.commentListPanel',
+        projectId: 'bbb',
+        state: {},
+      });
+
+      // A user zoom step on the same pane, now showing project B, before this window's own re-seed
+      // logic has had a chance to run.
+      await adjustContentZoom('notes-13', 1, 'main');
+      vi.advanceTimersByTime(250); // the burst's trailing write closes
+
+      // One step from B's effective level (nothing of its own yet, so the Settings default, 1) is
+      // 1.1 -- not one step from project A's still-pending 1.2, which would land on 1.3.
+      expect(definitions.get('notes-13')?.state).toEqual(zoomState({ main: 1.1 }, 'notes:BBB'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('treats a non-string identity stamp as no stamp at all', async () => {
     definitions.set('editor-8', {
       id: 'editor-8',
