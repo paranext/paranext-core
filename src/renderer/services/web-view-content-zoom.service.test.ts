@@ -972,6 +972,116 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it("leaves a re-pointed pane's levels and stamp untouched while memory has never loaded", async () => {
+    // Both the read and the subscription for memory fail, so `memoryLoaded` never becomes true.
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          if (key === MEMORY) throw new Error('network blip');
+          return settings[key];
+        },
+        set: settingsSet,
+        subscribe: async (key: string) => {
+          if (key === MEMORY) throw new Error('subscription unavailable');
+          return async () => {};
+        },
+      },
+    });
+    await initializeContentZoomService();
+    // Restored directly, as a layout would restore it, rather than seeded through the normal flow —
+    // that flow itself depends on the very memory read this test keeps failing.
+    definitions.set('notes-x', {
+      id: 'notes-x',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: zoomState({ main: 1.2 }, 'notes:AAA'),
+    });
+    updateDefinition.mockClear();
+    definitions.set('notes-x', { ...requireDefinition('notes-x'), projectId: 'bbb' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-x') });
+    expect(definitions.get('notes-x')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+    expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it("clears the pane's own-level write timer when a re-point drops its pending levels, so the next edit under the new identity commits at once", async () => {
+    settings[MEMORY] = { 'notes:AAA:main': 1.2, 'notes:BBB:main': 0.8 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('notes-7', {
+      id: 'notes-7',
+      webViewType: 'legacyCommentManager.commentListPanel',
+      projectId: 'aaa',
+      state: {},
+    });
+    setContentZoomAreas('notes-7', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('notes-7')?.state).toEqual(zoomState({ main: 1.2 }, 'notes:AAA'));
+
+    vi.useFakeTimers();
+    try {
+      await adjustContentZoom('notes-7', 1, 'main'); // 1.3, committed at once; opens the burst window
+      await adjustContentZoom('notes-7', 1, 'main'); // 1.4, deferred inside it -- never committed
+
+      // Re-point mid-burst, before the deferred write's own timer fires.
+      definitions.set('notes-7', { ...requireDefinition('notes-7'), projectId: 'bbb' });
+      onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-7') });
+      expect(definitions.get('notes-7')?.state).toEqual(zoomState({ main: 0.8 }, 'notes:BBB'));
+
+      updateDefinition.mockClear();
+      // One edit under the new identity, still well inside what would have been the old burst window.
+      await adjustContentZoom('notes-7', 1, 'main');
+      expect(updateDefinition).toHaveBeenCalledTimes(1); // written at once, not deferred into a stale window
+      expect(definitions.get('notes-7')?.state).toEqual(zoomState({ main: 0.9 }, 'notes:BBB'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not stamp a pane whose only "own levels" are a still-pending, uncommitted write', async () => {
+    // Every commit attempt fails to land, so the level chosen below never actually reaches state.
+    updateDefinition.mockImplementation(() => false);
+    await adjustContentZoom('editor-1', 1, 'main');
+    expect(definitions.get('editor-1')?.state).toEqual({});
+    // Unmounts the pane; the retry this makes also fails, so the level stays pending rather than
+    // being discarded along with the rest of the pane's state.
+    forgetContentZoom('editor-1');
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    updateDefinition.mockClear();
+    // The reload's bootstrap reports fresh, as if for a pane that had never reported before.
+    setContentZoomAreas('editor-1', ['main']);
+    // No levels are actually committed, so nothing may be stamped either — a stamp with no levels
+    // behind it would violate the invariant that the two are always written together.
+    expect(definitions.get('editor-1')?.state).toEqual({});
+    expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it('treats a non-string identity stamp as no stamp at all', async () => {
+    definitions.set('editor-8', {
+      id: 'editor-8',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      // A corrupted or foreign-written stamp: not a string, so it names nothing this build
+      // recognizes as an identity.
+      state: { [LEVELS]: { main: 1.5 }, [IDENTITY]: 42 },
+    });
+    setContentZoomAreas('editor-8', ['main']);
+    expect(definitions.get('editor-8')?.state).toEqual(zoomState({ main: 1.5 }));
+  });
+
+  it('leaves a pane with no resolvable identity untouched, even though it already holds its own levels', async () => {
+    definitions.set('editor-9', {
+      id: 'editor-9',
+      webViewType: 'platformScriptureEditor.react',
+      // No projectId and no state.resourceId: this build cannot resolve an identity for the pane at
+      // all, so there is nothing to compare a stamp against or to seed it with.
+      state: { [LEVELS]: { main: 1.4 } },
+    });
+    updateDefinition.mockClear();
+    setContentZoomAreas('editor-9', ['main']);
+    expect(definitions.get('editor-9')?.state).toEqual({ [LEVELS]: { main: 1.4 } });
+    expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
   it('does nothing for an unknown web view', async () => {
     await adjustContentZoom('nope', 1);
     expect(updateDefinition).not.toHaveBeenCalled();
