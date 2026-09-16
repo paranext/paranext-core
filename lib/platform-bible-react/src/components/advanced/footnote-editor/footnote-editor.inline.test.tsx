@@ -651,6 +651,68 @@ describe('FootnoteEditor inline live-apply', () => {
       expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
     });
 
+    it('settles mid-edit marker text before reading the note it applies', async () => {
+      // A marker left mid-rename is still plain text in the document until it settles. Every
+      // ordinary end of an inline session - the user clicking another note, focus leaving the
+      // pane - arrives through this handle rather than through `closeAndSave`, so the settle that
+      // keeps a rename from serializing as the stale pre-rename marker has to happen here too.
+      vi.useFakeTimers();
+      const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+      // The ref needs to start out with null for it to work as a component ref
+      // eslint-disable-next-line no-null/no-null
+      const handleRef = createRef<FootnoteEditorHandle>();
+      renderEditor({
+        inline: true,
+        ref: handleRef,
+        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        parentEditorRef: parentRef as never,
+        noteKey: 'key-handle-settle',
+      });
+      await vi.runOnlyPendingTimersAsync();
+
+      primeCurrentOps('initial'); // snapshot call
+      latestEditorialProps.onUsjChange?.({
+        type: 'USJ',
+        version: '3.1',
+        content: [{ type: 'para' }],
+      });
+      primeCurrentOps('unsaved edit');
+      latestEditorialProps.onUsjChange?.({
+        type: 'USJ',
+        version: '3.1',
+        content: [{ type: 'para' }],
+      });
+
+      handleRef.current?.flushPendingEdits();
+
+      expect(editorRefMock.commitPendingMarkerEdits).toHaveBeenCalledOnce();
+    });
+
+    it('does not settle when the session ends with nothing pending', async () => {
+      // Ending a session that changed nothing must not dispatch into the editor at all: this
+      // handle is called on every close, including ones reached from inside the PARENT editor's
+      // update listener, where the note has usually already gone.
+      vi.useFakeTimers();
+      const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+      // The ref needs to start out with null for it to work as a component ref
+      // eslint-disable-next-line no-null/no-null
+      const handleRef = createRef<FootnoteEditorHandle>();
+      renderEditor({
+        inline: true,
+        ref: handleRef,
+        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        parentEditorRef: parentRef as never,
+        noteKey: 'key-handle-settle-clean',
+      });
+      await vi.runOnlyPendingTimersAsync();
+
+      handleRef.current?.flushPendingEdits();
+
+      expect(editorRefMock.commitPendingMarkerEdits).not.toHaveBeenCalled();
+    });
+
     it('flushes a pending apply for the OUTGOING note before an in-place noteOps reload', async () => {
       vi.useFakeTimers();
       const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
@@ -726,6 +788,28 @@ describe('FootnoteEditor inline live-apply', () => {
 
       expect(editorRefMock.selectNote).toHaveBeenCalledWith(0);
       expect(editorRefMock.selectNoteTextOffset).not.toHaveBeenCalled();
+    });
+
+    it('does not re-apply the opening click offset when the note reloads under the user', async () => {
+      // `initialCaretPosition` describes the gesture that OPENED the session. A reload replaces
+      // this document from outside it - a collaborator's edit, an echo from the backend - so
+      // putting the caret back where the user first clicked would drag it off wherever they had
+      // typed to since.
+      vi.useFakeTimers();
+      const { rerender, props } = renderEditor({
+        inline: true,
+        initialCaretPosition: { utf16Offset: 7 },
+      });
+      await vi.runAllTimersAsync();
+      expect(editorRefMock.selectNoteTextOffset).toHaveBeenCalledWith(0, 7);
+      editorRefMock.selectNoteTextOffset.mockClear();
+      editorRefMock.selectNote.mockClear();
+
+      rerender(<FootnoteEditor {...props} noteOps={makeNoteOps('changed elsewhere')} />);
+      await vi.runAllTimersAsync();
+
+      expect(editorRefMock.selectNoteTextOffset).not.toHaveBeenCalled();
+      expect(editorRefMock.selectNote).toHaveBeenCalledWith(0);
     });
 
     it('lands at the end when the consumer asks for no particular position', async () => {

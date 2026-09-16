@@ -135,8 +135,9 @@ export interface FootnoteEditorProps {
   ref?: Ref<FootnoteEditorHandle>;
   /**
    * Where to place the caret in the note text after the note loads. `'end'` matches PT9's
-   * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row. When
-   * omitted, the editor does not move the caret (existing popover behavior).
+   * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row.
+   * Omitting it is the same as `'end'` — the editor always places a caret, so a note opened from
+   * any surface is ready to type in.
    */
   initialCaretPosition?: FootnoteCaretPosition;
   /**
@@ -678,6 +679,14 @@ export default function FootnoteEditor({
       // effect's setup, which hasn't run yet) - so the flush targets the note that's actually
       // unloading, not the one about to load.
       flushPendingApply();
+      // `initialCaretPosition` describes the gesture that OPENED this session, so it belongs to the
+      // first load of it and no other. A reload replaces this document from outside the editor, and
+      // landing the caret back at the opening click would drag it off wherever the user had typed
+      // to since; an unpositioned load puts it at the end of the note instead. Cleared here rather
+      // than at the placement itself because the load's own caret re-assert still needs it, and
+      // React runs this cleanup before the next setup - so a genuinely new session, which re-mints
+      // the prop, still receives its position through the mirroring effect above.
+      initialCaretPositionRef.current = undefined;
       if (timeout) {
         clearTimeout(timeout);
       }
@@ -694,7 +703,24 @@ export default function FootnoteEditor({
     return () => flushPendingApply();
   }, [flushPendingApply]);
 
-  useImperativeHandle(ref, () => ({ flushPendingEdits: flushPendingApply }), [flushPendingApply]);
+  // Every ORDINARY end of an inline session - the user picking another note, focus leaving the
+  // pane - arrives here rather than at `closeAndSave`, so this is where the abandonment window has
+  // to close: settle mid-edit marker text before the final read, or a rename the user walked away
+  // from serializes as the stale pre-rename marker. Skipped while this editor's own marker-palette
+  // session is open, as `closeAndSave`'s settle is - the palette's own apply must be the one to
+  // consume the typed literal.
+  //
+  // Gated on there actually being an apply to make. A session that changed nothing has nothing to
+  // settle into, and this handle is called on EVERY close, including ones the host reaches from
+  // inside the parent editor's update listener (where the note has usually already gone), so an
+  // unconditional settle would dispatch into this editor on paths with no edit to save.
+  const flushPendingEdits = useCallback(() => {
+    if (pendingApplyTimeoutRef.current === undefined) return;
+    if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
+    flushPendingApply();
+  }, [flushPendingApply]);
+
+  useImperativeHandle(ref, () => ({ flushPendingEdits }), [flushPendingEdits]);
 
   const closeAndSave = useCallback(() => {
     // Abandonment window: settle pending mid-edit marker text before the final read
