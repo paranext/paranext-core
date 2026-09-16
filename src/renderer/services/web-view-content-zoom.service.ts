@@ -769,24 +769,25 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
  * with the level the user chose. {@link effectiveOwnLevels} reads them meanwhile, so the pane goes
  * on showing that level while its definition lags behind it.
  *
- * A write that throws is logged and reported as `false` rather than left to propagate: this runs
- * from a burst's debounce timer and from the `beforeunload` flush, where a throw would either have
- * no handler at all or would stop the memory flush that runs right after it.
+ * A failure anywhere in here — the definition read included, which throws once the dock layout is
+ * gone — is logged and reported as `false` rather than left to propagate: this runs from a burst's
+ * debounce timer and from the `beforeunload` flush, where a throw would either have no handler at
+ * all or would stop the memory flush that runs right after it.
  */
 function commitOwnLevels(webViewId: WebViewId): boolean {
   const levels = pendingOwnLevels.get(webViewId);
   if (!levels) return true;
-  const definition = deps.getDefinition(webViewId);
-  if (!definition) {
-    // The pane is gone, so there is no definition left to write the levels into and no later
-    // attempt that could find one; keeping them pending would only hold a closed pane's entry.
-    pendingOwnLevels.delete(webViewId);
-    return false;
-  }
-  const state: Record<string, unknown> = { ...(definition.state ?? {}) };
-  if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
-  else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
   try {
+    const definition = deps.getDefinition(webViewId);
+    if (!definition) {
+      // The pane is gone, so there is no definition left to write the levels into and no later
+      // attempt that could find one; keeping them pending would only hold a closed pane's entry.
+      pendingOwnLevels.delete(webViewId);
+      return false;
+    }
+    const state: Record<string, unknown> = { ...(definition.state ?? {}) };
+    if (Object.keys(levels).length === 0) delete state[CONTENT_ZOOM_LEVELS_STATE_KEY];
+    else state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
     if (!deps.updateDefinition(webViewId, { state })) return false;
   } catch (e) {
     logger.warn(
