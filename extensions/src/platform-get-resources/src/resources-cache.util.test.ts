@@ -162,9 +162,38 @@ describe('reconcileCachedResources', () => {
     expect(isChanged).toBe(true);
   });
 
-  // An empty `dblEntryUid` would otherwise match every local project, because `''.startsWith('')`
-  // is true for every string.
-  it('does not match a resource with an empty dblEntryUid to an arbitrary local project', () => {
+  // The contract the whole reconcile rests on. The backend reports an empty string for a resource
+  // it knows is not installed, and omits a uid entirely when it has nothing to say — offline, or
+  // when its project scan could not read every project. Treating those the same way would mark an
+  // installed resource not-installed and persist it.
+  it('leaves a row absent from the install status exactly as it was', () => {
+    const installedRow = { ...INSTALLED_WITH_UPDATE, installed: true, projectId: 'ABC123AAAA' };
+
+    const { resources, isChanged } = reconcileCachedResources([installedRow], {}, undefined);
+
+    expect(resources[0]).toBe(installedRow);
+    expect(isChanged).toBe(false);
+  });
+
+  it('clears a row the install status reports as an empty string', () => {
+    const installedRow = { ...INSTALLED_WITH_UPDATE, installed: true, projectId: 'ABC123AAAA' };
+
+    const { resources, isChanged } = reconcileCachedResources(
+      [installedRow],
+      { abc123: '' },
+      undefined,
+    );
+
+    expect(resources[0].installed).toBe(false);
+    expect(resources[0].projectId).toBe('');
+    expect(isChanged).toBe(true);
+  });
+
+  // An empty `dblEntryUid` cannot be a key the backend reported on, so the row is simply absent
+  // from the status map and left alone — the same path any unreported row takes. It had to be
+  // guarded explicitly when the match was `localProjectId.startsWith(dblEntryUid)`, since
+  // `''.startsWith('')` is true for every string.
+  it('leaves a resource with an empty dblEntryUid alone rather than matching it to a project', () => {
     const { resources } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, dblEntryUid: '', installed: false, projectId: '' }],
       { abc123: 'ABC123AAAA' },

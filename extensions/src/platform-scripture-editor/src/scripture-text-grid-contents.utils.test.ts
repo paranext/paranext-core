@@ -484,25 +484,18 @@ describe('getViewOptionsTexts', () => {
     expect(duplicate).toHaveLength(0);
   });
 
-  // Without the catalog there is nothing to resolve the reference against, so the project cannot be
-  // recognised as already listed. The caller owes the rows; this pins that it is not silently fine.
-  it('appends a downloaded project when no catalog rows are supplied to match against', () => {
+  // `downloaded` and `dblResources` are required together, so a caller cannot supply projects
+  // without the rows needed to tell whether they are already listed. Omitting `options` entirely
+  // is the remaining shape, and it appends nothing — which is what PT-4171 has yet to wire up.
+  it('appends nothing when no options are supplied', () => {
     const sources = makeSources({
       adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
     });
-    const downloaded: DownloadedResource[] = [
-      {
-        projectId: 'dbl-uid-123extra',
-        name: 'DBL Resource',
-        fullName: 'DBL Resource Full',
-        language: 'English',
-      },
-    ];
 
-    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const { top, bottom } = getViewOptionsTexts(sources, undefined);
 
     const rows = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(0);
   });
 });
 

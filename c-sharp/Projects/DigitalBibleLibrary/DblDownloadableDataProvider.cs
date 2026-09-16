@@ -490,7 +490,7 @@ internal class DblResourcesDataProvider(
     /// Projects a catalog into "is a newer version available", keyed by DBL entry uid.
     /// </summary>
     /// <param name="resources">The catalog entries to report on.</param>
-    /// <param name="installedDblIds">
+    /// <param name="installedProjectIds">
     /// Local project id per installed uid, from <see cref="InstalledProjectIdsByDblId"/>. An entry
     /// outside this map is reported as having an update available without consulting
     /// ParatextData — the same answer <c>IsNewerThanCurrentlyInstalled</c> gives for anything

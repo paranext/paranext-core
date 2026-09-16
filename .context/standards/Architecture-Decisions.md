@@ -1191,11 +1191,11 @@ step, no automation. Just a record.
   argument is that deriving one flag from two expressions invites drift, not that they disagree.
 - **Consequences:** The prefix convention survives only as a documented best-effort fallback in
   `doesCatalogRowCoverProject`, behind an exact `projectId` match; the sites that stated it as fact
-  now say otherwise. Two behavioural sites still resolve by prefix alone — `matchesDownloaded` in
-  `platform-scripture-editor` (the admin-configured resource path, no catalog fallback) and the
-  commentary marker-style lookup, which degrades to missing styles. Both were judged below the bar
-  for their own work: they need a post-install DBL UID reassignment, or a divergent-id resource on
-  the admin path, and neither is reproduced. Folding the install lookup into the existing single
+  now say otherwise. `matchesDownloaded` and `resolveReferenced` both resolve a reference through
+  the catalog rather than by prefix, and through one shared index, so the picker cannot list a
+  resource twice — or drop it entirely, which is what two differing uid comparisons in one file
+  produced. The commentary marker-style lookup still matches by prefix and degrades to missing
+  styles; it was judged below the bar for its own work and is not reproduced. Folding the install lookup into the existing single
   pass removed the per-row `ExistingScrText` scans from the catalog projection as well, so the
   projection now costs one collection pass rather than one per catalogued row.
 - **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.

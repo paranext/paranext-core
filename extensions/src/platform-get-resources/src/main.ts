@@ -138,12 +138,12 @@ async function getLocalProjectMetadata(): Promise<
 }
 
 /**
- * Asks the backend which resources have a newer version on the DBL, or `undefined` if it could not
- * say.
+ * Asks the backend which local project each catalogued resource is installed as, or `undefined` if
+ * it could not say.
  *
- * `updateAvailable` compares the locally installed revision against the DBL catalog's, and neither
- * number is reachable from TypeScript, so only the backend can answer. `undefined` leaves those
- * flags at their cached values rather than guessing.
+ * A resource project's id is unrelated to the DBL entry it was installed from, so nothing in the
+ * local project list identifies the catalog row it belongs to and only the backend can answer.
+ * `undefined` leaves the flags at their cached values rather than guessing.
  */
 async function readInstallStatus(): Promise<DblResourceInstallStatus | undefined> {
   try {
@@ -155,6 +155,14 @@ async function readInstallStatus(): Promise<DblResourceInstallStatus | undefined
   }
 }
 
+/**
+ * Asks the backend which resources have a newer version on the DBL, or `undefined` if it could not
+ * say.
+ *
+ * `updateAvailable` compares the locally installed revision against the DBL catalog's, and neither
+ * number is reachable from TypeScript, so only the backend can answer. `undefined` leaves those
+ * flags at their cached values rather than guessing.
+ */
 async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> {
   try {
     const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
@@ -169,8 +177,8 @@ async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> 
  * Syncs the derived flags on `cachedResources` against current local state, updating the cache and
  * writing to storage when any of them change.
  *
- * `installed` and `projectId` come from live project metadata and are always reconciled. The
- * backend round trip for `updateAvailable` is opt-in, because only the Get Resources list renders
+ * `installed` and `projectId` come from the backend's install status and are always reconciled. The
+ * second round trip for `updateAvailable` is opt-in, because only the Get Resources list renders
  * that flag: every other consumer of the catalog would otherwise wait on a value it discards.
  *
  * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`
@@ -190,8 +198,10 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
     // older sync whose status predates an install cannot win the write and persist flags from
     // before it.
     await fetchMutex.runExclusive(async () => {
+      // Re-checked inside the mutex because the wait for it is an await: a concurrent fetch can
+      // clear the cache in between. It also narrows the type for the reconcile below.
       if (cachedResources === undefined) {
-        logger.debug('Skipped a resource flag sync: the cached catalog went away while waiting');
+        logger.debug('Skipped a resource flag sync: the cached catalog was cleared while waiting');
         return;
       }
 
