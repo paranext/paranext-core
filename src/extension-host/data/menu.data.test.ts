@@ -8,13 +8,17 @@ import menuDataObject from './menu.data.json';
 // Note: using resolve(__dirname, ...) instead of fileURLToPath(new URL(..., import.meta.url))
 // because this test runs under jsdom where import.meta.url does not have a file: scheme.
 const localizationDir = resolve(__dirname, '../../../assets/localization');
-const readLocalization = (file: string): Record<string, string> =>
+// `metadata.json` maps each key to a redirect record rather than to a string, so the value shape is
+// a parameter rather than baked into the reader.
+const readLocalization = <T = Record<string, string>>(file: string): T =>
   JSON.parse(readFileSync(resolve(localizationDir, file), 'utf8'));
 
 const en = readLocalization('en.json');
 const es = readLocalization('es.json');
-const metadata: Record<string, { fallbackKey?: string; deprecationInfo?: unknown }> =
-  readLocalization('metadata.json');
+const metadata =
+  readLocalization<Record<string, { fallbackKey?: string; deprecationInfo?: unknown }>>(
+    'metadata.json',
+  );
 
 const COMMUNITY_SUPPORT_KEY = '%mainMenu_helpInfo_visitCommunitySupportPage%';
 const RETIRED_FAQS_KEY = '%mainMenu_helpInfo_visitFAQsPage%';

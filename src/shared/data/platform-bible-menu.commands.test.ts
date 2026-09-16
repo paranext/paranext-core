@@ -11,11 +11,15 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-function menuItem(command: string): MenuItemContainingCommand {
-  // The menu document's branded key types aren't worth reconstructing for a dispatch test; the
-  // handler only reads `command`.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return { command, label: '%test%', group: 'test.group', order: 1 } as MenuItemContainingCommand;
+/** A minimal menu item carrying `command`, which is the only field `handleMenuCommand` reads. */
+function menuItem(command: `${string}.${string}`): MenuItemContainingCommand {
+  return {
+    command,
+    label: '%test%',
+    group: 'test.group',
+    order: 1,
+    localizeNotes: 'Dispatch test fixture',
+  };
 }
 
 describe('Help menu links open the destinations their labels promise', () => {
@@ -40,7 +44,7 @@ describe('Help menu links open the destinations their labels promise', () => {
   test.each([
     ['platform.visitGettingStartedPage', 'https://studio.paratext.org/start '],
     ['platform.visitFeatureRoadmapPage', 'https://studio.paratext.org/roadmap'],
-  ])('%s still opens %s', (command, url) => {
+  ] as const)('%s still opens %s', (command, url) => {
     handleMenuCommand(menuItem(command));
 
     expect(commandService.sendCommand).toHaveBeenCalledWith('platform.openWindow', url);
