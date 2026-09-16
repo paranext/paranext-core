@@ -510,10 +510,13 @@ function storedIdentityStamp(
  *   already holds are left exactly as they are.
  * - **The stamp matches the pane's identity** — nothing to do. Whatever the pane holds, seeded here
  *   or chosen by the user since, belongs to what the pane shows.
- * - **No stamp** — a newly opened pane, or one restored from a layout written before its levels were
- *   stamped. Levels it already holds are its own and are kept — the levels key is never written
- *   empty, so holding it at all means the pane has a level to keep — and only a pane with none
- *   takes the remembered levels of its identity.
+ * - **No stamp** — a newly opened pane, one restored from a layout written before its levels were
+ *   stamped, or one whose only own-level commit so far has failed. Levels it already holds
+ *   (committed) are its own and are kept — the levels key is never written empty, so holding it at
+ *   all means the pane has a level to keep — and a level it holds only as a still-pending,
+ *   uncommitted write is left alone the same way, since there is no stamp to say it changed FROM
+ *   anything: only a pane with neither committed nor pending levels takes the remembered levels of
+ *   its identity.
  * - **The stamp names another identity** — the pane was re-pointed at another project through the
  *   same web view id (`reloadWebView`), and the view's own `getWebViewDefinition` spreads its
  *   previous saved state, zoom levels included, onto the new definition. Those levels are replaced
@@ -543,16 +546,27 @@ function seedFromMemory(webViewId: WebViewId): void {
     definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state,
   );
   const state: Record<string, unknown> = { ...(definition.state ?? {}) };
-  if (storedStamp === undefined && hasOwnLevels) {
-    state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
-    deps.updateDefinition(definition.id, { state });
-    return;
-  }
-  if (storedStamp !== undefined) {
-    // A genuine re-point (as opposed to falling through below for a brand-new pane with nothing of
-    // its own, which carries no risk of dropping anything). See the "stamp names another identity"
+  if (storedStamp === undefined) {
+    if (hasOwnLevels) {
+      state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = stamp;
+      deps.updateDefinition(definition.id, { state });
+      return;
+    }
+    if (pendingOwnLevels.has(webViewId)) {
+      // No identity change happened here — there is no stamp to have changed FROM — so a
+      // still-pending, uncommitted write belongs to the identity it was chosen for, which is this
+      // one. It must survive this call untouched: dropping or overwriting it here, on a report that
+      // is not a re-point at all (an ordinary remount retries the same identity just as often as a
+      // genuine one), would silently discard a level `commitOwnLevels`'s own retry paths are still
+      // owed. It gets its stamp together with its levels once a later commit finally lands.
+      return;
+    }
+    // A genuinely brand-new pane with nothing of its own, committed or pending: fall through to
+    // take memory's remembered levels, same as a re-point does below.
+  } else if (!memoryLoaded) {
+    // A genuine re-point: the stamp names another identity. See the "stamp names another identity"
     // case above for why this is skipped until memory has actually loaded.
-    if (!memoryLoaded) return;
+    return;
   }
   pendingOwnLevels.delete(webViewId);
   const ownLevelTimer = ownLevelWriteTimers.get(webViewId);

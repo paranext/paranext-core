@@ -1037,7 +1037,7 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
-  it('does not stamp a pane whose only "own levels" are a still-pending, uncommitted write', async () => {
+  it('does not stamp a pane whose only "own levels" are a still-pending, uncommitted write, and preserves that write for a later retry', async () => {
     // Every commit attempt fails to land, so the level chosen below never actually reaches state.
     updateDefinition.mockImplementation(() => false);
     await adjustContentZoom('editor-1', 1, 'main');
@@ -1047,12 +1047,18 @@ describe('web-view-content-zoom.service', () => {
     forgetContentZoom('editor-1');
     updateDefinition.mockImplementation(applyDefinitionUpdate);
     updateDefinition.mockClear();
-    // The reload's bootstrap reports fresh, as if for a pane that had never reported before.
+    // The reload's bootstrap reports fresh, as if for a pane that had never reported before — the
+    // same identity as ever, not a re-point, so this must not be mistaken for one and must not
+    // discard the still-pending level.
     setContentZoomAreas('editor-1', ['main']);
     // No levels are actually committed, so nothing may be stamped either — a stamp with no levels
     // behind it would violate the invariant that the two are always written together.
     expect(definitions.get('editor-1')?.state).toEqual({});
     expect(updateDefinition).not.toHaveBeenCalled();
+    // The pending level survived the report above and lands on the next retry, rather than having
+    // been silently discarded by it.
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('editor-1')?.state).toEqual(zoomState({ main: 1.1 }));
   });
 
   it('treats a non-string identity stamp as no stamp at all', async () => {
