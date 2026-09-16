@@ -142,6 +142,12 @@ describe('registerContentZoomChromeKeys', () => {
     expect(canContentZoomAct).not.toHaveBeenCalled();
   });
 
+  it('does not ask whether a modal overlay is open for a key it would not act on anyway', () => {
+    dispatchKeyDown(document.body, { key: 'c', ctrlKey: true });
+    dispatchKeyDown(document.body, { key: '-', ctrlKey: true, shiftKey: true });
+    expect(isModalOverlayOpen).not.toHaveBeenCalled();
+  });
+
   it('acts even when a descendant stops propagation before the bubble phase', () => {
     const container = document.createElement('div');
     const child = document.createElement('div');

@@ -114,6 +114,45 @@ describe('Setting disabled forwarding', () => {
   });
 });
 
+describe('debounced text-setting writes', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    // The default mock implementation (`() => [{}]`) hands back a fresh object every call, which
+    // this describe overrides with a stable one — see the test for why. Restored so that default
+    // doesn't leak into a later test that assumes it.
+    vi.mocked(useLocalizedStrings).mockImplementation(() => [{}]);
+  });
+
+  it('collapses two keystrokes either side of an unrelated re-render into one write', async () => {
+    vi.useFakeTimers();
+    // The default mock (`() => [{}]`) returns a NEW object every call, which would make
+    // `localizedStrings` — and therefore `handleChangeSetting`'s identity — change on every render
+    // regardless of the fix under test. A stable reference here is what lets the render below stand
+    // in for a real unrelated re-render with genuinely unchanged inputs.
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+    const setSetting = vi.fn();
+    const validateProjectSetting = vi.fn().mockResolvedValue(true);
+    const props = {
+      setSetting,
+      isLoading: false,
+      validateProjectSetting,
+      settingKey: 'platform.language' as const,
+      setting: 'English',
+      label: 'Language',
+    };
+    const { rerender } = render(<Setting {...props} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Span' } });
+    // A re-render with unchanged props must hand the Input the SAME debounce closure — otherwise
+    // this keystroke and the next land on two independent timers instead of one shared one, and
+    // both fire instead of the second collapsing the first.
+    rerender(<Setting {...props} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Spanish' } });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(setSetting).toHaveBeenCalledTimes(1);
+    expect(setSetting).toHaveBeenCalledWith('Spanish');
+  });
+});
+
 // platform.webViewContentZoom and platform.zoomFactor are both `SettingNames` (the "other"/user
 // settings variant), validated via `validateOtherSetting` rather than `validateProjectSetting` —
 // unlike baseProps' platform.language/platform.isEditable cases above, which are project settings.
