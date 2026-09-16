@@ -386,6 +386,17 @@ export async function startDialogServiceShard(): Promise<void> {
   if (globalThis.windowId === undefined)
     throw new Error('Cannot start DialogService: windowId is not set');
 
+  // A whole-layout load (e.g. a Simple/Power mode switch) replaces the dock without running
+  // rc-dock's per-tab remove callback, so a docked dialog's tab can vanish with nothing telling this
+  // shard its request is now unanswerable — the requestor would then await a promise that never
+  // settles. Settle it as though the user canceled; `false` because the tab this would try to close
+  // is already gone.
+  webViewService.onLayoutLoadTabIds((survivingTabIds) => {
+    dialogRequests.forEach((_dialogRequest, id) => {
+      if (!survivingTabIds.has(id)) resolveDialogRequest(id, undefined, false);
+    });
+  });
+
   // Registered under this window's scoped name (e.g.
   // `DialogService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) so every window can own its own dialogs.
   // The object type and window id are how the main process's dialog service router finds this
