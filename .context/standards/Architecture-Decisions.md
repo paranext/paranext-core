@@ -109,7 +109,13 @@ step, no automation. Just a record.
   user answers "close it", so closing what looks like one dead window can still surface the
   whole-application close-all prompt. That escalation is a known gap this decision does not
   resolve; it is accepted as-is, since reaching it needs a primary window whose renderer has already
-  exhausted its crash-reload budget, and the prompt it surfaces defaults to cancelling.
+  exhausted its crash-reload budget, and the prompt it surfaces defaults to cancelling. Keeping the
+  entry has its own cost, and it is what the notice's text promises: a layout that reliably kills its
+  renderer is rebuilt on every launch and on every switch back to power mode, so a window that dies
+  because of what it holds crash-loops again each time it comes back, with nothing in the application
+  that lets the user break the cycle. What recovery to offer in that case — dropping or emptying the
+  entry after repeated abandonment, or a way to reopen the window without its tabs — is deferred to
+  PT-4636.
 - **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
   (`2026-09-02-pt-4286-mode-switch-spec.md`); depends on `adr-primary-window-owns-app-lifetime` for
   what makes a window "primary" and on the crash-reload-budget decision in
