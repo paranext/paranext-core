@@ -101,11 +101,27 @@ vi.mock('@papi/frontend', () => {
   };
 });
 
+/**
+ * The resolved value this stub gives a shared-picker key. Declared via `vi.hoisted` so the hoisted
+ * `vi.mock` factory below can reach it.
+ *
+ * It NAMES the key without being equal to it. Echoing a key back as its own value is what
+ * `useLocalizedStrings` does while strings are UNRESOLVED, and `readProjectSelectorString` treats
+ * such a value as "not localized yet" and falls back to English — so a key-valued stub would assert
+ * the fallback path rather than the localized one.
+ */
+const { localizedValueFor } = vi.hoisted(() => ({
+  localizedValueFor: (key: string) => `localized ${key}`,
+}));
+
 vi.mock('@papi/frontend/react', () => ({
-  // Echo each requested key back as its own value, matching useLocalizedStrings' pre-resolution
-  // behavior — every entry is always a string.
+  // Echo each requested key back as its own value, which is what useLocalizedStrings does before it
+  // resolves. The shared `%projectSelector_*%` block is the exception — those pass through the
+  // picker's unresolved-value guard, so they get a resolved-looking value instead.
   useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(keys.map((key) => [key, key])),
+    Object.fromEntries(
+      keys.map((key) => [key, key.startsWith('%projectSelector_') ? localizedValueFor(key) : key]),
+    ),
     false,
   ],
   useProjectDataProvider: vi.fn(() => undefined),
@@ -271,7 +287,9 @@ describe('ChecklistWebView comparative-texts picker', () => {
     const { user } = await openComparativePicker();
 
     // The grouping is available and active: the open project is bucketed under "Open tabs".
-    const openTabsHeading = await screen.findByText('%projectSelector_openTabsSectionHeading%');
+    const openTabsHeading = await screen.findByText(
+      localizedValueFor('%projectSelector_openTabsSectionHeading%'),
+    );
     expect(openTabsHeading).toBeInTheDocument();
 
     // One row per project, even though the project is open in two scroll groups.
@@ -316,17 +334,21 @@ describe('ChecklistWebView comparative-texts picker', () => {
     await user.click(getGroupByTrigger());
     await user.click(
       await screen.findByRole('menuitemradio', {
-        name: '%projectSelector_grouping_lastUsed_label%',
+        name: localizedValueFor('%projectSelector_grouping_lastUsed_label%'),
       }),
     );
 
     // PROJECT-2 is the only comparative row (the primary project is filtered out), so exactly one
     // of these two headings can render: which one is the whole assertion.
     expect(
-      await screen.findByText('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      await screen.findByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      screen.queryByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      ),
     ).not.toBeInTheDocument();
   });
 

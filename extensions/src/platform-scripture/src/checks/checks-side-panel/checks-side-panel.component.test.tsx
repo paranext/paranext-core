@@ -52,13 +52,28 @@ beforeAll(() => {
 });
 
 /**
+ * The resolved value this stub gives a shared-picker key. It NAMES the key without being equal to
+ * it, so assertions stay independent of the shipped English wording.
+ *
+ * It must not BE the key. `useLocalizedStrings` returns key-as-value only while strings are
+ * UNRESOLVED, and `readProjectSelectorString` treats such a value as "not localized yet" and falls
+ * back to English — so a key-valued stub would assert the fallback path, not the localized one.
+ */
+const localizedValueFor = (key: string) => `localized ${key}`;
+
+/**
  * Maps every localized key to the key itself, so assertions can target an exact, stable string
  * without depending on the shipped English wording (which is free to change).
+ *
+ * The shared `%projectSelector_*%` block is the exception — see {@link localizedValueFor}. Only
+ * those keys pass through the picker's unresolved-value guard; this component's own
+ * `%webView_checksSidePanel_*%` keys are rendered verbatim, so identity is still the clearest stub
+ * for them.
  */
 function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
   const strings: LanguageStrings = {};
   keys.forEach((key) => {
-    strings[key] = key;
+    strings[key] = key.startsWith('%projectSelector_') ? localizedValueFor(key) : key;
   });
   return strings;
 }
@@ -69,9 +84,9 @@ const PROJECT_SELECTOR_LABEL_KEY = '%webView_checksSidePanel_projectFilter_proje
  * The picker's grouping menu labels come from the shared `%projectSelector_grouping_*%` keys, which
  * `buildProps` stubs key-as-value along with the rest of `CHECKS_SIDE_PANEL_STRING_KEYS`.
  */
-const LANGUAGE_GROUPING_LABEL_KEY = '%projectSelector_grouping_language_label%';
-const TYPE_GROUPING_LABEL_KEY = '%projectSelector_grouping_type_label%';
-const LAST_USED_GROUPING_LABEL_KEY = '%projectSelector_grouping_lastUsed_label%';
+const LANGUAGE_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_language_label%');
+const TYPE_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_type_label%');
+const LAST_USED_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_lastUsed_label%');
 
 const JOB_STATUS_REPORT: CheckJobStatusReport = {
   jobId: '',
