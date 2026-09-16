@@ -1170,6 +1170,42 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('notes-9')?.state).toEqual(zoomState({ main: 0.8 }, 'notes:BBB'));
   });
 
+  it('does not commit a write chosen with no resolvable identity under the identity the pane later resolves to', async () => {
+    settings[MEMORY] = { 'editor:PROJ-X:main': 0.8 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('editor-10', {
+      id: 'editor-10',
+      webViewType: 'platformScriptureEditor.react',
+      // No projectId and no state.resourceId: unresolvable, so the level chosen below is tagged
+      // pending with no identity at all — not "chosen for project X", just "chosen for nothing".
+      state: {},
+    });
+    setContentZoomAreas('editor-10', ['main']);
+
+    // The first commit attempt fails, so the level stays pending with no recorded identity.
+    updateDefinition.mockImplementation(() => false);
+    await adjustContentZoom('editor-10', 1, 'main');
+    expect(definitions.get('editor-10')?.state).toEqual({});
+
+    // The pane resolves to a project before that pending write's first commit ever lands: with no
+    // stamp to compare against, `reseedIfIdentityChanged` cannot tell this happened, so it is a
+    // no-op — the same gap a resolvable-to-resolvable re-point closes via the stamp.
+    definitions.set('editor-10', { ...requireDefinition('editor-10'), projectId: 'proj-x' });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('editor-10') });
+    expect(definitions.get('editor-10')?.state).toEqual({});
+
+    // The stale write's retry can now succeed. Committing it here would attribute a level chosen
+    // before any project was known to project X's own memory.
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    forgetContentZoom('editor-10');
+    expect(definitions.get('editor-10')?.state).toEqual({}); // dropped, not written under project X
+
+    // A fresh area report seeds the pane from project X's own remembered level instead.
+    setContentZoomAreas('editor-10', ['main']);
+    expect(definitions.get('editor-10')?.state).toEqual(zoomState({ main: 0.8 }, 'editor:PROJ-X'));
+  });
+
   it('treats a non-string identity stamp as no stamp at all', async () => {
     definitions.set('editor-8', {
       id: 'editor-8',
