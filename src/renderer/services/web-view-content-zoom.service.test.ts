@@ -366,6 +366,28 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('does not let a failing definition read escape a pane being forgotten', async () => {
+    vi.useFakeTimers();
+    try {
+      let getDefinitionThrows = false;
+      __setContentZoomDepsForTesting({
+        getDefinition: (id: string) => {
+          if (getDefinitionThrows) throw new Error('dock layout is not registered');
+          return definitions.get(id);
+        },
+      });
+      await initializeContentZoomService();
+      setContentZoomAreas('editor-1', ['main', 'footnotes']);
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.1, written immediately
+      await adjustContentZoom('editor-1', 1, 'main'); // 1.2, deferred into the open window
+      getDefinitionThrows = true;
+      expect(() => forgetContentZoom('editor-1')).not.toThrow();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('could not store'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('still flushes the memory write on beforeunload when a definition write fails', async () => {
     vi.useFakeTimers();
     try {
@@ -378,6 +400,36 @@ describe('web-view-content-zoom.service', () => {
       window.dispatchEvent(new Event('beforeunload'));
       await vi.advanceTimersByTimeAsync(0);
       expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:PROJ-A:main': 1.2 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still flushes the memory write on beforeunload when the definition read throws', async () => {
+    vi.useFakeTimers();
+    try {
+      let getDefinitionThrows = false;
+      __setContentZoomDepsForTesting({
+        getDefinition: (id: string) => {
+          if (getDefinitionThrows) throw new Error('dock layout is not registered');
+          return definitions.get(id);
+        },
+      });
+      await initializeContentZoomService();
+      setContentZoomAreas('editor-1', ['main', 'footnotes']);
+      await adjustContentZoom('editor-1', 1, 'main'); // written immediately
+      await adjustContentZoom('editor-1', 1, 'main'); // deferred into the open window
+      getDefinitionThrows = true;
+      settingsSet.mockClear();
+      window.dispatchEvent(new Event('beforeunload'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settingsSet).toHaveBeenCalledWith(MEMORY, { 'editor:PROJ-A:main': 1.2 });
+      // The pane's own levels are still pending, since the read that would have stored them threw;
+      // once the pane is reachable again the next flush is what finally lands them.
+      getDefinitionThrows = false;
+      window.dispatchEvent(new Event('beforeunload'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.2 } });
     } finally {
       vi.useRealTimers();
     }
