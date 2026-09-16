@@ -219,10 +219,9 @@ internal class UserTextConnectionSettingTests : PapiTestBase
         var settings = new UserProjectSettings(_scrText.Directory, _scrText.User.Name);
         settings.SetSetting("ModelTexts", "2.0.0", ResourceReferenceList.ToXml(v200));
 
-        // This test is checking ValidateVersionNotDowngraded, so we need a stored 2.0.0
-        // and try to write 1.0.0 — but SetUserModelTexts also calls ValidateUserSettingVersion
-        // which rejects major != 1. The major-downgrade path (2→1) is therefore blocked by
-        // ValidateUserSettingVersion before ValidateVersionNotDowngraded runs. Verify that.
+        // Writing 1.0.0 passes ValidateUserSettingVersion (major 1 matches the current major), so
+        // this exercises ValidateVersionNotDowngraded catching the major-component downgrade
+        // against the stored 2.0.0.
         var v100 = new ResourceReferenceList { DataVersion = "1.0.0", Items = [] };
         Assert.That(
             () => _provider.SetUserModelTexts(v100.SerializeToJson()),
