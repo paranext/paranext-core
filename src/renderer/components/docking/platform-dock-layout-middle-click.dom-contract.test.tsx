@@ -118,9 +118,16 @@ describe('PlatformDockLayout tab DOM contract', () => {
   });
 
   describe('focus lookup by tab id', () => {
+    let previousWasWindowCreatedWithoutActivation: boolean | undefined;
+
     beforeEach(() => {
       resetActivationLatchForTesting();
+      previousWasWindowCreatedWithoutActivation = globalThis.wasWindowCreatedWithoutActivation;
       globalThis.wasWindowCreatedWithoutActivation = false;
+    });
+
+    afterEach(() => {
+      globalThis.wasWindowCreatedWithoutActivation = previousWasWindowCreatedWithoutActivation;
     });
 
     it('marks only tab panels with data-tab-id, once per rendered tab', () => {

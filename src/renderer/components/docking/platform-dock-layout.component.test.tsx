@@ -118,7 +118,8 @@ describe('the dock layout facade withholds document focus by default while a win
 
 describe('PlatformDockLayout middle-click tab-bar handlers wiring', () => {
   const TAB_ID = 'tab-1';
-  // Only `id` and a non-null `title` are read on this path — see the storage util's own tests.
+  // Only `id` and a non-null `title` are read on this path: `removeTabFromDock` accepts the tab
+  // through `isTab`, which checks `title`, and hands the same object to `dockMove`.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockedTab = { id: TAB_ID, title: TAB_ID } as TabData;
   let localMockDockLayout: DockLayout;

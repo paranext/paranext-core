@@ -1,7 +1,6 @@
 import type { BoxData, PanelData, TabData } from 'rc-dock';
 import { isTab } from './docking-framework-internal.model';
 
-/** `MouseEvent.button` value for the middle (auxiliary) mouse button, shared by every check below. */
 const MIDDLE_MOUSE_BUTTON = 1;
 const REPEAT_CLOSE_GUARD_MS = 500;
 const REPEAT_CLOSE_MAX_DISTANCE_PX = 4;
