@@ -79,7 +79,7 @@ const defaultLayout: LayoutData = {
     mode: 'horizontal',
     children: [
       {
-        tabs: [{ id: CLOSABLE_TAB_ID }, { id: 'tab-b' }, { id: 'tab-c' }],
+        tabs: [CLOSABLE_TAB_ID, 'tab-b', 'tab-c'].map((id) => loadTab({ id })),
         activeId: CLOSABLE_TAB_ID,
       },
     ],
