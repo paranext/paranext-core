@@ -224,16 +224,17 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('follows a focus change that comes long after the last click', () => {
-    // Only `Date` is faked: the bootstrap's own timers, the mutation observer and rAF keep running
-    // for real, so nothing but the age of the last pointer gesture changes.
-    vi.useFakeTimers({ toFake: ['Date'] });
+    // Only the monotonic clock the gesture window is measured with is faked: the bootstrap's own
+    // timers, the mutation observer and rAF keep running for real, so nothing but the age of the
+    // last pointer gesture changes.
+    vi.useFakeTimers({ toFake: ['performance'] });
     const { bound } = install('wv-late-focus', TWO_AREAS);
     byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
     // platform/pane contract, not a name this file invents.
     // eslint-disable-next-line no-underscore-dangle
     expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
-    vi.setSystemTime(new Date(Date.now() + 5_000));
+    vi.advanceTimersByTime(5_000);
     byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
     // platform/pane contract, not a name this file invents.
@@ -243,7 +244,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('a focus change inside the clicked area does not spend the gesture', () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.useFakeTimers({ toFake: ['performance'] });
     const { bound } = install('wv-inside-area', TWO_AREAS);
     byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
@@ -254,7 +255,7 @@ describe('content-zoom bootstrap script', () => {
     // A focus change that lands inside the SAME area the pointer went down in (the footnote row
     // itself, milliseconds after the pointerdown on its caller) is not the click's own focus
     // change into another area, so it must not spend the gesture.
-    vi.setSystemTime(new Date(Date.now() + 4));
+    vi.advanceTimersByTime(4);
     byId('note').dispatchEvent(new Event('focusin', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
     // platform/pane contract, not a name this file invents.
@@ -263,7 +264,7 @@ describe('content-zoom bootstrap script', () => {
 
     // The gesture is still live: the next focus change, into a different area, is the one it
     // protects.
-    vi.setSystemTime(new Date(Date.now() + 14));
+    vi.advanceTimersByTime(14);
     byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
     // platform/pane contract, not a name this file invents.
@@ -276,7 +277,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('a focus hop through an unmarked element keeps the gesture live', () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.useFakeTimers({ toFake: ['performance'] });
     const { bound } = install('wv-hop', TWO_AREAS);
     byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
@@ -287,7 +288,7 @@ describe('content-zoom bootstrap script', () => {
     // A focus change that lands outside every area has no area of its own to protect, so it is
     // not suppressed - but nothing was spent either, since it is not the click's own move into
     // another area.
-    vi.setSystemTime(new Date(Date.now() + 4));
+    vi.advanceTimersByTime(4);
     byId('toolbar').dispatchEvent(new Event('focusin', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
     // platform/pane contract, not a name this file invents.
@@ -296,7 +297,7 @@ describe('content-zoom bootstrap script', () => {
 
     // The gesture is still live: the next focus change, into a different area, is the one it
     // protects.
-    vi.setSystemTime(new Date(Date.now() + 14));
+    vi.advanceTimersByTime(14);
     byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
     // platform/pane contract, not a name this file invents.
@@ -306,7 +307,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('suppresses only the first focus change after a click, not every focus change within the gesture window', () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.useFakeTimers({ toFake: ['performance'] });
     const { bound } = install('wv-one-shot', TWO_AREAS);
     byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     // The bootstrap script defines this global; the double underscore marks it as an internal
@@ -314,13 +315,13 @@ describe('content-zoom bootstrap script', () => {
     // eslint-disable-next-line no-underscore-dangle
     expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
 
-    vi.setSystemTime(new Date(Date.now() + 14));
+    vi.advanceTimersByTime(14);
     byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
     // Still footnotes: the one focus change the click itself caused is suppressed.
     // eslint-disable-next-line no-underscore-dangle
     expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
 
-    vi.setSystemTime(new Date(Date.now() + 150));
+    vi.advanceTimersByTime(150);
     byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
     // A second focus change is accepted even though it still falls inside the gesture window: the
     // click has already spent its one suppression.
@@ -345,6 +346,27 @@ describe('content-zoom bootstrap script', () => {
     expect(window.__platformContentZoom?.activeArea).toBe('main');
     expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
       'wv-outside-click',
+      'main',
+    );
+  });
+
+  it('lets a right-click make its area active but arms no suppression window', () => {
+    const { bound } = install('wv-right-click', TWO_AREAS);
+    // A right-click opens a context menu; it says which area the user is pointing at, but it moves
+    // no caret, so it has no focus change of its own to protect.
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 2 }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+
+    byId('verse').dispatchEvent(new Event('focusin', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-right-click',
       'main',
     );
   });
