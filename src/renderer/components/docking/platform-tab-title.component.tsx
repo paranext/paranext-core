@@ -36,6 +36,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { windowService } from '@shared/services/window.service';
+import { resolveContentZoomArea } from '@renderer/services/web-view-content-zoom.service';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -187,7 +188,17 @@ function renderTabMenuItems(
         </ContextMenuSub>
       );
     return (
-      <ContextMenuItem key={key} onClick={() => onSelect(item.id)}>
+      <ContextMenuItem
+        key={key}
+        disabled={item.disabled}
+        // Guarded here rather than left to the primitive: the click still reaches this handler
+        // through the underlying DOM element regardless of the disabled styling, so a disabled item
+        // needs the same explicit no-op every other disabled control in this menu system gets.
+        onClick={() => {
+          if (item.disabled) return;
+          onSelect(item.id);
+        }}
+      >
         {item.label}
       </ContextMenuItem>
     );
@@ -444,6 +455,22 @@ export function PlatformTabTitle({
   }>({ otherWindows: [], isOnlyTabInWindowThatWouldClose: false });
 
   /**
+   * Whether this tab's web view currently reports a zoom area to act on, read fresh each time the
+   * menu opens. Zooming behaves identically in both modes, so this is read regardless of mode —
+   * unlike {@link menuTargets}, which only Power mode's window-target items need.
+   *
+   * Read synchronously rather than awaited: the resolver already knows every pane's reported areas
+   * the moment they arrive, so there is no round trip to wait out here, and the disabled state is
+   * correct for the open it belongs to rather than trailing it by one.
+   *
+   * Defaults to enabled rather than disabled: the menu's content is never on screen before the
+   * first open resolves this (Radix keeps it unmounted while closed), so the default itself is
+   * never seen — but assuming a working pane is the right guess if that ever stopped being true,
+   * matching how the rest of this menu treats an action it cannot yet prove is a no-op.
+   */
+  const [hasZoomArea, setHasZoomArea] = useState(true);
+
+  /**
    * Identifies the most recent call to {@link handleMenuOpenChange}, so a round trip that resolves
    * after a newer call was already made does not overwrite what the newer call found. The same
    * newest-wins shape `window-label.util.ts` keeps for its own async label resolution, adapted to a
@@ -452,8 +479,13 @@ export function PlatformTabTitle({
   const latestMenuOpenRequestRef = useRef<symbol | undefined>(undefined);
 
   const handleMenuOpenChange = async (isOpen: boolean) => {
-    // Simple mode's menu holds only the zoom items, and neither reader of this list is in it
-    if (!isOpen || !webViewId || !isPowerMode) return;
+    if (!isOpen || !webViewId) return;
+
+    setHasZoomArea(resolveContentZoomArea(webViewId, undefined) !== undefined);
+
+    // Simple mode's menu holds only the zoom items, and neither reader of the window-target lists
+    // below is in it
+    if (!isPowerMode) return;
 
     // Every call here passes the same `true`, so there is no resolved value of its own to compare
     // against later the way `window-label.util.ts` compares its resolved label — a token stands in
@@ -888,8 +920,8 @@ export function PlatformTabTitle({
   );
 
   const menuContext: TabMenuContext = useMemo(
-    () => ({ webViewId, ...menuTargets }),
-    [webViewId, menuTargets],
+    () => ({ webViewId, hasZoomArea, ...menuTargets }),
+    [webViewId, hasZoomArea, menuTargets],
   );
 
   // Memoized, and above every return so it stays a hook: a single focus change re-renders every
