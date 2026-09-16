@@ -1091,11 +1091,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // chapter's notes once they repopulate. It also drops the live document, which belongs to the
   // chapter being left: until the new chapter reaches the editor, the pane must fall back to
   // `usjFromPdp` rather than list the previous chapter's notes.
+  //
+  // The deps mirror `getChapterKey`'s identity fields exactly: a versification change re-selects
+  // the chapter document just as a chapter switch does, so the request and the live document it
+  // would be resolved against both belong to the document being left.
   useEffect(() => {
     setFootnotePaneFocusRequest(undefined);
     publishedPaneNotesRef.current = undefined;
     setLiveEditorUsj(undefined);
-  }, [scrRef.book, scrRef.chapterNum]);
+  }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
   // #endregion Footnotes Pane State
 
@@ -3282,9 +3286,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // A note-editing session belongs to the chapter it was opened in: the note's editor key does not
   // survive the new chapter's load, so a session left open would address a node that is gone.
   // `false` — nothing is discarded, so a note inserted just before navigating stays in the text.
+  //
+  // Runs in the CLEANUP rather than the body, because ending the session FLUSHES the row editor's
+  // pending apply (see `closeFootnoteEditor`) and that apply schedules a PDP save. By the time
+  // effect BODIES run, every input the save pipeline reads has already moved to the NEW chapter:
+  // `chapterKeyRef` was reassigned during render, and `saveUsjToPdpRawStableRef` was re-pointed to
+  // the new chapter's setter by an effect declared above this one. The flushed note content — the
+  // OLD chapter's — would then be scheduled under the new chapter's key, so
+  // `performDebouncedPdpSave` takes its same-chapter branch: it reads the editor at fire time and
+  // either drops the edits (the new chapter has loaded by then) or writes the old chapter's
+  // document into the new one (it has not). In the cleanup phase none of that has happened yet, and
+  // the debounced save's own chapter-switch flush — a cleanup declared BELOW this one, so it runs
+  // right after it — lands the content through the chapter it was typed in.
+  //
+  // The deps mirror `getChapterKey`'s identity fields exactly, as that flush's do: a versification
+  // change re-selects the chapter document just as a chapter switch does, and the session's note
+  // key does not survive that load either.
   useEffect(() => {
-    if (editingNoteKey.current) closeFootnoteEditor(false);
-  }, [scrRef.book, scrRef.chapterNum, closeFootnoteEditor]);
+    return () => {
+      if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
+    };
+  }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
   // A caller highlight means something only in Standard view, and no other view would ever clear
   // one left behind, so the highlight is re-derived on EVERY view change, in both directions.
@@ -3327,6 +3349,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // so a later re-mount would otherwise decide the highlight against what the last pane held.
     paneSelectedIndexRef.current = undefined;
     paneHasFocusRef.current = false;
+    // The request belongs to the pane it was made for. `FootnotesLayout` tracks which one it has
+    // applied in its own state, so a re-mounted pane treats a surviving request as new and
+    // re-selects that row — and in a read-only Standard view takes DOM focus for it — on a plain
+    // "show the footnotes pane", with no caller click behind it.
+    setFootnotePaneFocusRequest(undefined);
     editorRef.current?.highlightNote(undefined);
     if (paneEditingIndexRef.current !== undefined) closeFootnoteEditor(false);
   }, [footnotesPaneRendered, closeFootnoteEditor]);
