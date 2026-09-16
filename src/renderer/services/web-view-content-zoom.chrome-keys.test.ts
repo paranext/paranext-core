@@ -20,18 +20,18 @@ function dispatchKeyDown(target: EventTarget, init: KeyboardEventInit): Keyboard
 describe('registerContentZoomChromeKeys', () => {
   let adjustContentZoom: ReturnType<typeof vi.fn>;
   let resetContentZoom: ReturnType<typeof vi.fn>;
-  let isAnyDialogOpen: ReturnType<typeof vi.fn>;
+  let isModalOverlayOpen: ReturnType<typeof vi.fn>;
   let unsubscribe: () => void;
 
   beforeEach(() => {
     vi.clearAllMocks();
     adjustContentZoom = vi.fn().mockResolvedValue(undefined);
     resetContentZoom = vi.fn().mockResolvedValue(undefined);
-    isAnyDialogOpen = vi.fn().mockReturnValue(false);
+    isModalOverlayOpen = vi.fn().mockReturnValue(false);
     unsubscribe = registerContentZoomChromeKeys({
       adjustContentZoom,
       resetContentZoom,
-      isAnyDialogOpen,
+      isModalOverlayOpen,
     });
   });
 
@@ -118,8 +118,8 @@ describe('registerContentZoomChromeKeys', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  it('does not act while a dialog is open', () => {
-    isAnyDialogOpen.mockReturnValue(true);
+  it('does not act while a modal overlay is open', () => {
+    isModalOverlayOpen.mockReturnValue(true);
     const event = dispatchKeyDown(document.body, { key: '=', ctrlKey: true });
     expect(adjustContentZoom).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);

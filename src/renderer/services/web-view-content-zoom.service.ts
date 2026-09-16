@@ -52,7 +52,7 @@ type ContentZoomDeps = {
     callback: (event: { webView: SavedWebViewDefinition }) => void,
   ) => Unsubscriber;
   getLastFocusedTabId: () => string | undefined;
-  isAnyDialogOpen: () => boolean;
+  isModalOverlayOpen: () => boolean;
   settings: {
     get: (key: SettingKey) => Promise<unknown>;
     set: (key: SettingKey, value: unknown) => Promise<unknown>;
@@ -66,7 +66,7 @@ type ContentZoomDeps = {
 
 /**
  * Whether {@link warnShardDepsNotConfigured} has already logged. These six functions — five from the
- * renderer's two window-scoped shards, plus `isAnyDialogOpen` from the dialog-open util — only
+ * renderer's two window-scoped shards, plus `isModalOverlayOpen` from the modal-overlay util — only
  * exist once the composition root (`src/renderer/index.tsx`) calls
  * {@link initializeContentZoomService} with them; a call routed through one of the stubs below
  * before that happens is worth one warning, not one per call.
@@ -84,11 +84,11 @@ function warnShardDepsNotConfigured(): void {
 const productionDeps: ContentZoomDeps = {
   getIframe: getWebViewIframe,
   // The six functions below come from the renderer's web-view and window shards, plus the
-  // dialog-open util. Importing any of them here directly would create an import cycle (the
-  // dialog-open util's own dependency, `dialog.service-shard`, imports the web-view shard, which
-  // imports this module), so the renderer's composition root injects its own functions through
-  // `initializeContentZoomService` instead; these stubs cover the window between module load and
-  // that call.
+  // modal-overlay util. Importing a shard here directly would create an import cycle, since both
+  // shards import this module, and `isModalOverlayOpen` travels the same seam so this module's
+  // whole window-scoped surface is composed in one place. The renderer's composition root injects
+  // its own functions through `initializeContentZoomService`; these stubs cover the window between
+  // module load and that call.
   getDefinition: () => {
     warnShardDepsNotConfigured();
     return undefined;
@@ -109,7 +109,7 @@ const productionDeps: ContentZoomDeps = {
     warnShardDepsNotConfigured();
     return undefined;
   },
-  isAnyDialogOpen: () => {
+  isModalOverlayOpen: () => {
     warnShardDepsNotConfigured();
     return false;
   },
@@ -302,14 +302,19 @@ function effectiveOwnLevels(
 }
 
 /**
- * Explicit id → the window's last focused tab → nothing, or nothing while a dialog is open.
- * Exported for tests.
+ * Explicit id → the window's last focused tab → nothing. Exported for tests.
+ *
+ * A modal overlay (a modal dialog or the command palette) stops only the path that has to guess
+ * which pane is meant: the caller named no pane, so the last focused tab is all there is to go on,
+ * and that tab is behind the overlay the user is actually working in. A caller that names a pane —
+ * the tab menu, a wheel or chord inside a view, an extension's command — has said which pane it
+ * means and is answered whatever is on top.
  */
 export function resolveContentZoomTarget(
   explicitWebViewId: string | undefined,
 ): WebViewId | undefined {
-  if (deps.isAnyDialogOpen()) return undefined;
   if (explicitWebViewId) return explicitWebViewId;
+  if (deps.isModalOverlayOpen()) return undefined;
   return deps.getLastFocusedTabId();
 }
 
@@ -1073,8 +1078,8 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
  *
  * @param shardDeps The renderer's composition root supplies the web-view and window shards'
  *   `getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView` and
- *   `getLastFocusedTabId` here, plus `isAnyDialogOpen` from the dialog-open util, rather than this
- *   module importing any of them directly — each would create an import cycle back through the
+ *   `getLastFocusedTabId` here, plus `isModalOverlayOpen` from the modal-overlay util, rather than
+ *   this module importing any of them directly — each would create an import cycle back through the
  *   shards. Merged into the deps in use whenever provided, even on a later call after the first
  *   initialization already ran.
  */
@@ -1086,7 +1091,7 @@ export function initializeContentZoomService(
     | 'getAllOpenDefinitions'
     | 'onDidUpdateWebView'
     | 'getLastFocusedTabId'
-    | 'isAnyDialogOpen'
+    | 'isModalOverlayOpen'
   >,
 ): Promise<void> {
   if (shardDeps) deps = { ...deps, ...shardDeps };

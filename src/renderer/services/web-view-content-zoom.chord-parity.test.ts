@@ -138,7 +138,7 @@ describe('content-zoom chord rule parity: window-chrome keys vs. in-view bootstr
       const unsubscribe = registerContentZoomChromeKeys({
         adjustContentZoom,
         resetContentZoom,
-        isAnyDialogOpen: () => false,
+        isModalOverlayOpen: () => false,
       });
       try {
         document.body.dispatchEvent(new KeyboardEvent('keydown', eventInit(keyCase, modifiers)));
