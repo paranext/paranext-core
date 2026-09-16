@@ -430,25 +430,33 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
               },
               filtersToSet: {
                 type: 'object',
-                description: 'Comment-filter axes to pre-apply; unspecified axes reset to all',
-                // These enums duplicate the axis unions (ResolvedFilter / ReadFilter / TypeFilter /
-                // AssignmentFilter in legacy-comment-manager.d.ts). Keep them in sync by hand until a
-                // codegen step derives this schema from the types.
+                description:
+                  'Comment-filter preset to pre-apply; an unspecified preset resets to all',
+                // This enum duplicates the CommentPreset union (legacy-comment-manager.d.ts). Keep it
+                // in sync by hand until a codegen step derives this schema from the types.
                 properties: {
-                  resolved: { type: 'string', enum: ['all', 'unresolved', 'resolved'] },
-                  read: { type: 'string', enum: ['all', 'unread', 'read'] },
-                  type: { type: 'string', enum: ['all', 'conflicts', 'comments'] },
-                  assignment: {
+                  preset: {
                     type: 'string',
-                    enum: ['all', 'assigned-to-me', 'team', 'unassigned'],
+                    enum: [
+                      'all',
+                      'unresolved-assigned-to-me',
+                      'unresolved',
+                      'unread-assigned-to-me',
+                      'unread',
+                      'unread-and-unresolved',
+                      'resolved',
+                      'unsaved',
+                      'conflict',
+                    ],
                   },
                 },
               },
               scopeFilterToSet: {
                 type: 'string',
-                enum: ['unfiltered', 'current-chapter'],
-                description:
-                  'Scope to pre-apply; omitting it resets scope to all-books (unfiltered)',
+                // This enum duplicates the ScopeFilter union (legacy-comment-manager.d.ts). Keep it in
+                // sync by hand until a codegen step derives this schema from the types.
+                enum: ['all-books', 'current-book', 'current-chapter', 'current-verse'],
+                description: 'Scope to pre-apply; omitting it resets scope to all-books',
               },
             },
           },

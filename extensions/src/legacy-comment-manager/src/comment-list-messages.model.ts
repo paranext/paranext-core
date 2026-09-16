@@ -6,7 +6,7 @@ type CommentListMessageSelectThread = {
   threadId: string;
 };
 
-/** Tell the comment list to apply filter axes and/or scope */
+/** Tell the comment list to apply a filter preset and/or scope */
 type CommentListMessageSetFilters = {
   method: 'setFilters';
   filters?: Partial<CommentFilters>;

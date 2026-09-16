@@ -1,6 +1,6 @@
 import type { CommentFilters, ScopeFilter } from 'legacy-comment-manager';
 import { deepEqual } from 'platform-bible-utils';
-import { applyFilterOverrides, UNFILTERED } from './comment-list-filters.model';
+import { applyFilterOverrides, DEFAULT_SCOPE_FILTER } from './comment-list-filters.model';
 
 /** The filters/scope a comment list web view currently has applied. */
 export type CurrentCommentListView = {
@@ -9,8 +9,8 @@ export type CurrentCommentListView = {
 };
 
 /**
- * Resolves what a `setFilters` web view message should apply, and whether each axis actually
- * changes relative to the view's current state.
+ * Resolves what a `setFilters` web view message should apply, and whether the preset and/or scope
+ * actually change relative to the view's current state.
  *
  * A `setFilters` message is not always a real change: `openCommentList` (main.ts) sends one on
  * every open — including a reuse hit whose filters were already correct, either because nothing was
@@ -33,7 +33,7 @@ export function resolveSetFiltersMessage(
   scopeFilterChanged: boolean;
 } {
   const filters = applyFilterOverrides(message.filters);
-  const scopeFilter = message.scopeFilter ?? UNFILTERED;
+  const scopeFilter = message.scopeFilter ?? DEFAULT_SCOPE_FILTER;
   return {
     filters,
     filtersChanged: !deepEqual(filters, current.filters),
