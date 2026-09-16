@@ -31,6 +31,8 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   // about the float layout, not either of those. See `dialog.service-shard.layout-load.test.ts`.
   throwIfWindowIsClosing: vi.fn(),
   waitForLayoutLoadToSettle: vi.fn(async () => {}),
+  // No layout load happens in this file; the subscription just has to exist to start the shard.
+  onLayoutLoadTabIds: vi.fn(() => () => {}),
 }));
 
 vi.mock('@shared/services/localization.service', () => ({
