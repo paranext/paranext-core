@@ -1,9 +1,12 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DockContext, DragState, PanelData } from 'rc-dock';
-import { TabBarDropZone } from './tab-bar-drop-zone.component';
+import {
+  TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE,
+  TabBarDropZone,
+} from './tab-bar-drop-zone.component';
 import {
   createContext,
   createDragState,
@@ -104,17 +107,29 @@ function stubRect(element: Element, rect: { left: number; right: number; width: 
 }
 
 /**
+ * Gives the zone's inner indicator a non-zero width, as the browser lays it out whenever the zone
+ * has room to show it. jsdom reports every rect as zero-sized, which the zone treats as "no visible
+ * indicator" and rejects.
+ */
+function stubVisibleIndicator(zoneElement: HTMLElement): HTMLElement {
+  const indicatorElement = getIndicatorElement(zoneElement);
+  stubRect(indicatorElement, { left: 600, right: 608, width: 8 });
+  return indicatorElement;
+}
+
+/**
  * Renders `TabBarDropZone` inside a minimal fixture matching the real rc-tabs tab-bar DOM shape —
  * `.dock-nav > .dock-nav-wrap > .dock-nav-list` (two `.dock-tab`s) plus `.dock-extra-content` —
  * that the component's `closest('.dock-nav')` last-tab lookup depends on. Returns the two tabs (in
  * DOM order, so `tabs[1]` is the last tab) and the zone element; callers stub
- * `getBoundingClientRect` on whichever of these their scenario needs before driving a drag.
+ * `getBoundingClientRect` on whichever of these their scenario needs before driving a drag. May be
+ * called more than once per test to render several bars side by side.
  */
 function renderTabBarFixture(
   panel: PanelData,
   context: DockContext,
 ): { tabs: [HTMLElement, HTMLElement]; zoneElement: HTMLElement } {
-  render(
+  const { container } = render(
     <div className="dock-nav">
       <div className="dock-nav-wrap">
         <div className="dock-nav-list">
@@ -127,7 +142,7 @@ function renderTabBarFixture(
       </div>
     </div>,
   );
-  const zoneElement = screen.getByTestId('drop-zone');
+  const zoneElement = within(container).getByTestId('drop-zone');
   const dockNav = zoneElement.closest('.dock-nav');
   if (!dockNav) throw new Error('Fixture .dock-nav ancestor was not rendered');
   const [tab0, tab1] = Array.from(
@@ -149,8 +164,7 @@ describe('TabBarDropZone', () => {
     const panel = createPanel();
     const context = createContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
-    const zoneElement = screen.getByTestId('drop-zone');
-    const indicatorElement = getIndicatorElement(zoneElement);
+    const indicatorElement = stubVisibleIndicator(screen.getByTestId('drop-zone'));
     const { onDragOverT } = getCapturedHandlers();
 
     const tab = createTab();
@@ -162,10 +176,31 @@ describe('TabBarDropZone', () => {
 
     expect(acceptSpy).toHaveBeenCalled();
     expect(rejectSpy).not.toHaveBeenCalled();
-    // `DockContext.setDropRect` reads its target's own `getBoundingClientRect()` to position the
-    // global drop-indicator overlay; passing the zone itself here would show that overlay spanning
-    // the zone's wider, tab-covering box during a drag rather than just the last-tab-to-"+" strip.
+    // The indicator element, not the zone: see `onDragOver` in the component.
     expect(context.setDropRect).toHaveBeenCalledWith(indicatorElement, 'middle', expect.anything());
+  });
+
+  it('rejects a same-group tab drag while the indicator has no width, without showing it', () => {
+    const panel = createPanel();
+    const context = createContext();
+    render(<TabBarDropZone panelData={panel} context={context} />);
+    stubRect(getIndicatorElement(screen.getByTestId('drop-zone')), {
+      left: 600,
+      right: 600,
+      width: 0,
+    });
+    const { onDragOverT } = getCapturedHandlers();
+
+    const state = createDragState({ tab: createTab() }, DOCK_ID);
+    const acceptSpy = vi.spyOn(state, 'accept');
+    const rejectSpy = vi.spyOn(state, 'reject');
+
+    onDragOverT?.(state);
+
+    expect(rejectSpy).toHaveBeenCalled();
+    expect(acceptSpy).not.toHaveBeenCalled();
+    // `.dock-drop-indicator`'s ring shadow would still paint around a zero-width rect.
+    expect(context.setDropRect).not.toHaveBeenCalled();
   });
 
   it('rejects a different-group tab drag and does not show the indicator', () => {
@@ -190,6 +225,7 @@ describe('TabBarDropZone', () => {
     const panel = createPanel();
     const context = createContext();
     render(<TabBarDropZone panelData={panel} context={context} />);
+    stubVisibleIndicator(screen.getByTestId('drop-zone'));
     const { onDragOverT, onDragLeaveT } = getCapturedHandlers();
 
     const tab = createTab();
@@ -209,6 +245,7 @@ describe('TabBarDropZone', () => {
     const panel = createPanel();
     const context = createContext();
     const { unmount } = render(<TabBarDropZone panelData={panel} context={context} />);
+    stubVisibleIndicator(screen.getByTestId('drop-zone'));
     const { onDragOverT } = getCapturedHandlers();
 
     const tab = createTab();
@@ -259,8 +296,7 @@ describe('TabBarDropZone', () => {
       const targetPanel = createPanel({ id: 'target-panel' });
       const context = createContext();
       render(<TabBarDropZone panelData={targetPanel} context={context} />);
-      const zoneElement = screen.getByTestId('drop-zone');
-      const indicatorElement = getIndicatorElement(zoneElement);
+      const indicatorElement = stubVisibleIndicator(screen.getByTestId('drop-zone'));
       const { onDragOverT, onDropT } = getCapturedHandlers();
 
       const floatPanel = createPanel({ id: 'float-panel' });
@@ -340,41 +376,94 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
     createDragState(undefined, undefined);
   });
 
-  it('marks the zone and sets the overlap/indicator-inset custom properties from the last tab (LTR)', () => {
-    const panel = createPanel();
-    const context = createContext();
-    const { tabs, zoneElement } = renderTabBarFixture(panel, context);
-    // Last tab spans x:[500, 600] (width 100, midpoint 550); the zone starts at x:650 — 100px past
-    // the tab's midpoint.
+  /**
+   * Renders one tab bar whose last tab spans x:[500, 600] (midpoint 550) and whose zone starts at
+   * `zoneStart`, then drives a drag start carrying `dragData` through the captured listener.
+   */
+  function startDragOverLtrBar(
+    zoneStart: number,
+    dragData: Record<string, unknown> = { tab: createTab() },
+  ): HTMLElement {
+    const { tabs, zoneElement } = renderTabBarFixture(createPanel(), createContext());
     stubRect(tabs[1], { left: 500, right: 600, width: 100 });
-    stubRect(zoneElement, { left: 650, right: 900, width: 250 });
+    stubRect(zoneElement, { left: zoneStart, right: 900, width: 900 - zoneStart });
     const onDragStateChange = getCapturedDragStateListener();
-    createDragState({ tab: createTab() }, DOCK_ID);
-
+    createDragState(dragData, DOCK_ID);
     onDragStateChange(DOCK_ID);
+    return zoneElement;
+  }
 
-    expect(zoneElement).toHaveAttribute('data-dragging');
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('100px');
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-inset')).toBe('50px');
+  it('marks the zone, covering back to the last tab’s midpoint and leading the indicator to its trailing edge (LTR)', () => {
+    // The zone starts 8px past the tab's trailing edge (the flex gap) and 58px past its midpoint.
+    const zoneElement = startDragOverLtrBar(608);
+
+    expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('58px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('8px');
   });
 
-  it('computes the overlap from the zone’s right edge when the fixture is right-to-left', () => {
+  it('marks the zone for a whole-panel drag too', () => {
+    const zoneElement = startDragOverLtrBar(608, { panel: createPanel({ id: 'other' }) });
+
+    expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('58px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('8px');
+  });
+
+  it('does not lead the indicator backward when the zone already starts over the last tab', () => {
+    // A crowded bar clips the last tab under the zone: the zone starts 10px before its trailing edge.
+    const zoneElement = startDragOverLtrBar(590);
+
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('40px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
+  });
+
+  it('covers nothing when the zone already starts before the last tab’s midpoint', () => {
+    const zoneElement = startDragOverLtrBar(540);
+
+    expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
+  });
+
+  it('measures from the zone’s right edge when the fixture is right-to-left', () => {
     const panel = createPanel();
     const context = createContext();
     const { tabs, zoneElement } = renderTabBarFixture(panel, context);
     zoneElement.style.direction = 'rtl';
-    // Last tab spans x:[400, 500] (width 100, midpoint 450); the zone ends (its right edge, its
-    // logical start in RTL) at x:350 — 100px before the tab's midpoint.
+    // Last tab spans x:[400, 500] (midpoint 450); the zone's right edge (its logical start in RTL)
+    // is at x:392 — 8px before the tab's left edge and 58px before its midpoint.
     stubRect(tabs[1], { left: 400, right: 500, width: 100 });
-    stubRect(zoneElement, { left: 200, right: 350, width: 150 });
+    stubRect(zoneElement, { left: 200, right: 392, width: 192 });
     const onDragStateChange = getCapturedDragStateListener();
     createDragState({ tab: createTab() }, DOCK_ID);
 
     onDragStateChange(DOCK_ID);
 
-    expect(zoneElement).toHaveAttribute('data-dragging');
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('100px');
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-inset')).toBe('50px');
+    expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('58px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('8px');
+  });
+
+  it('measures each zone against its own tab bar', () => {
+    const first = renderTabBarFixture(createPanel({ id: 'panel-1' }), createContext());
+    stubRect(first.tabs[1], { left: 500, right: 600, width: 100 });
+    stubRect(first.zoneElement, { left: 608, right: 900, width: 292 });
+    const second = renderTabBarFixture(createPanel({ id: 'panel-2' }), createContext());
+    stubRect(second.tabs[1], { left: 1000, right: 1040, width: 40 });
+    stubRect(second.zoneElement, { left: 1044, right: 1400, width: 356 });
+    createDragState({ tab: createTab() }, DOCK_ID);
+
+    addDragStateListenerMock.mock.calls.forEach(([listener]) => listener(DOCK_ID));
+
+    expect(first.zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('58px');
+    expect(first.zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe(
+      '8px',
+    );
+    expect(second.zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('24px');
+    expect(second.zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe(
+      '4px',
+    );
   });
 
   it('does not mark the zone when the drag carries neither tab nor panel data for this dock (e.g. a divider resize)', () => {
@@ -388,9 +477,9 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
 
     onDragStateChange(DOCK_ID);
 
-    expect(zoneElement).not.toHaveAttribute('data-dragging');
+    expect(zoneElement).not.toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('');
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-inset')).toBe('');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('');
   });
 
   it('does nothing when the tab bar has no tabs', () => {
@@ -413,7 +502,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
 
     onDragStateChange(DOCK_ID);
 
-    expect(zoneElement).not.toHaveAttribute('data-dragging');
+    expect(zoneElement).not.toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('');
   });
 
@@ -426,16 +515,16 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
     const onDragStateChange = getCapturedDragStateListener();
     createDragState({ tab: createTab() }, DOCK_ID);
     onDragStateChange(DOCK_ID);
-    expect(zoneElement).toHaveAttribute('data-dragging');
+    expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
 
     // rc-dock's own `destroyDraggingElement` (DragManager.ts) calls every listener with `null` at
     // drag end.
     // eslint-disable-next-line no-null/no-null -- matches rc-dock's own drag-end call
     onDragStateChange(null);
 
-    expect(zoneElement).not.toHaveAttribute('data-dragging');
+    expect(zoneElement).not.toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('');
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-inset')).toBe('');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('');
   });
 
   it('removes the drag-state listener on unmount, using the same callback that was added', () => {
