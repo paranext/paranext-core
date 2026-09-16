@@ -158,6 +158,23 @@ describe('findVerseMarkerForVerse', () => {
     // at the beginning of verse 3 rather than midway through it.
     expect(findVerseMarkerForVerse(buildChapterPort(['3a', '3b']), 3)?.dataset.number).toBe('3a');
   });
+
+  it('lands on the top of the chapter for a malformed reference', () => {
+    // Nothing is "nearest" to a non-finite verse, so there is no defensible answer but the top.
+    // Unreachable through the scroll group, which carries integers — this pins the guard that keeps
+    // a bad reference from scrolling somewhere arbitrary if one ever arrives.
+    const port = buildChapterPort(['1', '2', '3']);
+
+    expect(findVerseMarkerForVerse(port, Number.NaN)?.dataset.number).toBe('1');
+  });
+
+  it('skips a marker whose verse number does not parse', () => {
+    // `parseVerseRange('')` is NaN, and an unparseable start compared against the running best would
+    // otherwise be able to win the scan and send the reader to a marker with no verse at all.
+    const port = buildChapterPort(['1', '', '3']);
+
+    expect(findVerseMarkerForVerse(port, 2)?.dataset.number).toBe('1');
+  });
 });
 
 /**
@@ -252,12 +269,24 @@ function buildChapterPortWithMarker(markerTop: number, markerHeight: number) {
 
 describe('port math with a chapter cell, whose header is outside the port', () => {
   it('counts a marker the aligned grid would call header-covered as showing', () => {
-    // The same geometry the aligned case reads as covered (see the sticky-header test above, which
-    // uses this exact -25/40 block and expects false). Here the header is a sibling, so it
-    // contributes nothing and the marker is genuinely visible.
-    const { port, marker } = buildChapterPortWithMarker(-25, 40);
+    // A marker in the port's top 25px. In the aligned grid a 20-tall sticky header sits INSIDE the
+    // port, so the same geometry starts behind it and reads as covered; here the header is a
+    // sibling and contributes nothing, so the marker is genuinely visible. Header placement is the
+    // only difference between the two answers, which is the adjacency this pins.
+    const { port, marker } = buildChapterPortWithMarker(5, 20);
 
     expect(isBlockInPortView(port, marker)).toBe(true);
+  });
+
+  it('does not count a marker clipped by the bottom edge as showing', () => {
+    // A verse marker is one line and its verse text follows AFTER it, so a marker hanging off the
+    // bottom edge means the reader can see a verse number and none of its verse. Counting that as
+    // showing would make the leave-a-visible-verse-alone rule decline to scroll, and the reference
+    // move would appear to do nothing. A whole verse BLOCK taller than the port is the opposite
+    // case and is still counted as showing — see the aligned tests above.
+    const { port, marker } = buildChapterPortWithMarker(290, 20);
+
+    expect(isBlockInPortView(port, marker)).toBe(false);
   });
 
   it('scrolls a marker to the top of the port with no header allowance', () => {
