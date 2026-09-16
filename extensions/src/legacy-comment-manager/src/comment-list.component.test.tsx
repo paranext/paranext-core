@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'fs';
+import path from 'path';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
@@ -31,28 +33,36 @@ beforeAll(() => {
 
 const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
 const SYNC_BLOCKED_NOTICE_TEXT = 'Editing is paused while this project syncs.';
-const PRESET_ARIA = 'Filter comments';
-const SCOPE_ARIA = 'Filter by scope';
 
-// Every lookup below has a real value: the toolbar now renders both dropdowns' options directly, so
-// a blank string would make the selection/option assertions below pass vacuously.
+type LocalizedStringsFile = {
+  localizedStrings: Record<string, Record<string, string>>;
+};
+
+/**
+ * The shipped English strings, read from the contribution the extension actually loads. The panel
+ * looks its labels up by key, so a test that retyped them would keep passing while the shipped
+ * wording drifted away from what it asserts.
+ */
+function readEnglishStrings(): Record<string, string> {
+  const file: LocalizedStringsFile = JSON.parse(
+    readFileSync(path.resolve(__dirname, '../contributions/localizedStrings.json'), 'utf-8'),
+  );
+  return file.localizedStrings.en;
+}
+
+const EN_STRINGS = readEnglishStrings();
+
+const PRESET_ARIA = EN_STRINGS['%comment_filter_aria_preset%'];
+const SCOPE_ARIA = EN_STRINGS['%comment_filter_aria_scope%'];
+
+// The toolbar renders both dropdowns' options directly, so a key that resolved to a blank string
+// would make the selection and option assertions below pass vacuously. `localized-strings.test.ts`
+// holds the line that every key this panel requests is non-empty in each shipped language.
 const STRINGS: LanguageStrings = {
+  ...EN_STRINGS,
+  // Deliberately overridden rather than read: this assertion names the text it expects, and the
+  // notice is the one string here whose exact wording the test is making a claim about.
   [SYNC_BLOCKED_NOTICE_KEY]: SYNC_BLOCKED_NOTICE_TEXT,
-  '%comment_filter_aria_preset%': PRESET_ARIA,
-  '%comment_filter_aria_scope%': SCOPE_ARIA,
-  '%comment_filter_preset_all%': 'All comments',
-  '%comment_filter_preset_unresolved_assigned_to_me%': 'Unresolved, assigned to me',
-  '%comment_filter_preset_unresolved%': 'Unresolved',
-  '%comment_filter_preset_unread_assigned_to_me%': 'Unread, assigned to me',
-  '%comment_filter_preset_unread%': 'Unread',
-  '%comment_filter_preset_unread_and_unresolved%': 'Unread and unresolved',
-  '%comment_filter_preset_resolved%': 'Resolved',
-  '%comment_filter_preset_unsaved%': 'Unsaved comments',
-  '%comment_filter_preset_conflict%': 'Conflicts',
-  '%comment_filter_scope_all_books%': 'All books',
-  '%comment_filter_scope_current_book%': 'Current book',
-  '%comment_filter_scope_current_chapter%': 'Current chapter',
-  '%comment_filter_scope_current_verse%': 'Current verse',
 };
 
 /**
@@ -125,10 +135,9 @@ describe('CommentListPanel filter toolbar', () => {
   it('disables the unsaved preset until draft tracking exists', async () => {
     renderPanel();
     await userEvent.click(screen.getByRole('combobox', { name: PRESET_ARIA }));
-    expect(screen.getByRole('option', { name: 'Unsaved comments' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(
+      screen.getByRole('option', { name: EN_STRINGS['%comment_filter_preset_unsaved%'] }),
+    ).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('offers exactly the preset and scope dropdowns and no other filter control', () => {
