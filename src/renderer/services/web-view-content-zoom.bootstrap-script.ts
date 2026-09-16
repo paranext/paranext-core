@@ -212,6 +212,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       }
       if (!activeArea || areas.indexOf(activeArea) === -1) setActive(areas[0]);
     };
+    // The badge and live region live in this document, so writing their text is itself a
+    // childList mutation; a zoom step would otherwise pay for a second full-document scan.
+    const isIndicatorRecord = (record) =>
+      (badge && badge.contains(record.target)) || (liveRegion && liveRegion.contains(record.target));
     let observer;
     const start = () => {
       // Ahead of the observer, so the two nodes it appends are not themselves a mutation to scan.
@@ -219,7 +223,9 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       seedRuled();
       // Observing before the first scan is what makes the retry above reachable: a throw out of that
       // scan then still leaves the view watching for the DOM change that tries again.
-      observer = new MutationObserver(refresh);
+      observer = new MutationObserver((records) => {
+        if (!records.every(isIndicatorRecord)) refresh();
+      });
       observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
       refresh();
     };
