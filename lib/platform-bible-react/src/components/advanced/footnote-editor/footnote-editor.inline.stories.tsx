@@ -64,7 +64,7 @@ function Template({ noteKind, inline }: StoryArgs) {
         onClose={() => {}}
         scrRef={defaultScrRef}
         editorOptions={{ hasExternalUI: true }}
-        defaultMarkerMenuTrigger="\\"
+        defaultMarkerMenuTrigger="\"
         localizedStrings={localizedStrings}
       />
     </div>

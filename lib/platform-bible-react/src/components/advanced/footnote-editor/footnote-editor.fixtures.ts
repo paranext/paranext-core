@@ -20,6 +20,41 @@ export function buildLocalizedStrings(): FootnoteEditorLocalizedStrings {
   return Object.fromEntries(entries) as FootnoteEditorLocalizedStrings;
 }
 
+/**
+ * The English text for every key the editor's chrome actually renders, so a story reads the way the
+ * app does instead of showing raw keys. Kept in step with `assets/localization/en.json` by hand -
+ * that file lives outside this package, and a demo fixture is not worth a cross-package import.
+ *
+ * Keys the chrome never shows (the marker menu, the USFM marker descriptions) stay pass-through:
+ * the visible surface is what a reviewer judges, and a short list is easier to keep honest.
+ */
+const demoStringOverrides = {
+  '%footnoteEditor_callerDropdown_item_custom%': 'Custom',
+  '%footnoteEditor_callerDropdown_item_generated%': 'Auto-generated',
+  '%footnoteEditor_callerDropdown_item_hidden%': 'Hidden',
+  '%footnoteEditor_callerDropdown_label%': 'Footnote caller',
+  '%footnoteEditor_callerDropdown_tooltip%': 'Footnote caller',
+  '%footnoteEditor_copyButton_tooltip%': 'Copy footnote',
+  '%footnoteEditor_noteType_crossReference_label%': 'Cross-reference',
+  '%footnoteEditor_noteType_endNote_label%': 'Endnote',
+  '%footnoteEditor_noteType_footnote_label%': 'Footnote',
+  '%footnoteEditor_noteType_tooltip%': 'Change type: Footnote',
+  '%footnoteEditor_noteTypeDropdown_label%': 'Type',
+  '%footnoteEditor_saveButton_tooltip%': 'Save footnote',
+  '%undoButton_tooltip%': 'Undo',
+  '%redoButton_tooltip%': 'Redo',
+  '%cancelButton_tooltip%': 'Cancel',
+  '%acceptButton_tooltip%': 'Save',
+  // `satisfies` rather than a `Partial<...>` annotation: the annotation would widen every value to
+  // `string | undefined`, and spreading that over the full map reintroduces `undefined` where the
+  // map promises a string.
+} satisfies Partial<FootnoteEditorLocalizedStrings>;
+
+/** Builds the localized-strings map a story renders with. See {@link demoStringOverrides}. */
+export function buildDemoLocalizedStrings(): FootnoteEditorLocalizedStrings {
+  return { ...buildLocalizedStrings(), ...demoStringOverrides };
+}
+
 /** A fixed Scripture reference for the popover under test. */
 export const scrRef: SerializedVerseRef = {
   book: 'GEN',

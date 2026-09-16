@@ -1254,6 +1254,16 @@ export default function FootnoteEditor({
 
   const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
 
+  const undoRedoButtons = (
+    <UndoRedoButtons
+      onUndoClick={() => editorRef.current?.undo()}
+      onRedoClick={() => editorRef.current?.redo()}
+      canUndo={!isAtInitialState}
+      canRedo={canRedo}
+      localizedStrings={localizedStrings}
+    />
+  );
+
   return (
     <>
       <div
@@ -1274,17 +1284,17 @@ export default function FootnoteEditor({
               updateCaller={handleCallerChange}
               localizedStrings={localizedStrings}
             />
+            {/* An inline editor is one row inside a list of notes, and the row is as wide as the
+                pane: pushing undo/redo to the far end would strand them across a gap from the
+                controls they belong with, so they join the dropdowns in a single cluster. The
+                popover, sized to its own content, keeps them at the end of the row with the
+                Cancel/Save pair below. */}
+            {inline && undoRedoButtons}
           </div>
-          <div className="tw:flex tw:w-full tw:justify-end">
-            <ButtonGroup>
-              <UndoRedoButtons
-                onUndoClick={() => editorRef.current?.undo()}
-                onRedoClick={() => editorRef.current?.redo()}
-                canUndo={!isAtInitialState}
-                canRedo={canRedo}
-                localizedStrings={localizedStrings}
-              />
-              {!inline && (
+          {!inline && (
+            <div className="tw:flex tw:w-full tw:justify-end">
+              <ButtonGroup>
+                {undoRedoButtons}
                 <CancelAcceptButtons
                   onCancelClick={onClose}
                   onAcceptClick={closeAndSave}
@@ -1296,9 +1306,9 @@ export default function FootnoteEditor({
                   localizedStrings={localizedStrings}
                   acceptLabel={localizedStrings['%footnoteEditor_saveButton_tooltip%']}
                 />
-              )}
-            </ButtonGroup>
-          </div>
+              </ButtonGroup>
+            </div>
+          )}
         </div>
         <div
           ref={editorParentRef}
