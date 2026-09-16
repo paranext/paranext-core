@@ -624,8 +624,13 @@ function seedFromMemory(webViewId: WebViewId, precomputed?: IdentityState): void
     // Either a genuinely brand-new pane with nothing of its own, committed or pending, or a pending
     // write that predates a re-point. Both fall through below exactly like a stamped re-point does.
   }
-  // "The stamp names another identity, OR a pending write was chosen for one" above.
+  // "The stamp names another identity, OR a pending write was chosen for one" above -- except a
+  // pending write already chosen for the identity being seeded NOW, which is the pane's own edit
+  // for what it currently shows: it is kept, along with its open burst timer, for a later commit or
+  // retry to land, rather than being overwritten by what memory remembers for that same identity.
   if (!memoryLoaded) return;
+  const pendingForThisSeed = pendingOwnLevelWrites.get(webViewId);
+  if (pendingForThisSeed && pendingForThisSeed.identity === stamp) return;
   pendingOwnLevelWrites.delete(webViewId);
   const ownLevelTimer = ownLevelWriteTimers.get(webViewId);
   if (ownLevelTimer !== undefined) {
