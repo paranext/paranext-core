@@ -307,12 +307,29 @@ function getOwnLevels(definition: Pick<SavedWebViewDefinition, 'state'> | undefi
   return out;
 }
 
-/** The pane's own levels, with a write this window has not committed yet taking precedence. */
+/**
+ * The pane's own levels, with a write this window has not committed yet taking precedence — but
+ * only when that write was chosen for the identity the pane resolves to right now
+ * ({@link memoryIdentityFor}). A pending write chosen for another identity, or for none when the
+ * pane now resolves one (or the reverse), belongs to a project the pane no longer shows: returning
+ * it here would leak that stale level into whatever reads this function, including
+ * {@link syncSiblingsFromMemory}, which would then re-record it as the CURRENT identity's own. The
+ * committed levels are returned instead, until {@link commitOwnLevels} or a fresh area report
+ * resolves the mismatch.
+ */
 function effectiveOwnLevels(
-  definition: Pick<SavedWebViewDefinition, 'id' | 'state'> | undefined,
+  definition:
+    | Pick<SavedWebViewDefinition, 'id' | 'state' | 'webViewType' | 'projectId'>
+    | undefined,
 ): Levels {
   if (!definition) return {};
-  return pendingOwnLevelWrites.get(definition.id)?.levels ?? getOwnLevels(definition);
+  const pending = pendingOwnLevelWrites.get(definition.id);
+  if (pending) {
+    const currentId = memoryIdentityFor(definition);
+    const currentStamp = currentId ? identityStampFor(currentId) : undefined;
+    if (pending.identity === currentStamp) return pending.levels;
+  }
+  return getOwnLevels(definition);
 }
 
 /**
@@ -1252,10 +1269,17 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
         else levels[areaId] = remembered;
         changed = true;
       });
-      // A pane whose levels have not reached its definition yet is written even when this delta asks
-      // for nothing new: those levels are what the pane shows and they still owe a write, so the
-      // change that memory delivers next is also this pane's next chance to store them.
-      if (!changed && !pendingOwnLevelWrites.has(definition.id)) return;
+      // A pane with an own-level write still pending for the identity it shows RIGHT NOW is written
+      // even when this delta asks for nothing new: those are the levels it actually shows and they
+      // still owe a write, so the change that memory delivers next is also this pane's next chance
+      // to store them. A pending write recorded for another identity does not count — it predates a
+      // re-point this pane's stamp has not caught up to yet, and forcing it through here would
+      // misattribute a stale project's level to the identity memory just delivered a change for.
+      const pendingForCurrentIdentity = pendingOwnLevelWrites.get(definition.id);
+      const owesAWrite =
+        pendingForCurrentIdentity !== undefined &&
+        pendingForCurrentIdentity.identity === identityStampFor(id);
+      if (!changed && !owesAWrite) return;
       if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
       else everyPaneTookItsUpdate = false;
     } catch (e) {
