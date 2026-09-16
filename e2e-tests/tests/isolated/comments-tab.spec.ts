@@ -45,6 +45,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/comment.fixture';
 import {
+  DEFAULT_WEBSOCKET_PORT,
   waitForAppReady,
   waitForOpenWebViewIdByType,
   waitForOverlayGone,
@@ -53,12 +54,13 @@ import {
 } from '../../fixtures/helpers';
 import {
   type CommentTestProject,
+  clickCommentsTab,
   createCommentTestProject,
   cleanupCommentTestProject,
   createCommentThreads,
+  openCommentListPanel,
 } from '../../fixtures/comment-test-helpers';
 
-const DEFAULT_WEBSOCKET_PORT = 8876;
 const SETTINGS_TIMEOUT_MS = 60_000;
 /**
  * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits five PAPI
@@ -164,39 +166,6 @@ async function openScriptureEditor(
   }
 }
 
-/**
- * Click the Comments tab in Column 3.
- *
- * If the tab title is scrolled outside the visible portion of the tab bar (clipped by the rc-tabs
- * overflow container), hover the `.dock-nav-more` overflow button to open the dropdown, then click
- * the Comments option via its `data-web-view-id` attribute.
- *
- * `actionTimeoutMs` bounds the click/hover actions — pass a short value when calling inside a retry
- * loop so a blocked click (e.g. the workspace-updating overlay intercepting pointer events) fails
- * fast and the loop can retry, instead of burning the default 30 s action timeout.
- */
-async function clickCommentsTab(
-  mainPage: Page,
-  commentListPanelId: string,
-  actionTimeoutMs = 30_000,
-): Promise<void> {
-  const tabTitle = mainPage.locator(
-    `.platform-tab-title[data-web-view-id="${commentListPanelId}"]`,
-  );
-  if (await tabTitle.isVisible()) {
-    await tabTitle.click({ timeout: actionTimeoutMs });
-    return;
-  }
-  // Tab is outside the visible scroll area — open the overflow dropdown and activate it.
-  const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
-  await dockBar.locator('.dock-nav-more').hover({ timeout: actionTimeoutMs });
-  // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
-  await mainPage
-    .locator('[role="listbox"] [role="option"]')
-    .filter({ has: mainPage.locator(`[data-web-view-id="${commentListPanelId}"]`) })
-    .click({ timeout: 5_000 });
-}
-
 // Own this spec's Electron app so it is not inherited from another spec that has already replaced
 // the Column 2 scripture-editor slot waitForSimpleLayout waits for. See comment.fixture.ts.
 test.use({ commentAppOwner: 'comments-tab' });
@@ -279,17 +248,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // that call getWebView for the comment list panel while the sentinel is in flight,
     // occasionally overwriting it with the previously-open developer project. Calling directly
     // here is safe because waitForSimpleLayout already confirmed the dock is stable (overlay gone).
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [project.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(project.projectId);
 
     await clickCommentsTab(mainPage, commentListPanelId);
 
@@ -317,17 +276,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
 
     // Point the Column 3 Comments tab at the seeded project (same direct-open path the
     // "has comments" test uses — see that test for why we avoid openScriptureEditor here).
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [projectScroll.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
 
     await clickCommentsTab(mainPage, commentListPanelId);
 
@@ -381,17 +330,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
       ['PT-4070 keyboard a11y 1', 'PT-4070 keyboard a11y 2', 'PT-4070 keyboard a11y 3'],
     );
 
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [projectScroll.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
 
     await clickCommentsTab(mainPage, commentListPanelId);
 
@@ -447,17 +386,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
 
     await createCommentThreads(projectScroll, ['GEN 3:1'], ['PT-4070 scope-option test']);
 
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [projectScroll.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
 
     const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
     // Find the scope dropdown by its stable data-testid rather than by trigger index — the index

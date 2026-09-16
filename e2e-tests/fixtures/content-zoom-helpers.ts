@@ -1,6 +1,8 @@
 /**
- * Helpers shared by the content-zoom e2e specs (`tests/isolated/notes-content-zoom/` and
- * `tests/isolated/scripture-editor/content-zoom*.spec.ts`): the wheel gesture every one of them
+ * Helpers shared by the three content-zoom e2e specs that import this module —
+ * `tests/isolated/notes-content-zoom/comment-list-content-zoom.spec.ts`,
+ * `tests/isolated/notes-content-zoom/comments-panel-content-zoom.spec.ts`, and
+ * `tests/isolated/scripture-editor/content-zoom.spec.ts`: the wheel gesture every one of them
  * drives, the memory-setting reader every one of them polls, and the indicator/zoom-area selectors
  * every one of them reads.
  */
@@ -19,7 +21,7 @@ export const CONTENT_ZOOM_MEMORY_SETTING = 'platform.webViewContentZoomMemory';
 export const INDICATOR_SELECTOR = '#platform-content-zoom-indicator';
 
 /**
- * Ctrl+wheel over the centre of `box` (frame-relative coordinates, as {@link areaBox} returns).
+ * Ctrl+wheel over the centre of `box` (main-frame-relative coordinates, as {@link areaBox} returns).
  * `deltaY: -120` zooms in, `+120` zooms out (`web-view-content-zoom.bootstrap-script.ts`'s
  * `onWheel`: `e.deltaY < 0` is zoom-in). Does not itself wait for the effect — callers poll the
  * resulting factor, never a bare timeout, since geometry inside a zoomed frame moves and a fixed
@@ -55,7 +57,7 @@ export async function readIndicatorText(frame: Frame): Promise<string | undefine
   return text?.replace(/\s/gu, '');
 }
 
-/** Bounding box (frame-relative) of one zoom area's marked root element. */
+/** Bounding box (main-frame-relative) of one zoom area's marked root element. */
 export async function areaBox(
   frame: Frame,
   areaId: string,
