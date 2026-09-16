@@ -14,6 +14,8 @@ export type ContentZoomChromeKeysDeps = {
   ) => Promise<void>;
   resetContentZoom: (webViewId: WebViewId | undefined, areaId?: ContentZoomAreaId) => Promise<void>;
   isModalOverlayOpen: () => boolean;
+  /** Whether a pane and an area resolve for a chord carrying no ids — see the service's own query. */
+  canContentZoomAct: () => boolean;
 };
 
 /** Ctrl (or ⌘) is required. Alt is excluded, because Ctrl+Alt chords carry their own meanings. */
@@ -70,7 +72,12 @@ function actionFor(e: KeyboardEvent): ChordAction | undefined {
  * content zoom, and its own use of these keys, if any, must not be shadowed by this listener. A
  * non-modal docked dialog stops nothing — the user keeps working in the panes behind it.
  *
- * @param deps The zoom actions and the modal-overlay query to call.
+ * Consumes the keystroke only when the action will really happen
+ * ({@link ContentZoomChromeKeysDeps.canContentZoomAct}): a pane that marks no zoom area cannot zoom,
+ * and swallowing the chord there would take it from whoever else might want it while giving the
+ * user nothing back.
+ *
+ * @param deps The zoom actions, the modal-overlay query and the can-act query to call.
  * @returns A function that removes the listener.
  */
 export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): () => void {
@@ -81,6 +88,7 @@ export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): 
     const action = actionFor(e);
     if (!action) return;
     if (!isAllowedShiftState(e, action)) return;
+    if (!deps.canContentZoomAct()) return;
     e.preventDefault();
     const promise =
       action === 'reset'
@@ -90,6 +98,11 @@ export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): 
       logger.warn(`Content zoom: window-chrome chord failed. ${getErrorMessage(err)}`),
     );
   };
-  window.addEventListener('keydown', onKeyDown);
-  return () => window.removeEventListener('keydown', onKeyDown);
+  // Capture phase, unlike the in-view bootstrap's own bubble-phase listener: parts of the window
+  // chrome this listener exists for stop every keydown they see unconditionally — the reference
+  // box's book/chapter picker and its recent-searches list both do — so a bubble-phase listener
+  // never sees the chord on exactly the surfaces it was written for. Nothing else in the renderer
+  // chrome claims these chords, so pre-empting the bubble phase costs no other handler its keys.
+  window.addEventListener('keydown', onKeyDown, true);
+  return () => window.removeEventListener('keydown', onKeyDown, true);
 }
