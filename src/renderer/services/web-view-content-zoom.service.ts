@@ -1330,8 +1330,17 @@ export function initializeContentZoomService(
         // This is where a pane's identity changes: a view re-pointed at another project keeps its
         // web view id and updates its definition, so the levels it carries over are checked against
         // that new identity before they are pushed. The write a re-seed makes comes back through
-        // this same event, where the stamp it just wrote ends the round.
-        reseedIfIdentityChanged(webView.id);
+        // this same event, where the stamp it just wrote ends the round. The re-seed carries its own
+        // guard, like `commitOwnLevels` and `repushAllPanes`: a throwing re-seed write must not skip
+        // the push below, which keeps the pane's variables current even when its own identity check
+        // could not be stored.
+        try {
+          reseedIfIdentityChanged(webView.id);
+        } catch (e) {
+          logger.warn(
+            `Content zoom: could not re-seed web view ${webView.id}. ${getErrorMessage(e)}`,
+          );
+        }
         pushContentZoom(webView.id);
       } catch (e) {
         logger.warn(
