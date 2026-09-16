@@ -142,8 +142,10 @@ import {
   prepareUsjForChapterSave,
 } from './chapter-marker-repair.util';
 import {
+  clearOutstandingSaveFailure,
+  createSaveFailureMemory,
   planSaveFailureResponse,
-  SaveFailureKind,
+  SaveFailureMemory,
   SaveFailureResponse,
   SYNC_EDIT_BLOCKED_REGEX,
 } from './save-failure-report.util';
@@ -2601,11 +2603,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
-  // The kind of save rejection the user has already been told about, or `undefined` when nothing is
-  // outstanding. A chapter the backend refuses is refused again on every save for as long as the
-  // user keeps typing, so this is what turns that run of identical rejections into one report; a
-  // save that gets through clears it (see `saveUsjToPdpInternal`).
-  const lastReportedSaveFailureKind = useRef<SaveFailureKind | undefined>(undefined);
+  // Which save rejection the user has already been told about. A chapter the backend refuses is
+  // refused again on every save for as long as the user keeps typing, so this is what turns that
+  // run of identical rejections into one report; a write that completes clears it. Both transitions
+  // belong to `save-failure-report.util.ts` rather than to this component — see `SaveFailureMemory`
+  // for why they cannot be allowed to live apart.
+  const saveFailureMemory = useRef<SaveFailureMemory>(createSaveFailureMemory());
   // Monotonic count of PDP deliveries observed — the failed-save retry gate's other half.
   // `withWriteInFlightGuard` owns the in-flight flag for exactly the write's own duration, so the
   // flag carries no information about deliveries; this counter is what lets a failed save tell
@@ -2895,7 +2898,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
      */
     async function reportSaveFailure({ kind, shouldReport }: SaveFailureResponse): Promise<void> {
       if (!shouldReport) return;
-      lastReportedSaveFailureKind.current = kind;
 
       try {
         if (kind === 'syncEditBlocked') {
@@ -2963,7 +2965,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // Only the report half of the plan is used here — `shouldRevert` is deliberately
               // ignored, for the reason given above.
               await reportSaveFailure(
-                planSaveFailureResponse(zombieMessage, lastReportedSaveFailureKind.current),
+                planSaveFailureResponse(saveFailureMemory.current, zombieMessage),
               );
             }
             return false;
@@ -2987,8 +2989,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // Forget it, so the next rejection is worth reporting even if it is the same kind, and
         // take down the save-failed toast, which is the one that stays up under a stable id
         // until something dismisses it. Dismissing an id that was never sent is a no-op.
-        if (lastReportedSaveFailureKind.current !== undefined) {
-          lastReportedSaveFailureKind.current = undefined;
+        if (clearOutstandingSaveFailure(saveFailureMemory.current)) {
           papi.notifications.dismiss(saveNotificationIds.saveFailed).catch((error: unknown) => {
             logger.warn(`Error dismissing the save-failed notification: ${getErrorMessage(error)}`);
           });
@@ -3042,10 +3043,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // `finally` has since cleared it — so the snapshot is the state the failed write started
         // from rather than a `releaseAfterMs`-stale one, which is why the zombie path above
         // deliberately does not do this.
-        const failureResponse = planSaveFailureResponse(
-          errorMessage,
-          lastReportedSaveFailureKind.current,
-        );
+        const failureResponse = planSaveFailureResponse(saveFailureMemory.current, errorMessage);
         // Synchronously, before anything is awaited. Awaiting the notification first would yield
         // across macrotask boundaries — long enough for `useEditorPdpSync` to apply a NEWER PDP
         // delivery into the editor, which this revert would then overwrite with the older snapshot

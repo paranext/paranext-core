@@ -74,6 +74,29 @@ export interface SaveFailureResponse {
 }
 
 /**
+ * The running record of which save rejection the user is currently looking at.
+ *
+ * Deliberately a value this module owns both transitions of, rather than a field the caller
+ * maintains itself. The two halves have to agree: whatever suppresses a repeat report is also the
+ * only thing that knows when to stop suppressing, and the notice raised for a suppressed run stays
+ * on screen until something takes it down. Split between a save path and a success path they drift
+ * apart silently, and what that produces is the bug this whole module exists to prevent — a chapter
+ * failing to save with nothing on screen saying so.
+ */
+export interface SaveFailureMemory {
+  /**
+   * The kind last reported to the user, or `undefined` when nothing is outstanding (nothing has
+   * failed yet, or a save has got through since).
+   */
+  lastReportedKind: SaveFailureKind | undefined;
+}
+
+/** A memory with no rejection outstanding. */
+export function createSaveFailureMemory(): SaveFailureMemory {
+  return { lastReportedKind: undefined };
+}
+
+/**
  * Everything the editor needs to decide about one rejected save, worked out synchronously so the
  * caller can act on the editor's content BEFORE it awaits anything.
  *
@@ -84,21 +107,43 @@ export interface SaveFailureResponse {
  * document with an older snapshot and record the older one as last-sent, leaving the editor and the
  * PDP out of step until the next delivery arrives.
  *
+ * A rejection this says to report is recorded as reported HERE, before the caller has sent
+ * anything, so that a caller which reverts between deciding and telling cannot report the same
+ * rejection twice. A send that then fails is deliberately not un-recorded: a notification the
+ * platform refused is a broken notification path, and retrying it on every keystroke of a failing
+ * chapter would be worse than staying quiet until the kind changes.
+ *
+ * @param memory The record of what the user has already been told. Updated in place.
  * @param errorMessage The message the backend rejected the write with.
- * @param lastReportedKind The kind last reported to the user, or `undefined` when nothing is
- *   outstanding (nothing has failed yet, or a save has got through since).
  */
 export function planSaveFailureResponse(
+  memory: SaveFailureMemory,
   errorMessage: string,
-  lastReportedKind: SaveFailureKind | undefined,
 ): SaveFailureResponse {
   const kind = classifySaveFailure(errorMessage);
+  const shouldReport = shouldReportSaveFailure(kind, memory.lastReportedKind);
+  if (shouldReport) memory.lastReportedKind = kind;
   return {
     kind,
-    shouldReport: shouldReportSaveFailure(kind, lastReportedKind),
+    shouldReport,
     // Only a rejection the editor recognizes says anything about what the backend WOULD accept. For
     // anything else the editor's content is the user's only copy of the edit, and nothing here
     // knows the PDP's document would fare any better.
     shouldRevert: kind !== 'unknown',
   };
+}
+
+/**
+ * Records that a write ran to completion with no rejection to classify, so whatever the user was
+ * told is no longer outstanding: the next rejection is worth reporting again even if it is the same
+ * kind.
+ *
+ * @param memory The record of what the user has already been told. Updated in place.
+ * @returns Whether a notice raised for an earlier rejection is now stale and has to be taken down.
+ *   `false` when nothing was outstanding, so a caller never dismisses an id it never sent.
+ */
+export function clearOutstandingSaveFailure(memory: SaveFailureMemory): boolean {
+  if (memory.lastReportedKind === undefined) return false;
+  memory.lastReportedKind = undefined;
+  return true;
 }
