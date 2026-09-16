@@ -7,7 +7,9 @@
 .platform-tab-bar-drop-zone {
   // `flex-basis: 0` (the `0` in the shorthand) keeps this element out of the flex line's
   // hypothetical main-size total, so it only ever claims space nothing else needs — it can't force
-  // `.dock-nav-wrap` (the tab list) to shrink and push a tab into the overflow dropdown.
+  // `.dock-nav-wrap` (the tab list) to shrink and push a tab into the overflow dropdown. The flex
+  // `gap` between "+" and this zone still applies while the zone is 0px wide, so it does cost the
+  // tab list that gap's width.
   flex: 1 0 0;
   // The default flex-item `min-width: auto` would otherwise floor this at its content size; it has
   // no content, but pin it to 0 so a change here can't reintroduce that floor.
@@ -53,7 +55,10 @@
     }
 
     // Forward: the flex gap before "+", "+" itself (moved to the bar's end during a drag) and the
-    // bar's trailing padding. "+" isn't positioned, so this paints and hit-tests above it.
+    // bar's trailing padding. "+" isn't positioned, so this paints and hit-tests above it. On a bar
+    // crowded enough to overflow, the zone has no width to draw an indicator in, so it refuses the
+    // drop (see `onDragOver`) and this area takes no drop; the last visible tab's own rc-dock
+    // target still appends after that tab.
     &::after {
       inset-inline-start: 100%;
       width: tab-bar-metrics.$tab-bar-extra-gap + tab-bar-metrics.$panel-button-size +
