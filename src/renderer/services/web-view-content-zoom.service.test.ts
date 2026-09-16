@@ -927,7 +927,11 @@ describe('web-view-content-zoom.service', () => {
     await resetContentZoom('notes-4', 'main');
     // The reset's own definition write comes back as an update while its memory edit is still in
     // the debounce window, so memory still remembers the level the pane just gave up.
+    updateDefinition.mockClear();
     onDidUpdateWebViewCallback?.({ webView: requireDefinition('notes-4') });
+    // The guard's coverage must not rest on `cachedMemory` still holding the level alone: a
+    // real re-seed would call updateDefinition, so this proves the update was skipped outright.
+    expect(updateDefinition).not.toHaveBeenCalled();
     expect(definitions.get('notes-4')?.state).toEqual({});
     expect(cssVar(iframeFor('notes-4'), '--platform-content-zoom-main')).toBe('1');
     await __flushContentZoomWritesForTesting();
@@ -1191,6 +1195,21 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-9', ['main']);
     expect(definitions.get('editor-9')?.state).toEqual({ [LEVELS]: { main: 1.4 } });
     expect(updateDefinition).not.toHaveBeenCalled();
+  });
+
+  it("drops a stale identity stamp when a level-holding pane's own-level write finds no resolvable identity", async () => {
+    definitions.set('editor-1', {
+      id: 'editor-1',
+      webViewType: 'platformScriptureEditor.react',
+      // No projectId and no state.resourceId: this build cannot resolve an identity for the pane,
+      // yet its state still carries a stamp from before that became true (e.g. the project was
+      // unlinked from the pane some other way).
+      state: zoomState({ main: 1.5 }),
+    });
+    await adjustContentZoom('editor-1', 1, 'main');
+    // The new level commits, but with no resolvable identity to stamp it with, the stale stamp is
+    // dropped rather than left to name a project the new level was never chosen for.
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.6 } });
   });
 
   it('does nothing for an unknown web view', async () => {
