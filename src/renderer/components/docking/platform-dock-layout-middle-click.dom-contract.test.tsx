@@ -2,8 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { createRef } from 'react';
-import DockLayout, { LayoutData, TabBase, TabData } from 'rc-dock';
+import DockLayout, { DragDropDiv, LayoutData, TabBase, TabData } from 'rc-dock';
 import { resetActivationLatchForTesting } from '@renderer/services/window-activation.util';
+import { installMiddleClickTabBarHandlers } from './platform-dock-layout-middle-click-handlers.util';
 import { focusTab } from './platform-dock-layout-storage.util';
 import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
 
@@ -86,9 +87,14 @@ const defaultLayout: LayoutData = {
 };
 
 /**
- * Pins the rc-dock DOM details the tab headers and panels depend on against a real `DockLayout`
- * rendering the app's own `PlatformTabTitle` and `PlatformPanel`, so an rc-dock upgrade that moves
- * them fails here instead of silently.
+ * Pins the rc-dock DOM details that tab focus and middle-click close depend on — `role="tab"` on
+ * the element wrapping each header, the `.dock-bar` class, drags armed from `DragDropDiv`, and the
+ * close button following `closable` — against a real `DockLayout` rendering the app's own
+ * `PlatformTabTitle` and `PlatformPanel`, so an rc-dock upgrade that changes them fails here
+ * instead of silently disabling the feature.
+ *
+ * The overflow dropdown rc-tabs renders is not covered: jsdom has no layout, so no tab ever
+ * overflows. The middle-click util's own tests cover it with a hand-built stand-in.
  */
 describe('PlatformDockLayout tab DOM contract', () => {
   let dockLayout: DockLayout;
@@ -137,6 +143,107 @@ describe('PlatformDockLayout tab DOM contract', () => {
       expect(activeElement?.closest<HTMLElement>('.platform-panel')?.dataset.tabId).toBe(
         CLOSABLE_TAB_ID,
       );
+    });
+  });
+
+  describe('middle click', () => {
+    let onCloseTab: ReturnType<typeof vi.fn<(tabId: string) => void>>;
+    let dragStartSpy: ReturnType<typeof vi.spyOn>;
+    let removeHandlers: () => void;
+
+    beforeEach(() => {
+      onCloseTab = vi.fn<(tabId: string) => void>();
+      dragStartSpy = vi.spyOn(DragDropDiv.prototype, 'onDragStart').mockImplementation(() => {});
+      removeHandlers = installMiddleClickTabBarHandlers(document, {
+        findTab: (tabId) => dockLayout.find(tabId),
+        onCloseTab,
+      });
+    });
+
+    afterEach(() => {
+      removeHandlers();
+      dragStartSpy.mockRestore();
+    });
+
+    /** The title `PlatformTabTitle` renders for a tab */
+    function titleOf(tabId: string) {
+      const title = document.querySelector(`[data-tab-header-id="${tabId}"]`);
+      if (!title) throw new Error(`No tab header rendered for ${tabId}`);
+      return title;
+    }
+
+    /** The `role="tab"` element rc-dock wraps around a tab's title, close button and hit area */
+    function headerOf(tabId: string) {
+      const header = titleOf(tabId).closest('[role="tab"]');
+      if (!header) throw new Error(`No role="tab" ancestor for ${tabId}`);
+      return header;
+    }
+
+    function partOf(tabId: string, selector: string) {
+      const part = headerOf(tabId).querySelector(selector);
+      if (!part) throw new Error(`No ${selector} rendered for ${tabId}`);
+      return part;
+    }
+
+    function tabBar() {
+      const bar = document.querySelector('.dock-bar');
+      if (!bar) throw new Error('No .dock-bar rendered');
+      return bar;
+    }
+
+    function pressOn(target: Element, button: number) {
+      return target.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true, button }),
+      );
+    }
+
+    function middleClickOn(target: Element) {
+      target.dispatchEvent(
+        new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }),
+      );
+    }
+
+    it('arms a drag on a left press on a tab title, so the drag spy can see one', () => {
+      pressOn(titleOf(CLOSABLE_TAB_ID), 0);
+
+      expect(dragStartSpy).toHaveBeenCalled();
+    });
+
+    it.each([
+      ['tab title', () => titleOf(CLOSABLE_TAB_ID)],
+      ['close button', () => partOf(CLOSABLE_TAB_ID, '.dock-tab-close-btn')],
+      ['tab bar', tabBar],
+    ])('arms no drag, and prevents the default, on a middle press on the %s', (_, getTarget) => {
+      const notPrevented = pressOn(getTarget(), 1);
+
+      expect(notPrevented).toBe(false);
+      expect(dragStartSpy).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['tab title', () => titleOf(CLOSABLE_TAB_ID)],
+      ['close button', () => partOf(CLOSABLE_TAB_ID, '.dock-tab-close-btn')],
+      ['hit area', () => partOf(CLOSABLE_TAB_ID, '.dock-tab-hit-area')],
+    ])('closes a closable tab on a middle click on its %s', (_, getTarget) => {
+      middleClickOn(getTarget());
+
+      expect(onCloseTab).toHaveBeenCalledExactlyOnceWith(CLOSABLE_TAB_ID);
+    });
+
+    it('does not close a tab rc-dock marks non-closable, which also gets no close button', () => {
+      middleClickOn(titleOf('tab-c'));
+
+      expect(onCloseTab).not.toHaveBeenCalled();
+      expect(headerOf('tab-c').querySelector('.dock-tab-close-btn')).toBeNull();
+    });
+
+    it('closes nothing on a middle click in panel content', () => {
+      const content = document.querySelector('.platform-panel button');
+      if (!content) throw new Error('No panel content rendered');
+
+      middleClickOn(content);
+
+      expect(onCloseTab).not.toHaveBeenCalled();
     });
   });
 });
