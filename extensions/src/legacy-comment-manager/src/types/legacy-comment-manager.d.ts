@@ -1,6 +1,7 @@
 declare module 'legacy-comment-manager' {
   import {
     DataProviderDataType,
+    DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
     NetworkableObject,
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -14,7 +15,9 @@ declare module 'legacy-comment-manager' {
     CommentType,
     LegacyComment,
     LegacyCommentThread,
+    PlatformError,
     Prettify,
+    UnsubscriberAsync,
   } from 'platform-bible-utils';
 
   // #region Scripture Range Types
@@ -266,6 +269,12 @@ declare module 'legacy-comment-manager' {
   export type LegacyCommentProjectInterfaceDataTypes = {
     /** Comment threads matching the selector criteria */
     CommentThreads: DataProviderDataType<LegacyCommentThreadSelector, LegacyCommentThread[], never>;
+    /** This user's comment filter selection for this project. */
+    UserCommentFilters: DataProviderDataType<
+      undefined,
+      CommentFilterSelection,
+      CommentFilterSelection
+    >;
   };
 
   /** Provides comments from project team members in a way that is compatible with Paratext 9 */
@@ -279,6 +288,30 @@ declare module 'legacy-comment-manager' {
        * @returns Promise that resolves to an array of comment threads
        */
       getCommentThreads(selector?: LegacyCommentThreadSelector): Promise<LegacyCommentThread[]>;
+
+      /** Gets this user's comment filter selection for this project. */
+      getUserCommentFilters(): Promise<CommentFilterSelection>;
+      /** Sets this user's comment filter selection for this project. */
+      setUserCommentFilters(
+        value: CommentFilterSelection,
+      ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes>>;
+      /** Resets this user's comment filter selection for this project to the default view. */
+      resetUserCommentFilters(): Promise<boolean>;
+      /**
+       * Subscribe to run a callback function when this user's comment filter selection changes
+       *
+       * @param selector Tells the provider what changes to listen for
+       * @param callback Function to run with the updated selection. If there is an error while
+       *   retrieving the updated data, the function will run with a {@link PlatformError} instead of
+       *   the data. You can call {@link isPlatformError} on this value to check if it is an error.
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeUserCommentFilters(
+        selector: undefined,
+        callback: (value: CommentFilterSelection | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
 
       /**
        * Creates a new comment (which will automatically also create a new thread). Use
@@ -514,6 +547,23 @@ declare module 'legacy-comment-manager' {
    * and resolve against it whether or not this list follows an editor.
    */
   export type ScopeFilter = 'all-books' | 'current-book' | 'current-chapter' | 'current-verse';
+
+  /**
+   * One user's stored comment-filter selection for one project, persisted independently of
+   * {@link CommentFilters} (the toolbar's in-memory filter state, which carries no version or
+   * scope).
+   */
+  export type CommentFilterSelection = {
+    /**
+     * Data schema version in Major.Minor.Patch format. The project setting validator rejects any
+     * write that would downgrade the major or minor version of the currently stored value.
+     */
+    dataVersion: string;
+    /** The named filter preset, e.g. `unresolved`. Defaults to `all`. */
+    preset: CommentPreset;
+    /** The Scripture scope, e.g. `current-chapter`. Defaults to `all-books`. */
+    scopeFilter: ScopeFilter;
+  };
 
   // #endregion
 
