@@ -105,8 +105,7 @@ export function buildCommentThreadSelector({
     ];
   }
 
-  // Preset. `unsaved` deliberately contributes nothing: a draft is client-side state, so the caller
-  // applies that rule to the result rather than the provider applying it to the query.
+  // Preset
   switch (filters.preset) {
     case 'unresolved':
       selector.isResolved = false;
@@ -136,8 +135,15 @@ export function buildCommentThreadSelector({
       break;
     case 'all':
     case 'unsaved':
-    default:
+      // Neither narrows the query: `all` by definition, and `unsaved` because a draft is
+      // client-side state the provider has never heard of.
       break;
+    default: {
+      // Exhaustiveness guard: a preset added to the union without a case here fails to compile,
+      // rather than silently producing an unnarrowed selector that reads as "show everything".
+      const unhandled: never = filters.preset;
+      throw new Error(`Unhandled comment preset: ${String(unhandled)}`);
+    }
   }
 
   return selector;

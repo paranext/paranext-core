@@ -27,23 +27,34 @@ describe('presets', () => {
     expect(build('all')).toEqual({});
   });
 
-  it('maps each preset to its selector clauses', () => {
-    expect(build('unresolved')).toEqual({ isResolved: false });
-    expect(build('resolved')).toEqual({ isResolved: true });
-    expect(build('unread')).toEqual({ isRead: false });
-    expect(build('unread-and-unresolved')).toEqual({ isRead: false, isResolved: false });
-    expect(build('conflict')).toEqual({ type: 'Conflict' });
-    expect(build('unresolved-assigned-to-me')).toEqual({
-      isResolved: false,
-      assignedTo: 'Donna',
+  describe.each<[CommentPreset, ReturnType<typeof build>]>([
+    ['unresolved', { isResolved: false }],
+    ['resolved', { isResolved: true }],
+    ['unread', { isRead: false }],
+    ['unread-and-unresolved', { isRead: false, isResolved: false }],
+    ['conflict', { type: 'Conflict' }],
+    ['unresolved-assigned-to-me', { isResolved: false, assignedTo: 'Donna' }],
+    ['unread-assigned-to-me', { isRead: false, assignedTo: 'Donna' }],
+  ])('%s', (preset, expected) => {
+    it(`maps to ${JSON.stringify(expected)}`, () => {
+      expect(build(preset)).toEqual(expected);
     });
-    expect(build('unread-assigned-to-me')).toEqual({ isRead: false, assignedTo: 'Donna' });
   });
 
   it('contributes no selector clause for the unsaved preset', () => {
     // A draft is client-side state; the provider cannot filter on it. The query must therefore be
     // unnarrowed by the preset, leaving the caller to apply the draft rule itself.
     expect(build('unsaved')).toEqual({});
+  });
+
+  it('maps every preset in the label map, with only all and unsaved unnarrowed', () => {
+    // Iterates the union rather than a hand-listed set, so a preset added later is exercised here
+    // without anyone remembering to add a case.
+    const unnarrowed = Object.keys(presetToLabelKey)
+      .filter(isCommentPreset)
+      .filter((preset) => Object.keys(build(preset)).length === 0);
+
+    expect(unnarrowed.sort()).toEqual(['all', 'unsaved']);
   });
 
   it('omits assignedTo until the current user name has loaded', () => {
