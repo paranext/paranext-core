@@ -57,14 +57,23 @@ function cardLocator(frame: Frame, threadId: string) {
 const CARD_TOP_TOLERANCE_PX = 4;
 
 /**
+ * `id` of the comment list's sticky header (`COMMENT_LIST_STICKY_HEADER_ELEMENT_ID`,
+ * `extensions/src/legacy-comment-manager/src/comment-list.component.tsx`) — the notice plus the
+ * filter toolbar. Production measures this same element's height for its own scroll padding
+ * (`comment-list.web-view.tsx`'s `scrollToTarget`), so `cardTopWithinView` anchors on it too rather
+ * than on the filter toolbar alone.
+ */
+const COMMENT_LIST_STICKY_HEADER_ELEMENT_ID = 'comment-list-sticky-header';
+
+/**
  * How far a card's top sits below the visible top of the list, in the card's own (zoomed) pixels.
- * The visible top is the bottom edge of the sticky filter toolbar: the list's own container never
- * clips (the web-view document is what scrolls, and the zoom root travels with the content), so
- * neither the zoom root's box nor the bare viewport is the right anchor — the toolbar covers the
- * top of the viewport, and the zoom root's top moves with every scroll. Both rectangles are read in
- * one `evaluate` so they cannot be a tick apart. The result is signed: a negative value means the
- * card's top sits ABOVE the toolbar (scrolled past it), which `toBeInViewport` alone would not
- * catch, since the toolbar overlays the card inside the viewport rather than clipping it out.
+ * The visible top is the bottom edge of the sticky header: the list's own container never clips
+ * (the web-view document is what scrolls, and the zoom root travels with the content), so neither
+ * the zoom root's box nor the bare viewport is the right anchor — the header covers the top of the
+ * viewport, and the zoom root's top moves with every scroll. Both rectangles are read in one
+ * `evaluate` so they cannot be a tick apart. The result is signed: a negative value means the
+ * card's top sits ABOVE the header (scrolled past it), which `toBeInViewport` alone would not
+ * catch, since the header overlays the card inside the viewport rather than clipping it out.
  * Callers must check both directions — see `CARD_TOP_TOLERANCE_PX`.
  */
 async function cardTopWithinView(
@@ -73,12 +82,15 @@ async function cardTopWithinView(
 ): Promise<number> {
   const cardId = await card.getAttribute('id');
   if (!cardId) throw new Error('Comment card has no id');
-  return frame.evaluate((id) => {
-    const toolbar = document.querySelector('[data-testid="comment-scope-filter"]');
-    const element = document.querySelector(`[role="option"][id="${id}"]`);
-    if (!toolbar || !element) throw new Error(`Filter toolbar or card "${id}" not found`);
-    return element.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom;
-  }, cardId);
+  return frame.evaluate(
+    ({ id, headerId }) => {
+      const header = document.getElementById(headerId);
+      const element = document.querySelector(`[role="option"][id="${id}"]`);
+      if (!header || !element) throw new Error(`Sticky header or card "${id}" not found`);
+      return element.getBoundingClientRect().top - header.getBoundingClientRect().bottom;
+    },
+    { id: cardId, headerId: COMMENT_LIST_STICKY_HEADER_ELEMENT_ID },
+  );
 }
 
 /** A card's rendered height in its own (zoomed) pixels. */
@@ -133,6 +145,7 @@ async function closeDockTab(page: Page, webViewId: string): Promise<void> {
   const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
   const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
   await dockTab.locator('.dock-tab-close-btn').dispatchEvent('click');
+  await expect(tabTitle).not.toBeVisible({ timeout: 10_000 });
 }
 
 test.describe('comment list content zoom', () => {

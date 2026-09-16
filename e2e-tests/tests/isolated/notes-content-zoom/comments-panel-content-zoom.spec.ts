@@ -94,8 +94,8 @@ test.describe('Comments panel content zoom in Simple mode', () => {
   // in the test body instead, after waitForAppReady — beforeAll takes no fixture and so runs before
   // Playwright launches the worker-scoped Electron app that fixture would trigger.
   test.beforeAll(async () => {
-    projectA = await createCommentTestProject([]);
-    projectB = await createCommentTestProject([]);
+    projectA = await createCommentTestProject([], 'A');
+    projectB = await createCommentTestProject([], 'B');
   });
 
   test.afterAll(() => {
@@ -112,7 +112,11 @@ test.describe('Comments panel content zoom in Simple mode', () => {
     const panelId = await waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_PANEL_WEBVIEW_TYPE);
     await waitForOverlayGone(mainPage, 90_000);
 
-    await createCommentThreads(projectA, ['GEN 1:1'], ['Project A comment zoom marker']);
+    const [projectACardThreadId] = await createCommentThreads(
+      projectA,
+      ['GEN 1:1'],
+      ['Project A comment zoom marker'],
+    );
     await createCommentThreads(projectB, ['GEN 1:1'], ['Project B comment zoom marker']);
 
     await openCommentListPanel(projectA.projectId);
@@ -130,9 +134,21 @@ test.describe('Comments panel content zoom in Simple mode', () => {
     if (!scopeBoxBaseline) throw new Error('Scope filter trigger not found');
 
     await test.step('wheel over the panel scales it and leaves the scope-filter row untouched', async () => {
+      const card = panelFrame.locator(`[role="option"][id="${projectACardThreadId}"]`);
+      const cardBoxBefore = await card.boundingBox();
+      if (!cardBoxBefore) throw new Error('Comment card not found');
+
       const box = await areaBox(panelFrame, '');
       await ctrlWheel(mainPage, box, -120);
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
+
+      const cardBoxAfter = await card.boundingBox();
+      if (!cardBoxAfter) throw new Error('Comment card not found after zoom');
+      // A tight tolerance around the actual 1.1 factor: a wide band would also accept a ratio of
+      // 1.0, so a missing marker that left the whole-iframe fallback scaling nothing would pass
+      // unnoticed.
+      const ratio = cardBoxAfter.height / cardBoxBefore.height;
+      expect(ratio).toBeCloseTo(1.1, 1);
 
       const indicator = panelFrame.locator(INDICATOR_SELECTOR);
       await expect.poll(() => indicator.getAttribute('data-area'), { timeout: 2_000 }).toBe('main');
