@@ -2456,7 +2456,7 @@ async function main() {
               );
               return;
             }
-            await createWindow({ kind: 'preserved-entry', entry });
+            await createWindow({ kind: 'preserved-entry', entry }, { isUserRequested: true });
           },
           writeInterfaceModeSetting: async (mode) => {
             await settingsService.set('platform.interfaceMode', mode);
