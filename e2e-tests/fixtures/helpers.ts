@@ -13,7 +13,7 @@ import WebSocket from 'ws';
 import { suppressOnboardingTour } from './onboarding-tour.page';
 import { WINDOW_ID_SHAPE_SOURCE } from './window-id-shape';
 
-const DEFAULT_WEBSOCKET_PORT = 8876;
+export const DEFAULT_WEBSOCKET_PORT = 8876;
 
 // Re-exported so the matchers below and the specs that build their own read one shape from one
 // place. It is defined in its own import-free module so the drift guard can read it without pulling
