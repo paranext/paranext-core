@@ -15,6 +15,7 @@ const {
   capturedEditorScrRef,
   captureEditorScrRefChange,
   getEditorScrRefChange,
+  mockVisibility,
 } = vi.hoisted(() => {
   /** The live `onScrRefChange` Editorial was handed, so tests can drive the write-back channel. */
   let onScrRefChange: ((scrRef: unknown) => void) | undefined;
@@ -30,6 +31,11 @@ const {
       onScrRefChange = handler;
     },
     getEditorScrRefChange: () => onScrRefChange,
+    /**
+     * Whether the web view reports itself visible. Mutable so a test can mount hidden and flip;
+     * `true` by default, since these tests are about what the cell renders, not when it scrolls.
+     */
+    mockVisibility: { isVisible: true },
   };
 });
 
@@ -74,11 +80,17 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
 });
 // Mock platform-bible-react: stub useExtraValidMarkers (used by ResourceCell) and pass through
 // the UI components that ResourceCellView needs to render properly in jsdom.
+//
+// `useViewVisibility` is stubbed rather than left to the real hook, which builds an
+// IntersectionObserver that jsdom does not provide. A mutable flag is also a lever a test can flip,
+// where a stubbed observer would only be plumbing. Mirrors
+// `character-marker-bar-overlay.component.test.tsx`.
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...original,
     useExtraValidMarkers: () => [],
+    useViewVisibility: () => mockVisibility.isVisible,
   };
 });
 
