@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONTENT_ZOOM_COMMANDS } from '@shared/models/content-zoom.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -38,6 +38,11 @@ function getItem(id: string): Record<string, unknown> | undefined {
 }
 
 describe('macosMenubarObject View menu', () => {
+  // Without this, `sendCommand`'s call history accumulates across tests in this file, so a later
+  // `toHaveBeenCalledWith` assertion can pass on a call an EARLIER test made rather than the one
+  // this test's own click just produced — silently hiding a wrong-command wiring bug on a later item.
+  beforeEach(() => vi.clearAllMocks());
+
   it('labels the explicit zoom items', () => {
     const labels = submenu.map((item) => item.label);
     expect(labels).toContain('%mainMenu_view_zoomIn%');
