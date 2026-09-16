@@ -14,6 +14,7 @@ import {
   RetryableErrorView,
   useRetryablePromise,
   useTabIconSelection,
+  useViewVisibility,
   type TabIconUrls,
 } from 'platform-bible-react';
 import { CloudOff, Settings2 } from 'lucide-react';
@@ -167,6 +168,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  // Owned here for the same reason `scrRef` is: it is one fact about this web view, and the grid
+  // renders a cell per resource. Subscribing per cell would build an `IntersectionObserver` each,
+  // all watching the same document for the same answer.
+  const isViewVisible = useViewVisibility();
 
   // The project whose text collection the grid shows. Opened from the default layout the tab carries
   // no projectId, so this takes the first project the active editor reports and keeps it; only an
@@ -640,6 +646,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             resources={resources}
             scrRef={scrRef}
             setScrRef={setScrRef}
+            isViewVisible={isViewVisible}
             viewMode={viewMode}
             zoom={zoom}
             zoomMenuLabels={zoomMenuLabels}

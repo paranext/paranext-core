@@ -37,14 +37,9 @@ const SCROLL_MATCH_TOLERANCE_PX = 1;
  * @param isViewVisible Whether the view is visible, from `useViewVisibility`. Taken as a parameter
  *   so a view calls `useViewVisibility` once however many consumers of this hook it renders.
  * @param findTarget How to find the element representing a verse in this view's layout.
- * @param options `isEnabled` (default `true`) stops the hook scrolling — no target lookup, no
- *   geometry reads, no mutation observer — for a view whose layout is scrolled by an ancestor or
- *   that has nothing to scroll to, where a React hook still has to be called unconditionally. It
- *   does NOT stop the visibility subscription below, which every caller pays for because it is read
- *   before the flag; with a per-cell caller that is one `IntersectionObserver` per cell. Taking
- *   `isViewVisible` as a parameter instead would leave the subscription to the one consumer that
- *   owns the view, as `useBcvSyncScroll` and `useFocusSearchOnInvoke` do — proposed on the PR that
- *   introduced this hook.
+ * @param options `isEnabled` (default `true`) turns the hook off — no target lookup, no geometry
+ *   reads, no mutation observer — for a view whose layout is scrolled by an ancestor or that has
+ *   nothing to scroll to, where a React hook still has to be called unconditionally.
  */
 export function useReferenceScroll(
   portRef: RefObject<HTMLElement | null>,
