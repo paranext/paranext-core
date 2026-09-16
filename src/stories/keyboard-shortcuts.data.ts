@@ -562,7 +562,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // editor's overlays, which are portalled out of the pane but still bubble their React events
     // through the list.
     context: 'Footnotes pane, from the list or a note row',
-    keys: { macOS: '↑ / ↓', windows: 'Up / Down', linux: 'Up / Down' },
+    keys: {
+      macOS: '↑ / ↓',
+      windows: 'Up Arrow / Down Arrow',
+      linux: 'Up Arrow / Down Arrow',
+    },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
     ],
@@ -582,7 +586,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Select the focused note in the footnotes pane without opening it',
     category: 'Selection',
     context: 'Footnotes pane, on a note row',
-    keys: { macOS: 'Space', windows: 'Space', linux: 'Space' },
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
     ],
