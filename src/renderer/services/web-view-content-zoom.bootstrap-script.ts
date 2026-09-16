@@ -288,7 +288,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // into another area, and the click's protection stays live for the one that follows. A focus
     // change that lands outside every area works the same way: there is no area to protect, so it
     // is not suppressed, but nothing was spent either, and the gesture still protects the next
-    // change into a different area.
+    // change into a different area. A Tab ends the gesture outright: the focus move that follows it
+    // is one the user asked for, not the view's answer to the click, and a user who clicks a
+    // footnote row and immediately Tabs toward the text means the text. Only Tab, not any key - a
+    // zoom chord pressed inside the window is exactly what the protection is for.
     let pointerArea;
     let pointerTime = 0;
     const onPointerDown = (e) => {
@@ -318,8 +321,12 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       }
       setActive(areaId);
     };
+    const onGestureKeyDown = (e) => {
+      if (e.key === 'Tab') pointerArea = undefined;
+    };
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('focusin', onFocusIn, true);
+    window.addEventListener('keydown', onGestureKeyDown, true);
 
     const targetFor = (node) => {
       if (areas.length === 0) return undefined;
@@ -725,6 +732,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       document.removeEventListener('DOMContentLoaded', start);
       window.removeEventListener('pointerdown', onPointerDown, true);
       window.removeEventListener('focusin', onFocusIn, true);
+      window.removeEventListener('keydown', onGestureKeyDown, true);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keydown', onModifierKeyDown, true);
       window.removeEventListener('keyup', onModifierKeyUp, true);
