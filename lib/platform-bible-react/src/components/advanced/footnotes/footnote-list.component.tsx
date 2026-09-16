@@ -10,8 +10,8 @@ import { getCaretPositionFromClick } from './footnote-caret.utils';
 /**
  * Returns the nearest row index adjacent to `from` in `direction`, hopping over `editingIndex` -
  * that row isn't a selectable option while it's being edited, and it renders no `ref`/`tabIndex`
- * for the roving-focus effect to land on. Falls back to `from` if there's no other row to move to
- * (e.g. a single-row list whose only row is being edited).
+ * for keyboard focus to land on. Falls back to `from` if there's no other row to move to (e.g. a
+ * single-row list whose only row is being edited).
  */
 function getAdjacentFocusableIndex(
   from: number,
@@ -82,6 +82,19 @@ export function FootnoteList({
 
   const [focusedIndex, setFocusedIndex] = useState<number>(initialFocusedIndex);
 
+  /**
+   * Moves keyboard focus to a row, which is the arrow keys' whole job - so they move it directly
+   * rather than through `focusedIndex`. Every OTHER writer of `focusedIndex` is following focus
+   * that is already somewhere this list must not disturb: the mount-time seed from
+   * `selectedFootnote` (a gesture that happens in the EDITOR - see the reveal-on-select effect
+   * below), the rows' own `onFocus`, and the editing-row hop (focus belongs to the editor that just
+   * opened in that row's place). Focusing off the state would steal focus from all three.
+   */
+  const focusRow = (index: number) => {
+    setFocusedIndex(index);
+    if (index >= 0 && index < rowRefs.current.length) rowRefs.current[index]?.focus();
+  };
+
   const handleFootnoteKeyDown = (
     e: React.KeyboardEvent<HTMLLIElement>,
     footnote: MarkerObject,
@@ -114,13 +127,15 @@ export function FootnoteList({
   const handleListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!footnotes.length) return;
 
-    // While a row is being edited, its content may host a real editor (e.g. FootnoteEditor) that
-    // needs ArrowUp/ArrowDown for its own cursor movement. Let those keystrokes through instead of
-    // hijacking them for list navigation.
+    // Arrow keys drive list navigation only when they ORIGINATE on the list itself or on one of
+    // its read-only rows. Anything else in the subtree owns its own arrow keys: the row being
+    // edited hosts a real editor (e.g. FootnoteEditor) that needs them for cursor movement, and
+    // that editor's own overlays - a marker palette in a Radix popover, say - are portalled out to
+    // `document.body` yet still bubble their React events through here, so an allow-list of what
+    // the list navigates from is the only test those overlays cannot fall through.
     if (
-      editingRowIndex !== undefined &&
-      e.target instanceof HTMLElement &&
-      e.target.closest('li[data-state="editing"]')
+      e.target !== e.currentTarget &&
+      !(e.target instanceof HTMLElement && e.target.closest('li[role="option"]'))
     ) {
       return;
     }
@@ -128,12 +143,12 @@ export function FootnoteList({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setFocusedIndex((prev) => getAdjacentFocusableIndex(prev, 1, lastIndex, editingRowIndex));
+        focusRow(getAdjacentFocusableIndex(focusedIndex, 1, lastIndex, editingRowIndex));
         break;
 
       case 'ArrowUp':
         e.preventDefault();
-        setFocusedIndex((prev) => getAdjacentFocusableIndex(prev, -1, lastIndex, editingRowIndex));
+        focusRow(getAdjacentFocusableIndex(focusedIndex, -1, lastIndex, editingRowIndex));
         break;
 
       default:
@@ -143,8 +158,11 @@ export function FootnoteList({
 
   useEffect(() => {
     // The focused row just became (or already was) the editing row - it's no longer a selectable
-    // option, so hop the roving tabIndex/focus to the nearest non-editing row instead of stranding
-    // it on a row that renders no `ref`/`tabIndex`.
+    // option, so hop the arrow keys' starting point to the nearest non-editing row instead of
+    // stranding it on a row that renders no `ref`. It deliberately moves no DOM focus (see
+    // `focusRow`): the gesture that opened the row - Enter on it, or a click in it - leaves focus
+    // in the editor that mounted in its place, and the next arrow press has to resume from the
+    // note the user was on, not from wherever the list was last told to look.
     if (editingRowIndex === undefined || focusedIndex !== editingRowIndex) return;
     setFocusedIndex((prev) => {
       const forward = getAdjacentFocusableIndex(prev, 1, lastIndex, editingRowIndex);
@@ -153,12 +171,6 @@ export function FootnoteList({
       return backward !== prev ? backward : -1;
     });
   }, [editingRowIndex, focusedIndex, lastIndex]);
-
-  useEffect(() => {
-    if (focusedIndex >= 0 && focusedIndex < rowRefs.current.length) {
-      rowRefs.current[focusedIndex]?.focus();
-    }
-  }, [focusedIndex]);
 
   const selectedIndex = selectedFootnote
     ? footnotes.findIndex((footnote) => footnote === selectedFootnote)
@@ -186,10 +198,14 @@ export function FootnoteList({
    * wide/skinny layouts.
    */
   return (
+    // Every row is its own tab stop (see the row `tabIndex` below), so the list is not one as
+    // well - a stop here would put an extra, contentless press between whatever precedes the list
+    // and its first note. It stays programmatically focusable (`-1`) because arrow-key navigation
+    // starts by focusing it.
     <div
       role="listbox"
       aria-label="Footnotes"
-      tabIndex={focusedIndex < 0 ? 0 : -1}
+      tabIndex={-1}
       className={cn('tw:h-full tw:overflow-y-auto', className)}
       onKeyDown={handleListKeyDown}
     >
@@ -249,10 +265,19 @@ export function FootnoteList({
                 aria-selected={isSelected}
                 data-marker={footnote.marker}
                 data-state={isSelected ? 'selected' : undefined}
-                tabIndex={idx === focusedIndex ? 0 : -1}
+                /* Tab walks the notes one by one rather than treating the list as a single stop.
+                   That is a deliberate departure from the ARIA listbox pattern's roving tabindex,
+                   which reaches a listbox once and navigates inside it with the arrow keys (still
+                   supported here): reading down the notes is the pane's primary keyboard gesture,
+                   and the row being edited hands its turn to the editor rendered in its place, so
+                   Tab has to arrive at each row for that handoff to happen where the note is. */
+                tabIndex={0}
                 className={cn(
                   'tw:gap-x-3 tw:gap-y-1 tw:p-2 tw:data-[state=selected]:bg-muted',
-                  onFootnoteSelected && 'tw:hover:bg-muted/50',
+                  // Both handlers make the row a click target, so both earn the hover affordance -
+                  // a consumer that only opens rows for editing would otherwise render rows that
+                  // respond to a click but look inert.
+                  (onFootnoteSelected || onFootnoteEditRequested) && 'tw:hover:bg-muted/50',
                   'tw:w-full tw:rounded-sm tw:border-0 tw:bg-transparent tw:shadow-none',
                   'tw:focus:outline-hidden tw:focus-visible:outline-hidden',
                   /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
@@ -267,6 +292,11 @@ export function FootnoteList({
                   classNameForItems,
                 )}
                 onClick={(event) => handleFootnoteClick(footnote, idx, event)}
+                /* Every row is its own tab stop, so focus reaches a row by Tab or by click as
+                   often as by the arrow keys. Following it keeps the next arrow press relative to
+                   the note the user is actually on - without this, arrowing after a Tab restarts
+                   from whichever row the list last moved to itself. */
+                onFocus={() => setFocusedIndex(idx)}
                 onKeyDown={(e) => handleFootnoteKeyDown(e, footnote, idx)}
               >
                 <FootnoteItem
