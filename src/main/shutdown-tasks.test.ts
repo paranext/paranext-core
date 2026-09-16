@@ -501,13 +501,14 @@ function asWindowWebViews(definitions: object[]) {
   return definitions as Awaited<ReturnType<typeof getOpenWebViewDefinitionsForWindow>>;
 }
 
-describe('performWindowCloseTasks', () => {
-  const writableEditor = (projectId: string) => ({
-    webViewType: 'platformScriptureEditor.react',
-    state: { isReadOnly: false },
-    projectId,
-  });
+/** An open writable Scripture Editor on a project — what the sync selection is looking for */
+const writableEditor = (projectId: string) => ({
+  webViewType: 'platformScriptureEditor.react',
+  state: { isReadOnly: false },
+  projectId,
+});
 
+describe('performWindowCloseTasks', () => {
   it('syncs the projects the closing window was editing, asking that window and no other', async () => {
     // Nothing else can answer for this window: once it is gone the shutdown fan-out only reaches the
     // windows that are still there, so whatever it had open would never be sent
@@ -674,12 +675,6 @@ describe('performWindowCloseTasks', () => {
 });
 
 describe('startWindowCloseTasksWithoutWaiting', () => {
-  const writableEditor = (projectId: string) => ({
-    webViewType: 'platformScriptureEditor.react',
-    state: { isReadOnly: false },
-    projectId,
-  });
-
   /** A sendReceiveProjects that hangs until the returned release is called */
   function holdTheSync(): () => void {
     let release = () => {};
@@ -863,5 +858,198 @@ describe('startWindowCloseTasksWithoutWaiting', () => {
       await shutdownTasks;
     }
     expect(shutdownSettled).toBe(true);
+  });
+});
+
+describe('window-close sync de-duplication across windows', () => {
+  /** A sendReceiveProjects that hangs per call, keyed by the project ids it was asked for */
+  function holdSyncsByProjectIds(): Map<string, () => void> {
+    const releasers = new Map<string, () => void>();
+    mockRequestNoRetry.mockImplementation(async (requestType, ...params) => {
+      if (`${requestType}`.includes('sendReceiveProjects')) {
+        // requestNoRetry's params are generic (unknown[] here); sendReceiveProjects always takes a
+        // single project-id array.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const [projectIds] = params as [string[]];
+        await new Promise<void>((resolve) => {
+          releasers.set(projectIds.join(','), resolve);
+        });
+      }
+      return undefined;
+    });
+    return releasers;
+  }
+
+  /** Every project id any sendReceiveProjects call was asked for, in call order */
+  function allRequestedProjectIds(): string[] {
+    return (
+      mockRequestNoRetry.mock.calls
+        .filter(([requestType]) => `${requestType}`.includes('sendReceiveProjects'))
+        // As above: the call's second argument is always the project-id array.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        .flatMap(([, projectIds]) => projectIds as string[])
+    );
+  }
+
+  /** Let every released sync run to the end of its bounded wait, so no claim outlives the test */
+  async function settleReleasedSyncs(): Promise<void> {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  it('sends a project two windows closing together share only once, and each window’s own projects as well', async () => {
+    // Every secondary window closing for a mode switch starts its own sync in the same tick, and two
+    // of them can have had an editor on the same project — which must not be handed to
+    // sendReceiveProjects twice at once.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews([
+        writableEditor('shared-project'),
+        writableEditor(`window-${windowId}-project`),
+      ]),
+    );
+    const releasers = holdSyncsByProjectIds();
+
+    try {
+      // Which window claims the shared project is unspecified in production — the two closes
+      // interleave at their awaits — so the order is pinned here rather than assumed.
+      startWindowCloseTasksWithoutWaiting('2');
+      await vi.waitFor(() => expect(releasers.has('shared-project,window-2-project')).toBe(true));
+      startWindowCloseTasksWithoutWaiting('3');
+      await vi.waitFor(() => expect(releasers.size).toBe(2));
+
+      expect(allRequestedProjectIds()).toEqual([
+        'shared-project',
+        'window-2-project',
+        'window-3-project',
+      ]);
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringMatching(/Not syncing .*shared-project.* for closing window 3/),
+      );
+    } finally {
+      releasers.forEach((release) => release());
+      await settleReleasedSyncs();
+    }
+  });
+
+  it('syncs the project again for a later close, once the first window’s sync has settled', async () => {
+    // Leaving a project out is only ever about a sync that is happening right now; once it is over,
+    // the next closing window is the only thing that can cover what it had open.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([writableEditor('shared-project')]),
+    );
+    const releasers = holdSyncsByProjectIds();
+
+    try {
+      startWindowCloseTasksWithoutWaiting('2');
+      await vi.waitFor(() => expect(releasers.has('shared-project')).toBe(true));
+    } finally {
+      releasers.forEach((release) => release());
+      await settleReleasedSyncs();
+    }
+
+    mockRequestNoRetry.mockResolvedValue(undefined);
+    await performWindowCloseTasks('3');
+
+    expect(allRequestedProjectIds()).toEqual(['shared-project', 'shared-project']);
+  });
+
+  it('syncs the project again after the first window’s request failed', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([writableEditor('shared-project')]),
+    );
+    mockRequestNoRetry.mockRejectedValueOnce(new Error('command not registered'));
+
+    await performWindowCloseTasks('2');
+    await performWindowCloseTasks('3');
+
+    expect(allRequestedProjectIds()).toEqual(['shared-project', 'shared-project']);
+  });
+
+  it('syncs the project again after an unexpected error took the first window past its dispatch', async () => {
+    // An error anywhere between choosing the projects and the request settling must still hand them
+    // back, or the next closing window would be left unable to sync them for the life of the app.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([writableEditor('shared-project')]),
+    );
+    mockLoggerInfo.mockImplementationOnce(() => {
+      throw new Error('unexpected logging failure');
+    });
+
+    await performWindowCloseTasks('2');
+    await performWindowCloseTasks('3');
+
+    expect(allRequestedProjectIds()).toEqual(['shared-project']);
+  });
+
+  it('asks for no project twice when three windows close together for a mode switch', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews([
+        writableEditor('shared-project'),
+        writableEditor(`window-${windowId}-project`),
+      ]),
+    );
+    const releasers = holdSyncsByProjectIds();
+
+    try {
+      startWindowCloseTasksWithoutWaiting('2');
+      await vi.waitFor(() => expect(releasers.size).toBe(1));
+      startWindowCloseTasksWithoutWaiting('3');
+      await vi.waitFor(() => expect(releasers.size).toBe(2));
+      startWindowCloseTasksWithoutWaiting('4');
+      await vi.waitFor(() => expect(releasers.size).toBe(3));
+
+      const requested = allRequestedProjectIds();
+      expect(requested.filter((projectId) => projectId === 'shared-project')).toHaveLength(1);
+      expect(new Set(requested).size).toBe(requested.length);
+      expect(requested).toEqual(
+        expect.arrayContaining(['window-2-project', 'window-3-project', 'window-4-project']),
+      );
+      // Requests may still track closing windows; it is the projects inside them that must not repeat
+      expect(mockRequestNoRetry).toHaveBeenCalledTimes(3);
+    } finally {
+      releasers.forEach((release) => release());
+      await settleReleasedSyncs();
+    }
+  });
+
+  it('makes no request at all for a window whose every project a sibling is already sending', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews(
+        windowId === '2'
+          ? [writableEditor('shared-project'), writableEditor('window-2-project')]
+          : [writableEditor('shared-project')],
+      ),
+    );
+    const releasers = holdSyncsByProjectIds();
+
+    try {
+      startWindowCloseTasksWithoutWaiting('2');
+      await vi.waitFor(() => expect(releasers.size).toBe(1));
+      startWindowCloseTasksWithoutWaiting('3');
+      await vi.waitFor(() =>
+        expect(mockLoggerInfo).toHaveBeenCalledWith(
+          expect.stringMatching(/Not syncing .*shared-project.* for closing window 3/),
+        ),
+      );
+
+      expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+      // The control for the negative below: this is the line a window that does sync produces
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringContaining('Syncing the projects of closing window 2'),
+      );
+      expect(mockLoggerInfo).not.toHaveBeenCalledWith(
+        expect.stringContaining('Syncing the projects of closing window 3'),
+      );
+    } finally {
+      releasers.forEach((release) => release());
+      await settleReleasedSyncs();
+    }
   });
 });

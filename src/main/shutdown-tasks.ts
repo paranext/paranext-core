@@ -131,6 +131,59 @@ async function performShutdownTasksInternal(): Promise<void> {
 const inFlightWindowCloseSyncs = new Set<Promise<void>>();
 
 /**
+ * Projects a window-close sync is currently sending, across every closing window.
+ *
+ * Windows closing together — every secondary window at a switch to simple mode — each run their own
+ * sync, and two of them can have had an editor on the same project. `sendReceiveProjects` must not
+ * be asked to sync one project twice at once, so a project belongs to whichever closing window's
+ * sync claims it first and the others leave it out of their own request.
+ *
+ * Keyed by project id alone rather than by window: a project is either being sent or it is not, and
+ * which window is sending it changes nothing for the window that has to leave it out.
+ */
+const projectIdsSyncingForWindowClose = new Set<string>();
+
+/**
+ * Claim the projects a closing window's sync will send, leaving out any a sibling closing window is
+ * already sending.
+ *
+ * The check and the claim are one synchronous step, and the caller dispatches without awaiting in
+ * between, so two windows closing together cannot both come away holding the same project.
+ *
+ * @param projectIds Projects the closing window had open, already de-duplicated within the window
+ * @param closingWindowId Window that is closing
+ * @returns The projects this window's sync is responsible for; may be empty when a sibling covers
+ *   all of them
+ */
+function claimProjectIdsForWindowCloseSync(
+  projectIds: string[],
+  closingWindowId: string,
+): string[] {
+  const claimedProjectIds: string[] = [];
+  const projectIdsCoveredBySibling: string[] = [];
+  projectIds.forEach((projectId) => {
+    if (projectIdsSyncingForWindowClose.has(projectId)) projectIdsCoveredBySibling.push(projectId);
+    else {
+      projectIdsSyncingForWindowClose.add(projectId);
+      claimedProjectIds.push(projectId);
+    }
+  });
+  // Said at the same level as the "Syncing the projects of…" line it explains: without it, a log
+  // shows a window syncing fewer projects than it had open with nothing to distinguish that from
+  // work being dropped.
+  if (projectIdsCoveredBySibling.length > 0)
+    logger.info(
+      `Not syncing ${projectIdsCoveredBySibling.join(', ')} for closing window ${closingWindowId}: another closing window's sync is already sending them`,
+    );
+  return claimedProjectIds;
+}
+
+/** Give up a closing window's claims, so a later close can sync those projects again. */
+function releaseProjectIdsFromWindowCloseSync(projectIds: string[]): void {
+  projectIds.forEach((projectId) => projectIdsSyncingForWindowClose.delete(projectId));
+}
+
+/**
  * Send/Receive what a single window had open, because that window is going away while the app stays
  * up.
  *
@@ -267,26 +320,45 @@ async function performWindowCloseTasksInternal(
   }
   if (projectIds.length === 0) return;
 
-  logger.info(
-    `Syncing the projects of closing window ${closingWindowId}: ${projectIds.join(', ')}`,
-  );
-  const settlement = await runBoundedShutdownSync(`window ${closingWindowId} close sync`, () =>
-    networkService.requestNoRetry(
-      serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
-      projectIds,
-    ),
-  );
-  // The already-warned settlements (`failed`, `timedOut`) add nothing here
-  if (settlement.status === 'completed')
-    logger.info(`Sync for closing window ${closingWindowId} complete`);
+  // Claimed immediately before the dispatch below, with nothing awaited in between:
+  // runBoundedShutdownSync invokes its callback synchronously, so the claim and the request go out
+  // in one tick and no sibling close can interleave between them.
+  const projectIdsToSync = claimProjectIdsForWindowCloseSync(projectIds, closingWindowId);
+  // Every project this window had open is already going out with a sibling's sync, so there is
+  // nothing left for this one to send.
+  if (projectIdsToSync.length === 0) return;
+
+  try {
+    logger.info(
+      `Syncing the projects of closing window ${closingWindowId}: ${projectIdsToSync.join(', ')}`,
+    );
+    const settlement = await runBoundedShutdownSync(`window ${closingWindowId} close sync`, () =>
+      networkService.requestNoRetry(
+        serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
+        projectIdsToSync,
+      ),
+    );
+    // The already-warned settlements (`failed`, `timedOut`) add nothing here
+    if (settlement.status === 'completed')
+      logger.info(`Sync for closing window ${closingWindowId} complete`);
+  } finally {
+    // Released here rather than when the request itself settles: runBoundedShutdownSync returns
+    // after AUTO_SYNC_MAX_DURATION_MS whether or not the sync did, and a claim that outlived its
+    // bounded wait would keep every later close from ever syncing that project again. The `try`
+    // starts at the log line on purpose — that is the one statement here that can throw, and a
+    // claim stranded by it would last for the life of the process.
+    releaseProjectIdsFromWindowCloseSync(projectIdsToSync);
+  }
 }
 
 /**
  * The projects of the writable Scripture Editors among a set of open web views, without duplicates.
  *
  * Read-only Resource Viewers are left out because no local change is possible in them. Duplicates
- * are dropped because two windows may have editors on the same project and `sendReceiveProjects`
- * should not be asked to sync it twice.
+ * are dropped because one window can have two editors on the same project, and the shutdown
+ * selection merges every window's editors into one list. Two windows closing at once are a
+ * different problem, and a different mechanism handles it — see
+ * {@link projectIdsSyncingForWindowClose}.
  */
 function getWritableEditorProjectIds(definitions: SavedWebViewDefinition[]): string[] {
   const writableEditorProjectIds = definitions
