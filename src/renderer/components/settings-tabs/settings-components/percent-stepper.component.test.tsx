@@ -136,6 +136,20 @@ describe('PercentStepper', () => {
     expect(increase).toHaveFocus();
   });
 
+  it('keeps the pointer cursor off a bound button', () => {
+    render(<PercentStepper {...baseProps} value={3} onChange={vi.fn()} />);
+    expect(screen.getByRole('button', { name: LABELS.increase }).className).toContain(
+      'aria-disabled:cursor-default',
+    );
+  });
+
+  it('shows the tooltip for a bound button on keyboard focus', async () => {
+    render(<PercentStepper {...baseProps} value={3} onChange={vi.fn()} />);
+    const increase = screen.getByRole('button', { name: LABELS.increase });
+    increase.focus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.increase);
+  });
+
   it('exposes keyboard-reachable buttons with the given labels', () => {
     render(<PercentStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
     [LABELS.increase, LABELS.decrease, LABELS.reset].forEach((name) => {

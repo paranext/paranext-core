@@ -1,14 +1,13 @@
 /**
  * Keyboard-chord cases for content zoom (Ctrl+`=`/`+`, Ctrl+`-`, Ctrl+`0`) over a Scripture editor
- * pane: one on the main text area, one on a footnote area to prove area targeting. `main.ts` no
- * longer claims these chords app-wide — its `before-input-event` handler has no zoom branches, and
- * app-wide zoom now runs through `adjustZoomFactor` behind `platform.zoomIn`/`platform.zoomOut` —
- * so the chord reaches the web view. CDP's `Input.dispatchKeyEvent` (`mainPage.keyboard.press`) is
- * OS-level input that lands on whatever holds focus, including inside an iframe, so it drives the
- * in-iframe `keydown` listener in `web-view-content-zoom.bootstrap-script.ts` that is now the
- * handler for these chords — see `marker-palette-trigger-focus.spec.ts` for the same in-iframe CDP
- * precedent. That handler picks the area from the FOCUSED element (`targetFor`), so the footnotes
- * case puts keyboard focus in the footnotes pane rather than clicking it.
+ * pane: one on the main text area, one on a footnote area to prove area targeting. These chords are
+ * handled by the in-iframe `keydown` listener in `web-view-content-zoom.bootstrap-script.ts`;
+ * `main.ts`'s `before-input-event` handler does not claim them. CDP's `Input.dispatchKeyEvent`
+ * (`mainPage.keyboard.press`) is OS-level input that lands on whatever holds focus, including
+ * inside an iframe, so it reaches that listener — see `marker-palette-trigger-focus.spec.ts` for
+ * the same in-iframe CDP precedent. The handler picks the area from the FOCUSED element
+ * (`targetFor`), so the footnotes case puts keyboard focus in the footnotes pane rather than
+ * clicking it.
  */
 import { type Frame } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';

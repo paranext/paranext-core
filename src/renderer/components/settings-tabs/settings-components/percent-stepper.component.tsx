@@ -21,6 +21,18 @@ import { formatZoomPercent } from '@shared/utils/content-zoom.util';
  */
 const STEP_BASELINE_WINDOW_MS = 1500;
 
+/**
+ * Classes shared by all three stepper buttons so a bound press reads as inert, not merely faded.
+ * The shared Button's `outline`/`ghost` variants gate their hover treatment on native `:disabled`
+ * only, so without this a bound button — real and focusable, with `aria-disabled` rather than
+ * `disabled` — would still highlight and show a pointer cursor on hover as if the press would do
+ * something. `pointer-events-none` is deliberately not part of this: killing pointer events would
+ * also stop the Radix `TooltipTrigger` from ever seeing the hover, and a reachable tooltip
+ * explaining the bound is the reason this component uses `aria-disabled` in the first place.
+ */
+const BOUND_BUTTON_CLASSNAME =
+  'tw:aria-disabled:opacity-50 tw:aria-disabled:cursor-default tw:aria-disabled:hover:bg-background tw:aria-disabled:hover:text-inherit';
+
 /** Props for {@link PercentStepper}. */
 export type PercentStepperProps = {
   /** Current factor, e.g. `1.2` for 120 %. */
@@ -130,7 +142,7 @@ export function PercentStepper({
               size="icon"
               aria-label={labels.decrease}
               aria-disabled={decreaseDisabled || undefined}
-              className="tw:aria-disabled:opacity-50"
+              className={BOUND_BUTTON_CLASSNAME}
               onClick={() => {
                 if (decreaseDisabled) return;
                 emit((baseline) => baseline - step);
@@ -157,7 +169,7 @@ export function PercentStepper({
               size="icon"
               aria-label={labels.increase}
               aria-disabled={increaseDisabled || undefined}
-              className="tw:aria-disabled:opacity-50"
+              className={BOUND_BUTTON_CLASSNAME}
               onClick={() => {
                 if (increaseDisabled) return;
                 emit((baseline) => baseline + step);
@@ -176,7 +188,7 @@ export function PercentStepper({
               size="icon"
               aria-label={labels.reset}
               aria-disabled={resetDisabled || undefined}
-              className="tw:aria-disabled:opacity-50"
+              className={BOUND_BUTTON_CLASSNAME}
               onClick={() => {
                 if (resetDisabled) return;
                 emit(() => defaultValue);
