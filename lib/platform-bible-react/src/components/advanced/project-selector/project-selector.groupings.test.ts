@@ -15,13 +15,20 @@ import { buildProjectSelectorLocalizedStrings } from './project-selector.compone
 import type { ProjectSelectorGrouping, ProjectSelectorProject } from './project-selector.rows';
 
 /**
- * A lookup whose value for every key IS that key. Feeding it through a string builder makes the
- * builder's key-to-field mapping directly assertable: the field's value names the key it was built
- * from, so a mistyped key surfaces as a wrong (or undefined) value rather than silently falling
- * back to English.
+ * The resolved value this fixture gives a key. It NAMES the key without being equal to it, which
+ * keeps a builder's key-to-field mapping directly assertable: the field's value names the key it
+ * was built from, so a mistyped key surfaces as a wrong (or undefined) value rather than silently
+ * falling back to English.
+ *
+ * It must not BE the key. `readProjectSelectorString` treats a value identical to its key as
+ * unresolved, because that is exactly what `useLocalizedStrings` hands back before strings load and
+ * on a platform error — so a key-valued fixture would assert the fallback path, not the mapping.
  */
-const IDENTITY_STRINGS: ProjectSelectorStringLookup = Object.freeze(
-  Object.fromEntries(PROJECT_SELECTOR_STRING_KEYS.map((key) => [key, key])),
+const localizedValueFor = (key: string) => `localized ${key}`;
+
+/** A lookup that resolves every known key to {@link localizedValueFor}'s value for it. */
+const NAMED_STRINGS: ProjectSelectorStringLookup = Object.freeze(
+  Object.fromEntries(PROJECT_SELECTOR_STRING_KEYS.map((key) => [key, localizedValueFor(key)])),
 );
 
 function project(id: string, customData?: Record<string, unknown>): ProjectSelectorProject {
@@ -63,50 +70,97 @@ describe('readProjectSelectorString', () => {
       readProjectSelectorString({ '%projectSelector_clearAll%': 42 }, '%projectSelector_clearAll%'),
     ).toBeUndefined();
   });
+
+  // `useLocalizedStrings` seeds `defaultState[key] = key` and returns that same state on a platform
+  // error, so an unresolved entry arrives as the key itself — a string, which a bare `typeof` check
+  // accepts. Without this guard the picker renders "%projectSelector_searchPlaceholder%" as its
+  // placeholder instead of falling back to English.
+  it('returns undefined when the value is still the key, so the English fallback applies', () => {
+    expect(
+      readProjectSelectorString(
+        { '%projectSelector_clearAll%': '%projectSelector_clearAll%' },
+        '%projectSelector_clearAll%',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('still returns a resolved value that merely contains the key text', () => {
+    expect(
+      readProjectSelectorString(
+        { '%projectSelector_clearAll%': 'Clear all (%projectSelector_clearAll%)' },
+        '%projectSelector_clearAll%',
+      ),
+    ).toBe('Clear all (%projectSelector_clearAll%)');
+  });
+
+  it('does not treat a DIFFERENT key as unresolved', () => {
+    expect(
+      readProjectSelectorString(
+        { '%projectSelector_clearAll%': '%projectSelector_openButtonLabel%' },
+        '%projectSelector_clearAll%',
+      ),
+    ).toBe('%projectSelector_openButtonLabel%');
+  });
 });
 
 describe('string builders — key-to-field mapping', () => {
   // These assertions are the reason this suite exists. A mistyped localization key in a builder
   // degrades silently to English at runtime; nothing else in the codebase would fail.
   it('maps every built-in grouping field to its own localization key', () => {
-    expect(buildBuiltInGroupingStrings(IDENTITY_STRINGS)).toEqual({
-      openTabsLabel: '%projectSelector_grouping_openTabs_label%',
-      lastUsedLabel: '%projectSelector_grouping_lastUsed_label%',
-      lastUsedRecentSectionHeading: '%projectSelector_grouping_lastUsed_recentSectionHeading%',
-      lastUsedOtherSectionHeading: '%projectSelector_grouping_lastUsed_otherSectionHeading%',
-      languageLabel: '%projectSelector_grouping_language_label%',
-      languageUnknownSectionHeading: '%projectSelector_grouping_language_unknownSectionHeading%',
-      typeLabel: '%projectSelector_grouping_type_label%',
-      typeUnknownSectionHeading: '%projectSelector_grouping_type_unknownSectionHeading%',
+    expect(buildBuiltInGroupingStrings(NAMED_STRINGS)).toEqual({
+      openTabsLabel: localizedValueFor('%projectSelector_grouping_openTabs_label%'),
+      lastUsedLabel: localizedValueFor('%projectSelector_grouping_lastUsed_label%'),
+      lastUsedRecentSectionHeading: localizedValueFor(
+        '%projectSelector_grouping_lastUsed_recentSectionHeading%',
+      ),
+      lastUsedOtherSectionHeading: localizedValueFor(
+        '%projectSelector_grouping_lastUsed_otherSectionHeading%',
+      ),
+      languageLabel: localizedValueFor('%projectSelector_grouping_language_label%'),
+      languageUnknownSectionHeading: localizedValueFor(
+        '%projectSelector_grouping_language_unknownSectionHeading%',
+      ),
+      typeLabel: localizedValueFor('%projectSelector_grouping_type_label%'),
+      typeUnknownSectionHeading: localizedValueFor(
+        '%projectSelector_grouping_type_unknownSectionHeading%',
+      ),
     });
   });
 
   it('maps every selection grouping field to its own localization key', () => {
-    expect(buildSelectionGroupingStrings(IDENTITY_STRINGS)).toEqual({
-      label: '%projectSelector_grouping_selection_label%',
-      selectedSectionHeading: '%projectSelector_grouping_selection_selectedSectionHeading%',
-      unselectedSectionHeading: '%projectSelector_grouping_selection_unselectedSectionHeading%',
+    expect(buildSelectionGroupingStrings(NAMED_STRINGS)).toEqual({
+      label: localizedValueFor('%projectSelector_grouping_selection_label%'),
+      selectedSectionHeading: localizedValueFor(
+        '%projectSelector_grouping_selection_selectedSectionHeading%',
+      ),
+      unselectedSectionHeading: localizedValueFor(
+        '%projectSelector_grouping_selection_unselectedSectionHeading%',
+      ),
     });
   });
 
   it('maps every picker-chrome field to its own localization key', () => {
-    expect(buildProjectSelectorLocalizedStrings(IDENTITY_STRINGS)).toEqual({
-      searchPlaceholder: '%projectSelector_searchPlaceholder%',
-      commandEmptyMessage: '%projectSelector_commandEmptyMessage%',
-      groupByAriaLabel: '%projectSelector_groupByAriaLabel%',
-      groupSectionLabel: '%projectSelector_groupSectionLabel%',
-      groupByNone: '%projectSelector_groupByNone%',
-      openTabsSectionHeading: '%projectSelector_openTabsSectionHeading%',
-      otherProjectsSectionHeading: '%projectSelector_otherProjectsSectionHeading%',
-      autoOpenTabsGroupingLabel: '%projectSelector_grouping_openTabs_label%',
-      autoSelectionGroupingLabel: '%projectSelector_grouping_selection_label%',
-      autoSelectionSelectedSectionHeading:
+    expect(buildProjectSelectorLocalizedStrings(NAMED_STRINGS)).toEqual({
+      searchPlaceholder: localizedValueFor('%projectSelector_searchPlaceholder%'),
+      commandEmptyMessage: localizedValueFor('%projectSelector_commandEmptyMessage%'),
+      groupByAriaLabel: localizedValueFor('%projectSelector_groupByAriaLabel%'),
+      groupSectionLabel: localizedValueFor('%projectSelector_groupSectionLabel%'),
+      groupByNone: localizedValueFor('%projectSelector_groupByNone%'),
+      openTabsSectionHeading: localizedValueFor('%projectSelector_openTabsSectionHeading%'),
+      otherProjectsSectionHeading: localizedValueFor(
+        '%projectSelector_otherProjectsSectionHeading%',
+      ),
+      autoOpenTabsGroupingLabel: localizedValueFor('%projectSelector_grouping_openTabs_label%'),
+      autoSelectionGroupingLabel: localizedValueFor('%projectSelector_grouping_selection_label%'),
+      autoSelectionSelectedSectionHeading: localizedValueFor(
         '%projectSelector_grouping_selection_selectedSectionHeading%',
-      autoSelectionUnselectedSectionHeading:
+      ),
+      autoSelectionUnselectedSectionHeading: localizedValueFor(
         '%projectSelector_grouping_selection_unselectedSectionHeading%',
-      boundButClosedTooltip: '%projectSelector_boundButClosedTooltip%',
-      openButtonLabel: '%projectSelector_openButtonLabel%',
-      clearAll: '%projectSelector_clearAll%',
+      ),
+      boundButClosedTooltip: localizedValueFor('%projectSelector_boundButClosedTooltip%'),
+      openButtonLabel: localizedValueFor('%projectSelector_openButtonLabel%'),
+      clearAll: localizedValueFor('%projectSelector_clearAll%'),
     });
   });
 
@@ -133,18 +187,18 @@ describe('makeBuiltInGroupings', () => {
   });
 
   it('applies supplied labels and unknown-section headings', () => {
-    const groupings = makeBuiltInGroupings(buildBuiltInGroupingStrings(IDENTITY_STRINGS));
+    const groupings = makeBuiltInGroupings(buildBuiltInGroupingStrings(NAMED_STRINGS));
     expect(groupings.map((g) => g.label)).toEqual([
-      '%projectSelector_grouping_openTabs_label%',
-      '%projectSelector_grouping_lastUsed_label%',
-      '%projectSelector_grouping_language_label%',
-      '%projectSelector_grouping_type_label%',
+      localizedValueFor('%projectSelector_grouping_openTabs_label%'),
+      localizedValueFor('%projectSelector_grouping_lastUsed_label%'),
+      localizedValueFor('%projectSelector_grouping_language_label%'),
+      localizedValueFor('%projectSelector_grouping_type_label%'),
     ]);
     expect(groupings.find((g) => g.id === 'language')?.unknownSectionHeading).toBe(
-      '%projectSelector_grouping_language_unknownSectionHeading%',
+      localizedValueFor('%projectSelector_grouping_language_unknownSectionHeading%'),
     );
     expect(groupings.find((g) => g.id === 'type')?.unknownSectionHeading).toBe(
-      '%projectSelector_grouping_type_unknownSectionHeading%',
+      localizedValueFor('%projectSelector_grouping_type_unknownSectionHeading%'),
     );
   });
 
@@ -181,14 +235,14 @@ describe('lastUsed grouping', () => {
   });
 
   it('labels the two buckets from the supplied strings', () => {
-    const grouping = groupingById('lastUsed', buildBuiltInGroupingStrings(IDENTITY_STRINGS));
+    const grouping = groupingById('lastUsed', buildBuiltInGroupingStrings(NAMED_STRINGS));
     const recent = keyFor(grouping, project('a', makeProjectSelectorCustomData({ lastUsedAt: 1 })));
     const other = keyFor(grouping, project('b'));
     expect(grouping.getSectionHeading?.(recent, [])).toBe(
-      '%projectSelector_grouping_lastUsed_recentSectionHeading%',
+      localizedValueFor('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
     );
     expect(grouping.getSectionHeading?.(other, [])).toBe(
-      '%projectSelector_grouping_lastUsed_otherSectionHeading%',
+      localizedValueFor('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
     );
   });
 });
@@ -245,13 +299,13 @@ describe('makeSelectionGrouping', () => {
   });
 
   it('applies supplied headings', () => {
-    const grouping = makeSelectionGrouping(buildSelectionGroupingStrings(IDENTITY_STRINGS));
-    expect(grouping.label).toBe('%projectSelector_grouping_selection_label%');
+    const grouping = makeSelectionGrouping(buildSelectionGroupingStrings(NAMED_STRINGS));
+    expect(grouping.label).toBe(localizedValueFor('%projectSelector_grouping_selection_label%'));
     expect(grouping.getSectionHeading?.('selected', [])).toBe(
-      '%projectSelector_grouping_selection_selectedSectionHeading%',
+      localizedValueFor('%projectSelector_grouping_selection_selectedSectionHeading%'),
     );
     expect(grouping.getSectionHeading?.('unselected', [])).toBe(
-      '%projectSelector_grouping_selection_unselectedSectionHeading%',
+      localizedValueFor('%projectSelector_grouping_selection_unselectedSectionHeading%'),
     );
   });
 });

@@ -6,9 +6,11 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import {
   ProjectSelector,
+  buildProjectSelectorLocalizedStrings,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
+import { PROJECT_SELECTOR_STRING_KEYS } from '@/components/advanced/project-selector/project-selector.groupings';
 
 // jsdom doesn't ship ResizeObserver or `Element.prototype.scrollTo`. cmdk (the
 // Command primitive used inside the popover) instantiates a ResizeObserver on
@@ -514,5 +516,39 @@ describe('first paint', () => {
     const trigger = screen.getByRole('combobox');
     expect(trigger).toHaveAccessibleName(expect.stringMatching(/\S/));
     expect(trigger.textContent?.trim()).not.toBe('');
+  });
+});
+
+describe('unresolved localized strings', () => {
+  // `useLocalizedStrings` seeds its state with `defaultState[key] = key` and returns that same state
+  // on a platform error, so every value can arrive as its own key — before strings load, and
+  // permanently if localization fails. Those are strings, so a naive lookup accepts them and the
+  // picker renders raw `%projectSelector_*%` keys at the user.
+  const UNRESOLVED_STRINGS = Object.fromEntries(
+    PROJECT_SELECTOR_STRING_KEYS.map((key) => [key, key]),
+  );
+
+  it('falls back to English rather than rendering raw localization keys', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: 'esvus16' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{
+          ...buildProjectSelectorLocalizedStrings(UNRESOLVED_STRINGS),
+          ariaLabel: 'Project',
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+    expect(screen.getByPlaceholderText('Search projects & resources')).toBeInTheDocument();
+    // The load-bearing half: asserting the English string alone would still pass if the fallback
+    // were reached some other way. Nothing may render a raw key.
+    expect(screen.queryByPlaceholderText(/^%projectSelector_/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%projectSelector_/)).not.toBeInTheDocument();
   });
 });

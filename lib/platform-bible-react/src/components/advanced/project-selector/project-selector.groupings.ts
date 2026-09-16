@@ -56,14 +56,22 @@ export type ProjectSelectorStringLookup = Readonly<Record<`%${string}%`, unknown
 
 /**
  * Read one `%projectSelector_*%` entry out of a {@link ProjectSelectorStringLookup}. Returns
- * `undefined` for a missing or non-string value so the caller's own English fallback applies.
+ * `undefined` for a missing, non-string, or unresolved value so the caller's own English fallback
+ * applies.
+ *
+ * "Unresolved" means the value is still the key itself. `useLocalizedStrings` seeds its state with
+ * `defaultState[key] = key`, and returns that same state on a platform error — so a lookup can hand
+ * back `'%projectSelector_searchPlaceholder%'` as the placeholder's VALUE, both in the window
+ * before strings resolve and permanently if localization fails. That is a string, so a bare
+ * `typeof` check accepts it and renders the raw key in the UI instead of falling back to English.
  */
 export function readProjectSelectorString(
   strings: ProjectSelectorStringLookup,
   key: ProjectSelectorLocalizedStringKey,
 ): string | undefined {
   const value = strings[key];
-  return typeof value === 'string' ? value : undefined;
+  if (typeof value !== 'string' || value === key) return undefined;
+  return value;
 }
 
 /**

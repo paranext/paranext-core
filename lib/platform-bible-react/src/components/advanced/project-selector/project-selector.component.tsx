@@ -190,7 +190,15 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
-  return { ...DEFAULT_STRINGS, ...partial };
+  if (!partial) return { ...DEFAULT_STRINGS };
+  // Drop `undefined` values instead of spreading them: `buildProjectSelectorLocalizedStrings` emits
+  // a property for EVERY field, holding `undefined` wherever the lookup did not resolve one, and a
+  // plain spread lets that `undefined` overwrite the English default — leaving the field blank
+  // rather than falling back.
+  const resolved = Object.entries(partial).filter(
+    (entry): entry is [string, string] => entry[1] !== undefined,
+  );
+  return { ...DEFAULT_STRINGS, ...Object.fromEntries(resolved) };
 }
 
 /**

@@ -63,11 +63,27 @@ vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+/**
+ * The resolved value this stub gives a shared-picker key. Declared via `vi.hoisted` so the hoisted
+ * `vi.mock` factory below can reach it.
+ *
+ * It NAMES the key without being equal to it. Echoing a key back as its own value is what
+ * `useLocalizedStrings` does while strings are UNRESOLVED, and `readProjectSelectorString` treats
+ * such a value as "not localized yet" and falls back to English — so a key-valued stub would assert
+ * the fallback path rather than the localized one.
+ */
+const { localizedValueFor } = vi.hoisted(() => ({
+  localizedValueFor: (key: string) => `localized ${key}`,
+}));
+
 vi.mock('@papi/frontend/react', () => ({
-  // Echo each requested key back as its own value, matching useLocalizedStrings' pre-resolution
-  // behavior — every entry is always a string.
+  // Echo each requested key back as its own value, which is what useLocalizedStrings does before it
+  // resolves. The shared `%projectSelector_*%` block is the exception — those pass through the
+  // picker's unresolved-value guard, so they get a resolved-looking value instead.
   useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(keys.map((key) => [key, key])),
+    Object.fromEntries(
+      keys.map((key) => [key, key.startsWith('%projectSelector_') ? localizedValueFor(key) : key]),
+    ),
     false,
   ],
   useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
@@ -185,7 +201,9 @@ describe('ManageBooksWebView sidebar project grouping', () => {
     const { user, popover } = await openSidebarPicker();
     await user.click(getGroupByTrigger(popover));
     await user.click(
-      await screen.findByRole('menuitemradio', { name: '%projectSelector_grouping_type_label%' }),
+      await screen.findByRole('menuitemradio', {
+        name: localizedValueFor('%projectSelector_grouping_type_label%'),
+      }),
     );
 
     // Headings are the localized type names, not the raw PT9 `ProjectType` enum values the wire
@@ -209,15 +227,19 @@ describe('ManageBooksWebView sidebar project grouping', () => {
     await user.click(getGroupByTrigger(popover));
     await user.click(
       await screen.findByRole('menuitemradio', {
-        name: '%projectSelector_grouping_lastUsed_label%',
+        name: localizedValueFor('%projectSelector_grouping_lastUsed_label%'),
       }),
     );
 
     expect(
-      await screen.findByText('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      await screen.findByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      screen.queryByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -245,10 +267,14 @@ describe('ManageBooksWebView sidebar project grouping', () => {
     await user.click(getGroupByTrigger(popover));
 
     expect(
-      await screen.findByRole('menuitemradio', { name: '%projectSelector_grouping_type_label%' }),
+      await screen.findByRole('menuitemradio', {
+        name: localizedValueFor('%projectSelector_grouping_type_label%'),
+      }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitemradio', { name: '%projectSelector_grouping_language_label%' }),
+      screen.queryByRole('menuitemradio', {
+        name: localizedValueFor('%projectSelector_grouping_language_label%'),
+      }),
     ).not.toBeInTheDocument();
   });
 });
