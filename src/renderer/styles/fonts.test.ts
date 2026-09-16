@@ -144,6 +144,28 @@ const VENDORED_EDITOR_STYLESHEETS = [
   'lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css',
 ];
 
+/**
+ * Storybook's copy of the faces, and the family it declares. Neither Storybook loads fonts.css —
+ * the application pulls it in as `?raw` and inlines it into each web view's srcdoc — and the
+ * vendored stylesheets above declare no faces, so without this file a Scripture story has no Charis
+ * SIL declaration from any source. It is a copy, so it is pinned against fonts.css face for face
+ * rather than trusted.
+ */
+const STORYBOOK_FONTS_STYLESHEET = 'lib/platform-bible-react/.storybook/scripture-fonts.css';
+const STORYBOOK_FONTS_FAMILY = 'Charis SIL';
+
+/**
+ * Every Storybook preview that has to load {@link STORYBOOK_FONTS_STYLESHEET}. There are two
+ * Storybooks: the library's own, and the root one, whose globs reach the renderer's and the bundled
+ * extensions' stories. Both render Scripture through the same vendored `usj-nodes.css`, so loading
+ * it from a single story's stylesheet would leave whichever stories arrive at that stylesheet by
+ * another route with no faces at all.
+ */
+const STORYBOOK_PREVIEWS = [
+  '.storybook/preview.ts',
+  'lib/platform-bible-react/.storybook/preview.ts',
+];
+
 /** Read one descriptor out of a normalized `@font-face` body, stripping quotes. */
 function readDescriptor(body: string, name: string): string {
   const match = new RegExp(`(?:^|;)\\s*${name}\\s*:\\s*([^;]+)`).exec(body);
@@ -518,6 +540,34 @@ describe('Scripture fonts (src/renderer/styles/fonts.css)', () => {
     const vendored = readFileSync(resolve(repoRoot, path), 'utf8');
     expect(vendored).toContain('.usfm');
     expect(parseFontFaces(vendored)).toEqual([]);
+  });
+
+  it('gives Storybook the same faces the application declares', () => {
+    // A copy, because the library's Storybook cannot reach the application's stylesheet and the
+    // application's cannot be loaded without also restyling every story's chrome. So it is pinned
+    // face for face instead: same weights, styles, sources and ranges, for both the downloaded
+    // faces and the installed-only complement. Anything that changes a Charis SIL face in fonts.css
+    // — a regenerated paste, a widened range, a new `local()` name — fails here until the copy
+    // follows.
+    const storybookFaces = parseFontFaces(
+      readFileSync(resolve(repoRoot, STORYBOOK_FONTS_STYLESHEET), 'utf8'),
+    );
+    const identify = (face: FontFace) => `${face.weight}/${face.style} ${face.unicodeRange}`;
+    const byIdentity = (left: FontFace, right: FontFace) =>
+      identify(left).localeCompare(identify(right));
+    const inFontsCss = [...installedFirstFaces, ...installedOnlyFaces]
+      .filter((face) => face.family === STORYBOOK_FONTS_FAMILY)
+      .sort(byIdentity);
+    expect(inFontsCss.length).toBeGreaterThan(0);
+    expect(storybookFaces.sort(byIdentity)).toEqual(inFontsCss);
+  });
+
+  it.each(STORYBOOK_PREVIEWS)('loads the Storybook faces from %s', (path) => {
+    // Importing it from one preview covers one of the two Storybooks. The other renders the same
+    // vendored stylesheet through a different set of stories, and its gap is silent: text still
+    // renders, in a system serif with a synthesized bold.
+    const preview = readFileSync(resolve(repoRoot, path), 'utf8');
+    expect(preview).toMatch(/import\s+'[^']*scripture-fonts\.css'/);
   });
 
   it.each(VENDORED_EDITOR_STYLESHEETS)('points Scripture text at the stack in %s', (path) => {

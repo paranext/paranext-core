@@ -48,7 +48,10 @@
   );
 }
 .usfm.formatted-font {
-  font-family: var(--usj-font-fallback);
+  /* Same `serif` fallback the generated project rules carry: a `var()` whose property turns out to
+     be invalid at computed-value time takes the whole declaration with it, dropping Scripture text
+     onto the inherited UI font. */
+  font-family: var(--usj-font-fallback, serif);
   font-size: 12pt;
 }
 
