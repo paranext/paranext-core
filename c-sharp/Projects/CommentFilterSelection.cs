@@ -24,6 +24,7 @@ public class CommentFilterSelection
     /// <summary>The Scripture scope, e.g. <c>current-chapter</c>. Defaults to <c>all-books</c>.</summary>
     public string ScopeFilter { get; set; } = "all-books";
 
+    /// <summary>Serializes a <see cref="CommentFilterSelection"/> to an <c>&lt;Items&gt;</c> XElement.</summary>
     public static XElement ToXml(CommentFilterSelection selection) =>
         new(
             "Items",
@@ -32,10 +33,10 @@ public class CommentFilterSelection
         );
 
     /// <summary>
-    /// Reads a selection, falling back to the default view for any element the file does not carry.
-    /// Values are not validated against the known presets here: the set lives in TypeScript, and a
-    /// value this build does not recognize is better surfaced by the frontend resolving it to its
-    /// default than by the provider refusing to load the file.
+    /// Reads a selection. An absent <c>Preset</c> or <c>ScopeFilter</c> element falls back to the
+    /// default view. A present element's value — including an empty one, and one this build does
+    /// not recognize — is passed through as-is rather than validated: the preset set lives in
+    /// TypeScript, and the frontend owns resolving an unrecognized value to its default.
     /// </summary>
     public static CommentFilterSelection FromXml(XElement? items) =>
         new()
