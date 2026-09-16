@@ -16,10 +16,16 @@ public class CommentFilterSelectionTests
             ScopeFilter = "current-verse",
         };
 
-        var restored = CommentFilterSelection.FromXml(CommentFilterSelection.ToXml(selection));
+        // Deliberately not the default version, so a FromXml that ignored its dataVersion
+        // argument and fell back to the default would be caught here.
+        var restored = CommentFilterSelection.FromXml(
+            CommentFilterSelection.ToXml(selection),
+            "1.2.3"
+        );
 
         Assert.That(restored.Preset, Is.EqualTo("unread-and-unresolved"));
         Assert.That(restored.ScopeFilter, Is.EqualTo("current-verse"));
+        Assert.That(restored.DataVersion, Is.EqualTo("1.2.3"));
     }
 
     [Test]
@@ -27,7 +33,10 @@ public class CommentFilterSelectionTests
     {
         // A file written by an older build, or a hand-edited one, must not throw — an absent
         // selection is simply the default view rather than a corrupt setting.
-        var restored = CommentFilterSelection.FromXml(new XElement("Items"));
+        var restored = CommentFilterSelection.FromXml(
+            new XElement("Items"),
+            CommentFilterSelection.CurrentDataVersion
+        );
 
         Assert.That(restored.Preset, Is.EqualTo("all"));
         Assert.That(restored.ScopeFilter, Is.EqualTo("all-books"));
@@ -47,7 +56,10 @@ public class CommentFilterSelectionTests
             new XElement("ScopeFilter", "")
         );
 
-        var restored = CommentFilterSelection.FromXml(items);
+        var restored = CommentFilterSelection.FromXml(
+            items,
+            CommentFilterSelection.CurrentDataVersion
+        );
 
         Assert.That(restored.Preset, Is.EqualTo(""));
         Assert.That(restored.ScopeFilter, Is.EqualTo(""));
