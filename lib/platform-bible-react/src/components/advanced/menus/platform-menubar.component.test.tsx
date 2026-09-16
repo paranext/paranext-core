@@ -9,6 +9,8 @@ import { PlatformMenubar } from './platform-menubar.component';
 // jsdom doesn't ship a ResizeObserver, which Radix's Popper-positioned menu content instantiates
 // on mount. A no-op stub is sufficient since these tests inspect structure, not layout.
 class NoopResizeObserver implements ResizeObserver {
+  // Keep an internal record of observed targets so the no-op methods touch `this` and don't
+  // trip @typescript-eslint/class-methods-use-this. No test inspects this state.
   private readonly targets = new Set<Element>();
 
   observe(target: Element) {

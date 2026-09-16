@@ -29,7 +29,11 @@ import {
 import { Fragment, ReactNode, useId } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
-import { getMenuSectionsWithItems, getSubMenuGroupKeyForMenuItemId } from './menu.util';
+import {
+  getMenuSectionsWithItems,
+  getSubMenuGroupKeyForMenuItemId,
+  isGroupUnderColumnOrSubMenu,
+} from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
 
@@ -42,10 +46,7 @@ const getGroupContent = (
   if (!columnOrSubMenuKey) return undefined;
 
   const sortedGroupsForColumn = Object.entries(groups)
-    .filter(
-      ([key, group]) =>
-        ('column' in group && group.column === columnOrSubMenuKey) || key === columnOrSubMenuKey,
-    )
+    .filter(([key, group]) => isGroupUnderColumnOrSubMenu(key, group, columnOrSubMenuKey))
     .sort(([, a], [, b]) => a.order - b.order);
 
   return sortedGroupsForColumn.flatMap(([groupKey]) => {

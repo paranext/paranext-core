@@ -22,6 +22,15 @@ const ENTRIES: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌘J', windows: 'Ctrl+J', linux: 'Ctrl+J' },
     locations: [],
   },
+  {
+    id: 'no-macos-equivalent',
+    purpose: 'Open the user settings',
+    category: 'Application',
+    context: 'Anywhere',
+    keys: { macOS: '— (no equivalent)', windows: 'Ctrl+, / Shift+F10', linux: 'Ctrl+,' },
+    locations: [],
+    command: 'platform.openUserSettings',
+  },
 ];
 
 describe('splitShortcutAlternatives', () => {
@@ -52,6 +61,13 @@ describe('getShortcutHintForCommand', () => {
 
   it('gives no hint for a command no entry is joined to', () => {
     expect(getShortcutHintForCommand('platform.openSettings', 'win32', ENTRIES)).toBeUndefined();
+  });
+
+  it('gives no hint on an operating system the catalog marks as having no equivalent', () => {
+    expect(
+      getShortcutHintForCommand('platform.openUserSettings', 'darwin', ENTRIES),
+    ).toBeUndefined();
+    expect(getShortcutHintForCommand('platform.openUserSettings', 'win32', ENTRIES)).toBe('Ctrl+,');
   });
 
   it('reads the real catalog by default', () => {

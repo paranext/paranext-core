@@ -1,5 +1,8 @@
 import { slice, split, startsWith } from 'platform-bible-utils';
-import { splitShortcutAlternatives } from '@shared/utils/keyboard-shortcut-hint.util';
+import {
+  NO_EQUIVALENT_PREFIX,
+  splitShortcutAlternatives,
+} from '@shared/utils/keyboard-shortcut-hint.util';
 
 /**
  * The macOS key symbols a combo may string together with no separator — modifiers plus the symbols
@@ -21,9 +24,6 @@ const MACOS_SYMBOL_KEYS: ReadonlySet<string> = new Set([
   '←',
   '→',
 ]);
-
-/** Marker an OS's `keys` uses when that OS has no equivalent for the shortcut. */
-const NO_EQUIVALENT_PREFIX = '—';
 
 /** One key combination, split into the keys the user presses together. */
 export type KeycapGroup = {
