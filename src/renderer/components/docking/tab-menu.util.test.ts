@@ -49,6 +49,7 @@ const context = (overrides: Partial<TabMenuContext> = {}): TabMenuContext => ({
   webViewId: 'tab-1',
   otherWindows: [{ windowId: '2', label: 'Biblical Terms', isMain: false }],
   isOnlyTabInWindowThatWouldClose: false,
+  hasZoomArea: true,
   ...overrides,
 });
 
@@ -184,6 +185,26 @@ describe('buildTabMenuItems', () => {
     const result = buildTabMenuItems(grouped, context({ webViewId: undefined }), 'Empty window');
 
     expect(idsOf(result)).toEqual([]);
+  });
+
+  test('greys out the zoom items rather than removing them on a tab with no zoom area', () => {
+    // A pane that hosts a web view but has not (yet) reported an area to act on: the items stay in
+    // the menu, just disabled, so they don't jump into or out of it the moment the area arrives
+    const result = buildTabMenuItems(ZOOM_ITEMS, context({ hasZoomArea: false }), 'Empty window');
+
+    expect(idsOf(result)).toEqual([
+      'platform.webViewContentZoomIn',
+      'platform.webViewContentZoomOut',
+      'platform.webViewContentZoomReset',
+    ]);
+    expect(result.every((item) => item.type === 'item' && item.disabled === true)).toBe(true);
+  });
+
+  test('leaves the zoom items enabled on a tab that has a zoom area', () => {
+    // The positive control for the case above
+    const result = buildTabMenuItems(ZOOM_ITEMS, context({ hasZoomArea: true }), 'Empty window');
+
+    expect(result.every((item) => item.type === 'item' && !item.disabled)).toBe(true);
   });
 });
 
