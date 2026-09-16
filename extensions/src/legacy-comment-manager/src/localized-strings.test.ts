@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
+import { COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 
 const PANEL_TITLE_KEY = '%webView_legacyCommentManager_commentListPanel_title%';
 const COMMENTARIES_TAB_TITLE_KEY = '%webView_resourcePanel_commentaries_title%';
@@ -13,50 +14,12 @@ const SYNC_BLOCKED_KEYS = [
   '%webView_legacyCommentManager_error_syncEditBlocked%',
 ];
 
-// The comment-filter strings: the toolbar's "Filters" trigger, each axis's popover-row/chip name,
-// the chip dismiss-label template, and the date/author axes' own aria/option/search strings. Both
-// languages must define every key so a future edit that drops one in a single language fails here
-// rather than silently falling back or shipping untranslated text.
-const COMMENT_FILTER_KEYS = [
-  '%comment_filter_aria_assignment%',
-  '%comment_filter_aria_author%',
-  '%comment_filter_aria_date%',
-  '%comment_filter_aria_read%',
-  '%comment_filter_aria_resolved%',
-  '%comment_filter_aria_scope%',
-  '%comment_filter_aria_type%',
-  '%comment_filter_assignment_all%',
-  '%comment_filter_assignment_me%',
-  '%comment_filter_assignment_team%',
-  '%comment_filter_assignment_unassigned%',
-  '%comment_filter_author_all%',
-  '%comment_filter_author_no_results%',
-  '%comment_filter_author_search_placeholder%',
-  '%comment_filter_axis_assignment%',
-  '%comment_filter_axis_author%',
-  '%comment_filter_axis_date%',
-  '%comment_filter_axis_read%',
-  '%comment_filter_axis_resolved%',
-  '%comment_filter_axis_scope%',
-  '%comment_filter_axis_type%',
-  '%comment_filter_button%',
-  '%comment_filter_chip_clear%',
-  '%comment_filter_date_all%',
-  '%comment_filter_date_last_30_days%',
-  '%comment_filter_date_last_7_days%',
-  '%comment_filter_date_today%',
-  '%comment_filter_read_all%',
-  '%comment_filter_read_read%',
-  '%comment_filter_read_unread%',
-  '%comment_filter_resolved_all%',
-  '%comment_filter_resolved_resolved%',
-  '%comment_filter_resolved_unresolved%',
-  '%comment_filter_scope_all_books%',
-  '%comment_filter_scope_current_chapter%',
-  '%comment_filter_type_all%',
-  '%comment_filter_type_comments%',
-  '%comment_filter_type_conflicts%',
-];
+// The comment-filter strings the panel actually requests, derived from the panel's own key list
+// rather than hand-copied, so a key added to (or removed from) the panel and forgotten here cannot
+// pass unnoticed.
+const COMMENT_FILTER_KEYS = COMMENT_LIST_PANEL_EXTRA_STRING_KEYS.filter((key) =>
+  key.startsWith('%comment_filter_'),
+);
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
@@ -126,23 +89,8 @@ describe('legacyCommentManager sync-blocked strings', () => {
 });
 
 describe('legacyCommentManager comment-filter strings', () => {
-  // Enforce en/es parity for every comment-filter string, both directions: a key present in one
-  // language but not the other fails here, and Vitest's array diff names the offending key —
-  // this single assertion subsumes what a per-key "has an English/Spanish label" test would show.
-  it('defines every comment-filter key in both languages (no key present in only one)', () => {
-    const englishOnly = COMMENT_FILTER_KEYS.filter(
-      (key) => localizedStrings.en[key] && !localizedStrings.es[key],
-    );
-    const spanishOnly = COMMENT_FILTER_KEYS.filter(
-      (key) => localizedStrings.es[key] && !localizedStrings.en[key],
-    );
-    expect(englishOnly).toEqual([]);
-    expect(spanishOnly).toEqual([]);
-  });
-
-  // The parity check above treats an empty string as "absent" on both sides, so a key defined as
-  // "" in BOTH languages would slip through undetected there. Assert non-empty values directly to
-  // close that gap — a guarantee the parity check does not make.
+  // A key with a non-empty value in both languages is necessarily present in both, so this single
+  // assertion also enforces en/es parity — no separate presence check is needed.
   it('every comment-filter key has a non-empty value in both languages', () => {
     const emptyInEnglish = COMMENT_FILTER_KEYS.filter((key) => !localizedStrings.en[key]);
     const emptyInSpanish = COMMENT_FILTER_KEYS.filter((key) => !localizedStrings.es[key]);
