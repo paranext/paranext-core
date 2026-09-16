@@ -23,12 +23,24 @@ import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  PROJECT_SELECTOR_STRING_KEYS,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  makeBuiltInGroupings,
+  type ProjectSelectorGrouping,
+  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
-import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  getErrorMessage,
+  makeProjectSelectorCustomData,
+  normalizeProjectId,
+} from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import {
   AlertEntry,
   EstherTemplate,
@@ -88,22 +100,21 @@ type ProjectListResult = {
     name: string;
     /**
      * PT9 `ProjectType` enum value (e.g. "Standard"). Mirrors the C# `ProjectSummary.ProjectType`
-     * wire field. Currently unread on the client (the former commentary filter that consumed it was
-     * removed — N4); kept to document the wire shape and for future use.
+     * wire field. Feeds the sidebar picker's `type` grouping via {@link toManageBooksSelectorRows}.
      */
     projectType: string;
     isEditable: boolean;
     /** Whether the project is a resource (read-only published text). */
     isResource: boolean;
     /**
-     * Long human-readable name (e.g. "English Standard Version 2016"). I2: returned on the list so
-     * the frontend no longer fetches `platform.fullName` per project. Empty when unset — fall back
+     * Long human-readable name (e.g. "English Standard Version 2016"). Returned on the list so the
+     * frontend does not have to fetch `platform.fullName` per project. Empty when unset — fall back
      * to the short `name`.
      */
     fullName: string;
     /**
-     * Versification as the numeric `ScrVersType` code in string form (e.g. "4"). I2: returned on
-     * the list so the frontend no longer fetches `platformScripture.versification` per project.
+     * Versification as the numeric `ScrVersType` code in string form (e.g. "4"). Returned on the
+     * list so the frontend does not have to fetch `platformScripture.versification` per project.
      */
     versification: string;
   }[];
@@ -299,6 +310,83 @@ function booksToNumbers(bookIds: string[]): number[] {
   return nums;
 }
 
+/**
+ * The built-in grouping ids the manage-books project pickers offer, in `makeBuiltInGroupings`
+ * order. Shared by the sidebar's primary picker and the Copy "From" picker. The Create "Based on"
+ * picker doesn't consume these — it locks into a bespoke versification grouping built on the dialog
+ * side.
+ *
+ * `language` is left out: the manage-books wire carries no language, and fetching it would cost one
+ * project-settings round-trip per row on a list that has to stay fast. Offering the grouping anyway
+ * would produce a single "Unknown language" bucket for every project, so it is omitted rather than
+ * shown as a menu item that cannot do anything.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toManageBooksSelectorRows} actually packs, so adding an id here without
+ * adding its data is a build failure rather than a dead menu item.
+ */
+export const MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = [
+  'openTabs',
+  'lastUsed',
+  'type',
+];
+
+/**
+ * Localize key for each PT9 `ProjectType` value the manage-books wire can carry, used as the
+ * section heading for the built-in `type` grouping. A value missing from this map keeps its raw
+ * enum string as its heading (see {@link toManageBooksSelectorRows}).
+ */
+const PROJECT_TYPE_LOCALIZE_KEYS: Readonly<
+  Record<string, (typeof MANAGE_BOOKS_DIALOG_STRING_KEYS)[number]>
+> = Object.freeze({
+  Auxiliary: '%manageBooks_projectType_Auxiliary%',
+  BackTranslation: '%manageBooks_projectType_BackTranslation%',
+  ConsultantNotes: '%manageBooks_projectType_ConsultantNotes%',
+  Daughter: '%manageBooks_projectType_Daughter%',
+  Standard: '%manageBooks_projectType_Standard%',
+  StudyBible: '%manageBooks_projectType_StudyBible%',
+  StudyBibleAdditions: '%manageBooks_projectType_StudyBibleAdditions%',
+  TransliterationManual: '%manageBooks_projectType_TransliterationManual%',
+  TransliterationWithEncoder: '%manageBooks_projectType_TransliterationWithEncoder%',
+});
+
+/**
+ * Maps manage-books wire projects onto ProjectSelector rows. Exported for coverage tests.
+ *
+ * `recencyMap` must already be keyed by {@link normalizeProjectId}-normalized ids: the recents
+ * service stores ids verbatim while these are canonical (upper-cased) project ids, so normalizing
+ * only one side misses on casing alone and routes every project into the grouping's "Other"
+ * bucket.
+ *
+ * `projectTypeNames` maps a raw PT9 `ProjectType` value onto its localized display name for the
+ * built-in `type` grouping's section headings.
+ */
+export function toManageBooksSelectorRows(
+  projects: readonly ProjectListResult['projects'][number][],
+  recencyMap: ReadonlyMap<string, number>,
+  projectTypeNames?: ReadonlyMap<string, string>,
+): SidebarProject[] {
+  return projects.map((p) => ({
+    id: p.projectId,
+    // `fullName` arrives on the wire row, so no per-project `getSetting` is needed here.
+    shortName: p.name,
+    fullName: p.fullName.length > 0 ? p.fullName : p.name,
+    isEditable: p.isEditable,
+    customData: makeProjectSelectorCustomData({
+      type: p.projectType,
+      // A `ProjectType` value with no localized name falls back to the raw enum value so the
+      // grouping still shows a heading for it rather than dropping the project into the unknown
+      // bucket.
+      typeName: projectTypeNames?.get(p.projectType) ?? p.projectType,
+      lastUsedAt: recencyMap.get(normalizeProjectId(p.projectId)),
+    }),
+  }));
+}
+
 // ===== Web view component ==================================================
 
 global.webViewComponent = function ManageBooksWebView({
@@ -349,7 +437,12 @@ global.webViewComponent = function ManageBooksWebView({
   // (Hoisted above the project-change effect so the effect can read the localized title
   // template when computing the new tab title.)
   const stringKeys = useMemo(
-    () => [...MANAGE_BOOKS_DIALOG_STRING_KEYS, ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS],
+    () => [
+      ...MANAGE_BOOKS_DIALOG_STRING_KEYS,
+      ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS,
+      // Central ProjectSelector keys used by every picker in the dialog.
+      ...PROJECT_SELECTOR_STRING_KEYS,
+    ],
     [],
   );
   const [localizedStrings] = useLocalizedStrings(stringKeys);
@@ -445,6 +538,22 @@ global.webViewComponent = function ManageBooksWebView({
     });
     return out;
   }, [localizedStrings]);
+
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
+    () => buildProjectSelectorLocalizedStrings(localizedStrings),
+    [localizedStrings],
+  );
+
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys, narrowed to
+  // the ids these pickers offer. See MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS for which ones and
+  // why.
+  const projectSelectorGroupings = useMemo<ProjectSelectorGrouping[]>(
+    () =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)).filter((grouping) =>
+        MANAGE_BOOKS_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [localizedStrings],
+  );
 
   // ===== PAPI: project list =================================================
   // Resolve the manage-books NetworkObject lazily on first render.
@@ -730,11 +839,11 @@ global.webViewComponent = function ManageBooksWebView({
     if (!manageBooksApi) return [];
     try {
       const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
-      // I2: the C# `ProjectSummary` now carries name (short), fullName and versification directly,
-      // so this is a single round-trip — no per-project `projectDataProviders.get` + `getSetting`
-      // fan-out (which scaled linearly with project count and was the cause of the slow initial
-      // load). `platform.name` resolves to `ScrText.Name` server-side, i.e. the same short `name`
-      // already on the wire, so there is no separate display name to fetch.
+      // The C# `ProjectSummary` carries name (short), fullName and versification directly, so this
+      // is a single round-trip. Keep it that way: a per-project `projectDataProviders.get` +
+      // `getSetting` fan-out scales linearly with project count and makes the initial load slow.
+      // `platform.name` resolves to `ScrText.Name` server-side, i.e. the same short `name` already
+      // on the wire, so there is no separate display name to fetch.
       return result.projects.map((p) => ({
         id: p.projectId,
         shortName: p.name,
@@ -750,6 +859,11 @@ global.webViewComponent = function ManageBooksWebView({
         // versification grouping. The localized name is resolved on the dialog side (it owns the
         // localizedStrings → versificationLabelKey map); here we forward the raw id.
         versificationId: p.versification,
+        // Project type for the Copy "From" picker's type grouping. Already on this same wire
+        // response, so it adds no round-trip. There is no localized display name on the wire, so
+        // the raw key doubles as the section heading.
+        type: p.projectType,
+        typeName: p.projectType,
       }));
     } catch (e) {
       logger.warn(
@@ -788,21 +902,33 @@ global.webViewComponent = function ManageBooksWebView({
   // read-only. ProjectSelector ignores unknown fields, so passing the extended array directly is
   // safe. Source is `manageBooksApi.filterProjects` — the same call `loadProjects` uses, so the
   // sidebar list and the dialog's internal project list stay in lockstep.
-  const [sidebarProjects, setSidebarProjects] = useState<readonly SidebarProject[]>([]);
+  // Holds the raw wire rows; the ProjectSelector shape is derived below so that grouping inputs
+  // (recency, localized type names) can change without re-fetching the project list.
+  const [sidebarWireProjects, setSidebarWireProjects] = useState<
+    readonly ProjectListResult['projects'][number][]
+  >([]);
+
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('manage-books');
+
+  // Localized section headings for the built-in `type` grouping, keyed by raw PT9 `ProjectType`
+  // value.
+  const projectTypeNames = useMemo<ReadonlyMap<string, string>>(() => {
+    const names = new Map<string, string>();
+    Object.entries(PROJECT_TYPE_LOCALIZE_KEYS).forEach(([projectType, localizeKey]) => {
+      const localizedName = localizedStrings[localizeKey];
+      if (localizedName) names.set(projectType, localizedName);
+    });
+    return names;
+  }, [localizedStrings]);
+
   useEffect(() => {
     if (!manageBooksApi) return undefined;
     let cancelled = false;
     (async () => {
       try {
         const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
-        // I2: fullName comes straight off the wire now — no per-project getSetting fan-out.
-        const enriched: SidebarProject[] = result.projects.map((p) => ({
-          id: p.projectId,
-          shortName: p.name,
-          fullName: p.fullName.length > 0 ? p.fullName : p.name,
-          isEditable: p.isEditable,
-        }));
-        if (!cancelled) setSidebarProjects(enriched);
+        if (!cancelled) setSidebarWireProjects(result.projects);
       } catch (err) {
         logger.warn(`manage-books: sidebarProjects fetch failed: ${getErrorMessage(err)}`);
       }
@@ -811,6 +937,11 @@ global.webViewComponent = function ManageBooksWebView({
       cancelled = true;
     };
   }, [manageBooksApi]);
+
+  const sidebarProjects = useMemo<readonly SidebarProject[]>(
+    () => toManageBooksSelectorRows(sidebarWireProjects, recencyMap, projectTypeNames),
+    [projectTypeNames, recencyMap, sidebarWireProjects],
+  );
 
   // ===== Open project tabs (for ProjectSelector grouping) ====================
   // The shared `useOpenProjectTabs` hook returns a richer shape (`webViewId`, `webViewType`); map
@@ -1042,6 +1173,8 @@ global.webViewComponent = function ManageBooksWebView({
         localizedStrings={localizedStrings}
         sidebarProjects={sidebarProjects}
         openTabs={projectSelectorOpenTabs}
+        projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
+        projectSelectorGroupings={projectSelectorGroupings}
       />
       <GreekEstherTemplatePicker
         open={pickerOpen}

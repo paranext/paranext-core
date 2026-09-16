@@ -70,7 +70,13 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%webView_bookChapterControl_selectChapter%",
 	"%webView_bookChapterControl_selectVerse%",
 	"%webView_bookChapterControl_showMoreBooks%",
-	"%webView_bookChapterControl_showProjectBooksOnly%"
+	"%webView_bookChapterControl_showProjectBooksOnly%",
+	"%webView_bookChapterControl_previousChapter%",
+	"%webView_bookChapterControl_nextChapter%",
+	"%webView_bookChapterControl_previousVerse%",
+	"%webView_bookChapterControl_nextVerse%",
+	"%webView_bookChapterControl_backToBooks%",
+	"%webView_bookChapterControl_backToChapters%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
@@ -307,13 +313,27 @@ export interface RecentSearchesProps<T> {
 	renderItem?: (item: T) => string;
 	/** Function to create a unique key for each item */
 	getItemKey?: (item: T) => string;
-	/** Aria label for the recent searches button */
+	/**
+	 * Accessible name for the trigger button, which is also rendered as the button's visible tooltip
+	 * text. Write it as user-visible microcopy (sentence case), not as a screen-reader-only phrase.
+	 *
+	 * Passing an empty string suppresses the tooltip AND leaves the icon-only button without an
+	 * accessible name, so prefer omitting the prop — which falls back to a sensible default — over
+	 * passing `''`.
+	 *
+	 * A value that is still a raw `%localization_key%` is treated as not-yet-localized and falls back
+	 * to the default, so a key can never reach the screen as tooltip text.
+	 */
 	ariaLabel?: string;
-	/** Heading text for the recent searches group */
+	/**
+	 * Heading for the recent searches list. Rendered as the list's visible heading and used as its
+	 * accessible name, so a screen reader announces what the list is rather than a bare "menu". Falls
+	 * back to the default when omitted or still a raw `%localization_key%`.
+	 */
 	groupHeading?: string;
-	/** Optional ID for the popover content for accessibility */
+	/** Optional ID for the dropdown menu content for accessibility */
 	id?: string;
-	/** Class name for styling the `CommandItem` for each recent search result */
+	/** Class name for styling the `DropdownMenuItem` for each recent search result */
 	classNameForItems?: string;
 	/**
 	 * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
@@ -322,14 +342,14 @@ export interface RecentSearchesProps<T> {
 	buttonClassName?: string;
 	/** Variant for the trigger button. Defaults to `"ghost"` */
 	buttonVariant?: ButtonProps["variant"];
-	/** Controlled open state of the popover. If provided, the component becomes controlled. */
+	/** Controlled open state of the dropdown menu. If provided, the component becomes controlled. */
 	open?: boolean;
 	/** Called when the open state changes. Required when `open` is provided. */
 	onOpenChange?: (open: boolean) => void;
 }
 /**
- * Generic component that displays a button to show recent searches in a popover. Only renders if
- * there are recent searches available. Works with any data type T.
+ * Generic component that displays a button to show recent searches in a dropdown menu. Only renders
+ * if there are recent searches available. Works with any data type T.
  */
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, open: openProp, onOpenChange, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
@@ -1100,7 +1120,8 @@ export declare function FootnoteItem({ footnote, layout, formatCaller, showMarke
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, selectionRequest, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
-type ScopeWithRange = Scope | "range";
+/** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
+export type ScopeWithRange = Scope | "range";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -1425,17 +1446,6 @@ export type SettingsSidebarProps = {
 	projectsSidebarGroupLabel: string;
 	/** Placeholder text for the button */
 	buttonPlaceholderText: string;
-	/**
-	 * Localized strings for the project picker's popover (search placeholder, filter menu, section
-	 * headings), keyed by localize key. Resolve them from `PROJECT_SELECTOR_STRING_KEYS`, exported
-	 * from `platform-bible-react/experimental`. Any key left unresolved falls back to the picker's
-	 * English default.
-	 *
-	 * Typed structurally rather than as the picker's own `ProjectSelectorLocalizedStrings` so this
-	 * stable-surface type does not name a type from the experimental entry point, whose shape carries
-	 * no stability guarantee.
-	 */
-	projectSelectorLocalizedStrings?: LanguageStrings;
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
 };
@@ -1446,7 +1456,7 @@ export type SettingsSidebarProps = {
  *
  * @param props - {@link SettingsSidebarProps} The props for the component.
  */
-export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, projectSelectorLocalizedStrings, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** The search query in the search bar */
 	searchValue: string;
@@ -1460,7 +1470,7 @@ type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWit
  * @param {SettingsSidebarContentSearchProps} props - The props for the component.
  * @param {string} props.id - The id of the sidebar.
  */
-export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, projectSelectorLocalizedStrings, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -1630,6 +1640,24 @@ interface ScopeSelectorProps {
 	 * {@link SelectBooks} and shown as a tooltip on that section's disabled quick-select button.
 	 */
 	disabledSectionExplanations?: Partial<Record<Section, string>>;
+	/**
+	 * Optional explanations, by scope, for why that scope cannot be chosen right now. A scope with an
+	 * entry renders disabled, with its explanation as muted text beneath the option's label. Both
+	 * variants render it inline rather than as a tooltip: a disabled control — a radio or a Radix
+	 * menu item — is out of the tab order, so hover- or focus-only affordances reach nobody. Keep
+	 * explanations short enough to read in a menu row.
+	 *
+	 * `'selectedBooks'` and `'range'` are honored in the `'radio'` variant only. In the `'dropdown'`
+	 * variant those two are menu items that open a dialog rather than scope options, and they ignore
+	 * an entry here — a consumer that must block them in a dropdown should drop them from
+	 * {@link ScopeSelectorProps.availableScopes} instead.
+	 *
+	 * Only for a scope that is genuinely unavailable in the CURRENT state — a scope the consumer
+	 * never offers at all belongs out of {@link ScopeSelectorProps.availableScopes} instead. Disabling
+	 * is only an affordance: the consumer still has to reject the query itself, since a scope already
+	 * selected when the state changed never passes through a disabled control.
+	 */
+	disabledScopeExplanations?: Partial<Record<ScopeWithRange, string>>;
 	/** Optional ID that is applied to the root element of this component */
 	id?: string;
 	/**
@@ -1696,7 +1724,7 @@ interface ScopeSelectorProps {
  * chosen, two BookChapterControl pickers are displayed for selecting the start and end verse of the
  * range.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, disabledScopeExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the SelectBooks component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -3227,7 +3255,7 @@ export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuContent({ className, align, sideOffset, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
@@ -3249,7 +3277,7 @@ export declare function DropdownMenuSub({ ...props }: React$1.ComponentProps<typ
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuSubTrigger({ className, inset, children, ...props }: DropdownMenuSubTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuSubContent({ className, style, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Empty component displays a centered zero-state message — typically a title, description, and
  * an optional action — for when there is no content to show. The component is built and styled by
@@ -4142,11 +4170,10 @@ export declare function ShrinkStepOverride({ value, children }: ShrinkStepOverri
  * Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200)
  * — the menubar, and every `PopoverContent`.
  *
- * At 600 this sits above the overlay, modal, and tooltip layers, which is why content portalled out
- * of a popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences are unresolved
- * and deliberately not papered over here: a tooltip triggered from inside a popover
- * (`Z_INDEX_TOOLTIP`, 550) renders BEHIND it, and a popover renders OVER a modal dialog
- * ({@link Z_INDEX_MODAL}, 500). Both want the scale re-ordered rather than another constant raised.
+ * At 600 this sits above the overlay and modal layers, which is why content portalled out of a
+ * popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. One consequence is unresolved and
+ * deliberately not papered over here: a popover renders OVER a modal dialog ({@link Z_INDEX_MODAL},
+ * 500). That wants the scale re-ordered rather than another constant raised.
  */
 export declare const Z_INDEX_ABOVE_DOCK = 600;
 /**
@@ -4157,29 +4184,53 @@ export declare const Z_INDEX_ABOVE_DOCK = 600;
  * two become stacking SIBLINGS: the popover's own {@link Z_INDEX_ABOVE_DOCK} competes directly with
  * whatever the portalled child asks for, and anything lower renders behind the popover it belongs
  * to. Must therefore stay above {@link Z_INDEX_ABOVE_DOCK} and below {@link Z_INDEX_FIRST_RUN}, which
- * gates the whole app. Pinned by `z-index.test.ts`.
+ * gates the whole app. Pinned by `z-index.test.tsx`.
  *
  * Note this is only needed because {@link Z_INDEX_ABOVE_DOCK} sits so high; see its own doc.
  */
 export declare const Z_INDEX_ABOVE_POPOVER = 650;
-/** Z-index for overlay popovers and context menus */
+/**
+ * Z-index for in-page overlays that sit above ordinary page content but BELOW modal content — the
+ * renderer's overlay service (`src/renderer/components/overlays/`) plus a handful of
+ * component-level overlays across `lib/` and `extensions/`.
+ *
+ * Deliberately the lowest tier in the scale: anything that must clear a modal, a popover, or the
+ * dock belongs on {@link Z_INDEX_ABOVE_DOCK} instead. No ordering test covers this tier.
+ *
+ * Consumers are deliberately not listed here — an enumerated list in this comment went stale once
+ * already and sent a menu to 400 underneath its own 600-tier host. Grep for the constant to find
+ * them; the `adr-z-index-ordering-invariants` entry in
+ * `.context/standards/Architecture-Decisions.md` records why this tier was left alone.
+ */
 export declare const Z_INDEX_OVERLAY = 400;
 /** Z-index for the semi-transparent backdrop behind modal dialogs */
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
 /**
- * Z-index for the one-shot onboarding tour spotlight. Sits above Z_INDEX_ABOVE_DOCK and
- * Z_INDEX_TOOLTIP so it can spotlight toolbar buttons and columns, but below Z_INDEX_FIRST_RUN so
- * the wizard always wins if both are mounted.
+ * Z-index for the one-shot onboarding tour spotlight. Sits above {@link Z_INDEX_ABOVE_DOCK},
+ * {@link Z_INDEX_ABOVE_POPOVER} and `Z_INDEX_TOOLTIP` so it can spotlight toolbar buttons and
+ * columns without a tooltip on one of them painting over the spotlight, and below
+ * {@link Z_INDEX_FIRST_RUN} so the wizard always wins if both are mounted. Pinned by
+ * `z-index.test.tsx`.
  */
-export declare const Z_INDEX_ONBOARDING_TOUR = 650;
+export declare const Z_INDEX_ONBOARDING_TOUR = 690;
 /**
  * Z-index for the first-run setup wizard gate. Must sit above every other layer (including
- * Z_INDEX_ABOVE_DOCK and Z_INDEX_TOOLTIP) so the wizard fully gates the app at startup and nothing
- * behind it remains clickable or focusable.
+ * {@link Z_INDEX_ABOVE_POPOVER}, `Z_INDEX_TOOLTIP` and {@link Z_INDEX_ONBOARDING_TOUR}) so the wizard
+ * fully gates the app at startup and nothing behind it remains clickable or focusable.
  */
 export declare const Z_INDEX_FIRST_RUN = 700;
+/**
+ * Z-index for the connection-lost state. Sits above every other layer, {@link Z_INDEX_FIRST_RUN}
+ * included.
+ *
+ * When the websocket to the rest of the app dies, every layer beneath this one is inert — the
+ * first-run wizard cannot submit, modals cannot resolve, the toolbar cannot navigate. Anything
+ * rendering over this state would be offering the user a control that silently does nothing. Pinned
+ * by `z-index.test.tsx`.
+ */
+export declare const Z_INDEX_CONNECTION_LOST = 800;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

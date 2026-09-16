@@ -115,6 +115,57 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
+    id: 'book-chapter-control-move-grid-highlight',
+    purpose:
+      'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid either once the caret has nowhere left to go or once a vertical arrow has stepped into the grid; editing the query hands them back to the caret',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: {
+      macOS: '↑ / ↓ / ← / →',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.utils.ts',
+    ],
+  },
+  {
+    id: 'book-chapter-control-activate-grid-item',
+    purpose:
+      'Go to the highlighted chapter or verse in the Book Chapter Control grid. In the books view — where the search box is on screen and the grid below it is a preview of the typed reference — Enter submits that reference instead, and Space stays an ordinary character',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  {
+    id: 'book-chapter-control-cycle-focus',
+    purpose:
+      'Move between the Book Chapter Control’s own controls (search box, recent searches, quick-navigation arrows, show-more toggle), wrapping at the ends rather than leaving the popover. The chapter and verse views have no controls of their own, so there the key does nothing — Escape closes the picker',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  {
+    id: 'book-chapter-control-back',
+    purpose:
+      'Go back one level in the Book Chapter Control — verses to chapters, chapters to books',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⌫', windows: 'Backspace', linux: 'Backspace' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  // Escape on the Book Chapter Control popover is deliberately absent from this catalog; the
+  // reasoning is recorded once, under "Not catalogued" in keyboard-shortcuts.mdx.
+  {
     id: 'reference-history-back',
     purpose: 'Go back one Scripture reference in the active scroll group’s history',
     category: 'Navigation',
@@ -141,6 +192,39 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // combo (NOTIFICATION_TOASTER_HOTKEY) - they must not drift apart.
     keys: { macOS: '⌥T', windows: 'Alt+T', linux: 'Alt+T' },
     locations: ['src/renderer/components/notification-display.tsx'],
+  },
+  {
+    id: 'connection-lost-contain-focus',
+    purpose:
+      'Keep focus on Reload while the connection-lost state is shown, so the keyboard cannot reach controls that can no longer work',
+    category: 'Navigation',
+    context: 'Renderer (global, only while the connection-lost state is shown)',
+    // Containment is the Radix modal `Dialog`'s default, shared with every other dialog in the app
+    // and not catalogued for them. Listed for this one because here it is load-bearing rather than
+    // incidental: every control it keeps focus away from is one that can no longer do anything.
+    // Not total — a focus scope only constrains where focus lands, so three categories still fire:
+    // main's `before-input-event` accelerators, the `document`-level toaster hotkeys (Sonner's own
+    // and Alt+T above), and PlatformMenubar's Alt / Alt+P / Alt+L / Alt+N / Alt+H, which are
+    // `react-hotkeys-hook` bindings that additionally pull focus OUT of the scope by calling
+    // `.focus()` on a menu trigger behind the scrim. See the component doc block.
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'src/renderer/components/overlays/overlay-connection-lost.component.tsx',
+      'lib/platform-bible-react/src/components/shadcn-ui/dialog.tsx',
+    ],
+  },
+  {
+    id: 'connection-lost-swallow-escape',
+    purpose:
+      'Do nothing — the connection-lost state deliberately cannot be dismissed, so Escape is inert while it is shown',
+    category: 'Menus',
+    context: 'Renderer (global, only while the connection-lost state is shown)',
+    // `onEscapeKeyDown` is prevented on the state's DialogContent. Catalogued because it is the one
+    // dialog in the app where Escape does NOT close anything, and because the `dismiss-overlays`
+    // entry says a modal dialog on top is left to its own shell — this is that shell, and it
+    // swallows the key. Reload is the only way out.
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['src/renderer/components/overlays/overlay-connection-lost.component.tsx'],
   },
   {
     id: 'zoom-in',
@@ -418,8 +502,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Scripture Text Grid web view',
     keys: {
       macOS: '↑ / ↓ / ← / →',
-      windows: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
-      linux: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',

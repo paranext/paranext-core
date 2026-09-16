@@ -18,6 +18,11 @@ import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 import type { WebViewServiceType } from '@shared/services/web-view.service-model';
+import {
+  forgetWindowWithholding,
+  noteWindowWithheldFromActivation,
+  resetWindowActivationForTesting,
+} from '@main/window-activation.util';
 
 const mocks = vi.hoisted(() => {
   // Where the router's shard index parks its subscriptions. Plain arrays rather than the subscribe
@@ -185,6 +190,9 @@ async function getCommandHandler(commandName: string) {
 describe('web view service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Which windows were created without activation, and whose focus has already been handed
+    // back, is process state, not a mock — nothing else clears it between tests.
+    resetWindowActivationForTesting();
     mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
@@ -611,9 +619,60 @@ describe('web view service router', () => {
 
       const openedId = await router.openWebView('someType', { type: 'window' });
 
-      expect(created.openWebView).toHaveBeenCalledWith('someType', { type: 'tab' }, undefined);
+      expect(created.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        undefined,
+        false,
+      );
       expect(focused.openWebView).not.toHaveBeenCalled();
       expect(openedId).toBe('opened');
+    });
+
+    test('a window created without activation opens the view without taking document focus', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      withWindows({ 1: focused, 7: created });
+      setWebViewWindowCreator({
+        createPendingContentWindow: vi.fn(async () => '7'),
+        closeWindow: vi.fn(),
+      });
+      const router = await getRouter();
+      // What the window creator does for a web view's own window: brings it into being without
+      // activating it, so the content that lands must not activate it either
+      noteWindowWithheldFromActivation('7');
+
+      await router.openWebView('someType', { type: 'window' });
+
+      expect(created.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        undefined,
+        true,
+      );
+    });
+
+    test('a window the user has activated opens the view normally', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      withWindows({ 1: focused, 7: created });
+      setWebViewWindowCreator({
+        createPendingContentWindow: vi.fn(async () => '7'),
+        closeWindow: vi.fn(),
+      });
+      const router = await getRouter();
+      noteWindowWithheldFromActivation('7');
+      // The user clicked into it before the content arrived, so it is an ordinary window now
+      forgetWindowWithholding('7');
+
+      await router.openWebView('someType', { type: 'window' });
+
+      expect(created.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        undefined,
+        false,
+      );
     });
 
     test('degrades to a tab in the focused window in simple mode', async () => {
@@ -627,7 +686,12 @@ describe('web view service router', () => {
       await router.openWebView('someType', { type: 'window' });
 
       expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
-      expect(focused.openWebView).toHaveBeenCalledWith('someType', { type: 'tab' }, undefined);
+      expect(focused.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        undefined,
+        false,
+      );
     });
 
     test('degrades to a tab when the interface mode cannot be read', async () => {
@@ -792,6 +856,7 @@ describe('web view service router', () => {
         'comments',
         { type: 'tab' },
         { existingId: '?' },
+        false,
       );
     });
 
@@ -811,6 +876,7 @@ describe('web view service router', () => {
         'comments',
         { type: 'tab' },
         { existingId: '?' },
+        false,
       );
     });
 
@@ -960,7 +1026,7 @@ describe('web view service router', () => {
       const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
       setWebViewWindowCreator(creator);
       await getRouter();
-      const freshWindow = await createFreshWindow('someType');
+      const freshWindow = await createFreshWindow('someType', false);
 
       await Promise.all([freshWindow.discard(), freshWindow.discard()]);
 
@@ -984,8 +1050,30 @@ describe('web view service router', () => {
         'someType',
         { type: 'tab' },
         { targetWindowId: '2' },
+        false,
       );
       expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('a named window that is still in the background keeps its content from focusing it', async () => {
+      // A caller can name a window created for an earlier web view, which may never have been
+      // activated — the second open must not do what the first was stopped from doing.
+      const focused = windowShard([]);
+      const named = windowShard([]);
+      withWindows({ 1: focused, 2: named });
+      const router = await getRouter();
+      noteWindowWithheldFromActivation('2');
+
+      await router.openWebView('someType', { type: 'tab' }, { targetWindowId: '2' });
+
+      expect(named.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        { targetWindowId: '2' },
+        true,
+      );
+
+      forgetWindowWithholding('2');
     });
 
     test('fails rather than guessing when the named window does not exist', async () => {
@@ -1448,6 +1536,65 @@ describe('web view service router', () => {
       await router.openWebView('comments', undefined, { existingId: '?', bringToFront: true });
 
       expect(mocks.focusWindow).toHaveBeenCalledWith('2');
+    });
+
+    test('withholds document focus from the shard when about to raise across windows, so the raise below has a tab left waiting to catch up on', async () => {
+      // `focusWindow` below runs an OS-level raise of a window that is, at the moment the shard's
+      // own `openWebView` call runs above it, still backgrounded. A `focus()` call made then would
+      // set that document's active element without raising the window — latently, not lost — and
+      // stay open to being overwritten by whatever else in that window calls `focus()` before the
+      // raise actually happens. Withholding here leaves that decision to the shard's own catch-up at
+      // raise time, so this open is the one that ends up owning the caret.
+      const owner = windowShard(['existing-view']);
+      owner.openWebView.mockResolvedValue('existing-view');
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('someType', undefined, { existingId: 'existing-view' });
+
+      expect(owner.openWebView).toHaveBeenCalledWith(
+        'someType',
+        undefined,
+        { existingId: 'existing-view' },
+        true,
+      );
+    });
+
+    test('does not withhold document focus when the routed window is already the one the user is in (no raise happening)', async () => {
+      const focused = windowShard(['existing-view']);
+      withWindows({ 1: focused, 2: windowShard([]) });
+      const router = await getRouter();
+
+      await router.openWebView('someType', undefined, { existingId: 'existing-view' });
+
+      expect(focused.openWebView).toHaveBeenCalledWith(
+        'someType',
+        undefined,
+        { existingId: 'existing-view' },
+        false,
+      );
+    });
+
+    test('does not withhold document focus for a passive probe that opted out of bringToFront', async () => {
+      // The pre-open snapshot mirrors the same `bringToFront` opt-out the post-open raise already
+      // respects — a probe that declined the raise must not have its content withheld either.
+      const owner = windowShard([{ id: 'wv-2', webViewType: 'comments' }]);
+      owner.openWebView.mockResolvedValue('wv-2');
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('comments', undefined, {
+        existingId: '?',
+        createNewIfNotFound: false,
+        bringToFront: false,
+      });
+
+      expect(owner.openWebView).toHaveBeenCalledWith(
+        'comments',
+        undefined,
+        { existingId: '?', createNewIfNotFound: false, bringToFront: false },
+        false,
+      );
     });
   });
 

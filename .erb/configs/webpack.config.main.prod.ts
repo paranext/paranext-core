@@ -10,6 +10,7 @@ import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
 import deleteSourceMaps from '../scripts/delete-source-maps';
 import { GenerateBuildInfoPlugin } from './generate-build-info-plugin';
+import { EmitShippedModulesPlugin } from './emit-shipped-modules-plugin';
 
 checkNodeEnv('production');
 deleteSourceMaps();
@@ -78,6 +79,14 @@ const configuration: webpack.Configuration = {
           require('child_process').execSync('git rev-parse HEAD').toString().trim()
         }`,
       }),
+    }),
+
+    // Writes .notices/modules/main.json: the modules webpack actually compiled into this bundle,
+    // for the third-party notices generator. Production only - a dev build's module graph includes
+    // hot-reload machinery that does not ship.
+    new EmitShippedModulesPlugin({
+      bundleName: 'main',
+      outputDir: path.join(webpackPaths.rootPath, '.notices', 'modules'),
     }),
   ],
 

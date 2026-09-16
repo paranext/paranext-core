@@ -4,7 +4,6 @@ import {
   SettingsSidebarContentSearch,
   usePromise,
 } from 'platform-bible-react';
-import { PROJECT_SELECTOR_STRING_KEYS } from 'platform-bible-react/experimental';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import {
   filterProjectSettingsContributionsByProjectInterfaces,
@@ -58,9 +57,6 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_noSettingsFound%',
   '%settings_defaultMessage_noSettingsFoundDetails%',
   SYNC_BLOCKED_NOTICE_KEY,
-  // The sidebar embeds a ProjectSelector, so that component's keys resolve in the same
-  // subscription as the tab's own.
-  ...PROJECT_SELECTOR_STRING_KEYS,
 ];
 
 const filterSettingsContributions = (
@@ -308,7 +304,6 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_generalSettingsLabel%']}
           projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectSettingsLabel%']}
           buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
-          projectSelectorLocalizedStrings={localizedStrings}
         >
           <div className="project-or-settings-list-container">
             {selectedSidebarItem.projectId ? (

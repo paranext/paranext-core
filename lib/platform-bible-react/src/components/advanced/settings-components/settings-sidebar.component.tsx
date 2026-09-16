@@ -1,9 +1,7 @@
-import { type LanguageStrings } from 'platform-bible-utils';
 import {
   ProjectSelector,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
-import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import {
   Sidebar,
   SidebarContent,
@@ -50,18 +48,6 @@ export type SettingsSidebarProps = {
   /** Placeholder text for the button */
   buttonPlaceholderText: string;
 
-  /**
-   * Localized strings for the project picker's popover (search placeholder, filter menu, section
-   * headings), keyed by localize key. Resolve them from `PROJECT_SELECTOR_STRING_KEYS`, exported
-   * from `platform-bible-react/experimental`. Any key left unresolved falls back to the picker's
-   * English default.
-   *
-   * Typed structurally rather than as the picker's own `ProjectSelectorLocalizedStrings` so this
-   * stable-surface type does not name a type from the experimental entry point, whose shape carries
-   * no stability guarantee.
-   */
-  projectSelectorLocalizedStrings?: LanguageStrings;
-
   /** Additional css classes to help with unique styling of the sidebar */
   className?: string;
 };
@@ -82,7 +68,6 @@ export function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
-  projectSelectorLocalizedStrings,
   className,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
@@ -156,11 +141,14 @@ export function SettingsSidebar({
               (no click handler), so keeping it adjacent to — rather than inside — the trigger
               preserves the visual affordance without bloating the canonical component.
 
-              Open Tabs grouping isn't wired here because the platform-bible-react library is
-              intentionally PAPI-free (see CLAUDE.md "Symlinked Directories" / lib boundaries).
-              `useOpenProjectTabs` lives in the extension layer; passing `openTabs={[]}` makes the
-              ProjectSelector fall back to a flat (non-grouped) list. If a future consumer needs
-              the grouping, they can pass `openTabs` in via a new prop on this component.
+              No groupings at all are offered here, and that is deliberate rather than an
+              oversight. platform-bible-react is intentionally PAPI-free (see CLAUDE.md
+              "Symlinked Directories" / lib boundaries), so this component cannot reach project
+              settings or the recently-opened-projects service, and its public `ProjectInfo` prop
+              carries only an id and a name — there is no language, type, or recency to group by.
+              `useOpenProjectTabs` likewise lives in the extension layer, so `openTabs={[]}` keeps
+              the ProjectSelector on a flat (non-grouped) list. A consumer that wants grouping
+              passes `openTabs` and richer rows in via new props on this component.
             */}
             <div
               className={cn(
@@ -176,7 +164,6 @@ export function SettingsSidebar({
                 mode="project"
                 projects={projectSelectorProjects}
                 openTabs={[]}
-                availableGroupings={['openTabs']}
                 selection={{ projectId: selectedSidebarItem?.projectId ?? '' }}
                 onChangeSelection={({ projectId: nextId }) => {
                   if (!nextId) return;
@@ -185,12 +172,10 @@ export function SettingsSidebar({
                 }}
                 buttonVariant="ghost"
                 buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
-                buttonPlaceholder={buttonPlaceholderText}
-                ariaLabel={projectsSidebarGroupLabel}
-                localizedStrings={projectSelectorLocalizedStrings}
-                // TODO: Check if this z-index override is necessary — the PopoverContent default
-                // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
-                popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
+                localizedStrings={{
+                  buttonPlaceholder: buttonPlaceholderText,
+                  ariaLabel: projectsSidebarGroupLabel,
+                }}
               />
             </div>
           </SidebarGroupContent>
