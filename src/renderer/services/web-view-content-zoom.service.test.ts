@@ -1206,6 +1206,48 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-10')?.state).toEqual(zoomState({ main: 0.8 }, 'editor:PROJ-X'));
   });
 
+  it('does not commit a write chosen under a resolvable identity once the pane becomes unresolvable', async () => {
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.2 };
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    definitions.set('editor-11', {
+      id: 'editor-11',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-a',
+      state: {},
+    });
+    setContentZoomAreas('editor-11', ['main']);
+    await __flushContentZoomWritesForTesting();
+    expect(definitions.get('editor-11')?.state).toEqual(zoomState({ main: 1.2 }, 'editor:PROJ-A'));
+
+    // A further edit's commit fails, so the level stays pending — recorded under project A's
+    // identity, the one the pane showed when the edit was made.
+    updateDefinition.mockImplementation(() => false);
+    await adjustContentZoom('editor-11', 1, 'main');
+    expect(definitions.get('editor-11')?.state).toEqual(zoomState({ main: 1.2 }, 'editor:PROJ-A'));
+
+    // The pane loses its project before that pending write's first retry lands (no projectId and
+    // no state.resourceId — the same unresolvable shape "editor-9" exercises), while its state (and
+    // the stamp already in it) carries over unchanged, as a real re-point's state-spread would.
+    // `reseedIfIdentityChanged` runs (there is a stamp to compare against) but has no identity of
+    // its own to seed from, so it is a no-op — this is not the re-point path, just the pane going
+    // project-less.
+    definitions.set('editor-11', {
+      id: 'editor-11',
+      webViewType: 'platformScriptureEditor.react',
+      state: requireDefinition('editor-11').state,
+    });
+    onDidUpdateWebViewCallback?.({ webView: requireDefinition('editor-11') });
+
+    // The stale write's retry can now succeed. Committing it unstamped here would let a LATER
+    // re-point stamp project A's level as belonging to whatever project the pane resolves to next
+    // (`seedFromMemory`'s own "no stamp, but levels already held" case treats an unstamped level as
+    // this window's own to re-attribute) — the same misattribution this whole guard exists to stop.
+    updateDefinition.mockImplementation(applyDefinitionUpdate);
+    forgetContentZoom('editor-11');
+    expect(definitions.get('editor-11')?.state).toEqual(zoomState({ main: 1.2 }, 'editor:PROJ-A'));
+  });
+
   it('treats a non-string identity stamp as no stamp at all', async () => {
     definitions.set('editor-8', {
       id: 'editor-8',
