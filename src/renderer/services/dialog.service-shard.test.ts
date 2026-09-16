@@ -14,6 +14,7 @@ vi.mock('@renderer/services/overlays/overlay-store', () => ({
 
 // Mock web-view service (needed by dialog service initialize)
 const mockCloseTab = vi.fn();
+const mockOnLayoutLoadTabIds = vi.fn();
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   initialize: vi.fn().mockResolvedValue(undefined),
   addTab: vi.fn(),
@@ -23,6 +24,10 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   // covered against the real module in `dialog.service-shard.layout-load.test.ts`.
   throwIfWindowIsClosing: vi.fn(),
   waitForLayoutLoadToSettle: vi.fn(async () => {}),
+  // Captured so a test can invoke the shard's own subscriber directly with a chosen surviving-tab
+  // set, the same way the real event would deliver one. Real end-to-end coverage (a live layout
+  // load actually dropping a docked dialog's tab) lives in `dialog.service-shard.layout-load.test.ts`.
+  onLayoutLoadTabIds: mockOnLayoutLoadTabIds,
 }));
 
 // Mock localization service
@@ -286,6 +291,36 @@ describe('dialog.service-shard', () => {
       rejectDialogRequest('mock-guid', 'something went wrong');
 
       await expect(dialogPromise).rejects.toBe('something went wrong');
+    });
+  });
+
+  describe('a layout load that keeps the dialog tab', () => {
+    it('leaves the dialog request alone', async () => {
+      const { hasDialogRequest } = await import('./dialog.service-shard');
+
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
+      vi.mocked(addTab).mockResolvedValue(undefined);
+
+      const dialogPromise = capturedShowDialog('platform.selectProject', {});
+      // Never resolved by this test; a wrongly-settled promise would otherwise report as an
+      // unhandled rejection instead of failing the assertion below.
+      dialogPromise.catch(() => {});
+
+      await vi.waitFor(() => {
+        expect(hasDialogRequest('mock-guid')).toBe(true);
+      });
+
+      expect(mockOnLayoutLoadTabIds).toHaveBeenCalledTimes(1);
+      const [layoutLoadHandler] = mockOnLayoutLoadTabIds.mock.calls[0];
+      // The loaded layout still contains this dialog's tab id, so its request must survive.
+      layoutLoadHandler(new Set(['mock-guid', 'some-other-tab']));
+
+      expect(hasDialogRequest('mock-guid')).toBe(true);
+
+      // Clean up: resolve the dialog request so it doesn't leak into subsequent tests
+      const { resolveDialogRequest } = await import('./dialog.service-shard');
+      resolveDialogRequest('mock-guid', undefined);
+      await dialogPromise;
     });
   });
 });
