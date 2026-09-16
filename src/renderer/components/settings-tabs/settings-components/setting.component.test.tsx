@@ -120,7 +120,7 @@ describe('debounced text-setting writes', () => {
     // The default mock implementation (`() => [{}]`) hands back a fresh object every call, which
     // this describe overrides with a stable one — see the test for why. Restored so that default
     // doesn't leak into a later test that assumes it.
-    vi.mocked(useLocalizedStrings).mockImplementation(() => [{}]);
+    vi.mocked(useLocalizedStrings).mockImplementation(() => [{}, false]);
   });
 
   it('collapses two keystrokes either side of an unrelated re-render into one write', async () => {
