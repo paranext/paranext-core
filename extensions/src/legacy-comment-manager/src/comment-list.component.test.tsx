@@ -47,7 +47,7 @@ const STRINGS: LanguageStrings = {
   '%comment_filter_preset_unread%': 'Unread',
   '%comment_filter_preset_unread_and_unresolved%': 'Unread and unresolved',
   '%comment_filter_preset_resolved%': 'Resolved',
-  '%comment_filter_preset_unsaved%': 'Unsaved notes',
+  '%comment_filter_preset_unsaved%': 'Unsaved comments',
   '%comment_filter_preset_conflict%': 'Conflicts',
   '%comment_filter_scope_all_books%': 'All books',
   '%comment_filter_scope_current_book%': 'Current book',
@@ -125,7 +125,7 @@ describe('CommentListPanel filter toolbar', () => {
   it('disables the unsaved preset until draft tracking exists', async () => {
     renderPanel();
     await userEvent.click(screen.getByRole('combobox', { name: PRESET_ARIA }));
-    expect(screen.getByRole('option', { name: 'Unsaved notes' })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: 'Unsaved comments' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
