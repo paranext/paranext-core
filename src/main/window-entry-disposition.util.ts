@@ -30,10 +30,12 @@ export type WindowEntryDispositionInput = {
  * and its entry is what a later reopen creates it from.
  *
  * A window whose renderer was given up on after crash-looping keeps its entry too, so that
- * accepting the offer to close it costs the user nothing: the window is dead either way, and its
- * tabs are still there next launch. The price is that a layout which reliably kills its renderer is
- * rebuilt on every launch and every switch back to power, with no way out from inside the app —
- * `TODO(PT-4636)` is where the recovery policy for that case is decided.
+ * accepting the offer to close it costs the user none of its tabs: the window is dead either way,
+ * and its tabs are still there next launch. The price is that a layout which reliably kills its
+ * renderer is rebuilt on every launch and every switch back to power, with no way out from inside
+ * the app once the window is abandoned.
+ *
+ * TODO(PT-4636): decide the recovery policy for a layout that crash-loops.
  *
  * The exception, for the last two but deliberately NOT for a quit: a window still waiting for the
  * content it was created to receive has nothing in its entry, so keeping it would resurrect a blank
