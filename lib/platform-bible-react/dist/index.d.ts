@@ -887,8 +887,9 @@ export type FootnoteLayout = "horizontal" | "vertical";
  * The offset origin is the note's CONTENT: every character run the note contains, including a
  * leading `fr`/`xo` target reference, which PT9's notes pane and `FootnoteItem` alike render inline
  * at the head of the note text. It excludes everything that is display rather than content — the
- * caller (`FootnoteItem` renders it in a separate header div) and the USFM markers themselves
- * (`.marker` spans; see `isMarkerText` in `footnote-caret.utils.ts`).
+ * caller (`FootnoteItem` renders it in a separate header div), the USFM markers themselves
+ * (`.marker` spans) and the note's `\cat` category, which is a field on the note rather than part
+ * of its content (see `isDisplayText` in `footnote-caret.utils.ts`).
  *
  * That origin is the note's USJ text, NOT any one rendering of it, which is what lets a position
  * captured over a read-only row resolve inside a live editor: the editor adds its own display
@@ -964,7 +965,12 @@ export interface FootnoteListProps {
 	layout?: FootnoteLayout;
 	/**
 	 * ID provided by the caller that should change whenever the list changes (due to additions,
-	 * deletions or — unlikely — reordering) )
+	 * deletions or — unlikely — reordering).
+	 *
+	 * Changing it re-mints every read-only row. The row named by
+	 * {@link FootnoteListProps.editingFootnoteIndex} is exempt: it hosts a live editor holding state
+	 * no prop carries, and it stays mounted across list-id changes so a note added or removed
+	 * elsewhere cannot discard an edit in progress.
 	 */
 	listId: string | number;
 	/** The currently selected footnote (or undefined if none) */
@@ -1023,7 +1029,8 @@ export interface FootnoteListProps {
  * @param clientY Viewport Y of the click.
  * @param rowElement The row's root element; the offset is computed over the text of its
  *   `.textual-note-body` descendant - the note's character runs, excluding the caller (rendered in
- *   the row's header cell) and the rendered USFM markers (see `isMarkerText`).
+ *   the row's header cell), the rendered USFM markers and the `\cat` category run (see
+ *   `isDisplayText`).
  * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
  *   (no browser support, click outside the body text, empty note).
  */
@@ -1130,8 +1137,9 @@ export interface FootnoteEditorProps {
 	ref?: React$1.Ref<FootnoteEditorHandle>;
 	/**
 	 * Where to place the caret in the note text after the note loads. `'end'` matches PT9's
-	 * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row. When
-	 * omitted, the editor does not move the caret (existing popover behavior).
+	 * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row.
+	 * Omitting it is the same as `'end'` — the editor always places a caret, so a note opened from
+	 * any surface is ready to type in.
 	 */
 	initialCaretPosition?: FootnoteCaretPosition;
 	/**
