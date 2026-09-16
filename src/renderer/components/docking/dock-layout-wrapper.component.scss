@@ -194,6 +194,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   border-radius: var(--radius);
 }
 
+// A web view can hold document focus in a window that is not the one the user is currently in —
+// see window.service-shard.ts for both the "cross-window raise" catch-up and the
+// `platform-window-not-focused` class (toggled on the root element) this rule keys off of. Left
+// alone, the browser's default focus outline would still draw on that iframe. Mirrors the
+// Simple-mode reset in dock-layout-wrapper.simple-mode.scss's SIMPLE-MODE FOCUS RING region,
+// scoped to Power mode since Simple mode already resets this outline unconditionally.
+:root.platform-window-not-focused [data-interface-mode='power'] .web-view:focus {
+  outline: none;
+}
+
 // #endregion TAB-PANE (CONTENTS) ///////////////////////////////////////
 
 // #region TAB-BAR //////////////////////////////////////////////////////

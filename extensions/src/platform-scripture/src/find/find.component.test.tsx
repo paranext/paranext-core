@@ -357,6 +357,86 @@ describe('Find project selector — simple interface mode', () => {
   });
 });
 
+/**
+ * The picker's grouping menu labels come from the shared `%projectSelector_grouping_*%` keys, which
+ * `buildProps` stubs key-as-value along with the rest of `FIND_LOCALIZED_STRING_KEYS`.
+ */
+const LANGUAGE_GROUPING_LABEL_KEY = '%projectSelector_grouping_language_label%';
+const TYPE_GROUPING_LABEL_KEY = '%projectSelector_grouping_type_label%';
+const LAST_USED_GROUPING_LABEL_KEY = '%projectSelector_grouping_lastUsed_label%';
+
+const PROJECTS_WITH_LANGUAGES: FindProject[] = [
+  { id: 'WEB', shortName: 'WEB', fullName: 'World English Bible', language: 'English' },
+  { id: 'OTH', shortName: 'OTH', fullName: 'Other Bible', language: 'Spanish' },
+];
+const OPEN_TABS_TWO_PROJECTS: ProjectSelectorOpenTab[] = [
+  ...OPEN_TABS,
+  { projectId: 'OTH', scrollGroupId: 0 },
+];
+
+/**
+ * The picker's group-by menu trigger, found by its menu-popup semantics rather than by its
+ * accessible name: the name comes from the shared `%projectSelector_*%` block, and matching on the
+ * role a dropdown trigger must expose keeps these tests independent of how that string is spelled.
+ * The length assertion keeps the query honest — it is the only menu-opening button in the picker.
+ */
+function getGroupByTrigger(): HTMLElement {
+  const menuTriggers = within(screen.getByRole('dialog'))
+    .getAllByRole('button')
+    .filter((button) => button.getAttribute('aria-haspopup') === 'menu');
+  expect(menuTriggers).toHaveLength(1);
+  return menuTriggers[0];
+}
+
+async function openGroupByMenu(user: ReturnType<typeof setupUser>) {
+  await openProjectSelector(user);
+  await user.click(getGroupByTrigger());
+}
+
+describe('Find project selector — groupings', () => {
+  it('buckets projects by language when the caller supplies it', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({ projects: PROJECTS_WITH_LANGUAGES, openTabs: OPEN_TABS_TWO_PROJECTS })}
+      />,
+    );
+
+    await openGroupByMenu(user);
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
+    );
+
+    // Section headings, not row text: no project's short or full name is exactly 'English' or
+    // 'Spanish', so these match the language buckets and nothing else.
+    expect(await screen.findByText('English')).toBeInTheDocument();
+    expect(screen.getByText('Spanish')).toBeInTheDocument();
+  });
+
+  it('offers neither Type nor Last used, which Find cannot split into real buckets', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({ projects: PROJECTS_WITH_LANGUAGES, openTabs: OPEN_TABS_TWO_PROJECTS })}
+      />,
+    );
+
+    await openGroupByMenu(user);
+
+    // Falsifies the negative assertions below: the menu did open, and it offers the groupings Find
+    // can actually populate.
+    expect(
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL_KEY }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL_KEY }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 // #region PT-4343 lifecycle + permission suites
 
 /**
@@ -416,6 +496,9 @@ const STRINGS = {
   '%webView_find_replace_readOnlyTooltip%':
     "This project is read-only, so replacements can't be made.",
   '%webView_find_previewOptions_toggle%': 'Preview style',
+  '%webView_find_extraMaterialNotSearchedScope%': "Find doesn't search extra material.",
+  '%webView_find_extraMaterialNotSearchedScopeResults%':
+    "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
 };
 
 /** `buildProps` with the English string map swapped in, for the suites below. */
@@ -881,4 +964,300 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
       expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveClass('tw:bg-muted');
     },
   );
+});
+
+// The book and chapter scopes resolve to the CURRENT reference's book rather than to the (already
+// extra-material-free) book list, so nothing else keeps a search in a glossary from producing
+// matches labeled with the meaningless reference the exclusion exists to hide.
+describe('Find — current reference in extra material', () => {
+  const GLOSSARY_VERSE_REF: SerializedVerseRef = { book: 'GLO', chapterNum: 1, verseNum: 1 };
+  // The placeholder and the scope tooltip are separate strings: the placeholder has to name a way
+  // out, the tooltip only has to say why the option is unavailable.
+  const EXTRA_MATERIAL_MESSAGE =
+    "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.";
+  // The scope selector's own strings stay stubbed to their keys — `buildLifecycleProps` swaps in
+  // English only for Find's own strings.
+  const BOOK_SCOPE_LABEL_KEY = '%webView_scope_selector_book%';
+  const CHAPTER_SCOPE_LABEL_KEY = '%webView_scope_selector_chapter%';
+
+  /**
+   * The scope option a label names, found through the label's `for`.
+   *
+   * Not `getByRole('radio', { name })`: the scope selector renders each option as a Radix `<button
+   * role="radio">`, and the accessible-name computation does not pick up a `<label for>` pointing
+   * at a button, so every option comes back nameless.
+   */
+  function getScopeOption(labelKey: string): HTMLElement {
+    const optionId = screen.getByText(labelKey).getAttribute('for');
+    if (!optionId) throw new Error(`Scope label '${labelKey}' has no 'for'`);
+    const option = document.getElementById(optionId);
+    if (!option) throw new Error(`Scope label '${labelKey}' points at missing id '${optionId}'`);
+    return option;
+  }
+
+  it.each(['book', 'chapter'] as const)(
+    'explains why the %s scope cannot run instead of showing results for it',
+    (scope) => {
+      render(
+        <Find
+          {...buildLifecycleProps({
+            scope,
+            verseRef: GLOSSARY_VERSE_REF,
+            searchTerm: 'God',
+            results: [RESULT],
+            resultsByBook: RESULTS_BY_BOOK,
+            searchStatus: 'completed',
+            totalNumberOfResults: 1,
+          })}
+        />,
+      );
+
+      expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+      // The stale results are replaced, not merely covered — they carry the bogus reference.
+      expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+    },
+  );
+
+  // The rows are suppressed for an invalid query; a count and working arrows left behind read as a
+  // live search over an empty results area, and the arrows still drive the editor.
+  it('drops the result count and navigation along with the results', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('1 of 1')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next result' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Previous result' })).not.toBeInTheDocument();
+  });
+
+  // Before typing is where the reason is most useful, and it is the state a user lands in by
+  // navigating into extra material. The idle "enter search text" prompt would be false here — no
+  // term will run while the scope is blocked.
+  it('explains the block before a search term is entered, rather than prompting for one', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({ scope: 'book', verseRef: GLOSSARY_VERSE_REF, searchTerm: '' })}
+      />,
+    );
+
+    expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText('Enter search text to find results')).not.toBeInTheDocument();
+    // The trigger's de-emphasis and its description are one condition, so it never reads as
+    // unavailable while the reason is nowhere on screen.
+    expect(screen.getByRole('button', { name: /Showing/ })).toHaveAttribute('aria-describedby');
+  });
+
+  // "Select at least one book" would send the user to a picker that cannot fix this: the picker
+  // never offers extra material, and the fix is to move the reference or change scope.
+  it('does not fall back to the select-books wording, which names the wrong remedy', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(EXTRA_MATERIAL_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
+  });
+
+  // The selected books are the user's own choice and already exclude extra material, so where the
+  // reference happens to sit says nothing about them.
+  it('leaves the selectedBooks scope searchable while the reference sits in extra material', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+          results: [RESULT],
+          resultsByBook: RESULTS_BY_BOOK,
+          searchStatus: 'completed',
+          totalNumberOfResults: 1,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(RESULT_MATCH_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText(EXTRA_MATERIAL_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('disables both current-reference scopes in the picker so neither can be chosen', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeDisabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeDisabled();
+  });
+
+  it('leaves both scopes selectable while the reference is in a scripture book', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({ scope: 'selectedBooks', selectedBookIds: ['GEN'] })} />);
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeEnabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeEnabled();
+  });
+
+  // `localizedStrings` is an open index signature, so an unrequested key reads as `undefined` with
+  // no compile error. Leaving the scopes enabled while the query gate still rejects them would be
+  // worse than showing a raw key, so the explanation falls back to the key rather than vanishing.
+  it('keeps the scopes disabled when the explanation string is missing', async () => {
+    const user = setupUser();
+    // Built by omission rather than by deleting from a copy: `STRINGS`'s inferred type has the key
+    // as required, so `delete` is a type error — one no check in this repo would report, since
+    // `platform-scripture`'s tsconfig excludes test files and the workspace has no typecheck
+    // script.
+    const stringsWithoutExplanation = Object.fromEntries(
+      Object.entries(STRINGS).filter(
+        ([key]) => key !== '%webView_find_extraMaterialNotSearchedScope%',
+      ),
+    );
+    render(
+      <Find
+        {...buildProps({
+          localizedStrings: stringsWithoutExplanation,
+          scope: 'selectedBooks',
+          selectedBookIds: ['GEN'],
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Showing/ }));
+
+    expect(getScopeOption(BOOK_SCOPE_LABEL_KEY)).toBeDisabled();
+    expect(getScopeOption(CHAPTER_SCOPE_LABEL_KEY)).toBeDisabled();
+  });
+
+  // The results area carries the explanation, but it scrolls; the collapsed trigger must not read
+  // as an ordinary active scope on its own.
+  it('points the collapsed scope trigger at the placeholder that explains the block', () => {
+    render(
+      <Find
+        {...buildLifecycleProps({
+          scope: 'book',
+          verseRef: GLOSSARY_VERSE_REF,
+          searchTerm: 'God',
+        })}
+      />,
+    );
+
+    // Asserted from the trigger outwards: the description has to be on the BUTTON, since a button
+    // is atomic to assistive technology and a description on a span inside it is never announced.
+    // Following the id through to the element proves the two sides name the same node — reading the
+    // id off the placeholder instead would pass for any element that merely carries the attribute.
+    const trigger = screen.getByRole('button', { name: /Showing/ });
+    const describedById = trigger.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    expect(trigger).toHaveTextContent('GLO');
+    expect(document.getElementById(describedById ?? '')).toHaveTextContent(EXTRA_MATERIAL_MESSAGE);
+  });
+
+  // A fixed id would collide wherever two Find components share a document, e.g. a Storybook
+  // autodocs page, and aria-describedby would then resolve to whichever copy came first.
+  it('gives each Find its own placeholder id', () => {
+    const props = buildLifecycleProps({
+      scope: 'book',
+      verseRef: GLOSSARY_VERSE_REF,
+      searchTerm: 'God',
+    });
+    render(
+      <>
+        <Find {...props} />
+        <Find {...props} />
+      </>,
+    );
+
+    const describedByIds = screen
+      .getAllByRole('button', { name: /Showing/ })
+      .map((trigger) => trigger.getAttribute('aria-describedby'));
+
+    expect(describedByIds).toHaveLength(2);
+    expect(new Set(describedByIds).size).toBe(2);
+  });
+});
+
+// `buildProps` stubs every localized string as its own key, which is exactly what
+// `useLocalizedStrings` hands a consumer before the strings arrive. `RecentSearches` treats a raw
+// key as not-yet-localized and falls back to its English default, so this — not the key — is the
+// button's accessible name here. That fallback is what keeps a `%key%` off the screen when it is
+// rendered as visible tooltip text.
+const RECENT_SEARCHES_LABEL = 'Show recent searches';
+
+// `recentSearches: []` in `buildProps` means every other suite in this file renders
+// `RecentSearches` with an empty list, which makes it return `undefined` and never mount — so
+// nothing else here exercises the menu it opens. These are the only tests that do.
+describe('Find — recent searches menu', () => {
+  const RECENT_SEARCH_TERMS = ['first search', 'second search'];
+
+  it('opens the recent searches menu and lists recent search terms', async () => {
+    const user = setupUser();
+    render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS })} />);
+
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL }));
+
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByText('first search')).toBeInTheDocument();
+    expect(within(menu).getByText('second search')).toBeInTheDocument();
+  });
+
+  it('selecting a recent search item applies it and closes the menu', async () => {
+    const user = setupUser();
+    const onSearchTermChange = vi.fn();
+    render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS, onSearchTermChange })} />);
+
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL }));
+    await user.click(await screen.findByText('first search'));
+
+    expect(onSearchTermChange).toHaveBeenCalledWith('first search');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('uses the localized label once the strings arrive', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({
+          recentSearches: RECENT_SEARCH_TERMS,
+          localizedStrings: {
+            ...STRINGS,
+            '%webView_find_showRecentSearches%': 'Mostrar búsquedas recientes',
+            '%webView_find_recent%': 'Recientes',
+          },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Mostrar búsquedas recientes' }));
+
+    expect(await screen.findByRole('menu', { name: 'Recientes' })).toBeInTheDocument();
+  });
 });

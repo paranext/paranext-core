@@ -102,7 +102,7 @@ Every keyboard handler change here must also update `src/stories/keyboard-shortc
 - **A dropdown opened inside the popover must clear it.** Radix portals such content to
   `document.body` instead of nesting it, so the dropdown and `PopoverContent` are stacking SIBLINGS
   and the popover's own z-index competes directly with the dropdown's. Use `Z_INDEX_ABOVE_POPOVER`;
-  `lib/platform-bible-react/src/components/z-index.test.ts` pins the ordering.
+  `lib/platform-bible-react/src/components/z-index.test.tsx` pins the ordering.
 - **The note's shell is not typeable, and the view option alone does not achieve that.** The popover
   passes `isNoteShellEditable: false`, which renders `\f + ` in Lexical's `token` mode — necessary,
   but on its own that still lets a caret land among those characters, where a keystroke replaces the

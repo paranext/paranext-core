@@ -1,24 +1,28 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import JSON5 from 'json5';
 import { describe, expect, it } from 'vitest';
 import { extensionCacheDirectory } from '../../../extensions/webpack/webpack.util';
+import { ELECTRON_BUILDER } from './main';
+import { readPackagingConfig } from './product';
+import type { ExtraResource } from './product';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
-const config = JSON5.parse(fs.readFileSync(path.join(REPO, 'electron-builder.json5'), 'utf8'));
+// Read through the pipeline's own reader, so the packaging config has one parser and one shape.
+const config = readPackagingConfig(ELECTRON_BUILDER);
 
-const extraResources: unknown[] = config.extraResources || [];
-
-// A narrowing helper rather than `(r as { from: string }).from`: this repo bans type assertions
-// (`no-type-assertion/no-type-assertion`) and does not exempt test files.
-function resourcePath(entry: unknown): string {
+/**
+ * Where an `extraResources` entry copies from, whichever of its two shapes it takes.
+ *
+ * Narrowed rather than trusted: `from` is optional on the object shape, because electron-builder
+ * declares it that way, so an entry without one would otherwise put `undefined` into the list and
+ * make every assertion below throw instead of failing on the file it is about.
+ */
+const resourcePath = (entry: ExtraResource): string => {
   if (typeof entry === 'string') return entry;
-  if (entry && typeof entry === 'object' && 'from' in entry && typeof entry.from === 'string')
-    return entry.from;
-  return '';
-}
+  return typeof entry.from === 'string' ? entry.from : '';
+};
 
-const asStrings = extraResources.map(resourcePath);
+const asStrings = (config.extraResources || []).map(resourcePath);
 
 describe('electron-builder packaging', () => {
   it('ships THIRD-PARTY-NOTICES.md', () => {
@@ -44,16 +48,16 @@ describe('electron-builder packaging', () => {
     expect(asStrings.some((r) => r.includes('LICENSING.md'))).toBe(true);
   });
 
-  it("ships TERMS-OF-SERVICE.md, which the binary's declared license points at", () => {
-    // `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.md`. That declaration is
+  it("ships TERMS-OF-SERVICE.html, which the binary's declared license points at", () => {
+    // `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.html`. That declaration is
     // only meaningful if the file travels with the binary, and it is the terms the application is
     // actually licensed to the user under - so it has to be packed, not merely present in the repo.
-    expect(asStrings.some((r) => r.includes('TERMS-OF-SERVICE.md'))).toBe(true);
+    expect(asStrings.some((r) => r.includes('TERMS-OF-SERVICE.html'))).toBe(true);
     const releaseApp = JSON.parse(
       fs.readFileSync(path.join(REPO, 'release', 'app', 'package.json'), 'utf8'),
     );
-    expect(releaseApp.license).toBe('SEE LICENSE IN TERMS-OF-SERVICE.md');
-    expect(fs.existsSync(path.join(REPO, 'TERMS-OF-SERVICE.md'))).toBe(true);
+    expect(releaseApp.license).toBe('SEE LICENSE IN TERMS-OF-SERVICE.html');
+    expect(fs.existsSync(path.join(REPO, 'TERMS-OF-SERVICE.html'))).toBe(true);
   });
 
   it('ships LICENSE-EXCEPTION.md, which modifies the license text beside it', () => {

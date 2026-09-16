@@ -217,15 +217,15 @@ Everything below describes the terms the released application carries; a locally
 `Platform.Bible` binary is the same code under the same terms, not a separate product with its own.
 
 The built application is **not** distributed under the AGPL. It is licensed to the user under the
-[Paratext Terms of Service](./TERMS-OF-SERVICE.md), whose section 3.B.1 says so directly: "The final
+[Paratext Terms of Service](./TERMS-OF-SERVICE.html), whose section 3.B.1 says so directly: "The final
 and built Paratext 10 application is licensed to you solely under these Terms of Service, not under
 the GNU Affero General Public License ('AGPL') or any other license." `release/app/package.json`
-declares `"license": "SEE LICENSE IN TERMS-OF-SERVICE.md"` — npm's registered form for terms that are
+declares `"license": "SEE LICENSE IN TERMS-OF-SERVICE.html"` — npm's registered form for terms that are
 not an SPDX license.
 
 `SEE LICENSE IN <file>` is read relative to the package that declares it, and this one does not
 resolve there: `release/app`'s `files` list is `dist`, `node_modules` and `package.json`, so
-`TERMS-OF-SERVICE.md` is never inside `app.asar`. It travels through
+`TERMS-OF-SERVICE.html` is never inside `app.asar`. It travels through
 `electron-builder.json5`'s `extraResources` instead, which places it in the installed `resources/`
 directory beside `app.asar` rather than inside it — alongside `LICENSE`, `LICENSING.md`,
 `LICENSE-EXCEPTION.md` and `THIRD-PARTY-NOTICES.md`. The declaration names a document the user
@@ -236,10 +236,11 @@ box when creating your Paratext account or installing the Paratext client" — a
 is the Paratext account flow's, not an installer license page. This repository's installers present
 no such page: `nsis.license` and the `dmg` license are unset, and a test pins them that way.
 
-This document is what section 3.B.1 means by "the AGPL Components identified by Paratext": the tables
-above are the identification. Section 3.B.2 adds that, except for those components, the rest of the
-application is proprietary, and that using or interacting with it over a network does not itself
-trigger AGPL obligations.
+This document is what sections 3.B.1 and 3.B.2 mean by the AGPL Components being "identified as such
+in the license notices accompanying the Paratext 10 application": the tables above are the
+identification.
+The same section adds that, except for those components, the rest of the application is proprietary,
+and that using or interacting with it over a network does not itself trigger AGPL obligations.
 
 **The application UI names the Terms of Service and no license, deliberately.** The About dialog
 shows "License: Paratext Terms of Service" and nothing else — no AGPL identifier, no warranty

@@ -12,10 +12,11 @@ Build and test tooling is excluded because it is not distributed.
 
 Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,
 the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source
-tree, and native libraries taken from the machine that built the installer. No scan of either
-graph can reach any of them and none appears as a row below, so each is described in a section
-of its own, present only when that build actually carries it: a component that ships without a
-row is indistinguishable from one nobody considered.
+tree, native libraries taken from the machine that built the installer, third-party programs
+redistributed as separate executables, and extensions packed from other repositories. No scan of
+either graph can reach any of them and none appears as a row below, so each is described in a
+section of its own, present only when that build actually carries it: a component that ships
+without a row is indistinguishable from one nobody considered.
 
 **This is a reference, not the notices for any shipped product.** A distributed application
 built on paranext-core carries its own dependencies on top of these, and must generate its own
@@ -163,8 +164,8 @@ free text rather than as an SPDX identifier the corpus holds a canonical text fo
 | Apache-2.0 (elected from MPL-2.0 OR Apache-2.0) | 1 |
 | ISC | 1 |
 
-Resolved differently on this machine than `package-lock.json` records, because a `yalc` dev
-link replaces a package with a symlink and takes the copies nested under it off disk with it.
+Resolved differently on this machine than `package-lock.json` records, because a dev link
+replaces a package with a symlink and takes the copies nested under it off disk with it.
 The version and license below are the ones the lockfile resolves, and nothing was read from
 the copy this machine happens to hold: `epsilon@5.0.0`.
 

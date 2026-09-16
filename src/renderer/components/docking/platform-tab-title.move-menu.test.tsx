@@ -46,6 +46,10 @@ vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
 }));
 
+vi.mock('@renderer/hooks/use-is-focused-window.hook', () => ({
+  useIsFocusedWindow: vi.fn(() => true),
+}));
+
 // Mock heavy transitive deps that run side-effects at module init in jsdom.
 vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
@@ -475,7 +479,12 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     fireEvent.click(screen.getByText('Move tab to new window'));
 
     await waitFor(() =>
-      expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToNewWindow', 'web-view-1'),
+      expect(sendCommand).toHaveBeenCalledWith(
+        'platform.moveWebViewToNewWindow',
+        'web-view-1',
+        // A person picked this from the menu, so the window it creates comes to the front
+        true,
+      ),
     );
   });
 
@@ -631,6 +640,34 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     );
   });
 
+  it('a move refused before it started says so rather than that something went wrong mid-move', async () => {
+    // A second click while the first move is still running never touched the tab; the tab is
+    // wherever the still-running move leaves it, which is not what any of the other messages say
+    vi.mocked(sendCommand).mockRejectedValue(
+      new Error(
+        describeWebViewMoveFailure(
+          'already-moving',
+          'Cannot move webview web-view-1: it is already being moved.',
+        ),
+      ),
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    // Waits for the menu item rather than assuming it is already there: the tab's contributed menu
+    // can take a render pass of its own to arrive, and clicking before it does misses the item
+    // entirely instead of exercising this disposition.
+    fireEvent.click(await screen.findByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTab_failedAlreadyMoving%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
   it('a disposition that survived the network round trip is still read', async () => {
     // What the renderer actually receives: the request plumbing wraps a handler's rejection in its
     // own message, so a disposition only reaches here if it is read out of the whole text rather
@@ -667,7 +704,12 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     fireEvent.click(screen.getByText('Move tab to new window'));
 
     await waitFor(() =>
-      expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToNewWindow', 'web-view-1'),
+      expect(sendCommand).toHaveBeenCalledWith(
+        'platform.moveWebViewToNewWindow',
+        'web-view-1',
+        // A person picked this from the menu, so the window it creates comes to the front
+        true,
+      ),
     );
     expect(notificationService.send).not.toHaveBeenCalled();
   });
@@ -840,6 +882,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
         'platform.moveWebViewToWindow',
         'web-view-1',
         MAIN_WINDOW.windowId,
+        true,
       ),
     );
   });
@@ -860,6 +903,33 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
           message: '%tab_contextMenu_moveTab_failedReopenedElsewhere%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
+  it('reports the already-moving refusal without naming a destination it cannot know', async () => {
+    // `moveWebView` raises this refusal before it looks at `target`, and both move actions reach
+    // the same message map — so the copy has to describe the tab, not where this call was headed.
+    // The destination that matters belongs to the move already in flight, which neither handler
+    // knows. Driven through the existing-window submenu because that is the path a new-window
+    // -specific string would be wrong for.
+    globalThis.windowId = '22222222-2222-4222-8222-222222222222';
+    vi.mocked(sendCommand).mockImplementation(async (command: string) => {
+      if (command === 'platform.getWindows') return [MAIN_WINDOW, OTHER_WINDOW];
+      throw new Error('[webViewMoveFailure:already-moving] nope');
+    });
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
+    fireEvent.click(screen.getByTestId('open-menu'));
+
+    fireEvent.click(await screen.findByText('MRK — wgPIDGIN'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTab_failedAlreadyMoving%',
           severity: 'error',
         }),
       ),

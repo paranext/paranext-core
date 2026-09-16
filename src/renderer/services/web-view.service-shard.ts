@@ -107,17 +107,15 @@ import {
   UnsubscriberAsync,
   wait,
 } from 'platform-bible-utils';
-import withWindowScopedWebViewIds, {
-  stripWindowScopeFromWebViewId,
-  withWindowScopedWebViewIdInTab,
-} from '@renderer/components/docking/window-scoped-web-view-ids.util';
+import mintFreshWebViewIds, {
+  type MintedWebViewIdMap,
+} from '@renderer/components/docking/mint-web-view-ids.util';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   applyProjectIdToTabs,
   buildSimpleLayoutForProject,
   SIMPLE_LAYOUT_EDITOR_TAB_ID,
-  SIMPLE_LAYOUT_TAB_IDS,
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
 } from '@renderer/components/docking/simple-layout.builder';
 import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
@@ -665,12 +663,12 @@ let currentInterfaceMode: 'simple' | 'power' | undefined;
  *
  * Rapid Power<->Simple toggling (e.g. the user changing their mind mid-switch, which can already
  * take multiple seconds) previously let two switches run concurrently: two overlay tokens
- * outstanding, two `SIMPLE_LAYOUT_TAB_IDS` trackers each satisfied by the other's events, and —
- * worse — a stale switch's `loadLayout` call could still fire `onLayoutChange` -> `saveLayout`
- * after `currentInterfaceMode` had already moved on, persisting the wrong layout into the wrong
- * slot. This is a plain counter, not a queue: a new switch always starts immediately (the user can
- * always abort/redirect an in-flight switch), and a superseded switch's tail self-cancels rather
- * than blocking behind it or racing it. See {@link startNewSwitchGeneration}.
+ * outstanding, two `trackSimpleLayoutTabsResolvedImpl` trackers each satisfied by the other's
+ * events, and — worse — a stale switch's `loadLayout` call could still fire `onLayoutChange` ->
+ * `saveLayout` after `currentInterfaceMode` had already moved on, persisting the wrong layout into
+ * the wrong slot. This is a plain counter, not a queue: a new switch always starts immediately (the
+ * user can always abort/redirect an in-flight switch), and a superseded switch's tail self-cancels
+ * rather than blocking behind it or racing it. See {@link startNewSwitchGeneration}.
  */
 let switchGeneration = 0;
 
@@ -760,7 +758,7 @@ export function getDockLayout(): Promise<PapiDockLayout> {
  * @returns The papi dock layout
  * @throws If the papi dock layout has not been registered
  */
-function getDockLayoutSync(): PapiDockLayout {
+export function getDockLayoutSync(): PapiDockLayout {
   if (!papiDockLayoutVarSync)
     throw new Error(
       'WebView Service error: Dock layout was requested synchronously, but the dock layout has not been registered!',
@@ -1107,10 +1105,12 @@ async function loadLayout(
     // subsequent `saveLayout`) sees the current mode without another settings round-trip.
     currentInterfaceMode = interfaceMode;
     // Simple mode never calls `getPersistedLayout` — the static `simpleLayout` never signals pending
-    // content, so this always keeps the default-layout supplement.
+    // content, so this always keeps the default-layout supplement. It is always a baked default
+    // too: unlike Power mode's `testLayout` fallback, Simple mode has no persisted layout to prefer
+    // over it.
     const persistedResult =
       interfaceMode === 'simple'
-        ? { layout: dockLayoutVar.simpleLayout, isPendingContent: false }
+        ? { layout: dockLayoutVar.simpleLayout, isPendingContent: false, isBakedDefault: true }
         : await getPersistedLayout(dockLayoutVar.testLayout, isSuperseded);
     if (persistedResult === undefined) {
       // The only reason `getPersistedLayout` withholds a layout: a newer load started while it was
@@ -1121,7 +1121,7 @@ async function loadLayout(
       );
       return;
     }
-    const { layout: persistedLayout, isPendingContent } = persistedResult;
+    const { layout: persistedLayout, isPendingContent, isBakedDefault } = persistedResult;
     /**
      * Whether web views arrived in the dock while this load was reading what to restore. Only a
      * load that began against an empty dock can answer yes, and for it the answer means everything
@@ -1134,13 +1134,19 @@ async function loadLayout(
      */
     const didDockGainWebViewsDuringLoad = () =>
       webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
-    // Every layout gets its web view ids scoped to this window, including one restored from
-    // persistence. Re-scoping is idempotent — it replaces any existing `-w<id>` suffix rather than
-    // stacking another one — so it is correct whichever ids the layout carries: this window's own
-    // id (the ordinary restore case, now that a window's id is durable and comes back with it),
-    // another window's id (a layout that came from elsewhere), or no scope at all (the legacy
-    // pre-multi-window layout).
-    const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
+    // Only a layout materialized from a baked constant (`simpleLayout`, or `testLayout` when Power
+    // mode has no persisted or legacy layout to prefer) needs fresh web view ids minted — that
+    // constant's ids are a slot identity in the data file, not ids any live web view may carry (see
+    // `mintFreshWebViewIds`). A genuinely persisted or legacy layout keeps whatever ids it already
+    // has: a view keeps one id for its whole life, including across a move to another window.
+    let layoutToLoad: LayoutInfo;
+    if (isBakedDefault) {
+      const { layout: mintedLayout, mintedIds } = mintFreshWebViewIds(persistedLayout);
+      layoutToLoad = mintedLayout;
+      if (interfaceMode === 'simple') trackFreshSimpleEditorTabId(mintedIds);
+    } else {
+      layoutToLoad = persistedLayout;
+    }
     if (isPendingContent) {
       if (didDockGainWebViewsDuringLoad()) {
         logger.debug(
@@ -1155,15 +1161,7 @@ async function loadLayout(
       emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
       return;
     }
-    // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
-    // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
-    // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
-    // merge's dedup working: it matches by exact id, so an unscoped supplement id would never match
-    // the scoped copy already in a restored layout and the tab would be appended again on every load.
-    const enabledEntries = (await getEnabledSupplementEntries()).map((entry) => ({
-      ...entry,
-      tab: withWindowScopedWebViewIdInTab(entry.tab),
-    }));
+    const enabledEntries = await getEnabledSupplementEntries();
     if (isSuperseded()) {
       // Point of no return: everything below replaces the dock's whole contents, and the saved-layout
       // request above can take seconds. The newer load has already loaded, or is about to load, the
@@ -1189,9 +1187,10 @@ async function loadLayout(
     // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
     // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
     // flag-off run — provider-less, though closable, since the merge drops an entry's Simple-mode
-    // `isClosable: false` pin outside simple mode. (Changing a tab's id across versions likewise
-    // leaves a duplicate, since we dedup by exact id.) Fix when power mode lands: drop persisted
-    // supplement tabs whose provider is no longer registered.
+    // `isClosable: false` pin outside simple mode. (The merge dedups a web-view entry by
+    // `webViewType` and any other entry by its tab's own id, so renaming either one across versions
+    // likewise leaves a duplicate.) Fix when power mode lands: drop persisted supplement tabs whose
+    // provider is no longer registered.
     // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
     // mirroring platform-dock-layout.component.tsx
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -1230,8 +1229,17 @@ async function loadLayout(
  * layout at all (a fresh profile).
  *
  * @param defaultLayout Layout to fall back to when no legacy layout is stored
+ * @returns The layout to restore, and whether it is `defaultLayout` rather than a genuine legacy
+ *   layout — `isBakedDefault` is what tells the caller whether this layout's web view ids need
+ *   fresh minting (see {@link mintFreshWebViewIds}) or are already real, previously-used ids that
+ *   must pass through unchanged (a genuine legacy layout predates multi-window support and may
+ *   still carry ids in whatever shape that era used — loading it must not crash, but nothing here
+ *   depends on that shape either)
  */
-function getLegacySavedLayout(defaultLayout: LayoutInfo): LayoutInfo {
+function getLegacySavedLayout(defaultLayout: LayoutInfo): {
+  layout: LayoutInfo;
+  isBakedDefault: boolean;
+} {
   let lowestPrefixedWindowId: number | undefined;
   for (let keyIndex = 0; keyIndex < localStorage.length; keyIndex += 1) {
     const match = localStorage.key(keyIndex)?.match(PREFIXED_DOCK_LAYOUT_KEY_PATTERN);
@@ -1246,7 +1254,9 @@ function getLegacySavedLayout(defaultLayout: LayoutInfo): LayoutInfo {
       ? localStorage.getItem(`${lowestPrefixedWindowId}_${DOCK_LAYOUT_KEY}`)
       : localStorage.getItem(DOCK_LAYOUT_KEY);
   const savedLayout: LayoutInfo | undefined = saved ? deserialize(saved) : undefined;
-  return savedLayout || defaultLayout;
+  return savedLayout
+    ? { layout: savedLayout, isBakedDefault: false }
+    : { layout: defaultLayout, isBakedDefault: true };
 }
 
 /**
@@ -1287,14 +1297,15 @@ let hasLoggedHeldLayoutPushes = false;
  *
  * @param defaultLayout Layout to fall back to when the legacy path has nothing
  * @param isSuperseded Whether the load this read belongs to has since been replaced by a newer one
- * @returns The layout to load along with whether this window is waiting for routed content (in
- *   which case the caller skips the default-layout supplement — a window created for one specific
- *   web view starts with nothing else), or `undefined` if this load was superseded
+ * @returns The layout to load, whether this window is waiting for routed content (in which case the
+ *   caller skips the default-layout supplement — a window created for one specific web view starts
+ *   with nothing else), and whether the layout is a baked default whose web view ids still need
+ *   minting (see {@link getLegacySavedLayout}) — or `undefined` if this load was superseded
  */
 async function getPersistedLayout(
   defaultLayout: LayoutInfo,
   isSuperseded: () => boolean,
-): Promise<{ layout: LayoutInfo; isPendingContent: boolean } | undefined> {
+): Promise<{ layout: LayoutInfo; isPendingContent: boolean; isBakedDefault: boolean } | undefined> {
   let response: WindowLayoutGetResponse | undefined;
   for (let attempt = 1; attempt <= GET_PERSISTED_LAYOUT_ATTEMPTS; attempt += 1) {
     try {
@@ -1325,14 +1336,21 @@ async function getPersistedLayout(
     logger.warn(
       `Could not get this window's saved layout after ${GET_PERSISTED_LAYOUT_ATTEMPTS} attempts; starting empty and holding layout pushes until a load succeeds`,
     );
-    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
+    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false, isBakedDefault: false };
   }
   isRunningOnFallbackLayout = false;
-  if (response.kind === 'entry') return { layout: response.layout, isPendingContent: false };
-  if (response.kind === 'empty') return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
+  if (response.kind === 'entry')
+    return { layout: response.layout, isPendingContent: false, isBakedDefault: false };
+  if (response.kind === 'empty')
+    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false, isBakedDefault: false };
   if (response.kind === 'pending-content')
-    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: true };
-  return { layout: getLegacySavedLayout(defaultLayout), isPendingContent: false };
+    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: true, isBakedDefault: false };
+  const legacyResult = getLegacySavedLayout(defaultLayout);
+  return {
+    layout: legacyResult.layout,
+    isPendingContent: false,
+    isBakedDefault: legacyResult.isBakedDefault,
+  };
 }
 
 /**
@@ -1366,13 +1384,6 @@ function reportIfLoadedLayoutIsEmpty(layout: LayoutInfo): void {
  * overwrite the real saved entry. Nothing is lost by holding: the load on its way replaces the
  * dock's whole contents anyway.
  *
- * As a second, content-based check, also refuses to persist a layout that still contains one of
- * Simple mode's fixed tab ids (`SIMPLE_LAYOUT_TAB_IDS`) while not in Simple mode. This is a strict
- * subset of what the structural `layoutLoadGenerationInDock` check above catches; it is retained as
- * a redundant safeguard and is slated for removal once the structural check's coverage is verified.
- * See `adr-layout-persistence-guard-retirement` in `.context/standards/Architecture-Decisions.md`
- * for the full reasoning.
- *
  * @param layout Layout to persist
  */
 async function saveLayout(layout: LayoutInfo): Promise<void> {
@@ -1380,24 +1391,6 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
     currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
   if (layoutLoadGenerationInDock !== layoutLoadGeneration) return;
-  // TODO: retire this content-based guard in favor of the structural `layoutLoadGenerationInDock`
-  // check above once its coverage is verified — see the doc comment above, and
-  // `adr-layout-persistence-guard-retirement`, for context.
-  const containedWebViewIds = collectWebViewIdsFromLayoutInfo(layout);
-  // `SIMPLE_LAYOUT_TAB_IDS` is always unscoped (derived from the static `simpleLayout` at module
-  // load, before any window id is involved), but a contaminating tab's live id may carry this
-  // window's scope suffix (e.g. it arrived via `loadLayout`'s no-arg branch, which scopes every id
-  // it loads) — strip it from each contained id before comparing, or a scoped contaminant would
-  // silently slip past this guard.
-  const normalizedContainedWebViewIds = new Set(
-    [...containedWebViewIds].map(stripWindowScopeFromWebViewId),
-  );
-  if (SIMPLE_LAYOUT_TAB_IDS.some((id) => normalizedContainedWebViewIds.has(id))) {
-    logger.warn(
-      `Refused to persist a ${interfaceMode}-mode layout that still contains a Simple-mode tab id; leaving the previously-saved layout untouched.`,
-    );
-    return;
-  }
   if (isRunningOnFallbackLayout) {
     // The dock holds a fallback, not the user's saved layout (see getPersistedLayout); pushing it
     // would replace the real saved entry in the main process's structure
@@ -1431,35 +1424,45 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
  */
 /**
  * Every webview id that has ever been the Simple-mode Scripture Editor tab's real id during this
- * renderer session, always stored **unscoped** (see {@link stripWindowScopeFromWebViewId}) — the
- * fixed id from `simpleLayout` and every id `trackSimpleEditorReplaceTab` adds are compared against
- * this set, and a live id may or may not carry this window's scope suffix depending on which
- * `loadLayout` branch loaded it (the no-arg branch scopes every id it loads; the fast path
- * (`buildSimpleLayoutForProject`) does not, and a `newGuid()`-minted replace-tab id never does
- * either). Normalizing everything to unscoped on the way in is what lets every lookup below use a
- * plain, scope-agnostic `.has()`. Seeded with the tab's fixed id from `simpleLayout`
- * (`SIMPLE_LAYOUT_EDITOR_TAB_ID`) — reused every time a fresh Simple layout loads, whether via the
- * Power → Simple fast path or the no-arg Simple-mode load (`simpleLayout` itself) — and grown by
+ * renderer session. `simpleLayout`'s Scripture Editor slot has a fixed id in the data file
+ * (`SIMPLE_LAYOUT_EDITOR_TAB_ID`), but a materialization mints that slot a fresh id every time (see
+ * `mintFreshWebViewIds`), so no single id identifies the tab across even two loads — this set is
+ * what does. Grown by `trackFreshSimpleEditorTabId` whenever a Simple layout is materialized (the
+ * no-arg Simple-mode load and the Power → Simple fast path, `buildSimpleLayoutForProject`) and by
  * `trackSimpleEditorReplaceTab` whenever an in-Simple project switch replaces the tab's content
  * with a freshly-generated webview id instead. Ids are never removed: they're random GUIDs, so
  * unbounded growth over a session is negligible and safer than guessing when it would be safe to
  * prune.
  */
-const simpleEditorTabIds = new Set<string>([SIMPLE_LAYOUT_EDITOR_TAB_ID]);
+const simpleEditorTabIds = new Set<string>();
+
+/**
+ * Tracks a freshly materialized Simple layout's Scripture Editor tab id, translating the baked
+ * `SIMPLE_LAYOUT_EDITOR_TAB_ID` slot through the `mintedIds` map a materialization returns. Called
+ * at both places a Simple layout is materialized: `loadLayout`'s baked-default branch (the no-arg
+ * Simple-mode load) and `runProjectBoundSimpleSwitch` (the Power → Simple fast path via
+ * `buildSimpleLayoutForProject`). A map with no entry for the slot (the baked layout has no
+ * Scripture Editor tab, which should not happen but is not this function's job to enforce) is a
+ * silent no-op rather than a throw — the same posture `simpleEditorTabIds`' other callers take
+ * toward an id they don't recognize.
+ */
+function trackFreshSimpleEditorTabId(mintedIds: MintedWebViewIdMap): void {
+  const mintedEditorTabId = mintedIds.get(SIMPLE_LAYOUT_EDITOR_TAB_ID);
+  if (mintedEditorTabId) simpleEditorTabIds.add(mintedEditorTabId);
+}
 
 /**
  * Keeps `simpleEditorTabIds` current across an in-Simple project switch, which does NOT reuse the
- * Simple layout's fixed Scripture Editor tab id. `resolveOpenEditorDispatch`
+ * Simple editor tab's current id. `resolveOpenEditorDispatch`
  * (`platform-scripture-editor.utils.ts`) dispatches that switch as `{ kind: 'replace-tab',
- * targetTabId }` against whichever id is _currently_ the Simple editor's — window-scoped or not,
- * depending on how the current layout was loaded (see {@link simpleEditorTabIds}) —
- * `addWebViewToDock`'s `replace-tab` case (`platform-dock-layout-storage.util.ts`) then swaps that
- * tab's whole `SavedTabInfo` — including its `id` — for the new webview's. So the position that
- * used to answer to a tracked id now answers to a freshly-generated one, and a filter keyed on a
- * fixed id (or even a fixed id list) alone stops matching after the very first in-Simple switch,
- * permanently. Called from `openOrReloadWebView` right after the dock placement lands, so the
- * retirement of the old id and the tracking of the new one happen atomically with the switch itself
- * — no window where an event for the new id could arrive before it's tracked.
+ * targetTabId }` against whichever id is _currently_ the Simple editor's — `addWebViewToDock`'s
+ * `replace-tab` case (`platform-dock-layout-storage.util.ts`) then swaps that tab's whole
+ * `SavedTabInfo` — including its `id` — for the new webview's. So the position that used to answer
+ * to a tracked id now answers to a freshly-generated one, and a filter keyed on a single fixed id
+ * alone stops matching after the very first in-Simple switch, permanently. Called from
+ * `openOrReloadWebView` right after the dock placement lands, so the retirement of the old id and
+ * the tracking of the new one happen atomically with the switch itself — no window where an event
+ * for the new id could arrive before it's tracked.
  *
  * Deliberately does nothing when `targetTabId` isn't already tracked (e.g. a Power-mode replace-tab
  * on some other editor tab): only replacements that land on a tab this set already recognizes as
@@ -1468,8 +1471,8 @@ const simpleEditorTabIds = new Set<string>([SIMPLE_LAYOUT_EDITOR_TAB_ID]);
  */
 function trackSimpleEditorReplaceTab(layout: Layout, newTabId: WebViewId): void {
   if (layout.type !== 'replace-tab') return;
-  if (!simpleEditorTabIds.has(stripWindowScopeFromWebViewId(layout.targetTabId))) return;
-  simpleEditorTabIds.add(stripWindowScopeFromWebViewId(newTabId));
+  if (!simpleEditorTabIds.has(layout.targetTabId)) return;
+  simpleEditorTabIds.add(newTabId);
 }
 
 /**
@@ -1485,7 +1488,7 @@ function trackSimpleEditorReplaceTab(layout: Layout, newTabId: WebViewId): void 
  */
 function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
   if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
-  if (!simpleEditorTabIds.has(stripWindowScopeFromWebViewId(webView.id))) return;
+  if (!simpleEditorTabIds.has(webView.id)) return;
   const { projectId } = webView;
   if (!projectId) return;
   projectLookupService
@@ -1795,7 +1798,8 @@ async function runProjectBoundSimpleSwitch(projectId: string, generation: number
   // `catch`/`finally` below. `finally` only disposes it if it was actually acquired.
   let tabsResolved: ReturnType<typeof trackSimpleLayoutTabsResolvedImpl> | undefined;
   try {
-    const projectBoundLayout = buildSimpleLayoutForProject(projectId);
+    const { layout: projectBoundLayout, mintedIds } = buildSimpleLayoutForProject(projectId);
+    trackFreshSimpleEditorTabId(mintedIds);
     // `loadLayout`'s explicit-layout branch deliberately does not apply the default-layout
     // supplement (a caller passing an explicit layout owns its full contents) - so this caller
     // must merge it in itself, mirroring what `loadLayout`'s own no-arg branch does. Without this,
@@ -1835,10 +1839,13 @@ async function runProjectBoundSimpleSwitch(projectId: string, generation: number
     // Only the tabs that are actually on-screen should gate the overlay: Column 3 of `simpleLayout`
     // stacks other tabs behind the one active tab, and the others are mounted-but-hidden (rc-dock
     // `display: none`) - waiting on them too would block the overlay on content the user can't even
-    // see yet. `VISIBLE_SIMPLE_LAYOUT_TAB_IDS` is the narrower subset; see its doc comment in
-    // simple-layout.builder.ts for what it does and does not account for.
+    // see yet. `VISIBLE_SIMPLE_LAYOUT_TAB_IDS` is the narrower subset (see its doc comment in
+    // simple-layout.builder.ts for what it does and does not account for), named by baked slot id —
+    // translate each through `mintedIds` (falling back to the baked id itself when a slot wasn't
+    // minted, which should not happen but leaves the wait harmless rather than silently empty) to
+    // get the ids this materialization's tabs actually carry.
     tabsResolved = trackSimpleLayoutTabsResolvedImpl({
-      tabIds: VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
+      tabIds: VISIBLE_SIMPLE_LAYOUT_TAB_IDS.map((id) => mintedIds.get(id) ?? id),
       onDidOpenWebView,
       onDidUpdateWebView,
     });
@@ -2114,11 +2121,13 @@ export function updateWebViewDefinitionSync(
   webViewId: WebViewId,
   webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
   shouldBringToFront = false,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): boolean {
   const didUpdateWebView = getDockLayoutSync().updateWebViewDefinition(
     webViewId,
     webViewDefinitionUpdateInfo,
     shouldBringToFront,
+    activateWithoutDocumentFocus,
   );
   if (didUpdateWebView) {
     const webView = getSavedWebViewDefinitionSync(webViewId);
@@ -2612,6 +2621,12 @@ async function admitContentToDock(operation: string): Promise<void> {
  *   is asking for it again, which is what makes the same web view's absence at the dock write
  *   meaningful — see the check there. An open and an adopt both name an id no tab here has yet, so
  *   there is nothing for them to have lost.
+ * @param activateWithoutDocumentFocus Whether to dock the content without taking document focus.
+ *   Passed by the process that created this window when it created it in the background and the
+ *   user has not activated it since; focusing the new tab focuses its iframe, and a `focus()`
+ *   inside a window that does not hold OS focus sets that document's active element without
+ *   activating the window — latently, until the window is next activated — so it would still claim
+ *   the caret for a window that was deliberately opened in the background.
  * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
  *   not create a WebView for this request.
  *
@@ -2625,8 +2640,13 @@ export async function openOrReloadWebView(
   layout: Layout = { type: 'tab' },
   optionsDefaulted: OpenWebViewOptions = {},
   isReloadOfAnOpenWebView = false,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> {
   const { webViewType } = savedWebViewDefinition;
+  // A load that starts and finishes entirely inside the provider await below, with nothing left in
+  // flight for the settle wait further down to catch, leaves `layoutLoadGeneration` as its only
+  // trace once it is over — recorded here, ahead of both, so the recheck further down can tell.
+  const layoutLoadGenerationBeforeProvider = layoutLoadGeneration;
 
   // Get the WebView definition from the webview provider
   const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
@@ -3036,7 +3056,40 @@ export async function openOrReloadWebView(
   // re-register invalidates a dock layout already read into a variable (see `getDockLayout`). The
   // close half of the same question is asked inside the try below — see `admitContentToDock` for
   // what the two halves are for.
+  //
+  // Read before the wait settles it, because this is what tells the two shapes a load taken during
+  // the provider await can have apart. One still in flight here is one the wait below is about to
+  // catch and wait out, and the dock it leaves behind when it settles is exactly the one this call
+  // should write into — no recheck needed once that wait has happened. One that instead ran to
+  // completion entirely inside the provider await has nothing left for the wait to find; a
+  // generation moved with nothing caught is the only trace it leaves, which the check below exists
+  // to catch.
+  const wasLayoutLoadInFlight = layoutLoadInFlight !== undefined;
   await waitForLayoutLoadToSettle();
+  if (
+    !isReloadOfAnOpenWebView &&
+    !wasLayoutLoadInFlight &&
+    layoutLoadGeneration !== layoutLoadGenerationBeforeProvider
+  ) {
+    logger.debug(
+      `Not docking web view ${webView.id} (type ${webView.webViewType}): a layout load replaced this window's dock while it was being created`,
+    );
+    // This bail-out only ever names a fresh open — a reload is excluded above, because a reload's
+    // own tab may still be standing in whatever dock the load left behind, and the dock-read
+    // bail-out just below this one is what answers that question directly, without needing to park
+    // waiting for a dock to re-register.
+    //
+    // A fresh open, unlike a reload, has never joined any dock: the write for it is still below
+    // this point, so nothing but this call has registered anything for its id, and no close event
+    // will ever fire for a tab that never existed. Emitting it disposes the controller the provider
+    // registered and cleans up the nonce (both subscribe to it); the state is evicted directly —
+    // the same residue the catch below clears for the same shape of failure.
+    onDidCloseWebViewBufferedEmitter.emit({
+      webView: convertWebViewDefinitionToSaved(finalWebView),
+    });
+    deleteFullWebViewStateById(webView.id);
+    return undefined;
+  }
   const dockLayoutVar = await getDockLayout();
   // A reload's caller read this web view out of the dock before the provider ran and before the
   // wait above, and either stretch is long enough to lose it: a load that runs inside one takes the
@@ -3069,6 +3122,7 @@ export async function openOrReloadWebView(
       finalWebView,
       layout,
       optionsDefaulted.bringToFront,
+      activateWithoutDocumentFocus,
     );
   } catch (e) {
     // A throw can leave this web view's own tab in the dock: a definition its tab loader refuses
@@ -3134,6 +3188,7 @@ export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
   options: OpenWebViewOptions = {},
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> => {
   // Ahead of everything, including the provider: a window on its way out must not run a web view
   // provider's side effects for a tab that is about to be destroyed with it
@@ -3177,8 +3232,11 @@ export const openWebView = async (
 
     // If we found an existing WebView, handle it and return it
     if (existingWebView) {
-      // We found an existing web view, so bring it to front
-      if (optionsDefaulted.bringToFront) updateWebViewDefinitionSync(existingWebView.id, {}, true);
+      // We found an existing web view, so bring it to front. The tab is raised either way; whether
+      // it also takes document focus follows the same rule as a fresh open, so reusing a view in a
+      // window the user has not been in yet does not pull the caret there.
+      if (optionsDefaulted.bringToFront)
+        updateWebViewDefinitionSync(existingWebView.id, {}, true, activateWithoutDocumentFocus);
 
       // We found an existing WebView, so no need to do anything else
       return existingWebView.id;
@@ -3207,11 +3265,17 @@ export const openWebView = async (
     id: newGuid(),
   };
 
-  return openOrReloadWebView(newWebViewDefinition, layout, {
-    ...optionsDefaulted,
-    // Always bring new WebViews to the front
-    bringToFront: true,
-  });
+  return openOrReloadWebView(
+    newWebViewDefinition,
+    layout,
+    {
+      ...optionsDefaulted,
+      // Always bring new WebViews to the front
+      bringToFront: true,
+    },
+    false,
+    activateWithoutDocumentFocus,
+  );
 };
 
 /**
@@ -3655,10 +3719,6 @@ async function captureAndCloseWebView(
   // This window's stored copy is left alone rather than deleted, but nothing depends on it: a
   // failed move re-adopts from the captured bundle, and the adopt re-seeds storage from that. It
   // survives only until the state service's own cleanup sweeps ids no longer open here.
-  // A window re-scopes web view ids to itself when it reloads a layout. Hand the target the
-  // minted id — the spelling a fresh open would use — so the id does not carry this window's
-  // scope into a window it does not belong to
-  captured.id = stripWindowScopeFromWebViewId(captured.id);
 
   dockLayout.removeTabFromDock(webViewDefinition.id);
   return captured;
@@ -3693,6 +3753,7 @@ async function deleteSeededStateUnlessDocked(webViewId: WebViewId): Promise<void
 /** See {@link WebViewServiceShard.adoptWebView} */
 async function adoptWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> {
   // Ahead of the seeding below, and of anything that reads the bundle: this method is reachable
   // from any process, so an unvalidated bundle would let an arbitrary caller write a state blob
@@ -3754,6 +3815,8 @@ async function adoptWebView(
       savedWebViewDefinition,
       { type: 'tab' },
       getWebViewOptionsDefaults({}),
+      false,
+      activateWithoutDocumentFocus,
     );
     // A provider that declines returns no id, which is a failed adopt like any other: the seed is
     // a write this window would not otherwise have made, and it persists as soon as it is made
@@ -3824,6 +3887,11 @@ async function setDetachedScrRef(
  */
 const webViewServiceShard: WebViewServiceShard = {
   ...papiWebViewService,
+  // Named rather than left to the spread: `papiWebViewService` is typed as the public service,
+  // whose `openWebView` stops at three parameters. A function with fewer parameters is assignable
+  // to one with more optional ones, so the spread would satisfy the shard's widened signature with
+  // a value typed as though the fourth argument did not exist — and the main process passes it.
+  openWebView,
   dockContainsTab,
   hasContentArrivedSinceEmptyReport,
   openSettingsTab,

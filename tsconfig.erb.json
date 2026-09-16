@@ -1,12 +1,26 @@
 {
-  // Type-check gate for the build-time TypeScript under .erb, which the root tsconfig's `include`
-  // ("src", "assets") leaves out: the packaging clean-up entry point, the startup-waterfall parser
-  // + CLI, and the third-party-notices pipeline. Without this, a type error in any of them would
-  // keep CI green and surface only at manual runtime - and the notices pipeline is ~4,700 lines
-  // that decide which licenses may ship and then write the artifact asserting it, so a renamed
-  // verdict field has to fail here rather than produce a wrong document. Scoped to these files (not
-  // all of .erb/scripts) because the older scripts there carry pre-existing type issues from their
-  // own heavy deps and are out of scope.
+  // Type-check gate for the build-time and install-time TypeScript under .erb, which the root
+  // tsconfig's `include` ("src", "assets") leaves out: the packaging clean-up entry point, the
+  // startup-waterfall parser + CLI, the third-party-notices pipeline, the snap metadata check, and
+  // the two scripts npm runs as `preinstall`/`postinstall`. Without this, a type error in any of
+  // them would keep CI green and surface only at runtime - for the notices pipeline that is ~4,700
+  // lines deciding which licenses may ship and then writing the artifact asserting it, so a renamed
+  // verdict field has to fail here rather than produce a wrong document; for the install scripts
+  // that runtime is every developer's and every CI job's `npm install`.
+  //
+  // `.erb/scripts` is covered by glob rather than by an allowlist, so a script added later is
+  // checked without anyone remembering to list it. That matters because nothing else would catch
+  // the omission: type-aware ESLint does not report compiler diagnostics, so `npm run lint` passes
+  // over an uncovered file in silence.
+  //
+  // The excluded scripts are not badly typed. Each imports `../configs/webpack.paths`, which
+  // reaches dependency .d.ts files that fail under this project's settings - inside `path-scurry`'s
+  // bundled `lru-cache` and `tinyglobby`'s `fdir` - because `skipLibCheck` is off. Turning that on
+  // would cover them at the cost of weakening the gate for the notices pipeline it mainly exists to
+  // protect, which is the wrong trade. A new script importing `webpack.paths` will fail here with
+  // those same node_modules errors; exclude it too, or give it what it needs from `webpack.paths`
+  // without the import.
+  //
   // Test files are excluded for the same reason the root config excludes all `*.test.ts`: they rely
   // on Vitest's runtime rather than on tsc. Referenced by `npm run typecheck` via `typecheck:erb`.
   // Emits nothing - it is purely a gate.
@@ -18,15 +32,18 @@
   "compilerOptions": {
     "noEmit": true,
     "incremental": false,
-    "types": ["node"]
+    "types": ["node"],
+    // The install scripts are plain CommonJS with no import or export, so TypeScript would put
+    // their top-level declarations in one shared global scope and report every name they have in
+    // common as a redeclaration. Node decides CommonJS-vs-ESM from package.json, never from file
+    // contents, so giving each file its own scope here changes nothing about how they run.
+    "moduleDetection": "force"
   },
-  "include": [
-    ".erb/scripts/clean.ts",
-    ".erb/scripts/startup-waterfall.ts",
-    ".erb/scripts/startup-waterfall.util.ts",
-    ".erb/scripts/notices-build-id.ts",
-    ".erb/scripts/third-party-notices/*.ts",
-    ".erb/configs/emit-shipped-modules-plugin.ts"
-  ],
-  "exclude": ["node_modules", "**/*.test.ts"]
+  "include": [".erb/configs/emit-shipped-modules-plugin.ts", ".erb/scripts/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    ".erb/scripts/bump-versions.ts",
+    ".erb/scripts/check-build-exists.ts"
+  ]
 }
