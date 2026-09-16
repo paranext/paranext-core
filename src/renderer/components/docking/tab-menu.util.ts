@@ -50,6 +50,12 @@ export type TabMenuContext = {
    * standing, and whether this one is the window that would survive anyway.
    */
   isOnlyTabInWindowThatWouldClose: boolean;
+  /**
+   * Whether this tab's web view currently reports a zoom area to act on. A tab with a web view but
+   * no reported area still offers the zoom items — greyed out — rather than dropping them, since an
+   * area that has not reported yet can still arrive after this menu was built.
+   */
+  hasZoomArea: boolean;
 };
 
 /** Reads the target window id back out of a generated submenu entry, if that is what was selected */
@@ -110,16 +116,24 @@ export function buildTabMenuItems(
   const available = contributedItems.filter((item) => !isUnavailable(item, context));
 
   const withTargets = available.map((item) => {
-    if (item.type !== 'submenu' || item.id !== MOVE_TO_WINDOW_ITEM_ID) return item;
-    return {
-      ...item,
-      items: context.otherWindows.map((window) => ({
-        type: 'item' as const,
-        id: `${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${window.windowId}`,
-        // Two windows showing the same thing carry the same name, and nothing disambiguates them
-        label: window.label || emptyWindowLabel,
-      })),
-    };
+    if (item.type === 'submenu' && item.id === MOVE_TO_WINDOW_ITEM_ID) {
+      return {
+        ...item,
+        items: context.otherWindows.map((window) => ({
+          type: 'item' as const,
+          id: `${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${window.windowId}`,
+          // Two windows showing the same thing carry the same name, and nothing disambiguates them
+          label: window.label || emptyWindowLabel,
+        })),
+      };
+    }
+    // The tab has a web view (that much already cleared it above), but the pane hasn't reported a
+    // zoom area to act on — greyed out rather than removed, so the item doesn't jump into or out of
+    // the menu the moment the area arrives.
+    if (item.type === 'item' && CONTENT_ZOOM_ITEM_IDS.has(item.id) && !context.hasZoomArea) {
+      return { ...item, disabled: true };
+    }
+    return item;
   });
 
   return pruneSeparators(withTargets);

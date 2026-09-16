@@ -3,6 +3,7 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { resolveContentZoomArea } from '@renderer/services/web-view-content-zoom.service';
 import { sendCommand } from '@shared/services/command.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { logger } from '@shared/services/logger.service';
@@ -45,6 +46,10 @@ vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
 }));
 
+vi.mock('@renderer/hooks/use-is-focused-window.hook', () => ({
+  useIsFocusedWindow: vi.fn(() => true),
+}));
+
 // Mock heavy transitive deps that run side-effects at module init in jsdom.
 vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
@@ -78,6 +83,12 @@ vi.mock('@shared/services/notification.service', () => ({
 
 vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn(),
+}));
+
+// The real module pulls settings/localization services in behind it; only the one synchronous
+// resolver this component reads is needed here.
+vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
+  resolveContentZoomArea: vi.fn(),
 }));
 
 vi.mock('@shared/services/menu-data.service', () => ({
@@ -133,11 +144,17 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     ContextMenuItem: ({
       children,
       onClick,
+      disabled,
     }: {
       children: React.ReactNode;
       onClick?: () => void;
+      disabled?: boolean;
     }) => (
-      <button type="button" onClick={onClick}>
+      // Marked via `data-disabled`, mirroring the real Radix item (a `div`, styled disabled via CSS
+      // pointer-events rather than a native `disabled` attribute) rather than a native `<button
+      // disabled>`, which would block `fireEvent.click` outright and hide whether the component's
+      // own guard is doing the work.
+      <button type="button" onClick={onClick} data-disabled={disabled || undefined}>
         {children}
       </button>
     ),
@@ -236,6 +253,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     vi.mocked(menuDataService.getWebViewMenu).mockReset();
     vi.mocked(logger.warn).mockClear();
     vi.mocked(sendCommand).mockReset();
+    vi.mocked(resolveContentZoomArea).mockReset();
   });
 
   it('power mode: the zoom group precedes the window group', async () => {
@@ -338,6 +356,58 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
 
     expect(screen.getByText('Float Tab')).toBeInTheDocument();
     expect(screen.queryByText('Zoom in')).not.toBeInTheDocument();
+  });
+
+  it('power mode: greys out the zoom items on a pane with no zoom area, and a click on one sends nothing', async () => {
+    vi.mocked(resolveContentZoomArea).mockReturnValue(undefined);
+    vi.mocked(sendCommand).mockResolvedValue([]);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+
+    fireEvent.click(screen.getByTestId('open-menu'));
+    await waitFor(() =>
+      expect(resolveContentZoomArea).toHaveBeenCalledWith('web-view-1', undefined),
+    );
+
+    expect(screen.getByText('Zoom in').closest('button')).toHaveAttribute('data-disabled', 'true');
+
+    fireEvent.click(screen.getByText('Zoom in'));
+    await flushMenuRead();
+    expect(sendCommand).not.toHaveBeenCalledWith('platform.webViewContentZoomIn', 'tab-1');
+  });
+
+  it('power mode: leaves the zoom items enabled on a pane with a zoom area — the positive control for the case above', async () => {
+    vi.mocked(resolveContentZoomArea).mockReturnValue('main');
+    vi.mocked(sendCommand).mockResolvedValue([]);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+
+    fireEvent.click(screen.getByTestId('open-menu'));
+    await waitFor(() =>
+      expect(resolveContentZoomArea).toHaveBeenCalledWith('web-view-1', undefined),
+    );
+
+    expect(screen.getByText('Zoom in').closest('button')).not.toHaveAttribute('data-disabled');
+
+    fireEvent.click(screen.getByText('Zoom in'));
+    await waitFor(() =>
+      expect(sendCommand).toHaveBeenCalledWith('platform.webViewContentZoomIn', 'tab-1'),
+    );
+  });
+
+  it('simple mode reads the zoom area too, even though the window-target lists stay unread', async () => {
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
+    vi.mocked(resolveContentZoomArea).mockReturnValue(undefined);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+
+    fireEvent.click(screen.getByTestId('open-menu'));
+    await waitFor(() =>
+      expect(resolveContentZoomArea).toHaveBeenCalledWith('web-view-1', undefined),
+    );
+
+    expect(screen.getByText('Zoom in').closest('button')).toHaveAttribute('data-disabled', 'true');
+    expect(sendCommand).not.toHaveBeenCalledWith('platform.getWindows');
   });
 
   it('simple mode: drag-ignore is preserved on the tab title and carried onto the menu trigger', async () => {
