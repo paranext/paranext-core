@@ -333,6 +333,48 @@ describe('content-zoom bootstrap script', () => {
     expect(rules.some((text) => text.includes('"inner"'))).toBe(false);
   });
 
+  it("writing the indicator's text does not re-scan the document for zoom areas", async () => {
+    install('wv-indicator-no-scan', TWO_AREAS);
+    await nextFrame();
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    const spy = vi.spyOn(document, 'querySelectorAll');
+    const markerScanCount = () =>
+      spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
+        .length;
+    // showIndicator itself scans once, synchronously, to place the badge at its area's corner; the
+    // count taken after it returns already includes that scan, so the delta below isolates only
+    // what the observer's callback does once the write's mutation record reaches it.
+    api.showIndicator('main', '120 %');
+    const afterShow = markerScanCount();
+    await nextFrame();
+    expect(markerScanCount() - afterShow).toBe(0);
+    spy.mockRestore();
+  });
+
+  it('still rescans when a marker changes in the same task as an indicator write', async () => {
+    const { bound } = install('wv-indicator-rescan', TWO_AREAS);
+    await nextFrame();
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    api.showIndicator('main', '120 %');
+    const late = document.createElement('aside');
+    late.setAttribute('data-platform-content-zoom-root', 'sidebar');
+    document.body.appendChild(late);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-indicator-rescan', [
+      'main',
+      'footnotes',
+      'sidebar',
+    ]);
+  });
+
   it('retries a report the parent rejected, and keeps its listeners and api when the first report throws', async () => {
     let throwsLeft = 1;
     const reportContentZoomAreasById = vi.fn((_webViewId: string, reported: string[]) => {
