@@ -554,6 +554,40 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'footnote-pane-move-between-notes',
+    purpose: 'Move to the previous/next note in the footnotes pane',
+    category: 'Navigation',
+    // Arrow navigation runs only for keystrokes that originate on the list or on a read-only row.
+    // The row being edited hosts a real editor that owns its own arrow keys, and so do that
+    // editor's overlays, which are portalled out of the pane but still bubble their React events
+    // through the list.
+    context: 'Footnotes pane, from the list or a note row',
+    keys: { macOS: '↑ / ↓', windows: 'Up / Down', linux: 'Up / Down' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-open-note',
+    purpose: 'Open the focused note for editing, or select it where the pane does not edit',
+    category: 'Editing',
+    context: 'Footnotes pane, on a note row',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-select-note',
+    purpose: 'Select the focused note in the footnotes pane without opening it',
+    category: 'Selection',
+    context: 'Footnotes pane, on a note row',
+    keys: { macOS: 'Space', windows: 'Space', linux: 'Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
     id: 'picker-select-highlighted-item',
     purpose: 'Select the highlighted item in a picker whose search box is empty',
     category: 'Selection',
