@@ -48,7 +48,6 @@ import {
   OnLayoutChange,
   PapiDockLayout,
   SavedTabInfo,
-  TAB_TYPE_WEBVIEW,
   TabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
@@ -113,6 +112,7 @@ import {
   isSerializable,
   isString,
   newGuid,
+  PlatformEventEmitter,
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
   UnsubscriberAsync,
@@ -826,29 +826,22 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
 };
 
 /**
- * Collects the ids of all web view tabs present in layout information (docked, floated, and
- * maximized boxes) without loading it. Layout info tabs are `SavedTabInfo`-shaped, so a web view
- * tab is one whose `tabType` is {@link TAB_TYPE_WEBVIEW}; a web view tab's id is its `WebViewId`.
+ * Collects the ids of every tab present in layout information (docked, floated, and maximized
+ * boxes) without loading it — of any tab type, not only web views. Layout info tabs are
+ * `SavedTabInfo`-shaped, and a tab's id is the same field regardless of its `tabType`.
  *
  * Reads the layout data instead of querying the dock layout because rc-dock applies `loadLayout`
  * via React state, so the dock layout still reports the pre-load tabs immediately after a load.
  */
-function collectWebViewIdsFromLayoutInfo(layout: LayoutInfo): Set<WebViewId> {
-  const webViewIds = new Set<WebViewId>();
+function collectTabIdsFromLayoutInfo(layout: LayoutInfo): Set<string> {
+  const tabIds = new Set<string>();
 
   const visit = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
     if ('tabs' in node && Array.isArray(node.tabs)) {
       node.tabs.forEach((tab: unknown) => {
-        if (
-          tab &&
-          typeof tab === 'object' &&
-          'tabType' in tab &&
-          tab.tabType === TAB_TYPE_WEBVIEW &&
-          'id' in tab &&
-          typeof tab.id === 'string'
-        )
-          webViewIds.add(tab.id);
+        if (tab && typeof tab === 'object' && 'id' in tab && typeof tab.id === 'string')
+          tabIds.add(tab.id);
       });
     }
     if ('children' in node && Array.isArray(node.children)) node.children.forEach(visit);
@@ -859,13 +852,30 @@ function collectWebViewIdsFromLayoutInfo(layout: LayoutInfo): Set<WebViewId> {
   visit(layout.maxbox);
   visit(layout.windowbox);
 
-  return webViewIds;
+  return tabIds;
 }
+
+const layoutLoadTabIdsEmitter = new PlatformEventEmitter<Set<string>>();
+
+/**
+ * Emits with the ids of every tab (of any type) present right after a whole-layout `loadLayout`
+ * call replaces the dock. `PapiDockLayout.loadLayout` does this without running rc-dock's per-tab
+ * remove callback (see `onLayoutChange`), so a tab a load has dropped is otherwise reported
+ * nowhere. A web view's own removal is covered above by {@link onDidCloseWebView}; this event exists
+ * for every other kind of tab, whose owner this module does not know — the dialog service shard's
+ * docked, non-modal dialogs, so far (see its subscription in `startDialogServiceShard`). This
+ * module keeps no record of which non-web-view tabs existed before a load, so it reports what
+ * survived and leaves each subscriber to compare that against the ids it was itself tracking.
+ *
+ * @internal function; not exposed on papi
+ */
+export const onLayoutLoadTabIds = layoutLoadTabIdsEmitter.event;
 
 /**
  * Emits {@link onDidCloseWebView} for every web view that was open before a whole-layout load and is
- * not present in the loaded layout. `PapiDockLayout.loadLayout` replaces all tabs at once without
- * running rc-dock's per-tab remove callback (the only other place the close event is emitted — see
+ * not present in the loaded layout, and emits {@link onLayoutLoadTabIds} with the tabs the loaded
+ * layout does contain. `PapiDockLayout.loadLayout` replaces all tabs at once without running
+ * rc-dock's per-tab remove callback (the only other place either event is emitted — see
  * `onLayoutChange`), so without this, web views discarded by a layout load (e.g. switching
  * `platform.interfaceMode`) would close silently and close subscribers — the window service's
  * last-selected tracker, web view nonce cleanup — would keep references to web views that no longer
@@ -875,13 +885,14 @@ function emitCloseEventsForWebViewsRemovedByLayoutLoad(
   webViewsBeforeLoad: WebViewDefinition[],
   loadedLayout: LayoutInfo,
 ): void {
-  const webViewIdsAfterLoad = collectWebViewIdsFromLayoutInfo(loadedLayout);
+  const tabIdsAfterLoad = collectTabIdsFromLayoutInfo(loadedLayout);
   webViewsBeforeLoad.forEach((webViewDefinition) => {
-    if (!webViewIdsAfterLoad.has(webViewDefinition.id))
+    if (!tabIdsAfterLoad.has(webViewDefinition.id))
       onDidCloseWebViewBufferedEmitter.emit({
         webView: convertWebViewDefinitionToSaved(webViewDefinition),
       });
   });
+  layoutLoadTabIdsEmitter.emit(tabIdsAfterLoad);
 }
 
 /**
