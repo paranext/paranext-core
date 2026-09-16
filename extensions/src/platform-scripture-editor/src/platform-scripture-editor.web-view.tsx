@@ -2752,6 +2752,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const chapterKeyRef = useRef(chapterKey);
   chapterKeyRef.current = chapterKey;
 
+  // A caret restore waiting on a chapter-marker repair's push-back to load (see
+  // `putRepairedUsjInEditor`). Held so a second repair replaces the wait rather than stacking a
+  // second one behind it.
+  const pendingCaretRestoreTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   // #region PDP Save Write Path
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP. Resolves `true`
@@ -2800,13 +2805,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     /**
      * Puts a repaired chapter document back into the editor, moving the sent-to-PDP baseline with
-     * it so the two cannot drift apart.
+     * it so the two cannot drift apart, and puts the caret back at the correction.
      *
      * Swallows a refusal by the editor (after logging it) because the caller must go on to write:
      * it is the write that un-poisons the chapter, and skipping it would leave the PDP holding the
      * document Paratext rejects, so every later save is rejected too.
+     *
+     * The push-back replaces the whole document, so the editor regenerates every node key and the
+     * caret the user was typing with does not survive it — the correction is made under a caret
+     * that then vanishes. `caretTarget` addresses the repaired document, so it can only be applied
+     * once the editor has loaded it, and the editor reports no load signal; this waits the same
+     * span the scroll-into-view paths below do.
      */
-    function putRepairedUsjInEditor(repairedUsj: Usj): void {
+    function putRepairedUsjInEditor(
+      repairedUsj: Usj,
+      caretTarget: SelectionRange | undefined,
+    ): void {
+      // Decided BEFORE the push-back, on whether the caret is this editor's to place at all: an
+      // editor without DOM focus has no claim on the shared document selection (which is why it
+      // skips selection reconciliation when it loads content unfocused), so placing a caret there
+      // would pull it out of whatever the user is actually typing in — a footnote popover, say.
+      const caretToRestore = editorRef.current?.isFocused() ? caretTarget : undefined;
       try {
         usjSentToPdp.current = repairedUsj;
         setEditorUsj.current(repairedUsj);
@@ -2814,7 +2833,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         logger.error(
           `Error putting the repaired chapter marker back into the editor: ${getErrorMessage(error)}`,
         );
+        return;
       }
+
+      if (!caretToRestore) return;
+      clearTimeout(pendingCaretRestoreTimeout.current);
+      pendingCaretRestoreTimeout.current = setTimeout(() => {
+        pendingCaretRestoreTimeout.current = undefined;
+        // `caretToRestore` addresses the repaired chapter's document, so it means nothing once the
+        // user has navigated to another chapter.
+        if (chapterKeyRef.current !== savedChapterKey) return;
+        try {
+          // Focus first: the load leaves the editor with no selection to reconcile, and a caret
+          // placed in an editor the load has dropped focus from would not show.
+          editorRef.current?.focus();
+          editorRef.current?.setSelection(caretToRestore);
+        } catch (error) {
+          logger.warn(
+            `Error restoring the caret after a chapter marker correction: ${getErrorMessage(error)}`,
+          );
+        }
+      }, EDITOR_LOAD_DELAY_TIME);
     }
 
     // Not wired directly to the editor's `onUsjChanged`: the editor fires `onUsjChanged` even

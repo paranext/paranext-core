@@ -9,8 +9,9 @@
  *
  * The unit suites pin the repair algorithm and the save-path plumbing. What only the running app
  * can show is the part those suites stub: that the gesture really does poison the document, that
- * the push-back reaches the editor, that the chapter goes on saving afterwards, and that a repair
- * carried by the chapter-switch flush reports without overwriting the chapter the user moved to.
+ * the push-back reaches the editor, that the caret the push-back destroyed is put back at the
+ * correction, that the chapter goes on saving afterwards, and that a repair carried by the
+ * chapter-switch flush reports without overwriting the chapter the user moved to.
  *
  * ONE test() per spec file on purpose (the isolated fixture is test-scoped and a second Electron
  * instance against the shared renderer dev server has a documented dock-tab failure mode — see
@@ -22,6 +23,7 @@
 import { type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  findScriptureEditorFrame,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
@@ -151,6 +153,31 @@ test.describe('scripture editor chapter-marker repair', () => {
       await editorInput.pressSequentially(digit, { delay: 60 });
     };
 
+    /**
+     * Where the caret is, as the web view's own document sees it: whether it sits in the chapter
+     * marker's glyph text and, if so, how many characters of that glyph follow it. The glyph reads
+     * `\c<NBSP><number><space>`, so exactly one character after the caret means the caret is
+     * immediately after the number — where deleting the errant text by hand would have left it.
+     *
+     * Read from the DOM selection rather than inferred from where the next keystroke lands: a
+     * keystroke at this position goes INTO the marker, so using one to probe would change the thing
+     * being probed.
+     */
+    const editorEvalFrame = await findScriptureEditorFrame(mainPage);
+    const readCaret = async () =>
+      editorEvalFrame.evaluate(() => {
+        const selection = document.getSelection();
+        const node = selection?.anchorNode;
+        if (!selection || !node || node.nodeType !== Node.TEXT_NODE)
+          return { where: 'no-text-caret', charsAfterCaret: -1 };
+        if (!node.parentElement?.closest('p.chapter[data-marker="c"]'))
+          return { where: 'outside-the-chapter-marker', charsAfterCaret: -1 };
+        return {
+          where: 'chapter-marker-glyph',
+          charsAfterCaret: (node.textContent ?? '').length - selection.anchorOffset,
+        };
+      });
+
     await installToastProbe(mainPage);
 
     // Jonah (4 chapters) lets one book cover the chapter-switch steps below.
@@ -176,13 +203,21 @@ test.describe('scripture editor chapter-marker repair', () => {
         .toEqual(expect.arrayContaining([expect.stringContaining(CORRECTION_MESSAGE)]));
     });
 
-    await test.step('the keystrokes that follow the push-back are not dropped', async () => {
+    await test.step('the caret comes back to the number that was corrected', async () => {
       // The push-back replaces the whole document (`setUsj`), which regenerates every Lexical key
-      // and so cannot keep the caret where it was. Deliberately no click first: this is the user
-      // who carries on typing after the correction, and what must hold is that their keystrokes
-      // still reach the document. WHERE they land is the part `setUsj` gives up — today they land
-      // at the top of the chapter body, in the paragraph after the chapter marker, not back at the
-      // marker the user was editing.
+      // and so leaves the editor with no caret at all; the save path places one afresh at the
+      // correction. This is the assertion that pins the offset the repair util computes from the
+      // glyph's byte layout — the unit suite can only state that layout, not check it.
+      await expect
+        .poll(readCaret, { timeout: 20_000 })
+        .toEqual({ where: 'chapter-marker-glyph', charsAfterCaret: 1 });
+    });
+
+    await test.step('the keystrokes that follow the push-back are not dropped', async () => {
+      // Click into the body first: the restored caret sits in the chapter marker, where typed
+      // characters are marker bytes that the next repair would correct straight back out again.
+      await editorInput.click();
+      await editorInput.press('End');
       await editorInput.pressSequentially(AFTER_REPAIR_TOKEN, { delay: 40 });
       await expect(editorInput).toContainText(AFTER_REPAIR_TOKEN, { timeout: 20_000 });
     });

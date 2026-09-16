@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
   MarkerObject,
@@ -296,7 +297,7 @@ describe('applyChapterSavePreparation', () => {
     const notifyRepair = vi.fn();
 
     const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE },
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
       applyRepairToEditor,
@@ -304,7 +305,7 @@ describe('applyChapterSavePreparation', () => {
     });
 
     expect(applyRepairToEditor).toHaveBeenCalledTimes(1);
-    expect(applyRepairToEditor).toHaveBeenCalledWith(REPAIRED);
+    expect(applyRepairToEditor).toHaveBeenCalledWith(REPAIRED, undefined);
     expect(state.usjSentToPdp).toBe(REPAIRED);
     expect(state.editorUsj).toBe(REPAIRED);
     expect(usjToSave).toBe(TO_SAVE);
@@ -315,7 +316,7 @@ describe('applyChapterSavePreparation', () => {
     const notifyRepair = vi.fn();
 
     const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE },
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 4',
       applyRepairToEditor,
@@ -331,7 +332,7 @@ describe('applyChapterSavePreparation', () => {
   it('tells the user about the repair whether or not the editor was corrected', () => {
     const sameChapterNotify = vi.fn();
     applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE },
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
       applyRepairToEditor: vi.fn(),
@@ -341,7 +342,7 @@ describe('applyChapterSavePreparation', () => {
 
     const crossChapterNotify = vi.fn();
     applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE },
+      preparation: { repairedUsj: REPAIRED, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 4',
       applyRepairToEditor: vi.fn(),
@@ -355,7 +356,7 @@ describe('applyChapterSavePreparation', () => {
     const notifyRepair = vi.fn();
 
     const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: REPAIRED, usjToSave: undefined },
+      preparation: { repairedUsj: REPAIRED, usjToSave: undefined, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
       applyRepairToEditor,
@@ -372,7 +373,7 @@ describe('applyChapterSavePreparation', () => {
     const notifyRepair = vi.fn();
 
     const usjToSave = applyChapterSavePreparation({
-      preparation: { repairedUsj: undefined, usjToSave: TO_SAVE },
+      preparation: { repairedUsj: undefined, usjToSave: TO_SAVE, caretTarget: undefined },
       savedChapterKey: 'GEN 3',
       currentChapterKey: 'GEN 3',
       applyRepairToEditor,
@@ -383,5 +384,130 @@ describe('applyChapterSavePreparation', () => {
     expect(notifyRepair).not.toHaveBeenCalled();
     expect(state.editorUsj).toBeUndefined();
     expect(usjToSave).toBe(TO_SAVE);
+  });
+});
+
+describe('repairChapterMarkers — where the caret belongs after a repair', () => {
+  const CHAPTER_GLYPH = '$.content[0].content[0]';
+
+  it('reports no caret target when nothing needed repairing', () => {
+    const { didRepair, caretTarget } = repairChapterMarkers(
+      usjOf(chapter('2'), para('p', 'body')),
+      2,
+    );
+    expect(didRepair).toBe(false);
+    expect(caretTarget).toBeUndefined();
+  });
+
+  it('puts the caret just after a corrected chapter number', () => {
+    const { caretTarget } = repairChapterMarkers(usjOf(chapter('3'), para('p', 'body')), 2);
+    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+  });
+
+  it('counts every digit of a multi-digit chapter number', () => {
+    const { caretTarget } = repairChapterMarkers(usjOf(chapter('3'), para('p', 'body')), 12);
+    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 5 } });
+  });
+
+  it('puts the caret just after a restored chapter number', () => {
+    const { caretTarget } = repairChapterMarkers(usjOf(para('p', 'body')), 2);
+    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+  });
+
+  it('addresses the corrected marker where the repair actually left it', () => {
+    // Chapter 1 keeps its marker behind the introduction that precedes it, so the marker the
+    // caret belongs in is not the first thing in the document.
+    const { usj, caretTarget } = repairChapterMarkers(usjOf(para('ip', 'intro'), chapter('2')), 1);
+    expect(usj.content).toEqual([para('ip', 'intro'), chapter('1')]);
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 4 } });
+  });
+
+  it('puts the caret where a chapter marker typed mid-chapter was removed', () => {
+    const { caretTarget } = repairChapterMarkers(
+      usjOf(chapter('2'), para('p', 'one'), chapter('2'), para('p', 'two')),
+      2,
+    );
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[2]', offset: 0 } });
+  });
+
+  it('puts the caret where a chapter marker nested in a paragraph was removed', () => {
+    const { caretTarget } = repairChapterMarkers(
+      usjOf(chapter('3'), {
+        type: 'para',
+        marker: 'p',
+        content: ['before', chapter('9'), 'after'],
+      }),
+      3,
+    );
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 1 } });
+  });
+
+  it('places a nested removal even for an intro-only chapter 1, which has no marker to fall back to', () => {
+    const { caretTarget } = repairChapterMarkers(
+      usjOf(ID_GEN, {
+        type: 'para',
+        marker: 'p',
+        content: ['before', chapter('9'), 'after'],
+      }),
+      1,
+    );
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 1 } });
+  });
+
+  it('falls back to the surviving marker when the removed marker ended the document', () => {
+    const { caretTarget } = repairChapterMarkers(
+      usjOf(chapter('2'), para('p', 'one'), chapter('2')),
+      2,
+    );
+    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+  });
+
+  it('prefers the corrected number over a removal site when the repair did both', () => {
+    const { caretTarget } = repairChapterMarkers(
+      usjOf(chapter('9'), para('p', 'one'), chapter('9'), para('p', 'two')),
+      2,
+    );
+    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+  });
+});
+
+describe('the caret target on the way to the editor', () => {
+  it('rides along with the repaired document out of prepareUsjForChapterSave', () => {
+    const { caretTarget } = prepareUsjForChapterSave(
+      usjOf(chapter('5'), para('p', 'body')),
+      usjOf(chapter('3'), para('p', 'body')),
+      3,
+    );
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[0].content[0]', offset: 4 } });
+  });
+
+  it('is absent when no repair was needed', () => {
+    const { caretTarget } = prepareUsjForChapterSave(
+      usjOf(chapter('3'), para('p', 'edited')),
+      usjOf(chapter('3'), para('p', 'body')),
+      3,
+    );
+    expect(caretTarget).toBeUndefined();
+  });
+
+  it('is handed to the editor alongside the repaired document', () => {
+    const caretTarget: SelectionRange = {
+      start: { jsonPath: '$.content[0].content[0]', offset: 4 },
+    };
+    const applyRepairToEditor = vi.fn();
+
+    applyChapterSavePreparation({
+      preparation: {
+        repairedUsj: usjOf(chapter('3'), para('p', 'body')),
+        usjToSave: undefined,
+        caretTarget,
+      },
+      savedChapterKey: 'GEN 3',
+      currentChapterKey: 'GEN 3',
+      applyRepairToEditor,
+      notifyRepair: vi.fn(),
+    });
+
+    expect(applyRepairToEditor).toHaveBeenCalledWith(expect.anything(), caretTarget);
   });
 });

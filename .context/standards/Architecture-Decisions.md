@@ -567,6 +567,67 @@ step, no automation. Just a record.
   relaxes the "text before chapter marker" rule.
 - **Source:** PT-4608; Paratext 9 `UsfmEditorTextLoader.FixChapterNumbers` and its test table.
 
+## adr-chapter-marker-repair-replaces-the-document: The repair's push-back replaces the whole document and re-places the caret; keeping the undo stack is deferred to the editor
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** The renderer half of
+  [adr-chapter-marker-repair-at-the-save-boundary](#adr-chapter-marker-repair-at-the-save-boundary)
+  pushes the repaired document back with `EditorRef.setUsj`. The editor loads external content
+  through `LoadStatePlugin`
+  (`scripture-editors` `libs/shared-react/src/plugins/usj/LoadStatePlugin.tsx`): it parses a fresh
+  editor state, calls `editor.setEditorState`, and dispatches `CLEAR_HISTORY_COMMAND`
+  **unconditionally**. So every Lexical node key regenerates, the parsed state carries no selection,
+  and the caret the correction was made under disappears while the undo/redo stack is emptied. Hand
+  QA reported the vanished caret: the correction lands mid-typing, and the user is left with no
+  insertion point.
+- **Decision:** Keep the whole-document push-back, place a caret afresh at the correction, and
+  accept the emptied undo stack for now.
+  - The repair reports where the caret belongs in the coordinates of the document it produced
+    (`ChapterMarkerRepairResult.caretTarget`). The save path applies it once the editor has loaded
+    that document, and only when the editor held DOM focus at push-back time — an unfocused editor
+    has no claim on the shared document selection, and the editor itself skips selection
+    reconciliation when it loads content unfocused.
+  - The target is just past the corrected or restored chapter number; failing that, the boundary a
+    removed marker occupied; failing that, the surviving marker.
+  - **The target is computed from the repair, never carried across from the pre-repair selection.**
+    `EditorRef.getSelection()` addresses the LIVE tree while the repair works on `getUsj()`'s
+    SETTLED document, and the two differ for exactly the gesture that matters: a `\c` typed under
+    the caret is still a pending literal in the live tree while the settled document already holds a
+    chapter node. A captured path is therefore in the wrong coordinate system, whereas a target
+    computed from the repair is in the right one, because the editor is about to load precisely that
+    document.
+- **Alternatives:**
+  - **Apply the repair as OT delta ops (`EditorRef.applyUpdate`) instead of `setUsj`** — rejected
+    for now, though it would keep the history (no load, so no `CLEAR_HISTORY_COMMAND`). A chapter is
+    an opaque embed in `$applyUpdate`'s `"apply"` coordinates — every element embed is one unit and
+    its children are never descended into — so no op can edit a character out of a chapter's glyph
+    text. The wrong-number case, which is the common one, could then only be expressed as
+    replace-the-whole-embed, which regenerates the node key and loses the caret anyway. The editor
+    also records the editable-chapter coordinate divergence as accepted and unfinished ("no live flow
+    currently routes ops across an editable chapter into `$applyUpdate`", in `scripture-editors`
+    `libs/shared-react/src/plugins/usj/collab/delta-common.utils.ts`), and it exports no USJ→OT
+    position helper, so the host would compute retains itself — where a miscomputed retain splices
+    content silently rather than failing.
+  - **Repair inside the editor as node surgery, behind a new `EditorRef` method** — the right end
+    state, deferred. One `editor.update()` that rewrites the marker's glyph (the glyph is the source
+    of truth: `$chapterNodeTransform` re-derives the number from it, so `ChapterNode.setNumber`
+    alone is overwritten) or removes the offending node would keep the caret through Lexical's own
+    reconciliation and push exactly one undo entry — the shape every other structural mutation on
+    `EditorRef` already has (`removeCharacterMarker`, `insertMarker`, `splitParagraphWithMarker`).
+    Deferred because it is a `scripture-editors` change, so it carries its own PR, committed-dist
+    rebuild and `platform-yalc` move; and because it has to handle the pending, unsettled literal
+    case inside the marker-edit tiers, which is the genuinely hard part.
+- **Consequences:** after a correction the caret sits in the marker glyph, where typed characters
+  are marker bytes that the next repair corrects away again — the same fight any autocorrect has,
+  and bounded by the notice that explains it. Undo and redo history is emptied by every repair, so a
+  user cannot undo back past a correction; that is a known limitation carried on PT-4608 rather than
+  a property anyone should rely on. The caret offset the util computes encodes the editor's glyph
+  byte layout, which no unit test can check from this repo, so it is pinned end to end instead
+  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts` reads the web view's own
+  DOM selection). **Revisit** when the editor grows a chapter-repair primitive of its own.
+- **Source:** PT-4608 hand QA.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
