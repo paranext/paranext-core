@@ -1573,7 +1573,10 @@ async function main() {
       logger.error(`Window ${windowId} could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
-    // Register zoom keyboard shortcuts. MacOS already supports this natively
+    // Window-chrome keyboard shortcuts: dev tools (F12), tab and tab-group navigation, and PT9-style
+    // verse/reference-history navigation. Content zoom is not among them — the window-chrome zoom
+    // chords live in `web-view-content-zoom.chrome-keys.ts`, and the in-view case in the bootstrap
+    // script it injects.
     newWindow.webContents.on('before-input-event', (event, input) => {
       // Just act on keyDown and ignore keyUp. Could cause trouble if we need to preventDefault on keyUp
       if (input.type === 'keyUp') return;
