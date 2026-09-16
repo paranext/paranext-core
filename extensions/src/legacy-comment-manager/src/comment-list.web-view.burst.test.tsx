@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
+import type { CommentFilterSelection, LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import {
   CommentFilters,
   DEFAULT_COMMENT_FILTERS,
@@ -36,7 +36,23 @@ const mocks = vi.hoisted(() => {
    * re-subscribing; a new reference means it would tear down and re-establish the subscription.
    */
   const commentThreadSelectorLog: LegacyCommentThreadSelector[] = [];
-  return { panelPropsLog, bcvSyncScroll, commentThreadSelectorLog };
+  /**
+   * This user's stored comment-filter selection per project id, as the C# provider would return it.
+   * A test seeds an entry before rendering to control what a project mounts already showing; a
+   * project id with no entry never resolves, so the web view's `UserCommentFilters` hook reports
+   * `isLoading: true` forever — matching what mounting against a project the provider hasn't
+   * answered for yet looks like.
+   */
+  const storedUserCommentFilters = new Map<string, CommentFilterSelection>();
+  /** Every value the web view wrote back to `UserCommentFilters`, per project id, in write order. */
+  const userCommentFiltersWriteLog = new Map<string, CommentFilterSelection[]>();
+  return {
+    panelPropsLog,
+    bcvSyncScroll,
+    commentThreadSelectorLog,
+    storedUserCommentFilters,
+    userCommentFiltersWriteLog,
+  };
 });
 
 vi.mock('@papi/frontend', () => ({
@@ -50,10 +66,21 @@ vi.mock('@papi/frontend', () => ({
 
 vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: vi.fn(() => [{}]),
-  useProjectData: vi.fn(() => ({
+  useProjectData: vi.fn((_projectInterface: string, contextProjectId: string) => ({
     CommentThreads: (selector: LegacyCommentThreadSelector) => {
       mocks.commentThreadSelectorLog.push(selector);
       return [[], vi.fn(), false];
+    },
+    UserCommentFilters: (_selector: undefined, defaultValue: CommentFilterSelection) => {
+      const stored = mocks.storedUserCommentFilters.get(contextProjectId);
+      const setUserCommentFilters = (value: CommentFilterSelection) => {
+        const writes = mocks.userCommentFiltersWriteLog.get(contextProjectId) ?? [];
+        writes.push(value);
+        mocks.userCommentFiltersWriteLog.set(contextProjectId, writes);
+        return Promise.resolve(true);
+      };
+      if (!stored) return [defaultValue, setUserCommentFilters, true];
+      return [stored, setUserCommentFilters, false];
     },
   })),
   useProjectDataProvider: vi.fn(() => ({})),
@@ -169,13 +196,14 @@ function makeControllableScrRef(initialScrRef: SerializedVerseRef): Controllable
 
 function renderCommentListWebView(
   useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook = useWebViewScrollGroupScrRefFake,
+  projectId = 'project-1',
 ) {
   const CommentListWebView = globalThis.webViewComponent;
   render(
     <CommentListWebView
       webViewType="legacyCommentManager.commentList"
       id="comment-list-1"
-      projectId="project-1"
+      projectId={projectId}
       useWebViewState={makeUseWebViewState({ editorWebViewId: 'editor-1' })}
       useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRef}
       updateWebViewDefinition={vi.fn()}
@@ -193,6 +221,23 @@ function dispatchSetFilters(message: {
 function latestPanelProps() {
   return mocks.panelPropsLog[mocks.panelPropsLog.length - 1];
 }
+
+/** This user's stored selection for 'project-1' before any test narrows it. */
+const DEFAULT_STORED_USER_COMMENT_FILTERS: CommentFilterSelection = {
+  dataVersion: '1.0.0',
+  preset: DEFAULT_COMMENT_FILTERS.preset,
+  scopeFilter: DEFAULT_SCOPE_FILTER,
+};
+
+// Applies to every test in this file: seeds 'project-1' with a resolved stored selection so the
+// existing setFilters/scrRef tests below — unconcerned with restoring a stored selection — mount
+// past the loading state exactly as before this behavior existed, instead of hanging on an
+// unseeded, forever-loading UserCommentFilters mock.
+beforeEach(() => {
+  mocks.storedUserCommentFilters.clear();
+  mocks.storedUserCommentFilters.set('project-1', DEFAULT_STORED_USER_COMMENT_FILTERS);
+  mocks.userCommentFiltersWriteLog.clear();
+});
 
 describe('setFilters messages replayed in a burst', () => {
   beforeEach(() => {
@@ -337,5 +382,132 @@ describe('current-* scope scrRef wiring', () => {
     // must not mint a new-but-equal selector that would needlessly tear down and re-establish the
     // PDP subscription.
     expect(latestCommentThreadSelector()).toBe(selectorBeforeMove);
+  });
+});
+
+describe('stored comment filter selection', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('restores the stored selection on mount and writes back on change', async () => {
+    // The stored selection is the source of truth: a panel reopened on a project comes back to the
+    // filters it was left on, rather than to the default view.
+    mocks.storedUserCommentFilters.set('project-1', {
+      dataVersion: '1.0.0',
+      preset: 'unread',
+      scopeFilter: 'current-book',
+    });
+
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unread' }));
+    expect(latestPanelProps().scopeFilter).toBe('current-book');
+
+    act(() => {
+      latestPanelProps().onFiltersChange({ preset: 'resolved' });
+    });
+
+    // Both axes, not just the changed one: a write that dropped the scope would silently reset it
+    // to the default the next time this project's panel loads.
+    await waitFor(() => {
+      const writes = mocks.userCommentFiltersWriteLog.get('project-1');
+      expect(writes?.at(-1)).toEqual({
+        dataVersion: '1.0.0',
+        preset: 'resolved',
+        scopeFilter: 'current-book',
+      });
+    });
+  });
+
+  it('resolves an unrecognized stored preset to the default instead of throwing', async () => {
+    mocks.storedUserCommentFilters.set('project-1', {
+      dataVersion: '1.0.0',
+      preset: '',
+      scopeFilter: 'all-books',
+    });
+
+    expect(() => renderCommentListWebView()).not.toThrow();
+    await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
+  });
+
+  it('resolves a stored preset from a newer build to the default instead of throwing', async () => {
+    mocks.storedUserCommentFilters.set('project-1', {
+      dataVersion: '1.0.0',
+      preset: 'preset-from-a-newer-build',
+      scopeFilter: 'all-books',
+    });
+
+    expect(() => renderCommentListWebView()).not.toThrow();
+    await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
+  });
+
+  it('resolves an unrecognized stored scope to the default instead of throwing', async () => {
+    mocks.storedUserCommentFilters.set('project-1', {
+      dataVersion: '1.0.0',
+      preset: 'all',
+      scopeFilter: 'scope-from-a-newer-build',
+    });
+
+    expect(() => renderCommentListWebView()).not.toThrow();
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe(DEFAULT_SCOPE_FILTER));
+  });
+
+  it('shows a setFilters message override without writing it back to storage', async () => {
+    mocks.storedUserCommentFilters.set('project-1', {
+      dataVersion: '1.0.0',
+      preset: 'unread',
+      scopeFilter: 'current-book',
+    });
+
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unread' }));
+
+    // Positive control: a panel-driven change DOES reach the write log, so the absence asserted
+    // below (after the setFilters message) is a real observation, not the log simply never being
+    // written to in this test.
+    act(() => {
+      latestPanelProps().onScopeFilterChange('current-chapter');
+    });
+    await waitFor(() => expect(mocks.userCommentFiltersWriteLog.get('project-1')).toHaveLength(1));
+
+    act(() => {
+      dispatchSetFilters({ filters: { preset: 'conflict' }, scopeFilter: 'current-verse' });
+    });
+
+    // The message changes what this open shows...
+    await waitFor(() => {
+      expect(latestPanelProps().filters).toEqual({ preset: 'conflict' });
+      expect(latestPanelProps().scopeFilter).toBe('current-verse');
+    });
+    // ...but never reaches the stored selection: the write log still holds only the panel-driven
+    // change from above, not a second entry for the message.
+    expect(mocks.userCommentFiltersWriteLog.get('project-1')).toHaveLength(1);
+  });
+
+  it('keeps two projects on independent stored selections', async () => {
+    mocks.storedUserCommentFilters.set('project-a', {
+      dataVersion: '1.0.0',
+      preset: 'unread',
+      scopeFilter: 'current-book',
+    });
+    mocks.storedUserCommentFilters.set('project-b', {
+      dataVersion: '1.0.0',
+      preset: 'resolved',
+      scopeFilter: 'current-chapter',
+    });
+
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-a');
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unread' }));
+    expect(latestPanelProps().scopeFilter).toBe('current-book');
+    cleanup();
+
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-b');
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'resolved' }));
+    expect(latestPanelProps().scopeFilter).toBe('current-chapter');
   });
 });
