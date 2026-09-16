@@ -273,7 +273,10 @@ export function Setting({
     [localizedStrings, setting, settingKey, setSetting, validateSetting],
   );
 
-  const debouncedHandleChange = debounce(handleChangeSetting, 500);
+  const debouncedHandleChange = useMemo(
+    () => debounce(handleChangeSetting, 500),
+    [handleChangeSetting],
+  );
 
   const generateComponent = useCallback(() => {
     let component = <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>;
