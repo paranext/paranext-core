@@ -996,13 +996,18 @@ export async function __flushContentZoomWritesForTesting(): Promise<void> {
  * with the level the user chose. {@link effectiveOwnLevels} reads them meanwhile, so the pane goes
  * on showing that level while its definition lags behind it.
  *
- * Commits only under the identity the write was chosen for. A pending write's own identity
- * (recorded alongside its levels — see {@link pendingOwnLevelWrites}) is compared against what the
- * pane shows right now, and a mismatch drops the write instead of committing it: the pane has moved
- * on to another identity since the write was chosen (a re-point {@link reseedIfIdentityChanged} has
- * not yet caught, because no stamp existed for it to compare against), and writing the old level
- * now would stamp it as the new identity's own. The pane is left to re-seed itself from its next
- * fresh area report, which reads what the identity it shows now actually remembers.
+ * Commits only under the identity the write was chosen for. The pane's CURRENT identity is compared
+ * against the identity the pending write was recorded with (see {@link pendingOwnLevelWrites}), and
+ * the write is dropped instead of committed whenever the current identity is resolvable and differs
+ * — whether the write was chosen under a different resolvable identity, or under none at all:
+ * either way the pane has moved on since the write was chosen (a re-point
+ * {@link reseedIfIdentityChanged} has not yet caught, because no stamp existed for it to compare
+ * against), and writing the old level now would misattribute it as the current identity's own. The
+ * pane is left to re-seed itself from its next fresh area report, which reads what the identity it
+ * shows now actually remembers. A write is NOT dropped when the pane's current identity has become
+ * unresolvable: that mirrors {@link seedFromMemory}'s own "no identity" case, which leaves existing
+ * levels alone since there is nothing here to replace them with — the level still commits, just
+ * without a stamp.
  *
  * A failure anywhere in here — the definition read included, which throws once the dock layout is
  * gone — is logged and reported as `false` rather than left to propagate: this runs from a burst's
@@ -1020,12 +1025,11 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
       pendingOwnLevelWrites.delete(webViewId);
       return false;
     }
-    if (pending.identity !== undefined) {
-      const currentId = memoryIdentityFor(definition);
-      if (!currentId || identityStampFor(currentId) !== pending.identity) {
-        pendingOwnLevelWrites.delete(webViewId);
-        return true;
-      }
+    const currentId = memoryIdentityFor(definition);
+    const currentStamp = currentId ? identityStampFor(currentId) : undefined;
+    if (currentStamp !== undefined && pending.identity !== currentStamp) {
+      pendingOwnLevelWrites.delete(webViewId);
+      return true;
     }
     const { levels } = pending;
     const state: Record<string, unknown> = { ...(definition.state ?? {}) };
@@ -1037,8 +1041,7 @@ function commitOwnLevels(webViewId: WebViewId): boolean {
       delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
     } else {
       state[CONTENT_ZOOM_LEVELS_STATE_KEY] = levels;
-      const id = memoryIdentityFor(definition);
-      if (id) state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = identityStampFor(id);
+      if (currentStamp !== undefined) state[CONTENT_ZOOM_IDENTITY_STATE_KEY] = currentStamp;
       else delete state[CONTENT_ZOOM_IDENTITY_STATE_KEY];
     }
     if (!deps.updateDefinition(webViewId, { state })) return false;
