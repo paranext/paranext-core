@@ -107,8 +107,9 @@ step, no automation. Just a record.
   it is free of side effects — an abandoned window that still holds the primary role reaches the same
   `decideWindowClose`/`confirmCloseAllWindows` path an ordinary primary-window close does when the
   user answers "close it", so closing what looks like one dead window can still surface the
-  whole-application close-all prompt. That escalation is a known, separately tracked gap this
-  decision does not resolve.
+  whole-application close-all prompt. That escalation is a known gap this decision does not
+  resolve; it is accepted as-is, since reaching it needs a primary window whose renderer has already
+  exhausted its crash-reload budget, and the prompt it surfaces defaults to cancelling.
 - **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
   (`2026-09-02-pt-4286-mode-switch-spec.md`); depends on `adr-primary-window-owns-app-lifetime` for
   what makes a window "primary" and on the crash-reload-budget decision in
