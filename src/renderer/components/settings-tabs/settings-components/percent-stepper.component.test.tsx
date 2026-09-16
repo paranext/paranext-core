@@ -66,30 +66,74 @@ describe('PercentStepper', () => {
 
   it('disables increase but not decrease at the maximum', () => {
     render(<PercentStepper {...baseProps} value={3} onChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: LABELS.increase })).toBeDisabled();
-    expect(screen.getByRole('button', { name: LABELS.decrease })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: LABELS.reset })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: LABELS.increase })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: LABELS.decrease })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(screen.getByRole('button', { name: LABELS.reset })).not.toHaveAttribute('aria-disabled');
   });
 
   it('disables decrease but not increase at the minimum', () => {
     render(<PercentStepper {...baseProps} value={0.5} onChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: LABELS.decrease })).toBeDisabled();
-    expect(screen.getByRole('button', { name: LABELS.increase })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: LABELS.reset })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: LABELS.decrease })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: LABELS.increase })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(screen.getByRole('button', { name: LABELS.reset })).not.toHaveAttribute('aria-disabled');
   });
 
   it('disables Reset at the default', () => {
     render(<PercentStepper {...baseProps} value={1} onChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: LABELS.reset })).toBeDisabled();
-    expect(screen.getByRole('button', { name: LABELS.increase })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: LABELS.decrease })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: LABELS.reset })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: LABELS.increase })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(screen.getByRole('button', { name: LABELS.decrease })).not.toHaveAttribute(
+      'aria-disabled',
+    );
   });
 
   it('disables every button when disabled is passed', () => {
     render(<PercentStepper {...baseProps} value={1.2} onChange={vi.fn()} disabled />);
-    expect(screen.getByRole('button', { name: LABELS.increase })).toBeDisabled();
-    expect(screen.getByRole('button', { name: LABELS.decrease })).toBeDisabled();
-    expect(screen.getByRole('button', { name: LABELS.reset })).toBeDisabled();
+    expect(screen.getByRole('button', { name: LABELS.increase })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: LABELS.decrease })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: LABELS.reset })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('does not emit when a disabled button is pressed, even off any numeric bound', () => {
+    const onChange = vi.fn();
+    // value=1.2 sits strictly between min/max/defaultValue, so only the `disabled` prop — not the
+    // bound-clamping arithmetic in `emit` — is what could stop the press from changing the value.
+    render(<PercentStepper {...baseProps} value={1.2} onChange={onChange} disabled />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
+    fireEvent.click(screen.getByRole('button', { name: LABELS.reset }));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('stays focusable at its bound', () => {
+    render(<PercentStepper {...baseProps} value={3} onChange={vi.fn()} />);
+    const increase = screen.getByRole('button', { name: LABELS.increase });
+    increase.focus();
+    expect(increase).toHaveFocus();
   });
 
   it('exposes keyboard-reachable buttons with the given labels', () => {
