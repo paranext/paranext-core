@@ -489,4 +489,18 @@ describe('ResourcePickerDialog', () => {
       'Only resources already on this computer are shown.',
     );
   });
+  // A long name is truncated rather than widening the table past a narrow dialog; the layout half
+  // of that contract is asserted in a real browser by the `LongNamesDoNotScrollHorizontally` story,
+  // because jsdom has no layout to measure. Truncation only stays honest if the untruncated text is
+  // still reachable, so every name cell carries it as a native hover label.
+  it('exposes each resource name in full on hover, so truncation hides nothing', () => {
+    renderDialog();
+
+    expect(screen.getByText('New International Version')).toHaveAttribute(
+      'title',
+      'New International Version',
+    );
+    expect(screen.getByText('NIV')).toHaveAttribute('title', 'NIV');
+    expect(screen.getAllByText('English')[0]).toHaveAttribute('title', 'English');
+  });
 });
