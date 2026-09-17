@@ -924,6 +924,36 @@ step, no automation. Just a record.
     filed, all three sites carry the literal marker `TODO(main-renderer-shutdown-relay)` — a slug rather than
     a `PT-XXXX`, because inventing an id that resolves to nothing is worse than admitting there
     is not one yet. Grep the marker to find every site; replace it with the real id once it exists.
+- **Amended 2026-09-14 (PT-4435, branch `pt-4435-tour-stand-down-connection-lost`):** two more
+  surfaces stand down on the latch. The arbitration bullet above — two Radix modal `Dialog`s, with
+  `FocusScope` and `DismissableLayer` arbitrating by mount order and z-index deciding only what is
+  visible — covers `OverlayHost` as well as `FirstRunOverlay`. It is not the reason for
+  `OnboardingTour`.
+  - `OverlayHost` stood down in the same commit as this entry (#2742) without being recorded here.
+    Its reason is the arbitration argument above: `OverlayModalDialog` is a Radix modal `Dialog`, so
+    a `showDialog` still in flight when the socket drops would mount second, take the focus trap,
+    and leave Reload unreachable (`overlay-host.component.tsx`).
+  - `OnboardingTour` stands down for a different reason entirely. `Tour` is a hand-written overlay
+    (`adr-hand-written-tour-spotlight`), not a Radix layer: a plain `div[role="dialog"]` with a
+    capture-phase `keydown` listener on `window` and a capture-phase focus trap on `document`. Those
+    beat any Radix layer regardless of mount order, and `Z_INDEX_ONBOARDING_TOUR` is below both
+    `Z_INDEX_FIRST_RUN` and `Z_INDEX_CONNECTION_LOST`, so neither half of the argument above would
+    have saved it. What makes standing it down necessary rather than tidy: the tour's Escape routes
+    through `onSkip`, which persists a permanent `localStorage` "tour done" flag shared across
+    same-origin windows — so Escape at a banner whose only action is a reload would spend a tour the
+    user never saw, and the reload would come back to an app that believed the tour had been given.
+    Muting the key would have been available — the listener could consult the latch and return —
+    but it treats one key at a time. Withdrawing the component withdraws the Escape handler and the
+    `document`-level focus trap in a single move, which is why the gate is a mount gate rather than
+    a check inside each handler.
+  - A fourth full-area gating sibling in the same `Main` block, `WorkspaceUpdatingOverlay`, does NOT
+    consult the latch, and that has not been examined against this entry. It is a bounded
+    (30 s local leash) `role="status"` spinner rather than a focus-trapping dialog, so it is not an
+    obvious instance of the same problem — but it is not an established exception either. It carries
+    the literal marker `TODO(gating-surface-latch-audit)` at its own definition, so the open question
+    is greppable rather than living only in this log — a slug rather than a `PT-XXXX` for the same
+    reason `TODO(main-renderer-shutdown-relay)` above is one.
+
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
