@@ -31,7 +31,7 @@ import {
   PlatformError,
 } from 'platform-bible-utils';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { PercentStepper } from './percent-stepper.component';
+import { ZoomStepper } from './zoom-stepper.component';
 import './settings.component.scss';
 
 /** Props shared between the user and project setting components */
@@ -218,8 +218,8 @@ export function Setting({
    * Validate and change a setting
    *
    * @param event `ChangeEvent<HTMLInputElement>` is for `Input`; `boolean | 'indeterminate'` is for
-   *   `Switch`; a raw `number` is for `PercentStepper`, which already knows the new factor and has
-   *   no change event to parse one out of
+   *   `Switch`; a raw `number` is for `ZoomStepper`, which already knows the new factor and has no
+   *   change event to parse one out of
    */
   const handleChangeSetting = useCallback(
     async (
@@ -234,7 +234,7 @@ export function Setting({
         // This event came from a `Switch` component
         newValue = event;
       } else if (typeof event === 'number') {
-        // A `PercentStepper` emits the new factor itself rather than a change event, so there is
+        // A `ZoomStepper` emits the new factor itself rather than a change event, so there is
         // nothing to parse out of a target.
         newValue = event;
       } else if (Array.isArray(event)) {
@@ -298,7 +298,7 @@ export function Setting({
     // branch below would put a raw decimal in a text box instead.
     if (settingKey === 'platform.webViewContentZoom' && typeof setting === 'number')
       component = (
-        <PercentStepper
+        <ZoomStepper
           key={settingKey}
           value={setting}
           defaultValue={DEFAULT_ZOOM_FACTOR}
