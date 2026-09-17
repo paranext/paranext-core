@@ -695,6 +695,20 @@ declare module 'shared/models/web-view.model' {
    */
   export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
   /**
+   * Attribute that marks an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} as pop-up content
+   * opened from that zoom area (a popover, menu or tooltip portaled out of the area element) rather
+   * than a pane. The platform scales such an element with its area but never reports it as an area of
+   * its own and never places the zoom indicator on it. `platform-bible-react`'s pop-up components set
+   * it automatically.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that marks its own pop-up content writes the literal `'data-platform-content-zoom-popup'` itself
+   * and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_POPUP_ATTRIBUTE = 'data-platform-content-zoom-popup';
+  /**
    * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
    * zoom area, with that area's effective factor (own level, else the Settings default):
    * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …
@@ -12628,8 +12642,7 @@ declare module 'shared/services/menu-data.service-model' {
     rebuildMenus(): Promise<void>;
     /**
      *
-     * Get localized menu content for the main menu. Items hidden in the current interface mode are
-     * left out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
+     * Get localized menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of localized main menu content
@@ -12637,8 +12650,7 @@ declare module 'shared/services/menu-data.service-model' {
     getMainMenu(mainMenuType: undefined): Promise<Localized<MultiColumnMenu>>;
     /**
      *
-     * Get localized menu content for the main menu. Items hidden in the current interface mode are
-     * left out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
+     * Get localized menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of localized main menu content
@@ -12670,8 +12682,7 @@ declare module 'shared/services/menu-data.service-model' {
     ): Promise<UnsubscriberAsync>;
     /**
      *
-     * Get unlocalized menu content for the main menu. Items hidden in the current interface mode are
-     * left out. Items never carry `shortcut`.
+     * Get unlocalized menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of unlocalized main menu content
@@ -12679,8 +12690,7 @@ declare module 'shared/services/menu-data.service-model' {
     getUnlocalizedMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
     /**
      *
-     * Get unlocalized menu content for the main menu. Items hidden in the current interface mode are
-     * left out. Items never carry `shortcut`.
+     * Get unlocalized menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of unlocalized main menu content
@@ -12711,8 +12721,7 @@ declare module 'shared/services/menu-data.service-model' {
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
-     * Get localized menu content for a web view. Items hidden in the current interface mode are left
-     * out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
+     * Get localized menu content for a web view
      *
      * @param webViewType The type of webview for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content
