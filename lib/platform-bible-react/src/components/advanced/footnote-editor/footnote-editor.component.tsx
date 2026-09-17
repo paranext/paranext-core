@@ -267,12 +267,15 @@ export default function FootnoteEditor({
 
   // Lock the container width to its natural rendered width so content changes (e.g. switching
   // language, undo/redo enabling) don't cause the popover to resize while editing.
-  // useLayoutEffect fires after DOM layout but before paint, so getBoundingClientRect() returns
-  // the natural width. The parent PopoverContent unmounts this component on close, so the effect
-  // re-runs fresh on each open.
+  // useLayoutEffect fires after DOM layout but before paint, so the measured width is the natural
+  // width. The parent PopoverContent unmounts this component on close, so the effect re-runs fresh
+  // on each open. The computed width, not `getBoundingClientRect()`: inside a CSS-`zoom`ed ancestor
+  // (a pop-up opened from zoomed content) client rects report painted pixels, so writing one back
+  // as `style.width` would apply the zoom a second time and make the editor wider than its pop-up.
+  // The computed value is in the element's own CSS pixels and keeps sub-pixel precision.
   useLayoutEffect(() => {
     if (!containerRef.current) return;
-    const { width } = containerRef.current.getBoundingClientRect();
+    const width = parseFloat(getComputedStyle(containerRef.current).width);
     if (width > 0) containerRef.current.style.width = `${width}px`;
   }, []);
 

@@ -146,6 +146,11 @@ function PopoverContent({
           // own lengths are zoomed, so the division keeps a zoomed popover inside the pane
           zoomArea !== undefined &&
             'tw:max-w-[calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
+          // CUSTOM: Inside a content-zoom area, also cap the height at the space Radix reports as
+          // available, divided by the area's zoom factor, so a tall zoomed popover stays inside the
+          // pane vertically too (same unzoomed-vs-zoomed pixel reason as the width cap above)
+          zoomArea !== undefined &&
+            'tw:max-h-[calc(var(--radix-popover-content-available-height)/var(--platform-content-zoom-popup-factor,1))]',
           className,
         )}
         // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring popover renders above the dock
