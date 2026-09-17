@@ -1619,12 +1619,11 @@ async function main() {
               `Could not capture the placement of window ${windowId} as the interface mode changed: ${getErrorMessage(e)}`,
             );
           }
-          // Started, but not waited for. The close tasks are a send/receive of what this window
-          // had open, and that is still worth pushing — but this window is only changing mode, not
-          // going away for good, so holding it on screen for the length of a sync would make a mode
-          // change take as long as a send/receive, once per window. The sync is registered as
-          // in-flight, so a quit arriving mid-sync still waits for it rather than cancelling it.
-          startWindowCloseTasksWithoutWaiting(windowId);
+          // No send/receive here. The switch starts one for every window it is closing, in a single
+          // request, before it closes any of them (`startCloseSyncForWindows`): the send/receive
+          // runs one call at a time, so a request per window would cover whichever window got there
+          // first and be refused for every other — each of them already closed and unable to be
+          // asked again.
         } else {
           // The app stays up, but this window's editors go with it. Only this window can say what
           // it had open, so a sync that runs after it is gone can never cover it — the fan-out asks
@@ -2445,6 +2444,7 @@ async function main() {
             window.close();
             return true;
           },
+          startCloseSyncForWindows: startWindowCloseTasksWithoutWaiting,
           focusWindow,
           isAppShuttingDown,
           getPreservedEntryIds,

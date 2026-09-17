@@ -34,6 +34,7 @@ function makeDeps(overrides: Partial<ModeSwitchDependencies> = {}): ModeSwitchDe
     hideWindow: vi.fn(),
     showWindow: vi.fn(),
     closeWindow: vi.fn(() => true),
+    startCloseSyncForWindows: vi.fn(),
     focusWindow: vi.fn(),
     isAppShuttingDown: () => false,
     getPreservedEntryIds: () => [],
@@ -425,6 +426,82 @@ describe('reacting to an interface-mode change', () => {
     await handleInterfaceModeChanged('simple');
 
     expect(calls).toEqual(['hide2', 'close2', 'hide3', 'close3']);
+  });
+
+  test('one send/receive is started for every closing window, before any of them closes', async () => {
+    // A window is the only thing that can say what it had open, and the send/receive behind this
+    // runs one call at a time — so the whole batch goes out as one request, asked for while every
+    // window in it is still there to answer. The ordering is the contract, so it is asserted as an
+    // order: a call per window, or a call after the closes, both read as correct from two
+    // independent facts.
+    const order: string[] = [];
+    const deps = makeDeps({
+      startCloseSyncForWindows: vi.fn((windowIds: string[]) => {
+        order.push(`sync:${windowIds.join(',')}`);
+      }),
+      closeWindow: vi.fn((windowId: string) => {
+        order.push(`close:${windowId}`);
+        return true;
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(order).toEqual(['sync:2,3', 'close:2', 'close:3']);
+  });
+
+  test('the window that stays and one already on its way out are left out of the sync', async () => {
+    // The two skips are the close loop's own: the survivor is not closing at all, and a window
+    // whose close has already begun has a close handler mid-flight with a sync of its own.
+    const deps = makeDeps({ isWindowClosing: (windowId) => windowId === '3' });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.startCloseSyncForWindows).toHaveBeenCalledWith(['2']);
+    expect(deps.startCloseSyncForWindows).toHaveBeenCalledTimes(1);
+  });
+
+  test('no window to close means no sync is started', async () => {
+    // Nothing is closing, so there is nothing whose editors are about to become unaskable — and a
+    // send/receive fired anyway would sync the windows the user is still working in.
+    const noWindowFitToLeave = makeDeps({ isPrimaryWindow: () => false });
+    initializeModeSwitchOrchestration(noWindowFitToLeave, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(noWindowFitToLeave.startCloseSyncForWindows).not.toHaveBeenCalled();
+
+    resetForTesting();
+    const onlyThePrimaryIsOpen = makeDeps({ getTrackedWindowIds: () => ['1'] });
+    initializeModeSwitchOrchestration(onlyThePrimaryIsOpen, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(onlyThePrimaryIsOpen.startCloseSyncForWindows).not.toHaveBeenCalled();
+  });
+
+  test('a sync that cannot be started does not abandon the switch', async () => {
+    // Every other failure in the switch is reported rather than thrown, and this one costs the user
+    // an automatic send/receive. Throwing here would leave both windows marked and hidden with
+    // their closes never asked for.
+    const deps = makeDeps({
+      startCloseSyncForWindows: vi.fn(() => {
+        throw new Error('web view router is gone');
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+    // The logger mock is shared by every test in this file, so the count below is this test's own
+    vi.mocked(logger.warn).mockClear();
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.closeWindow).toHaveBeenCalledWith('2');
+    expect(deps.closeWindow).toHaveBeenCalledWith('3');
+    expect(deps.focusWindow).toHaveBeenCalledWith('1');
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('web view router is gone'));
   });
 
   test('with no window holding the primary role, nothing is closed', async () => {

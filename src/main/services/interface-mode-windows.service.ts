@@ -59,6 +59,17 @@ export type ModeSwitchDependencies = {
    * @returns Whether there was a live window to ask; `false` means nothing was asked to close
    */
   closeWindow: (windowId: string) => boolean;
+  /**
+   * Start one send/receive covering what every window in a batch had open, and do not wait for it.
+   *
+   * Called with every window a switch is about to close, while all of them are still alive to be
+   * asked: a window is the only thing that can say what it had open, so once it is gone nothing can
+   * tell that anything was open in it. One call for the whole batch rather than one per window
+   * because the send/receive runs one at a time and refuses the rest outright — a request per
+   * window would sync whichever window got there first and silently drop every sibling, with the
+   * siblings already closed and unable to be asked again.
+   */
+  startCloseSyncForWindows: (closingWindowIds: string[]) => void;
   /** Bring a window to the front */
   focusWindow: (windowId: string) => void;
   /** Whether the application is on its way down, by either route it can take */
@@ -342,6 +353,32 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): string | undefined
     return undefined;
   }
 
+  // Hoisted out of the loop so the sync below is given every window it is about to close, in one
+  // call, while all of them are still open. Both skips are the loop's own: the survivor stays, and
+  // a window already on its way out has a close handler mid-flight with a sync of its own.
+  const windowIdsToClose = trackedWindowIds.filter(
+    (windowId) => windowId !== survivorId && !deps.isWindowClosing(windowId),
+  );
+
+  // Asked before a single window is closed, and for all of them at once. Each window is the only
+  // thing that can report what it had open, and the send/receive behind this takes one call at a
+  // time — so one request for the whole batch is what makes every closing window's work go out
+  // rather than only the first one's. Not awaited, and nothing here may become a wait: this
+  // function is synchronous end to end, which is what lets it act on the window set it just read
+  // without a generation check of its own.
+  if (windowIdsToClose.length > 0) {
+    try {
+      deps.startCloseSyncForWindows(windowIdsToClose);
+    } catch (e) {
+      // Reported rather than thrown, like every other failure in this function: a sync that could
+      // not be started costs the user an automatic send/receive, and abandoning the switch here
+      // would leave the windows it had already marked hidden and claimed.
+      logger.warn(
+        `Could not start the send/receive for the windows closing for the switch to simple mode: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+
   // Collected rather than thrown from inside the loop: one window failing to close is not a
   // reason to leave the rest of the batch visible, so every window still gets its turn. The
   // failure is rethrown once the loop is done, so that a switch which could not be fully carried
@@ -351,13 +388,10 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): string | undefined
   // way out — see the catch in {@link handleInterfaceModeChanged}, which rolls back only a failed
   // switch to power.
   const closeFailures: unknown[] = [];
-  trackedWindowIds.forEach((windowId) => {
-    if (windowId === survivorId) return;
-    // A window already on its way out has a close handler mid-flight; telling it to close again
-    // reaches the escape hatch that abandons the work that close started. Read BEFORE anything is
-    // recorded: a window the user closed with its own ✕ must not end up recorded as closing for
-    // the switch, or its entry would be kept and the window they closed would come back on the way
-    // to power.
+  windowIdsToClose.forEach((windowId) => {
+    // Re-read: the list above was taken before any window was told to close. A window the user
+    // closed with its own ✕ must not end up recorded as closing for the switch, or its entry would
+    // be kept and the window they closed would come back on the way to power.
     if (deps.isWindowClosing(windowId)) return;
     try {
       // Marked before it is told to close, so a layout it pushes on its way out is already
