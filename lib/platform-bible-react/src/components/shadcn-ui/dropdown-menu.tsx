@@ -15,6 +15,12 @@ import { IconCheck, IconChevronRight } from '@tabler/icons-react';
 // CUSTOM: Import shared z-index constants so dropdown menus join the same overlay tier as
 // popover, select, and context-menu instead of falling back to Tailwind's tw:z-50.
 import { Z_INDEX_ABOVE_DOCK, Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
+// CUSTOM: Import the content-zoom area context so a dropdown menu opened from zoomed content
+// follows that area's zoom
+import {
+  getContentZoomPopupStyle,
+  useContentZoomArea,
+} from '@/components/advanced/content-zoom-root.component';
 
 /**
  * Dropdown Menu components providing accessible dropdown menus and submenus. Built on Radix UI
@@ -118,6 +124,9 @@ function DropdownMenuContent({
 }: DropdownMenuContentProps) {
   // CUSTOM: Use readDirection for RTL support — wraps children in dir div to mirror layout
   const dir: Direction = readDirection();
+  // CUSTOM: Read the content-zoom area this dropdown menu was opened from (undefined outside
+  // every area)
+  const zoomArea = useContentZoomArea();
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -134,6 +143,11 @@ function DropdownMenuContent({
           // a dropdown menu must clear the overlay layer, including when opened from inside a
           // popover or dialog
           'pr-twp tw:max-h-(--radix-dropdown-menu-content-available-height) tw:min-w-32 tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-[state=closed]:overflow-hidden tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 tw:animate-none! tw:bg-popover/70 tw:before:-z-1 tw:**:data-[slot$=-item]:focus:bg-foreground/10 tw:**:data-[slot$=-item]:data-highlighted:bg-foreground/10 tw:**:data-[slot$=-separator]:bg-foreground/5 tw:**:data-[slot$=-trigger]:focus:bg-foreground/10 tw:**:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! tw:**:data-[variant=destructive]:focus:bg-foreground/10! tw:**:data-[variant=destructive]:text-accent-foreground! tw:**:data-[variant=destructive]:**:text-accent-foreground! tw:relative tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150',
+          // CUSTOM: Inside a content-zoom area, cap height and width at the space Radix reports as
+          // available, divided by the area's zoom factor: Radix measures in unzoomed pixels while
+          // this element's own lengths are zoomed. Replaces the base unzoomed max-height above.
+          zoomArea !== undefined &&
+            'tw:max-h-[calc(var(--radix-dropdown-menu-content-available-height)/var(--platform-content-zoom-popup-factor,1))] tw:max-w-[calc(var(--radix-dropdown-menu-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
           className,
         )}
         // CUSTOM: Set the shared overlay z-index instead of a stock z-class, matching the other
@@ -149,7 +163,18 @@ function DropdownMenuContent({
         //
         // `...style` merges after, so a caller can still override. Ordering is pinned by
         // z-index.test.tsx.
-        style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
+        // CUSTOM: Inside a content-zoom area, also carry the area's zoom factor for the size caps above
+        style={{
+          zIndex: Z_INDEX_ABOVE_DOCK,
+          ...(zoomArea === undefined ? undefined : getContentZoomPopupStyle(zoomArea)),
+          ...style,
+        }}
+        // CUSTOM: Inside a content-zoom area, mark the content with that area so the platform's
+        // zoom rule scales it, and flag it as pop-up content so the platform never counts it as a
+        // pane. It is portaled out of the area element, so it is a marker of its own, not a nested
+        // one.
+        data-platform-content-zoom-root={zoomArea}
+        data-platform-content-zoom-popup={zoomArea === undefined ? undefined : ''}
         {...props}
       >
         {/* CUSTOM: Wrap children in dir div for RTL support — scrollbar-position limitation noted below */}

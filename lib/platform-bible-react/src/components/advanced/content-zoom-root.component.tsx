@@ -67,7 +67,11 @@ export type ContentZoomAreaProviderProps = {
    * @experimental This property is unstable and may change shape or disappear without notice
    */
   area?: string;
-  /** The content that belongs to the area. */
+  /**
+   * The content that belongs to the area.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
   children?: ReactNode;
 };
 
