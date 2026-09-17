@@ -5781,7 +5781,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   route to content zoom is required only where Simple mode already has a visible, interactive tab bar
   — Column 3 — not on the editor's own tab, whose hamburger menu is its sole entry point instead. The
   headless Column 1/2 tab bars keep their existing `pointer-events: none`; this feature does not make
-  them interactive to reach that parity.
+  them interactive to reach that parity. The disabled state is a snapshot taken when the menu opens,
+  not a subscription: a zoom area that arrives while the menu is up leaves the items greyed until the
+  menu is closed and reopened. That bounds the cost to a menu left open across a pane's first
+  moments, and it is why the items are greyed rather than hidden — the shape of the menu does not
+  change under the pointer.
 - **Source:** PT-4578 (PR #2821), epic PT-4575.
 
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
