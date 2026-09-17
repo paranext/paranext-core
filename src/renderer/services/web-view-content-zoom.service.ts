@@ -414,7 +414,8 @@ function startFallbackGrace(webViewId: WebViewId): void {
       // A timer callback has no caller to catch it, and a pane can be torn down inside this second.
       // The id was just added to fallbackAllowedWebViewIds above, so mayScaleWholeIframe
       // short-circuits on that disjunct and never reads the pane's definition here; what can still
-      // throw is iframe.contentDocument, on a detached or cross-origin frame.
+      // throw is iframe.contentDocument, on a frame that has been detached from the document. A
+      // cross-origin frame does not throw here: contentDocument is simply null for one.
       try {
         pushContentZoom(webViewId);
       } catch (e) {
