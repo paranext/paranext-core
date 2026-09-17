@@ -156,10 +156,16 @@ async function scrollTextKeepingVisible(
 const TRIGGER_TOP_MARGIN_PX = 40;
 
 /**
- * Scrolls the main text so `trigger`'s box sits {@link TRIGGER_TOP_MARGIN_PX} below the top of the
- * text's scroll container, and returns the box it has there. The room a pop-up opened on that
- * trigger then has is the pane's, rather than whatever the preceding steps left the text scrolled
- * to.
+ * Scrolls the main text so `trigger`'s box sits no lower than {@link TRIGGER_TOP_MARGIN_PX} below
+ * the top of the text's scroll container, and returns the box it has there. The room a pop-up
+ * opened on that trigger then has is the pane's, rather than whatever the preceding steps left the
+ * text scrolled to.
+ *
+ * Landing higher than that margin is fine and needs no scroll: a trigger already near the top of
+ * the pane has the whole pane below it. So the check is a range, not a target — scrolling up is
+ * clamped at the top of the text, and demanding an exact offset would fail there instead of
+ * accepting the room it asked for. Below the pane's top edge, on the other hand, the trigger is
+ * scrolled out of sight, and above the margin the pop-up may find no room on either side.
  */
 async function scrollTriggerNearPaneTop(frame: Frame, trigger: PageBox): Promise<PageBox> {
   const { box: scroller } = await scrollText(frame, {});
@@ -167,7 +173,11 @@ async function scrollTriggerNearPaneTop(frame: Frame, trigger: PageBox): Promise
     by: Math.round(trigger.y - scroller.y - TRIGGER_TOP_MARGIN_PX),
   });
   const scrolled = { ...trigger, y: trigger.y - (after - before) };
-  expect(Math.abs(scrolled.y - scroller.y - TRIGGER_TOP_MARGIN_PX)).toBeLessThanOrEqual(2);
+  const belowPaneTop = scrolled.y - scroller.y;
+  expect(belowPaneTop, 'trigger inside the pane').toBeGreaterThanOrEqual(0);
+  expect(belowPaneTop, 'trigger near the top of the pane').toBeLessThanOrEqual(
+    TRIGGER_TOP_MARGIN_PX + 2,
+  );
   return scrolled;
 }
 
