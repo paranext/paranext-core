@@ -1146,6 +1146,62 @@ describe('web-view-content-zoom.service', () => {
     expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.4 } });
   });
 
+  it('does not throw out of the fallback grace timer when the pane is being torn down', async () => {
+    // A pane detached while the grace is running: reading `contentDocument` on its iframe throws,
+    // and the timer's push is the one call site with no caller to catch it.
+    const detached = {
+      get contentDocument(): Document {
+        throw new Error('the iframe is detached');
+      },
+      style: {},
+    } as unknown as HTMLIFrameElement;
+    let paneIsDetached = false;
+    __setContentZoomDepsForTesting({
+      getIframe: (id: string) => (paneIsDetached ? detached : iframeFor(id)),
+    });
+    await initializeContentZoomService();
+    vi.useFakeTimers();
+    try {
+      setContentZoomAreas('editor-1', []); // arms the grace
+      paneIsDetached = true;
+      expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('fallback'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let a failing definition read escape the iframe load hook', async () => {
+    __setContentZoomDepsForTesting({
+      getDefinition: () => {
+        throw new Error('dock layout is not registered');
+      },
+    });
+    await initializeContentZoomService();
+    expect(() => applyContentZoomForWebView('editor-1')).not.toThrow();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+  });
+
+  it('does not let a failing definition read stop the other subscribers of a web-view update', async () => {
+    let getDefinitionThrows = false;
+    __setContentZoomDepsForTesting({
+      getDefinition: (id: string) => {
+        if (getDefinitionThrows) throw new Error('dock layout is not registered');
+        return definitions.get(id);
+      },
+    });
+    await initializeContentZoomService();
+    if (!onDidUpdateWebViewCallback) throw new Error('test setup: no web-view update subscriber');
+    // Positive control: the subscriber runs normally while the definition is readable.
+    onDidUpdateWebViewCallback({ webView: requireDefinition('editor-1') });
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+    getDefinitionThrows = true;
+    expect(() =>
+      onDidUpdateWebViewCallback?.({ webView: requireDefinition('editor-1') }),
+    ).not.toThrow();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+  });
+
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
     setContentZoomAreas('editor-1', []);
     await adjustContentZoom('editor-1', 1);

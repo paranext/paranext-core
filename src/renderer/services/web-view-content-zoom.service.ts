@@ -406,7 +406,15 @@ function startFallbackGrace(webViewId: WebViewId): void {
       fallbackGraceTimers.delete(webViewId);
       if ((areasByWebViewId.get(webViewId) ?? []).length > 0) return;
       fallbackAllowedWebViewIds.add(webViewId);
-      pushContentZoom(webViewId);
+      // A timer callback has no caller to catch it, and a pane can be torn down inside this second:
+      // the push reads the pane's iframe and its definition, and both fail once it is gone.
+      try {
+        pushContentZoom(webViewId);
+      } catch (e) {
+        logger.warn(
+          `Content zoom: could not apply the fallback to web view ${webViewId}. ${getErrorMessage(e)}`,
+        );
+      }
     }, FALLBACK_GRACE_MS),
   );
 }
@@ -574,11 +582,19 @@ export function pushContentZoom(
  * changes and keeps that list inside the iframe.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
-  clearFallbackGrace(webViewId);
-  const definition = deps.getDefinition(webViewId);
-  if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL)
-    startFallbackGrace(webViewId);
-  pushContentZoom(webViewId);
+  // The React `onLoad` handler this runs from is a synthetic event handler, which no error boundary
+  // catches, and a late load during teardown reads a definition that is no longer there.
+  try {
+    clearFallbackGrace(webViewId);
+    const definition = deps.getDefinition(webViewId);
+    if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL)
+      startFallbackGrace(webViewId);
+    pushContentZoom(webViewId);
+  } catch (e) {
+    logger.warn(
+      `Content zoom: could not apply content zoom to web view ${webViewId}. ${getErrorMessage(e)}`,
+    );
+  }
 }
 
 /**
@@ -1127,7 +1143,16 @@ export function initializeContentZoomService(
     // compared the levels would have to be right about every other way a pane's variables can go
     // stale to avoid suppressing a push the pane needed.
     deps.onDidUpdateWebView(({ webView }) => {
-      if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
+      // The emitter behind this event is not isolated, so a throw here aborts its whole subscriber
+      // loop and every later subscriber misses the update — the cost of this one reaches well past
+      // zoom, which is why it is guarded even though the read only fails during teardown.
+      try {
+        if (deps.getDefinition(webView.id)) pushContentZoom(webView.id);
+      } catch (e) {
+        logger.warn(
+          `Content zoom: could not push the update for web view ${webView.id}. ${getErrorMessage(e)}`,
+        );
+      }
     });
     // Gives a debounced edit still in flight when the window closes one last chance to reach the
     // setting rather than being silently dropped. Best effort only: the flush reads the stored
