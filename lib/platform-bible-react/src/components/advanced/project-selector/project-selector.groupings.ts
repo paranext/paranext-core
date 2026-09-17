@@ -1,5 +1,4 @@
-import { PROJECT_SELECTOR_CUSTOM_DATA_KEYS } from 'platform-bible-utils';
-import { isResolvedLocalizedValue } from '@/utils/localization.util';
+import { isResolvedLocalizedValue, PROJECT_SELECTOR_CUSTOM_DATA_KEYS } from 'platform-bible-utils';
 import {
   DEFAULT_SELECTED_SECTION_HEADING,
   DEFAULT_UNSELECTED_SECTION_HEADING,

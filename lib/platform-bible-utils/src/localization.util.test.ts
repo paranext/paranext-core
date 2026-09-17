@@ -45,6 +45,17 @@ describe('resolveLocalizedString', () => {
     // carries one in the middle is real copy, not a key.
     expect(resolveLocalizedString('%s of 50% total%', 'fallback')).toBe('%s of 50% total%');
   });
+
+  test('falls back when the value is a different key than the one requested', () => {
+    // The copies this replaces compared the value against the key that was asked for, so a bag
+    // carrying some other key's raw text passed straight through. Any `%…%`-shaped value is
+    // unresolved, whichever key produced it.
+    expect(resolveLocalizedString('%some_other_key%', 'Previous chapter')).toBe('Previous chapter');
+  });
+
+  test('falls back on whitespace-only text that an exact-key comparison would accept', () => {
+    expect(resolveLocalizedString('   ', 'Previous chapter')).toBe('Previous chapter');
+  });
 });
 
 describe('isResolvedLocalizedValue', () => {

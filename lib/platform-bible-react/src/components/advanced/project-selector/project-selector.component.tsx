@@ -19,12 +19,12 @@ import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Group, Loader2 } from '
 import {
   getLocalizeKeyForScrollGroupId,
   normalizeProjectId,
+  resolveLocalizedString,
   type ScrollGroupId,
 } from 'platform-bible-utils';
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
-import { resolveLocalizedString } from '@/utils/localization.util';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';

@@ -14,8 +14,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import { resolveLocalizedString } from '@/utils/localization.util';
 import { cn } from '@/utils/shadcn-ui/utils';
+import { resolveLocalizedString } from 'platform-bible-utils';
 
 const DEFAULT_ARIA_LABEL = 'Show recent searches';
 const DEFAULT_GROUP_HEADING = 'Recent';

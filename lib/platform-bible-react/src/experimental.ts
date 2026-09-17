@@ -40,7 +40,7 @@ export {
   isResolvedLocalizedValue,
   resolveLocalizedString,
   firstResolvedLocalizedString,
-} from './utils/localization.util';
+} from 'platform-bible-utils';
 export {
   default as ResourcePickerDialog,
   type ResourcePickerDialogProps,

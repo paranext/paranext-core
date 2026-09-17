@@ -4913,6 +4913,45 @@ export declare const localizedStringsDocumentSchema: {
 	};
 };
 /**
+ * Whether a value read out of a localized-strings map carries text that can actually be shown to a
+ * user.
+ *
+ * Three states fail that test, and only one of them is nullish:
+ *
+ * - `undefined` — the lookup produced nothing, or a builder emitted a field it could not populate.
+ * - A raw localization key — `useLocalizedStrings` seeds its result with `{ [key]: key }` and keeps
+ *   that seed for the whole first render pass, and permanently if the localization provider errors.
+ *   A key is a non-empty string, so the usual `localizedStrings[key] ?? 'Default'` idiom does NOT
+ *   fall back: it hands back the literal `%some_key%` and renders it at the user.
+ * - Blank or whitespace-only text — a label of spaces is indistinguishable on screen from an empty
+ *   one, and leaves the control with no accessible name. That reads as broken rather than as
+ *   untranslated, so it belongs on the fallback path too.
+ *
+ * @param value The value read out of a localized-strings map, if any.
+ * @returns Whether `value` carries real localized text.
+ */
+export declare function isResolvedLocalizedValue(value: string | undefined): value is string;
+/**
+ * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
+ *
+ * @param value The value read out of a localized-strings map, if any.
+ * @param fallback Text to show when `value` does not carry real localized text.
+ * @returns `value` when {@link isResolvedLocalizedValue} accepts it, `fallback` otherwise.
+ */
+export declare function resolveLocalizedString(value: string | undefined, fallback: string): string;
+/**
+ * The first candidate that can actually be shown to a user, or `undefined` if none can.
+ *
+ * For call sites that have more than one source to try before reaching a literal they own — a
+ * consumer's own localized override, then a value read from a setting, then English. Each candidate
+ * is judged by {@link isResolvedLocalizedValue}, so an unresolved lookup is skipped rather than
+ * rendered, which a nullish chain (`a ?? b ?? c`) cannot do.
+ *
+ * @param candidates Values to try, best first.
+ * @returns The first candidate carrying real text, or `undefined` when none does.
+ */
+export declare function firstResolvedLocalizedString(...candidates: (string | undefined)[]): string | undefined;
+/**
  * One selectable item in a command/marker palette. The dependency-free shared shape consumed by
  * every layer that handles palette items — the renderer overlay service's `CommandPaletteItem`
  * extends it, `platform-bible-react`'s `FootnoteEditor` marker palette uses it directly, and

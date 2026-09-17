@@ -17,17 +17,17 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { getKeyCharacterType, isArrowKey } from '@/utils/keyboard.util';
-import { resolveLocalizedString } from '@/utils/localization.util';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { IconSelector } from '@tabler/icons-react';
 import {
+  resolveLocalizedString,
   formatReplacementString,
   formatScrRef,
   getSectionForBook,
   Section,
 } from 'platform-bible-utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { IconSelector } from '@tabler/icons-react';
 import {
   getSectionLongName,
   getLocalizedBookName,
