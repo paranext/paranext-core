@@ -328,6 +328,23 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-fallback', 1, 'main');
   });
 
+  it('keeps a part of a tick through a pause of any length', () => {
+    const { bound } = install('wv-notch-pause', TWO_AREAS);
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      // Part of a tick is a position within one notch, not a gesture that can go stale: the wheel
+      // has not moved since, so waiting does not put it back where it was.
+      wheel({ deltaY: -40, ctrlKey: true, wheelDeltaY: 48 }, byId('verse'));
+      expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+      now += 5000;
+      wheel({ deltaY: -40, ctrlKey: true, wheelDeltaY: 48 }, byId('verse'));
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-pause', 1, 'main']]);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it('starts a new count when the wheel direction reverses', () => {
     const { bound } = install('wv-notch-reverse', TWO_AREAS);
     // Four tenths of a tick banked one way must not have to be unwound before the other way steps.
