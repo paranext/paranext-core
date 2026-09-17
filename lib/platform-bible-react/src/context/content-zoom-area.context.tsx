@@ -1,4 +1,4 @@
-import { createContext, createElement, ReactNode, useContext } from 'react';
+import { createContext, ReactNode, useContext } from 'react';
 
 /**
  * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
@@ -91,13 +91,12 @@ export type ContentZoomAreaProviderProps = {
  * Popovers, dropdown menus and tooltips from this library that open inside an area are scaled with
  * that area's zoom, and their size is capped so they stay inside the pane.
  *
- * Written with `createElement` rather than JSX: this module keeps the `.ts` extension the rest of
- * the context directory uses (`menu.context.ts`), and JSX syntax is not available there.
- *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export function ContentZoomAreaProvider({ area, children }: ContentZoomAreaProviderProps) {
-  return createElement(ContentZoomAreaContext.Provider, { value: area ?? '' }, children);
+  return (
+    <ContentZoomAreaContext.Provider value={area ?? ''}>{children}</ContentZoomAreaContext.Provider>
+  );
 }
 
 /**
