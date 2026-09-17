@@ -34,8 +34,8 @@ const STEP_BASELINE_WINDOW_MS = 1500;
 const BOUND_BUTTON_CLASSNAME =
   'tw:aria-disabled:opacity-50 tw:aria-disabled:cursor-default tw:aria-disabled:hover:bg-background tw:aria-disabled:hover:text-inherit';
 
-/** Props for {@link PercentStepper}. */
-export type PercentStepperProps = {
+/** Props for {@link ZoomStepper}. */
+export type ZoomStepperProps = {
   /** Current factor, e.g. `1.2` for 120 %. */
   value: number;
   /** Factor the reset button returns to; reset is disabled while the value is already here. */
@@ -69,7 +69,7 @@ export type PercentStepperProps = {
  * rule every other zoom surface follows. `defaultValue` stays a prop because the reset target is
  * the calling setting's own default.
  */
-export function PercentStepper({
+export function ZoomStepper({
   value,
   defaultValue,
   disabled = false,
@@ -77,7 +77,7 @@ export function PercentStepper({
   groupLabel,
   onChange,
   className,
-}: PercentStepperProps) {
+}: ZoomStepperProps) {
   /**
    * The factor this component has asked the platform for and the platform has not confirmed yet, or
    * `undefined` when the confirmed prop is the last word. State rather than a ref because the three
@@ -218,4 +218,4 @@ export function PercentStepper({
   );
 }
 
-export default PercentStepper;
+export default ZoomStepper;
