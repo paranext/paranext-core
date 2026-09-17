@@ -344,6 +344,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-markers-menu',
     purpose: 'Open the inline markers menu',
     category: 'Editing',
+    // Inert while the editor's right-click menu is open: that menu is the only keyboard mode on
+    // screen while it is up, and the key is swallowed rather than typed into the document.
     context: 'Scripture editor web view',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
