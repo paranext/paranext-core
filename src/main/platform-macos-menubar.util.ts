@@ -178,7 +178,13 @@ function getMenubarColumnContent(
     ) as LocalizedMacosMenubar;
 }
 
-async function translatePlatformMenuItemsAndCombine(
+/**
+ * Merges the contributed platform main menu into the macOS menubar template.
+ *
+ * Exported for `platform-macos-menubar.util.test.ts`, which drives the real combine rather than a
+ * helper the combine could stop calling. Main-process-internal; it is on no PAPI surface.
+ */
+export async function translatePlatformMenuItemsAndCombine(
   currentPlatformMainMenu: MultiColumnMenu,
 ): Promise<MenuItemConstructorOptions[]> {
   // Convert the platform-specific main menu into the correct format
@@ -195,7 +201,17 @@ async function translatePlatformMenuItemsAndCombine(
       ).filter((menuItem) => menuItem.label !== '%mainMenu_exit%'), // Remove duplicate 'Exit' here
     })) as MenuItemConstructorOptionsWithOrder[];
 
-  const combinedMenubar = [...macosMenubarObject];
+  // Each entry gets its own object AND its own submenu array: the combine below pushes into the app
+  // menu's submenu and replaces a matching column's submenu outright, and `macosMenubarObject` is a
+  // module-level template that `fallbackToDefaultMacosMenubar` and every later rebuild read again.
+  // Writing through it once would delete the View menu's zoom items for the rest of the process.
+  // Deliberately not `structuredClone` or a JSON round trip: the zoom items carry `click` closures,
+  // which `structuredClone` refuses outright and a JSON round trip drops silently — leaving menu
+  // items that render and do nothing.
+  const combinedMenubar: MenuItemConstructorOptionsWithOrder[] = macosMenubarObject.map((menu) => ({
+    ...menu,
+    submenu: Array.isArray(menu.submenu) ? [...menu.submenu] : menu.submenu,
+  }));
 
   platformMainMenuContent.forEach((column) => {
     if (!column.submenu || !Array.isArray(column.submenu)) return;
