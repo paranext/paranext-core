@@ -173,6 +173,17 @@ export type ProjectSelectorGrouping = {
 		key: string;
 		heading: string;
 	}) => number;
+	/**
+	 * Row order within each bucket. Omit to use the selector's canonical order (alphabetical by
+	 * `shortName`). Supply one when the grouping's meaning implies an order the selector cannot know
+	 * — a "most recently used" bucket is the motivating case, since alphabetical order defeats its
+	 * purpose.
+	 *
+	 * Rows for the same project in different scroll groups compare equal, so ties fall back to the
+	 * canonical order and keep a stable, predictable sequence. Ignored for `'openTabs'` and
+	 * `'selection'`, and for the unknown bucket, which stays canonically ordered.
+	 */
+	compareProjects?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
 /**
  * The platform-level localization keys that back every shared ProjectSelector string. Consumers
@@ -414,6 +425,17 @@ type CommonProps = {
 	 * are available.
 	 */
 	defaultGrouping?: string | "none";
+	/**
+	 * Render an indicator for a row — typically a small icon distinguishing a project from a
+	 * resource, derived from the caller's own `customData.type` values.
+	 *
+	 * The selector ships no taxonomy and no default mapping: `customData.type` is a free-form string
+	 * whose meaning belongs to whoever produced the list (Paratext project types and DBL resource
+	 * types are two different vocabularies, neither owned by this library), so the caller decides
+	 * what a value looks like. Output is treated as decorative — give it an accessible name yourself,
+	 * or mark it `aria-hidden`, since the selector cannot know what the glyph means.
+	 */
+	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
 };
 type ProjectSelectorProps = (CommonProps & {
 	mode: "project";

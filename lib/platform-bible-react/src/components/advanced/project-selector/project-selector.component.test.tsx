@@ -516,3 +516,51 @@ describe('first paint', () => {
     expect(trigger.textContent?.trim()).not.toBe('');
   });
 });
+
+describe('renderProjectIndicator', () => {
+  const mixed: ProjectSelectorProject[] = [
+    { id: 'p1', shortName: 'P1', fullName: 'A project', customData: { type: 'Standard' } },
+    {
+      id: 'r1',
+      shortName: 'R1',
+      fullName: 'A resource',
+      customData: { type: 'ScriptureResource' },
+    },
+  ];
+
+  it('renders projects and resources distinguishably from data alone', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+        renderProjectIndicator={(project) => (
+          <span data-testid={`indicator-${project.customData?.type}`} aria-hidden />
+        )}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.getByTestId('indicator-Standard')).toBeInTheDocument();
+    expect(screen.getByTestId('indicator-ScriptureResource')).toBeInTheDocument();
+  });
+
+  it('renders no indicator element when the prop is absent', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={mixed}
+        openTabs={[]}
+        selection={{ projectId: 'p1' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: 'Project' }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.queryByTestId(/^indicator-/)).not.toBeInTheDocument();
+  });
+});
