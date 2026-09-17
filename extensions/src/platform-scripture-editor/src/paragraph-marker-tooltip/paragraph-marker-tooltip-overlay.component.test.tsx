@@ -166,10 +166,10 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
   });
 
   it('reapplies the delay once the grace period has elapsed, even across adjacent markers with no true close', () => {
-    // Pins the fix for the unbounded "already showing" shortcut: the old `if (hoveredData)` check
-    // (no time bound) would jump to A instantly below, forever, once any tooltip had shown once —
-    // this test fails against that code. Also pins that an expired grace period hides the stale
-    // tooltip immediately rather than leaving mismatched content on screen during the re-armed delay.
+    // Guards the grace period's time bound: an "already showing" shortcut with no time bound would
+    // jump to A instantly below, forever, once any tooltip had shown once. Also guards that an
+    // expired grace period hides the stale tooltip immediately rather than leaving mismatched
+    // content on screen during the re-armed delay.
     renderEditor();
     const paraA = screen.getByText('First paragraph');
     const paraB = screen.getByText('Second paragraph');
@@ -214,9 +214,9 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
   });
 
   it('recomputes the tooltip position at reveal time, so a scroll during the pending window is reflected', () => {
-    // Pins the fix for stale-position capture: before it, computePosition ran synchronously inside
-    // the mouseOver handler, so the assertion right after fireEvent.mouseOver below would already
-    // see 1 call.
+    // Guards against computing position eagerly at hover time: if computePosition ran synchronously
+    // inside the mouseOver handler, the assertion right after fireEvent.mouseOver below would
+    // already see 1 call.
     const computePositionSpy = vi.spyOn(tooltipUtils, 'computePosition');
     renderEditor();
     const para = screen.getByText('First paragraph');
@@ -303,10 +303,10 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
   });
 
   it('does not reopen at a stale position, or skip the delay, on the first hover after enabled flips back true', () => {
-    // Pins the enabled-flip cleanup fix. vi.useFakeTimers() also fakes Date by default, so
-    // Date.now() stays frozen across the rerenders below with no advance — the elapsed time reads
-    // 0ms, deliberately inside the grace window, so this test isolates whether hoveredDataRef was
-    // reset on disable from the grace-period boundary (covered separately above).
+    // vi.useFakeTimers() also fakes Date by default, so Date.now() stays frozen across the
+    // rerenders below with no advance — the elapsed time reads 0ms, deliberately inside the grace
+    // window, so this test isolates whether hoveredDataRef was reset on disable from the
+    // grace-period boundary (covered separately above).
     const { rerender } = renderEditor(true);
     const paraA = screen.getByText('First paragraph');
     const paraB = screen.getByText('Second paragraph');
@@ -348,10 +348,10 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
   });
 
   it('ignores a churn-driven mouseout/mouseover pair whose target disagrees with what is actually under the cursor', () => {
-    // Regression test (PT-4536): the editor's own DOM churn (e.g. an active-paragraph decoration
-    // swap) can make the browser fire a mouseout/mouseover pair whose target/relatedTarget claim a
-    // boundary crossing that never really happened — the cursor never moved, and a live hit-test
-    // still resolves to the same paragraph. Such a pair must not touch the tooltip at all.
+    // Guards against the editor's own DOM churn (e.g. an active-paragraph decoration swap), which can
+    // make the browser fire a mouseout/mouseover pair whose target/relatedTarget claim a boundary
+    // crossing that never really happened — the cursor never moved, and a live hit-test still
+    // resolves to the same paragraph. Such a pair must not touch the tooltip at all.
     renderEditor();
     const para = screen.getByText('First paragraph');
     const other = screen.getByText('Second paragraph');
@@ -376,11 +376,10 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
   });
 
   it('cancels a pending reveal once ground truth shows the cursor has left, even though the arming event’s own target claimed otherwise', () => {
-    // Regression test (PT-4536): previously, arming and revalidating a delayed reveal both trusted
-    // an event's target/relatedTarget, so a churn-driven event landing between "cursor genuinely
-    // left" and "timer fires" could resurrect a tooltip the user was no longer hovering. The
-    // decision must come from a live hit-test at the point the event actually names, not from
-    // which DOM node the event nominally fired on.
+    // Guards against trusting an event's target/relatedTarget to arm or revalidate a delayed reveal:
+    // a churn-driven event landing between "cursor genuinely left" and "timer fires" could resurrect
+    // a tooltip the user was no longer hovering. The decision must come from a live hit-test at the
+    // point the event actually names, not from which DOM node the event nominally fired on.
     renderEditor();
     const para = screen.getByText('First paragraph');
 
