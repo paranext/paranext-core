@@ -145,6 +145,32 @@ async function scrollTextKeepingVisible(
   return moved;
 }
 
+/**
+ * Distance below the top of the main text's scroll container at which this spec parks a pop-up's
+ * trigger before opening the pop-up. At 200 % a pop-up like the comment editor is about half the
+ * pane tall, so a trigger left mid-pane has room for it neither above nor below, and the pop-up
+ * falls back to covering its own line — real behavior in a pane that short, but not what a "sits
+ * beside its trigger" check is about. Near the top of the pane, the whole pane height is below the
+ * trigger, with room to spare for the scroll that follows.
+ */
+const TRIGGER_TOP_MARGIN_PX = 40;
+
+/**
+ * Scrolls the main text so `trigger`'s box sits {@link TRIGGER_TOP_MARGIN_PX} below the top of the
+ * text's scroll container, and returns the box it has there. The room a pop-up opened on that
+ * trigger then has is the pane's, rather than whatever the preceding steps left the text scrolled
+ * to.
+ */
+async function scrollTriggerNearPaneTop(frame: Frame, trigger: PageBox): Promise<PageBox> {
+  const { box: scroller } = await scrollText(frame, {});
+  const { before, after } = await scrollText(frame, {
+    by: Math.round(trigger.y - scroller.y - TRIGGER_TOP_MARGIN_PX),
+  });
+  const scrolled = { ...trigger, y: trigger.y - (after - before) };
+  expect(Math.abs(scrolled.y - scroller.y - TRIGGER_TOP_MARGIN_PX)).toBeLessThanOrEqual(2);
+  return scrolled;
+}
+
 /** The text caret's (or the text selection's) box, main-frame-relative. */
 async function readCaretBox(frame: Frame): Promise<PageBox> {
   const editorFrameBox = await frameBox(frame);
@@ -516,7 +542,7 @@ test.describe('scripture editor content zoom', () => {
       // Both pop-ups are anchored to the text caret (or selection), so its box is their trigger.
       const placeCaret = async () => {
         await text.click();
-        return readCaretBox(editorFrame);
+        return scrollTriggerNearPaneTop(editorFrame, await readCaretBox(editorFrame));
       };
       const openMarkerMenu = async () => {
         const caret = await placeCaret();
@@ -579,27 +605,28 @@ test.describe('scripture editor content zoom', () => {
         expect((widths.get(factor)?.comment ?? 0) / atDefault.comment).toBeCloseTo(factor, 1);
       });
 
-      // Still at 200 %: scroll after opening, and each pop-up moves with its caret.
+      // Still at 200 %: scroll after opening, and each pop-up moves with its caret. The text
+      // scrolls back up (a negative delta), which moves the trigger down: every trigger here is
+      // parked near the top of the pane, so scrolling the other way would take it out of the pane
+      // and leave nothing to compare the pop-up's position against.
       const caretForMenu = await openMarkerMenu();
-      await expectFollowsScroll(markerMenu, caretForMenu, 60);
+      await expectFollowsScroll(markerMenu, caretForMenu, -60);
       await closeMarkerMenu();
 
       const caretForComment = await placeCaret();
       await openCommentEditor(caretForComment);
-      await expectFollowsScroll(commentEditor, caretForComment, 60);
+      await expectFollowsScroll(commentEditor, caretForComment, -60);
       await closeCommentEditor();
 
       // A selection that wraps onto a second line: the comment editor sits beside the whole
       // selection, never on part of it, also once the editor has re-rendered the selection as the
       // pending comment and the text scrolls.
-      const selection = await selectWrappedText(mainPage, editorFrame, mainInput);
-      await openCommentEditor(selection);
-      const scrolledTop = (await scrollText(editorFrame, {})).box.y;
-      await expectFollowsScroll(
-        commentEditor,
-        selection,
-        selection.y - scrolledTop > 180 ? 60 : -60,
+      const selection = await scrollTriggerNearPaneTop(
+        editorFrame,
+        await selectWrappedText(mainPage, editorFrame, mainInput),
       );
+      await openCommentEditor(selection);
+      await expectFollowsScroll(commentEditor, selection, -60);
       await closeCommentEditor();
       // Stays in the formatted view: the next step needs it too.
     });
