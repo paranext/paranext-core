@@ -198,6 +198,10 @@ function readOpenWebViewDefinitionsEagerly(
  * One call for the whole batch rather than one per window because the send/receive runs one call at
  * a time and refuses the rest outright: a request per window would cover whichever window got there
  * first and be refused for every other, each of them already closed and unable to be asked again.
+ * That one-at-a-time behavior belongs to the send/receive command's backend handler, which lives
+ * outside this repository (the Paratext 10 Studio overlay), so it is stated here on purpose as a
+ * cross-repo dependency: if that handler ever started accepting concurrent calls, batching would
+ * become an optimization rather than the thing that makes every closing window's work go out.
  *
  * The sync joins {@link inFlightWindowCloseSyncs} exactly as an awaited one does, which is what
  * keeps it from being lost: the shutdown drains that set before either mode's sync cancels
@@ -239,7 +243,12 @@ function beginWindowCloseSync(closingWindows: ClosingWindowRead[]): Promise<void
     try {
       await performWindowCloseTasksInternal(closingWindows);
     } catch (e) {
-      logger.error(`Unexpected error while syncing the projects of a closing window:`, e);
+      logger.error(
+        `Unexpected error while syncing the projects of closing ${describeClosingWindows(
+          closingWindows.map(({ windowId }) => windowId),
+        )}:`,
+        e,
+      );
     }
   })();
   inFlightWindowCloseSyncs.add(windowCloseSync);
@@ -248,14 +257,20 @@ function beginWindowCloseSync(closingWindows: ClosingWindowRead[]): Promise<void
   });
 }
 
+/**
+ * "window 2" / "windows 2, 3, 4" — names the windows a close sync belongs to, so every line about
+ * that sync says which windows it was for, and a batch of one still reads as the single window it
+ * is.
+ */
+function describeClosingWindows(closingWindowIds: string[]): string {
+  return closingWindowIds.length === 1
+    ? `window ${closingWindowIds[0]}`
+    : `windows ${closingWindowIds.join(', ')}`;
+}
+
 async function performWindowCloseTasksInternal(closingWindows: ClosingWindowRead[]): Promise<void> {
   const closingWindowIds = closingWindows.map(({ windowId }) => windowId);
-  // "window 2" / "windows 2, 3, 4" — every line below names the windows this sync belongs to, and a
-  // batch of one still reads as the single window it is
-  const windowPhrase =
-    closingWindowIds.length === 1
-      ? `window ${closingWindowIds[0]}`
-      : `windows ${closingWindowIds.join(', ')}`;
+  const windowPhrase = describeClosingWindows(closingWindowIds);
 
   // An unreadable mode skips the sync rather than falling through to Simple mode's behavior, for the
   // same reason performShutdownTasksInternal does: Simple mode would S/R whichever writable editors
@@ -275,6 +290,9 @@ async function performWindowCloseTasksInternal(closingWindows: ClosingWindowRead
   // Settled per window rather than all-or-nothing: one window that cannot be asked must not take its
   // siblings' editors down with it, and each failure is the last moment anything could know what
   // that window had open — so each is said on its own, naming the window it cost.
+  // The batch takes as long as the slowest window's read, bounded by the network request timeout
+  // rather than by the sync's own bound; nothing is held up by that, since the windows this covers
+  // are already closing and no caller is waiting on the result.
   const definitionsPerWindow = await Promise.all(
     closingWindows.map(async ({ windowId, openWebViewDefinitions }) => {
       try {

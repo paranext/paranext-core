@@ -365,7 +365,9 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): string | undefined
   // time — so one request for the whole batch is what makes every closing window's work go out
   // rather than only the first one's. Not awaited, and nothing here may become a wait: this
   // function is synchronous end to end, which is what lets it act on the window set it just read
-  // without a generation check of its own.
+  // without a generation check of its own. A window whose close is undone afterwards
+  // ({@link undoModeSwitchClose}) has still been included here, which is harmless: syncing a project
+  // that stays open is what the quit-time sync does anyway.
   if (windowIdsToClose.length > 0) {
     try {
       deps.startCloseSyncForWindows(windowIdsToClose);

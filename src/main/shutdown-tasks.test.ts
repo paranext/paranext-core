@@ -559,6 +559,9 @@ describe('performWindowCloseTasks', () => {
       expect.stringContaining('sendReceiveProjects'),
       ['p1', 'p2'],
     );
+    // A batch of one names the single window it is, in singular, rather than reading as a list
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Syncing the projects of closing window 2: p1, p2');
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Sync for closing window 2 complete');
   });
 
   it('does not cancel a sync another window may have started', async () => {
