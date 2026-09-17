@@ -379,6 +379,7 @@ const STRINGS = {
   '%webView_find_showRecentSearches%': 'Show recent searches',
   '%webView_find_recent%': 'Recent',
   '%webView_find_toggleFilters%': 'Toggle filters',
+  '%webView_find_filtersPanel%': 'Search filters',
   '%webView_find_matchContentIn%': 'Match content in',
   '%webView_find_allText%': 'Any text',
   '%webView_find_allText_tooltip%': 'Including introductions, titles, headings, etc.',
@@ -1006,13 +1007,16 @@ describe('Find — filters panel keyboard accessibility', () => {
     expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
   });
 
-  it('names the open panel after the button that opens it', async () => {
+  // A popover is not named by its trigger the way a menu is, so the panel needs a name of its own —
+  // and a noun phrase rather than the trigger's "Toggle filters", which names the control the user
+  // just left rather than the surface a screen reader is announcing they arrived at.
+  it('gives the open panel a name of its own', async () => {
     const user = setupUser();
     render(<Find {...buildLifecycleProps({})} />);
 
     await openFilters(user);
 
-    expect(screen.getByRole('dialog', { name: 'Toggle filters' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Search filters' })).toBeInTheDocument();
   });
 
   // The panel and each tooltip are portalled to the body separately, so they stack as siblings and

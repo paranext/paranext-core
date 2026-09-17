@@ -484,6 +484,7 @@
       "%webView_find_showingResultsOfMore%": "Showing {visibleNumber} of more than {totalNumber} results. Refine your search to see fewer results.",
       "%webView_find_title%": "Find",
       "%webView_find_toggleFilters%": "Toggle filters",
+      "%webView_find_filtersPanel%": "Search filters",
       "%webView_find_matchContentIn%": "Match content in",
       "%webView_find_allText%": "Any text",
       "%webView_find_allText_tooltip%": "Including introductions, titles, headings, footnotes, cross references, etc.",

@@ -19,6 +19,7 @@ import { SearchTextType } from './find-types';
 
 export type FindFiltersStrings = {
   toggleFilters: string;
+  filtersPanel: string;
   matchContentIn: string;
   allText: string;
   allTextTooltip: string;
@@ -144,7 +145,8 @@ export function FindFilters({
           would spread the groups further apart than those margins intend.
 
           A popover, unlike a menu, is not named by the button that opens it, so the name is given
-          explicitly. */}
+          explicitly — and as a noun phrase of its own rather than the trigger's "Toggle filters",
+          which names the control the user just left instead of the surface they arrived at. */}
       <PopoverContent
         align="end"
         collisionPadding={8}
@@ -172,7 +174,7 @@ export function FindFilters({
           event.preventDefault();
           triggerRef.current?.focus();
         }}
-        aria-label={localizedStrings.toggleFilters}
+        aria-label={localizedStrings.filtersPanel}
         className="tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:gap-0 tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
       >
         {/* 1. Match content in */}

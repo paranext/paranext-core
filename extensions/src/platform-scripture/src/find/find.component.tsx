@@ -140,6 +140,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_showingResultsOfMore%',
   '%webView_find_showRecentSearches%',
   '%webView_find_toggleFilters%',
+  '%webView_find_filtersPanel%',
   '%webView_find_verseTextOnly%',
   // Preview-options keys live with their component; spread them so the two lists can't drift.
   ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
@@ -1097,6 +1098,7 @@ export function Find({
             setIsRegexAllowed={setIsRegexAllowed}
             localizedStrings={{
               toggleFilters: localizedStrings['%webView_find_toggleFilters%'],
+              filtersPanel: localizedStrings['%webView_find_filtersPanel%'],
               matchContentIn: localizedStrings['%webView_find_matchContentIn%'],
               allText: localizedStrings['%webView_find_allText%'],
               allTextTooltip: localizedStrings['%webView_find_allText_tooltip%'],

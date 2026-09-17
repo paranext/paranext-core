@@ -993,35 +993,41 @@ test.describe('Search Filters', () => {
 
     await openFiltersPanel(frame);
     const filtersButton = frame.getByRole('button', { name: /toggle filters/i });
-    const positionsDuringReRun = filtersButton.evaluate(
-      (button, { previousCount, settleMs, timeoutMs }) =>
-        new Promise<number[]>((resolve) => {
-          const positions: number[] = [];
-          const startedAt = performance.now();
-          let countChangedAt: number | undefined;
-          const sample = () => {
-            positions.push(button.getBoundingClientRect().x);
-            const now = performance.now();
-            const count = button.ownerDocument.querySelector('.tw\\:tabular-nums')?.textContent;
-            if (
-              countChangedAt === undefined &&
-              typeof count === 'string' &&
-              count !== previousCount
-            )
-              countChangedAt = now;
-            const isDone =
-              countChangedAt === undefined
-                ? now - startedAt >= timeoutMs
-                : now - countChangedAt >= settleMs;
-            if (isDone) resolve(positions);
-            else requestAnimationFrame(sample);
-          };
-          requestAnimationFrame(sample);
-        }),
-      // Below Playwright's per-test timeout, so a re-run that never reports a new count still
-      // resolves with the positions it sampled instead of dying with no assertion output.
-      { previousCount: counterBefore, settleMs: 1_000, timeoutMs: 35_000 },
-    );
+    const positionsDuringReRun = filtersButton
+      .evaluate(
+        (button, { previousCount, settleMs, timeoutMs }) =>
+          new Promise<number[]>((resolve) => {
+            const positions: number[] = [];
+            const startedAt = performance.now();
+            let countChangedAt: number | undefined;
+            const sample = () => {
+              positions.push(button.getBoundingClientRect().x);
+              const now = performance.now();
+              const count = button.ownerDocument.querySelector('.tw\\:tabular-nums')?.textContent;
+              if (
+                countChangedAt === undefined &&
+                typeof count === 'string' &&
+                count !== previousCount
+              )
+                countChangedAt = now;
+              const isDone =
+                countChangedAt === undefined
+                  ? now - startedAt >= timeoutMs
+                  : now - countChangedAt >= settleMs;
+              if (isDone) resolve(positions);
+              else requestAnimationFrame(sample);
+            };
+            requestAnimationFrame(sample);
+          }),
+        // Below Playwright's per-test timeout, so a re-run that never reports a new count still
+        // resolves with the positions it sampled instead of dying with no assertion output.
+        { previousCount: counterBefore, settleMs: 1_000, timeoutMs: 35_000 },
+      )
+      // Only awaited on the success path below, so a throw before that would leave this pending:
+      // the sampling loop runs its full timeout into the tests that follow, and if the worker tears
+      // the app down first the rejection surfaces unattached, as a second error on a run that
+      // already has a real failure to report.
+      .catch((): number[] => []);
 
     let positions: number[];
     try {
