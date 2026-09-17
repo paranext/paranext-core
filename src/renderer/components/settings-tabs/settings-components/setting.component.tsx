@@ -266,10 +266,15 @@ export function Setting({
 
       try {
         if (validateSetting && (await validateSetting(settingKey, newValue, setting))) {
-          setErrorMessage(undefined);
+          // A setting whose data provider has not handed back a writer cannot be changed, so the
+          // change is a failure rather than a silent no-op: without this it would clear any error
+          // on screen and every control would go on showing the value it was never able to write.
+          if (!setSetting) throw new Error('no writer is available for it yet');
           // Await so a rejected write (e.g. the Send/Receive write-gate) reaches the catch below
           // and surfaces as an error message instead of vanishing as an unhandled rejection.
-          if (setSetting) await setSetting(newValue);
+          await setSetting(newValue);
+          // Only a completed write earns a clear screen.
+          setErrorMessage(undefined);
         } else {
           setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
         }
@@ -302,7 +307,10 @@ export function Setting({
           key={settingKey}
           value={setting}
           defaultValue={DEFAULT_ZOOM_FACTOR}
-          disabled={disabled}
+          // Without a writer the stepper has nothing to send a press to, and its readout moves and
+          // is announced (`aria-live`) the moment a button is pressed. Gating the buttons keeps the
+          // number on screen honest instead of reporting a percentage that was never written.
+          disabled={disabled || !setSetting}
           groupLabel={label}
           labels={{
             increase: localizedStrings['%settings_platform_webViewContentZoom_increase%'],
@@ -386,6 +394,7 @@ export function Setting({
     languages,
     defaultLanguages,
     disabled,
+    setSetting,
   ]);
 
   return (
