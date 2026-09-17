@@ -1235,9 +1235,7 @@ describe('web-view-content-zoom.service', () => {
 
     const addListener = vi.spyOn(window, 'addEventListener');
     try {
-      const initializing = initializeContentZoomService().then(() => {
-        order.push('initialized');
-      });
+      const initializing = initializeContentZoomService().then(() => order.push('initialized'));
       // Let the synchronous registrations and the not-yet-awaited subscriptions run.
       await Promise.resolve();
       await Promise.resolve();
