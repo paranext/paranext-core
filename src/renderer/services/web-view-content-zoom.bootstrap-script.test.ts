@@ -1587,6 +1587,121 @@ describe('content-zoom bootstrap script', () => {
     expect(badge?.dataset.area).toBe('footnotes');
   });
 
+  it('leaves pop-up content out of the reported areas and warns about none of it', async () => {
+    const { bound, papi } = install('wv-popup', TWO_AREAS);
+    await nextFrame();
+    const popupForFootnotes = document.createElement('div');
+    popupForFootnotes.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    popupForFootnotes.setAttribute('data-platform-content-zoom-popup', '');
+    const popupOnlyArea = document.createElement('div');
+    popupOnlyArea.setAttribute('data-platform-content-zoom-root', 'menu');
+    popupOnlyArea.setAttribute('data-platform-content-zoom-popup', '');
+    const nestedPopup = document.createElement('div');
+    nestedPopup.setAttribute('data-platform-content-zoom-root', '');
+    nestedPopup.setAttribute('data-platform-content-zoom-popup', '');
+    byId('main').appendChild(nestedPopup);
+    // Controls in the same batch: a real late pane is reported, a real nested marker still warns.
+    const late = document.createElement('aside');
+    late.setAttribute('data-platform-content-zoom-root', 'sidebar');
+    const nestedPane = document.createElement('div');
+    nestedPane.setAttribute('data-platform-content-zoom-root', 'inner');
+    byId('foot').appendChild(nestedPane);
+    document.body.append(popupForFootnotes, popupOnlyArea, late);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-popup', [
+      'main',
+      'footnotes',
+      'sidebar',
+    ]);
+    const warnings = papi.logger.warn.mock.calls.map(([message]) => String(message));
+    expect(warnings.some((message) => message.includes('"inner"'))).toBe(true);
+    expect(warnings.filter((message) => message.includes('nested'))).toHaveLength(1);
+  });
+
+  it('does not report a changed area list when a pop-up opens or closes', async () => {
+    const { bound } = install('wv-popup-churn', TWO_AREAS);
+    await nextFrame();
+    const reportsBefore = bound.reportContentZoomAreasById.mock.calls.length;
+    expect(reportsBefore).toBeGreaterThan(0);
+    const popup = document.createElement('div');
+    popup.setAttribute('data-platform-content-zoom-root', '');
+    popup.setAttribute('data-platform-content-zoom-popup', '');
+    document.body.appendChild(popup);
+    await nextFrame();
+    popup.remove();
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById.mock.calls.length).toBe(reportsBefore);
+  });
+
+  it('keeps the indicator on the pane while a pop-up of the same area is open', () => {
+    install('wv-popup-corner', TWO_AREAS);
+    const popup = document.createElement('div');
+    popup.setAttribute('data-platform-content-zoom-root', '');
+    popup.setAttribute('data-platform-content-zoom-popup', '');
+    document.body.appendChild(popup);
+    const rect = (top: number, left: number, right: number): DOMRect =>
+      DOMRect.fromRect({ x: left, y: top, width: right - left, height: 50 });
+    vi.spyOn(byId('main'), 'getBoundingClientRect').mockReturnValue(rect(100, 0, 500));
+    vi.spyOn(popup, 'getBoundingClientRect').mockReturnValue(rect(10, 600, 900));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    api.showIndicator('main', '200 %');
+    const badge = byId('platform-content-zoom-indicator');
+    // Pane only: top 100 + 12, right edge 500 → innerWidth - 500 + 16. Including the pop-up would
+    // give top 22 and a right offset from 900.
+    expect(badge.style.top).toBe('112px');
+    expect(badge.style.right).toBe(`${window.innerWidth - 500 + 16}px`);
+  });
+
+  it('a click or Ctrl+wheel inside a pop-up targets the area the pop-up belongs to', async () => {
+    const { bound } = install('wv-popup-target', TWO_AREAS);
+    await nextFrame();
+    const popup = document.createElement('div');
+    popup.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    popup.setAttribute('data-platform-content-zoom-popup', '');
+    popup.innerHTML = '<p id="popup-item">item</p>';
+    document.body.appendChild(popup);
+    await nextFrame();
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    byId('popup-item').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+    const event = wheel({ ctrlKey: true, deltaY: -120 }, byId('popup-item'));
+    expect(event.defaultPrevented).toBe(true);
+    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-popup-target', 1, 'footnotes');
+  });
+
+  it('scales a top-level pop-up with its area’s rule but no rule matches a nested one', async () => {
+    install('wv-popup-css', TWO_AREAS);
+    const popup = document.createElement('div');
+    popup.id = 'popup';
+    popup.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    popup.setAttribute('data-platform-content-zoom-popup', '');
+    document.body.appendChild(popup);
+    const nested = document.createElement('div');
+    nested.id = 'nestedPopup';
+    nested.setAttribute('data-platform-content-zoom-root', 'footnotes');
+    nested.setAttribute('data-platform-content-zoom-popup', '');
+    byId('main').appendChild(nested);
+    await nextFrame();
+    const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
+    const selectors = sheet
+      ? Array.from(sheet.cssRules).flatMap((rule) =>
+          rule instanceof CSSStyleRule ? [rule.selectorText] : [],
+        )
+      : [];
+    expect(selectors.some((selector) => byId('popup').matches(selector))).toBe(true);
+    expect(selectors.some((selector) => byId('nestedPopup').matches(selector))).toBe(false);
+  });
+
   it('anchors the indicator at inline-end: right for an LTR area, left for an RTL area', async () => {
     install('wv-14', TWO_AREAS);
     // jsdom does not map the `dir` attribute to a computed `direction` the way a browser's UA
