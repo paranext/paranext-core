@@ -181,9 +181,9 @@ The established contract for a localizable library component is four parts:
 3. **An optional `localizedStrings?` prop** typed as that mapped type (or the shared `LanguageStrings` type from `platform-bible-utils`). Inside the component, every read goes through `resolveLocalizedString` so the component still renders readable text when a key is absent or has not resolved:
 
    ```tsx
-   const selectChapter = resolveLocalizedString(
+   const selectChapterTitle = resolveLocalizedString(
      localizedStrings?.['%webView_bookChapterControl_selectChapter%'],
-     'Select Chapter',
+     'Select chapter',
    );
    ```
 
@@ -197,8 +197,8 @@ The established contract for a localizable library component is four parts:
    This applies to the `Partial<Record<…>>` prop shape above too, even though an indexed read of it
    is genuinely `string | undefined`. An absent key and a key-seeded key are both live
    possibilities on the same prop, and `??` only sees the first. `noUncheckedIndexedAccess` is off
-   repo-wide, so TypeScript flags neither the bug nor the now-dead `??`; `paranext/no-nullish-localized-fallback`
-   is what catches it.
+   repo-wide, so TypeScript flags neither the bug nor the now-dead `??`;
+   `paranext/no-nullish-localized-fallback` is what catches it.
 
 4. **A shipped English value for every key in the tuple.** The tuple only *declares* what the
    component asks for; nothing about declaring a key produces a value. The **default** home for a
