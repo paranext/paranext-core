@@ -310,6 +310,27 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-unfocused', 1, 'main');
   });
 
+  it('lets what the pointer saw go stale, so one modified pointer event cannot outlaw pinching for good', () => {
+    const { bound } = install('wv-pinch-stale', TWO_AREAS);
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      // Ctrl held while the mouse moved, then released while the focus is in another pane: no keyup
+      // reaches this iframe, the window never blurred, and a pinch moves no cursor — so nothing can
+      // ever correct this reading. Left standing it would send every later pinch down the notch
+      // path at a step a frame, which is the runaway in reverse.
+      byId('verse').dispatchEvent(new MouseEvent('pointermove', { bubbles: true, ctrlKey: true }));
+      now += 30000;
+      for (let i = 0; i < 20; i += 1) {
+        now += 16;
+        wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      }
+      expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(4);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it('never takes ⌘+wheel for a pinch, since a synthesized pinch always carries Ctrl', () => {
     const { bound } = install('wv-notch-meta', TWO_AREAS);
     // Chromium synthesizes a pinch as ctrl+wheel on every platform, never as ⌘+wheel, so a small

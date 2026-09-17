@@ -420,27 +420,45 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     //   Without them, Ctrl held while another pane has the focus and the wheel turned over THIS one
     //   arrives with nothing seen, and a macOS notch is small enough to be read as a pinch.
     //
-    // A modifier key held while the window loses focus or visibility has its keyup delivered to
-    // somebody else, so the set is cleared there as well - a flag left set would send every later
-    // pinch down the notch path for the rest of the pane's life.
+    // The two are kept apart because they expire differently. A key event stands until its own
+    // keyup, which is the event that ends it. A pointer reading is only ever evidence of the moment
+    // it was taken: the key can be released with no keyup this iframe sees and the cursor never
+    // moving again, and then nothing can correct it - so a pointer reading is trusted for a bounded
+    // time and the pane falls back to what the key events know. A modifier held while the window
+    // loses focus or visibility has its keyup delivered to somebody else, so both are cleared there
+    // too. Every flag left standing sends later pinches down the notch path at a step a frame.
     const PHYSICAL_MODIFIER_KEYS = ['Control', 'Meta'];
+    // Long enough for the gesture a pointer reading was taken for - a user who moves the mouse with
+    // Ctrl held is about to turn the wheel - and short next to the life of a pane.
+    const POINTER_MODIFIER_TRUST_MS = 2000;
     const physicalModifiers = new Set();
+    const pointerModifiers = new Set();
+    let pointerModifiersTime = -Infinity;
+    const anyPhysicalModifier = (now) =>
+      physicalModifiers.size > 0 ||
+      (pointerModifiers.size > 0 && now - pointerModifiersTime < POINTER_MODIFIER_TRUST_MS);
     const onModifierKeyDown = (e) => {
       if (PHYSICAL_MODIFIER_KEYS.indexOf(e.key) !== -1) physicalModifiers.add(e.key);
     };
     const onModifierKeyUp = (e) => {
       if (PHYSICAL_MODIFIER_KEYS.indexOf(e.key) !== -1) physicalModifiers.delete(e.key);
     };
-    // A pointer event states both flags outright, so it REPLACES what the set holds rather than
-    // adding to it: it is as much evidence that a key is up as that one is down.
+    // A pointer event states both flags outright, so it REPLACES what is held rather than adding to
+    // it: it is as much evidence that a key is up as that one is down, and it is the fresher
+    // evidence, so a flag it reports as up clears what the key events recorded as well.
     const onPointerModifiers = (e) => {
-      if (e.ctrlKey) physicalModifiers.add('Control');
-      else physicalModifiers.delete('Control');
-      if (e.metaKey) physicalModifiers.add('Meta');
-      else physicalModifiers.delete('Meta');
+      PHYSICAL_MODIFIER_KEYS.forEach((physicalKey) => {
+        const down = physicalKey === 'Control' ? e.ctrlKey : e.metaKey;
+        if (down) pointerModifiers.add(physicalKey);
+        else {
+          pointerModifiers.delete(physicalKey);
+          physicalModifiers.delete(physicalKey);
+        }
+      });
+      pointerModifiersTime = performance.now();
     };
-    const onModifierLost = () => physicalModifiers.clear();
-    const onVisibilityChange = () => { if (document.hidden) physicalModifiers.clear(); };
+    const onModifierLost = () => { physicalModifiers.clear(); pointerModifiers.clear(); };
+    const onVisibilityChange = () => { if (document.hidden) onModifierLost(); };
     window.addEventListener('keydown', onModifierKeyDown, true);
     window.addEventListener('keyup', onModifierKeyUp, true);
     window.addEventListener('pointerdown', onPointerModifiers, true);
@@ -452,7 +470,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       // Chromium's synthesized pinch is ctrl+wheel on every platform, never meta+wheel, so ⌘+wheel
       // on a Mac is a mouse gesture however small its delta - the same test pdf.js makes.
       e.ctrlKey &&
-      physicalModifiers.size === 0 &&
+      !anyPhysicalModifier(now) &&
       e.deltaMode === 0 &&
       e.deltaX === 0 &&
       (Math.abs(Math.exp(-e.deltaY / PINCH_SCALE_PIXELS) - 1) < PINCH_MAX_SCALE_DEVIATION ||
