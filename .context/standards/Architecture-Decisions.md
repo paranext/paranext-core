@@ -106,10 +106,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   applying it anyway would hide a working "all projects on disk" surface from plain Platform.Bible.
   **Route to the Send/Receive dialog** — rejected by the PRD itself, since send/receive is intended
   to be replaced by Home. **Open a projects-only filtered view of Home** — the PRD's own preferred
-  wording, not taken: Home's list is already searchable and its resource rows are the other half of
-  "get me to the project I mean", so a filtered variant would add a second Home configuration to
-  maintain for a narrowing the search box already gives. Revisit if the unfiltered list proves too
-  noisy to pick a project from in practice. **Cache the server's project list for offline use** —
+  wording. Not weighed at the time: the decision was framed as "which surface", and once Home was
+  chosen the filtered variant was not revisited. Recorded as open rather than rejected, because
+  nothing here has actually decided it — Home's search box already narrows the list, so the live
+  question is whether the resource rows are noise or the other half of "get me to the project I
+  mean". Decide it against real use before adding a second Home configuration to maintain. **Cache the server's project list for offline use** —
   deferred: a cached list cannot be acted on, because a user who is offline cannot sync the project
   the cache would show.
 - **Consequences:** Home is the single surface that reconciles local and server projects, so a defect
