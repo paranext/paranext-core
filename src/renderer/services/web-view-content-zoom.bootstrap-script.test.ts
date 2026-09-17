@@ -115,6 +115,37 @@ function normalizeCssRuleText(cssText: string): string {
   return cssText.replace(/\s+/g, '').replace(/;}/g, '}');
 }
 
+type ListenerRegistration = [
+  type: string,
+  listener: unknown,
+  options?: boolean | AddEventListenerOptions,
+];
+
+/**
+ * A listener comes off a target only when the event type, the listener function AND the capture
+ * flag all match the registration; a removal that disagrees on any of the three is a silent no-op
+ * that leaves the listener attached. Returns the `[type, capture]` pairs that were added and never
+ * removed that way.
+ */
+function listenersLeftAttached(
+  added: ListenerRegistration[],
+  removed: ListenerRegistration[],
+): [string, boolean][] {
+  const isCapture = (options?: boolean | AddEventListenerOptions): boolean =>
+    options === true || (typeof options === 'object' && options.capture === true);
+  return added
+    .filter(
+      ([type, listener, options]) =>
+        !removed.some(
+          ([removedType, removedListener, removedOptions]) =>
+            removedType === type &&
+            removedListener === listener &&
+            isCapture(removedOptions) === isCapture(options),
+        ),
+    )
+    .map(([type, , options]) => [type, isCapture(options)]);
+}
+
 /**
  * Jsdom has no real `window.matchMedia`; stub it so `(prefers-reduced-motion: reduce)` resolves as
  * given.
@@ -378,6 +409,8 @@ describe('content-zoom bootstrap script', () => {
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
     try {
+      // Moving this spy is the whole of the pause — nothing else here stands for time passing —
+      // and the tick path reads no clock of its own, so what this pins is that none is reintroduced.
       // Part of a tick is a position within one notch, not a gesture that can go stale: the wheel
       // has not moved since, so waiting does not put it back where it was.
       wheel({ deltaY: -40, ctrlKey: true, wheelDeltaY: 48 }, byId('verse'));
@@ -873,6 +906,58 @@ describe('content-zoom bootstrap script', () => {
     // platform/pane contract, not a name this file invents.
     // eslint-disable-next-line no-underscore-dangle
     expect(window.__platformContentZoom).toBeUndefined();
+  });
+
+  it('takes every listener it put on the window and the document back off again when it is destroyed', async () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    const removed = vi.spyOn(window, 'removeEventListener');
+    const documentAdded = vi.spyOn(document, 'addEventListener');
+    const documentRemoved = vi.spyOn(document, 'removeEventListener');
+    try {
+      install('wv-destroy-listeners', TWO_AREAS);
+      await nextFrame();
+      // Positive control: the whole set really is installed, so an empty leftover list below is
+      // destroy() doing its work rather than a bootstrap that attached nothing to let go of.
+      expect(new Set(added.mock.calls.map(([type]) => type))).toEqual(
+        new Set(['pointerdown', 'pointermove', 'focusin', 'keydown', 'keyup', 'blur', 'wheel']),
+      );
+      expect(documentAdded.mock.calls.some(([type]) => type === 'visibilitychange')).toBe(true);
+
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      window.__platformContentZoom?.destroy();
+
+      expect(listenersLeftAttached(added.mock.calls, removed.mock.calls)).toEqual([]);
+      expect(listenersLeftAttached(documentAdded.mock.calls, documentRemoved.mock.calls)).toEqual(
+        [],
+      );
+    } finally {
+      added.mockRestore();
+      removed.mockRestore();
+      documentAdded.mockRestore();
+      documentRemoved.mockRestore();
+    }
+  });
+
+  it('forgets a modifier key while the application is hidden, as it does when the window blurs', () => {
+    const { bound } = install('wv-pinch-hidden', TWO_AREAS);
+    // `document.hidden` follows the application window — minimised, hidden, or on another desktop —
+    // and NOT an rc-dock tab being switched away from, which leaves this pane's iframe mounted and
+    // this document visible. So this is the window-level companion of the blur case above, never a
+    // tab-activation hook.
+    modifierKey('keydown', 'Control');
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+      // The keyup for a key held as the application goes away is delivered to somebody else, so a
+      // flag left set here would send every later pinch down the notch path at a step a frame.
+      for (let i = 0; i < 20; i += 1)
+        wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(4);
+    } finally {
+      hidden.mockRestore();
+    }
   });
 
   it('inserts, for an area discovered after the pane loaded, a rule identical to the head-splice helper’s rule for the same area', async () => {
