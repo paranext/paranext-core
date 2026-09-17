@@ -84,7 +84,7 @@ describe('web-view-content-zoom.service', () => {
   let iframe: HTMLIFrameElement;
   const showIndicator = vi.fn();
   let lastFocused: string | undefined;
-  let modalOverlayOpen = false;
+  let windowInputBlocked = false;
   /** One iframe per pane, since the production `getIframe` is keyed by web view id. */
   const iframes = new Map<string, HTMLIFrameElement>();
   function iframeFor(webViewId: string): HTMLIFrameElement {
@@ -109,7 +109,7 @@ describe('web-view-content-zoom.service', () => {
     showIndicator.mockClear();
     vi.mocked(logger.warn).mockClear();
     lastFocused = undefined;
-    modalOverlayOpen = false;
+    windowInputBlocked = false;
     document.body.innerHTML = '';
     iframes.clear();
     iframe = iframeFor('editor-1');
@@ -129,7 +129,7 @@ describe('web-view-content-zoom.service', () => {
         return () => false;
       },
       getLastFocusedTabId: () => lastFocused,
-      isWindowInputBlocked: () => modalOverlayOpen,
+      isWindowInputBlocked: () => windowInputBlocked,
       settings: {
         get: async (key: string) => settings[key],
         set: settingsSet,
@@ -158,9 +158,9 @@ describe('web-view-content-zoom.service', () => {
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
 
-  it('lets a modal overlay stop only the no-id path; an explicitly targeted pane still resolves', () => {
+  it('lets a blocked window stop only the no-id path; an explicitly targeted pane still resolves', () => {
     lastFocused = 'editor-1';
-    modalOverlayOpen = true;
+    windowInputBlocked = true;
     expect(resolveContentZoomTarget('editor-1')).toBe('editor-1');
     expect(resolveContentZoomTarget(undefined)).toBeUndefined();
   });
@@ -182,7 +182,7 @@ describe('web-view-content-zoom.service', () => {
     setContentZoomAreas('editor-1', []);
     expect(canContentZoomActOnActiveTarget()).toBe(false);
     setContentZoomAreas('editor-1', ['main']);
-    modalOverlayOpen = true;
+    windowInputBlocked = true;
     expect(canContentZoomActOnActiveTarget()).toBe(false);
   });
 
@@ -849,8 +849,8 @@ describe('web-view-content-zoom.service', () => {
     expect(showIndicator).not.toHaveBeenCalled();
   });
 
-  it('still acts on an explicitly targeted pane while a modal overlay is open, and on none without an id', async () => {
-    modalOverlayOpen = true;
+  it("still acts on an explicitly targeted pane while the window's input is blocked, and on none without an id", async () => {
+    windowInputBlocked = true;
     await adjustContentZoom('editor-1', 1);
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.1');
     expect(showIndicator).toHaveBeenCalledTimes(1);

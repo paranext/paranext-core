@@ -450,19 +450,21 @@ export function PlatformTabTitle({
     [contributedItems, localizedStrings],
   );
 
-  // A process-lifetime cache keyed by web view type. The platform's own items are a fixed
-  // contribution; the two things that do change while a tab lives — which windows are open, and
-  // which actions apply to this tab — are read when the menu opens instead, so the cache never has
-  // to track them.
+  // A process-lifetime cache keyed by interface mode and web view type. The platform's own items
+  // are a fixed contribution; the two things that do change while a tab lives — which windows are
+  // open, and which actions apply to this tab — are read when the menu opens instead, so the cache
+  // never has to track them.
   //
-  // Both modes read the same contributed menu: Simple mode narrows it to the zoom group after the
-  // read lands, so a Simple-mode column shares the same cached read a Power-mode one does.
+  // The two modes are different menus: the menu data provider filters tab items by `currentMode`,
+  // so a Simple-mode read and a Power-mode read of the same web view type cannot share one cache
+  // entry. That is what the mode in the key is for.
   //
   // An extension installed or removed mid-session shows its tab items only at the next window
   // reload — the cache for its web view type survives until then.
   useEffect(() => {
-    // The read waits for the mode, because the menu is withheld until the mode is known either — so
-    // reading under the loading fallback would only cache the wrong mode's menu.
+    // The read waits for the mode: `useInterfaceMode` reports the 'simple' fallback while the
+    // setting loads, so reading under the loading fallback would cache that mode's menu for a tab
+    // that turns out to be in the other one. The menu itself is withheld until the mode is known.
     if (!isModeKnown) return undefined;
 
     let isStillMounted = true;

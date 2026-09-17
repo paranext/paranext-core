@@ -126,7 +126,7 @@ describe('registerContentZoomChromeKeys', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  it('does not act while a modal overlay is open', () => {
+  it("does not act while the window's input is blocked", () => {
     isWindowInputBlocked.mockReturnValue(true);
     const event = dispatchKeyDown(document.body, { key: '=', ctrlKey: true });
     expect(adjustContentZoom).not.toHaveBeenCalled();
@@ -147,7 +147,7 @@ describe('registerContentZoomChromeKeys', () => {
     expect(canContentZoomAct).not.toHaveBeenCalled();
   });
 
-  it('does not ask whether a modal overlay is open for a key it would not act on anyway', () => {
+  it('does not ask whether the window is blocked for a key it would not act on anyway', () => {
     dispatchKeyDown(document.body, { key: 'c', ctrlKey: true });
     dispatchKeyDown(document.body, { key: 'ArrowDown', ctrlKey: true, shiftKey: true });
     expect(isWindowInputBlocked).not.toHaveBeenCalled();
