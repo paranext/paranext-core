@@ -680,7 +680,7 @@ describe('unresolved localized strings', () => {
         onChangeSelection={() => {}}
         localizedStrings={{
           ariaLabel: 'Projekte & Ressourcen',
-          buttonPlaceholder: '%webView_find_projectFilter_selectProject%',
+          buttonPlaceholder: '%webView_find_projectFilter_noOpenProjectsOrResources%',
           commandEmptyMessage: undefined,
           searchPlaceholder: 'Projekte durchsuchen',
         }}

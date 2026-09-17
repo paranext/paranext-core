@@ -7,7 +7,7 @@ import { useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { newPlatformError } from 'platform-bible-utils';
 import { installManageBooksJsdomShims } from './manage-books-dialog/manage-books-dialog.test-utils';
-import { isProjectSelectorSharedKey, localizedValueFor } from './project-selector.test-utils';
+import { localizedValueFor } from './project-selector.test-utils';
 
 let uninstallShims: () => void;
 
@@ -64,25 +64,30 @@ vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@papi/frontend/react', () => ({
-  // Echo each requested key back as its own value, which is what useLocalizedStrings does before it
-  // resolves. The shared `%projectSelector_*%` block is the exception — the picker treats a key
-  // echoed as its own value as unresolved, so those get a resolved-looking value instead.
-  useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(
-      keys.map((key) => [key, isProjectSelectorSharedKey(key) ? localizedValueFor(key) : key]),
-    ),
-    false,
-  ],
-  useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
-    defaultValue,
-    vi.fn(),
-    false,
-  ],
-  useData: vi.fn(() => ({
-    RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
-  })),
-}));
+vi.mock('@papi/frontend/react', async () => {
+  // Imported inside the factory: a hoisted `vi.mock` factory must not close over the file's
+  // top-level import bindings. Aliased because the same names are bound at the top level.
+  const { isProjectSelectorSharedKey: isSharedKey, localizedValueFor: valueFor } = await import(
+    './project-selector.test-utils'
+  );
+  return {
+    // Echo each requested key back as its own value, which is what useLocalizedStrings does before
+    // it resolves. The shared `%projectSelector_*%` block is the exception — the picker treats a
+    // key echoed as its own value as unresolved, so those get a resolved-looking value instead.
+    useLocalizedStrings: (keys: string[]) => [
+      Object.fromEntries(keys.map((key) => [key, isSharedKey(key) ? valueFor(key) : key])),
+      false,
+    ],
+    useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
+      defaultValue,
+      vi.fn(),
+      false,
+    ],
+    useData: vi.fn(() => ({
+      RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
+    })),
+  };
+});
 
 vi.mock('./hooks/use-open-project-tabs', () => ({
   useOpenProjectTabs: vi.fn(() => []),
