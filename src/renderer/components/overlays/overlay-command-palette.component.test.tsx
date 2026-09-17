@@ -341,6 +341,25 @@ describe('OverlayCommandPalettePresentational', () => {
       await vi.waitFor(() => expect(input).toHaveFocus());
     });
 
+    it('should focus the search input of an ANCHORED palette, whose input mounts after the palette', async () => {
+      // Anchored mode renders the input inside a Radix Popover portal, which mounts its content on
+      // a render AFTER the palette's own mount effects have run — so at the first attempt there is
+      // no input to focus yet. The Enter paragraph palette is anchored and never forwards keys, so
+      // an unfocused one leaves every typed filter character landing in the document instead.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = await screen.findByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+    });
+
     it('should not throw when the palette unmounts before focus ever sticks', async () => {
       const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
 
