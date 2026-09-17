@@ -28,8 +28,9 @@ describe('content-zoom.util', () => {
   });
 
   it('snaps an off-grid factor to the nearest tenth as it steps', () => {
-    // A stored 1.25 moves 15 points, not 10, because the step snaps to the grid. The command
-    // summaries say so; this pins it.
+    // An off-grid factor lands back on the tenth grid, so a step is not always 10 points: from a
+    // stored 1.25, `+1` moves 15 points and `-1` moves 5, because `Math.round` breaks the .5 tie
+    // upward in both directions. The app-wide zoom command summaries name this snap.
     expect(adjustZoomFactor(1.25, 1)).toBe(1.4);
     expect(adjustZoomFactor(1.25, -1)).toBe(1.2);
   });
