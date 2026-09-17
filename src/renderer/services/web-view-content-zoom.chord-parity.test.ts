@@ -48,11 +48,18 @@ type KeyCase = {
 const KEY_CASES: KeyCase[] = [
   { label: '=', init: { key: '=' }, baseAction: 'in' },
   { label: '+', init: { key: '+' }, baseAction: 'in' },
-  { label: 'NumpadAdd (code)', init: { code: 'NumpadAdd' }, baseAction: 'in' },
+  { label: 'numpad + (NumLock on)', init: { key: '+', code: 'NumpadAdd' }, baseAction: 'in' },
   { label: '-', init: { key: '-' }, baseAction: 'out' },
-  { label: 'NumpadSubtract (code)', init: { code: 'NumpadSubtract' }, baseAction: 'out' },
+  { label: 'numpad - (NumLock on)', init: { key: '-', code: 'NumpadSubtract' }, baseAction: 'out' },
   { label: '0', init: { key: '0' }, baseAction: 'reset' },
-  { label: 'Numpad0 (code)', init: { code: 'Numpad0' }, baseAction: 'reset' },
+  { label: 'numpad 0 (NumLock on)', init: { key: '0', code: 'Numpad0' }, baseAction: 'reset' },
+  // With NumLock off this key reports itself as Insert, and Ctrl+Insert is Chromium's legacy Copy
+  // chord. Consuming it would take Copy away silently in the middle of data entry.
+  {
+    label: 'numpad 0 (NumLock off)',
+    init: { key: 'Insert', code: 'Numpad0' },
+    baseAction: undefined,
+  },
   { label: 'k (unrelated)', init: { key: 'k' }, baseAction: undefined },
 ];
 

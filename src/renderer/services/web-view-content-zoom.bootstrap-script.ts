@@ -379,7 +379,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       let command;
       if (zoomIn) command = '${CONTENT_ZOOM_COMMANDS.in}';
       else if (e.key === '-' || e.code === 'NumpadSubtract') command = '${CONTENT_ZOOM_COMMANDS.out}';
-      else if (e.key === '0' || e.code === 'Numpad0') command = '${CONTENT_ZOOM_COMMANDS.reset}';
+      // The numpad 0 only means reset while NumLock is on. With NumLock off it reports itself as
+      // Insert, and Ctrl+Insert is Chromium's legacy Copy chord, which content zoom must not
+      // swallow. NumpadAdd and NumpadSubtract are NumLock-independent, so only this branch needs it.
+      else if (e.key === '0' || (e.code === 'Numpad0' && e.key === '0')) command = '${CONTENT_ZOOM_COMMANDS.reset}';
       if (!command) return;
       e.preventDefault();
       act(command, areaId);

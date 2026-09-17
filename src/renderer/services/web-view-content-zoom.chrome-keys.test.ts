@@ -79,10 +79,16 @@ describe('registerContentZoomChromeKeys', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  it('resets on Ctrl+Numpad0', () => {
-    const event = dispatchKeyDown(document.body, { code: 'Numpad0', ctrlKey: true });
+  it('resets on the numpad 0 with NumLock on', () => {
+    const event = dispatchKeyDown(document.body, { key: '0', code: 'Numpad0', ctrlKey: true });
     expect(resetContentZoom).toHaveBeenCalledWith(undefined);
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('leaves Ctrl+Insert alone so the numpad 0 with NumLock off still copies', () => {
+    const event = dispatchKeyDown(document.body, { key: 'Insert', code: 'Numpad0', ctrlKey: true });
+    expect(resetContentZoom).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it('acts on Meta instead of Ctrl', () => {
