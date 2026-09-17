@@ -26,6 +26,7 @@ import {
   type PageBox,
   readContentZoomMemory,
   readIndicatorText,
+  waitForPopupAnimations,
   zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
 import {
@@ -159,8 +160,9 @@ async function readCaretBox(frame: Frame): Promise<PageBox> {
 
 /**
  * {@link expectPopupBesideTriggerAndInsideFrame}, retried until it holds: a pop-up that has just
- * opened is still being positioned and runs a short open animation, so its first boxes are not its
- * settled ones. A pop-up that never settles beside its trigger still fails.
+ * opened is still being positioned, so its first boxes are not its settled ones. A pop-up that
+ * never settles beside its trigger still fails. Once this returns, the pop-up's open animation has
+ * ended and its size can be measured.
  */
 async function expectSettledBeside(
   frame: Frame,
@@ -170,6 +172,7 @@ async function expectSettledBeside(
   await expect(async () => expectPopupBesideTriggerAndInsideFrame(frame, popup, trigger)).toPass({
     timeout: 5_000,
   });
+  await waitForPopupAnimations(popup);
 }
 
 /** A locator's main-frame box; throws when it has none. */
