@@ -1,9 +1,9 @@
 import path from 'path';
 import rule from './no-nullish-localized-fallback';
-import { typeAwareRuleTester } from '../test.utils';
+import { typeAwareRuleTester, typelessRuleTester } from '../test.utils';
 
 const filename = path.resolve(__dirname, '../fixtures/case.ts');
-const imports = `import { localizedStrings, stringsBag, partialStrings, widths, key, stringMap, plainKey, anonymousMap, keyFor, wideKey } from './localized-strings';`;
+const imports = `import { localizedStrings, stringsBag, partialStrings, widths, key, stringMap, plainKey, anonymousMap, keyFor, wideKey, componentStrings } from './localized-strings';`;
 
 typeAwareRuleTester.run('no-nullish-localized-fallback', rule, {
   valid: [
@@ -92,10 +92,45 @@ typeAwareRuleTester.run('no-nullish-localized-fallback', rule, {
       errors: [{ messageId: 'nullishLocalizedFallback' }],
     },
     {
-      // Falling back to the key itself is dead code rather than user-visible breakage.
+      // A component's own strings type — a mapped type over a literal key union — indexed by a
+      // plain `string`. Nothing about the key is `%…%`-shaped or typed `LocalizeKey`, so only the
+      // map branch, walking the type's declared members, can produce this report.
+      code: `${imports}\nconst t = componentStrings[plainKey] ?? 'A';`,
+      filename,
+      errors: [{ messageId: 'nullishLocalizedFallback' }],
+    },
+    {
+      // Falling back to the key itself is dead code rather than user-visible breakage. The only
+      // suggestion offered deletes the fallback: wrapping it would keep the key as the fallback
+      // text, which is the raw `%…%` the rule exists to stop.
       code: `${imports}\nconst t = localizedStrings[key] ?? key;`,
       filename,
-      errors: [{ messageId: 'deadKeyFallback' }],
+      errors: [
+        {
+          messageId: 'deadKeyFallback',
+          suggestions: [
+            {
+              messageId: 'deleteDeadKeyFallback',
+              output: `${imports}\nconst t = localizedStrings[key];`,
+            },
+          ],
+        },
+      ],
     },
   ],
+});
+
+// The stand-down guard: with no type information the rule must register no listeners and report
+// nothing, rather than throwing and taking the whole lint run down with it. Every case above runs
+// WITH a type-checked program, so none of them can reach this path.
+typelessRuleTester.run('no-nullish-localized-fallback (no type information)', rule, {
+  valid: [
+    // Reports under type information as the canonical shape; must be silent without it.
+    { code: `const t = localizedStrings['%a%'] ?? 'A';` },
+    // A literal `%…%` key is recognizable from syntax alone, so this pins that the rule stands
+    // down entirely rather than falling back to a syntax-only check.
+    { code: `const t = anyBag['%a%'] || 'A';` },
+    { code: `const t = localizedStrings[key] ?? key;` },
+  ],
+  invalid: [],
 });

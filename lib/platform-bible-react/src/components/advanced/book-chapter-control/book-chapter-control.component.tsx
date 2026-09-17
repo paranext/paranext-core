@@ -614,11 +614,13 @@ export function BookChapterControl({
     [disableReferencesUpTo],
   );
 
-  // `||`, not `??`, throughout: an absent translation can come back as an empty string, which `??`
-  // would pass straight through as a blank label. `||` falls back to the English text instead.
-  // A key with no entry at all resolves to the key itself, which is truthy and so renders raw as
-  // `%key%`; that case is guarded by `book-chapter-control-localization.test.ts`, which fails if any
-  // key in `BOOK_CHAPTER_CONTROL_STRING_KEYS` lacks an English value.
+  // `resolveLocalizedString`, not `??` or `||`, throughout: an unresolved lookup comes back as the
+  // raw key (`%…%`) and an absent translation can come back as blank text, both of which are
+  // defined, truthy strings that a logical fallback would render at the user. The helper judges the
+  // value instead, so every one of those states reaches the English text below it. That the keys
+  // have English values to resolve to at all is guarded by
+  // `book-chapter-control-localization.test.ts`, which fails if any key in
+  // `BOOK_CHAPTER_CONTROL_STRING_KEYS` lacks one.
   const selectChapterTitle = resolveLocalizedString(
     localizedStrings?.['%webView_bookChapterControl_selectChapter%'],
     'Select chapter',

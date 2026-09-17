@@ -27,3 +27,21 @@ export const typeAwareRuleTester = new RuleTester({
     tsconfigRootDir: path.resolve(__dirname, '..'),
   },
 });
+
+/**
+ * A rule tester for type-aware rules with NO `project` configured, so the parser produces no type
+ * information.
+ *
+ * A type-aware rule must stand down on such a file rather than throw: configurations that lint
+ * plain JavaScript alongside TypeScript reach this path, and a rule that throws there takes the
+ * whole `npm run lint` run down with it. Cases registered here assert silence, so they pin the
+ * stand-down guard that cases on {@link typeAwareRuleTester} can never exercise.
+ */
+export const typelessRuleTester = new RuleTester({
+  parser: require.resolve('@typescript-eslint/parser'),
+  parserOptions: {
+    ecmaVersion: 2020,
+    sourceType: 'module',
+    ecmaFeatures: { jsx: true },
+  },
+});

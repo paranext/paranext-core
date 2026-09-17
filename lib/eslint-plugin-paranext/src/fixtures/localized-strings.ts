@@ -28,3 +28,17 @@ export interface WideComponentStrings {
 }
 
 export declare const wideKey: keyof WideComponentStrings;
+
+/**
+ * A component's own strings type, mapped over a literal key union the way
+ * `BookChapterControlLocalizedStrings` and its siblings are. Unlike `Partial<Record<LocalizeKey,
+ * string>>`, whose template-literal key collapses to an index signature, this declares real members
+ * — so it is the shape the rule recognizes from the map rather than from the key.
+ */
+export type ComponentStringKey = '%component_title%' | '%component_body%';
+
+export type ComponentLocalizedStrings = {
+  [key in ComponentStringKey]?: string;
+};
+
+export declare const componentStrings: ComponentLocalizedStrings;

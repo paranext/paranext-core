@@ -17,18 +17,20 @@ function isLocalizedStringsType(type: Type, checker: TypeChecker): boolean {
   if (type.getSymbol()?.getName() === LOCALIZED_STRINGS_TYPE_NAME) return true;
   if (type.aliasSymbol?.getName() === LOCALIZED_STRINGS_TYPE_NAME) return true;
 
-  // A mapped type such as `Partial<Record<LocalizeKey, string>>` carries no useful symbol name, so
-  // judge it by its members: every key is `%…%`-shaped and every value is a string. Requiring at
-  // least one member keeps plain index-signature maps like `Record<string, string>`, which declare
-  // no members at all, out of the rule's reach.
+  // A component's own strings type — `BookChapterControlLocalizedStrings` and its siblings, mapped
+  // over a literal tuple union — carries no useful symbol name, so judge it by its members: every
+  // key is `%…%`-shaped and every value is a string. Requiring at least one member keeps maps that
+  // declare no members at all out of the rule's reach, both plain index-signature maps like
+  // `Record<string, string>` and key-shaped ones like `Partial<Record<LocalizeKey, string>>`, whose
+  // template-literal key collapses to an index signature. Those reach the rule, when they do,
+  // through the key rather than through the map.
   const properties = type.getProperties();
   if (properties.length === 0) return false;
   return properties.every((property) => {
     if (!LOCALIZATION_KEY_PATTERN.test(property.getName())) return false;
-    const declaration = property.valueDeclaration ?? property.declarations?.[0];
-    if (!declaration) return false;
-    const propertyType = checker.getTypeOfSymbolAtLocation(property, declaration);
-    return checker.typeToString(propertyType).includes('string');
+    // `getTypeOfSymbol`, not `getTypeOfSymbolAtLocation`: a mapped type's members are synthesized
+    // by the checker and have no declaration node to read them at.
+    return checker.typeToString(checker.getTypeOfSymbol(property)).includes('string');
   });
 }
 
@@ -98,8 +100,9 @@ export default createRule({
       nullishLocalizedFallback:
         "This fallback never runs. An unresolved localized string comes back as the raw key ('%…%'), which is a defined string, so '{{operator}}' passes it straight through to the user. Use resolveLocalizedString(value, fallback) from platform-bible-utils.",
       deadKeyFallback:
-        "This fallback is dead code: an unresolved lookup already returns the key, so '{{operator}}' can never produce anything different. Delete it, or use resolveLocalizedString(value, fallback) from platform-bible-utils if real fallback text is wanted.",
+        "This fallback is dead code: its text is the key itself, so whenever '{{operator}}' fires it hands the user the raw key ('%…%') instead of readable text. Delete it, or use resolveLocalizedString(value, fallback) from platform-bible-utils if real fallback text is wanted.",
       useResolveLocalizedString: 'Wrap in resolveLocalizedString(value, fallback)',
+      deleteDeadKeyFallback: 'Delete the dead fallback',
     },
   },
   defaultOptions: [],
@@ -135,8 +138,10 @@ export default createRule({
       if (!objectTsNode) return;
       const objectType = checker.getTypeAtLocation(objectTsNode);
 
+      // The key test is a literal check or one `getTypeAtLocation`; the map test can walk every
+      // property of the type. Order them cheap-first — this runs on every `x[y] ?? z` in the repo.
       const looksLocalized =
-        isLocalizedStringsType(objectType, checker) || isLocalizeKeyNode(left.property);
+        isLocalizeKeyNode(left.property) || isLocalizedStringsType(objectType, checker);
       if (!looksLocalized) return;
 
       // A fallback that is the same key being read cannot differ from the unresolved value, so
@@ -149,16 +154,26 @@ export default createRule({
         node,
         messageId: isDeadKeyFallback ? 'deadKeyFallback' : 'nullishLocalizedFallback',
         data: { operator: node.operator },
-        suggest: [
-          {
-            messageId: 'useResolveLocalizedString',
-            fix: (fixer) =>
-              fixer.replaceText(
-                node,
-                `resolveLocalizedString(${sourceCode.getText(node.left)}, ${sourceCode.getText(node.right)})`,
-              ),
-          },
-        ],
+        // Wrapping a dead key fallback would keep the key as the fallback text, which is the
+        // user-visible `%…%` this rule exists to stop. Offer the deletion instead; choosing real
+        // fallback text is a judgment the author has to make, not something a fixer can guess.
+        suggest: isDeadKeyFallback
+          ? [
+              {
+                messageId: 'deleteDeadKeyFallback',
+                fix: (fixer) => fixer.replaceText(node, sourceCode.getText(node.left)),
+              },
+            ]
+          : [
+              {
+                messageId: 'useResolveLocalizedString',
+                fix: (fixer) =>
+                  fixer.replaceText(
+                    node,
+                    `resolveLocalizedString(${sourceCode.getText(node.left)}, ${sourceCode.getText(node.right)})`,
+                  ),
+              },
+            ],
       });
     }
 

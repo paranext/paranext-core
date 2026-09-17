@@ -1,6 +1,15 @@
 /**
  * Matches a localization key — the `%some_key%` spelling used throughout Platform.Bible — with
  * nothing else around it.
+ *
+ * Deliberately stricter than `isLocalizeKey`, which asks only that a string start and end with `%`.
+ * The two disagree on translated copy that both begins and ends with a percent sign, such as `'%s
+ * of 50% total%'`: `isLocalizeKey` calls that a key, this pattern calls it text. Rejecting an
+ * interior `%` is what lets the predicates below judge _values_, where real copy is exactly what is
+ * expected and treating it as an unresolved key would blank out a perfectly good string.
+ * `isLocalizeKey` answers a different question — whether an identifier the caller already believes
+ * to be a key is shaped like one — and widening either to match the other would break the other's
+ * callers, so they stay separate.
  */
 const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
 

@@ -2482,8 +2482,10 @@ step, no automation. Just a record.
   `%…%`-shaped value and any blank-or-whitespace string. `platform-bible-utils` and
   `platform-bible-react` ship through committed `dist/`, and the root `npm run build` does not
   rebuild either — a source change to this helper that is not accompanied by a rebuilt, committed
-  `dist/` does not ship, and because `platform-bible-react`'s bundle embeds `platform-bible-utils`'s
-  `dist`, rebuilding the latter also requires rebuilding the former. **Revisit** if a consumer ever
+  `dist/` does not ship. `platform-bible-react`'s bundle leaves `platform-bible-utils` external
+  (`import … from "platform-bible-utils"` in the `.js` bundles, `require("platform-bible-utils")` in
+  the `.cjs` twins, and a type import in `dist/index.d.ts`), so rebuilding utils does not by itself
+  require rebuilding react. **Revisit** if a consumer ever
   needs to distinguish "absent" from "seeded with its key", which this predicate deliberately merges.
 - **Source:** follow-up from PR #2829 review finding 16.
 
