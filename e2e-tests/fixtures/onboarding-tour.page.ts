@@ -159,18 +159,22 @@ export async function skipTour(page: Page): Promise<void> {
  * race a visibility check alone would leave; an instance that already opened before the flag landed
  * is dismissed with Escape.
  *
- * The Escape is dispatched on the host `window` from page script rather than typed through
- * `page.keyboard`: the tour's listener sits on `window` in the capture phase, so a synthetic event
- * there reaches it whatever has DOM focus, while a typed key goes to the focused element — once a
- * scripture editor is open, its iframe — and never leaves it. Retried briefly because the listener
- * is attached only once the step card has rendered.
+ * A typed Escape (`page.keyboard`) goes to whatever has DOM focus. With host focus intact it
+ * reaches the tour's `window` listener like a user's key would, and that is tried first so the
+ * common path keeps exercising the real handler. Once a scripture editor is open, its iframe holds
+ * focus and the key never leaves it, so if the dialog is still up and focus is in an iframe a
+ * synthetic `keydown` is dispatched on the host `window`, which the capture-phase listener receives
+ * regardless of focus. If the typed key fails with focus anywhere else, this throws: that is a
+ * broken Escape handler, and falling back would hide it. Retried briefly because the listener is
+ * attached only once the step card has rendered. TODO(PT-4627): once the tour handles Escape from
+ * inside a web view, drop the synthetic dispatch.
  *
  * `waitForAppReady` calls this by default. A Simple-mode spec that skips `waitForAppReady` (the
  * scripture-editor specs gate on the editor iframe instead) must call it itself before its first
- * click in the main frame.
+ * click in the main frame. TODO(PT-4639): suppress the tour at the fixture level
+ * (isolated.fixture.ts, with an opt-out for onboarding-tour.spec.ts) so no Simple-mode spec has to
+ * remember this call.
  */
-// TODO: suppress the tour at the fixture level (isolated.fixture.ts, with an opt-out for
-// onboarding-tour.spec.ts) so no Simple-mode spec has to remember this call.
 export async function suppressOnboardingTour(page: Page): Promise<void> {
   await page.evaluate((key) => {
     localStorage.setItem(key, 'true');
@@ -178,9 +182,19 @@ export async function suppressOnboardingTour(page: Page): Promise<void> {
   const tourDialog = getTourDialog(page);
   if (!(await tourDialog.isVisible())) return;
   await expect(async () => {
-    await page.evaluate(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    });
+    await page.keyboard.press('Escape');
+    if (await tourDialog.isVisible()) {
+      // The fallback is only legitimate when the typed key went into an iframe. With host focus a
+      // typed Escape is what a user would press, so its failing is the regression, not a quirk.
+      const focusIsInIframe = await page.evaluate(
+        () => document.activeElement?.tagName === 'IFRAME',
+      );
+      if (!focusIsInIframe)
+        throw new Error('A typed Escape did not dismiss the tour although the host had focus');
+      await page.evaluate(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      });
+    }
     await expect(tourDialog).not.toBeVisible({ timeout: 500 });
   }).toPass({ timeout: 5000 });
 }

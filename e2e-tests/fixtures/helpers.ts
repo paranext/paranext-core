@@ -559,6 +559,29 @@ function unreachableDescription(lastReadError: unknown): string {
 }
 
 /**
+ * The project root the most recent {@link launchElectronApp} pointed the app at through
+ * `PLATFORM_BIBLE_PROJECT_ROOT_FOLDER`, or `undefined` when that launch did not ask for one. Set
+ * per launch, so a later launch without `isolatedProjectRoot` clears it.
+ */
+let isolatedProjectRootDir: string | undefined;
+
+/**
+ * Throws unless the most recent launch used `isolatedProjectRoot: true`, returning that root. Call
+ * it before any PAPI write that mutates project data (a setting, a chapter's USFM): the helpers
+ * address the sample project by its fixed id and the app on the fixed PAPI port, so without an
+ * isolated root the same call would rewrite the developer's own copy of the sample project, with no
+ * restore.
+ */
+export function requireIsolatedProjectRoot(): string {
+  if (!isolatedProjectRootDir || !isolatedProjectRootDir.startsWith(os.tmpdir()))
+    throw new Error(
+      'This helper writes project data and may only run against an app launched with ' +
+        '`isolatedProjectRoot: true` (electronLaunchOptions); the current launch was not.',
+    );
+  return isolatedProjectRootDir;
+}
+
+/**
  * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
  * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
  * user-data directory path, and a promise that resolves when the app closes.
@@ -592,6 +615,9 @@ export async function launchElectronApp(
   // isolatedProjectRoot. Only the isolatedProjectRoot branch (or an explicit envOverride) below sets it.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { ELECTRON_RUN_AS_NODE, PLATFORM_BIBLE_PROJECT_ROOT_FOLDER, ...restEnv } = process.env;
+  isolatedProjectRootDir = opts.isolatedProjectRoot
+    ? path.join(userDataDir, 'projects')
+    : undefined;
   const env = {
     ...restEnv,
     NODE_ENV: 'development',

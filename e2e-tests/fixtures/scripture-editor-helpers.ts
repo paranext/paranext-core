@@ -1,6 +1,7 @@
 import { type Frame, type Page } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
+  requireIsolatedProjectRoot,
   SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
@@ -83,8 +84,13 @@ export async function sendPapiCommandWhenRegistered(
  * click, so caret-driven behavior cannot be exercised without this. Flipping the setting through
  * the PDP (same write path as the Project Settings UI) keeps the change inside the isolated temp
  * project root.
+ *
+ * Writes project data, so it refuses to run unless the app was launched with `isolatedProjectRoot:
+ * true`: there is no restore, and the sample project's id is the one the backend installs into a
+ * developer's real project root too.
  */
 export async function makeSampleProjectEditable(): Promise<void> {
+  requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
   await sendPapiRequestOnce<boolean>(
     `object:${pdpId}.setSetting`,
@@ -125,9 +131,9 @@ export interface SampleChapterRef {
 /**
  * Rewrites one chapter of the sample WEB project through its data provider — read the chapter's
  * USFM, pass it through `transform`, write the result back — so a spec can put markers the sample
- * text does not contain in front of real verses. Call only from specs launched with
- * `isolatedProjectRoot: true`; this helper does not check, and without that option it rewrites the
- * developer's own copy of the sample project.
+ * text does not contain in front of real verses. Writes project data, so it refuses to run unless
+ * the app was launched with `isolatedProjectRoot: true`: without that option it would rewrite the
+ * developer's own copy of the sample project, with no restore.
  *
  * Going through PAPI rather than editing the SFM file on disk means the write lands the same way an
  * editor save does: the provider re-parses it and every open editor for the chapter is notified.
@@ -136,6 +142,7 @@ export async function rewriteSampleProjectChapterUsfm(
   chapter: SampleChapterRef,
   transform: (usfm: string) => string,
 ): Promise<void> {
+  requireIsolatedProjectRoot();
   const pdpId = await getSampleProjectDataProviderId();
   const usfm = await sendPapiRequestOnce<string | undefined>(
     `object:${pdpId}.getChapterUSFM`,
