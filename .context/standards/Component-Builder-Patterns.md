@@ -193,9 +193,9 @@ that open from inside a `ContentZoomRoot` take that area's zoom level and keep t
 the pane. A pop-up your view renders outside the area element — beside the content and anchored
 to a position in it — joins the area only when wrapped in `ContentZoomAreaProvider` (pass the
 same `area` as the root; omit it for the main area). Toolbar pop-ups outside every area stay at
-interface scale. Both components are experimental. A pop-up you build without these components
-can opt in by putting `data-platform-content-zoom-root="<area>"` and
-`data-platform-content-zoom-popup` on its portaled content.
+interface scale. `ContentZoomRoot` and `ContentZoomAreaProvider` are experimental. A pop-up you
+build without these components can opt in by putting `data-platform-content-zoom-root="<area>"`
+and `data-platform-content-zoom-popup` on its portaled content.
 
 ---
 
