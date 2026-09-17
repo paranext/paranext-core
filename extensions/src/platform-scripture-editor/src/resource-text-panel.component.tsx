@@ -287,35 +287,6 @@ export function ResourceTextPanel({
     [resourceProjectId, usjPossiblyError, scrRef.book],
   );
 
-  // TEMPORARY PT-4459 DIAGNOSTIC — REMOVE BEFORE COMMITTING.
-  // Answers why the blank-chapter branch does or does not fire for a chapter absent from the file.
-  // `git checkout -- extensions/src/platform-scripture-editor/src/resource-text-panel.component.tsx`
-  useEffect(() => {
-    const usjShape = (() => {
-      if (isPlatformError(usjPossiblyError))
-        return `PlatformError(${getErrorMessage(usjPossiblyError)})`;
-      if (usjPossiblyError === undefined) return 'undefined';
-      const { content } = usjPossiblyError;
-      if (!Array.isArray(content)) return `content is not an array: ${typeof content}`;
-      const types = content.map((n) => (typeof n === 'string' ? 'string' : n.type)).join(',');
-      return `content[${content.length}]${types ? ` types=[${types}]` : ''}`;
-    })();
-    logger?.warn(
-      `PT-4459 | ${scrRef.book} ${scrRef.chapterNum} | project=${resourceProjectId} | ` +
-        `contentState=${contentState} | isUsjLoading=${isUsjLoading} | ` +
-        `isBlankChapter=${isBlankChapter} | usj=${usjShape}`,
-    );
-  }, [
-    usjPossiblyError,
-    isUsjLoading,
-    contentState,
-    isBlankChapter,
-    resourceProjectId,
-    scrRef.book,
-    scrRef.chapterNum,
-    logger,
-  ]);
-
   // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a
   // named, terminal message — looks the same whatever went wrong, so the log is the only place the
   // cause survives. Keyed on the error alone so paging through books on a sticky failure does not
