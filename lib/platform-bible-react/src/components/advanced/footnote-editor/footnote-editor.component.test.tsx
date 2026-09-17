@@ -238,6 +238,34 @@ function renderFootnoteEditor(
   };
 }
 
+describe('FootnoteEditor width lock', () => {
+  it('locks the container to its own CSS width, not its painted width', () => {
+    // jsdom has no layout: client rects are all zero and computed widths are empty. Report a layout
+    // width for the container only, so the lock has something to read; a lock taken from client
+    // rects (the painted size, which a zoomed ancestor scales) would stay unset here.
+    const originalGetComputedStyle = window.getComputedStyle.bind(window);
+    const spy = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockImplementation((element, pseudoElement) => {
+        const style = originalGetComputedStyle(element, pseudoElement);
+        if (!element.classList.contains('footnote-editor')) return style;
+        return new Proxy(style, {
+          get: (target, property) =>
+            property === 'width' ? '480.5px' : Reflect.get(target, property),
+        });
+      });
+    try {
+      const { container } = renderFootnoteEditor({
+        view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+      });
+      const lockedContainer = container.querySelector<HTMLElement>('.footnote-editor');
+      expect(lockedContainer?.style.width).toBe('480.5px');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 function makeItem(overrides: Partial<EditorMarkerMenuItem> = {}): EditorMarkerMenuItem {
   return {
     marker: 'wj',
