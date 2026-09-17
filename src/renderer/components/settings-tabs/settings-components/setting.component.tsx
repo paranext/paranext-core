@@ -1,11 +1,6 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
-import {
-  DEFAULT_ZOOM_FACTOR,
-  MAX_ZOOM_FACTOR,
-  MIN_ZOOM_FACTOR,
-  ZOOM_STEP,
-} from '@shared/models/content-zoom.model';
+import { DEFAULT_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
@@ -288,9 +283,6 @@ export function Setting({
         <PercentStepper
           key={settingKey}
           value={setting}
-          min={MIN_ZOOM_FACTOR}
-          max={MAX_ZOOM_FACTOR}
-          step={ZOOM_STEP}
           defaultValue={DEFAULT_ZOOM_FACTOR}
           disabled={disabled}
           groupLabel={label}
