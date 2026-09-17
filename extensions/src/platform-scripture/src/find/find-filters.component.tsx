@@ -112,36 +112,42 @@ export function FindFilters({
                 ['all', localizedStrings.allText],
                 ['verseOnly', localizedStrings.verseTextOnly],
               ] as const
-            ).map(([value, label]) => (
-              <div key={value} className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
-                <RadioGroupItem value={value} id={`searchTextType-${value}`} />
-                <Label
-                  htmlFor={`searchTextType-${value}`}
-                  className="tw:cursor-pointer tw:text-sm tw:font-normal"
-                >
-                  {label}
-                </Label>
-                {value === 'all' && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="tw:text-muted-foreground"
-                          aria-label={label}
+            ).map(([value, label]) =>
+              value === 'all' ? (
+                <TooltipProvider key={value}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
+                        <RadioGroupItem value={value} id={`searchTextType-${value}`} />
+                        <Label
+                          htmlFor={`searchTextType-${value}`}
+                          className="tw:cursor-pointer tw:text-sm tw:font-normal"
                         >
-                          <Info className="tw:h-3.5 tw:w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="tw:max-w-xs">{localizedStrings.allTextTooltip}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
-            ))}
+                          {label}
+                        </Label>
+                        <Info
+                          className="tw:h-3.5 tw:w-3.5 tw:shrink-0 tw:text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="tw:max-w-xs">{localizedStrings.allTextTooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <div key={value} className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
+                  <RadioGroupItem value={value} id={`searchTextType-${value}`} />
+                  <Label
+                    htmlFor={`searchTextType-${value}`}
+                    className="tw:cursor-pointer tw:text-sm tw:font-normal"
+                  >
+                    {label}
+                  </Label>
+                </div>
+              ),
+            )}
           </RadioGroup>
         </fieldset>
 
@@ -203,38 +209,32 @@ export function FindFilters({
           <legend className="tw:px-2 tw:py-1.5 tw:text-sm tw:font-semibold">
             {localizedStrings.flexibility}
           </legend>
-          <div className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
-            <Checkbox
-              id="ignoreWhitespaceDifferences"
-              checked={ignoreWhitespaceDifferences}
-              onCheckedChange={(checked) => setIgnoreWhitespaceDifferences(checked === true)}
-            />
-            <Label
-              htmlFor="ignoreWhitespaceDifferences"
-              className="tw:cursor-pointer tw:text-sm tw:font-normal"
-            >
-              {localizedStrings.ignoreWhitespaceDifferences}
-            </Label>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="tw:text-muted-foreground"
-                    aria-label={localizedStrings.ignoreWhitespaceDifferences}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
+                  <Checkbox
+                    id="ignoreWhitespaceDifferences"
+                    checked={ignoreWhitespaceDifferences}
+                    onCheckedChange={(checked) => setIgnoreWhitespaceDifferences(checked === true)}
+                  />
+                  <Label
+                    htmlFor="ignoreWhitespaceDifferences"
+                    className="tw:cursor-pointer tw:text-sm tw:font-normal"
                   >
-                    <Info className="tw:h-3.5 tw:w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="tw:max-w-xs">
-                    {localizedStrings.ignoreWhitespaceDifferencesTooltip}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+                    {localizedStrings.ignoreWhitespaceDifferences}
+                  </Label>
+                  <Info
+                    className="tw:h-3.5 tw:w-3.5 tw:shrink-0 tw:text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="tw:max-w-xs">{localizedStrings.ignoreWhitespaceDifferencesTooltip}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <div className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
             <Checkbox
               id="ignoreDiacritics"
