@@ -662,7 +662,10 @@ describe('performWindowCloseTasks', () => {
     });
 
     await expect(performWindowCloseTasks('2')).resolves.toBeUndefined();
-    expect(mockLoggerError).toHaveBeenCalled();
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Unexpected error while syncing the projects of closing window 2:',
+      expect.anything(),
+    );
   });
 
   it('is not cancelled out from under the closing window when the app quits mid-sync', async () => {
@@ -1032,6 +1035,32 @@ describe('startWindowCloseTasksWithoutWaiting with several windows', () => {
     // has gone can no longer be asked — and the answers are simply dropped
     expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledTimes(3);
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
+  });
+
+  it('drops a failed read in power mode silently, with nothing said about a window nobody asked about', async () => {
+    // Every read goes out before the mode is known, so a power-mode batch always has answers it
+    // never looks at — including failures. Nothing is warned or requested for them: the mode, not
+    // the read, is why this batch syncs nothing.
+    //
+    // What this canNOT pin is the handler `readOpenWebViewDefinitionsEagerly` attaches to each read
+    // so a rejection nothing consumes is not an unhandled rejection. Vitest's own spy attaches a
+    // handler to every promise a mocked function returns, so a rejection arriving through
+    // `getOpenWebViewDefinitionsForWindow` counts as handled here whether or not that code does it.
+    mockSettingsGet.mockResolvedValue('power');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) => {
+      if (windowId === '3') throw new Error('window is unreachable');
+      return asWindowWebViews([writableEditor(`window-${windowId}-project`)]);
+    });
+
+    startWindowCloseTasksWithoutWaiting(['2', '3', '4']);
+    await settleSyncs();
+
+    // The failing window was asked — the control for the two absences below, which would otherwise
+    // pass just as happily against a batch that never read anything
+    expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledWith('3');
+    expect(sendReceiveCalls()).toHaveLength(0);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 
   it('skips the whole batch with one warning when the interface mode cannot be read', async () => {

@@ -2501,6 +2501,36 @@ step, no automation. Just a record.
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
 
+## adr-mode-switch-sends-one-send-receive-for-all-closing-windows: A mode switch starts ONE send/receive covering every window it closes, not one per window
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** The backend handler for `paratextBibleSendReceive.sendReceiveProjects` (the Paratext
+  10 Studio overlay, outside this repository) runs one send/receive at a time and rejects a
+  concurrent call with a `FAILED_PRECONDITION` platform error before doing any work. A window's
+  close syncs the projects of the writable editors open in it, because nothing else can report them
+  once it is gone; a switch to simple mode closes N−1 windows at once. One request per window meant
+  the first ran and every sibling's was refused — each of those windows already closed and unable to
+  be asked again.
+- **Decision:** `closeSecondaryWindows` hands every window it is about to close to a single
+  `startWindowCloseTasksWithoutWaiting` call, made before any of them is closed and while all can
+  still be asked. That call reads each window's open definitions, unions the writable projects, and
+  makes one request. A mode-switch close starts no sync of its own in the per-window close handler.
+- **Alternatives:** one request per closing window — rejected, it is the failure above. A
+  cross-window de-duplication registry (makes the siblings' requests smaller) — rejected: under an
+  exclusive gate a smaller request is refused exactly as a larger one is. A queue serializing every
+  window-close sync — rejected here: it holds a hand-closed window on screen behind another
+  window's sync and compounds the quit drain; deferred to PT-4640 for the overlaps that remain.
+- **Consequences:** the one request waits for the slowest window's read, and a quit arriving
+  meanwhile waits with it (both bounded by `platform.requestTimeout`, 30 s by default). A window
+  whose close is undone has still been synced. Syncs from separate batches, or a hand close during a
+  batch, still overlap and the second is refused — PT-4640. The exclusivity is a cross-repo
+  dependency, stated on purpose in the TSDoc of `startWindowCloseTasksWithoutWaiting`
+  (`src/main/shutdown-tasks.ts`) and in `src/@types/paratext-bible-send-receive/index.d.ts`;
+  **revisit** this entry if that handler ever accepts concurrent calls, which would make batching an
+  optimization rather than the thing that makes every closing window's work go out.
+- **Source:** PT-4286 / PR #2752 review.
+
 ## adr-move-destination-lifetime: `WebViewMoveInFlight.destinationWindowId` is scoped to the readopt actually running, not to a recovery rung
 
 - **Date:** 2026-09-09

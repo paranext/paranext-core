@@ -170,9 +170,10 @@ export async function performWindowCloseTasks(closingWindowId: string): Promise<
  * A closing window's open web view definitions, dispatched eagerly and swallowed if never consumed.
  *
  * Reused by {@link startWindowCloseTasksWithoutWaiting} to close the race between letting the window
- * go and asking it what it had open: dispatching this at the point where the window is still
- * certainly alive, rather than after {@link performWindowCloseTasksInternal}'s own first await,
- * means the request is already in flight by the time the caller destroys the window.
+ * go and asking it what it had open. The window's WebView shard is looked up synchronously as this
+ * is dispatched, rather than after {@link performWindowCloseTasksInternal}'s own first await, and
+ * the window cannot be destroyed within that synchronous stretch: its close handler defers the
+ * close (`event.preventDefault()`) and only destroys the window after awaits of its own.
  */
 function readOpenWebViewDefinitionsEagerly(
   closingWindowId: string,
@@ -290,9 +291,10 @@ async function performWindowCloseTasksInternal(closingWindows: ClosingWindowRead
   // Settled per window rather than all-or-nothing: one window that cannot be asked must not take its
   // siblings' editors down with it, and each failure is the last moment anything could know what
   // that window had open — so each is said on its own, naming the window it cost.
-  // The batch takes as long as the slowest window's read, bounded by the network request timeout
-  // rather than by the sync's own bound; nothing is held up by that, since the windows this covers
-  // are already closing and no caller is waiting on the result.
+  // The batch's one request waits for the slowest window's read, and a quit arriving meanwhile waits
+  // with it, since drainInFlightWindowCloseSyncs waits for this sync from the moment it registers.
+  // Both waits are bounded by the network request timeout rather than by the sync's own bound. No
+  // window is held on screen by any of it: the windows this covers are already closing.
   const definitionsPerWindow = await Promise.all(
     closingWindows.map(async ({ windowId, openWebViewDefinitions }) => {
       try {

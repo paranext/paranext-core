@@ -501,6 +501,11 @@ describe('reacting to an interface-mode change', () => {
     expect(deps.closeWindow).toHaveBeenCalledWith('3');
     expect(deps.focusWindow).toHaveBeenCalledWith('1');
     expect(logger.warn).toHaveBeenCalledTimes(1);
+    // Named windows, not "the windows": this line is the only record that these two windows'
+    // editors went unsynced, and the switch is the only thing that knew which ones they were
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('windows 2, 3 closing for the switch to simple mode'),
+    );
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('web view router is gone'));
   });
 

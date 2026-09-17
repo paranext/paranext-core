@@ -353,9 +353,10 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): string | undefined
     return undefined;
   }
 
-  // Hoisted out of the loop so the sync below is given every window it is about to close, in one
-  // call, while all of them are still open. Both skips are the loop's own: the survivor stays, and
-  // a window already on its way out has a close handler mid-flight with a sync of its own.
+  // Every window this switch is about to close, taken once so the sync below is given all of them
+  // in one call while all of them are still open. Both skips are the loop's own: the survivor
+  // stays, and a window already on its way out has a close handler mid-flight with a sync of its
+  // own.
   const windowIdsToClose = trackedWindowIds.filter(
     (windowId) => windowId !== survivorId && !deps.isWindowClosing(windowId),
   );
@@ -366,8 +367,9 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): string | undefined
   // rather than only the first one's. Not awaited, and nothing here may become a wait: this
   // function is synchronous end to end, which is what lets it act on the window set it just read
   // without a generation check of its own. A window whose close is undone afterwards
-  // ({@link undoModeSwitchClose}) has still been included here, which is harmless: syncing a project
-  // that stays open is what the quit-time sync does anyway.
+  // ({@link undoModeSwitchClose}) has still been included here, which costs nothing beyond that
+  // sync's time on the shared send/receive gate — the backend runs one sync at a time — since
+  // syncing a project that stays open is what the quit-time sync does anyway.
   if (windowIdsToClose.length > 0) {
     try {
       deps.startCloseSyncForWindows(windowIdsToClose);
@@ -376,7 +378,7 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): string | undefined
       // not be started costs the user an automatic send/receive, and abandoning the switch here
       // would leave the windows it had already marked hidden and claimed.
       logger.warn(
-        `Could not start the send/receive for the windows closing for the switch to simple mode: ${getErrorMessage(e)}`,
+        `Could not start the send/receive for windows ${windowIdsToClose.join(', ')} closing for the switch to simple mode: ${getErrorMessage(e)}`,
       );
     }
   }
@@ -391,10 +393,6 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): string | undefined
   // switch to power.
   const closeFailures: unknown[] = [];
   windowIdsToClose.forEach((windowId) => {
-    // Re-read: the list above was taken before any window was told to close. A window the user
-    // closed with its own ✕ must not end up recorded as closing for the switch, or its entry would
-    // be kept and the window they closed would come back on the way to power.
-    if (deps.isWindowClosing(windowId)) return;
     try {
       // Marked before it is told to close, so a layout it pushes on its way out is already
       // recognizable as one to ignore, and taken off screen at the same moment: from here its
