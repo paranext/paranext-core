@@ -1121,6 +1121,31 @@ describe('web-view-content-zoom.service', () => {
     expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
   });
 
+  it('shows the shared level in a sibling whose definition write failed', async () => {
+    settings[MEMORY] = {};
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main']);
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-A',
+      state: {},
+    });
+    setContentZoomAreas('editor-2', ['main']);
+    updateDefinition.mockImplementation(
+      (id: string, update: { state?: Record<string, unknown> }) =>
+        id === 'editor-2' ? false : applyDefinitionUpdate(id, update),
+    );
+
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.4 }));
+    expect(cssVar(iframeFor('editor-2'), '--platform-content-zoom-main')).toBe('1.4');
+    // Controls: the write really did fail, so the level above is the push happening anyway; and the
+    // pane that could be written took the same level, so the walk was not skipped.
+    expect(definitions.get('editor-2')?.state).toEqual({});
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.4 } });
+  });
+
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
     setContentZoomAreas('editor-1', []);
     await adjustContentZoom('editor-1', 1);

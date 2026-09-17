@@ -1033,8 +1033,12 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
       // for nothing new: those levels are what the pane shows and they still owe a write, so the
       // change that memory delivers next is also this pane's next chance to store them.
       if (!changed && !pendingOwnLevels.has(definition.id)) return;
-      if (setOwnLevels(definition.id, levels)) pushContentZoom(definition.id);
-      else everyPaneTookItsUpdate = false;
+      // The sibling shows the level whether or not the write reached its definition, for the same
+      // reason the acting pane does: the push reads `effectiveOwnLevels`, and a level that did not
+      // get stored stays pending there for the next write to carry.
+      const stored = setOwnLevels(definition.id, levels);
+      pushContentZoom(definition.id);
+      if (!stored) everyPaneTookItsUpdate = false;
     } catch (e) {
       logger.warn(
         `Content zoom: could not bring web view ${definition.id} in line with memory. ${getErrorMessage(e)}`,
