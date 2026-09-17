@@ -17,10 +17,7 @@ import { IconCheck, IconChevronRight } from '@tabler/icons-react';
 import { Z_INDEX_ABOVE_DOCK, Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
 // CUSTOM: Import the content-zoom area context so a dropdown menu opened from zoomed content
 // follows that area's zoom
-import {
-  getContentZoomPopupStyle,
-  useContentZoomArea,
-} from '@/components/advanced/content-zoom-root.component';
+import { getContentZoomPopupStyle, useContentZoomArea } from '@/context/content-zoom-area.context';
 
 /**
  * Dropdown Menu components providing accessible dropdown menus and submenus. Built on Radix UI
@@ -395,6 +392,10 @@ function DropdownMenuSubTrigger({
 /** @inheritdoc DropdownMenuProps */
 // CUSTOM: Lifted the prop shape out of the function signature into the named
 // DropdownMenuSubContentProps type above so it can be exported.
+// CUSTOM: Unlike its parent DropdownMenuContent, this sub-menu content does not read the
+// content-zoom area context yet, so a sub-menu opened from inside a zoom area renders at interface
+// scale. Whatever first needs a sub-menu that follows one should read useContentZoomArea() here and
+// apply the same marker attributes and factor-divided size caps PopoverContent uses.
 function DropdownMenuSubContent({
   className,
   // CUSTOM: Destructure style so we can merge the shared z-index constant into it
