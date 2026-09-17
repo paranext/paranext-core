@@ -2791,8 +2791,9 @@ async function main() {
     {
       method: {
         summary:
-          "Increase all windows' zoom level — menus, toolbars and content — by 10 %. Has no " +
-          'default keyboard shortcut; per-pane content zoom uses platform.webViewContentZoomIn.',
+          'Increase the app-wide interface scaling — menus, toolbars and content — by 10 %, ' +
+          'stepping from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom ' +
+          'uses platform.webViewContentZoomIn.',
         params: [],
         result: {
           name: 'return value',
@@ -2810,8 +2811,9 @@ async function main() {
     {
       method: {
         summary:
-          "Decrease all windows' zoom level — menus, toolbars and content — by 10 %. Has no " +
-          'default keyboard shortcut; per-pane content zoom uses platform.webViewContentZoomOut.',
+          'Decrease the app-wide interface scaling — menus, toolbars and content — by 10 %, ' +
+          'stepping from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom ' +
+          'uses platform.webViewContentZoomOut.',
         params: [],
         result: {
           name: 'return value',
