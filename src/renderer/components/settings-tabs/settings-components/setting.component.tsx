@@ -145,6 +145,8 @@ const STEPPER_WRITE_DEBOUNCE_MS = 150;
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
+  '%settings_platform_webViewContentZoom_atMaximum%',
+  '%settings_platform_webViewContentZoom_atMinimum%',
   '%settings_platform_webViewContentZoom_decrease%',
   '%settings_platform_webViewContentZoom_increase%',
   '%settings_platform_webViewContentZoom_reset%',
@@ -306,6 +308,8 @@ export function Setting({
             increase: localizedStrings['%settings_platform_webViewContentZoom_increase%'],
             decrease: localizedStrings['%settings_platform_webViewContentZoom_decrease%'],
             reset: localizedStrings['%settings_platform_webViewContentZoom_reset%'],
+            atMaximum: localizedStrings['%settings_platform_webViewContentZoom_atMaximum%'],
+            atMinimum: localizedStrings['%settings_platform_webViewContentZoom_atMinimum%'],
           }}
           onChange={debouncedHandleStepperChange}
         />

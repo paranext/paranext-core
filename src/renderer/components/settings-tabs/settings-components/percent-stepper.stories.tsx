@@ -6,6 +6,8 @@ const LABELS = {
   increase: 'Increase default zoom',
   decrease: 'Decrease default zoom',
   reset: 'Reset default zoom',
+  atMaximum: 'Already at the largest zoom (300 %)',
+  atMinimum: 'Already at the smallest zoom (50 %)',
 };
 
 const meta: Meta<typeof PercentStepper> = {
