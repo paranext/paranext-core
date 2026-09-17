@@ -285,6 +285,14 @@ describe('content-zoom bootstrap script', () => {
     }
   });
 
+  it('cannot step past the width of the zoom range on one outsized delta', () => {
+    const { bound } = install('wv-pinch-cap', TWO_AREAS);
+    // 3000 px of travel is 30 thresholds, but 0.5 → 3.0 in steps of 0.1 is only 25; the rest would
+    // be calls into the parent that can move nothing.
+    wheel({ deltaY: -3000, ctrlKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(25);
+  });
+
   it('takes a line-mode wheel event as one step, since a pixel threshold means nothing there', () => {
     const { bound } = install('wv-pinch-line-mode', TWO_AREAS);
     // `deltaMode` 1 is lines: a handful of them, never 100 of anything.
