@@ -157,6 +157,14 @@ type InterfaceMode = ReturnType<typeof useInterfaceMode>[0];
  * menus: a cache keyed on the type alone would pin whichever mode a tab first mounted under for the
  * life of the process.
  *
+ * The key says which mode the read was made FOR, not which mode the answer was filtered by:
+ * `getWebViewMenu` carries no mode, and the provider answers from its own `currentMode`, which it
+ * reads from the same setting on its own schedule. A read that overtakes the provider's own view of
+ * a mode change is therefore filed under the mode it asked for while holding the other mode's
+ * items, and nothing invalidates it. No shipped tab item is mode-specific, so there is nothing to
+ * differ today; the first one that is wants `getWebViewMenu` to take the mode, or this cache to be
+ * dropped on a menu-data update.
+ *
  * A rejected read is deliberately NOT kept here (see {@link getContributedTabMenu}), so this only
  * ever holds a promise that is pending or has resolved.
  */
