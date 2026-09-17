@@ -502,6 +502,8 @@
   "%settings_platform_ptxUtilsMementoData_label%": "PtxUtils Memento Data",
   "%settings_platform_requestTimeout_description%": "Number of seconds to allow internal requests to resolve. Requests that take longer than this will be aborted. Set to 0 to never abort requests.",
   "%settings_platform_requestTimeout_label%": "Request Timeout",
+  "%settings_platform_webViewContentZoom_atMaximum%": "Already at the largest zoom (300 %)",
+  "%settings_platform_webViewContentZoom_atMinimum%": "Already at the smallest zoom (50 %)",
   "%settings_platform_webViewContentZoom_decrease%": "Decrease default zoom",
   "%settings_platform_webViewContentZoom_description%": "Default zoom for the content of every pane in a tab (such as the Scripture Editor, resources and notes) that has not been zoomed on its own. 100 % is the default; allowed range is 50 % to 300 %. The application's own menus and tab toolbars keep their size, and Interface scaling still scales the whole application on top of this.",
   "%settings_platform_webViewContentZoom_increase%": "Increase default zoom",
