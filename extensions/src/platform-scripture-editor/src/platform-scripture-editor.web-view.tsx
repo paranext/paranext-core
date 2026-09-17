@@ -298,8 +298,7 @@ const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
  * locks its own width on its first layout, which happens before that.
  *
  * Set inline rather than as a Tailwind arbitrary class: the web view's SCSS + PostCSS pipeline
- * drops a rule whose value is this `min()` expression, which silently removed the minimum
- * altogether.
+ * drops a rule whose value is this `min()` expression, so the minimum is an inline style.
  */
 const FOOTNOTE_POPOVER_MIN_WIDTH =
   'min(500px, calc(var(--radix-popover-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))';
