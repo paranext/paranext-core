@@ -51,9 +51,11 @@ export type TabMenuContext = {
    */
   isOnlyTabInWindowThatWouldClose: boolean;
   /**
-   * Whether this tab's web view currently reports a zoom area to act on. A tab with a web view but
-   * no reported area still offers the zoom items — greyed out — rather than dropping them, since an
-   * area that has not reported yet can still arrive after this menu was built.
+   * Whether this tab's web view reported a zoom area to act on when the menu was opened. Read once,
+   * at open, and not re-read while the menu stays up. A tab with a web view but no reported area
+   * still offers the zoom items — greyed out — rather than dropping them, so the menu's shape stays
+   * the same between one open and the next instead of items appearing and vanishing under the
+   * pointer.
    */
   hasZoomArea: boolean;
 };
@@ -127,9 +129,8 @@ export function buildTabMenuItems(
         })),
       };
     }
-    // The tab has a web view (that much already cleared it above), but the pane hasn't reported a
-    // zoom area to act on — greyed out rather than removed, so the item doesn't jump into or out of
-    // the menu the moment the area arrives.
+    // The tab has a web view (that much already cleared it above), but the pane reported no zoom
+    // area when this menu opened — greyed out rather than removed, so the item keeps its place.
     if (item.type === 'item' && CONTENT_ZOOM_ITEM_IDS.has(item.id) && !context.hasZoomArea) {
       return { ...item, disabled: true };
     }
