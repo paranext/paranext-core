@@ -362,6 +362,20 @@ describe('content-zoom bootstrap script', () => {
     }
   });
 
+  it('lets a real keyup overrule what the pointer saw, without waiting for that to go stale', () => {
+    const { bound } = install('wv-pinch-keyup', TWO_AREAS);
+    // The key really was down, and the pointer saw it — but a keyup is the event that ends a key,
+    // and it is fresher than any reading taken before it. A pinch moves no cursor, so waiting for
+    // a pointer event to correct this would mean waiting out the whole trust window with pinching
+    // switched off.
+    modifierKey('keydown', 'Control');
+    byId('verse').dispatchEvent(new MouseEvent('pointermove', { bubbles: true, ctrlKey: true }));
+    modifierKey('keyup', 'Control');
+    for (let i = 0; i < 20; i += 1)
+      wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(4);
+  });
+
   it('never takes ⌘+wheel for a pinch, since a synthesized pinch always carries Ctrl', () => {
     const { bound } = install('wv-notch-meta', TWO_AREAS);
     // Chromium synthesizes a pinch as ctrl+wheel on every platform, never as ⌘+wheel, so a small

@@ -440,8 +440,13 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const onModifierKeyDown = (e) => {
       if (PHYSICAL_MODIFIER_KEYS.indexOf(e.key) !== -1) physicalModifiers.add(e.key);
     };
+    // A keyup is the event that ends a key, so it overrules a pointer reading taken while the key
+    // was still down rather than waiting for that to go stale - a pinch moves no cursor, so nothing
+    // else would correct it inside the trust window.
     const onModifierKeyUp = (e) => {
-      if (PHYSICAL_MODIFIER_KEYS.indexOf(e.key) !== -1) physicalModifiers.delete(e.key);
+      if (PHYSICAL_MODIFIER_KEYS.indexOf(e.key) === -1) return;
+      physicalModifiers.delete(e.key);
+      pointerModifiers.delete(e.key);
     };
     // A pointer event states both flags outright, so it REPLACES what is held rather than adding to
     // it: it is as much evidence that a key is up as that one is down, and it is the fresher
