@@ -105,11 +105,11 @@ describe('pop-ups opened from zoomed content', () => {
     expect(element.className).not.toContain(zoomedClass);
   });
 
-  test('popover-content outside every area has no zoomed height cap', () => {
+  test('popover-content outside every area has no zoomed height cap and no scroll box', () => {
     render(popover());
-    expect(content('popover-content').className).not.toContain(
-      '--radix-popover-content-available-height',
-    );
+    const { className } = content('popover-content');
+    expect(className).not.toContain('--radix-popover-content-available-height');
+    expect(className).not.toContain('tw:overflow-y-auto');
   });
 
   test.each([
@@ -119,6 +119,8 @@ describe('pop-ups opened from zoomed content', () => {
       [
         'tw:max-w-[calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
         'tw:max-h-[calc(var(--radix-popover-content-available-height)/var(--platform-content-zoom-popup-factor,1))]',
+        // Content that cannot shrink to the capped height scrolls inside the box
+        'tw:overflow-y-auto',
       ],
     ],
     [

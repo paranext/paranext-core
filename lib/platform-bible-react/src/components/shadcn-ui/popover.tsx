@@ -148,13 +148,18 @@ function PopoverContent({
             'tw:max-w-[calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
           // CUSTOM: Inside a content-zoom area, also cap the height at the space Radix reports as
           // available, divided by the area's zoom factor, so a tall zoomed popover stays inside the
-          // pane vertically too (same unzoomed-vs-zoomed pixel reason as the width cap above)
+          // pane vertically too (same unzoomed-vs-zoomed pixel reason as the width cap above). The
+          // box scrolls, so content that cannot shrink to the capped size stays inside it instead of
+          // painting past its edges. Nothing portals into a PopoverContent (the portal-container
+          // provider's consumers target dialog and dropdown-menu contents), so the scroll box clips
+          // no nested pop-up.
           zoomArea !== undefined &&
-            'tw:max-h-[calc(var(--radix-popover-content-available-height)/var(--platform-content-zoom-popup-factor,1))]',
+            'tw:max-h-[calc(var(--radix-popover-content-available-height)/var(--platform-content-zoom-popup-factor,1))] tw:overflow-y-auto',
           className,
         )}
         // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring popover renders above the dock
-        // CUSTOM: Inside a content-zoom area, also carry the area's zoom factor for the width cap above
+        // CUSTOM: Inside a content-zoom area, also carry the area's zoom factor, which both the width
+        // and the height cap above divide by
         style={{
           zIndex: Z_INDEX_ABOVE_DOCK,
           ...(zoomArea === undefined ? undefined : getContentZoomPopupStyle(zoomArea)),
