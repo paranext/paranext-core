@@ -36,10 +36,12 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
   });
 
   it('wraps the footnote editor popover in a ContentZoomRoot', () => {
-    // An optional JSX comment may sit between the popover and the marker (explaining why this
-    // `main`-area marker isn't nested under the editor's), so it's tolerated but not required.
+    // Structure only. The popover's own class list is styling and no part of the zoom contract, so
+    // it stays out of the pattern — the sibling assertion above does the same. An optional JSX
+    // comment may sit between the popover and the marker (explaining why this `main`-area marker
+    // isn't nested under the editor's), so it's tolerated but not required.
     expect(source).toMatch(
-      /<PopoverContent className="tw:w-max tw:min-w-\[500px\] tw:p-\[10px\]"> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot> <FootnoteEditor/,
+      /<PopoverContent[^>]*> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot> <FootnoteEditor/,
     );
   });
 
