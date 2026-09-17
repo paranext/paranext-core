@@ -542,19 +542,29 @@ export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
 }
 
 /**
+ * Finds the (first) element of the annotation with the given ID within the editor content.
+ *
+ * @param id The ID of the annotation to find
+ * @returns The DOM element of the annotation if found; otherwise undefined
+ */
+export function getAnnotationElement(id: string): HTMLElement | undefined {
+  // annotation/comment ids can contain CSS metacharacters (":", ".", etc.); escaping the whole
+  // class token via CSS.escape keeps the selector valid (same approach as selectorForAnnotationIds
+  // in platform-enhanced-resources' scripture-pane.component.tsx).
+  const escapedAnnotationClass = CSS.escape(`annotationId-${id}`);
+  return (
+    document.querySelector<HTMLElement>(`.editor-container .${escapedAnnotationClass}`) ?? undefined
+  );
+}
+
+/**
  * Scrolls to the annotation with the given ID within the editor content.
  *
  * @param id The ID of the annotation to scroll to
  * @returns The DOM element of the annotation if found; otherwise undefined
  */
 export function scrollToAnnotation(id: string): HTMLElement | undefined {
-  // annotation/comment ids can contain CSS metacharacters (":", ".", etc.); escaping the whole
-  // class token via CSS.escape keeps the selector valid (same approach as selectorForAnnotationIds
-  // in platform-enhanced-resources' scripture-pane.component.tsx).
-  const escapedAnnotationClass = CSS.escape(`annotationId-${id}`);
-  const annotationElement =
-    document.querySelector<HTMLElement>(`.editor-container .${escapedAnnotationClass}`) ??
-    undefined;
+  const annotationElement = getAnnotationElement(id);
 
   const scrollContainerElement = annotationElement
     ? findScrollContainer(annotationElement)

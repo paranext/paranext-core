@@ -45,6 +45,24 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
     );
   });
 
+  it('lets the footnote editor popover’s minimum width yield to the zoomed width cap', () => {
+    // A plain `min-w-[500px]` zooms to 1000 px at 200 % and beats the cap's `max-width`, so the
+    // popover would overflow a narrow pane.
+    expect(source).toContain(
+      'tw:min-w-[min(500px,calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1)))]',
+    );
+    expect(source).not.toContain('tw:min-w-[500px]');
+  });
+
+  it('anchors all three popovers to live positions in the text', () => {
+    // A positioned anchor element keeps the rect captured on open, so the popover stays put while
+    // the text scrolls or reflows under a zoom change.
+    expect(source).toContain('<PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />');
+    expect(source).toContain('<PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />');
+    expect(source).toContain('<PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />');
+    expect(source.match(/<PopoverAnchor /g)).toHaveLength(3);
+  });
+
   it('does not nest a second marker inside the footnote editor popover', () => {
     expect(source).not.toMatch(/<PopoverContent[^>]*> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot>/);
   });
