@@ -1149,12 +1149,12 @@ describe('web-view-content-zoom.service', () => {
   it('does not throw out of the fallback grace timer when the pane is being torn down', async () => {
     // A pane detached while the grace is running: reading `contentDocument` on its iframe throws,
     // and the timer's push is the one call site with no caller to catch it.
-    const detached = {
-      get contentDocument(): Document {
+    const detached = document.createElement('iframe');
+    Object.defineProperty(detached, 'contentDocument', {
+      get() {
         throw new Error('the iframe is detached');
       },
-      style: {},
-    } as unknown as HTMLIFrameElement;
+    });
     let paneIsDetached = false;
     __setContentZoomDepsForTesting({
       getIframe: (id: string) => (paneIsDetached ? detached : iframeFor(id)),
