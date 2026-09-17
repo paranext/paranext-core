@@ -563,19 +563,19 @@ export function pushContentZoom(
  * runs on unmount, so the pane's id, and anything keyed by it, survives a reload). Clears any
  * fallback grace or grant left over from whatever the pane showed before — otherwise a grant the
  * old content earned would still authorize scaling the new content before its own bootstrap gets a
- * chance to report. For a non-URL pane it then arms a fresh grace exactly as if the pane had just
- * been opened, and a pane that goes on to report an area within it cancels the grace as usual. What
- * that grace can still grant is bounded by the areas the pane already has: a pane that has never
- * reported one — an HTML view opened with `allowScripts: false`, say, whose bootstrap never runs —
- * eventually gets the whole-iframe fallback, while a pane whose earlier content reported areas
- * keeps them (see the paragraph below), so replacement content that never runs the bootstrap of its
- * own is left with those areas rather than scaled whole. Clearing areas on a content replacement is
- * open work on PT-4581. The whole-iframe `zoom` a reload does not reset on its own (it lives on the
- * host `<iframe>` element, not the content a reload replaces) is cleared by the
- * {@link pushContentZoom} below, which assigns the host zoom in both directions, so the new content
- * never renders whole-scaled on the strength of the old grant. A URL pane keeps its immediate
- * fallback and is left out of the grace: {@link mayScaleWholeIframe} always allows a URL pane, so
- * that same push reapplies it.
+ * chance to report. It then arms a fresh grace exactly as if the pane had just been opened — for
+ * every pane but one already known to need none — and a pane that goes on to report an area within
+ * it cancels the grace as usual. What that grace can still grant is bounded by the areas the pane
+ * already has: a pane that has never reported one — an HTML view opened with `allowScripts: false`,
+ * say, whose bootstrap never runs — eventually gets the whole-iframe fallback, while a pane whose
+ * earlier content reported areas keeps them (see the paragraph below), so replacement content that
+ * never runs the bootstrap of its own is left with those areas rather than scaled whole. Clearing
+ * areas on a content replacement is open work on PT-4581. The whole-iframe `zoom` a reload does not
+ * reset on its own (it lives on the host `<iframe>` element, not the content a reload replaces) is
+ * cleared by the {@link pushContentZoom} below, which assigns the host zoom in both directions, so
+ * the new content never renders whole-scaled on the strength of the old grant. A URL pane keeps its
+ * immediate fallback and is left out of the grace: {@link mayScaleWholeIframe} always allows a URL
+ * pane, so that same push reapplies it.
  *
  * The pane's last-reported areas are deliberately kept. A real load replaces the iframe's realm, so
  * the fresh content's bootstrap reports its own areas from scratch; dropping them here instead
@@ -585,13 +585,21 @@ export function pushContentZoom(
  * changes and keeps that list inside the iframe.
  */
 export function applyContentZoomForWebView(webViewId: WebViewId): void {
+  // Armed before the definition is read, and outside the guard below, because a read that fails
+  // must still leave the pane a grace: for a view that never runs the bootstrap this hook is the
+  // only thing that ever arms one, so a pane whose read threw here would stay unscaled for as long
+  // as it lives. Neither of these two reads the pane or its definition, so neither can fail.
+  clearFallbackGrace(webViewId);
+  startFallbackGrace(webViewId);
   // The React `onLoad` handler this runs from is a synthetic event handler, which no error boundary
   // catches, and a late load during teardown reads a definition that is no longer there.
   try {
-    clearFallbackGrace(webViewId);
     const definition = deps.getDefinition(webViewId);
-    if (definition && definition.contentType !== WEB_VIEW_CONTENT_TYPE.URL)
-      startFallbackGrace(webViewId);
+    // Neither of these waits a grace out: a URL pane is scaled whole from the start
+    // ({@link mayScaleWholeIframe} always allows one), and a pane with no definition left has
+    // nothing to scale.
+    if (!definition || definition.contentType === WEB_VIEW_CONTENT_TYPE.URL)
+      clearFallbackGrace(webViewId);
     pushContentZoom(webViewId);
   } catch (e) {
     logger.warn(

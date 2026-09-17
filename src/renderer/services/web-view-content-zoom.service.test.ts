@@ -1432,6 +1432,28 @@ describe('web-view-content-zoom.service', () => {
     }
   });
 
+  it('still arms the fallback grace when the definition read fails at the iframe load hook', async () => {
+    // The pane this matters for — an HTML view opened with `allowScripts: false` — never runs the
+    // bootstrap, so this hook is the only thing that ever arms a grace for it: a read that threw
+    // before the arming would leave it unscaled for as long as it lives.
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({
+      getDefinition: () => {
+        throw new Error('dock layout is not registered');
+      },
+    });
+    await initializeContentZoomService();
+    vi.useFakeTimers();
+    try {
+      applyContentZoomForWebView('editor-1');
+      expect(iframe.style.zoom).toBe('');
+      vi.advanceTimersByTime(1000);
+      expect(iframe.style.zoom).toBe('1.3');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('cancels the grace armed by the iframe load hook once the pane reports an area within it', async () => {
     settings['platform.webViewContentZoom'] = 1.3;
     __setContentZoomDepsForTesting({});
