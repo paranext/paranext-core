@@ -3803,9 +3803,9 @@ step, no automation. Just a record.
   - keeping pop-ups at interface scale (rejected by the product owner).
 - **Consequences:**
   - three shadcn files carry `CUSTOM` changes;
-  - the library's `Select`, `ContextMenu` and dropdown sub-menu (`DropdownMenuSubContent`)
-    content do not follow an area yet; each needs the same small change when first opened from
-    zoomed content;
+  - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
+    (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
+    when first opened from zoomed content;
   - a pop-up portaled into a container inside another area inherits that container's zoom.
 - **Source:** PT-4634.
 
