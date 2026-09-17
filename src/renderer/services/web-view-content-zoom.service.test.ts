@@ -752,7 +752,7 @@ describe('web-view-content-zoom.service', () => {
     expect(settingsSet).not.toHaveBeenCalled();
   });
 
-  it('does not overwrite a pane that already holds levels', async () => {
+  it("keeps a pane's own level and seeds the remembered areas its state lacks", async () => {
     settings[MEMORY] = {
       'editor:PROJ-A:main': 1.3,
       'editor:PROJ-A:footnotes': 0.9,
@@ -766,8 +766,10 @@ describe('web-view-content-zoom.service', () => {
       state: { [LEVELS]: { main: 2 } },
     });
     setContentZoomAreas('editor-4', ['main', 'footnotes']);
-    expect(definitions.get('editor-4')?.state).toEqual({ [LEVELS]: { main: 2 } });
+    expect(definitions.get('editor-4')?.state).toEqual({ [LEVELS]: { main: 2, footnotes: 0.9 } });
+    // Control: what the pane's own state holds still outranks what memory remembers for it.
     expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-main')).toBe('2');
+    expect(cssVar(iframeFor('editor-4'), '--platform-content-zoom-footnotes')).toBe('0.9');
   });
 
   it('seeds on the first non-empty report even when an earlier report for the same pane was empty', async () => {

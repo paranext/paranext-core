@@ -408,23 +408,29 @@ function mayScaleWholeIframe(webViewId: WebViewId): boolean {
 /**
  * Seeds a newly opened pane's own levels from every area {@link cachedMemory} remembers for its kind
  * and identity, so the areas its bootstrap is about to report start at the level the user chose
- * last time instead of the Settings default. A pane whose state already holds
- * {@link CONTENT_ZOOM_LEVELS_STATE_KEY} — even for a single area — is left alone: the key is never
- * written empty, so holding it at all means the pane already has a level to keep.
+ * last time instead of the Settings default. Merged per area, with the same precedence
+ * {@link getInitialContentZoomForWebView} bakes into the pane's head: a level the pane's own state
+ * already holds wins, and memory fills only the areas the state lacks. Seeding per area rather than
+ * per pane is what lets a pane restored with one area's level still pick the other areas up — the
+ * push that follows writes an inline property for every reported area, which outranks the baked
+ * `:root` value, so an area missing from the state would otherwise be forced to the default.
  */
 function seedFromMemoryOnFirstReport(webViewId: WebViewId): void {
   const definition = deps.getDefinition(webViewId);
   if (!definition) return;
   // TODO(PT-4582): a pane re-pointed to another project keeps these levels; stamp the seeded
   // identity and re-seed on mismatch.
-  if (definition.state && CONTENT_ZOOM_LEVELS_STATE_KEY in definition.state) return;
   if (pendingOwnLevels.has(webViewId)) return;
   const id = memoryIdentityFor(definition);
   if (!id) return;
-  const levels = collectMemoryLevelsFor(cachedMemory, id);
-  if (Object.keys(levels).length === 0) return;
+  const existing = getOwnLevels(definition);
+  const seeded: Levels = { ...existing };
+  Object.entries(collectMemoryLevelsFor(cachedMemory, id)).forEach(([areaId, level]) => {
+    if (seeded[areaId] === undefined) seeded[areaId] = level;
+  });
+  if (Object.keys(seeded).length === Object.keys(existing).length) return;
   deps.updateDefinition(definition.id, {
-    state: { ...(definition.state ?? {}), [CONTENT_ZOOM_LEVELS_STATE_KEY]: levels },
+    state: { ...(definition.state ?? {}), [CONTENT_ZOOM_LEVELS_STATE_KEY]: seeded },
   });
 }
 
