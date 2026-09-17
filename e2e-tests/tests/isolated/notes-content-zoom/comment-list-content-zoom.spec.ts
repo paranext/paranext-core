@@ -270,6 +270,11 @@ test.describe('comment list content zoom', () => {
       await zoomAreaTo(mainPage, listFrame, listId, 'main', 1);
       const atDefault = await measureMenuItem();
       await mainPage.keyboard.press('Escape');
+      // The card's dropdown menu has no Escape handler of its own, so the keypress bubbles to the
+      // list container's "Escape collapses the last-interacted thread" handler
+      // (`handleKeyDownWithEscape` in comment-list.component.tsx) and closes the card along with
+      // the menu. Re-select it so the trigger exists for the next measurement.
+      await card.click();
 
       const factors = [1.5, 2];
       // Sequential zoom steps: each factor's zoom, measurement and pop-up assertion must complete
@@ -282,6 +287,9 @@ test.describe('comment list content zoom', () => {
         expect(zoomed.height / atDefault.height).toBeCloseTo(factor, 1);
         await expectPopupBesideTriggerAndInsideFrame(listFrame, zoomed.menu, menuTrigger);
         await mainPage.keyboard.press('Escape');
+        // Same collapse-on-Escape side effect as above; re-select for the next iteration (or, on
+        // the last one, for the assign-popover check right below the loop).
+        await card.click();
       }
       /* eslint-enable no-await-in-loop */
 

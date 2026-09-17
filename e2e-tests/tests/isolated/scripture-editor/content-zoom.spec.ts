@@ -263,11 +263,18 @@ test.describe('scripture editor content zoom', () => {
       await mainPage.keyboard.press('Escape');
 
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
-      // Scroll the text so the caller is no longer at the top of the pane.
-      await editorFrame.locator('.editor-container').evaluate((element) => {
-        const scroller = element.closest('.tw\\:overflow-auto') ?? element;
-        scroller.scrollTop = 120;
-      });
+      // Scroll the text so the caller is no longer at the top of the pane. `.first()`: the
+      // footnote popover's own FootnoteEditor renders a second `.editor-container` (nested under
+      // its `scripture-font` wrapper) while still closing from the Escape above, so the bare
+      // selector is ambiguous here even though it is unique everywhere else in this spec. The
+      // main text editor's container is always the first one in the frame.
+      await editorFrame
+        .locator('.editor-container')
+        .first()
+        .evaluate((element) => {
+          const scroller = element.closest('.tw\\:overflow-auto') ?? element;
+          scroller.scrollTop = 120;
+        });
       await caller.click({ force: true });
       await expect(popover).toBeVisible();
       await expect(popover).toHaveAttribute('data-platform-content-zoom-root', '');
