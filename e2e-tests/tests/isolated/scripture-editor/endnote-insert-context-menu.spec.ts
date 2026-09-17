@@ -11,7 +11,9 @@
  * The menu's CONTENTS are asserted here, and so is selecting an item BY KEYBOARD — arrow keys to
  * the item, then Enter. That path needs the real app: the menu claims Enter from a capture-phase
  * listener on the editor iframe's `document`, while this web view claims it from one on `window`,
- * and only the real two-listener stack shows which of them the press reaches.
+ * and only the real two-listener stack shows which of them the press reaches. The same stack is
+ * what decides the open menu's other keyboard claims — Enter with nothing highlighted, and the
+ * marker palette's backslash — which is why those are asserted here rather than in a unit test.
  *
  * Selecting the item by MOUSE is deliberately not asserted: the editor re-renders while the menu is
  * open, re-creating that portal, so the item detaches mid-click and any such assertion is flaky by
@@ -172,6 +174,25 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       });
     });
 
+    await test.step('with nothing highlighted the menu still owns Enter and the backslash', async () => {
+      const versePara = nextClearVersePara();
+      const paraCountBefore = await mainEditor.locator('p').count();
+      const textBefore = await versePara.innerText();
+      await openContextMenu(versePara);
+      await expect(contextMenu.locator('li.selected')).toHaveCount(0);
+
+      // Neither key may start a palette underneath the menu, and neither may reach the document
+      // behind it: the editor still holds DOM focus, so an unclaimed Enter plain-splits the
+      // paragraph and an unclaimed backslash types a `\\` into it.
+      await mainPage.keyboard.press('Enter');
+      await mainPage.keyboard.press('\\');
+
+      await expect(mainPage.locator('[data-overlay-command-palette]')).toHaveCount(0);
+      await expect(contextMenu).toBeAttached();
+      expect(await mainEditor.locator('p').count()).toBe(paraCountBefore);
+      expect(await versePara.innerText()).toBe(textBefore);
+    });
+
     await test.step('arrow keys then Enter invoke the highlighted item, not the Enter palette', async () => {
       const endNoteIndex = optionTexts.indexOf('Insert end note');
       expect(endNoteIndex).toBeGreaterThanOrEqual(0);
@@ -187,8 +208,9 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
 
       await mainPage.keyboard.press('Enter');
 
-      // The Enter-triggered paragraph marker palette must NOT have opened: while the menu holds a
-      // highlighted item, the web view stands down and the menu owns Enter. Sampled HERE, before
+      // The Enter-triggered paragraph marker palette must NOT have opened: the web view stands
+      // down for as long as the menu is open, and the menu invokes its highlighted item instead of
+      // handing the press back. Sampled HERE, before
       // the note-count wait below: the insert auto-opens the footnote editor, which takes focus,
       // and a palette that opened on Enter and was then dismissed by that focus change would
       // satisfy a check made afterwards.
