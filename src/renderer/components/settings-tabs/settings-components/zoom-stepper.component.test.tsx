@@ -19,8 +19,8 @@ beforeAll(() => {
   };
 });
 
-// File-level, not at the end of the one test that spies: an assertion that fails before an in-test
-// restore would otherwise leave `performance.now` pinned for everything after it.
+// File-level rather than inside whichever test installs a spy: a failing assertion skips the rest of
+// its own test body, so an in-test restore would leave the spy in place for everything after it.
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -157,6 +157,12 @@ describe('ZoomStepper', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atMaximum);
   });
 
+  it('names the lower limit on the decrease button at the minimum', async () => {
+    render(<ZoomStepper {...baseProps} value={0.5} onChange={vi.fn()} />);
+    screen.getByRole('button', { name: LABELS.decrease }).focus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atMinimum);
+  });
+
   it('names the button when it is not at a bound', async () => {
     render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
     screen.getByRole('button', { name: LABELS.increase }).focus();
@@ -216,15 +222,19 @@ describe('ZoomStepper', () => {
   });
 
   it('steps by the platform rule from an off-tenth factor', () => {
-    // The shared helper steps first and rounds the result to a tenth, so 0.95 goes to 0.9 — a rule
-    // that rounds the input first would land on 0.8 instead.
+    // The shared helper subtracts a whole step and then rounds the result to the nearest tenth, so
+    // 0.95 goes to 0.9. A rule that truncated the result to a tenth instead would land on 0.8,
+    // which is two steps away from where the user pressed once.
     const onChange = vi.fn();
     render(<ZoomStepper {...baseProps} value={0.95} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
     expect(onChange).toHaveBeenCalledWith(0.9);
   });
 
-  it('clamps to the platform range rather than to caller props', () => {
+  // The bounds are the platform's, not a caller's: at either one the button is `aria-disabled` and
+  // the press emits nothing. `content-zoom.util.test.ts` is what pins the clamp inside
+  // `adjustZoomFactor` itself; this only pins that the buttons gate on the same range.
+  it('emits nothing from a press at either platform bound', () => {
     const atMinimum = vi.fn();
     const { unmount } = render(<ZoomStepper {...baseProps} value={0.5} onChange={atMinimum} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
