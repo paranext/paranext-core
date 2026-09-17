@@ -1,6 +1,7 @@
 import {
   CONTENT_ZOOM_AREA_ID_PATTERN,
   CONTENT_ZOOM_AREA_ID_PLACEHOLDER,
+  CONTENT_ZOOM_CHORDS,
   CONTENT_ZOOM_COMMANDS,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
@@ -111,6 +112,14 @@ function escapeClosingTags(jsSourceLiteral: string): string {
 export function getContentZoomBootstrapScript(webViewId: string): string {
   const id = escapeClosingTags(JSON.stringify(webViewId));
   const attr = CONTENT_ZOOM_ROOT_ATTRIBUTE;
+  const chords = JSON.stringify(
+    CONTENT_ZOOM_CHORDS.map(({ action, command, keys, codes }) => ({
+      action,
+      command,
+      keys,
+      codes,
+    })),
+  );
   return `
   (() => {
     const webViewId = ${id};
@@ -363,29 +372,34 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         warnPapi('Content zoom command ' + command + ' threw: ' + (e && e.message ? e.message : e));
       }
     };
-    // The keydown chord rule below mirrors web-view-content-zoom.chrome-keys.ts's
-    // isChordModifier / actionFor. This script is serialized to a string and cannot import that
-    // module, so the two copies are independently maintained - change both together.
-    // web-view-content-zoom.chord-parity.test.ts is the guard that keeps them in sync.
-    // Shift is accepted for every action: on AZERTY and Czech layouts the top-row 0 and - are
-    // shifted keys, so rejecting Shift would put reset out of reach there entirely.
+    // The zoom chords, baked in from CONTENT_ZOOM_CHORDS in content-zoom.model.ts. This script runs
+    // as injected text inside the web view, so it cannot import that module - it gets the table
+    // serialized at build time instead, which is how the injected stylesheet's rule template travels
+    // here too. The macOS menu half is dropped: a web view has no menu. The modifier rule is the one
+    // chord rule still stated twice, because it is two booleans; Shift is accepted for every action,
+    // since on AZERTY and Czech layouts the top-row 0 and - are shifted keys.
+    const CHORDS = ${chords};
     const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey;
+    const chordFor = (e) => {
+      for (let i = 0; i < CHORDS.length; i += 1) {
+        const chord = CHORDS[i];
+        if (chord.keys.indexOf(e.key) !== -1) return chord;
+        for (let j = 0; j < chord.codes.length; j += 1) {
+          const entry = chord.codes[j];
+          if (entry.code === e.code && (!entry.requiredKey || entry.requiredKey === e.key)) return chord;
+        }
+      }
+      return undefined;
+    };
 
     const onKeyDown = (e) => {
       if (!hasModifier(e)) return;
-      const zoomIn = e.key === '=' || e.key === '+' || e.code === 'NumpadAdd';
+      const chord = chordFor(e);
+      if (!chord) return;
       const areaId = targetFor(document.activeElement);
       if (!areaId) return;
-      let command;
-      if (zoomIn) command = '${CONTENT_ZOOM_COMMANDS.in}';
-      else if (e.key === '-' || e.code === 'NumpadSubtract') command = '${CONTENT_ZOOM_COMMANDS.out}';
-      // The numpad 0 only means reset while NumLock is on. With NumLock off it reports itself as
-      // Insert, and Ctrl+Insert is Chromium's legacy Copy chord, which content zoom must not
-      // swallow. NumpadAdd and NumpadSubtract are NumLock-independent, so only this branch needs it.
-      else if (e.key === '0' || (e.code === 'Numpad0' && e.key === '0')) command = '${CONTENT_ZOOM_COMMANDS.reset}';
-      if (!command) return;
       e.preventDefault();
-      act(command, areaId);
+      act(chord.command, areaId);
     };
     window.addEventListener('keydown', onKeyDown);
 
