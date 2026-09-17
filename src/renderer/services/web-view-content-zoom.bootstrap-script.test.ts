@@ -1624,7 +1624,8 @@ describe('content-zoom bootstrap script', () => {
     const reportsBefore = bound.reportContentZoomAreasById.mock.calls.length;
     expect(reportsBefore).toBeGreaterThan(0);
     const popup = document.createElement('div');
-    popup.setAttribute('data-platform-content-zoom-root', '');
+    // An area id the pane never reported, so counting the pop-up as an area would change the list.
+    popup.setAttribute('data-platform-content-zoom-root', 'menu');
     popup.setAttribute('data-platform-content-zoom-popup', '');
     document.body.appendChild(popup);
     await nextFrame();
