@@ -10,10 +10,13 @@
  * Three tests, each launching its own Electron instance:
  *
  * 1. The zone's remainder appends a tab dragged within its own panel.
- * 2. Every part of ANOTHER panel's empty bar space appends: the gap before "+", "+" itself, the bar's
- *    end padding, and the bar's lower band when the pointer arrives from the panel's content.
- * 3. Starting a drag on a crowded bar does not move the tabs; the squeezed zone refuses the drop, and
- *    a neighboring tab's drop indicator stays inside the bar.
+ * 2. Every part of ANOTHER panel's empty bar space appends: the last tab's trailing half, which the
+ *    zone also claims so the bar reads as one continuous target, the gap before "+", "+" itself,
+ *    the bar's end padding, and the bar's lower band when the pointer arrives from the panel's
+ *    content.
+ * 3. Starting a drag on a crowded bar does not move the tabs; the squeezed zone refuses the drop, a
+ *    neighboring tab's drop indicator stays inside the bar, and a release past the bar's last tab
+ *    still appends even though the zone itself has no width left to claim.
  *
  * Everything is asserted on web view ids read from the tab titles, never on tab counts alone.
  *
@@ -32,6 +35,15 @@ const DROP_INDICATOR = '.dock-layout > .dock-drop-indicator';
 
 /** Appended to `<body>` by rc-dock's drag manager for the duration of a tab drag. */
 const DRAGGING_LAYER = 'body > .dragging-layer';
+
+/**
+ * The flex gap between the drop zone and the "+" button (`$tab-bar-extra-gap` in
+ * `_tab-bar-metrics.scss`) — the minimum the "+" must sit to the right of the zone's own box.
+ */
+const TAB_BAR_EXTRA_GAP_PX = 8;
+
+/** Slack for the bar's trailing padding when checking that "+" has slid to the bar's far end. */
+const BAR_END_SLACK_PX = 24;
 
 type Rect = { left: number; right: number; top: number; bottom: number; width: number };
 
@@ -101,9 +113,9 @@ async function readWhenSettled<T>(page: Page, read: () => Promise<T>): Promise<T
     const first: unknown = await read();
     await page.waitForTimeout(400);
     const second = await read();
-    // Widened to `unknown`: Playwright's matcher typing can't resolve on an unconstrained generic.
-    const secondReading: unknown = second;
-    expect(secondReading).toEqual(first);
+    // The matcher argument, not `second` itself, is annotated to `unknown`: Playwright's matcher
+    // typing can't resolve on an unconstrained generic.
+    expect<unknown>(second).toEqual(first);
     settled = { value: second };
   }).toPass({ timeout: 10_000 });
   if (!settled) throw new Error('no settled reading');
@@ -199,7 +211,11 @@ async function dragTabTo(
   await expect(page.locator(DRAGGING_LAYER)).toHaveCount(0, { timeout: 5_000 });
 }
 
-/** Wait until the tab is its panel's last tab and gone from `fromPanelId` (soft). */
+/**
+ * Wait until the tab is its panel's last tab and gone from `fromPanelId`. Hard: later steps in the
+ * same test mutate the state this one just asserted on, so a real failure here must stop the test
+ * rather than let a stale precondition cascade into every step that follows.
+ */
 async function expectAppendedTo(
   page: Page,
   webViewId: string,
@@ -207,15 +223,13 @@ async function expectAppendedTo(
   fromPanelId: string,
   label: string,
 ): Promise<void> {
-  await expect
-    .soft(async () => {
-      const bars = await readBars(page);
-      const target = bars.find((bar) => bar.panelId === toPanelId)?.tabIds ?? [];
-      const source = bars.find((bar) => bar.panelId === fromPanelId)?.tabIds ?? [];
-      expect(target.at(-1), `${label}: last tab of ${toPanelId}`).toBe(webViewId);
-      expect(source, `${label}: gone from ${fromPanelId}`).not.toContain(webViewId);
-    })
-    .toPass({ timeout: 10_000 });
+  await expect(async () => {
+    const bars = await readBars(page);
+    const target = bars.find((bar) => bar.panelId === toPanelId)?.tabIds ?? [];
+    const source = bars.find((bar) => bar.panelId === fromPanelId)?.tabIds ?? [];
+    expect(target.at(-1), `${label}: last tab of ${toPanelId}`).toBe(webViewId);
+    expect(source, `${label}: gone from ${fromPanelId}`).not.toContain(webViewId);
+  }).toPass({ timeout: 10_000 });
 }
 
 // #endregion
@@ -261,8 +275,12 @@ test.describe('tab-bar drop zone', () => {
           const bar = await rectOf(page, `${panel} .dock-bar`);
           // While dragging, the zone runs from the last tab to a "+" parked at the bar's far end;
           // a zone that stopped short would leave the rest of the bar accepting nothing.
-          expect(plus.right, '"+" at the far end of the bar').toBeGreaterThan(bar.right - 24);
-          expect(plus.left).toBeGreaterThan(zone.left + 8);
+          expect(plus.right, '"+" at the far end of the bar').toBeGreaterThan(
+            bar.right - BAR_END_SLACK_PX,
+          );
+          expect(plus.left, '"+" clears the zone by at least the flex gap').toBeGreaterThan(
+            zone.left + TAB_BAR_EXTRA_GAP_PX,
+          );
           point = {
             x: zone.left + 0.75 * (plus.left - zone.left),
             y: (bar.top + bar.bottom) / 2,
@@ -283,7 +301,7 @@ test.describe('tab-bar drop zone', () => {
   test("every part of another panel's empty bar space appends a dropped tab", async ({
     mainPage: page,
   }) => {
-    const { panelId: panelIdA } = await setUp(page);
+    const { panelId: panelIdA, homeId } = await setUp(page);
     const movers = [
       await addNewTab(page, panelIdA),
       await addNewTab(page, panelIdA),
@@ -298,6 +316,58 @@ test.describe('tab-bar drop zone', () => {
       const bar = await rectOf(page, `${panelB} .dock-bar`);
       return { x: (plus.left + plus.right) / 2, y: (bar.top + bar.bottom) / 2 };
     };
+
+    await test.step("last tab's trailing half", async () => {
+      // The zone's hit area extends backward over the current last tab's trailing half, so the bar
+      // reads as one continuous target instead of two. The tab landing last only shows SOMETHING
+      // accepted the drop — rc-dock's own after-tab target would produce the same outcome. Read the
+      // drop indicator before releasing and check its shape to prove the ZONE claimed this half:
+      // rc-dock's own after-tab indicator is a fixed 30px strip straddling the tab's trailing edge
+      // (`DockLayout.tsx`'s `after-tab` case: `left += width - 15; width = 30`), while the zone's
+      // own indicator (`.platform-tab-bar-drop-zone-indicator`, `inset-inline-end: 0` against the
+      // zone) starts at or before that edge and runs all the way to the zone's own right edge.
+      //
+      // Runs first, while panel B still has only its own original tab (the one `openPanelToTheRight`
+      // created) to claim the trailing half of. Drags the Home tab instead of adding a fifth tab to
+      // panel A: once panel B exists, panel A is only half the window wide, and a fifth tab there
+      // tips its own bar into overflow at the window sizes this suite launches with.
+      const lastTabId = (await tabIdsOf(page, panelIdB)).at(-1);
+      if (!lastTabId) throw new Error(`panel ${panelIdB} has no tabs`);
+
+      await startDrag(page, homeId);
+      try {
+        const box = await tabButton(page, lastTabId).boundingBox();
+        if (!box) throw new Error(`tab ${lastTabId} has no box`);
+        await page.mouse.move(box.x + 0.75 * box.width, box.y + box.height / 2, { steps: 10 });
+
+        const indicator = await readWhenSettled(page, () => readDropIndicator(page));
+        expect(indicator, 'drop indicator over the last tab trailing half').toBeDefined();
+        if (indicator) {
+          const tabRight = box.x + box.width;
+          const zone = await rectOf(page, `${panelB} .platform-tab-bar-drop-zone`);
+          const plus = await rectOf(page, `${panelB} .new-tab-button`);
+          expect
+            .soft(indicator.left, 'indicator starts at or before the tab trailing edge')
+            .toBeLessThanOrEqual(tabRight + 1);
+          expect
+            .soft(
+              Math.abs(indicator.right - zone.right),
+              "indicator right edge matches the zone's own right edge",
+            )
+            .toBeLessThan(2);
+          expect
+            .soft(
+              indicator.right,
+              'indicator reaches out toward "+", not a 15px after-tab strip past the tab edge',
+            )
+            .toBeGreaterThan(plus.left - TAB_BAR_EXTRA_GAP_PX - 1);
+        }
+      } finally {
+        await page.mouse.up();
+      }
+      await expect(page.locator(DRAGGING_LAYER)).toHaveCount(0, { timeout: 5_000 });
+      await expectAppendedTo(page, homeId, panelIdB, panelIdA, 'last tab trailing half');
+    });
 
     await test.step('gap between zone and "+"', async () => {
       await dragTabTo(page, movers[0], async () => {
@@ -358,7 +428,11 @@ test.describe('tab-bar drop zone', () => {
     const operations = page.locator(`${panel} .dock-nav-operations`);
 
     await test.step('crowd the bar until tabs overflow', async () => {
-      for (let i = 0; i < 40; i++) {
+      // Comfortably more tabs than any window width the suite launches with needs before the row
+      // overflows into the "more" dropdown; if it somehow still didn't overflow, the `expect`
+      // right after the loop — not this cap — is what fails the test.
+      const MAX_TABS_TO_CROWD_BAR = 40;
+      for (let i = 0; i < MAX_TABS_TO_CROWD_BAR; i++) {
         // Sequential on purpose: each tab must land before overflow is read again
         // eslint-disable-next-line no-await-in-loop
         const hidden = await operations.evaluate((operationsElement) =>
@@ -464,6 +538,35 @@ test.describe('tab-bar drop zone', () => {
         expect
           .soft(indicator.right, 'indicator reaches past the tab edge')
           .toBeGreaterThan(neighbor.right);
+      });
+
+      await test.step("release past the bar's last tab: still appends despite the crowd", async () => {
+        // On a crowded bar the zone itself has no width (see the "gap before +" step above), so
+        // whatever accepts a drop past the bar's LAST tab must be rc-dock's own after-tab handling —
+        // proving the outcome the zone exists to guarantee (dropping past the last tab appends)
+        // still holds even when the zone has no width of its own to claim it. Read the true last
+        // tab's box and the bar's box first: a bar crowded enough to clip that tab behind the
+        // overflow dropdown would send the release point somewhere else entirely, so fail with both
+        // rects named rather than let that happen silently.
+        const lastTabBox = await tabButton(page, during.lastTabId).boundingBox();
+        if (!lastTabBox) throw new Error(`tab ${during.lastTabId} has no box`);
+        const releaseX = lastTabBox.x + 0.75 * lastTabBox.width;
+        const releaseY = lastTabBox.y + lastTabBox.height / 2;
+        if (releaseX < bar.left || releaseX > bar.right) {
+          throw new Error(
+            `last tab ${during.lastTabId}'s trailing half falls outside the bar's visible bounds: ` +
+              `release point x=${releaseX}, tab box=${JSON.stringify(lastTabBox)}, bar box=` +
+              `${JSON.stringify(bar)}`,
+          );
+        }
+        await page.mouse.move(releaseX, releaseY, { steps: 10 });
+        await page.mouse.up();
+        await expect(page.locator(DRAGGING_LAYER)).toHaveCount(0, { timeout: 5_000 });
+
+        await expect(async () => {
+          const tabIds = await tabIdsOf(page, panelId);
+          expect(tabIds.at(-1), 'dragged tab appended despite the crowded bar').toBe(dragged.id);
+        }).toPass({ timeout: 10_000 });
       });
     } finally {
       await page.keyboard.press('Escape');

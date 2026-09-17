@@ -13,7 +13,7 @@ import {
   TAB_GROUP,
   TAB_GROUP_RESOURCES,
 } from './platform-dock-layout-positioning.util';
-import { createDockContext, createPanel } from './__tests__/tab-bar-drop-zone.test-utils';
+import { createDockContext, createPanel } from './__tests__/rc-dock.test-utils';
 
 /** Minimal WebView {@link TabInfo} fixture for `getTabGroup` tests. */
 function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo {
@@ -36,6 +36,9 @@ vi.mock('@renderer/services/theme.service', () => ({
 
 describe('Dock Layout Component', () => {
   describe('getGroups()', () => {
+    // `floatable`/`tabLocked`/`disableDock` below pin what this app's groups actually set; see
+    // `resolveTabBarDropZoneSource`'s TSDoc (tab-bar-drop-zone.util.ts) for why its own gates don't
+    // replicate rc-dock's `disableDock` branch — no group registered here ever sets it.
     it('power mode: returns TAB_GROUP with panelExtra and without tabLocked', () => {
       const groups = getGroups(true);
       expect(typeof groups[TAB_GROUP].panelExtra).toBe('function');

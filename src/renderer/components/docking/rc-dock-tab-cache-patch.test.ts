@@ -3,7 +3,7 @@
 // (`module` → `es/`). Importing `rc-dock` here would test the unpatched code.
 import { TabCache } from 'rc-dock/es/DockTabs';
 import { describe, expect, it } from 'vitest';
-import { createDockContext } from './__tests__/tab-bar-drop-zone.test-utils';
+import { createDockContext } from './__tests__/rc-dock.test-utils';
 
 /**
  * Builds `parent > child > ...` from the given tag/class specs and returns the innermost element.
@@ -56,13 +56,37 @@ function getStoredRefs(cache: TabCache): { ref: HTMLDivElement; hitAreaRef: HTML
   return { ref: cache._ref, hitAreaRef: cache._hitAreaRef };
 }
 
+/**
+ * Directly sets `cache`'s stored hit-area ref, bypassing `getHitAreaRef`'s popup guard. Seeds a
+ * known value so a rejection case can assert the ref was left alone, rather than merely asserting
+ * `undefined` — which a fresh `TabCache` reports even if the guard never ran at all.
+ */
+function seedHitAreaRef(cache: TabCache, ref: HTMLDivElement): void {
+  // rc-dock declares this public field with a leading underscore; the name isn't ours to change
+  // eslint-disable-next-line no-underscore-dangle
+  cache._hitAreaRef = ref;
+}
+
+/**
+ * Directly sets `cache`'s stored tab ref, bypassing `getRef`'s popup guard. Seeds a known value so
+ * a rejection case can assert the ref was left alone, rather than merely asserting `undefined` —
+ * which a fresh `TabCache` reports even if the guard never ran at all.
+ */
+function seedRef(cache: TabCache, ref: HTMLDivElement): void {
+  // rc-dock declares this public field with a leading underscore; the name isn't ours to change
+  // eslint-disable-next-line no-underscore-dangle
+  cache._ref = ref;
+}
+
 describe('patched rc-dock TabCache popup check', () => {
   it('ignores a hit area three levels under an overflow-dropdown <li>', () => {
     const cache = new TabCache(createDockContext());
+    const sentinel = document.createElement('div');
+    seedHitAreaRef(cache, sentinel);
 
     cache.getHitAreaRef(createPopupHitArea());
 
-    expect(getStoredRefs(cache).hitAreaRef).toBeUndefined();
+    expect(getStoredRefs(cache).hitAreaRef).toBe(sentinel);
   });
 
   it('keeps the real hit area when the dropdown copy registers after it', () => {
@@ -77,10 +101,12 @@ describe('patched rc-dock TabCache popup check', () => {
 
   it('ignores a tab node two levels under an overflow-dropdown <li>', () => {
     const cache = new TabCache(createDockContext());
+    const sentinel = document.createElement('div');
+    seedRef(cache, sentinel);
 
     cache.getRef(buildDivChain(document.body, 'ul', 'li', 'span', 'div'));
 
-    expect(getStoredRefs(cache).ref).toBeUndefined();
+    expect(getStoredRefs(cache).ref).toBe(sentinel);
   });
 
   it('keeps a real-strip hit area even when an <li> wraps the whole dock layout', () => {

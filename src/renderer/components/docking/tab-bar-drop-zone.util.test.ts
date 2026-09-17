@@ -8,7 +8,7 @@ import {
   DOCK_ID,
   OTHER_GROUP,
   resetDragStateStore,
-} from './__tests__/tab-bar-drop-zone.test-utils';
+} from './__tests__/rc-dock.test-utils';
 
 describe('resolveTabBarDropZoneSource', () => {
   beforeEach(() => {
