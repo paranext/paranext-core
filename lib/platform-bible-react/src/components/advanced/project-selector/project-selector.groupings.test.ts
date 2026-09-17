@@ -71,10 +71,8 @@ describe('readProjectSelectorString', () => {
     ).toBeUndefined();
   });
 
-  // `useLocalizedStrings` seeds `defaultState[key] = key` and returns that same state on a platform
-  // error, so an unresolved entry arrives as the key itself — a string, which a bare `typeof` check
-  // accepts. Without this guard the picker renders "%projectSelector_searchPlaceholder%" as its
-  // placeholder instead of falling back to English.
+  // Without this guard the picker renders "%projectSelector_clearAll%" at the user instead of
+  // falling back to English — see `isResolvedLocalizedValue`.
   it('returns undefined when the value is still the key, so the English fallback applies', () => {
     expect(
       readProjectSelectorString(
@@ -117,13 +115,17 @@ describe('readProjectSelectorString', () => {
     ).toBe('Clear all (%projectSelector_clearAll%)');
   });
 
-  it('does not treat a DIFFERENT key as unresolved', () => {
+  // Any `%…%` value is unresolved, not just this field's own key. Grouping labels are read straight
+  // off the returned object and never pass through the picker's `localizedStrings` merge, so this is
+  // their only guard — a consumer-built grouping labelled from an unresolved lookup would otherwise
+  // reach a section heading verbatim.
+  it('treats a DIFFERENT key as unresolved too', () => {
     expect(
       readProjectSelectorString(
         { '%projectSelector_clearAll%': '%projectSelector_openButtonLabel%' },
         '%projectSelector_clearAll%',
       ),
-    ).toBe('%projectSelector_openButtonLabel%');
+    ).toBeUndefined();
   });
 });
 

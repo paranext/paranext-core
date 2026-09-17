@@ -528,7 +528,14 @@ describe('unresolved localized strings', () => {
     PROJECT_SELECTOR_STRING_KEYS.map((key) => [key, key]),
   );
 
-  it('falls back to English rather than rendering raw localization keys', async () => {
+  // Any `%…%` key, whatever its prefix and whether or not it contains an underscore — a sweep
+  // narrowed to `%projectSelector_` would miss exactly the consumer-supplied keys this guards.
+  const RAW_KEY = /%[^%\s]+%/;
+
+  // `buildProjectSelectorLocalizedStrings` rejects a key-as-value itself, so this bag reaches the
+  // merge as all-`undefined`: it pins the `undefined` arm. The consumer-override test below is what
+  // reaches the localize-key arm.
+  it('falls back to English when the shared block resolved nothing', async () => {
     const user = setupUser();
     render(
       <ProjectSelector
@@ -541,15 +548,23 @@ describe('unresolved localized strings', () => {
           ...buildProjectSelectorLocalizedStrings(UNRESOLVED_STRINGS),
           ariaLabel: 'Project',
         }}
+        availableGroupings={[
+          { id: 'openTabs', label: 'Open tabs' },
+          { id: 'language', label: 'Language', getGroupKey: () => 'English' },
+        ]}
       />,
     );
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    // Open the group-by menu too, so the sweeps below cover the menu's own strings rather than
+    // only the popover's.
+    await user.click(screen.getByRole('button', { name: 'Group by' }));
 
     expect(screen.getByPlaceholderText('Search projects & resources')).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'None' })).toBeInTheDocument();
     // The load-bearing half: asserting the English string alone would still pass if the fallback
     // were reached some other way. Nothing may render a raw key.
-    expect(screen.queryByPlaceholderText(/^%projectSelector_/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/%projectSelector_/)).not.toBeInTheDocument();
+    expect(screen.queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
+    expect(screen.queryAllByText(RAW_KEY)).toHaveLength(0);
   });
 
   it('falls back to English when a consumer overrides with its own unresolved keys', async () => {
@@ -566,7 +581,7 @@ describe('unresolved localized strings', () => {
           // Consumers merge their OWN `%webView_…%` lookups over the shared block, and those
           // arrive as raw keys under the same `useLocalizedStrings` seeding behavior.
           ariaLabel: '%webView_find_projectSelector_label%',
-          buttonPlaceholder: '%webView_find_projectFilter_selectProject%',
+          buttonPlaceholder: '%webView_find_projectFilter_noOpenProjectsOrResources%',
           commandEmptyMessage: '%webView_find_projectFilter_noProjectsFound%',
         }}
       />,
@@ -582,14 +597,12 @@ describe('unresolved localized strings', () => {
 
     // The load-bearing half: asserting the English strings alone would still pass if the fallback
     // were reached some other way. Nothing may render a raw key, whatever its prefix.
-    expect(screen.queryByPlaceholderText(/^%/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/%\w+_/)).not.toBeInTheDocument();
-    expect(trigger).not.toHaveAccessibleName(expect.stringContaining('%'));
+    expect(screen.queryAllByPlaceholderText(RAW_KEY)).toHaveLength(0);
+    expect(screen.queryAllByText(RAW_KEY)).toHaveLength(0);
   });
 
   // A blank translation reaches the merge as a defined, non-key string, so neither the `undefined`
-  // arm nor the localize-key arm catches it. Left alone it renders a trigger with no visible text
-  // and no accessible name.
+  // arm nor the localize-key arm catches it. Left alone it renders a trigger with no visible text.
   it('falls back to English for a blank localized value', () => {
     render(
       <ProjectSelector
@@ -598,12 +611,44 @@ describe('unresolved localized strings', () => {
         openTabs={[]}
         selection={{ projectId: '' }}
         onChangeSelection={() => {}}
-        localizedStrings={{ ariaLabel: '', buttonPlaceholder: '   ' }}
+        localizedStrings={{ buttonPlaceholder: '   ' }}
       />,
     );
 
-    const trigger = screen.getByRole('combobox', { name: 'Projects & resources' });
-    expect(trigger).toHaveTextContent('Select a project');
+    expect(screen.getByRole('combobox')).toHaveTextContent('Select a project');
+  });
+
+  // `ariaLabel` is the documented exception to the blank rule: an empty string means "this control
+  // is named by its visible text or a labelling ancestor", so it must survive the merge rather than
+  // being replaced with English. Whitespace-only is NOT that opt-out — only a truly empty string is.
+  it('keeps an empty ariaLabel as a deliberate opt-out', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: '' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: '' }}
+      />,
+    );
+
+    expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-label');
+  });
+
+  it('falls back to English for a whitespace-only ariaLabel', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: '' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: '   ' }}
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Projects & resources' })).toBeInTheDocument();
   });
 
   it('keeps a resolved value whose visible text is merely padded with whitespace', () => {

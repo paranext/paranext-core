@@ -307,6 +307,32 @@ function openProjectSelector(user: ReturnType<typeof setupUser>) {
   return user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL }));
 }
 
+describe("Find project selector — Find's own strings unresolved", () => {
+  // Every key comes back as itself, which is what `useLocalizedStrings` hands over before strings
+  // load and permanently on a platform error. The picker treats those as unresolved, so without
+  // Find supplying its own English the trigger would show the picker's generic "Select a project"
+  // — an instruction to pick, at the moment the placeholder's job is to report there is nothing to
+  // pick.
+  const UNRESOLVED_STRINGS: LanguageStrings = Object.fromEntries(
+    FIND_LOCALIZED_STRING_KEYS.map((key) => [key, key]),
+  );
+
+  it("keeps Find's own placeholder wording rather than the picker's generic English", () => {
+    render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
+
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger).toHaveTextContent('No open projects or resources');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it('renders no raw localization key in the picker trigger', () => {
+    render(<Find {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />);
+
+    const trigger = screen.getByRole('combobox', { name: 'Project' });
+    expect(trigger.textContent ?? '').not.toMatch(/%[^%\s]+%/);
+  });
+});
+
 describe('Find project selector — simple interface mode', () => {
   it('appends the scroll group letter to the trigger in power mode', () => {
     render(<Find {...buildProps()} />);

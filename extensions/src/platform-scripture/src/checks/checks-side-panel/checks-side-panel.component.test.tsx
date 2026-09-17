@@ -165,6 +165,35 @@ async function openGroupByMenu(user: ReturnType<typeof setupUser>) {
   await user.click(getGroupByTrigger());
 }
 
+describe("Checks side panel project selector — the panel's own strings unresolved", () => {
+  // Every key comes back as itself, which is what `useLocalizedStrings` hands over before strings
+  // load and permanently on a platform error. The picker treats those as unresolved, so without the
+  // panel supplying its own English the trigger would read "Select a project" — an instruction,
+  // where "No project" reports a state.
+  const UNRESOLVED_STRINGS: LanguageStrings = Object.fromEntries(
+    CHECKS_SIDE_PANEL_STRING_KEYS.map((key) => [key, key]),
+  );
+
+  it("keeps the panel's own placeholder wording rather than the picker's generic English", () => {
+    render(
+      <ChecksSidePanel {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Your projects & resources' });
+    expect(trigger).toHaveTextContent('No project');
+    expect(trigger).not.toHaveTextContent('Select a project');
+  });
+
+  it('renders no raw localization key in the picker trigger', () => {
+    render(
+      <ChecksSidePanel {...buildProps({ localizedStrings: UNRESOLVED_STRINGS, projects: [] })} />,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Your projects & resources' });
+    expect(trigger.textContent ?? '').not.toMatch(/%[^%\s]+%/);
+  });
+});
+
 describe('Checks side panel project selector — groupings', () => {
   it('buckets projects by language when the caller supplies it', async () => {
     const user = setupUser();

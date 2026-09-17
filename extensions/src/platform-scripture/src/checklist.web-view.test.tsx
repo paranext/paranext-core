@@ -121,8 +121,10 @@ vi.mock('@papi/frontend/react', () => ({
 
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
-  // Imported inside the factory: a hoisted `vi.mock` factory must not close over the file's
-  // top-level import bindings.
+  // Imported inside the factory rather than at the top of the file: `react` is a dependency of the
+  // module this factory mocks, so a top-level import binding for it may still be in its temporal
+  // dead zone when the hoisted factory runs. Bindings from `./project-selector.test-utils` are safe
+  // by contrast — nothing in the mocked module graph imports it, so it is fully initialized first.
   const { useEffect, useState: useStateInMock } = await import('react');
   return {
     ...original,
@@ -235,11 +237,11 @@ describe('ChecklistWebView recently-opened-projects wiring', () => {
   });
 });
 
+// The module-level `useLocalizedStrings` stub hands a `%markersChecklist_*%` key back as its own
+// value, which is what the real hook does before strings load and on a platform error. Such a value
+// is unresolved, so the picker would fall back to its own generic English — the web view has to
+// supply its specific wording itself for these to render.
 describe('ChecklistWebView picker labels when its own strings are unresolved', () => {
-  // Every suite here stubs `useLocalizedStrings` so a `%markersChecklist_*%` key comes back as its
-  // own value, which is what the real hook hands over before strings load and on a platform error.
-  // The picker treats such a value as unresolved and falls back to its own generic English, so the
-  // web view has to supply its specific wording itself for these to render.
   const OTHER_PROJECTS: MockProject[] = [
     { id: 'project-9', shortName: 'P9', fullName: 'Project Nine' },
   ];
@@ -256,10 +258,7 @@ describe('ChecklistWebView picker labels when its own strings are unresolved', (
     expect(within(trigger).getByRole('combobox')).not.toHaveTextContent('Select a project');
   });
 
-  // The primary-project picker's own fallback is the project's NAME, read from a setting rather
-  // than localized — so it can never be an unresolved key, but it IS blank until the async read
-  // lands. Each state resolves to a different label, and neither may reach the generic default.
-  it('labels the primary-project picker with the project name when its own key is unresolved', async () => {
+  it('labels the primary-project picker with its own wording, not the picker default', async () => {
     mockRecentProjects.value = [];
     // No row matches the web view's projectId, so the trigger shows its placeholder rather than a
     // selected project's short name.
@@ -269,25 +268,32 @@ describe('ChecklistWebView picker labels when its own strings are unresolved', (
     render(<ChecklistWebView {...makeProps()} />);
 
     const trigger = await screen.findByTestId('checklist-primary-project-trigger');
-    await waitFor(() => {
-      expect(within(trigger).getByRole('combobox')).toHaveTextContent('P1');
-    });
-    expect(within(trigger).getByRole('combobox')).not.toHaveTextContent('Select a project');
-  });
-
-  it('labels the primary-project picker with its own wording when the project name is blank too', async () => {
-    mockRecentProjects.value = [];
-    mockProjects.value = OTHER_PROJECTS;
-
-    const ChecklistWebView = getChecklistWebView();
-    // With no project id the name read is skipped, so the picker's second candidate stays blank.
-    render(<ChecklistWebView {...makeProps()} projectId="" />);
-
-    const trigger = await screen.findByTestId('checklist-primary-project-trigger');
     expect(within(trigger).getByRole('combobox')).toHaveTextContent(
       'Select primary Scripture text',
     );
     expect(within(trigger).getByRole('combobox')).not.toHaveTextContent('Select a project');
+  });
+
+  // Visible text and accessible name come from one value per picker, so a screen reader user can
+  // tell the two toolbar comboboxes apart on the unresolved path — where both would otherwise be
+  // announced as the picker's generic "Projects & resources".
+  it('gives each picker a distinct accessible name', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = OTHER_PROJECTS;
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    await screen.findByTestId('checklist-primary-project-trigger');
+    expect(
+      screen.getByRole('combobox', { name: 'Select primary Scripture text' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('combobox', { name: 'Select comparative projects' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('combobox', { name: 'Projects & resources' }),
+    ).not.toBeInTheDocument();
   });
 });
 

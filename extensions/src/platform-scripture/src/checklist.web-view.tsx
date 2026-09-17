@@ -15,6 +15,7 @@ import {
   buildSelectionGroupingStrings,
   makeBuiltInGroupings,
   makeSelectionGrouping,
+  firstResolvedLocalizedString,
   type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
@@ -26,7 +27,6 @@ import {
   formatReplacementString,
   formatScrRef,
   getErrorMessage,
-  isLocalizeKey,
   isPlatformError,
   makeProjectSelectorCustomData,
   normalizeProjectId,
@@ -113,22 +113,6 @@ function buildClipboardText(columnHeaders: string[], includedRows: ChecklistRow[
     return [row.firstRef ? formatScrRef(row.firstRef.start) : '', ...cellStrings].join('\t');
   });
   return [headerLine, ...bodyLines].join('\n');
-}
-
-/**
- * The first candidate that can actually be shown to a user, or `undefined` if none can.
- *
- * `useLocalizedStrings` seeds its state with `defaultState[key] = key` and returns that same state
- * on a platform error, so an unresolved lookup arrives as the raw key — a DEFINED string. A nullish
- * test (`??`, `||` on `undefined`) therefore never sees it, and the raw key reaches the UI as a
- * label. A project name read from a setting has the opposite failure: it is blank until the async
- * read lands. Both have to be skipped for a later candidate to be reached, which is why the last
- * candidate at each call site is a literal the code owns.
- */
-function firstUsableLabel(...candidates: (string | undefined)[]): string | undefined {
-  return candidates.find(
-    (candidate) => candidate !== undefined && !isLocalizeKey(candidate) && candidate.trim() !== '',
-  );
 }
 
 /** Flatten a cell's paragraph/item structure to a single clipboard-friendly string. */
@@ -312,34 +296,6 @@ global.webViewComponent = function ChecklistWebView({
   const [columnDirections, setColumnDirections] = useState<
     Record<string, 'ltr' | 'rtl' | undefined>
   >({});
-
-  // ─── Primary project short name (for the toolbar trigger label) ──────────
-
-  const [primaryProjectName, setPrimaryProjectName] = useState<string>('');
-  useEffect(() => {
-    if (!projectId) {
-      setPrimaryProjectName('');
-      return () => {};
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        const name = (await pdp.getSetting('platform.name')) ?? projectId;
-        if (!cancelled) setPrimaryProjectName(name);
-      } catch (err) {
-        if (!cancelled) {
-          logger.warn(
-            `ChecklistWebView: failed to read platform.name for ${projectId}: ${getErrorMessage(err)}`,
-          );
-          setPrimaryProjectName(projectId);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
 
   // ─── Books-present for ScopeSelector ──────────────────────────────────────
   const [booksPresent, setBooksPresent] = useState<string>(
@@ -813,6 +769,20 @@ global.webViewComponent = function ChecklistWebView({
     [primaryProjectGroupings, projectSelectorResolvedStrings],
   );
 
+  // One label per picker, used as both the trigger's visible placeholder and its accessible name so
+  // the two can never disagree on the unresolved path. The last candidate is a literal this file
+  // owns, because the picker's own English default ("Select a project") is too generic to identify
+  // which of the two toolbar pickers a screen reader has landed on. Mirrors
+  // `%markersChecklist_toolbar_*%` in contributions/localizedStrings.json.
+  const comparativeProjectsLabel = firstResolvedLocalizedString(
+    localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
+    'Select comparative projects',
+  );
+  const primaryProjectPickerLabel = firstResolvedLocalizedString(
+    localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+    'Select primary Scripture text',
+  );
+
   const comparativeTextsSelectorNode = useMemo(
     () => (
       <div data-testid="checklist-comparative-texts-trigger" className="tw:min-w-32">
@@ -824,11 +794,8 @@ global.webViewComponent = function ChecklistWebView({
           onChangeSelection={handleComparativeTextsChange}
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
-            buttonPlaceholder: firstUsableLabel(
-              localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
-              'Select comparative projects',
-            ),
-            ariaLabel: localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
+            buttonPlaceholder: comparativeProjectsLabel,
+            ariaLabel: comparativeProjectsLabel,
           }}
           availableGroupings={comparativeTextsGroupings}
         />
@@ -841,7 +808,7 @@ global.webViewComponent = function ChecklistWebView({
       handleComparativeTextsChange,
       projectSelectorLocalizedStrings,
       comparativeTextsGroupings,
-      localizedStrings,
+      comparativeProjectsLabel,
     ],
   );
 
@@ -935,10 +902,6 @@ global.webViewComponent = function ChecklistWebView({
     setIsSettingsOpen(false);
   }, []);
 
-  // ─── Derived label for the primary-project selector buttonPlaceholder ────
-
-  const primaryProjectLabel = primaryProjectName;
-
   // ─── Primary-project picker via real ProjectSelector (Theme 5 #2) ─────────
   //
   // Single-select picker. On change, retargets the checklist to a new project via
@@ -959,12 +922,8 @@ global.webViewComponent = function ChecklistWebView({
           availableGroupings={primaryProjectGroupings}
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
-            buttonPlaceholder: firstUsableLabel(
-              localizedStrings['%markersChecklist_toolbar_primaryProject%'],
-              primaryProjectLabel,
-              'Select primary Scripture text',
-            ),
-            ariaLabel: localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+            buttonPlaceholder: primaryProjectPickerLabel,
+            ariaLabel: primaryProjectPickerLabel,
           }}
         />
       </div>
@@ -974,8 +933,7 @@ global.webViewComponent = function ChecklistWebView({
       comparativeOpenTabs,
       projectId,
       updateWebViewDefinition,
-      localizedStrings,
-      primaryProjectLabel,
+      primaryProjectPickerLabel,
       projectSelectorLocalizedStrings,
       primaryProjectGroupings,
     ],
