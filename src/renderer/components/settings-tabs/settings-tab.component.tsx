@@ -4,7 +4,6 @@ import {
   SettingsSidebarContentSearch,
   usePromise,
 } from 'platform-bible-react';
-import { PROJECT_SELECTOR_STRING_KEYS } from 'platform-bible-react/experimental';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import {
   filterProjectSettingsContributionsByProjectInterfaces,
@@ -19,6 +18,10 @@ import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto
 import { formatReplacementString, Localized, LocalizeKey } from 'platform-bible-utils';
 import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
+import {
+  PROJECT_SELECTOR_NO_RESULTS_KEY,
+  PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY,
+} from './settings-tab.localization';
 import { ProjectOrOtherSettingsList } from './settings-components/project-or-other-settings-list.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
@@ -58,9 +61,11 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_noSettingsFound%',
   '%settings_defaultMessage_noSettingsFoundDetails%',
   SYNC_BLOCKED_NOTICE_KEY,
-  // The sidebar embeds a ProjectSelector, so that component's keys resolve in the same
-  // subscription as the tab's own.
-  ...PROJECT_SELECTOR_STRING_KEYS,
+  // The sidebar's project picker is a ProjectSelector. Its trigger label comes from the tab's own
+  // `%settings_sidebar_projectsComboBoxPlaceholder%`; these are the only two picker strings this
+  // flat, tab-less list can render, so resolve them here rather than the picker's whole key block.
+  PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY,
+  PROJECT_SELECTOR_NO_RESULTS_KEY,
 ];
 
 const filterSettingsContributions = (
@@ -308,7 +313,8 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_generalSettingsLabel%']}
           projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectSettingsLabel%']}
           buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
-          projectSelectorLocalizedStrings={localizedStrings}
+          searchPlaceholderText={localizedStrings[PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY]}
+          noResultsText={localizedStrings[PROJECT_SELECTOR_NO_RESULTS_KEY]}
         >
           <div className="project-or-settings-list-container">
             {selectedSidebarItem.projectId ? (

@@ -1447,16 +1447,15 @@ export type SettingsSidebarProps = {
 	/** Placeholder text for the button */
 	buttonPlaceholderText: string;
 	/**
-	 * Localized strings for the project picker's popover — its search placeholder and its "no
-	 * results" message. Resolve them from `PROJECT_SELECTOR_STRING_KEYS`, exported from
-	 * `platform-bible-react/experimental`, and pass the result straight through. Any key left
-	 * unresolved falls back to the picker's English default.
-	 *
-	 * Typed as the generic `LanguageStrings` rather than the picker's own
-	 * `ProjectSelectorLocalizedStrings` so this stable-surface type does not name a type from the
-	 * experimental entry point, whose shape carries no stability guarantee.
+	 * Placeholder text for the project picker's search box. Falls back to the picker's English string
+	 * when omitted.
 	 */
-	projectSelectorLocalizedStrings?: LanguageStrings;
+	searchPlaceholderText?: string;
+	/**
+	 * Message the project picker shows when no project matches the search. Falls back to the picker's
+	 * English string when omitted.
+	 */
+	noResultsText?: string;
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
 };
@@ -1467,7 +1466,7 @@ export type SettingsSidebarProps = {
  *
  * @param props - {@link SettingsSidebarProps} The props for the component.
  */
-export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, projectSelectorLocalizedStrings, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, searchPlaceholderText, noResultsText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** The search query in the search bar */
 	searchValue: string;
@@ -1481,7 +1480,7 @@ type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWit
  * @param {SettingsSidebarContentSearchProps} props - The props for the component.
  * @param {string} props.id - The id of the sidebar.
  */
-export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, projectSelectorLocalizedStrings, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebarContentSearch({ id, children, searchValue, onSearch, className, ...sidebarProps }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.

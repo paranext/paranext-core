@@ -1,6 +1,6 @@
 import {
-  buildProjectSelectorLocalizedStrings,
   ProjectSelector,
+  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import {
@@ -15,7 +15,6 @@ import {
 } from '@/components/shadcn-ui/sidebar';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { ScrollText } from 'lucide-react';
-import { type LanguageStrings } from 'platform-bible-utils';
 import { useCallback, useMemo } from 'react';
 
 export type SelectedSettingsSidebarItem = {
@@ -51,16 +50,16 @@ export type SettingsSidebarProps = {
   buttonPlaceholderText: string;
 
   /**
-   * Localized strings for the project picker's popover — its search placeholder and its "no
-   * results" message. Resolve them from `PROJECT_SELECTOR_STRING_KEYS`, exported from
-   * `platform-bible-react/experimental`, and pass the result straight through. Any key left
-   * unresolved falls back to the picker's English default.
-   *
-   * Typed as the generic `LanguageStrings` rather than the picker's own
-   * `ProjectSelectorLocalizedStrings` so this stable-surface type does not name a type from the
-   * experimental entry point, whose shape carries no stability guarantee.
+   * Placeholder text for the project picker's search box. Falls back to the picker's English string
+   * when omitted.
    */
-  projectSelectorLocalizedStrings?: LanguageStrings;
+  searchPlaceholderText?: string;
+
+  /**
+   * Message the project picker shows when no project matches the search. Falls back to the picker's
+   * English string when omitted.
+   */
+  noResultsText?: string;
 
   /** Additional css classes to help with unique styling of the sidebar */
   className?: string;
@@ -82,7 +81,8 @@ export function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
-  projectSelectorLocalizedStrings,
+  searchPlaceholderText,
+  noResultsText,
   className,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
@@ -104,26 +104,6 @@ export function SettingsSidebar({
   // <ProjectSelector> trigger. We only have a single name string in the public API, so reuse it
   // as both `shortName` (the trigger label) and `fullName` (the popover row's secondary line).
   // The public prop shape is intentionally preserved so downstream consumers don't need to change.
-  // `buttonPlaceholder` and `ariaLabel` are this sidebar's own copy and are merged on top of the
-  // shared `%projectSelector_*%` block, which supplies the popover's search placeholder and its
-  // "no results" message. The picker's grouping menu is not rendered here (no `availableGroupings`
-  // are passed), so the grouping strings the block also carries are simply unused.
-  //
-  // The unset entries are dropped rather than passed through: ProjectSelector layers this bag over
-  // its own English defaults with a plain spread, so an explicit `undefined` blanks the default it
-  // lands on instead of falling back to it.
-  const projectSelectorStrings = useMemo(() => {
-    const resolved = buildProjectSelectorLocalizedStrings(projectSelectorLocalizedStrings ?? {});
-    const supplied = Object.fromEntries(
-      Object.entries(resolved).filter(([, value]) => value !== undefined),
-    );
-    return {
-      ...supplied,
-      buttonPlaceholder: buttonPlaceholderText,
-      ariaLabel: projectsSidebarGroupLabel,
-    };
-  }, [projectSelectorLocalizedStrings, buttonPlaceholderText, projectsSidebarGroupLabel]);
-
   const projectSelectorProjects = useMemo<ProjectSelectorProject[]>(
     () =>
       projectInfo.map((info) => ({
@@ -133,6 +113,20 @@ export function SettingsSidebar({
       })),
     [projectInfo],
   );
+
+  // `buttonPlaceholder` and `ariaLabel` are this sidebar's own copy; the popover's two strings are
+  // optional. Unsupplied entries are left off the bag rather than set to `undefined`, because
+  // ProjectSelector layers this bag over its own English defaults with a plain spread — an explicit
+  // `undefined` would blank the default it lands on instead of falling back to it.
+  const projectSelectorStrings = useMemo((): ProjectSelectorLocalizedStrings => {
+    const strings: ProjectSelectorLocalizedStrings = {
+      buttonPlaceholder: buttonPlaceholderText,
+      ariaLabel: projectsSidebarGroupLabel,
+    };
+    if (searchPlaceholderText) strings.searchPlaceholder = searchPlaceholderText;
+    if (noResultsText) strings.commandEmptyMessage = noResultsText;
+    return strings;
+  }, [buttonPlaceholderText, projectsSidebarGroupLabel, searchPlaceholderText, noResultsText]);
 
   const getIsActive: (label: string) => boolean = useCallback(
     (label: string) => !selectedSidebarItem.projectId && label === selectedSidebarItem.label,

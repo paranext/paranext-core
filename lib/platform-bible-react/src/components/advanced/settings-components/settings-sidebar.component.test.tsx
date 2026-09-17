@@ -3,7 +3,6 @@
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type LanguageStrings } from 'platform-bible-utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SidebarProvider } from '@/components/shadcn-ui/sidebar';
 import {
@@ -50,11 +49,15 @@ const PROJECTS: ProjectInfo[] = [
 
 const PROJECTS_GROUP_LABEL = 'Projects';
 
+// Distinct from the picker's own English `buttonPlaceholder` default ('Select a project'), so a
+// trigger assertion goes red if the sidebar ever stops supplying its own copy.
+const TRIGGER_PLACEHOLDER = 'Choose a project';
+
 /** Radix popovers and cmdk need pointer-event sequences jsdom does not synthesize on its own. */
 const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
 
 /** The sidebar with the minimum wiring it needs; it must live inside a SidebarProvider. */
-function sidebar(projectSelectorLocalizedStrings?: LanguageStrings) {
+function sidebar(popoverStrings?: { searchPlaceholderText?: string; noResultsText?: string }) {
   return (
     <SidebarProvider>
       <SettingsSidebar
@@ -64,8 +67,9 @@ function sidebar(projectSelectorLocalizedStrings?: LanguageStrings) {
         selectedSidebarItem={{ label: 'platform.settings' }}
         extensionsSidebarGroupLabel="Extensions"
         projectsSidebarGroupLabel={PROJECTS_GROUP_LABEL}
-        buttonPlaceholderText="Select a project"
-        projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
+        buttonPlaceholderText={TRIGGER_PLACEHOLDER}
+        searchPlaceholderText={popoverStrings?.searchPlaceholderText}
+        noResultsText={popoverStrings?.noResultsText}
       />
     </SidebarProvider>
   );
@@ -87,31 +91,48 @@ describe('SettingsSidebar project picker', () => {
     expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
   });
 
-  it('leaves the picker on its English defaults when no strings are supplied', async () => {
+  it('leaves the popover on its English defaults when no strings are supplied', async () => {
     const user = setupUser();
     render(sidebar());
 
     await user.click(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL }));
 
-    expect(await screen.findByPlaceholderText('Search projects & resources')).toBeInTheDocument();
+    const search = await screen.findByPlaceholderText('Search projects & resources');
+    await user.type(search, 'zzzz');
+
+    expect(await screen.findByText('No projects found')).toBeInTheDocument();
   });
 
-  it('localizes the picker popover from the supplied strings', async () => {
+  it('localizes the popover from the supplied strings', async () => {
     const user = setupUser();
     render(
       sidebar({
-        '%projectSelector_searchPlaceholder%': 'Buscar proyectos y recursos',
-        '%projectSelector_commandEmptyMessage%': 'No se encontraron proyectos',
+        searchPlaceholderText: 'Buscar proyectos y recursos',
+        noResultsText: 'No se encontraron proyectos',
       }),
     );
 
     await user.click(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL }));
 
-    // The picker's own strings come from the supplied block, while the trigger's placeholder and
-    // accessible name stay on the sidebar's dedicated props -- the two channels are merged, not
-    // exclusive.
-    expect(await screen.findByPlaceholderText('Buscar proyectos y recursos')).toBeInTheDocument();
+    const search = await screen.findByPlaceholderText('Buscar proyectos y recursos');
     expect(screen.queryByPlaceholderText('Search projects & resources')).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL })).toBeInTheDocument();
+
+    await user.type(search, 'zzzz');
+    expect(await screen.findByText('No se encontraron proyectos')).toBeInTheDocument();
+  });
+
+  it("keeps the trigger on the sidebar's own placeholder and accessible name", async () => {
+    render(
+      sidebar({
+        searchPlaceholderText: 'Buscar proyectos y recursos',
+        noResultsText: 'No se encontraron proyectos',
+      }),
+    );
+
+    // The popover strings and the trigger's copy are separate channels; supplying the former must
+    // not displace the latter.
+    expect(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL })).toHaveTextContent(
+      TRIGGER_PLACEHOLDER,
+    );
   });
 });
