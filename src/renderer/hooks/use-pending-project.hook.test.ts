@@ -1,10 +1,25 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
-import { PENDING_PROJECT_TIMEOUT_MS, usePendingProject } from './use-pending-project.hook';
+import { readFileSync } from 'fs';
+import path from 'path';
+import {
+  PENDING_PROJECT_TIMEOUT_MS,
+  PROJECT_OPEN_FAILED_MESSAGE_KEY,
+  usePendingProject,
+} from './use-pending-project.hook';
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
+// Wrapped rather than passed straight in: `vi.mock` is hoisted above this declaration, so the
+// factory can only reach the spy through a reference resolved when it is called.
+const mockSendNotification = vi.fn<(notification: unknown) => Promise<void>>(async () => {});
+vi.mock('@shared/services/notification.service', () => ({
+  notificationService: {
+    send: (notification: unknown) => mockSendNotification(notification),
+  },
 }));
 
 const OLD_PROJECT: ProjectItem = {
@@ -244,5 +259,59 @@ describe('usePendingProject', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('usePendingProject — reporting a failed open', () => {
+  // Clearing the pending name drops the trigger back to whatever is open, undoing the user's pick
+  // on screen. The Applying Changes guideline requires a failure to say so rather than just revert:
+  // "Failure — Always — an error toast or inline message. Never fail silently."
+  it('tells the user when the open rejects', async () => {
+    mockSendNotification.mockClear();
+    const { result } = renderPendingProject(OLD_PROJECT, async () => {
+      throw new Error('boom');
+    });
+
+    await act(async () => {
+      result.current.beginOpenProject(NEW_PROJECT);
+    });
+
+    expect(mockSendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ message: PROJECT_OPEN_FAILED_MESSAGE_KEY, severity: 'warning' }),
+    );
+  });
+
+  // An editor can legitimately open in another window and never report here, which is the whole
+  // reason the timeout exists — so the timeout is not a failure and must not manufacture an error.
+  it('stays quiet when the pending name expires instead of failing', () => {
+    vi.useFakeTimers();
+    try {
+      mockSendNotification.mockClear();
+      const { result } = renderPendingProject(OLD_PROJECT);
+
+      act(() => {
+        result.current.beginOpenProject(NEW_PROJECT);
+      });
+      act(() => {
+        vi.advanceTimersByTime(PENDING_PROJECT_TIMEOUT_MS);
+      });
+
+      expect(result.current.pendingProject).toBeUndefined();
+      expect(mockSendNotification).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('usePendingProject — localization', () => {
+  // `PlatformNotification.message` is typed `string | LocalizeKey`, so a typo or a key later renamed
+  // in en.json type-checks fine and reaches the user as literal `%key%` text in a toast.
+  it('uses a message key that actually exists in the localization file', () => {
+    const englishStrings: Record<string, string> = JSON.parse(
+      readFileSync(path.join(__dirname, '../../../assets/localization/en.json'), 'utf8'),
+    );
+
+    expect(englishStrings).toHaveProperty(PROJECT_OPEN_FAILED_MESSAGE_KEY);
   });
 });

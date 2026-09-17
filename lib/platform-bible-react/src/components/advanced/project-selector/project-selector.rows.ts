@@ -677,14 +677,11 @@ const UNMATCHED_SECTION_ID = '__unmatched__';
  * for the trailing unmatched bucket, or `undefined` if none does.
  */
 function findDuplicateSectionId(sections: readonly ProjectSelectorSection[]): string | undefined {
-  const seenIds = new Set<string>();
-  return sections
-    .map((section) => section.id)
-    .find((id) => {
-      if (id === UNMATCHED_SECTION_ID || seenIds.has(id)) return true;
-      seenIds.add(id);
-      return false;
-    });
+  // `indexOf` against the same array rather than a `Set` accumulated inside the predicate: a
+  // side-effecting `find` callback is correct here but reads as a bug at a glance. Quadratic, over
+  // a handful of caller-declared sections.
+  const ids = sections.map((section) => section.id);
+  return ids.find((id, index) => id === UNMATCHED_SECTION_ID || ids.indexOf(id) !== index);
 }
 
 /**

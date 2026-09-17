@@ -366,14 +366,6 @@ type CommonProps = {
 	 */
 	defaultGrouping?: ProjectSelectorGroupingOption | "none";
 	/**
-	 * Legacy shorthand for `defaultGrouping`. When `false`, opens with `'none'`; when `true` or
-	 * absent, uses the resolved default. Prefer `defaultGrouping` for new code. Superseded silently
-	 * if both are set.
-	 *
-	 * @deprecated Use {@link defaultGrouping} instead.
-	 */
-	defaultGroupByOpenTabs?: boolean;
-	/**
 	 * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
 	 * sidebar ~56px wide) the chevron plus its margin consumes the entire content box and the label
 	 * truncates to nothing; hiding it leaves room for a few characters of the project name. Keep the
@@ -400,9 +392,8 @@ type CommonProps = {
 	/**
 	 * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
 	 * order — a project lands in the first section whose `match` accepts it, and anything unmatched
-	 * collects into a trailing section headed by
-	 * `%webView_project_selector_custom_unmatched_section_heading%` ("Other"), which you can retitle
-	 * through `localizedStrings`. Empty sections are not rendered.
+	 * collects into a trailing section headed by `customUnmatchedSectionHeading` ("Other"), which you
+	 * can retitle through `localizedStrings`. Empty sections are not rendered.
 	 *
 	 * Must be referentially stable across renders — hoist it to a module constant or memoize it. The
 	 * selector re-partitions whenever this array's identity changes, so an inline literal
@@ -411,7 +402,7 @@ type CommonProps = {
 	 * the hoisted-constant shape.
 	 *
 	 * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-	 * override `%webView_project_selector_filter_group_by_custom%` through `localizedStrings` — its
+	 * override `filterGroupByCustom` through `localizedStrings` — its
 	 * "Custom" default names the mechanism, and the user needs the name of the axis your sections
 	 * actually express. To pin the list to these sections and nothing else, pass
 	 * `availableGroupings={['custom']}` with `defaultGrouping="custom"` and `hideFilterMenu`, since a
@@ -434,6 +425,17 @@ type CommonProps = {
 	 * supplied, so the type stays reachable by hover and by screen reader.
 	 */
 	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
+	/**
+	 * The text form of {@link renderProjectIndicator}'s glyph for a row, surfaced in the row tooltip.
+	 * Return `undefined` for rows with no indicator.
+	 *
+	 * Supply this whenever the glyph carries meaning a sighted user cannot otherwise get from the
+	 * row. The glyph is decorative to the selector and the rows are already tooltip triggers, so a
+	 * caller cannot give it its own hover label without opening a second tooltip over the row's —
+	 * this is the way in. Same reasoning as `typeName`, which the tooltip surfaces for the same
+	 * reason.
+	 */
+	getProjectIndicatorLabel?: (project: ProjectSelectorProject) => string | undefined;
 	/**
 	 * An action row rendered below every section, separated from the list. Use it for an affordance
 	 * that opens a different surface — the sections partition rows, so they cannot express one.

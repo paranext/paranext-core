@@ -125,7 +125,7 @@ describe('ShareLayoutDialogContent', () => {
     );
   });
 
-  it('adds a resource to the Bible Texts list via the manage popover', () => {
+  it('adds a resource to the Bible Texts list via the manage picker', () => {
     const { onConfirm } = renderContent();
 
     // The Bible Texts card is rendered first, so its manage button is the first match.
@@ -134,7 +134,7 @@ describe('ShareLayoutDialogContent', () => {
     );
     fireEvent.click(manageButton);
 
-    // The popover's ResourcePickerDialog renders NLT (not yet selected) as a clickable row.
+    // The picker's ResourcePickerDialog renders NLT (not yet selected) as a clickable row.
     fireEvent.click(screen.getByRole('button', { name: 'NLT' }));
     fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
 
@@ -144,7 +144,7 @@ describe('ShareLayoutDialogContent', () => {
     );
   });
 
-  it('does not render two elements with the same id when the manage popover is open', () => {
+  it('does not render two elements with the same id when the manage picker is open', () => {
     renderContent();
 
     const [manageButton] = screen.getAllByText(
@@ -152,14 +152,14 @@ describe('ShareLayoutDialogContent', () => {
     );
     fireEvent.click(manageButton);
 
-    // Sanity-check the popover actually opened before asserting on ids.
+    // Sanity-check the picker actually opened before asserting on ids.
     expect(screen.getByRole('button', { name: 'NLT' })).toBeInTheDocument();
 
     const ids = Array.from(document.querySelectorAll('[id]')).map((el) => el.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('does not close the manage popover after selecting a resource', () => {
+  it('does not close the manage picker after selecting a resource', () => {
     renderContent();
 
     const [manageButton] = screen.getAllByText(
@@ -172,7 +172,7 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.getByRole('button', { name: 'NLT' })).toBeInTheDocument();
   });
 
-  it('removes an already-included resource when it is clicked again in the manage popover', () => {
+  it('removes an already-included resource when it is clicked again in the manage picker', () => {
     const { onConfirm } = renderContent();
 
     const [manageButton] = screen.getAllByText(
@@ -191,10 +191,10 @@ describe('ShareLayoutDialogContent', () => {
     );
   });
 
-  // This dialog embeds the picker twice — the per-tab manage popover and the model-text popover —
+  // This dialog embeds the picker twice — the per-tab manage picker and the model-text picker —
   // so a failed catalog fetch has to reach both. Wiring only one leaves the other reporting the
   // failure as an empty catalog.
-  it('reports a failed catalog fetch in the manage popover instead of claiming there are no results', () => {
+  it('reports a failed catalog fetch in the manage picker instead of claiming there are no results', () => {
     renderContent({ allResources: [], hasResourcesError: true });
 
     const [manageButton] = screen.getAllByText(
@@ -206,7 +206,7 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.queryByText('%resourcePicker_no_results%')).not.toBeInTheDocument();
   });
 
-  it('reports a failed catalog fetch in the model-text popover too', () => {
+  it('reports a failed catalog fetch in the model-text picker too', () => {
     renderContent({ allResources: [], hasResourcesError: true, initialModelText: undefined });
 
     fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
@@ -214,7 +214,7 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.getByText('%resourcePicker_load_error%')).toBeInTheDocument();
   });
 
-  it('closes the manage popover when its close button is clicked', () => {
+  it('closes the manage picker when its close button is clicked', () => {
     renderContent();
 
     const [manageButton] = screen.getAllByText(
@@ -227,9 +227,63 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.queryByRole('button', { name: 'NLT' })).not.toBeInTheDocument();
   });
 
-  // Manage opens a second modal that sits OVER this dialog. It used to be a popover anchored to
-  // the button, which a narrow window pushed off-screen and which read as a menu hanging off the
-  // dialog rather than the separate task it is.
+  // Dismissing the inner modal has to leave the outer one usable. A nested dialog that takes the
+  // outer dialog's focus trap or backdrop down with it still passes "the picker is gone".
+  it('leaves the share dialog usable after the manage picker is dismissed', () => {
+    const { onConfirm } = renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+    fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
+
+    // The outer dialog's own controls still respond, and its state survived the round trip.
+    fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ scriptureResources: [ESV, NIV] }),
+    );
+  });
+
+  // The defect this fix was reported against is Manage Commentaries, not Manage Bible texts. Both
+  // run through one code path that picks the label by tab, so this guards against a future split
+  // of that path rather than a different bug today.
+  it('opens the commentary manage picker as a modal too', () => {
+    renderContent({ initialCommentaryResources: [IVP] });
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageCommentaryResources_label%',
+    );
+    fireEvent.click(manageButton);
+
+    // Anchored on the picker's own title rather than a row: the commentary picker filters to
+    // CommentaryResource, and this fixture's resources are all ScriptureResource, so it opens empty.
+    const pickerTitle = screen.getByText('%resourcePicker_title%');
+    expect(pickerTitle.closest('[data-slot="dialog-content"]')).not.toBeNull();
+    expect(pickerTitle.closest('[data-slot="popover-content"]')).toBeNull();
+    expect(document.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull();
+  });
+
+  // Every embedded picker replaces `DialogContent`'s built-in close button, whose screen-reader
+  // label is a hardcoded English "Close" no consumer can translate. Asserting the absence of that
+  // label is the load-bearing half: a picker that forgets `showCloseButton={false}` still has a
+  // working close button, so testing only that it closes would pass.
+  it('gives the model-text picker the same localized close button as the manage pickers', () => {
+    renderContent({ initialModelText: undefined });
+
+    fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
+
+    expect(screen.getByLabelText('%shareLayoutDialog_closePicker_label%')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
+    expect(screen.queryByText('%resourcePicker_search_placeholder%')).not.toBeInTheDocument();
+  });
+
+  // Manage opens a second modal that sits OVER this dialog, rather than a popover anchored to its
+  // trigger: a popover reads as a menu hanging off the dialog rather than the separate task it is,
+  // and a narrow window pushes it off-screen. The negative assertions below are what hold that —
+  // a popover would satisfy "the picker is showing" just as well.
   it('opens the resource picker as a modal dialog rather than a popover anchored to the button', () => {
     renderContent();
 

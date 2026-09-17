@@ -38,12 +38,12 @@ import {
 } from 'platform-bible-react';
 import {
   getAvailableBookIds,
-  ScopeWithRange,
-  summarizeSelectedBooks,
   ProjectSelector,
+  ProjectSelectorLocalizedStrings,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
-  ProjectSelectorLocalizedStrings,
+  ScopeWithRange,
+  summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
@@ -789,8 +789,8 @@ export function Find({
   // Deliberately only the strings REACHABLE from Find's configuration, since localized keys are
   // immutable once shipped and one that can never render is permanent dead surface. Omitted, with
   // the reason each cannot appear here:
-  // - `filterAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `filterGroupByOpenTabs` —
-  //   the funnel menu is not mounted at all (`hideFilterMenu` below).
+  // - `viewOptionsAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `filterGroupByOpenTabs` —
+  //   the view options menu is not mounted at all (`hideFilterMenu` below).
   // - `selectAll` / `clearAll` / `filterShowSelectedOnly` — multi-select only; both of Find's
   //   configurations are single-select (`mode="projectScrollGroup"` / `mode="project"`).
   // - `versificationUnknownSectionHeading` — requires versification grouping.
@@ -802,9 +802,9 @@ export function Find({
   // is empty and its heading does not render): unlike the above, its reachability depends on what
   // ends up in `projects` rather than on a setting here, so it is the one worth holding.
   //
-  // `openTabsSectionHeading` is only reachable in the power-mode configuration: `defaultGroupByOpenTabs`
-  // defaults to `true`, and there every row carries a `scrollGroupId` so all of them land in the
-  // "open tabs" section. The simple-mode configuration passes `openTabs={[]}`, which leaves no row
+  // `openTabsSectionHeading` is only reachable in the power-mode configuration: grouping defaults to
+  // `'openTabs'` whenever that option is on the menu, and there every row carries a `scrollGroupId`
+  // so all of them land in the "open tabs" section. The simple-mode configuration passes `openTabs={[]}`, which leaves no row
   // eligible for that section and collapses the list to a single unheaded group.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
