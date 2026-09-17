@@ -1495,8 +1495,9 @@ step, no automation. Just a record.
   re-synced by hand.
 - **Decision:** The coverage test parses the stylesheet itself into flat `selector { declarations }`
   blocks, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
-  cascade: a `[dir='ltr']` rule beats a direction-agnostic one, table rows excluded because they never
-  render as `.para`) and the expected `--verse-text-start` map from negative `text-indent`, then
+  cascade: a `[dir='ltr']` rule beats a direction-agnostic one; `\tr` excluded because a real table
+  row renders as `<tr>`, not `.para`, while the obsolete `\tr1`/`\tr2` still convert to paragraphs
+  and so are compensated) and the expected `--verse-text-start` map from negative `text-indent`, then
   asserts the gutter block matches in both directions: every derived marker present with the same
   value, and no gutter entry without a base rule calling for it. The parser's blind spots are
   themselves asserted away — a setter nested in an at-rule, a direction-qualified gutter rule, a
@@ -1512,8 +1513,15 @@ step, no automation. Just a record.
   five markers. **Assert the copies are byte-identical** — rejected: the copies legitimately diverge
   (SCSS versus CSS, host-specific rules), so a byte comparison would either fail permanently or need a
   hand-maintained exclusion list with the same staleness problem. **Parse with `postcss`** — declined
-  for now: the flat parser plus its blind-spot assertions is ~100 lines and reads without a dependency;
-  a real parser becomes worth it if the stylesheet grows nesting the assertions cannot exclude.
+  at first: the flat parser plus its blind-spot assertions was ~100 lines and read without a
+  dependency. **Amended 2026-09-17:** adopted. The upstream review of the same test demonstrated
+  nine ways the flat regex could be fooled without any assertion firing (a selector list mixing
+  gutter and base selectors, a `margin` shorthand inside an at-rule, a value wrapped across lines,
+  `!important`, hyphenated marker classes), each provable only with a probe. Both twins now parse
+  with `postcss` (`postcss-scss` for the SCSS copy), which was already in both repos' dependency
+  graphs; per-selector classification and at-rule nesting come from the parser, and the remaining
+  semantic limits (`calc()` values, direction from `[dir=…]`/`:dir()` only) are stated in the test
+  header.
 - **Consequences:** Adding an indented marker to the base rules without compensating it fails the
   build; so does adding a compensation nothing calls for. Re-syncing a copy from upstream is checked
   structurally for this block, so the cross-copy pin comments in the two `usj-nodes-styles.test.ts`
