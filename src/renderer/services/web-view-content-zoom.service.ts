@@ -411,8 +411,10 @@ function startFallbackGrace(webViewId: WebViewId): void {
       fallbackGraceTimers.delete(webViewId);
       if ((areasByWebViewId.get(webViewId) ?? []).length > 0) return;
       fallbackAllowedWebViewIds.add(webViewId);
-      // A timer callback has no caller to catch it, and a pane can be torn down inside this second:
-      // the push reads the pane's iframe and its definition, and both fail once it is gone.
+      // A timer callback has no caller to catch it, and a pane can be torn down inside this second.
+      // The id was just added to fallbackAllowedWebViewIds above, so mayScaleWholeIframe
+      // short-circuits on that disjunct and never reads the pane's definition here; what can still
+      // throw is iframe.contentDocument, on a detached or cross-origin frame.
       try {
         pushContentZoom(webViewId);
       } catch (e) {
