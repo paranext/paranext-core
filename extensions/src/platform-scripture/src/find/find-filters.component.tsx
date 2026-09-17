@@ -148,11 +148,20 @@ export function FindFilters({
       <PopoverContent
         align="end"
         collisionPadding={8}
-        // Tab and Escape are the keyboard's two ways out of the panel, and both leave the user with
-        // nowhere to stand once it unmounts, so both hand focus to the trigger. Capture phase records
-        // the key even if a control inside stops the event.
+        // Escape, and the Shift+Tab off the first control, are the keyboard's ways out of the panel;
+        // both leave the user with nowhere to stand once it unmounts, so both hand focus to the
+        // trigger. Which Tab is the exit cannot be known at keydown — Radix loops focus within the
+        // panel, so forward Tab always lands back inside and only that one Shift+Tab leaves. Arm on
+        // any Tab and let the focus that follows say whether it left. Capture phase records the key
+        // even if a control inside stops the event.
         onKeyDownCapture={(event) => {
           if (event.key === 'Tab' || event.key === 'Escape') dismissedByKeyboardRef.current = true;
+        }}
+        // Focus landing back inside means that Tab stayed in the panel, so it owes nobody a return.
+        // A Tab that does leave fires no focus event here, and Escape moves no focus at all, so both
+        // keep their arming.
+        onFocusCapture={() => {
+          dismissedByKeyboardRef.current = false;
         }}
         // Every other dismissal leaves focus wherever it went. That matters most when the app moved
         // it deliberately: invoking Find calls `focusSearchInput`, and the resulting focus change is

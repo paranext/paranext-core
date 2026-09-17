@@ -1031,8 +1031,14 @@ test.describe('Search Filters', () => {
       positions = await positionsDuringReRun;
     } finally {
       // Closed however this ends. A panel left open by a failure here is state the afterEach reset
-      // has to undo before it can attribute the failure to this test.
-      await frame.locator('#wordRestriction-wholeWord').press('Escape');
+      // has to undo before it can attribute the failure to this test. Bounded and swallowed: when
+      // the failure above was the control going missing, an unbounded press waits on that same
+      // missing control for the whole 120s per-test budget and buries the real assertion error
+      // behind a timeout. `resetFindPanel` converges from either state anyway, so this is tidying.
+      await frame
+        .locator('#wordRestriction-wholeWord')
+        .press('Escape', { timeout: 2_000 })
+        .catch(() => {});
     }
 
     expect(new Set(positions).size).toBe(1);

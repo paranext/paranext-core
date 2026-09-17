@@ -426,6 +426,19 @@ const STRINGS = {
     "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
 };
 
+/**
+ * Drains the `setTimeout` Radix returns focus from. The panel is already unmounted a full macrotask
+ * before focus settles, so asserting without this reads the caret mid-flight — still where it was
+ * put — and passes whether or not it is taken away next.
+ */
+async function settleFocus() {
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+}
+
 /** Gets the Find search box, which sits outside the filters panel */
 function getSearchInput() {
   return screen.getByPlaceholderText(STRINGS['%webView_find_searchPlaceholder%']);
@@ -1026,6 +1039,56 @@ describe('Find — filters panel keyboard accessibility', () => {
     expect(Number(tooltipZIndex)).toBeGreaterThan(Number(panelZIndex));
   });
 
+  // Tab moves between the groups inside the panel — Radix loops it, so forward Tab never leaves.
+  // The two tests below repeat the pair above after such a Tab, because arming the focus return on
+  // the keydown and clearing it only on open would leave it armed for the rest of the visit: the
+  // next dismissal of any kind would then take the caret, which is the bug those two tests exist to
+  // prevent. They are the same assertions from a state a user reaches by using the panel normally.
+  it('leaves focus in the search box when it is clicked after moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const searchBox = getSearchInput();
+
+    await user.click(searchBox);
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+
+  it('leaves focus in the search box when it takes focus after moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    const searchBox = getSearchInput();
+
+    await act(async () => {
+      searchBox.focus();
+    });
+    await settleFocus();
+
+    expect(searchBox).toHaveFocus();
+  });
+
+  // The other side of the same coin: clearing the arming on an in-panel Tab must not clear it for a
+  // later Escape, which is a real exit and still owes the user the trigger.
+  it('hands focus back to the filters button when Escape follows moving between groups', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+    await user.keyboard('{Escape}');
+    await settleFocus();
+
+    expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveFocus();
+  });
+
   // The pointer counterpart of the test below: clicking into the search box both dismisses the panel
   // and puts the caret where the user aimed it, so nothing should move afterwards. Without this, the
   // condition guarding the focus return has only one of its two branches covered and reads as
@@ -1038,11 +1101,7 @@ describe('Find — filters panel keyboard accessibility', () => {
     const searchBox = getSearchInput();
 
     await user.click(searchBox);
-    await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
-    });
+    await settleFocus();
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(searchBox).toHaveFocus();
@@ -1068,14 +1127,7 @@ describe('Find — filters panel keyboard accessibility', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    // Radix returns focus from a `setTimeout`, so the panel is already unmounted a full macrotask
-    // before focus settles. Asserting without draining that timer reads the caret mid-flight, while
-    // it is still in the box, and passes whether or not it is taken away next.
-    await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
-    });
+    await settleFocus();
 
     expect(searchBox).toHaveFocus();
   });
