@@ -1,10 +1,10 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PercentStepper } from './percent-stepper.component';
 
-// Radix Tooltip (now wrapping every button) uses ResizeObserver internally; jsdom doesn't provide
-// it, so we stub a no-op implementation.
+// Radix Tooltip uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
+// implementation.
 beforeAll(() => {
   global.ResizeObserver = class {
     // jsdom stub: empty no-op intentionally has no `this` usage
@@ -17,6 +17,12 @@ beforeAll(() => {
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     disconnect() {}
   };
+});
+
+// File-level, not at the end of the one test that spies: an assertion that fails before an in-test
+// restore would otherwise leave `performance.now` pinned for everything after it.
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const LABELS = {
@@ -257,7 +263,6 @@ describe('PercentStepper', () => {
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
     expect(onChange).toHaveBeenCalledTimes(2);
     expect(onChange).toHaveBeenLastCalledWith(1.1);
-    vi.restoreAllMocks();
   });
 
   it('a foreign write wins immediately', () => {
