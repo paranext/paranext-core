@@ -5121,7 +5121,8 @@ step, no automation. Just a record.
 - **Context:** In Power mode, a tab dropped on a tab bar's empty remainder did nothing: rc-dock only
   registers drop targets per tab (`TabCache.onDragOver` in `node_modules/rc-dock/src/DockTabs.tsx`),
   and its `after-tab` indicator is a fixed 30px strip. Users aiming at "the end of the bar" got a
-  silent no-op (PT-3288).
+  silent no-op — the defect reported as PT-3288. This decision addresses that defect but does not
+  close it; PT-3330 tracks the follow-up.
 - **Decision:** Render `TabBarDropZone` (`src/renderer/components/docking/tab-bar-drop-zone.component.tsx`)
   through `TabGroup.panelExtra` beside the "+" button. It is an rc-dock `DragDropDiv` that fills
   the bar's remainder and appends the dragged tab or panel with `dockMove(source, panel, 'middle')`.
@@ -5129,9 +5130,13 @@ step, no automation. Just a record.
   (`resolveTabBarDropZoneSource`) instead of inventing rules. During a drag, "+" slides to the bar's
   end, and absolutely positioned pseudo-elements extend the zone's hit area backward over the last
   tab's trailing half and forward over "+" and the bar's trailing padding, so the bar reads as one
-  target and flex layout never changes. rc-dock's edge-split layer is moved below the app's taller
-  tab bar. rc-dock is patched only for bugs (the `isPopupDiv` fix this work needed), never for
-  features, and is pinned to exactly the patched version.
+  target and flex layout never changes. The drawn indicator over that claimed trailing half is
+  widened toward a legible minimum width, capped so it never reaches back further than the region
+  the hit area actually claims — and the zone accepts a drop there if and only if it claimed that
+  region, so the visible indicator and the acceptance decision can never disagree. rc-dock's
+  edge-split layer is moved below the app's taller tab bar. rc-dock is patched only for bugs (the
+  `isPopupDiv` fix this work needed), never for features, and is pinned to exactly the patched
+  version.
 - **Alternatives:** Stretch the last tab's hit area, as proposed upstream (ticlo/rc-dock#222) —
   rejected: it changes the tab's measured size, which rc-tabs' overflow math reads. Patch
   `TabCache` to accept past the last tab — rejected: a feature patch that has to be carried across
@@ -5141,10 +5146,12 @@ step, no automation. Just a record.
 - **Consequences:** The app depends on rc-dock internals: DOM classes, drag-listener ordering, and
   `setDropRect` semantics. `src/renderer/components/docking/README.md` lists them as an upgrade
   checklist, and the `docking` e2e subset exercises the layout that unit tests cannot. Simple mode has
-  no `panelExtra`, so no zone; the CSS that hides rc-tabs' idle overflow box applies in both modes.
-  Revisit if rc-dock gains a native bar-level drop target, or when the PT-3330 follow-up reshapes
-  tab-bar dropping.
-- **Source:** PT-3288, PR #2767 and its review.
+  no `panelExtra`, so no zone; the CSS that hides rc-tabs' idle overflow box applies in both modes. On
+  a last tab too narrow for even the widened indicator to reach a visible width, the zone leaves that
+  tab uncovered and rc-dock's own per-tab handler takes the drop there instead — the same outcome,
+  reached through a different target. Revisit if rc-dock gains a native bar-level drop target, or
+  when the PT-3330 follow-up reshapes tab-bar dropping.
+- **Source:** Reported defect PT-3288; implemented in PR #2767 and its review.
 
 ## adr-tab-menu-channel-and-window-naming: The tab context menu is a contribution channel, and a window is named by its content
 
