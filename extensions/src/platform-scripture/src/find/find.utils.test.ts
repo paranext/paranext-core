@@ -8,6 +8,7 @@ import {
   OpenScrollGroupTab,
   applyPreserveCase,
   armBoundedWait,
+  buildReplacedAllMessage,
   buildSearchRegex,
   callControllerSafely,
   classifyPollAttempt,
@@ -22,6 +23,7 @@ import {
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
   resolveTargetReferencePanelWebViewId,
+  selectWrittenBookSnapshots,
   shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
@@ -1440,5 +1442,127 @@ describe('buildSearchRegex – block-boundary whitespace groups', () => {
     expect(regex.test('a  b')).toBe(true);
     regex.lastIndex = 0;
     expect(regex.test('a \u0301 b')).toBe(true);
+  });
+});
+
+describe('buildReplacedAllMessage', () => {
+  // The real English templates, so the assertions below read as the sentences a user sees and a
+  // wording change that reintroduces a concatenation seam shows up here.
+  const STRINGS = {
+    '%webView_find_replacedOneOccurrence%': 'Replaced 1 occurrence',
+    '%webView_find_replacedNOccurrences%': 'Replaced {count} occurrences',
+    '%webView_find_replacedOneOccurrenceSkippedOneResult%':
+      'Replaced 1 occurrence. Skipped 1 result that would delete a marker.',
+    '%webView_find_replacedOneOccurrenceSkippedNResults%':
+      'Replaced 1 occurrence. Skipped {skippedCount} results that would delete a marker.',
+    '%webView_find_replacedNOccurrencesSkippedOneResult%':
+      'Replaced {replacedCount} occurrences. Skipped 1 result that would delete a marker.',
+    '%webView_find_replacedNOccurrencesSkippedNResults%':
+      'Replaced {replacedCount} occurrences. Skipped {skippedCount} results that would delete a marker.',
+  };
+
+  it('reports the plain replaced count when nothing was skipped', () => {
+    expect(buildReplacedAllMessage(STRINGS, 1, 0)).toBe('Replaced 1 occurrence');
+    expect(buildReplacedAllMessage(STRINGS, 3, 0)).toBe('Replaced 3 occurrences');
+  });
+
+  it('uses the singular skipped form for one skipped result', () => {
+    // One skipped result is the ordinary case, and a shared plural template renders it as
+    // "Skipped 1 results".
+    expect(buildReplacedAllMessage(STRINGS, 3, 1)).toBe(
+      'Replaced 3 occurrences. Skipped 1 result that would delete a marker.',
+    );
+    expect(buildReplacedAllMessage(STRINGS, 1, 1)).toBe(
+      'Replaced 1 occurrence. Skipped 1 result that would delete a marker.',
+    );
+  });
+
+  it('inflects both counts independently', () => {
+    expect(buildReplacedAllMessage(STRINGS, 1, 2)).toBe(
+      'Replaced 1 occurrence. Skipped 2 results that would delete a marker.',
+    );
+    expect(buildReplacedAllMessage(STRINGS, 3, 2)).toBe(
+      'Replaced 3 occurrences. Skipped 2 results that would delete a marker.',
+    );
+  });
+
+  it('leaves no placeholder unresolved and no clause seam in any outcome', () => {
+    [0, 1, 2].forEach((skippedCount) =>
+      [1, 2].forEach((replacedCount) => {
+        const message = buildReplacedAllMessage(STRINGS, replacedCount, skippedCount);
+        expect(message).not.toMatch(/[{}]/);
+        // A sentence joined in code shows up as ". " with no preceding period, or as two
+        // sentences run together — the template owns the punctuation instead.
+        expect(message).not.toMatch(/\woccurrences? Skipped/);
+      }),
+    );
+  });
+});
+
+describe('selectWrittenBookSnapshots', () => {
+  const SNAPSHOTS = new Map([
+    ['GEN', 'gen usfm'],
+    ['EXO', 'exo usfm'],
+    ['LEV', 'lev usfm'],
+  ]);
+  const BOOK_ORDER = ['GEN', 'EXO', 'LEV'];
+
+  function outcomes(...statuses: ('fulfilled' | 'rejected')[]): PromiseSettledResult<unknown>[] {
+    return statuses.map((status) =>
+      status === 'fulfilled'
+        ? { status, value: undefined }
+        : { status, reason: new Error('refused') },
+    );
+  }
+
+  it('drops the book whose replace was refused, since it never wrote', () => {
+    // Restoring a refused book's snapshot would overwrite whatever changed in it since the
+    // snapshot was taken — and a cache-invalidation rejection means something did.
+    const written = selectWrittenBookSnapshots(
+      SNAPSHOTS,
+      BOOK_ORDER,
+      outcomes('fulfilled', 'rejected', 'fulfilled'),
+    );
+
+    expect([...written.keys()]).toEqual(['GEN', 'LEV']);
+  });
+
+  it('returns nothing to roll back when the first book is the one that failed', () => {
+    expect(
+      selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        outcomes('rejected', 'rejected', 'rejected'),
+      ).size,
+    ).toBe(0);
+  });
+
+  it('keeps every book when all of them wrote', () => {
+    expect([
+      ...selectWrittenBookSnapshots(
+        SNAPSHOTS,
+        BOOK_ORDER,
+        outcomes('fulfilled', 'fulfilled', 'fulfilled'),
+      ).keys(),
+    ]).toEqual(BOOK_ORDER);
+  });
+
+  it('pairs each snapshot with its own outcome rather than by position in the snapshot map', () => {
+    // The snapshots are gathered per unique book id and the replace calls are issued per book
+    // group; nothing guarantees the two iterate in the same order, so the book id is what has to
+    // carry the pairing.
+    const written = selectWrittenBookSnapshots(
+      SNAPSHOTS,
+      ['LEV', 'GEN', 'EXO'],
+      outcomes('rejected', 'fulfilled', 'fulfilled'),
+    );
+
+    expect([...written.keys()]).toEqual(['GEN', 'EXO']);
+  });
+
+  it('drops a book that has no outcome at all rather than restoring it blindly', () => {
+    expect([
+      ...selectWrittenBookSnapshots(SNAPSHOTS, ['GEN'], outcomes('fulfilled')).keys(),
+    ]).toEqual(['GEN']);
   });
 });

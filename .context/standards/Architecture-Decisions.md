@@ -1584,15 +1584,28 @@ step, no automation. Just a record.
 
   - **A chapter transition is never a boundary.** `chapter` nodes carry no `content` and cannot be a
     text node's ancestor, so they are detected by a flag set as the document-order walk passes one.
-    A match spanning a chapter would make `replace()` fall back to a whole-book `setBookUSFM` with
-    the `\c` marker inside the removed span, deleting it.
+    The durable reason is containment, not any one consequence: `platform-bible-utils` is a library
+    with consumers of its own and cannot assume an extension's marker-deletion guard is between it
+    and a write, so the engine declines to offer a cross-chapter join at all.
 
-  A join made adjacent only by `markerStylesToInclude` **is** still a boundary, which an earlier
-  round of this work had wrong. Under *Verse text only* the notes ending a paragraph are dropped
-  from the concatenated text, but the editor renders a line break between those two paragraphs
-  whether or not the notes were searched, so refusing the join made Find miss a real break for the
-  common case of a paragraph that ends in a footnote. Replace safety at such a join is carried by
-  the marker-deletion guard below, which counts notes, rather than by narrowing what Find matches.
+  - **A block of filtered-out text standing between the two chunks is never a boundary.** When
+    `markerStylesToInclude` drops a text node, the walk records that node's own nearest block
+    ancestor. At the next push, a dropped ancestor that differs from *both* neighbours means a whole
+    block was dropped from between them — a section heading, a list, a table — and the join is
+    suppressed.
+
+  That second condition is deliberately narrow, because a join made adjacent only by
+  `markerStylesToInclude` is otherwise **still** a boundary — which an earlier round of this work had
+  wrong in the other direction. Under *Verse text only* the notes ending a paragraph are dropped from
+  the concatenated text, but a note shares its paragraph's block ancestor, so it fails the
+  differs-from-both test and the join survives: the editor renders a line break between those two
+  paragraphs whether or not the notes were searched, and refusing it made Find miss a real break for
+  the common case of a paragraph that ends in a footnote. A heading has a block ancestor of its own,
+  so it does not survive the test — and it should not, because its text is on screen between the two
+  paragraphs, which means they are not the adjacent lines a phrase copied from the editor spans and a
+  phrase joined across them appears nowhere in the rendered document. Replace safety at a surviving
+  join is carried by the marker-deletion guard below, which counts notes, rather than by narrowing
+  what Find matches.
 
   Mid-paragraph matching and regex mode are both unchanged — the tolerance applies only at the
   boundary positions computed above, never to an ordinary run of whitespace inside one paragraph.
@@ -1626,35 +1639,42 @@ step, no automation. Just a record.
   reading suggests. Structure protection (`usfmChangesStructure`) is gated on
   `computeIsStructureProtected`, which returns `false` for **every** non-Simple interface mode, and
   `find.web-view.tsx` removes Replace from Simple mode entirely. The two together mean the structure
-  guard is **unreachable for Replace**: it exists only where it is always off. That is a pre-existing
-  product gap and Power mode opting out of structure protection is deliberate, so it is not closed
-  here.
+  guard is **all but unreachable for Replace today**: the only interface mode that turns it on is the
+  one that does not offer Replace. It is kept and tested as a fail-safe rather than deleted, because
+  it is the PDP's own guarantee and must not depend on which modes a web view currently offers
+  Replace in. That Power mode opts out of structure protection is a deliberate pre-existing product
+  decision, so the gap is not closed here.
 
   What is closed here is marker **deletion**, which is not an editorial-policy question:
   `usfmDeletesMarkers` refuses any replacement that drops a structural marker or a note the
-  replacement does not put back. It runs in **every** interface mode — via `usfmChangesStructure`
-  when protection is on, and `usfmDeletesMarkers` otherwise — as two *sequential* guards rather than
-  an either/or, because `usfmChangesStructure` deliberately ignores notes and so cannot see a
-  swallowed `\f …\f*` that the deletion guard refuses. It is deliberately narrower than
+  replacement does not put back. It runs **unconditionally**, in every interface mode. The structure
+  guard runs ahead of it only where protection is on, and the two are *sequential* rather than an
+  either/or so that the deletion guard is reached whenever the structure guard declines to fire:
+  `usfmChangesStructure` deliberately ignores notes, so a simple-mode replacement that swallows only
+  a `\f …\f*` passes it and is refused here instead. It is deliberately narrower than
   `usfmChangesStructure` — additions and reordering stay behind the opt-in Simple-mode protection,
   because losing a marker that was there is unrecoverable content loss whereas adding one is a
   matter of policy.
 
-  Two marker classes had to be added for that guard to mean anything, because `isBlockMarker`
-  reports `false` for both: **table and sidebar markers** (`tr`, every `t[hc][rc]?#` cell spelling
-  including a `-N` column span, `esb`, `esbe`) and **notes** (`f`, `fe`, `x`, plus the study-Bible
-  variants `ef`/`ex`). The table gap also affected `extractStructuralMarkers` itself, so Simple-mode
-  structure protection was blind to a deleted `\tc2` as well; both now go through a shared
-  `isStructuralMarker` in `find/usfm-tokens.util.ts`.
+  Three marker classes had to be added for that guard to mean anything, because `isBlockMarker`
+  reports `false` for all of them: **table and sidebar markers** (`tr`, every `t[hc][rc]?#` cell
+  spelling including a `-N` column span, `esb`, `esbe`), the **paragraph markers `usfmMarkers` omits**
+  (`ph`, `ph1`–`ph3`, `p1`, `p2`, `k1`, `k2` — all typed `para` by the shared map, and all real block
+  ancestors as far as the engine is concerned), and **notes** (`f`, `fe`, `x`, plus the study-Bible
+  variants `ef`, `efe` and `ex`). The table gap also affected `extractStructuralMarkers` itself, so
+  Simple-mode structure protection was blind to a deleted `\tc2` as well; all of them now go through a
+  shared `isStructuralMarker`/`isNoteMarker` pair in `find/usfm-tokens.util.ts`.
 
-  That helper reads the **shared markers map** (`USFM_MARKERS_MAP_3_0`: `markers.tr`, the
-  `markersRegExp` cell pattern, and the `esb`/`esbe` sidebar entries) rather than a hand-written
-  list. Two rounds of review found a missing spelling in a hand-written one — first `tc#`, then the
-  centred and right-aligned `thc#`/`tcc#` that the repo's own canonical 3.1 fixture contains — so
-  the list is derived from the map that already has the authoritative answer. `isBlockMarker` itself
-  is left alone: it is driven by `usfmMarkers`, which omits table and sidebar markers entirely, and
-  its only other consumer (the editor's marker menu) iterates `usfmMarkers` children, none of which
-  is a table or sidebar marker, so it cannot be reached with one.
+  Those helpers read the **shared markers map** (`USFM_MARKERS_MAP_3_0`) by *node type* rather than by
+  a hand-written list of names: a marker is structural when its type is `para`, `row`, `cell`,
+  `table:row` or `sidebar`, and a note when its type is `note`. Three rounds of review each found a
+  different missing spelling in a hand-written list — first `tc#`, then the centred and right-aligned
+  `thc#`/`tcc#` that the repo's own canonical 3.1 fixture contains, then `\ph#`/`\p#`/`\k#` and the
+  `\efe` note — which is what settled it: the lists are gone, and the map that already has the
+  authoritative answer is asked directly. The note-marker names the note-span scanner needs are
+  derived from the same map rather than re-listed. `isBlockMarker` itself is left alone: it is driven
+  by `usfmMarkers`, and its only other consumer (the editor's marker menu) iterates `usfmMarkers`
+  children, so its gaps cannot be reached from there.
 
   The guard being reachable is what exposed the next problem: **every** boundary-spanning match's
   USFM span contains the block marker that made it a boundary, so a plain-text replacement trips the
@@ -1670,14 +1690,20 @@ step, no automation. Just a record.
   Replace All also had to become recoverable. It issues one `replace()` call per book, and `replace()`
   is all-or-nothing only *within* a book — so one refused book used to leave the others' writes
   committed while control jumped to the error path, skipping the revert window entirely. It now uses
-  `Promise.allSettled` and rolls the written books back from the snapshots it already captured before
-  surfacing the failure.
+  `Promise.allSettled` and rolls back from the snapshots it already captured before surfacing the
+  failure — but only the books whose own call **fulfilled**. A refused book never wrote, because
+  `replace()` is all-or-nothing within a book, so writing its snapshot back would overwrite whatever
+  changed in it since the snapshot was taken; the likeliest non-sentinel rejection is the PDP
+  exhausting its cache-invalidation retries, which is exactly the case where someone else was editing
+  that book. If the rollback itself fails, the two sentinel toasts are not the right answer — nothing
+  was refused on policy grounds, books are still modified, and the result list's offsets no longer
+  describe the project — so that path raises its own error notification and re-runs the search.
 
   Remaining, documented and not fixed: a boundary **ending in a footnote or cross-reference** is not
   bridged, because the gap is note content rather than zero characters. **Whole-word Find** is still
   broken at these boundaries — the concatenated text makes `Abraham.Abraham` one word-run — which is
   the same root cause and out of scope here.
-- **Excepts:** [adr-find-tolerance-as-engine-options](#adr-find-tolerance-as-engine-options-find-expresses-its-search-tolerances-as-engine-options-not-by-rewriting-the-query)
+- **Excepts:** `adr-find-tolerance-as-engine-options`
   — that entry's "both default to off" rule; see its **Amended by** note for what is given up.
 - **Key symbols:** `UsjReaderWriter.search` / `collectSearchText` / `hasWhitespaceGapAwayFromBoundary`
   and `BLOCK_LEVEL_NODE_TYPES` (`lib/platform-bible-utils/src/scripture/usj-reader-writer.ts`);

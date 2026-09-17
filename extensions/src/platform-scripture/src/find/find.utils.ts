@@ -1,8 +1,10 @@
 import type { Scope } from 'platform-bible-react';
 import {
   escapeStringRegexp,
+  formatReplacementString,
   isPlatformError,
   isSelectableInvisibleCharOrWhiteSpace,
+  LanguageStrings,
   normalizeProjectId,
   PlatformError,
   ScrollGroupId,
@@ -103,6 +105,69 @@ export function applyPreserveCase(matchedText: string, replacementText: string):
     return replacementText[0].toUpperCase() + replacementText.slice(1);
   }
   return replacementText;
+}
+
+/**
+ * Builds the toast Replace All shows when it finishes, given how many results it replaced and how
+ * many it skipped because replacing them would have deleted a marker.
+ *
+ * There is one whole-sentence template per outcome rather than a replaced-clause and a
+ * skipped-clause joined with a space. A translation has to be free to punctuate between the two
+ * clauses, reorder them, or merge them, and each count needs its own singular form — one skipped
+ * result is the ordinary case, and "Skipped 1 results" is what a shared plural template produces.
+ */
+export function buildReplacedAllMessage(
+  localizedStrings: LanguageStrings,
+  replacedCount: number,
+  skippedCount: number,
+): string {
+  if (skippedCount === 0) {
+    return replacedCount === 1
+      ? localizedStrings['%webView_find_replacedOneOccurrence%']
+      : formatReplacementString(localizedStrings['%webView_find_replacedNOccurrences%'], {
+          count: replacedCount.toString(),
+        });
+  }
+  if (replacedCount === 1) {
+    return skippedCount === 1
+      ? localizedStrings['%webView_find_replacedOneOccurrenceSkippedOneResult%']
+      : formatReplacementString(
+          localizedStrings['%webView_find_replacedOneOccurrenceSkippedNResults%'],
+          { skippedCount: skippedCount.toString() },
+        );
+  }
+  return skippedCount === 1
+    ? formatReplacementString(
+        localizedStrings['%webView_find_replacedNOccurrencesSkippedOneResult%'],
+        { replacedCount: replacedCount.toString() },
+      )
+    : formatReplacementString(
+        localizedStrings['%webView_find_replacedNOccurrencesSkippedNResults%'],
+        { replacedCount: replacedCount.toString(), skippedCount: skippedCount.toString() },
+      );
+}
+
+/**
+ * Narrows the snapshots Replace All took before writing to only the books whose `replace()` call
+ * actually committed, given the outcomes in the order the calls were issued.
+ *
+ * Replace All issues one `replace()` per book and settles them all, so a partial failure leaves
+ * some books written and some untouched. `replace()` is all-or-nothing per book, so a book whose
+ * call rejected still holds exactly what it held before — rolling it back would write a snapshot
+ * over whatever changed in it since, and the likeliest non-sentinel rejection is the PDP exhausting
+ * its cache-invalidation retries, which is precisely the case where someone else was editing.
+ */
+export function selectWrittenBookSnapshots(
+  bookSnapshots: Map<string, string>,
+  bookIdsInReplaceOrder: string[],
+  replaceOutcomes: PromiseSettledResult<unknown>[],
+): Map<string, string> {
+  return new Map(
+    [...bookSnapshots].filter(([bookId]) => {
+      const outcomeIndex = bookIdsInReplaceOrder.indexOf(bookId);
+      return outcomeIndex >= 0 && replaceOutcomes[outcomeIndex]?.status === 'fulfilled';
+    }),
+  );
 }
 
 /**

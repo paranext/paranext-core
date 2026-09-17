@@ -37,6 +37,19 @@ describe('usfm-tokens.util', () => {
       expect(isStructuralMarker('esbe')).toBe(true);
     });
 
+    it('recognizes the paragraph markers the usfmMarkers list omits but the shared map types', () => {
+      // The engine treats any `para` node as a block ancestor, so a boundary match across one of
+      // these is real. Were they missed here, the deletion guard would report no removed markers
+      // and the break would be deleted with Replace still enabled.
+      expect(isStructuralMarker('ph')).toBe(true);
+      expect(isStructuralMarker('ph1')).toBe(true);
+      expect(isStructuralMarker('ph3')).toBe(true);
+      expect(isStructuralMarker('p1')).toBe(true);
+      expect(isStructuralMarker('p2')).toBe(true);
+      expect(isStructuralMarker('k1')).toBe(true);
+      expect(isStructuralMarker('k2')).toBe(true);
+    });
+
     it('is false for character markers, notes, and unknown codes', () => {
       expect(isStructuralMarker('bd')).toBe(false);
       expect(isStructuralMarker('nd')).toBe(false);
@@ -55,9 +68,11 @@ describe('usfm-tokens.util', () => {
       expect(isNoteMarker('x')).toBe(true);
     });
 
-    it('recognizes the extended study-Bible variants the map omits', () => {
+    it('recognizes every extended study-Bible variant the map types as a note', () => {
       expect(isNoteMarker('ef')).toBe(true);
       expect(isNoteMarker('ex')).toBe(true);
+      // `efe` is the one a hand-written `/^e[fx]$/` exception missed.
+      expect(isNoteMarker('efe')).toBe(true);
     });
 
     it('is false for note content markers and for block markers', () => {
@@ -105,6 +120,61 @@ describe('usfm-tokens.util', () => {
 
     it('handles a marker run at the very start of the span', () => {
       expect(collapseUsfmMarkersForDisplay('\\p\r\n\\v 4 Abraham')).toBe(' Abraham');
+    });
+
+    it('drops an orphan note closer without swallowing the text up to the next note', () => {
+      // Every match inside a note has an orphan `\f*` at the start of its after-context. Treating
+      // that closer as an opener made the lazy note scan run to the *following* note's closer and
+      // delete the verses in between — from the card and from "Copy verse text" alike.
+      expect(
+        collapseUsfmMarkersForDisplay(
+          ' here\\f*, and by grace, Mr. Smith said he asked.\r\n\\p\r\n\\v 2 Blessed is he\\f + \\ft second note\\f* who reads.',
+        ),
+      ).toBe(', and by grace, Mr. Smith said he asked. Blessed is he who reads.');
+    });
+
+    it('drops a note the slice cut in half, from either end', () => {
+      // A before-context that runs into a note leaks its caller (`house + `); an after-context
+      // that begins inside one leaks the tail of its content. Neither is verse text.
+      expect(collapseUsfmMarkersForDisplay('the house\\f + \\ft a note')).toBe('the house');
+      expect(collapseUsfmMarkersForDisplay('rest of the note\\f* and the house')).toBe(
+        ' and the house',
+      );
+    });
+
+    it('closes a note whose marker is a longer name than one it starts with', () => {
+      // `fe` and `efe` have to be tried before `f` and `ef`, or the backreference looks for a
+      // closer that is not there and the scan falls through to the marker pass.
+      expect(collapseUsfmMarkersForDisplay('end\\fe + \\ft endnote\\fe* here')).toBe('end here');
+      expect(collapseUsfmMarkersForDisplay('end\\efe + \\ft extended\\efe* here')).toBe('end here');
+    });
+
+    it('leaves no space where the editor shows none', () => {
+      // A character marker is not a break: `\nd LORD\nd*’s` reads `LORD’s`, so collapsing the
+      // marker to a space would insert punctuation spacing the editor never shows.
+      expect(collapseUsfmMarkersForDisplay('The \\nd Lord\\nd*’s house')).toBe('The Lord’s house');
+      expect(collapseUsfmMarkersForDisplay('house\\f + \\ft note\\f*, and')).toBe('house, and');
+    });
+
+    it('removes a milestone, its attributes, and its bare closer', () => {
+      expect(collapseUsfmMarkersForDisplay('said \\qt-s |sid="q1" who="Pilate"\\*“Are you')).toBe(
+        'said “Are you',
+      );
+      expect(collapseUsfmMarkersForDisplay('done\\qt-e |eid="q1"\\* and')).toBe('done and');
+    });
+
+    it('preserves authored non-breaking spaces in a span that also holds a marker', () => {
+      // These are exactly the characters "show invisible characters" exists to display, so a
+      // blanket `\s` collapse would erase the thing the user is looking at.
+      expect(collapseUsfmMarkersForDisplay('a\u00A0b\r\n\\p\r\nc\u202Fd')).toBe(
+        'a\u00A0b c\u202Fd',
+      );
+    });
+
+    it('leaves the author’s own spacing alone outside a collapsed marker', () => {
+      expect(collapseUsfmMarkersForDisplay('two  spaces \\nd here\\nd* and  two  more')).toBe(
+        'two  spaces here and  two  more',
+      );
     });
   });
 });

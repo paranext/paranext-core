@@ -2172,9 +2172,88 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('reports the markers a boundary-spanning match would delete, on the result itself', async () => {
+      // The producer for the whole deletion guard. Every consumer — the card's Replace button, the
+      // toolbar's, and Replace All's skip filter — reads `removedMarkers` off the result and does
+      // nothing when it is empty, so a producer that silently stopped filling it would turn all
+      // three gates off with every one of their own tests still green.
+      const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
+      );
+
+      const results = await pollFindJob(boundaryEngine, {
+        searchString: 'Abraham. Abraham',
+        scope: [{ bookId: 'MAT' }],
+        caseInsensitive: false,
+        ignoreWhitespaceDifferences: true,
+      });
+
+      expect(results).toHaveLength(1);
+      // `\p` opens the second paragraph and `\v 2` opens the verse inside it; both sit in the gap
+      // the match runs across, so both would be deleted by a plain-text replacement.
+      expect(results[0].removedMarkers).toEqual(['p', 'v']);
+    });
+
+    it('leaves removedMarkers off a match that spans no marker at all', async () => {
+      // The other half of the producer: were it filled in unconditionally, every result would gate
+      // Replace and the feature would be unusable, which no assertion above would catch.
+      const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
+      );
+
+      const results = await pollFindJob(boundaryEngine, {
+        searchString: 'son of Abraham',
+        scope: [{ bookId: 'MAT' }],
+        caseInsensitive: false,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].removedMarkers).toBeUndefined();
+    });
+
+    const NOTE_IN_PARAGRAPH_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>The son<note caller="+" style="f"><char style="ft">a note</char></note> of Abraham.<verse eid="MAT 1:1"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+    it('refuses a note-swallowing replacement in simple mode, which structure protection allows', async () => {
+      // The case the deletion guard running unconditionally exists for. `usfmChangesStructure`
+      // deliberately ignores notes, so in simple mode the structure guard passes this range — if
+      // the two guards were an either/or, the note would be deleted silently. Every other
+      // simple-mode test here removes a `\p`/`\v` as well, which trips the structure guard first
+      // and so passes under `else if` too.
+      const noteEngine = new ScriptureFinderProjectDataProviderEngine(
+        createSingleUsxMockPdps(NOTE_IN_PARAGRAPH_USX),
+      );
+      vi.mocked(papi.settings.get).mockResolvedValue('simple');
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          // The whole of verse 1's text, which holds the note and no structural marker: `\v 1` and
+          // the paragraph's `\p` both sit before offset 5.
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 42 },
+        },
+      ];
+
+      await expect(noteEngine.replace(ranges, 'replaced')).rejects.toThrow(MARKER_DELETION_ERROR);
+
+      // Putting the note back is accepted, which shows the refusal is the deletion guard counting
+      // markers rather than structure protection refusing the range outright.
+      await expect(
+        noteEngine.replace(ranges, 'replaced\\f + \\ft a note\\f*'),
+      ).resolves.toBeUndefined();
+    });
+
     it('refuses a boundary-spanning replacement in simple mode too, via structure protection', async () => {
-      // Simple mode reaches the first guard instead, so the same range is refused either way —
-      // this is what the two guards being sequential rather than exclusive buys.
+      // This range removes `\p` and `\v 2`, which is a structural change, so in simple mode it is
+      // the structure guard that refuses it and the deletion guard is never consulted. The range
+      // is therefore refused in both interface modes, by a different guard in each. The case only
+      // the deletion guard can catch is the note-swallowing one above.
       const boundaryEngine = new ScriptureFinderProjectDataProviderEngine(
         createSingleUsxMockPdps(TWO_PARAGRAPH_CHAPTER_USX),
       );

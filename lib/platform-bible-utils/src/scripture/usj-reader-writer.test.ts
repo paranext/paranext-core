@@ -1374,6 +1374,68 @@ describe('Find USJ details for text searches', () => {
     ).toBe(0);
   });
 
+  test('search does not record a boundary across a filtered-out block of its own 3.0', () => {
+    // A heading between two paragraphs is dropped by verse-text-only filtering, which leaves the
+    // two paragraphs as adjacent pushed chunks exactly as a dropped note does. The two cases part
+    // company on what the reader sees: the heading's text is on screen between them, so they are
+    // not the adjacent lines a phrase copied from the editor spans, and a phrase joined across
+    // them is one that appears nowhere.
+    const headingBetweenParasUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        { type: 'para', marker: 'p', content: ['… end of para.'] },
+        { type: 'para', marker: 's1', content: ['A Section Heading'] },
+        { type: 'para', marker: 'p', content: ['Next para'] },
+      ],
+    };
+    const headingDoc = new UsjReaderWriter(headingBetweenParasUsj);
+    const acrossTheHeading = /(para\.(?<ws0>(?: )?)Next para)/dg;
+
+    // Unfiltered the heading's own text lies between them, so there is nothing to bridge.
+    expect(
+      headingDoc.search(acrossTheHeading, { flexibleWhitespaceAtBlockBoundaries: true }).length,
+    ).toBe(0);
+
+    expect(
+      headingDoc.search(acrossTheHeading, {
+        markerStylesToInclude: new Set(['p']),
+        flexibleWhitespaceAtBlockBoundaries: true,
+      }).length,
+    ).toBe(0);
+  });
+
+  test('search still records a boundary when the dropped text shares a neighbour’s block 3.0', () => {
+    // The counterpart to the heading above, reduced to the shape the rule turns on: the dropped
+    // note's nearest block ancestor is the first paragraph, so it is not a block standing between
+    // the two, and the line break the editor renders is still a boundary.
+    const noteAtParaEndUsj: Usj = {
+      type: 'USJ',
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as typeof USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: ['… end of para.', { type: 'note', marker: 'f', content: ['NOTE'] }],
+        },
+        { type: 'para', marker: 'p', content: ['Next para'] },
+      ],
+    };
+    const noteDoc = new UsjReaderWriter(noteAtParaEndUsj);
+    const acrossTheNote = /(para\.(?<ws0>(?: )?)Next para)/dg;
+
+    expect(
+      noteDoc.search(acrossTheNote, {
+        markerStylesToInclude: new Set(['p']),
+        flexibleWhitespaceAtBlockBoundaries: true,
+      }).length,
+    ).toBe(1);
+  });
+
   test('search terminates on a supplementary-plane query when a boundary candidate is rejected 3.0', () => {
     // Adlam (U+1E900..) is a supplementary-plane script, so every code point is a surrogate pair.
     // Rejecting a boundary candidate rewinds `lastIndex`; advancing a single UTF-16 code unit
@@ -1405,10 +1467,14 @@ describe('Find USJ details for text searches', () => {
       markersMap: USFM_MARKERS_MAP_3_1,
     });
 
-    // `Header 2 space after ` and `Header 3-4 centered` are adjacent cells in one row. The cell
-    // holding the second is marked `thc3` — a centred cell, the spelling a `t[hc]r?\d+` marker
-    // test misses.
-    const acrossCells = /(Header 2 space after(?<ws0>(?: )?)Header 3-4 centered)/dg;
+    // `Header 2 space after ` and `Header 3-4 centered` are adjacent cells in one row, so matching
+    // across them takes a boundary recorded for the `table:cell` node type.
+    //
+    // The first cell's text ends in a real space, and that space belongs in the literal: left in
+    // `ws0`, it is a character the group can match outright, and a group that matched a real
+    // character is accepted without the boundary set ever being consulted. Written this way the
+    // assertion is 1 here and 0 with `table:cell` dropped from the block-level node types.
+    const acrossCells = /(Header 2 space after (?<ws0>(?: )?)Header 3-4 centered)/dg;
     expect(tableDoc.search(acrossCells, { flexibleWhitespaceAtBlockBoundaries: true }).length).toBe(
       1,
     );

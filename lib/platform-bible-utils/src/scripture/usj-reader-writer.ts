@@ -1818,6 +1818,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // spanned one would make `replace()` fall back to a whole-book write with the `\c` marker
     // inside the removed span, deleting it.
     let hasCrossedChapterSincePush = false;
+    /**
+     * Nearest block ancestor of each text node the marker-style filter dropped since the last chunk
+     * was pushed, so the next push can tell a dropped note inside a paragraph from a dropped block
+     * standing between two of them.
+     */
+    const droppedBlockAncestorsSincePush: (MarkerObject | Usj | undefined)[] = [];
 
     // Variables to track our current position while walking through the USJ content tree
     let currentIndex = 0;
@@ -1859,28 +1865,46 @@ export class UsjReaderWriter implements IUsjReaderWriter {
               return markerStyle !== undefined && !markerStylesToInclude.has(markerStyle);
             });
 
-            // Skip this text node - an ancestor's style is not in the allowed set. A filtered-out
-            // node never suppresses a boundary: a paragraph that ends in a footnote still renders
-            // a line break before the next one, so the join is a real boundary whether or not the
-            // note was searched. The USFM the note occupies is guarded on the replace side, where
-            // marker deletion is refused, rather than by narrowing what Find can match.
-            if (hasExcludedAncestor) return false;
+            // Skip this text node — an ancestor's style is not in the allowed set. Whether that
+            // suppresses the boundary depends on what was dropped, which is decided at the next
+            // push: a filtered-out node that shares a block with a neighbour (a footnote at a
+            // paragraph's end) leaves a real boundary behind, while one that is a block of its own
+            // (a section heading, a list, a table between two paragraphs) does not.
+            if (hasExcludedAncestor) {
+              if (shouldRecordBoundaries)
+                droppedBlockAncestorsSincePush.push(
+                  UsjReaderWriter.findNearestBlockAncestor(workingStack),
+                );
+              return false;
+            }
           }
 
           // Block-boundary bookkeeping is pure overhead for a caller that never asked for the
           // filter, or whose pattern carries no whitespace group to relax, so skip it then.
           if (shouldRecordBoundaries) {
             const blockAncestor = UsjReaderWriter.findNearestBlockAncestor(workingStack);
-            // A boundary is tolerable only when the block changed and no chapter was crossed.
+            // A filtered-out block of its own sits between these two chunks — a section heading, a
+            // list, a table. Its text is on screen between them, so the two are not the adjacent
+            // lines that a phrase copied from the editor spans, and joining them across a space
+            // would match a phrase no reader ever sees. A note at a paragraph's end shares that
+            // paragraph's block ancestor and so does not qualify, which is what keeps a match
+            // across it working.
+            const droppedOwnBlockSincePush = droppedBlockAncestorsSincePush.some(
+              (dropped) => dropped !== previousBlockAncestor && dropped !== blockAncestor,
+            );
+            // A boundary is tolerable only when the block changed, no chapter was crossed, and no
+            // block of dropped text stands between the two chunks.
             if (
               hasPushedAChunk &&
               blockAncestor !== previousBlockAncestor &&
-              !hasCrossedChapterSincePush
+              !hasCrossedChapterSincePush &&
+              !droppedOwnBlockSincePush
             )
               blockBoundaryOffsets.add(currentIndex);
             previousBlockAncestor = blockAncestor;
             hasPushedAChunk = true;
             hasCrossedChapterSincePush = false;
+            droppedBlockAncestorsSincePush.length = 0;
           }
 
           textChunks.push(node);

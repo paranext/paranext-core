@@ -124,12 +124,14 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_replaceAll%',
   '%webView_find_replaceTab%',
   '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_replace_failedMessage%',
   '%webView_find_replace_markerDeletionError%',
   '%webView_find_replace_markerDeletionTooltip%',
   '%webView_find_replace_readOnlyNote%',
   '%webView_find_replace_readOnlyTooltip%',
-  '%webView_find_replace_skippedAllResults%',
-  '%webView_find_replace_skippedNResults%',
+  '%webView_find_replace_rollbackFailedMessage%',
+  '%webView_find_replace_skippedAllNResults%',
+  '%webView_find_replace_skippedAllOneResult%',
   '%webView_find_replace_structureProtectedError%',
   '%webView_find_replace_structureProtectedMarkerTooltip%',
   '%webView_find_replace_structureProtectedNote%',
@@ -1244,14 +1246,16 @@ export function Find({
                   />
                 )}
               </div>
+              {/* Two nested tooltips because the two reasons have different scopes. Structure
+                  protection blocks both buttons, so it is explained once around the pair. A
+                  focused result whose span holds markers blocks only Replace — announcing that
+                  around Replace All too would name a reason that does not apply to it, and the
+                  toolbar has nothing on it to say which result is meant. A wrapper whose
+                  `disabled` is false is inert, so only one of the two is ever live. */}
               <DisabledActionTooltip
                 className="tw:flex tw:gap-2"
-                disabled={isReplaceActionBlocked || isFocusedResultMarkerDeleting}
-                tooltipText={
-                  isReplaceActionBlocked
-                    ? replaceBlockedTooltipText
-                    : localizedStrings['%webView_find_replace_markerDeletionTooltip%']
-                }
+                disabled={isReplaceActionBlocked}
+                tooltipText={replaceBlockedTooltipText}
               >
                 <Button
                   variant="outline"
@@ -1261,17 +1265,22 @@ export function Find({
                   <ReplaceAll className="tw:h-4 tw:w-4" />
                   {localizedStrings['%webView_find_replaceAll%']}
                 </Button>
-                <Button
-                  onClick={() => onReplace()}
-                  disabled={
-                    focusedResultIndex === undefined ||
-                    isReplaceUnavailable ||
-                    isFocusedResultMarkerDeleting
-                  }
+                <DisabledActionTooltip
+                  disabled={!isReplaceActionBlocked && isFocusedResultMarkerDeleting}
+                  tooltipText={localizedStrings['%webView_find_replace_markerDeletionTooltip%']}
                 >
-                  <Replace className="tw:h-4 tw:w-4" />
-                  {localizedStrings['%webView_find_replace%']}
-                </Button>
+                  <Button
+                    onClick={() => onReplace()}
+                    disabled={
+                      focusedResultIndex === undefined ||
+                      isReplaceUnavailable ||
+                      isFocusedResultMarkerDeleting
+                    }
+                  >
+                    <Replace className="tw:h-4 tw:w-4" />
+                    {localizedStrings['%webView_find_replace%']}
+                  </Button>
+                </DisabledActionTooltip>
               </DisabledActionTooltip>
             </div>
           </>
