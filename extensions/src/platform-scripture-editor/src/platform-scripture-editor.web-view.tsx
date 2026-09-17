@@ -136,8 +136,8 @@ import {
   removeDecorations,
 } from './decorations.util';
 import {
+  createPendingCommentAnchorSource,
   leftEdgeRect,
-  measureAnnotation,
   measureRange,
   runOnFirstLoad,
   scrollToAnnotation,
@@ -1509,51 +1509,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const domSelection = window.getSelection();
       if (domSelection && domSelection.rangeCount > 0) {
         const range = domSelection.getRangeAt(0).cloneRange();
-        const rangeRectAtOpen = measureRange(range);
-        const { startContainer, startOffset, endContainer, endOffset } = range;
-        const isRangeIntact = () =>
-          startContainer.isConnected &&
-          range.startContainer === startContainer &&
-          range.startOffset === startOffset &&
-          range.endContainer === endContainer &&
-          range.endOffset === endOffset;
-        // The editor re-renders the selected text to mark it as the pending comment. That moves the
-        // range to the start of its text node (or detaches the node), so once the mark exists all
-        // of its fragments are measured instead of the range: the anchor spans the whole (possibly
-        // wrapped) selection, so a popover above or below it never covers part of it, and keeps
-        // the caret's horizontal position as a fraction of the mark's width, which survives a zoom
-        // change.
-        let fractionInAnnotation: number | undefined;
-        commentPopoverAnchor.setSource({
-          measure: () => {
-            const annotationRect = measureAnnotation(PENDING_COMMENT_ANNOTATION_ID);
-            if (!annotationRect) {
-              // Between the re-render and the mark appearing, a moved range would place the
-              // popover at the start of the text node; keep the last good rect instead.
-              if (!isRangeIntact()) return undefined;
-              const rangeRect = measureRange(range);
-              return rangeRect && leftEdgeRect(rangeRect);
-            }
-            if (fractionInAnnotation === undefined)
-              fractionInAnnotation =
-                rangeRectAtOpen && annotationRect.width > 0
-                  ? Math.min(
-                      Math.max(
-                        (rangeRectAtOpen.left - annotationRect.left) / annotationRect.width,
-                        0,
-                      ),
-                      1,
-                    )
-                  : 0;
-            return new DOMRect(
-              annotationRect.left + fractionInAnnotation * annotationRect.width,
-              annotationRect.top,
-              0,
-              annotationRect.height,
-            );
-          },
-          contextElement: editorContainer,
-        });
+        commentPopoverAnchor.setSource(
+          createPendingCommentAnchorSource(range, PENDING_COMMENT_ANNOTATION_ID, editorContainer),
+        );
       } else {
         // Fallback to center of editor viewport
         commentPopoverAnchor.setSource({
