@@ -15,7 +15,7 @@ import {
   DOCK_ID,
   OTHER_GROUP,
   resetDragStateStore,
-} from './__tests__/tab-bar-drop-zone.test-utils';
+} from './__tests__/rc-dock.test-utils';
 
 interface MockDragDropDivProps {
   getRef?: React.Ref<HTMLDivElement>;
@@ -126,13 +126,14 @@ function stubRect(element: Element, rect: { left: number; right: number; width: 
 }
 
 /**
- * Gives the zone's inner indicator a non-zero width, as the browser lays it out whenever the zone
- * has room to show it. jsdom reports every rect as zero-sized, which the zone treats as "no visible
- * indicator" and rejects.
+ * Gives the zone's inner indicator a width at least as wide as the legible minimum, as the browser
+ * lays it out whenever the zone has room to show it (or `claimLastTabOverlap` has widened its lead
+ * to reach that minimum). jsdom reports every rect as zero-sized, which the zone treats as "no
+ * visible indicator" and rejects.
  */
 function stubVisibleIndicator(zoneElement: HTMLElement): HTMLElement {
   const indicatorElement = getIndicatorElement(zoneElement);
-  stubRect(indicatorElement, { left: 600, right: 608, width: 8 });
+  stubRect(indicatorElement, { left: 600, right: 640, width: 40 });
   return indicatorElement;
 }
 
@@ -212,8 +213,56 @@ describe('TabBarDropZone', () => {
 
     expect(rejectSpy).toHaveBeenCalled();
     expect(acceptSpy).not.toHaveBeenCalled();
-    // `.dock-drop-indicator`'s ring shadow would still paint around a zero-width rect.
+    // `.dock-drop-indicator`'s ring shadow would still paint around a zero-width rect. This is the
+    // only case `claimLastTabOverlap` can produce (the clipped, no-room-at-all case): every claim it
+    // makes keeps the indicator at or above `MIN_VISIBLE_INDICATOR_WIDTH`.
     expect(context.setDropRect).not.toHaveBeenCalled();
+  });
+
+  it('accepts a same-group tab drag once the indicator has any visible width', () => {
+    const panel = createPanel();
+    const context = createDockContext();
+    render(<TabBarDropZone panelData={panel} context={context} />);
+    // Exactly `MIN_VISIBLE_INDICATOR_WIDTH` (1px) -- pins the accept gate's own boundary,
+    // independent of `MIN_DRAWN_INDICATOR_WIDTH` (30px, a target for how wide the indicator is
+    // drawn, not a gate on whether a drop is accepted).
+    const indicatorElement = getIndicatorElement(screen.getByTestId('drop-zone'));
+    stubRect(indicatorElement, { left: 600, right: 601, width: 1 });
+    const { onDragOverT } = getCapturedHandlers();
+
+    const state = createDragState({ tab: createTab() }, DOCK_ID);
+    const acceptSpy = vi.spyOn(state, 'accept');
+    const rejectSpy = vi.spyOn(state, 'reject');
+
+    onDragOverT?.(state);
+
+    expect(acceptSpy).toHaveBeenCalled();
+    expect(rejectSpy).not.toHaveBeenCalled();
+    expect(context.setDropRect).toHaveBeenCalledWith(indicatorElement, 'middle', expect.anything());
+  });
+
+  it('accepts a same-group tab drag when the indicator is capped short of the legible target by a narrow last tab', () => {
+    const panel = createPanel();
+    const context = createDockContext();
+    render(<TabBarDropZone panelData={panel} context={context} />);
+    // Matches the geometry `claimLastTabOverlap` produces for a 10px-wide last tab with no gap (see
+    // "caps the widened indicator lead at the overlap" below): a visible but sub-legible 5px
+    // indicator, from a zone claiming a region it can only reach 5px back into. That claim must
+    // still be accepted here, or the claimed region becomes a dead spot -- the invariant this gate
+    // exists to preserve (see `claimLastTabOverlap`'s own TSDoc).
+    const indicatorElement = getIndicatorElement(screen.getByTestId('drop-zone'));
+    stubRect(indicatorElement, { left: 505, right: 510, width: 5 });
+    const { onDragOverT } = getCapturedHandlers();
+
+    const state = createDragState({ tab: createTab() }, DOCK_ID);
+    const acceptSpy = vi.spyOn(state, 'accept');
+    const rejectSpy = vi.spyOn(state, 'reject');
+
+    onDragOverT?.(state);
+
+    expect(acceptSpy).toHaveBeenCalled();
+    expect(rejectSpy).not.toHaveBeenCalled();
+    expect(context.setDropRect).toHaveBeenCalledWith(indicatorElement, 'middle', expect.anything());
   });
 
   it('rejects a different-group tab drag and does not show the indicator', () => {
@@ -441,11 +490,15 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
    * x:[zoneStart, zoneEnd], then drives a drag start carrying `dragData` through the captured
    * listener.
    */
-  function startDragOverLtrBar(
-    zoneStart: number,
-    dragData: Record<string, unknown> = { tab: createTab() },
+  function startDragOverLtrBar({
+    zoneStart,
     zoneEnd = 900,
-  ): HTMLElement {
+    dragData = { tab: createTab() },
+  }: {
+    zoneStart: number;
+    zoneEnd?: number;
+    dragData?: Record<string, unknown>;
+  }): HTMLElement {
     const { tabs, zoneElement } = renderTabBarFixture(createPanel(), createDockContext());
     stubRect(tabs[1], { left: 500, right: 600, width: 100 });
     stubRect(zoneElement, { left: zoneStart, right: zoneEnd, width: zoneEnd - zoneStart });
@@ -457,7 +510,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
 
   it('marks the zone, covering back to the last tab’s midpoint and leading the indicator to its trailing edge (LTR)', () => {
     // The zone starts 8px past the tab's trailing edge (the flex gap) and 58px past its midpoint.
-    const zoneElement = startDragOverLtrBar(608);
+    const zoneElement = startDragOverLtrBar({ zoneStart: 608 });
 
     expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('58px');
@@ -465,7 +518,10 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
   });
 
   it('marks the zone for a whole-panel drag too', () => {
-    const zoneElement = startDragOverLtrBar(608, { panel: createPanel({ id: 'other' }) });
+    const zoneElement = startDragOverLtrBar({
+      zoneStart: 608,
+      dragData: { panel: createPanel({ id: 'other' }) },
+    });
 
     expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('58px');
@@ -476,7 +532,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
   // the zone covers must be a part the zone accepts, or a drop there does nothing.
   it('covers nothing when the zone starts over the last tab (a crowded bar clips the tab under it)', () => {
     // The zone starts 10px before the tab's trailing edge, past its midpoint, with no width left.
-    const zoneElement = startDragOverLtrBar(590, undefined, 590);
+    const zoneElement = startDragOverLtrBar({ zoneStart: 590, zoneEnd: 590 });
 
     expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
@@ -484,25 +540,86 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
   });
 
   it('covers nothing when the zone starts over the last tab, even with room of its own', () => {
-    const zoneElement = startDragOverLtrBar(590);
+    const zoneElement = startDragOverLtrBar({ zoneStart: 590 });
 
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
   });
 
-  it('covers nothing when a zero-width zone starts exactly at the last tab’s trailing edge', () => {
-    // No gap to lead back over and no width: the indicator would be empty, so the zone rejects.
-    const zoneElement = startDragOverLtrBar(600, undefined, 600);
+  it('claims the tab and widens the indicator when a zero-width zone starts exactly at the last tab’s trailing edge', () => {
+    // No natural gap and no zone width, for a natural indicator width of 0 — the narrowest
+    // possible case. `gapToTab` is exactly 0, not negative, so the zone still isn't clipped: it
+    // claims the tab's trailing half and widens the indicator to the legible minimum instead of
+    // rejecting. The fixture's 100px-wide tab puts the overlap (50px) well past the 30px minimum,
+    // so the cap below doesn't reduce it — see the narrow-tab test for when it does.
+    const zoneElement = startDragOverLtrBar({ zoneStart: 600, zoneEnd: 600 });
 
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
-    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('50px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('30px');
   });
 
-  it('still covers the tab when a zero-width zone leads its indicator back over a gap', () => {
-    const zoneElement = startDragOverLtrBar(608, undefined, 608);
+  it('widens the indicator lead past a zero-width zone’s natural gap to the legible minimum', () => {
+    // Natural lead is the 8px gap, with zero zone width, for a natural indicator width of 8px —
+    // short of the legible minimum, so the lead widens to reach it. The overlap (the invisible hit
+    // area) is unaffected: it still reaches back to the tab's midpoint regardless of indicator width.
+    const zoneElement = startDragOverLtrBar({ zoneStart: 608, zoneEnd: 608 });
 
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('58px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('30px');
+  });
+
+  it('leaves the indicator lead unchanged once the natural indicator width already meets the legible minimum', () => {
+    // gapToTab is 8px (zoneStart 608) and zone width is 22px, for a natural indicator width of
+    // exactly 30px — already at the legible minimum, so no widening is needed.
+    const zoneElement = startDragOverLtrBar({ zoneStart: 608, zoneEnd: 630 });
+
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('8px');
+  });
+
+  it('widens the indicator lead by exactly the shortfall when the natural width falls one pixel short', () => {
+    // gapToTab is 8px and zone width is 21px, for a natural indicator width of 29px — one pixel
+    // under the legible minimum, so the lead widens by exactly that one pixel.
+    const zoneElement = startDragOverLtrBar({ zoneStart: 608, zoneEnd: 629 });
+
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('9px');
+  });
+
+  it('caps the widened indicator lead at the overlap, for a last tab narrower than the legible minimum', () => {
+    // A 10px-wide tab (midpoint 5px in from its trailing edge) with no gap: the overlap — the
+    // region that actually hit-tests to the zone — only reaches 5px back, since it stops at the
+    // tab's midpoint. Widening the lead to the full 30px minimum would draw the indicator past that
+    // region, over territory rc-dock's own tab handler still owns, so the lead is capped at the
+    // overlap instead: the indicator stays inside the covered region even though it stays short of
+    // the legible minimum.
+    const { tabs, zoneElement } = renderTabBarFixture(createPanel(), createDockContext());
+    stubRect(tabs[1], { left: 500, right: 510, width: 10 });
+    stubRect(zoneElement, { left: 510, right: 510, width: 0 });
+    const onDragStateChange = getCapturedDragStateListener();
+    createDragState({ tab: createTab() }, DOCK_ID);
+
+    onDragStateChange(DOCK_ID);
+
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('5px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('5px');
+  });
+
+  it('refuses to claim the tab when even the capped indicator would have no visible width', () => {
+    // A 1px-wide tab (midpoint 0.5px in from its trailing edge) with no gap: the overlap only
+    // reaches 0.5px back, so the capped indicator would be 0.5px wide -- narrower than
+    // `MIN_VISIBLE_INDICATOR_WIDTH`, so `onDragOver` would reject a drop there. Claiming this region
+    // anyway would extend the hit area over territory that then can't accept a drop, so the claim is
+    // refused entirely instead: overlap and lead both fall back to their unwidened, natural values
+    // (0, since there's no gap), leaving the tab to rc-dock's own per-tab handler.
+    const { tabs, zoneElement } = renderTabBarFixture(createPanel(), createDockContext());
+    stubRect(tabs[1], { left: 500, right: 501, width: 1 });
+    stubRect(zoneElement, { left: 501, right: 501, width: 0 });
+    const onDragStateChange = getCapturedDragStateListener();
+    createDragState({ tab: createTab() }, DOCK_ID);
+
+    onDragStateChange(DOCK_ID);
+
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');
+    expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-indicator-lead')).toBe('0px');
   });
 
   it('covers nothing when a right-to-left zone starts over the last tab', () => {
@@ -522,7 +639,7 @@ describe('TabBarDropZone drag-state marking (last-tab overlap)', () => {
   });
 
   it('covers nothing when the zone already starts before the last tab’s midpoint', () => {
-    const zoneElement = startDragOverLtrBar(540);
+    const zoneElement = startDragOverLtrBar({ zoneStart: 540 });
 
     expect(zoneElement).toHaveAttribute(TAB_BAR_DROP_ZONE_DRAGGING_ATTRIBUTE);
     expect(zoneElement.style.getPropertyValue('--tab-bar-drop-zone-overlap')).toBe('0px');

@@ -27,11 +27,31 @@ const OVERLAP_PROPERTY = '--tab-bar-drop-zone-overlap';
 /**
  * CSS custom property (set on the zone element) holding how far the inner indicator reaches
  * backward from the zone's start edge, so the visible indicator starts at the last tab's trailing
- * edge rather than after the gap that follows it. See {@link claimLastTabOverlap}.
+ * edge rather than after the gap that follows it — and further still, into the tab itself, when the
+ * zone is too narrow to draw a legible indicator on its own. See {@link claimLastTabOverlap}.
  */
 const INDICATOR_LEAD_PROPERTY = '--tab-bar-drop-zone-indicator-lead';
-/** Narrowest indicator, in px, the zone shows; `onDragOver` rejects the drag below this. */
-const MIN_INDICATOR_WIDTH = 1;
+/**
+ * Legible target width, in px, that `claimLastTabOverlap` widens the indicator's backward lead
+ * toward on a narrow zone — capped at the overlap (see {@link claimLastTabOverlap}) so the indicator
+ * never reaches back further than the region that actually hit-tests to the zone. This is a target
+ * for how wide the indicator is drawn, not a gate on whether a drop is accepted; see
+ * {@link MIN_VISIBLE_INDICATOR_WIDTH} for that. Matches rc-dock's own hard-coded 30px width for an
+ * after-tab drop's indicator (`DockLayout.tsx`'s `after-tab` case: `width = 30`), so the two read
+ * as the same size whenever the target is reached — nothing mechanically ties this to
+ * `$panel-button-size`; the two happening to share a value is coincidence, not a dependency.
+ */
+const MIN_DRAWN_INDICATOR_WIDTH = 30;
+/**
+ * Narrowest width, in px, `onDragOver` treats as a visible indicator; below this,
+ * `.dock-drop-indicator`'s ring shadow would still paint around a rect with nothing to show, so the
+ * zone rejects instead. This is the only accept/reject gate `onDragOver` applies — deliberately
+ * independent of {@link MIN_DRAWN_INDICATOR_WIDTH}, so an indicator that reads as legible but falls
+ * short of that larger target is still accepted rather than rejected. `claimLastTabOverlap` claims
+ * the last tab's trailing half only when doing so leaves the indicator at or above this width, so
+ * the zone claiming a region and `onDragOver` accepting a drop there always agree.
+ */
+const MIN_VISIBLE_INDICATOR_WIDTH = 1;
 
 /**
  * Clears a zone's claimed drop indicator. rc-dock's own `.d.ts` types `setDropRect`'s `element`
@@ -71,13 +91,19 @@ function clearLastTabOverlap(zone: HTMLElement): void {
  * {@link OVERLAP_PROPERTY}, and the inner indicator, led backward by
  * {@link INDICATOR_LEAD_PROPERTY}), so writing them never changes the zone's own box or the bar's
  * flex layout, and the rects read here are the same before and after a previous claim. The overlap
- * reaches back to the last tab's midpoint; the indicator only reaches back to the tab's trailing
- * edge.
+ * reaches back to the last tab's midpoint; the indicator reaches back at least to the tab's
+ * trailing edge, and further still toward {@link MIN_DRAWN_INDICATOR_WIDTH} when the zone's own
+ * width would otherwise draw a hairline — but never further back than the overlap itself, since the
+ * drawn indicator must stay inside the region that actually hit-tests to the zone.
  *
- * The tab is covered only when the zone starts at or after its trailing edge and will show an
- * indicator. Otherwise (a crowded bar clips the last tab under a zone with no width left) the zone
- * would reject the drop there, and rc-dock's walk from the zone never reaches the tab, so the tab's
- * visible trailing half would silently ignore a drop it accepts on its own.
+ * Invariant: this function claims the tab's trailing half if and only if `onDragOver` then accepts
+ * a drop there (see {@link MIN_VISIBLE_INDICATOR_WIDTH}). The tab is covered whenever the zone
+ * starts at or after its trailing edge AND the resulting indicator, after the cap above, is still
+ * visible; on a last tab too narrow for even the capped lead to reach a visible width, the claim is
+ * refused entirely rather than covering a region `onDragOver` would then reject. Otherwise (a
+ * crowded bar clips the last tab under the zone's own box, leaving no valid direction to extend
+ * backward from) the zone leaves the tab uncovered, and rc-dock's own per-tab handler takes the
+ * drop there instead.
  */
 function claimLastTabOverlap(zone: HTMLElement): void {
   const tabs = zone.closest('.dock-nav')?.querySelectorAll<HTMLElement>('.dock-nav-list .dock-tab');
@@ -89,11 +115,33 @@ function claimLastTabOverlap(zone: HTMLElement): void {
   const tabMidpoint = tabRect.left + tabRect.width / 2;
   const isRtl = getComputedStyle(zone).direction === 'rtl';
   const gapToTab = isRtl ? tabRect.left - zoneRect.right : zoneRect.left - tabRect.right;
-  const indicatorLead = Math.max(0, gapToTab);
-  const coversTab = gapToTab >= 0 && indicatorLead + zoneRect.width >= MIN_INDICATOR_WIDTH;
-  const overlap = coversTab
-    ? Math.max(0, isRtl ? tabMidpoint - zoneRect.right : zoneRect.left - tabMidpoint)
-    : 0;
+  // A negative gap means the last tab's trailing edge is clipped under the zone's own box, with no
+  // valid backward direction to reach from — an anomalous layout state the zone leaves alone,
+  // rather than the ordinary "narrow zone" case the widening below handles.
+  const isClipped = gapToTab < 0;
+  const naturalIndicatorLead = Math.max(0, gapToTab);
+  // How far back the region that actually hit-tests to the zone would reach, if claimed: to the
+  // last tab's midpoint. Computed before the widened lead below, which is capped against it. Left
+  // unguarded by `isClipped`: `claims` below already excludes the clipped case from both consumers
+  // of this value (`overlap` and, transitively, `indicatorLead`), so its value there is unused.
+  const overlapToMidpoint = Math.max(
+    0,
+    isRtl ? tabMidpoint - zoneRect.right : zoneRect.left - tabMidpoint,
+  );
+  // Widen the lead toward the legible target width, capped at the overlap so the drawn indicator
+  // never reaches back further than the region that actually hit-tests to the zone.
+  const widenedIndicatorLead = Math.min(
+    Math.max(naturalIndicatorLead, MIN_DRAWN_INDICATOR_WIDTH - zoneRect.width),
+    overlapToMidpoint,
+  );
+  // Claim the tab's trailing half only when the resulting indicator is still visible — otherwise
+  // the claimed hit area would extend over a region `onDragOver` then rejects, exactly the dead spot
+  // this mechanism exists to avoid (see this function's own TSDoc). On a last tab too narrow for
+  // even the capped lead to reach a visible width, refuse the claim entirely and leave the tab to
+  // rc-dock's own per-tab handler, rather than covering a region that can't accept a drop.
+  const claims = !isClipped && zoneRect.width + widenedIndicatorLead >= MIN_VISIBLE_INDICATOR_WIDTH;
+  const overlap = claims ? overlapToMidpoint : 0;
+  const indicatorLead = claims ? widenedIndicatorLead : naturalIndicatorLead;
 
   zone.style.setProperty(OVERLAP_PROPERTY, `${overlap}px`);
   zone.style.setProperty(INDICATOR_LEAD_PROPERTY, `${indicatorLead}px`);
@@ -129,11 +177,16 @@ export function TabBarDropZone({ panelData, context }: TabBarDropZoneProps) {
   const onDragOver = (state: DragState) => {
     const source = resolveTabBarDropZoneSource(context, panelData);
     const indicator = indicatorRef.current;
-    // A zero-width indicator (a zone squeezed to nothing on a crowded bar, with no gap to lead back
-    // over) has nothing visible to show, and `.dock-drop-indicator`'s ring shadow would still paint
-    // around it, so this zone takes no drop. `claimLastTabOverlap` leaves the last tab uncovered in
-    // that case, so the tab still takes drops on its own.
-    if (!source || !indicator || indicator.getBoundingClientRect().width < MIN_INDICATOR_WIDTH) {
+    // An indicator with no visible width has nothing to show, and `.dock-drop-indicator`'s ring
+    // shadow would still paint around it, so this zone takes no drop there. Deliberately gated on
+    // `MIN_VISIBLE_INDICATOR_WIDTH`, not `MIN_DRAWN_INDICATOR_WIDTH`: `claimLastTabOverlap` only
+    // claims the last tab's trailing half when doing so keeps the indicator at or above this
+    // (smaller) width, so whenever it claims, this check accepts.
+    if (
+      !source ||
+      !indicator ||
+      indicator.getBoundingClientRect().width < MIN_VISIBLE_INDICATOR_WIDTH
+    ) {
       state.reject();
       return;
     }
