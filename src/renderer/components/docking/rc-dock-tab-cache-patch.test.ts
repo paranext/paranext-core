@@ -3,7 +3,7 @@
 // (`module` → `es/`). Importing `rc-dock` here would test the unpatched code.
 import { TabCache } from 'rc-dock/es/DockTabs';
 import { describe, expect, it } from 'vitest';
-import { createDockContext } from './__tests__/tab-bar-drop-zone-test.util';
+import { createDockContext } from './__tests__/tab-bar-drop-zone.test-utils';
 
 /**
  * Builds `parent > child > ...` from the given tag/class specs and returns the innermost element.
