@@ -27,5 +27,4 @@ export interface WideComponentStrings {
   '%manage_books_dialog_remove_books_long_enough_to_print%': string;
 }
 
-export declare const wideStrings: WideComponentStrings;
 export declare const wideKey: keyof WideComponentStrings;

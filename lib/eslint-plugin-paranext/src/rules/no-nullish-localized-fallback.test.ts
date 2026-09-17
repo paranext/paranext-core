@@ -3,7 +3,7 @@ import rule from './no-nullish-localized-fallback';
 import { typeAwareRuleTester } from '../test.utils';
 
 const filename = path.resolve(__dirname, '../fixtures/case.ts');
-const imports = `import { localizedStrings, stringsBag, partialStrings, widths, key, stringMap, plainKey, anonymousMap, keyFor, wideStrings, wideKey } from './localized-strings';`;
+const imports = `import { localizedStrings, stringsBag, partialStrings, widths, key, stringMap, plainKey, anonymousMap, keyFor, wideKey } from './localized-strings';`;
 
 typeAwareRuleTester.run('no-nullish-localized-fallback', rule, {
   valid: [
@@ -61,9 +61,17 @@ typeAwareRuleTester.run('no-nullish-localized-fallback', rule, {
       errors: [{ messageId: 'nullishLocalizedFallback' }],
     },
     {
-      // A computed key the parser cannot read as `%…%` still resolves through the map's type, so
-      // the rule does not depend on the key being written as a literal.
-      code: `${imports}\nconst t = localizedStrings[\`%a_\${plainKey}%\`] ?? 'A';`,
+      // An aliased map indexed by a plain `string`, looser than the map's own key type. Nothing
+      // about the key is recognizable, so only the map's type can produce the report — the one
+      // shape neither an identifier-name heuristic nor a key-shape check can reach.
+      code: `${imports}\nconst t = stringsBag[plainKey] ?? 'A';`,
+      filename,
+      errors: [{ messageId: 'nullishLocalizedFallback' }],
+    },
+    {
+      // An interpolated key on an aliased map. TypeScript contextually types the template literal
+      // by the map's key type, so this reports without the key ever being written as a literal.
+      code: `${imports}\nconst t = stringsBag[\`%a_\${plainKey}%\`] ?? 'A';`,
       filename,
       errors: [{ messageId: 'nullishLocalizedFallback' }],
     },
@@ -76,8 +84,10 @@ typeAwareRuleTester.run('no-nullish-localized-fallback', rule, {
     },
     {
       // A `keyof` over a wide strings bag prints as a union the checker truncates, so the key is
-      // recognized from the type's members rather than from its printed text.
-      code: `${imports}\nconst t = wideStrings[wideKey] ?? 'A';`,
+      // recognized from the type's members rather than from its printed text. The map is the
+      // zero-member `anonymousMap`, which the map branch never claims, so only the key branch can
+      // produce this report.
+      code: `${imports}\nconst t = anonymousMap[wideKey] ?? 'A';`,
       filename,
       errors: [{ messageId: 'nullishLocalizedFallback' }],
     },

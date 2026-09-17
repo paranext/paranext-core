@@ -105,6 +105,13 @@ export default createRule({
   defaultOptions: [],
 
   create(context) {
+    // A type-aware rule has nothing to say about a file linted without type information, so it
+    // registers no listeners rather than aborting the run. Configurations that lint plain
+    // JavaScript alongside TypeScript, and any downstream repo that enables the recommended config
+    // without `parserOptions.project`, reach this path.
+    const { parserServices } = context;
+    if (!parserServices?.program || !parserServices.esTreeNodeToTSNodeMap) return {};
+
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 
