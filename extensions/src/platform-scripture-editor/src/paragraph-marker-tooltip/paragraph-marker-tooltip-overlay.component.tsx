@@ -45,9 +45,12 @@ export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Prop
   const rafIdRef = useRef<number>(0);
   // Pending reveal timer: armed on hover-enter while nothing is showing yet, fired to actually set
   // hoveredData once TOOLTIP_DELAY_MS elapses. Cleared on every leave path so a fast pass never shows
-  // anything. Hidden-view case (see .claude/rules/cross-view-sync-hidden-views.md): not handled
-  // separately — a display:none pane can't receive real mouseover events, so no new timer can ever
-  // start while hidden.
+  // anything. Hidden-view case (see .claude/rules/cross-view-sync-hidden-views.md): a display:none
+  // pane can't receive real mouseover events, so no new timer can ever start while hidden — but a
+  // timer already armed before the pane hid keeps running and can still fire while hidden, committing
+  // a bogus position from a zeroed-out rect. Deliberately left unhandled: this component only renders
+  // in Simple mode, where the Scripture Editor is always alone in its dock stack, so there is no other
+  // tab whose activation could hide this pane while it's mounted.
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Set to true by keydown so the tooltip stays hidden until the mouse actually moves.
   const suppressUntilMoveRef = useRef(false);
