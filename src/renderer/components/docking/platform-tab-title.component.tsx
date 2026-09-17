@@ -515,8 +515,9 @@ export function PlatformTabTitle({
   }>({ otherWindows: [], isOnlyTabInWindowThatWouldClose: false });
 
   /**
-   * Whether this tab's web view currently reports a zoom area to act on, read fresh each time the
-   * menu opens. Zooming behaves identically in both modes, so this is read regardless of mode —
+   * Whether this tab's web view reports a zoom area to act on, read when the menu opens, and not
+   * re-read while it stays open — an area that arrives mid-open is picked up the next time the menu
+   * is opened. Zooming behaves identically in both modes, so this is read regardless of mode —
    * unlike {@link menuTargets}, which only Power mode's window-target items need.
    *
    * Read synchronously rather than awaited: the resolver already knows every pane's reported areas
