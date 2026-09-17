@@ -14,7 +14,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [{}]),
 }));
 
-// Accessible names for the percent-stepper buttons; only the webViewContentZoom stepper tests
+// Accessible names for the zoom-stepper buttons; only the webViewContentZoom stepper tests
 // below need real localized strings, so they override the default `[{}]` mock per test.
 const ZOOM_STRINGS = {
   '%settings_platform_webViewContentZoom_increase%': 'Increase default zoom',
@@ -165,7 +165,7 @@ describe('platform.webViewContentZoom stepper', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
   });
 
-  it('renders the percent stepper instead of a text box', () => {
+  it('renders the zoom stepper instead of a text box', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
     render(
       <Setting

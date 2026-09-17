@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { fn } from 'storybook/test';
-import { PercentStepper } from './percent-stepper.component';
+import { ZoomStepper } from './zoom-stepper.component';
 
 const LABELS = {
   increase: 'Increase default zoom',
@@ -10,9 +10,9 @@ const LABELS = {
   atMinimum: 'Already at the smallest zoom (50 %)',
 };
 
-const meta: Meta<typeof PercentStepper> = {
-  title: 'Settings/PercentStepper',
-  component: PercentStepper,
+const meta: Meta<typeof ZoomStepper> = {
+  title: 'Settings/ZoomStepper',
+  component: ZoomStepper,
   tags: ['autodocs'],
   args: {
     defaultValue: 1,
@@ -23,7 +23,7 @@ const meta: Meta<typeof PercentStepper> = {
 };
 export default meta;
 
-type Story = StoryObj<typeof PercentStepper>;
+type Story = StoryObj<typeof ZoomStepper>;
 
 /** The default factor — reset is disabled since there is nothing to reset back to. */
 export const Default: Story = {
