@@ -22,10 +22,12 @@ import {
   areaBox,
   ctrlWheel,
   expectPopupBesideTriggerAndInsideFrame,
+  frameBox,
   INDICATOR_SELECTOR,
   type PageBox,
   readContentZoomMemory,
   readIndicatorText,
+  triggerBox,
   waitForPopupAnimations,
   zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
@@ -95,8 +97,7 @@ async function scrollText(
   frame: Frame,
   target: { to?: number; by?: number },
 ): Promise<{ before: number; after: number; box: PageBox }> {
-  const frameBox = await (await frame.frameElement()).boundingBox();
-  if (!frameBox) throw new Error('Editor frame has no box');
+  const editorFrameBox = await frameBox(frame);
   const result = await mainEditorContainer(frame).evaluate((element, { to, by }) => {
     let node: Element | null = element;
     while (node) {
@@ -118,7 +119,7 @@ async function scrollText(
   }, target);
   return {
     ...result,
-    box: { ...result.box, x: result.box.x + frameBox.x, y: result.box.y + frameBox.y },
+    box: { ...result.box, x: result.box.x + editorFrameBox.x, y: result.box.y + editorFrameBox.y },
   };
 }
 
@@ -136,26 +137,25 @@ async function scrollTextKeepingVisible(
   const moved = after - before;
   expect(Math.abs(moved)).toBeGreaterThanOrEqual(Math.abs(delta) / 2);
   expect(Math.sign(moved)).toBe(Math.sign(delta));
-  const triggerBox = 'boundingBox' in trigger ? await trigger.boundingBox() : trigger;
-  if (!triggerBox) throw new Error('Scroll trigger has no box');
+  const triggerRect = await triggerBox(trigger);
   // A pre-scroll box (a caret) is shifted by the distance scrolled.
-  const top = 'boundingBox' in trigger ? triggerBox.y : triggerBox.y - moved;
+  const top = 'boundingBox' in trigger ? triggerRect.y : triggerRect.y - moved;
   expect(top).toBeGreaterThanOrEqual(scrollerBox.y);
-  expect(top + triggerBox.height).toBeLessThanOrEqual(scrollerBox.y + scrollerBox.height);
+  expect(top + triggerRect.height).toBeLessThanOrEqual(scrollerBox.y + scrollerBox.height);
   return moved;
 }
 
 /** The text caret's (or the text selection's) box, main-frame-relative. */
 async function readCaretBox(frame: Frame): Promise<PageBox> {
-  const frameBox = await (await frame.frameElement()).boundingBox();
+  const editorFrameBox = await frameBox(frame);
   const caret = await frame.evaluate(() => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return undefined;
     const rect = selection.getRangeAt(0).getBoundingClientRect();
     return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
   });
-  if (!frameBox || !caret) throw new Error('No frame box or no text caret');
-  return { ...caret, x: caret.x + frameBox.x, y: caret.y + frameBox.y };
+  if (!caret) throw new Error('No text caret');
+  return { ...caret, x: caret.x + editorFrameBox.x, y: caret.y + editorFrameBox.y };
 }
 
 /**
@@ -187,8 +187,7 @@ async function boxOf(locator: Locator): Promise<PageBox> {
  * Checks that the selection really spans more than one line.
  */
 async function selectWrappedText(page: Page, frame: Frame, input: Locator): Promise<PageBox> {
-  const frameBox = await (await frame.frameElement()).boundingBox();
-  if (!frameBox) throw new Error('Editor frame has no box');
+  const editorFrameBox = await frameBox(frame);
   await input.getByText('that great city', { exact: false }).first().scrollIntoViewIfNeeded();
   const points = await input.evaluate((root) => {
     const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -211,9 +210,9 @@ async function selectWrappedText(page: Page, frame: Frame, input: Locator): Prom
     return undefined;
   });
   if (!points) throw new Error('Verse 2 text not found');
-  await page.mouse.click(frameBox.x + points.start.x, frameBox.y + points.start.y);
+  await page.mouse.click(editorFrameBox.x + points.start.x, editorFrameBox.y + points.start.y);
   await page.keyboard.down('Shift');
-  await page.mouse.click(frameBox.x + points.end.x, frameBox.y + points.end.y);
+  await page.mouse.click(editorFrameBox.x + points.end.x, editorFrameBox.y + points.end.y);
   await page.keyboard.up('Shift');
   const lines = await frame.evaluate(() => {
     const selection = window.getSelection();
@@ -232,7 +231,12 @@ async function selectWrappedText(page: Page, frame: Frame, input: Locator): Prom
   const top = Math.min(...lines.map((line) => line.top));
   const right = Math.max(...lines.map((line) => line.right));
   const bottom = Math.max(...lines.map((line) => line.bottom));
-  return { x: frameBox.x + left, y: frameBox.y + top, width: right - left, height: bottom - top };
+  return {
+    x: editorFrameBox.x + left,
+    y: editorFrameBox.y + top,
+    width: right - left,
+    height: bottom - top,
+  };
 }
 
 test.describe('scripture editor content zoom', () => {
