@@ -41,7 +41,7 @@ function renderHome(onSendReceiveProject: (projectId: string) => Promise<void>) 
   );
 }
 
-const SERVER_UNREACHABLE_TITLE = "Can't reach the Send/Receive server";
+const SERVER_UNREACHABLE_TITLE = "Can't reach the sync server";
 const NOTHING_HERE = 'Nothing here.';
 const NOTHING_FOUND = 'Nothing found.';
 
@@ -71,7 +71,7 @@ function renderHomeList({
           '%resources_noSearchResults%': NOTHING_FOUND,
           '%resources_serverUnreachable_title%': SERVER_UNREACHABLE_TITLE,
           '%resources_serverUnreachable_description%':
-            'Only projects already on this computer are shown.',
+            'Showing only the projects already on your computer.',
         },
         false,
       ]}
