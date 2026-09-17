@@ -323,8 +323,13 @@ export type SavedWebViewDefinition = (
 export type ContentZoomAreaId = string;
 
 /**
- * Id of the zoom area a web view marks without naming one (an empty attribute value). Every web
- * view that opts into content zoom has at least this area.
+ * Id of the zoom area a web view marks without naming one. Every web view that opts into content
+ * zoom has at least this area.
+ *
+ * Three attribute values name it: an empty value (`data-platform-content-zoom-root=""`), the id
+ * itself (`="main"`), and `="true"` — the value React serializes a bare JSX prop (`<div
+ * data-platform-content-zoom-root />`) to. Because `"true"` names this area, an area genuinely
+ * called `true` is not available.
  *
  * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
  * writes the literal `'main'` itself and keeps it equal to this constant.
@@ -348,12 +353,15 @@ export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
 
 /**
  * Attribute a web view puts on each element that wraps one zoom area's content (below its own
- * toolbar, outside dividers and headers). The attribute value is the area id; an empty value is the
- * {@link MAIN_CONTENT_ZOOM_AREA} area. The platform's injected stylesheet applies `zoom:
- * var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored — matched
- * by neither the platform's stylesheet nor its report of the view's areas — so nesting never
- * compounds one area's zoom into another's. Web views without this attribute ignore per-area zoom
- * input and are scaled whole at the Settings default.
+ * toolbar, outside dividers and headers). The attribute value is the area id. Three values name the
+ * {@link MAIN_CONTENT_ZOOM_AREA} area instead: an empty value
+ * (`data-platform-content-zoom-root=""`), `="main"`, and the `="true"` React serializes a bare JSX
+ * prop (`<div data-platform-content-zoom-root />`) to. Write the empty value in static markup and
+ * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
+ * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
+ * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
+ * never compounds one area's zoom into another's. Web views without this attribute ignore per-area
+ * zoom input and are scaled whole at the Settings default.
  *
  * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
  * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this

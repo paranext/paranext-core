@@ -4,6 +4,7 @@ import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  MAIN_CONTENT_ZOOM_AREA,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from '@shared/models/web-view.model';
 
@@ -69,6 +70,20 @@ export const CONTENT_ZOOM_AREA_ID_PLACEHOLDER = 'AREA_ID';
  * rules wins.
  */
 export const CONTENT_ZOOM_UNNESTED_CLAUSE = `:where(:not([${CONTENT_ZOOM_ROOT_ATTRIBUTE}] [${CONTENT_ZOOM_ROOT_ATTRIBUTE}]))`;
+
+/**
+ * Every attribute value that names the {@link MAIN_CONTENT_ZOOM_AREA} area: the empty value a view
+ * writes when it names no area, the id itself, and the string `"true"` that React serializes a bare
+ * `data-*` JSX prop to — so a view written as `<div data-platform-content-zoom-root />` marks its
+ * main area rather than one called `true`. The bootstrap's `idOf` and the `main` area's CSS rule
+ * are both built from this one list, so the report and the stylesheet cannot disagree about which
+ * markers are the main area. An area genuinely called `true` is therefore not available.
+ */
+export const CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES: readonly string[] = [
+  '',
+  MAIN_CONTENT_ZOOM_AREA,
+  'true',
+];
 
 /**
  * The CSS rule that scales one NAMED zoom area (not `main`, whose rule also matches the marker's

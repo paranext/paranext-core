@@ -3,6 +3,7 @@ import {
   CONTENT_ZOOM_AREA_ID_PLACEHOLDER,
   CONTENT_ZOOM_COMMANDS,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
   CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
@@ -26,13 +27,15 @@ const INDICATOR_ANNOUNCE_QUIET_MS = 500;
 
 /**
  * The rule that scales one zoom area: its own variable, else the default. The `main` area's rule
- * names both spellings of its marker — the empty value a view writes when it names no area, and the
- * id itself — so that a marker carrying an id no rule was generated for (an invalid id, or one this
- * pane has neither a remembered level for nor the bootstrap accepted at runtime) is left unscaled
- * instead of quietly following `main`. Every clause also carries
- * {@link CONTENT_ZOOM_UNNESTED_CLAUSE}, so a marker nested inside another marker matches no rule at
- * all — the same marker the runtime `collectAreas` refuses to report, keeping the CSS and the
- * report in agreement about which markers are areas. Without that clause a nested marker would
+ * names every spelling of its marker — {@link CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES}: the empty
+ * value a view writes when it names no area, the id itself, and the `"true"` React serializes a
+ * bare JSX prop to — so that a marker carrying an id no rule was generated for (an invalid id, or
+ * one this pane has neither a remembered level for nor the bootstrap accepted at runtime) is left
+ * unscaled instead of quietly following `main`. The list is shared with the bootstrap's `idOf`, so
+ * a spelling the report calls `main` is always a spelling this rule scales. Every clause also
+ * carries {@link CONTENT_ZOOM_UNNESTED_CLAUSE}, so a marker nested inside another marker matches no
+ * rule at all — the same marker the runtime `collectAreas` refuses to report, keeping the CSS and
+ * the report in agreement about which markers are areas. Without that clause a nested marker would
  * match whenever its id also has a rule (always true for `main`/the empty value, and true for any
  * named id that is also a legitimate area elsewhere in the view), and CSS `zoom` compounds, so it
  * would scale by the product of its own area's factor and its ancestor area's while the report
@@ -42,7 +45,9 @@ const INDICATOR_ANNOUNCE_QUIET_MS = 500;
  */
 function areaRule(areaId: string): string {
   if (areaId === MAIN_CONTENT_ZOOM_AREA) {
-    const selector = `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}=""]${CONTENT_ZOOM_UNNESTED_CLAUSE},[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${MAIN_CONTENT_ZOOM_AREA}"]${CONTENT_ZOOM_UNNESTED_CLAUSE}`;
+    const selector = CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES.map(
+      (value) => `[${CONTENT_ZOOM_ROOT_ATTRIBUTE}="${value}"]${CONTENT_ZOOM_UNNESTED_CLAUSE}`,
+    ).join(',');
     return `${selector}{zoom:var(${getContentZoomCssVariable(areaId)},var(${CONTENT_ZOOM_DEFAULT_CSS_VARIABLE},1))}`;
   }
   return CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE.split(CONTENT_ZOOM_AREA_ID_PLACEHOLDER).join(areaId);
@@ -132,9 +137,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       warnPapi('Content zoom: ' + message);
     };
 
+    // Every spelling that names the main area. React serialises a bare \`data-*\` JSX prop as the
+    // string "true", so a view that marks its main area the documented way arrives here spelled
+    // that way rather than with an empty value; the same list builds the main area's CSS rule, so
+    // the report and the stylesheet always agree. An area genuinely called "true" is not available.
+    const MAIN_AREA_VALUES = ${JSON.stringify(CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES)};
     const idOf = (element) => {
       const value = element.getAttribute(ATTR);
-      return value ? value : MAIN;
+      return value === null || MAIN_AREA_VALUES.indexOf(value) !== -1 ? MAIN : value;
     };
     // The area an element belongs to: its closest marked ancestor (itself included).
     const areaOf = (node) => {

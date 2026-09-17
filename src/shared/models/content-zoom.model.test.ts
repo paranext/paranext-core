@@ -5,6 +5,7 @@ import {
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
+  CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   getContentZoomCssVariable,
@@ -34,5 +35,9 @@ describe('content-zoom.model', () => {
     expect(CONTENT_ZOOM_COMMANDS.in).toBe('platform.webViewContentZoomIn');
     expect(CONTENT_ZOOM_COMMANDS.out).toBe('platform.webViewContentZoomOut');
     expect(CONTENT_ZOOM_COMMANDS.reset).toBe('platform.webViewContentZoomReset');
+  });
+
+  it('names the main area with the empty value, its id, and the "true" React writes for a bare JSX prop', () => {
+    expect(CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES).toEqual(['', 'main', 'true']);
   });
 });

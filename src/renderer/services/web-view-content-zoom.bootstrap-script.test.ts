@@ -1,3 +1,5 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getContentZoomBootstrapScript,
@@ -331,6 +333,35 @@ describe('content-zoom bootstrap script', () => {
       ),
     ).toBe(true);
     expect(rules.some((text) => text.includes('"inner"'))).toBe(false);
+  });
+
+  it('takes the marker React writes for a bare JSX prop as the main area', async () => {
+    // Rendered through React rather than hand-written, so this also pins the serialization a view
+    // gets from `<div data-platform-content-zoom-root />` — the way the published docs say to mark
+    // the main area.
+    const rendered = renderToStaticMarkup(
+      createElement('div', { id: 'main', 'data-platform-content-zoom-root': true }, 'text'),
+    );
+    expect(rendered).toContain('data-platform-content-zoom-root="true"');
+    const { bound } = install(
+      'wv-react',
+      `${rendered}<div data-platform-content-zoom-root="footnotes" id="foot">note</div>`,
+    );
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-react', [
+      'main',
+      'footnotes',
+    ]);
+    const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
+    const selectors = sheet
+      ? Array.from(sheet.cssRules).flatMap((rule) =>
+          rule instanceof CSSStyleRule ? [rule.selectorText] : [],
+        )
+      : [];
+    // Positive control: the named area is matched, so a miss on the React-marked element below
+    // would be the missing spelling rather than an empty sheet.
+    expect(selectors.some((selector) => byId('foot').matches(selector))).toBe(true);
+    expect(selectors.some((selector) => byId('main').matches(selector))).toBe(true);
   });
 
   it("writing the indicator's text does not re-scan the document for zoom areas", async () => {
@@ -684,7 +715,7 @@ describe('content-zoom bootstrap script', () => {
       ':root{--platform-content-zoom-default:1.3;--platform-content-zoom-main:1.2;--platform-content-zoom-footnotes:0.9}',
     );
     expect(style).toContain(
-      '[data-platform-content-zoom-root=""]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])),[data-platform-content-zoom-root="main"]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])){zoom:var(--platform-content-zoom-main,var(--platform-content-zoom-default,1))}',
+      '[data-platform-content-zoom-root=""]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])),[data-platform-content-zoom-root="main"]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])),[data-platform-content-zoom-root="true"]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])){zoom:var(--platform-content-zoom-main,var(--platform-content-zoom-default,1))}',
     );
     expect(style).toContain(
       '[data-platform-content-zoom-root="footnotes"]:where(:not([data-platform-content-zoom-root] [data-platform-content-zoom-root])){zoom:var(--platform-content-zoom-footnotes,var(--platform-content-zoom-default,1))}',
