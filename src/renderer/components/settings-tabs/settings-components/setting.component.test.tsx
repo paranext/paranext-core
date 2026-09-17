@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { logger } from '@shared/services/logger.service';
 import { Setting } from './setting.component';
 
 // Setting pulls in useData (only for the UI-language-selector fallback, unused by the string/
@@ -12,6 +13,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     AvailableInterfaceLanguages: () => [{}, vi.fn(), false],
   })),
   useLocalizedStrings: vi.fn(() => [{}]),
+}));
+
+// Stubbed so a failed write's log entry can be asserted; `Setting` is the only thing logging here.
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 // Accessible names for the zoom-stepper buttons; only the webViewContentZoom stepper tests
@@ -158,6 +164,36 @@ describe('debounced text-setting writes', () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(setSetting).toHaveBeenCalledTimes(1);
     expect(setSetting).toHaveBeenCalledWith('Spanish');
+  });
+});
+
+describe('failed setting writes', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('logs a rejected write so the failure outlives the component', async () => {
+    vi.useFakeTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
+    // The shape of a Send/Receive write-gate rejection, which reports only into component state —
+    // and `setErrorMessage` is a no-op once the settings tab has been closed.
+    const setSetting = vi.fn().mockRejectedValue(new Error('project is syncing (SR_EDIT_BLOCKED)'));
+    render(
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateProjectSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Spanish' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('platform.language'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('SR_EDIT_BLOCKED'));
   });
 });
 
