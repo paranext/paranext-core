@@ -8,6 +8,10 @@ import {
   reportConnectionLost,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
+import {
+  isWindowBlockedByOverlay,
+  resetWindowBlockingOverlays,
+} from '@renderer/services/window-blocking-overlay-store';
 import { FirstRunOverlay } from './first-run-overlay.component';
 
 vi.mock('@renderer/services/first-run-store', async (importActual) => {
@@ -171,6 +175,9 @@ afterEach(() => {
   // The connection-lost store is a module-level singleton and never clears itself, so a test that
   // latches it would leave every later test permanently stood down.
   resetConnectionLost();
+  // Same for the window-blocking store: a registration left behind would block the window for every
+  // later test in this process.
+  resetWindowBlockingOverlays();
 });
 
 describe('FirstRunOverlay', () => {
@@ -301,6 +308,21 @@ describe('FirstRunOverlay', () => {
       captured?.();
     });
     expect(screen.getByText(/choose your language/i)).toBeInTheDocument();
+  });
+
+  it('marks the window blocked while the first-run gate is up', () => {
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    const { unmount } = render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(true);
+    unmount();
+    expect(isWindowBlockedByOverlay()).toBe(false);
+  });
+
+  it('does not mark the window blocked once the connection is lost', () => {
+    reportConnectionLost();
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(false);
   });
 
   // Both orderings, because the gate can be raised at any time: a background registration re-check
