@@ -218,3 +218,33 @@ function SendReceiveErrorDecorator(Story: (update?: { args: HomeProps }) => Reac
 export const SendReceiveError: Story = {
   decorators: [SendReceiveErrorDecorator],
 };
+
+/**
+ * The send/receive server could not be reached, so the list holds only what is already on this
+ * computer. Without the banner this is indistinguishable from a server that simply has no projects
+ * on it — and the local rows give no hint that anything is missing.
+ */
+function ServerUnreachableDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        // Empty on purpose: an unreachable server yields no shared projects, which is exactly why
+        // the list alone cannot say whether the server was reached.
+        sharedProjectsInfo: {},
+        didRemoteProjectsFailToLoad: true,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const ServerUnreachable: Story = {
+  decorators: [ServerUnreachableDecorator],
+};

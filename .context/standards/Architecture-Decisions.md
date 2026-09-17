@@ -75,6 +75,44 @@ step, no automation. Just a record.
 
 ---
 
+## adr-all-projects-routes-to-home: "All projects…" routes to Home rather than making the project picker send/receive-aware
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** PRD IAN-NN-2.3 asks for a way to reach projects the title-bar picker's list does not
+  show, including projects that exist on the send/receive server but not yet on this machine. The
+  picker's list is built entirely from local metadata — `use-project-picker-data.hook.ts` never calls
+  `getSharedProjects` — so the affordance existed but could not reach the server. Making the picker
+  itself server-aware was constrained by two facts: `paratextBibleSendReceive.getSharedProjects` is
+  registered only through Paratext 10 Studio's patch layer, so calling it from core would throw in
+  plain Platform.Bible; and there is no app-wide offline signal (three identical
+  `// TODO: Hook into something that checks for whether the platform is in offline mode` sit in the
+  socket and XHR services). Meanwhile Home — `extensions/src/platform-get-resources/` — already
+  merges local and shared projects, de-duplicates them by `projectId`, gates its own server fetch on
+  `useSendReceiveAvailability`, and offers Sync rather than Open for rows not on disk.
+- **Decision:** The affordance opens Home. Core does not call `getSharedProjects`, gains no
+  send/receive awareness in the picker, and needs no build-flavour gate on the affordance — Home
+  degrades to a local-only list where send/receive is absent. Home owns the honesty requirement
+  instead: it now distinguishes "the server could not be reached" from "the server has no projects"
+  with an explicit banner, because a silent fallback to the local half tells an offline user their
+  projects do not exist.
+- **Alternatives:** **Make the picker call `getSharedProjects` and render server rows inline** —
+  rejected: it throws in plain Platform.Bible, duplicates the merge and de-duplication Home already
+  does, and would need its own outage handling. **Gate the affordance on send/receive availability**
+  — rejected once the target became Home: the gate's only rationale was avoiding that throw, and
+  applying it anyway would hide a working "all projects on disk" surface from plain Platform.Bible.
+  **Route to the Send/Receive dialog** — rejected by the PRD itself, since send/receive is intended
+  to be replaced by Home. **Cache the server's project list for offline use** — deferred: a cached
+  list cannot be acted on, because a user who is offline cannot sync the project the cache would
+  show.
+- **Consequences:** Home is the single surface that reconciles local and server projects, so a defect
+  in that reconciliation is fixed once. The picker stays local-only by design, which is worth
+  restating on any future picker ticket that reads its list as incomplete. Revisit if
+  `getSharedProjects` moves out of the Studio patch layer into core, or if an app-wide offline signal
+  lands — either would make an inline, server-aware picker cheap enough to reconsider.
+
+---
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014

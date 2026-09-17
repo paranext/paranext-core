@@ -5,7 +5,6 @@ import { useBackendSyncActivity } from '@renderer/hooks/use-backend-sync-activit
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useData,
-  useDialogCallback,
   useLocalizedStrings,
   useScrollGroupScrRef,
   useRecentScriptureRefs,
@@ -17,7 +16,6 @@ import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-ava
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
-import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
@@ -338,19 +336,6 @@ export function PlatformBibleToolbar() {
     await svc?.recordProjectOpened(projectId);
   }, []);
 
-  const showProjectPicker = useDialogCallback(
-    PROJECT_PICKER_DIALOG_TYPE,
-    { isModal: true },
-    async (projectId) => {
-      if (!projectId) return;
-      try {
-        await openProject(projectId);
-      } catch (e) {
-        logger.warn(`ProjectPicker: error opening project ${projectId}: ${getErrorMessage(e)}`);
-      }
-    },
-  );
-
   const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;
   const hasProjectPickerItems = projectPickerItems.length > 0;
 
@@ -641,7 +626,10 @@ export function PlatformBibleToolbar() {
                 <button
                   type="button"
                   className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-start tw:text-sm"
-                  onClick={() => showProjectPicker()}
+                  // Home lists local projects alongside the send/receive server's projects that
+                  // are not on this machine yet — the "rest of my projects" this picker cannot
+                  // reach, since its own list is built from local metadata only.
+                  onClick={() => openHome()}
                 >
                   {localizedStrings['%projectPicker_toolbar_more_projects%']}
                 </button>

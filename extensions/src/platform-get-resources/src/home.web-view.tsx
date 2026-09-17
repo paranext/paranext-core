@@ -201,6 +201,7 @@ globalThis.webViewComponent = function HomeWebView() {
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
   const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+  const [didRemoteProjectsFailToLoad, setDidRemoteProjectsFailToLoad] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isSendReceiveAvailable) {
@@ -221,6 +222,7 @@ globalThis.webViewComponent = function HomeWebView() {
 
         if (promiseIsCurrent && isMounted.current) {
           setIsLoadingRemoteProjects(false);
+          setDidRemoteProjectsFailToLoad(false);
           setSharedProjectsInfo(projectsInfo);
         }
       } catch (e) {
@@ -254,8 +256,13 @@ globalThis.webViewComponent = function HomeWebView() {
           logger.warn(`Home web view failed to get shared projects: ${errorMessage}`);
         }
 
+        // Every branch that reaches here has given up on the server for this run — the two
+        // notified ones as well as the retries-exhausted one. The notifications name a cause and
+        // offer a fix, but they are dismissible and live outside the list, so Home still has to say
+        // for itself that what it is showing is only the local half.
         if (promiseIsCurrent && isMounted.current) {
           setIsLoadingRemoteProjects(false);
+          setDidRemoteProjectsFailToLoad(true);
         }
       }
     };
@@ -314,6 +321,7 @@ globalThis.webViewComponent = function HomeWebView() {
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
       isLoadingRemoteProjects={isLoadingRemoteProjects}
+      didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}
