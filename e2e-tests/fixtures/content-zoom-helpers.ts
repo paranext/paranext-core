@@ -127,6 +127,24 @@ const POPUP_TRIGGER_MAX_GAP_PX = 24;
 /** A main-frame-relative box, as Playwright's `boundingBox()` returns it. */
 export type PageBox = { x: number; y: number; width: number; height: number };
 
+/** A frame's own box, main-frame-relative. Throws when the frame has none. */
+export async function frameBox(frame: Frame): Promise<PageBox> {
+  const box = await (await frame.frameElement()).boundingBox();
+  if (!box) throw new Error('Frame has no box');
+  return box;
+}
+
+/**
+ * A pop-up trigger's main-frame box: the element's own box when `trigger` is a `Locator`, or the
+ * box already given directly when it is no element of its own (a text caret or selection). Throws
+ * when there is no box.
+ */
+export async function triggerBox(trigger: Locator | PageBox): Promise<PageBox> {
+  const box = 'boundingBox' in trigger ? await trigger.boundingBox() : trigger;
+  if (!box) throw new Error('Trigger has no box');
+  return box;
+}
+
 /**
  * Asserts an open pop-up sits beside its trigger (touching or within
  * {@link POPUP_TRIGGER_MAX_GAP_PX} on one axis and overlapping on the other, without covering the
@@ -141,21 +159,20 @@ export async function expectPopupBesideTriggerAndInsideFrame(
   trigger: Locator | PageBox,
 ): Promise<void> {
   await waitForPopupAnimations(popup);
-  const frameElement = await frame.frameElement();
-  const frameBox = await frameElement.boundingBox();
+  const frameRect = await frameBox(frame);
   const popupBox = await popup.boundingBox();
-  const triggerBox = 'boundingBox' in trigger ? await trigger.boundingBox() : trigger;
-  if (!frameBox || !popupBox || !triggerBox) throw new Error('Pop-up, trigger or frame has no box');
+  const triggerRect = await triggerBox(trigger);
+  if (!popupBox) throw new Error('Pop-up has no box');
   const gapY = Math.max(
-    popupBox.y - (triggerBox.y + triggerBox.height),
-    triggerBox.y - (popupBox.y + popupBox.height),
+    popupBox.y - (triggerRect.y + triggerRect.height),
+    triggerRect.y - (popupBox.y + popupBox.height),
   );
   const gapX = Math.max(
-    popupBox.x - (triggerBox.x + triggerBox.width),
-    triggerBox.x - (popupBox.x + popupBox.width),
+    popupBox.x - (triggerRect.x + triggerRect.width),
+    triggerRect.x - (popupBox.x + popupBox.width),
   );
   const tolerance = 1;
-  const boxes = `pop-up ${JSON.stringify(popupBox)}, trigger ${JSON.stringify(triggerBox)}, frame ${JSON.stringify(frameBox)}`;
+  const boxes = `pop-up ${JSON.stringify(popupBox)}, trigger ${JSON.stringify(triggerRect)}, frame ${JSON.stringify(frameRect)}`;
   // Beside = separated on at most one axis, by a small gap, and never covering the trigger: two
   // boxes intersect exactly when both gaps are negative, so the larger gap must not be.
   expect(
@@ -168,13 +185,13 @@ export async function expectPopupBesideTriggerAndInsideFrame(
   expect(Math.max(gapX, gapY), `close to the trigger: ${boxes}`).toBeLessThanOrEqual(
     POPUP_TRIGGER_MAX_GAP_PX,
   );
-  expect(popupBox.x, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameBox.x - tolerance);
-  expect(popupBox.y, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameBox.y - tolerance);
+  expect(popupBox.x, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameRect.x - tolerance);
+  expect(popupBox.y, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameRect.y - tolerance);
   expect(popupBox.x + popupBox.width, `inside the frame: ${boxes}`).toBeLessThanOrEqual(
-    frameBox.x + frameBox.width + tolerance,
+    frameRect.x + frameRect.width + tolerance,
   );
   expect(popupBox.y + popupBox.height, `inside the frame: ${boxes}`).toBeLessThanOrEqual(
-    frameBox.y + frameBox.height + tolerance,
+    frameRect.y + frameRect.height + tolerance,
   );
   // The box alone is not enough: content that cannot shrink to a capped box paints past its edges
   // while the box itself looks fine. Its own scroll size must fit its client size (both in its own
