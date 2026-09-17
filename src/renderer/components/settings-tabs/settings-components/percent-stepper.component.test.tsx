@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PercentStepper } from './percent-stepper.component';
@@ -175,9 +175,9 @@ describe('PercentStepper', () => {
     fireEvent.click(increase);
     fireEvent.click(increase);
     expect(onChange.mock.calls).toEqual([[1.1], [1.2]]);
-    // The readout follows the `value` prop, which hasn't moved yet — it never shows the
-    // unconfirmed 1.2 the component just emitted.
-    expect(screen.getByText('100 %')).toBeInTheDocument();
+    // The readout follows the presses, not the prop: both have been made, so it reads 120 % while
+    // the platform is still confirming the first one.
+    expect(screen.getByText('120 %')).toBeInTheDocument();
   });
 
   it('follows the prop once it catches up', () => {
@@ -228,19 +228,90 @@ describe('PercentStepper', () => {
   });
 
   it('does not reuse a stale baseline after the window', () => {
-    let currentTimeMs = 0;
-    vi.spyOn(performance, 'now').mockImplementation(() => currentTimeMs);
+    vi.useFakeTimers();
+    try {
+      const onChange = vi.fn();
+      const { rerender } = render(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
+      fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+      expect(onChange).toHaveBeenCalledWith(1.1);
+      // The write is never confirmed — the prop stays at 1 — but enough time passes that the
+      // baseline the first press left behind is no longer trustworthy.
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      rerender(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
+      fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+      expect(onChange).toHaveBeenCalledTimes(2);
+      expect(onChange).toHaveBeenLastCalledWith(1.1);
+      expect(screen.getByText('110 %')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a confirmation of an earlier press does not discard a later one', () => {
+    // Press 1's write landing while press 2 is still outstanding is the ordinary shape of a burst.
+    const onChange = vi.fn();
+    const { rerender } = render(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
+    const increase = screen.getByRole('button', { name: LABELS.increase });
+    fireEvent.click(increase);
+    fireEvent.click(increase);
+    rerender(<PercentStepper {...baseProps} value={1.1} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onChange.mock.calls.map(([factor]) => factor)).toEqual([1.1, 1.2, 1.3]);
+  });
+
+  it('a write from elsewhere still wins the baseline', () => {
     const onChange = vi.fn();
     const { rerender } = render(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
-    expect(onChange).toHaveBeenCalledWith(1.1);
-    // The write is never confirmed — the prop stays at 1 — but enough time passes that the
-    // baseline the first press left behind is no longer trustworthy.
-    currentTimeMs += 2000;
-    rerender(<PercentStepper {...baseProps} value={1} onChange={onChange} />);
+    rerender(<PercentStepper {...baseProps} value={2} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
-    expect(onChange).toHaveBeenCalledTimes(2);
-    expect(onChange).toHaveBeenLastCalledWith(1.1);
+    expect(onChange).toHaveBeenLastCalledWith(2.1);
+  });
+
+  it('enables reset as soon as + is pressed, before the write lands', () => {
+    const onChange = vi.fn();
+    render(<PercentStepper {...baseProps} value={1} defaultValue={1} onChange={onChange} />);
+    const reset = screen.getByRole('button', { name: LABELS.reset });
+    expect(reset).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(reset).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(reset);
+    expect(onChange).toHaveBeenLastCalledWith(1);
+  });
+
+  it('disables + as soon as the press that reaches the maximum is made', () => {
+    const onChange = vi.fn();
+    render(<PercentStepper {...baseProps} value={2.9} onChange={onChange} />);
+    const increase = screen.getByRole('button', { name: LABELS.increase });
+    fireEvent.click(increase);
+    expect(increase).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(increase);
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the optimistic enabled state if the write never lands', () => {
+    vi.useFakeTimers();
+    try {
+      const onChange = vi.fn();
+      render(<PercentStepper {...baseProps} value={1} defaultValue={1} onChange={onChange} />);
+      fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+      const reset = screen.getByRole('button', { name: LABELS.reset });
+      expect(reset).not.toHaveAttribute('aria-disabled');
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(reset).toHaveAttribute('aria-disabled', 'true');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows the pressed factor in the readout before the write lands', () => {
+    render(<PercentStepper {...baseProps} value={1} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(screen.getByText('110 %')).toBeInTheDocument();
   });
 
   it('a foreign write wins immediately', () => {
