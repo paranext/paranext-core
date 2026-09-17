@@ -374,6 +374,30 @@ function warnUnlessReplaced(paletteDescription: string, error: unknown): void {
 }
 
 /**
+ * Adapts one of the async insert actions for the editor's right-click menu, whose `onSelect` is
+ * synchronous and so has nowhere to return a rejection to.
+ *
+ * The menu decides which items are selectable when it opens, but each action awaits a
+ * version-history snapshot before it inserts — so the editor can turn read-only in that window and
+ * `EditorRef.insertMarker` throws. Log that the way the top-menu message path does rather than
+ * leaving an unhandled promise.
+ *
+ * @param editDescription Names the edit in the log line, e.g. `'inserting footnote'`.
+ */
+function runInsertFromContextMenu(
+  insert: () => Promise<void>,
+  editDescription: string,
+): () => void {
+  return () => {
+    insert().catch((error) => {
+      logger.warn(
+        `Error ${editDescription} from the editor context menu: ${getErrorMessage(error)}`,
+      );
+    });
+  };
+}
+
+/**
  * The marker-menu context plus the caret/selection anchor rect returned by
  * `EditorRef.getMarkerMenuContext`. Anchor coordinates are iframe-relative by contract, so they can
  * be passed straight through to `papi.overlays.showCommandPalette`'s `anchor` option.
@@ -1630,9 +1654,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       contextMenu: createInsertContextMenuItems(
         localizedStrings,
         {
-          insertFootnote: insertFootnoteAtCurrentSelection,
-          insertCrossReference: insertCrossReferenceAtCurrentSelection,
-          insertEndnote: insertEndnoteAtCurrentSelection,
+          insertFootnote: runInsertFromContextMenu(
+            insertFootnoteAtCurrentSelection,
+            'inserting footnote',
+          ),
+          insertCrossReference: runInsertFromContextMenu(
+            insertCrossReferenceAtCurrentSelection,
+            'inserting cross-reference',
+          ),
+          insertEndnote: runInsertFromContextMenu(
+            insertEndnoteAtCurrentSelection,
+            'inserting endnote',
+          ),
           insertComment: insertCommentAtCurrentSelection,
         },
         { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
