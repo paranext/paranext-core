@@ -138,11 +138,10 @@ const ORPHAN_NOTE_HEAD_REGEX = new RegExp(
 /** A marker's `|attribute` payload, which ends where the closing marker begins. */
 const MARKER_ATTRIBUTES_REGEX = /\|[^\\]*(?=\\)/g;
 /**
- * A marker token, capturing its name, or a bare `\*` closer — the form a milestone (`\qt-s
+ * A marker token, capturing its name, or a bare `\*` closer — the form a milestone closes with.
  *
- * |who="Pilate"\*`) closes with. A pattern rather than a regex because the scan below drives
- *
- * `lastIndex` by hand, which a shared `g`-flagged regex could not survive.
+ * A pattern rather than a regex because the scan below drives `lastIndex` by hand, which a shared
+ * `g`-flagged regex could not survive.
  */
 const MARKER_CONSTRUCT_PATTERN = String.raw`${MARKER_TOKEN_PATTERN}|\\\*`;
 /**
