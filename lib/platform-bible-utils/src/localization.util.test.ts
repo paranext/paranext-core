@@ -47,9 +47,8 @@ describe('resolveLocalizedString', () => {
   });
 
   test('falls back when the value is a different key than the one requested', () => {
-    // The copies this replaces compared the value against the key that was asked for, so a bag
-    // carrying some other key's raw text passed straight through. Any `%…%`-shaped value is
-    // unresolved, whichever key produced it.
+    // Any `%…%`-shaped value is unresolved, whichever key produced it: a strings bag can carry
+    // some other key's raw text, and that is no more showable than the requested key's own.
     expect(resolveLocalizedString('%some_other_key%', 'Previous chapter')).toBe('Previous chapter');
   });
 
