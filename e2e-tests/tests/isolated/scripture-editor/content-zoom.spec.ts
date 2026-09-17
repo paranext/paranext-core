@@ -145,7 +145,7 @@ async function scrollTextKeepingVisible(
   return moved;
 }
 
-/** The collapsed text caret's box, main-frame-relative. */
+/** The text caret's (or the text selection's) box, main-frame-relative. */
 async function readCaretBox(frame: Frame): Promise<PageBox> {
   const frameBox = await (await frame.frameElement()).boundingBox();
   const caret = await frame.evaluate(() => {
@@ -595,8 +595,113 @@ test.describe('scripture editor content zoom', () => {
         selection.y - scrolledTop > 180 ? 60 : -60,
       );
       await closeCommentEditor();
+      // Stays in the formatted view: the next step needs it too.
+    });
 
-      // Back to the standard view (formatted -> standard) for the steps that follow.
+    await test.step("the footnote editor's marker menu sits beside the selection and is zoomed once", async () => {
+      // The footnote editor opens its own inline marker menu on `\` only outside the standard
+      // view (which opens the platform's command palette instead); the previous step left the
+      // pane in the formatted view.
+      const mainInput = editorFrame.locator('.editor-input').first();
+      await expect(mainInput).toHaveClass(/\bmarker-hidden\b/);
+      const caller = editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first();
+      const popover = editorFrame.locator('[data-slot="popover-content"]').filter({
+        has: editorFrame.locator('.editor-input'),
+      });
+      const noteInput = popover.locator('.editor-input');
+      const menu = editorFrame.locator('[data-slot="popover-content"]').filter({
+        has: editorFrame.locator('[cmdk-input]'),
+      });
+      const menuItem = menu.locator('[cmdk-item]').first();
+
+      const openFootnotePopover = async () => {
+        await caller.scrollIntoViewIfNeeded();
+        await caller.click({ force: true });
+        await expect(popover).toBeVisible();
+        await expectSettledBeside(editorFrame, popover, caller);
+      };
+      const closeFootnotePopover = async () => {
+        await popover.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(popover).toBeHidden();
+      };
+      /**
+       * Selects the note text from its reference (`\fr`) into its text (`\ft`) and returns the
+       * selection's box. The menu lists the markers allowed inside the selection's innermost
+       * marker, and only a note (`\f`) has any: a caret inside one `\ft` run offers nothing, so no
+       * menu opens there.
+       */
+      const selectAcrossNoteMarkers = async (): Promise<PageBox> => {
+        const selected = await noteInput.evaluate((root) => {
+          const firstText = (selector: string) => {
+            const element = root.querySelector(selector);
+            if (!element) return undefined;
+            return root.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode();
+          };
+          const from = firstText('[data-marker="fr"]');
+          const to = firstText('[data-marker="ft"]');
+          if (!from || !to) return false;
+          root.ownerDocument
+            .getSelection()
+            ?.setBaseAndExtent(
+              from,
+              Math.min(1, from.textContent?.length ?? 0),
+              to,
+              Math.min(3, to.textContent?.length ?? 0),
+            );
+          return true;
+        });
+        if (!selected) throw new Error('The note has no \\fr and \\ft text to select');
+        return readCaretBox(editorFrame);
+      };
+      /**
+       * Presses `\` until the menu opens: the editor reports the selection's marker after the
+       * selection changes, and the key does nothing until it has.
+       */
+      const openMenu = async () => {
+        await expect(async () => {
+          await mainPage.keyboard.press('\\');
+          await expect(menu).toBeVisible({ timeout: 1_000 });
+        }).toPass({ timeout: 10_000 });
+        await expect(menuItem).toBeVisible();
+      };
+      const closeMenu = async () => {
+        await mainPage.keyboard.press('Escape');
+        await expect(menu).toBeHidden();
+      };
+
+      // Control at 100 %: the menu opens for this selection at all.
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
+      await openFootnotePopover();
+      await selectAcrossNoteMarkers();
+      await openMenu();
+      await waitForPopupAnimations(menu);
+      const itemHeightAtDefault = (await boxOf(menuItem)).height;
+      await closeMenu();
+      await closeFootnotePopover();
+
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
+      await openFootnotePopover();
+      const selection = await selectAcrossNoteMarkers();
+      await openMenu();
+      await expect(menu).toHaveAttribute('data-platform-content-zoom-root', '');
+      // Its own zoom root, outside the zoomed footnote popover: nested inside it, the menu would
+      // be zoomed twice.
+      const popoverElement = await popover.elementHandle();
+      expect(
+        await menu.evaluate(
+          (element, popoverRoot) => !!popoverRoot?.contains(element),
+          popoverElement,
+        ),
+      ).toBe(false);
+      await waitForPopupAnimations(menu);
+      await expectSettledBeside(editorFrame, menu, selection);
+      const itemHeightRatio = (await boxOf(menuItem)).height / itemHeightAtDefault;
+      expect(itemHeightRatio).toBeGreaterThan(2 * 0.85);
+      expect(itemHeightRatio).toBeLessThan(2 * 1.15);
+      await closeMenu();
+      await closeFootnotePopover();
+
+      // Back to the standard view (formatted -> standard) for the steps that follow, still at 200 %.
       await sendCommandWithId(mainPage, 'platformScriptureEditor.changeView', editorId);
       await expect(mainInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
     });
