@@ -1,7 +1,21 @@
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, normalizeProjectId } from 'platform-bible-utils';
+import { notificationService } from '@shared/services/notification.service';
+import { getErrorMessage, normalizeProjectId, type LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * Message shown when a picked project fails to open. Declared here rather than inline so the key is
+ * spelled exactly once — `PlatformNotification.message` accepts any string, so a typo would not
+ * fail the build; it would ship a raw `%key%` into a toast.
+ */
+export const PROJECT_OPEN_FAILED_MESSAGE_KEY: LocalizeKey = '%toolbar_project_open_failed%';
+
+/**
+ * Shared by every "couldn't open that project" toast so a user retrying against an unavailable
+ * editor replaces the message rather than collecting one copy per attempt.
+ */
+const PROJECT_OPEN_FAILED_NOTIFICATION_ID = 'toolbar-project-open-failed';
 
 /**
  * How long the toolbar keeps naming a just-selected project before falling back to whatever the
@@ -74,7 +88,7 @@ export function usePendingProject(
         // editor never reported here would otherwise keep its name up until the bound expired.
         setPendingProject(undefined);
       }
-      openProject(item.id).catch((e: unknown) => {
+      openProject(item.id).catch(async (e: unknown) => {
         logger.warn(
           `Toolbar caught an error while trying to open project ${item.id}: ${getErrorMessage(e)}`,
         );
@@ -84,6 +98,20 @@ export function usePendingProject(
             ? undefined
             : current,
         );
+        // Dropping the name back to whatever is open would otherwise undo the user's pick with no
+        // account of why. Only this path reports: the timeout above is not a failure, since an
+        // editor that opens in another window never reports here and has not gone wrong.
+        try {
+          await notificationService.send({
+            message: PROJECT_OPEN_FAILED_MESSAGE_KEY,
+            severity: 'warning',
+            notificationId: PROJECT_OPEN_FAILED_NOTIFICATION_ID,
+          });
+        } catch (notificationError) {
+          logger.warn(
+            `Toolbar could not notify the user that opening a project failed: ${getErrorMessage(notificationError)}`,
+          );
+        }
       });
     },
     [currentProject, openProject],

@@ -503,4 +503,26 @@ describe('ResourcePickerDialog', () => {
     expect(screen.getByText('NIV')).toHaveAttribute('title', 'NIV');
     expect(screen.getAllByText('English')[0]).toHaveAttribute('title', 'English');
   });
+
+  // The other half of the picker row layout contract in
+  // `.context/standards/Architecture-Decisions.md`: the short name starts at the leading edge of
+  // its column in every picker. The "Select project" dialog asserts its own side
+  // (`project-picker.component.test.tsx`, "starts the short name at the leading edge of its
+  // column"); without this one, "identical in both pickers" is only claimed in prose, and moving
+  // this column would leave that test still green.
+  it('starts the short name at the leading edge of its column', () => {
+    renderDialog();
+
+    const shortNameCell = screen.getByText('NIV').closest('td');
+    expect(shortNameCell).not.toBeNull();
+    // Asserting the absence of an end-alignment is the load-bearing half — the leading edge is the
+    // table default, so there is no positive class to match. The language column two cells over
+    // does carry `tw:text-right`, which is what this column must not acquire.
+    expect(shortNameCell?.className).not.toContain('tw:text-right');
+    expect(shortNameCell?.className).not.toContain('tw:text-end');
+    expect(shortNameCell?.className).not.toContain('tw:text-center');
+
+    const languageCell = screen.getAllByText('English')[0].closest('td');
+    expect(languageCell?.className).toContain('tw:text-right');
+  });
 });

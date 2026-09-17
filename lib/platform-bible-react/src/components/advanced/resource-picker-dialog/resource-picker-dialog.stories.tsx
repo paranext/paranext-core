@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+import type { DblResourceData } from 'platform-bible-utils';
 import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
@@ -146,6 +147,35 @@ export const InstalledNotSelectable: Story = {
   },
 };
 
+const LONG_NAME_FULL_NAME =
+  'An Extremely Long Resource Full Name That Keeps Going Well Past Any Reasonable Dialog Width';
+
+const LONG_NAME_RESOURCE: DblResourceData = {
+  dblEntryUid: 'long-1',
+  displayName: 'aVeryLongShortNameThatRefusesToWrapAnywhere',
+  fullName: LONG_NAME_FULL_NAME,
+  bestLanguageName: 'A Language With An Unreasonably Long Display Name',
+  type: 'ScriptureResource',
+  size: 1,
+  installed: false,
+  updateAvailable: false,
+  projectId: 'long-proj',
+};
+
+/**
+ * The defect this pins: `overflow-y: auto` alone leaves the other axis computing from `visible` to
+ * `auto`, so a row wider than the dialog earns a scrollbar nobody asked for.
+ */
+const expectNoHorizontalScroll = async (canvasElement: HTMLElement) => {
+  const canvas = within(canvasElement);
+  const row = await canvas.findByText(LONG_NAME_FULL_NAME);
+
+  const scroller = row.closest('.tw\\:overflow-y-auto');
+  if (!scroller) throw new Error('resource list scroll container not found');
+
+  expect(scroller.scrollWidth).toBeLessThanOrEqual(scroller.clientWidth);
+};
+
 /**
  * A resource whose names are far wider than the 560px dialog this file's decorator renders. The
  * columns truncate; the list must not gain a horizontal scrollbar, which hides the language column
@@ -156,33 +186,30 @@ export const InstalledNotSelectable: Story = {
  */
 export const LongNamesDoNotScrollHorizontally: Story = {
   args: {
-    allResources: [
-      {
-        dblEntryUid: 'long-1',
-        displayName: 'aVeryLongShortNameThatRefusesToWrapAnywhere',
-        fullName:
-          'An Extremely Long Resource Full Name That Keeps Going Well Past Any Reasonable Dialog Width',
-        bestLanguageName: 'A Language With An Unreasonably Long Display Name',
-        type: 'ScriptureResource',
-        size: 1,
-        installed: false,
-        updateAvailable: false,
-        projectId: 'long-proj',
-      },
-    ],
+    allResources: [LONG_NAME_RESOURCE],
     selectedResourceIds: [],
   },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const row = await canvas.findByText(
-      'An Extremely Long Resource Full Name That Keeps Going Well Past Any Reasonable Dialog Width',
-    );
+  play: async ({ canvasElement }) => expectNoHorizontalScroll(canvasElement),
+};
 
-    const scroller = row.closest('.tw\\:overflow-y-auto');
-    if (!scroller) throw new Error('resource list scroll container not found');
-
-    // The defect this pins: `overflow-y: auto` alone leaves the other axis computing from
-    // `visible` to `auto`, so a row wider than the dialog earns a scrollbar nobody asked for.
-    expect(scroller.scrollWidth).toBeLessThanOrEqual(scroller.clientWidth);
+/**
+ * The same guard at a deliberately narrow width. The defect is reported against two conditions — a
+ * long name AND a small dialog — and either one alone can pass: at the file-wide 560px the columns
+ * still have room to absorb a long name that a narrower dialog would push past the edge. The inner
+ * wrapper constrains the content inside the meta decorator's fixed-width shell, since a story-level
+ * decorator nests inside that one rather than replacing it.
+ */
+export const LongNamesDoNotScrollHorizontallyWhenNarrow: Story = {
+  decorators: [
+    (Story) => (
+      <div className="tw:flex tw:min-h-0 tw:w-[320px] tw:flex-col">
+        <Story />
+      </div>
+    ),
+  ],
+  args: {
+    allResources: [LONG_NAME_RESOURCE],
+    selectedResourceIds: [],
   },
+  play: async ({ canvasElement }) => expectNoHorizontalScroll(canvasElement),
 };

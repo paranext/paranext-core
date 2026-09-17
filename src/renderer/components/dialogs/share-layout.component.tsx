@@ -161,6 +161,41 @@ export function isShareLayoutActiveTab(value: string): value is ShareLayoutActiv
 
 type TabKey = 'ScriptureResource' | 'CommentaryResource';
 
+/**
+ * Close button for an embedded picker modal, replacing the one `DialogContent` builds in. Every
+ * picker here opts out of the built-in (`showCloseButton={false}`) because its screen-reader label
+ * is a hardcoded English "Close" that no consumer can translate, and these dialogs already ship a
+ * localized string for it.
+ *
+ * Render it _after_ the picker in DOM order. A dialog focuses its first tabbable element on open,
+ * so leading with this button would open its tooltip over the list and start a keyboard user on
+ * "leave" instead of on the search box.
+ *
+ * This is a local workaround, not the fix: the untranslated label lives in `DialogContent` itself,
+ * so every dialog in the app carries it. Giving `DialogContent` a `closeButtonLabel` prop would
+ * retire this component — tracked with the rest of the picker long tail.
+ */
+function PickerCloseButton({ label, onClose }: { label: string; onClose: () => void }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
+            onClick={onClose}
+            aria-label={label}
+          >
+            <X className="tw:size-4" aria-hidden />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function ShareLayoutDialogContent({
   initialModelText,
   initialActiveTab,
@@ -249,8 +284,6 @@ export function ShareLayoutDialogContent({
             {localizeString(strings, manageLabelKey[tab])}
           </Button>
         </DialogTrigger>
-        {/* The built-in close button is replaced by a localized one: shadcn's carries a hardcoded
-            English "Close" label, and this dialog already ships a translated string for it. */}
         {/* The picker renders a title but deliberately no description; saying so silences Radix's
             missing-description warning without inventing prose for it. */}
         <DialogContent
@@ -270,27 +303,10 @@ export function ShareLayoutDialogContent({
             allowDeselect
             onSelect={(resource) => handleTogglePickedResource(tab, resource)}
           />
-          {/* After the picker in DOM order, not before it: a dialog focuses its first tabbable
-              element on open, and leading with this button would open its tooltip over the list and
-              start a keyboard user on "leave" instead of on the search box. */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
-                  onClick={() => setOpenAddPickerTab(undefined)}
-                  aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-                >
-                  <X className="tw:size-4" aria-hidden />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <PickerCloseButton
+            label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+            onClose={() => setOpenAddPickerTab(undefined)}
+          />
         </DialogContent>
       </Dialog>
     </div>
@@ -355,7 +371,11 @@ export function ShareLayoutDialogContent({
                   />
                 </Button>
               </DialogTrigger>
-              <DialogContent className={RESOURCE_PICKER_DIALOG_CLASS} aria-describedby={undefined}>
+              <DialogContent
+                className={RESOURCE_PICKER_DIALOG_CLASS}
+                showCloseButton={false}
+                aria-describedby={undefined}
+              >
                 <ResourcePickerDialog
                   allResources={allResources}
                   isResourcesLoading={isResourcesLoading}
@@ -366,6 +386,13 @@ export function ShareLayoutDialogContent({
                   selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
                   localizedStrings={resourcePickerLocalizedStrings}
                   onSelect={handleSelectModelText}
+                />
+                {/* Picking a model text closes this dialog, so unlike the multi-select Manage
+                    pickers this button is the cancel path rather than the way out. It is still
+                    the same control, and carries the same localized label. */}
+                <PickerCloseButton
+                  label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+                  onClose={() => setIsModelTextPickerOpen(false)}
                 />
               </DialogContent>
             </Dialog>
