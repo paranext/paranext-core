@@ -175,13 +175,14 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     electronApp,
   }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, several clipboard round
-    // trips each awaiting a settle/save). 3x "slow" budget — see standard-default-power-mode.spec.ts.
-    test.slow();
-    // …and then an explicit ceiling above it, because eight steps no longer fit that budget's worst
-    // case: a cold launch spends ~85s of it before the first step, and each step then waits on a
-    // paste or a clipboard poll with its own 15-20s allowance, which adds up past the 360s `slow()`
-    // grants. The steps are not individually slower than before — there are simply enough of them
-    // that one genuinely slow paste would turn a real pass into a timeout.
+    // trips each awaiting a settle/save), with an explicit ceiling rather than the 3x `test.slow()`
+    // budget other isolated specs use (see standard-default-power-mode.spec.ts): eight steps no
+    // longer fit that budget's worst case, because a cold launch spends ~85s of it before the first
+    // step and each step then waits on a paste or a clipboard poll with its own 15-20s allowance,
+    // which adds up past the 360s `slow()` grants. No step is individually slower than before —
+    // there are simply enough of them that one genuinely slow paste would turn a real pass into a
+    // timeout. `setTimeout` REPLACES the budget rather than scaling it, so this is the whole
+    // allowance and adding `test.slow()` alongside it would change nothing.
     test.setTimeout(480_000);
 
     await waitForHomeTab(mainPage);
@@ -407,6 +408,15 @@ test.describe('scripture editor clipboard USFM round trip', () => {
 
       await expect(figureAttributeRun).toHaveCount(1);
       await figure.scrollIntoViewIfNeeded();
+      // Collapse the previous step's selection BEFORE measuring, not after: `click()` runs
+      // Playwright's actionability checks, which scroll the target into view, and a scroll after the
+      // boxes are read leaves the drag aiming at whatever text moved into those coordinates. The
+      // press itself has to happen at all because the previous step left the whole figure selected —
+      // its drag was clamped to the block and then materialized — and a press INSIDE an existing
+      // selection is, to Chromium, the start of a text drag-and-drop rather than a new selection.
+      // Collapsing somewhere outside the figure first is exactly what a user would do before
+      // dragging afresh.
+      await figureTailGlyph.click();
       const openerBox = await requireElementBox(figureOpenerGlyph, 'the figure’s `\\fig` opener');
       const attributeBox = await requireElementBox(
         figureAttributeRun,
@@ -420,11 +430,6 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       // where a point interpolated toward the attribute run would land on the wrong line entirely.
       // A keyboard selection cannot stand in for this: the mouse path through a read-only glyph is
       // what the behaviour is about.
-      // The previous step left the whole figure selected — its drag was clamped to the block and then
-      // materialized — and a press INSIDE an existing selection is, to Chromium, the start of a
-      // text drag-and-drop rather than a new selection. Collapse it somewhere outside the figure
-      // first, exactly as a user would click before dragging afresh.
-      await figureTailGlyph.click();
       await dragSelect(
         mainPage,
         openerBox.x + openerBox.width + 3,
