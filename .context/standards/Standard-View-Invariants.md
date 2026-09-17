@@ -85,6 +85,24 @@ frames). Enter and Escape are claimed there so they cannot reach the document: a
 Lexical performs the unmarked plain split the palette exists to prevent, and leaves the palette open
 with nothing committed.
 
+**What the palette OFFERS is the editor's to decide, not the host's.** Both Standard-view palettes
+are built from the engine: `EditorRef.getMarkerMenuContext()` describes the caret, and
+`getMarkerMenuItems` / `getEnterMenuItems` turn that into the list
+(`platform-scripture-editor.web-view.tsx`). The host renders the list and forwards the pick to
+`applyMarkerMenuSelection` / `splitParagraphWithMarker` — it must not filter the list or assemble
+its own for a region, because the engine is what knows which markers the caret's block can take. Two
+consequences worth knowing here:
+
+- **`generateInlineMarkerMenuListItems` is a different menu.** It builds from the `usfmMarkers` map
+  in `platform-bible-utils` and serves the OTHER view types (`viewType !== 'standard'`); it never
+  runs in Standard view. A Standard-view palette question is never answered by that function.
+- **Everything offered must be insertable, and the `\` only commits to the document through a
+  palette that opened.** With nothing to offer, the `\` is an ordinary character and lands. The
+  editor half owns the rule that no offered entry is a silent no-op — see "A menu offers nothing it
+  cannot insert" in `docs/standard-view-invariants.md` (`scripture-editors`), which also covers the
+  `\id` line, where `\` offers the inline list and the Enter palette's paragraph pick splits the
+  line instead of retagging it.
+
 Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.
 
