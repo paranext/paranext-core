@@ -82,6 +82,12 @@ globalThis.webViewComponent = function HomeWebView() {
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
   );
+  /**
+   * Whether the availability check ran out of attempts without an answer, as opposed to not having
+   * answered yet. Separate from `isSendReceiveAvailable` because `undefined` there is both states
+   * at once, and only the settled one should reach the user.
+   */
+  const [didAvailabilityCheckGiveUp, setDidAvailabilityCheckGiveUp] = useState<boolean>(false);
 
   const getStarted = useCallback(() => {
     papi.commands.sendCommand(
@@ -110,7 +116,17 @@ globalThis.webViewComponent = function HomeWebView() {
       { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
     );
 
-    if (isAvailable !== undefined && isMounted.current) setIsSendReceiveAvailable(isAvailable);
+    if (!isMounted.current) return;
+    if (isAvailable === undefined) {
+      // Still unknown after every attempt. This is a third state, distinct from both "send/receive
+      // is absent from this build" (a definite `false`, where a local-only list is the whole truth)
+      // and "the server was reached" — and without saying so it renders exactly like the latter.
+      logger.warn('Home web view gave up determining send/receive availability');
+      setDidAvailabilityCheckGiveUp(true);
+      return;
+    }
+    setDidAvailabilityCheckGiveUp(false);
+    setIsSendReceiveAvailable(isAvailable);
   }, []);
 
   useEffect(() => {
@@ -270,10 +286,6 @@ globalThis.webViewComponent = function HomeWebView() {
     if (isSendReceiveInProgress) {
       return;
     }
-    if (!isSendReceiveAvailable) {
-      setIsLoadingRemoteProjects(false);
-      return;
-    }
     getSharedProjects();
 
     return () => {
@@ -321,7 +333,7 @@ globalThis.webViewComponent = function HomeWebView() {
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
       isLoadingRemoteProjects={isLoadingRemoteProjects}
-      didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad}
+      didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad || didAvailabilityCheckGiveUp}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}

@@ -171,7 +171,10 @@ step, no automation. Just a record.
   OS focus, only serves callers with no window, such as the extension host.
 - **Source:** PT-4238; PR #2736.
 
-## adr-all-projects-routes-to-home: "All projects…" routes to Home rather than making the project picker send/receive-aware
+## adr-all-projects-routes-to-home: the title bar's "more projects" affordance routes to Home rather than making the project picker send/receive-aware
+
+_The affordance is labelled "More projects…" in the title bar today; the PRD calls it "All projects…"
+and the rename lands with the `ProjectSelector` migration (PT-4549). Both names mean this entry._
 
 - **Date:** 2026-09-17
 - **Status:** Accepted
@@ -198,12 +201,20 @@ step, no automation. Just a record.
   — rejected once the target became Home: the gate's only rationale was avoiding that throw, and
   applying it anyway would hide a working "all projects on disk" surface from plain Platform.Bible.
   **Route to the Send/Receive dialog** — rejected by the PRD itself, since send/receive is intended
-  to be replaced by Home. **Cache the server's project list for offline use** — deferred: a cached
-  list cannot be acted on, because a user who is offline cannot sync the project the cache would
-  show.
+  to be replaced by Home. **Open a projects-only filtered view of Home** — the PRD's own preferred
+  wording, not taken: Home's list is already searchable and its resource rows are the other half of
+  "get me to the project I mean", so a filtered variant would add a second Home configuration to
+  maintain for a narrowing the search box already gives. Revisit if the unfiltered list proves too
+  noisy to pick a project from in practice. **Cache the server's project list for offline use** —
+  deferred: a cached list cannot be acted on, because a user who is offline cannot sync the project
+  the cache would show.
 - **Consequences:** Home is the single surface that reconciles local and server projects, so a defect
   in that reconciliation is fixed once. The picker stays local-only by design, which is worth
-  restating on any future picker ticket that reads its list as incomplete. Revisit if
+  restating on any future picker ticket that reads its list as incomplete. The
+  `platform.projectPicker` dialog now has no caller in core — it is kept rather than removed because
+  the dialog type is part of the public `DialogTypes` surface an extension can still open, so
+  retiring it is a breaking change that belongs to its own decision, not a side effect of this one.
+  Revisit if
   `getSharedProjects` moves out of the Studio patch layer into core, or if an app-wide offline signal
   lands — either would make an inline, server-aware picker cheap enough to reconsider.
 

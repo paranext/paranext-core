@@ -65,7 +65,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
+import { CSSProperties, ReactNode, useCallback, useMemo, useState } from 'react';
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
@@ -338,6 +338,11 @@ export function PlatformBibleToolbar() {
   const projectPickerItems = recentProjects.length > 0 ? recentProjects : allProjects;
   const hasProjectPickerItems = projectPickerItems.length > 0;
 
+  // The dropdown's footer is a plain button rather than a `SelectItem`, so selecting it does not
+  // run the select's own close-on-select path, and opening Home leaves no modal behind to dismiss
+  // the dropdown by taking focus. Controlled here so the footer can close it explicitly.
+  const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
+
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
@@ -587,6 +592,8 @@ export function PlatformBibleToolbar() {
         )}
         {isSimpleMode && (
           <Select
+            open={isProjectPickerOpen}
+            onOpenChange={setIsProjectPickerOpen}
             value={currentSimpleProject?.id ?? ''}
             onValueChange={async (projectId: string) => {
               try {
@@ -628,7 +635,10 @@ export function PlatformBibleToolbar() {
                   // Home lists local projects alongside the send/receive server's projects that
                   // are not on this machine yet — the "rest of my projects" this picker cannot
                   // reach, since its own list is built from local metadata only.
-                  onClick={() => openHome()}
+                  onClick={() => {
+                    setIsProjectPickerOpen(false);
+                    openHome();
+                  }}
                 >
                   {localizedStrings['%projectPicker_toolbar_more_projects%']}
                 </button>
