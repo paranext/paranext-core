@@ -321,6 +321,27 @@ describe('FirstRunOverlay', () => {
     expect(isWindowBlockedByOverlay()).toBe(false);
   });
 
+  // The production release path: this gate is mounted for the life of the window (it returns
+  // nothing once setup is done rather than unmounting), so the block is never lifted by an unmount.
+  // A registration that only ever released on unmount would leave the window blocked for the rest
+  // of the session, and every content-zoom chord in it dead, with nothing said.
+  it('releases the block when setup finishes, without unmounting', () => {
+    let captured: (() => void) | undefined;
+    vi.spyOn(store, 'subscribeToFirstRun').mockImplementation((listener) => {
+      captured = listener;
+      return () => {};
+    });
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(true);
+
+    mockGetStatus.mockReturnValue({ kind: 'app' });
+    act(() => {
+      captured?.();
+    });
+    expect(isWindowBlockedByOverlay()).toBe(false);
+  });
+
   it('does not mark the window blocked once the connection is lost', () => {
     reportConnectionLost();
     mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });

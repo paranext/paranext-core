@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { registerWindowBlockingOverlay } from '@renderer/services/window-blocking-overlay-store';
 
 /**
@@ -10,7 +10,10 @@ import { registerWindowBlockingOverlay } from '@renderer/services/window-blockin
  * flag and what is on screen cannot drift apart.
  */
 export function useWindowBlockingOverlay(isBlocking: boolean): void {
-  useEffect(() => (isBlocking ? registerWindowBlockingOverlay() : undefined), [isBlocking]);
+  // Layout, not passive: a passive effect commits after the browser has painted, so for that frame
+  // the scrim would be on screen while the store still answered "unblocked" — and a chord landing
+  // in that window would zoom, and persist, a pane the user cannot see.
+  useLayoutEffect(() => (isBlocking ? registerWindowBlockingOverlay() : undefined), [isBlocking]);
 }
 
 export default useWindowBlockingOverlay;
