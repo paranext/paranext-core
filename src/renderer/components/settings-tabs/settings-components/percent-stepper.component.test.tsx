@@ -29,6 +29,8 @@ const LABELS = {
   increase: 'Increase default zoom',
   decrease: 'Decrease default zoom',
   reset: 'Reset default zoom',
+  atMaximum: 'Already at the largest zoom (300 %)',
+  atMinimum: 'Already at the smallest zoom (50 %)',
 };
 const baseProps = {
   defaultValue: 1,
@@ -146,10 +148,18 @@ describe('PercentStepper', () => {
     );
   });
 
-  it('shows the tooltip for a bound button on keyboard focus', async () => {
+  // A bound button keeps its tooltip reachable by keyboard — that is the whole reason the bound
+  // state is `aria-disabled` rather than the native `disabled`, which drops out of the tab order.
+  it('names the limit rather than the button when the bound is reached', async () => {
     render(<PercentStepper {...baseProps} value={3} onChange={vi.fn()} />);
     const increase = screen.getByRole('button', { name: LABELS.increase });
     increase.focus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atMaximum);
+  });
+
+  it('names the button when it is not at a bound', async () => {
+    render(<PercentStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
+    screen.getByRole('button', { name: LABELS.increase }).focus();
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.increase);
   });
 

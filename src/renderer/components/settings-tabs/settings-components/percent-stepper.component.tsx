@@ -42,8 +42,18 @@ export type PercentStepperProps = {
   defaultValue: number;
   /** When true, every button is disabled. Defaults to `false`. */
   disabled?: boolean;
-  /** Localized accessible names for the three buttons. */
-  labels: { increase: string; decrease: string; reset: string };
+  /**
+   * Localized strings for the three buttons: an accessible name each, plus the two that explain a
+   * bound. A bound button's tooltip shows its bound string instead of its name, so a press that
+   * does nothing says why rather than repeating what the button is called.
+   */
+  labels: {
+    increase: string;
+    decrease: string;
+    reset: string;
+    atMaximum: string;
+    atMinimum: string;
+  };
   /** Localized accessible name for the group as a whole — normally the setting's own label. */
   groupLabel?: string;
   /** Called with the new factor whenever a press changes it. Never called with an unchanged value. */
@@ -145,7 +155,12 @@ export function PercentStepper({
               <Minus />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{labels.decrease}</TooltipContent>
+          {/* The bound string only when the bound itself is what stops the press: while the whole
+              control is disabled, a bound button is stopped for a different reason, which these
+              strings would misstate. */}
+          <TooltipContent>
+            {decreaseDisabled && !disabled ? labels.atMinimum : labels.decrease}
+          </TooltipContent>
         </Tooltip>
         {/* The readout shows the press this control is still waiting on, so the number, the buttons
             and the arithmetic always agree: a write travels through a debounce before it is even
@@ -175,7 +190,9 @@ export function PercentStepper({
               <Plus />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{labels.increase}</TooltipContent>
+          <TooltipContent>
+            {increaseDisabled && !disabled ? labels.atMaximum : labels.increase}
+          </TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>

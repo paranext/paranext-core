@@ -607,6 +607,8 @@
   "%settings_platform_supporter_group_description%": "Configuraciones que una persona de soporte puede pedirle ajustar al ayudarle",
   "%settings_platform_supporter_group_label%": "Configuración de soporte",
   "%settings_platform_syncOnStartup_label%": "Sincronizar automáticamente al iniciar",
+  "%settings_platform_webViewContentZoom_atMaximum%": "Ya está en el zoom máximo (300 %)",
+  "%settings_platform_webViewContentZoom_atMinimum%": "Ya está en el zoom mínimo (50 %)",
   "%settings_platform_webViewContentZoom_decrease%": "Reducir el zoom predeterminado",
   "%settings_platform_webViewContentZoom_description%": "Zoom predeterminado para el contenido de cada panel de una pestaña (como el Editor de Escrituras, los recursos y las notas) que no se haya ampliado por su cuenta. El valor predeterminado es 100 %; el rango permitido es de 50 % a 300 %. Los menús de la aplicación y las barras de herramientas de las pestañas mantienen su tamaño, y Escalado de la interfaz sigue escalando toda la aplicación además de esto.",
   "%settings_platform_webViewContentZoom_increase%": "Aumentar el zoom predeterminado",
