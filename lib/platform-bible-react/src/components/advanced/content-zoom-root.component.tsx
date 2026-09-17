@@ -62,7 +62,7 @@ const ContentZoomAreaContext = createContext<string | undefined>(undefined);
 export type ContentZoomAreaProviderProps = {
   /**
    * Id of the zoom area the wrapped content belongs to, with the same rules as
-   * {@link ContentZoomRootProps.area}. Omit it for the view's main area.
+   * `ContentZoomRootProps.area`. Omit it for the view's main area.
    *
    * @experimental This property is unstable and may change shape or disappear without notice
    */
