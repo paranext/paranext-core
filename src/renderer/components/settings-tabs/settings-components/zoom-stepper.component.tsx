@@ -43,8 +43,9 @@ export type ZoomStepperProps = {
   /** When true, every button is disabled. Defaults to `false`. */
   disabled?: boolean;
   /**
-   * Localized strings for the three buttons: an accessible name each, plus the two that explain a
-   * bound. A bound button's tooltip shows its bound string instead of its name, so a press that
+   * Localized strings for the three buttons: an accessible name each, plus the three that explain
+   * why a press would do nothing — the two zoom bounds and the reset button already sitting on
+   * `defaultValue`. Such a button's tooltip shows that string instead of its name, so a press that
    * does nothing says why rather than repeating what the button is called.
    */
   labels: {
@@ -53,6 +54,7 @@ export type ZoomStepperProps = {
     reset: string;
     atMaximum: string;
     atMinimum: string;
+    atDefault: string;
   };
   /** Localized accessible name for the group as a whole — normally the setting's own label. */
   groupLabel?: string;
@@ -212,7 +214,9 @@ export function ZoomStepper({
               <RotateCcw />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{labels.reset}</TooltipContent>
+          <TooltipContent>
+            {resetDisabled && !disabled ? labels.atDefault : labels.reset}
+          </TooltipContent>
         </Tooltip>
       </ButtonGroup>
     </TooltipProvider>
