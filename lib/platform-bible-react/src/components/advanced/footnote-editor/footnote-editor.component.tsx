@@ -1060,8 +1060,12 @@ export default function FootnoteEditor({
 
   return (
     <>
-      <div ref={containerRef} className="footnote-editor tw:grid tw:gap-[12px]">
-        <div className="tw:flex">
+      {/* `max-w-full`: the width lock below is taken before the surrounding pop-up knows how much
+          room the pane has, so the container must still give way to a narrower pop-up. */}
+      <div ref={containerRef} className="footnote-editor tw:grid tw:max-w-full tw:gap-[12px]">
+        {/* Wraps the action buttons onto their own line when a narrow (or zoomed) pop-up has no
+            room for the whole row; `flex-1` keeps them on the first line, right-aligned, otherwise. */}
+        <div className="tw:flex tw:flex-wrap tw:gap-y-2">
           <div className="tw:flex tw:gap-4">
             <FootnoteTypeDropdown
               isTypeSwitchable={isTypeSwitchable}
@@ -1076,7 +1080,7 @@ export default function FootnoteEditor({
               localizedStrings={localizedStrings}
             />
           </div>
-          <div className="tw:flex tw:w-full tw:justify-end">
+          <div className="tw:flex tw:flex-1 tw:justify-end">
             <ButtonGroup>
               <UndoRedoButtons
                 onUndoClick={() => editorRef.current?.undo()}
