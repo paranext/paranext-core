@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { forwardRef, useImperativeHandle } from 'react';
+import { forwardRef, ReactNode, useImperativeHandle } from 'react';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { act, render } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
+import { ContentZoomAreaProvider } from '@/components/advanced/content-zoom-root.component';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type {
@@ -54,7 +55,12 @@ beforeAll(() => {
  * `useImperativeHandle`. Declared with `vi.hoisted` so the `vi.mock` factory (itself hoisted to the
  * top of the file by Vitest) can close over it.
  */
-const { mockEditorRefHolder, mockGetMarkerMenuItems, mockRegisterOnUsjChange } = vi.hoisted(() => ({
+const {
+  mockEditorRefHolder,
+  mockGetMarkerMenuItems,
+  mockRegisterOnUsjChange,
+  mockRegisterOnStateChange,
+} = vi.hoisted(() => ({
   mockEditorRefHolder: {
     // Placeholder only — every test overwrites this with a full mock (see `renderFootnoteEditor`)
     // before rendering, so the empty object is never actually read as an `EditorRef`.
@@ -66,6 +72,9 @@ const { mockEditorRefHolder, mockGetMarkerMenuItems, mockRegisterOnUsjChange } =
   // change the real editor would have: that is what evaluates note-type switchability, and so what
   // enables the note-type dropdown.
   mockRegisterOnUsjChange: vi.fn(),
+  // Records the `onStateChange` the stubbed `Editorial` was handed, so a test can report the
+  // caret's context marker the way the real editor does: that is what fills the inline markers menu.
+  mockRegisterOnStateChange: vi.fn(),
 }));
 
 // Replaces the real `Editorial` with a minimal stub exposing `.editor-input` (queried by the
@@ -78,17 +87,19 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
   return {
     ...actual,
     getMarkerMenuItems: mockGetMarkerMenuItems,
-    Editorial: forwardRef<EditorRef, { onUsjChange?: (usj: unknown) => void }>(
-      ({ onUsjChange }, ref) => {
-        mockRegisterOnUsjChange(onUsjChange);
-        useImperativeHandle(ref, () => mockEditorRefHolder.current);
-        // This stub only stands in for the real editor in tests that dispatch keydown events at
-        // `document` and check `document.activeElement`; it's never navigated via Tab/keyboard, so
-        // it doesn't need the interaction handlers a real focusable non-form element would.
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-        return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
-      },
-    ),
+    Editorial: forwardRef<
+      EditorRef,
+      { onUsjChange?: (usj: unknown) => void; onStateChange?: (state: unknown) => void }
+    >(({ onUsjChange, onStateChange }, ref) => {
+      mockRegisterOnUsjChange(onUsjChange);
+      mockRegisterOnStateChange(onStateChange);
+      useImperativeHandle(ref, () => mockEditorRefHolder.current);
+      // This stub only stands in for the real editor in tests that dispatch keydown events at
+      // `document` and check `document.activeElement`; it's never navigated via Tab/keyboard, so
+      // it doesn't need the interaction handlers a real focusable non-form element would.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
+    }),
   };
 });
 
@@ -175,6 +186,7 @@ function placeDomCaretOutsideNote(editorInput: HTMLElement): void {
 function renderFootnoteEditor(
   editorOptions: EditorOptions,
   markerPalette?: FootnoteEditorMarkerPalette,
+  wrapper?: (props: { children: ReactNode }) => ReactNode,
 ) {
   // EditorRef has many required methods; using a partial mock via type assertion is simpler than
   // stubbing all of them in a test (same rationale as
@@ -225,7 +237,7 @@ function renderFootnoteEditor(
     />
   );
 
-  const utils = render(renderElement(scrRef));
+  const utils = render(renderElement(scrRef), { wrapper });
 
   const editorInput = utils.getByTestId('popover-editor-input');
   editorInput.focus();
@@ -262,6 +274,101 @@ describe('FootnoteEditor width lock', () => {
       expect(lockedContainer?.style.width).toBe('480.5px');
     } finally {
       spy.mockRestore();
+    }
+  });
+});
+
+describe('FootnoteEditor inline markers menu placement', () => {
+  /**
+   * Makes every `Range` report `rect` as its one client rect. jsdom does not implement either
+   * method on `Range`, so they are defined for the test and removed again by the returned
+   * function.
+   */
+  function stubRangeRect(rect: DOMRect) {
+    const originals = {
+      getBoundingClientRect: Object.getOwnPropertyDescriptor(
+        Range.prototype,
+        'getBoundingClientRect',
+      ),
+      getClientRects: Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects'),
+    };
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => rect,
+    });
+    // Only the length is read, and jsdom exposes no `DOMRectList` to build a real one from.
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: () => [rect],
+    });
+    return () => {
+      Object.entries(originals).forEach(([name, descriptor]) => {
+        if (descriptor) Object.defineProperty(Range.prototype, name, descriptor);
+        else Reflect.deleteProperty(Range.prototype, name);
+      });
+    };
+  }
+
+  /** The Radix wrapper that positions the markers menu (the popover holding its search box). */
+  function getMenuPositioner(): HTMLElement {
+    const wrapper = document
+      .querySelector('[cmdk-input]')
+      ?.closest<HTMLElement>('[data-radix-popper-content-wrapper]');
+    if (!wrapper) throw new Error('inline markers menu is not open');
+    return wrapper;
+  }
+
+  it('places the menu at the left edge of the live selection rect, not at an offset inside the pop-up', async () => {
+    // jsdom has no layout, so any element's client rect is all zeros. An anchor placed inside the
+    // pop-up from offsets would therefore put the menu at the origin; the selection's own rect is
+    // what the menu must sit against (it is also correct inside a zoomed pop-up, where written-back
+    // offsets would be scaled twice).
+    let restoreRange = stubRangeRect(new DOMRect(120, 50, 30, 10));
+    try {
+      const { editorInput } = renderFootnoteEditor(
+        { view: { markerMode: 'visible', hasSpacing: true, isFormattedFont: true } },
+        undefined,
+        ({ children }) => (
+          <ContentZoomAreaProvider area="footnotes">{children}</ContentZoomAreaProvider>
+        ),
+      );
+      // The `\` menu offers the markers allowed inside the caret's context marker.
+      await act(async () => {
+        const onStateChange = mockRegisterOnStateChange.mock.calls.at(-1)?.[0];
+        onStateChange?.({ contextMarker: 'f', canRedo: false });
+      });
+      placeDomCaretInsideNote(editorInput);
+
+      await act(async () => {
+        editorInput.ownerDocument.dispatchEvent(
+          new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+        );
+      });
+
+      // Centered on the selection's left edge (the menu itself has no size in jsdom), 4px (the
+      // popover's side offset) below or above the selection's 50–60px band. Which side is up to the
+      // positioning's collision checks, which jsdom's empty layout decides, so either is accepted.
+      await waitFor(() =>
+        expect(getMenuPositioner().style.transform).toMatch(/^translate\(120px, (64|46)px\)$/),
+      );
+
+      // The menu is a pop-up of the same zoom area, marked on its own content.
+      expect(getMenuPositioner().querySelector('[data-slot="popover-content"]')).toHaveAttribute(
+        'data-platform-content-zoom-root',
+        'footnotes',
+      );
+
+      // The anchor is read again when the menu is repositioned, so the menu follows its text.
+      restoreRange();
+      restoreRange = stubRangeRect(new DOMRect(200, 80, 30, 10));
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'));
+      });
+      await waitFor(() =>
+        expect(getMenuPositioner().style.transform).toMatch(/^translate\(200px, (94|76)px\)$/),
+      );
+    } finally {
+      restoreRange();
     }
   });
 });

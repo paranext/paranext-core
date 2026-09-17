@@ -261,7 +261,6 @@ export default function FootnoteEditor({
   /* eslint-disable no-null/no-null */
   const editorRef = useRef<EditorRef | null>(null);
   const editorParentRef = useRef<HTMLDivElement>(null);
-  const outerBorderRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   /* eslint-enable no-null/no-null */
 
@@ -294,11 +293,37 @@ export default function FootnoteEditor({
   const hasInitializedEditor = useRef(false);
   const initialNoteOpsJson = useRef('');
 
-  // These control the placement of the inline markers menu by setting the location of the anchor
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
-  const [markersMenuAnchorX, setMarkersMenuAnchorX] = useState<number>();
-  const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
-  const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
+
+  /**
+   * The selection the inline markers menu opened at, kept as a detached copy so moving focus into
+   * the menu's search box does not move it.
+   */
+  const markersMenuRangeRef = useRef<Range | undefined>(undefined);
+  const markersMenuLastRectRef = useRef<DOMRect | undefined>(undefined);
+  /**
+   * The inline markers menu's anchor: a virtual element that reads the zero-width left edge of
+   * {@link markersMenuRangeRef} every time the menu is positioned. It is not an element placed
+   * inside this component from client-rect offsets because this component can sit inside a
+   * CSS-`zoom`ed pop-up. There, client rects are painted pixels, and an offset written back as
+   * `top`/`left` is scaled by the zoom a second time. The range's own viewport rect is correct at
+   * any zoom, and reading it live also keeps the menu beside the text when the pop-up moves or
+   * reflows. If the range can no longer be measured (its text was re-rendered away), the last rect
+   * is kept.
+   */
+  const markersMenuAnchorRef = useRef({
+    getBoundingClientRect: (): DOMRect => {
+      const range = markersMenuRangeRef.current;
+      if (range && range.getClientRects().length > 0) {
+        const rect = range.getBoundingClientRect();
+        markersMenuLastRectRef.current = new DOMRect(rect.left, rect.top, 0, rect.height);
+      }
+      return markersMenuLastRectRef.current ?? new DOMRect();
+    },
+    get contextElement(): Element | undefined {
+      return editorParentRef.current ?? undefined;
+    },
+  });
 
   const [contextMarker, setContextMarker] = useState<string | undefined>();
 
@@ -671,20 +696,14 @@ export default function FootnoteEditor({
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
-    if (
-      outerBorderRef.current &&
-      inlineMarkerMenuItems.length &&
-      currentSelection &&
-      currentSelection.rangeCount > 0
-    ) {
-      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
-      const footnoteEditorRect = outerBorderRef.current.getBoundingClientRect();
-      setMarkersMenuAnchorX(selectionRect.left - footnoteEditorRect.left);
-      setMarkersMenuAnchorY(selectionRect.top - footnoteEditorRect.top);
-      setMarkersMenuAnchorHeight(selectionRect.height);
+    if (inlineMarkerMenuItems.length && currentSelection && currentSelection.rangeCount > 0) {
+      markersMenuRangeRef.current = currentSelection.getRangeAt(0).cloneRange();
+      markersMenuLastRectRef.current = undefined;
+      // Take the rect now, while the range is sure to be measurable.
+      markersMenuAnchorRef.current.getBoundingClientRect();
       setShowMarkersMenu(true);
     }
-  }, [inlineMarkerMenuItems, outerBorderRef]);
+  }, [inlineMarkerMenuItems]);
 
   /**
    * Always-current {@link runPaletteSessionKey} (assigned below, once it exists). The palette
@@ -1146,23 +1165,9 @@ export default function FootnoteEditor({
           </div>
         </div>
       </div>
-      <div
-        className="tw:absolute"
-        ref={outerBorderRef}
-        style={{ top: 0, left: 0, height: 0, width: 0 }}
-      />
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: markersMenuAnchorY,
-            left: markersMenuAnchorX,
-            height: markersMenuAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
+        <PopoverAnchor virtualRef={markersMenuAnchorRef} />
         <PopoverContent
           className="tw:w-[500px] tw:p-0"
           onClick={(event) => {
