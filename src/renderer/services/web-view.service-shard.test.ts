@@ -3046,6 +3046,38 @@ describe('content zoom wiring', () => {
     expect(content).not.toContain('reportContentZoomAreasById');
   });
 
+  test('gives an HTML web view opened with scripts disabled no content-zoom style', async () => {
+    respondToLayoutRequestsWithoutOpeningHome();
+    const module = await primeWebViewOpenPath();
+    getWebViewProviderMock.mockImplementation(async () => ({
+      getWebView: async (saved: { id: string; webViewType: string }) => ({
+        id: saved.id,
+        webViewType: saved.webViewType,
+        contentType: 'html',
+        content:
+          '<html><head></head><body><div data-platform-content-zoom-root></div></body></html>',
+        allowScripts: false,
+        state: {},
+      }),
+    }));
+    const { dockLayout, addWebViewToDockCalls } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+
+    await module.openWebView('test.type', { type: 'tab' });
+
+    expect(addWebViewToDockCalls).toHaveLength(1);
+    const content = String(addWebViewToDockCalls[0].content);
+    // Such a view cannot run the bootstrap, so it can never report the area it marks; the platform
+    // scales its whole iframe instead, and an area rule would scale the marked element again. The
+    // two strings below belong to the baked `<style>` element alone — the bootstrap's own source is
+    // still spliced in (inert, since nothing runs it) and names the same id in single quotes.
+    expect(content).not.toContain('id="platform-content-zoom-styles"');
+    expect(content).not.toContain(':root{--platform-content-zoom-default:');
+    // Control: the rest of the head splice is still there, so the misses above are the condition
+    // rather than a view that was never spliced at all.
+    expect(content).toContain('Content-Security-Policy');
+  });
+
   test('exposes adjustContentZoom and resetContentZoom on the shard object, passing the area through', async () => {
     await primeWebViewOpenPath();
     const shard = await registeredShard();

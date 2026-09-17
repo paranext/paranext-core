@@ -3071,12 +3071,19 @@ export async function openOrReloadWebView(
   // not a URL iframe
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
-    const initialContentZoom = await getInitialContentZoomForWebView(webView);
-    const contentZoomStyles = getContentZoomStyleElement(
-      srcNonce,
-      initialContentZoom.defaultZoom,
-      initialContentZoom.levels,
-    );
+    // A view that runs no scripts cannot run the zoom bootstrap, so it can never report the areas it
+    // marks and the platform scales its whole iframe at the default instead; baking the area rules
+    // as well would scale a marked element a second time, and CSS `zoom` compounds across the iframe
+    // boundary. Skipping the read with them also spares such a view a settings round trip.
+    let contentZoomStyles = '';
+    if (allowScripts) {
+      const initialContentZoom = await getInitialContentZoomForWebView(webView);
+      contentZoomStyles = getContentZoomStyleElement(
+        srcNonce,
+        initialContentZoom.defaultZoom,
+        initialContentZoom.levels,
+      );
+    }
 
     webViewContent = spliceIntoWebViewHead(
       webViewContent,
