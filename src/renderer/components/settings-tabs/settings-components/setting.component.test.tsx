@@ -224,6 +224,47 @@ describe('failed setting writes', () => {
     expect(screen.queryByText('An error occurred')).toBeNull();
     expect(setSetting).toHaveBeenCalledWith('Spanish');
   });
+
+  it('keeps an earlier error on screen until the write it is waiting on has landed', async () => {
+    vi.useFakeTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
+    // A write that stays in flight, which is where clearing before the write and clearing after it
+    // part company: a write that resolves at once is indistinguishable either way.
+    let landWrite: (() => void) | undefined;
+    const setSetting = vi.fn(
+      () =>
+        new Promise<undefined>((resolve) => {
+          landWrite = () => resolve(undefined);
+        }),
+    );
+    const validateProjectSetting = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+    render(
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateProjectSetting={validateProjectSetting}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+      />,
+    );
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: '' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(screen.getByText('An error occurred')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'Spanish' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    // Positive control: the write really is under way, so the error below is being held rather than
+    // simply never reached.
+    expect(setSetting).toHaveBeenCalledWith('Spanish');
+    expect(screen.getByText('An error occurred')).toBeInTheDocument();
+
+    await act(async () => {
+      landWrite?.();
+    });
+    expect(screen.queryByText('An error occurred')).toBeNull();
+  });
 });
 
 describe('a setting with no writer', () => {
