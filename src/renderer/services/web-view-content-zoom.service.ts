@@ -170,17 +170,14 @@ const MEMORY_WRITE_DEBOUNCE_MS = 250;
 const pendingMemoryWrites = new Map<string, number | undefined>();
 
 /**
- * Memory edits this window gave up on, by key: the level the failed write carried and the stored
- * level it was meant to replace. The pane already shows and stores the former through its own
- * definition state, which a memory fault does not touch, so an emission carrying the latter is not
- * news and must not push the old level back into the pane. Any OTHER value is a real change from
+ * Memory edits this window gave up on, by key, each carrying the stored level the failed write was
+ * meant to replace. The pane already shows and stores the level the user chose, through its own
+ * definition state, which a memory fault does not touch — so an emission carrying the superseded
+ * level is not news and must not push it back into the pane. Any OTHER value is a real change from
  * elsewhere: it is applied and the entry spent, so a key is never ignored beyond the one value this
  * window failed to overwrite.
  */
-const givenUpMemoryWrites = new Map<
-  string,
-  { wanted: number | undefined; superseded: number | undefined }
->();
+const givenUpMemoryWrites = new Map<string, { superseded: number | undefined }>();
 
 /** What a memory transaction did, so its caller can tell a write that failed from one that ran. */
 type MemoryTransactionOutcome = 'written' | 'unchanged' | 'failed';
@@ -771,9 +768,9 @@ async function flushMemoryWrites(): Promise<void> {
   // `pendingMemoryWrites` is the echo guard as well as the retry queue, so dropping these keys would
   // leave the next emission of the level this window failed to replace looking like news and undo
   // the user's zoom. Each key that no newer edit has re-pended is recorded instead.
-  flushing.forEach((level, key) => {
+  flushing.forEach((_level, key) => {
     if (pendingMemoryWrites.has(key)) return;
-    givenUpMemoryWrites.set(key, { wanted: level, superseded: cachedMemory[key] });
+    givenUpMemoryWrites.set(key, { superseded: cachedMemory[key] });
   });
   logger.warn(
     `Content zoom: giving up on ${flushing.size} memory edit(s) after ${MAX_MEMORY_FLUSH_ATTEMPTS} failed attempts.`,
