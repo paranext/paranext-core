@@ -276,12 +276,18 @@ function asMemory(value: unknown): MemoryRecord {
 
 async function getDefaultZoom(): Promise<number> {
   if (cachedDefault !== undefined) return cachedDefault;
+  let read: number;
   try {
-    cachedDefault = asNumber(await deps.settings.get('platform.webViewContentZoom'));
+    read = asNumber(await deps.settings.get('platform.webViewContentZoom'));
   } catch (e) {
     logger.warn(`Content zoom: could not read the default; using 100 %. ${getErrorMessage(e)}`);
-    cachedDefault = DEFAULT_ZOOM_FACTOR;
+    read = DEFAULT_ZOOM_FACTOR;
   }
+  // The subscription this window starts before its first read delivers the current value at once,
+  // so it can fill the cache while this read is still out. That value is the setting's, and at
+  // least as fresh as this one, so it stands — and the 100 % fallback above, which is not the
+  // setting's value at all, never replaces it.
+  cachedDefault ??= read;
   return cachedDefault;
 }
 
@@ -605,8 +611,14 @@ export function applyContentZoomForWebView(webViewId: WebViewId): void {
  * work on PT-4585.
  */
 async function readMemory(): Promise<MemoryRecord | undefined> {
+  const loadedBeforeTheRead = memoryLoaded;
   try {
     const memory = asMemory(await deps.settings.get('platform.webViewContentZoomMemory'));
+    // The subscription this window starts before its first read delivers the current record at
+    // once, so it can load the cache while that read is still out — with a record at least as
+    // fresh as the one this read carries, which is therefore the one both the cache and the caller
+    // keep. Every later read is the current record by definition and simply replaces the cache.
+    if (!loadedBeforeTheRead && memoryLoaded) return cachedMemory;
     cachedMemory = memory;
     memoryLoaded = true;
     return memory;

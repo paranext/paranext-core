@@ -1207,17 +1207,22 @@ describe('web-view-content-zoom.service', () => {
     const parked = new Promise<void>((resolve) => {
       releaseReads = resolve;
     });
+    /** What initialization did, in the order it happened, so the control can pin the order. */
+    const order: string[] = [];
     __setContentZoomDepsForTesting({
       settings: {
         get: async (key: string) => {
           await parked;
+          order.push(`read ${key}`);
           return settings[key];
         },
         set: settingsSet,
+        // The immediate delivery a real subscription makes is withheld here, so the only thing that
+        // can fill the caches is the parked read below — which is what makes the control able to
+        // fail if the reads stop being awaited.
         subscribe: async (key: string, callback: (value: unknown) => void) => {
           if (key === MEMORY) memoryCallbacks.push(callback);
           else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
-          callback(settings[key]);
           return async () => {};
         },
       },
@@ -1230,7 +1235,9 @@ describe('web-view-content-zoom.service', () => {
 
     const addListener = vi.spyOn(window, 'addEventListener');
     try {
-      const initializing = initializeContentZoomService();
+      const initializing = initializeContentZoomService().then(() => {
+        order.push('initialized');
+      });
       // Let the synchronous registrations and the not-yet-awaited subscriptions run.
       await Promise.resolve();
       await Promise.resolve();
@@ -1240,15 +1247,103 @@ describe('web-view-content-zoom.service', () => {
       expect(onDidUpdateWebViewCallback).toBeDefined();
       expect(addListener.mock.calls.some(([type]) => type === 'beforeunload')).toBe(true);
 
+      // Control: every pending microtask and a full turn of the event loop later, initialization is
+      // still out, because both reads are awaited and neither has come back.
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      expect(order).toEqual([]);
+
       releaseReads();
       await initializing;
-      // Control: both reads are still awaited, so the default they carry is in hand by the time
-      // initialization resolves.
+      // …and once they do come back, the default one of them carries is in hand.
+      expect(order).toHaveLength(3);
+      expect(order[2]).toBe('initialized');
       setContentZoomAreas('editor-1', ['main']);
       expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
     } finally {
       addListener.mockRestore();
     }
+  });
+
+  /**
+   * Initialization starts both subscriptions before the two reads and a subscription delivers its
+   * current value immediately, so a callback commonly lands while a read is still in flight. These
+   * park the reads and deliver in that window.
+   */
+  function useSubscriptionsThatDeliverWhileTheReadsAreOut(readOutcome: 'stale' | 'failure'): {
+    releaseReads: () => void;
+  } {
+    let release = () => {};
+    const parked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          await parked;
+          if (readOutcome === 'failure') throw new Error(`the settings read for ${key} failed`);
+          return settings[key];
+        },
+        set: settingsSet,
+        // Registered here and delivered by the test, rather than delivered on subscribe, so the
+        // delivery lands after the reads have started and before they resolve.
+        subscribe: async (key: string, callback: (value: unknown) => void) => {
+          if (key === MEMORY) memoryCallbacks.push(callback);
+          else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
+          return async () => {};
+        },
+      },
+    });
+    memoryCallbacks.length = 0;
+    defaultCallbacks.length = 0;
+    return { releaseReads: release };
+  }
+
+  it('keeps a default a subscription delivered while the startup read was out, rather than the fallback that failed read leaves', async () => {
+    const { releaseReads } = useSubscriptionsThatDeliverWhileTheReadsAreOut('failure');
+    const initializing = initializeContentZoomService();
+    // Let the subscriptions register and both reads park.
+    await Promise.resolve();
+    await Promise.resolve();
+    defaultCallbacks.forEach((cb) => cb(1.3));
+    releaseReads();
+    await initializing;
+
+    setContentZoomAreas('editor-1', ['main']);
+    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+    // Control: the read really did fail, so the level above is the subscription's value surviving it.
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('could not read the default'));
+  });
+
+  it('keeps what the subscriptions delivered while the startup reads were out, rather than the values those reads carry', async () => {
+    const { releaseReads } = useSubscriptionsThatDeliverWhileTheReadsAreOut('stale');
+    const initializing = initializeContentZoomService();
+    await Promise.resolve();
+    await Promise.resolve();
+    // The stored values the parked reads will carry are the suite's defaults (1 and no memory); a
+    // change made in Settings meanwhile reaches this window through the subscriptions first. The
+    // remembered level names a project no pane is open for, so nothing but the cache can carry it
+    // to the pane opened below.
+    defaultCallbacks.forEach((cb) => cb(1.3));
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-B:main': 1.6 }));
+    releaseReads();
+    await initializing;
+
+    setContentZoomAreas('editor-1', ['main']);
+    expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+
+    definitions.set('editor-2', {
+      id: 'editor-2',
+      webViewType: 'platformScriptureEditor.react',
+      projectId: 'proj-B',
+      state: {},
+    });
+    setContentZoomAreas('editor-2', ['main']);
+    expect(definitions.get('editor-2')?.state).toEqual({ [LEVELS]: { main: 1.6 } });
+    expect(cssVar(iframeFor('editor-2'), '--platform-content-zoom-main')).toBe('1.6');
   });
 
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
