@@ -254,6 +254,22 @@ export function getVerseElement(verseNum: number): HTMLElement | undefined {
 }
 
 /**
+ * Downgrades a requested `'smooth'` scroll to `'instant'` when the user has asked their system to
+ * reduce motion. `Element.scrollTo({ behavior: 'smooth' })` is a script-driven animation, not a CSS
+ * transition, so it is invisible to this extension's `@media (prefers-reduced-motion: reduce)`
+ * blocks and has to be downgraded explicitly here instead.
+ *
+ * @param behavior The behavior the caller would otherwise use
+ * @returns `'instant'` when `behavior` is `'smooth'` and the user prefers reduced motion; otherwise
+ *   `behavior` unchanged (including when `matchMedia` is unavailable)
+ */
+export function resolveScrollBehavior(behavior: ScrollBehavior): ScrollBehavior {
+  if (behavior === 'instant') return behavior;
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return behavior;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : behavior;
+}
+
+/**
  * Scrolls to the verse marker at the specified verse ref within the editor content.
  *
  * @param verseRef The verse ref whose matching verse marker to scroll to
@@ -306,7 +322,12 @@ export function scrollToVerse(
  *
  * - A range already FULLY inside the viewport stays put, so stepping between results on one screen
  *   does not make the text jump.
- * - Otherwise the range's first line lands {@link RANGE_SCROLL_TOP_OFFSET} below the top edge.
+ * - Otherwise the range's first line lands {@link RANGE_SCROLL_TOP_OFFSET} below the top edge, capped
+ *   to a quarter of the viewport's own height. A short pane (Power mode gives an editor little
+ *   room) would otherwise land the match past the midpoint, with barely any of the surrounding text
+ *   visible below it; the cap keeps the landing spot proportional instead. On an ordinary pane the
+ *   quarter-height is well above the fixed offset, so the cap never engages and the offset is
+ *   exactly {@link RANGE_SCROLL_TOP_OFFSET}.
  * - A range taller than the viewport follows the same rule: its start is what a reader looks for, so
  *   the start is in view and the rest runs off the bottom.
  * - The target is clamped to the container's scroll range, so a range at the very start or end of a
@@ -329,7 +350,8 @@ export function computeRangeScrollTop({
 }): number | undefined {
   if (rangeTop >= scrollTop && rangeBottom <= scrollTop + clientHeight) return undefined;
   const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
-  return Math.min(Math.max(rangeTop - RANGE_SCROLL_TOP_OFFSET, 0), maxScrollTop);
+  const effectiveOffset = Math.min(RANGE_SCROLL_TOP_OFFSET, clientHeight / 4);
+  return Math.min(Math.max(rangeTop - effectiveOffset, 0), maxScrollTop);
 }
 
 /**
@@ -375,27 +397,43 @@ export interface RangeScrollGeometry {
 }
 
 /**
+ * The result of {@link measureRangeScrollGeometry}: either the measured geometry, or which of the
+ * two reasons kept it from being measured. A discriminated result rather than a plain
+ * `RangeScrollGeometry | undefined` because its two callers have to treat the reasons differently —
+ * `scrollToRange` falls back to the verse on `'no-layout'` but reports "already in view" on
+ * `'no-scroll-container'` — and folding both into one `undefined` would erase exactly the
+ * distinction a caller needs.
+ */
+export type RangeScrollMeasurement =
+  | { status: 'no-layout' }
+  | { status: 'no-scroll-container' }
+  | ({ status: 'measured' } & RangeScrollGeometry);
+
+/**
  * Measures everything a scroll-to-range decision needs, from the real scroll container, in one pass
  * — the single measurement path both `scrollToRange` and the settle loop in `useScrollToRange`
  * read, so the two can never sample different elements and disagree about whether the layout has
  * finished growing.
  *
  * @param range The DOM range to measure; must be inside the editor content
- * @returns The range's and container's geometry, or `undefined` when there is no layout to measure
- *   (inside a `display: none` iframe every rect is zeros) or no scrollable ancestor exists
+ * @returns `'no-layout'` when there is no layout to measure (inside a `display: none` iframe every
+ *   rect is zeros); `'no-scroll-container'` when there is layout but no scrollable ancestor;
+ *   otherwise the measured geometry
  */
-export function measureRangeScrollGeometry(range: Range): RangeScrollGeometry | undefined {
+export function measureRangeScrollGeometry(range: Range): RangeScrollMeasurement {
   const rect = range.getBoundingClientRect();
-  if (rect.top === 0 && rect.left === 0 && rect.width === 0 && rect.height === 0) return undefined;
+  if (rect.top === 0 && rect.left === 0 && rect.width === 0 && rect.height === 0)
+    return { status: 'no-layout' };
 
   const startElement =
     range.startContainer instanceof HTMLElement
       ? range.startContainer
       : range.startContainer.parentElement;
   const scrollContainer = startElement ? findScrollContainer(startElement) : undefined;
-  if (!scrollContainer) return undefined;
+  if (!scrollContainer) return { status: 'no-scroll-container' };
 
   return {
+    status: 'measured',
     scrollContainer,
     rangeTop: getTopWithinScrollContainer(rect, scrollContainer),
     rangeHeight: rect.height,
@@ -419,21 +457,19 @@ export function measureRangeScrollGeometry(range: Range): RangeScrollGeometry | 
  *   can fall back
  */
 export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
-  const rect = range.getBoundingClientRect();
-  if (rect.top === 0 && rect.left === 0 && rect.width === 0 && rect.height === 0) return false;
-
-  const geometry = measureRangeScrollGeometry(range);
+  const measurement = measureRangeScrollGeometry(range);
+  if (measurement.status === 'no-layout') return false;
   // No scroll container: nothing overflows, so everything is already in view.
-  if (!geometry) return true;
+  if (measurement.status === 'no-scroll-container') return true;
 
   const targetTop = computeRangeScrollTop({
-    rangeTop: geometry.rangeTop,
-    rangeBottom: geometry.rangeTop + geometry.rangeHeight,
-    scrollTop: geometry.scrollTop,
-    clientHeight: geometry.clientHeight,
-    scrollHeight: geometry.scrollHeight,
+    rangeTop: measurement.rangeTop,
+    rangeBottom: measurement.rangeTop + measurement.rangeHeight,
+    scrollTop: measurement.scrollTop,
+    clientHeight: measurement.clientHeight,
+    scrollHeight: measurement.scrollHeight,
   });
-  if (targetTop !== undefined) geometry.scrollContainer.scrollTo({ behavior, top: targetTop });
+  if (targetTop !== undefined) measurement.scrollContainer.scrollTo({ behavior, top: targetTop });
   return true;
 }
 
@@ -561,3 +597,93 @@ export function hasNewScrollTarget(
  * publishes no marker for 17).
  */
 export const SCROLL_MAX_WAIT_MS = 2000;
+
+/** What a {@link waitForLayoutToSettle} settle callback decides once two consecutive samples agree. */
+export type SettleOutcome = 'settled' | 'keep-waiting';
+
+export interface WaitForLayoutToSettleOptions<TSample> {
+  /**
+   * Takes one reading of whatever geometry decides settling. Called once synchronously and then
+   * again once per animation frame. The very first call has nothing to compare against, so it can
+   * never settle on its own — settling always needs at least two agreeing samples.
+   */
+  sample: () => TSample;
+  /**
+   * Whether two consecutive samples count as unchanged, i.e. the layout they describe has stopped
+   * moving.
+   */
+  samplesMatch: (previous: TSample, current: TSample) => boolean;
+  /**
+   * Runs once two consecutive samples agree.
+   *
+   * `isTimedOut` is `true` when {@link SCROLL_MAX_WAIT_MS} has already elapsed by this same reading.
+   * An agreement that arrives exactly as time runs out still goes to `onSettled`, never to
+   * `onTimedOut` — `onTimedOut` only ever runs when no agreement was reached to hand it — so a
+   * caller that would otherwise ask to wait again (re-applying something lost, or waiting for a
+   * measurement to produce something it has not yet produced) has to check this flag and finalize
+   * instead, the same way it would from `onTimedOut`.
+   *
+   * Returning `'keep-waiting'` discards the agreement: the next two samples have to agree again
+   * before this runs a second time, exactly as if sampling had just started. Doing that while
+   * `isTimedOut` is `true` is safe — the bound still governs, via `onTimedOut` — but it reads, from
+   * a log or a test, as though the layout never settled at all, so a caller with something useful
+   * to say on timeout should say it here instead.
+   */
+  onSettled: (sample: TSample, isTimedOut: boolean) => SettleOutcome;
+  /**
+   * Runs once, only along the path where the bound elapses on a reading that never agreed with its
+   * predecessor, or agreed but was rejected by `onSettled` while already out of time. Never runs
+   * once `onSettled` has returned `'settled'`.
+   */
+  onTimedOut: () => void;
+}
+
+/**
+ * Repeatedly samples layout, once per animation frame, until two consecutive samples agree — the
+ * shape behind this extension's "wait for the editor to finish laying out, then act once" loops (a
+ * range jump's selection geometry, a revealed pane's content height). Bounded by
+ * {@link SCROLL_MAX_WAIT_MS} throughout, measured from the call and never reset, so any number of
+ * `'keep-waiting'` results cannot push the deadline out.
+ *
+ * @returns A cancel function. Once called, no callback runs again; an effect's cleanup should call
+ *   it unconditionally.
+ */
+export function waitForLayoutToSettle<TSample>({
+  sample,
+  samplesMatch,
+  onSettled,
+  onTimedOut,
+}: WaitForLayoutToSettleOptions<TSample>): () => void {
+  let isCancelled = false;
+  let previous: { sample: TSample } | undefined;
+  const start = Date.now();
+
+  const tick = () => {
+    if (isCancelled) return;
+    const isTimedOut = Date.now() - start > SCROLL_MAX_WAIT_MS;
+    const current = sample();
+    // `previous` starts `undefined` so the very first sample — whatever it reads — can never
+    // trivially settle against nothing.
+    const isSettled = previous !== undefined && samplesMatch(previous.sample, current);
+    previous = { sample: current };
+
+    if (isSettled) {
+      const outcome = onSettled(current, isTimedOut);
+      if (outcome === 'settled') return;
+      // The agreement doesn't count: the next two samples have to agree again, exactly as if
+      // sampling had just started.
+      previous = undefined;
+    }
+
+    if (isTimedOut) {
+      onTimedOut();
+      return;
+    }
+    requestAnimationFrame(tick);
+  };
+  tick();
+
+  return () => {
+    isCancelled = true;
+  };
+}

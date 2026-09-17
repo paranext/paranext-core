@@ -8,11 +8,12 @@ import {
   getEditorSelectionRange,
   measureRangeScrollGeometry,
   RangeScrollGeometry,
+  RangeScrollMeasurement,
   SCROLL_MAX_WAIT_MS,
   scrollToRange,
   scrollToVerse,
 } from './editor-dom.util';
-import { isSelectionAt, toChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
+import { isSelectionAt, toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 
 vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -31,7 +32,7 @@ vi.mock('./editor-dom.util', async (importOriginal) => {
   };
 });
 
-/** A stable geometry reading, reused so most tests settle after one repeat sample as before. */
+/** A stable geometry reading, reused so most tests settle after one repeat sample. */
 function stableGeometry(): RangeScrollGeometry {
   return {
     scrollContainer: document.createElement('div'),
@@ -41,6 +42,11 @@ function stableGeometry(): RangeScrollGeometry {
     clientHeight: 701,
     scrollHeight: 1400,
   };
+}
+
+/** Wraps a {@link RangeScrollGeometry} reading as the `measureRangeScrollGeometry` mock's return. */
+function measured(geometry: RangeScrollGeometry): RangeScrollMeasurement {
+  return { status: 'measured', ...geometry };
 }
 
 const GEN_10_19: SerializedVerseRef = { book: 'GEN', chapterNum: 10, verseNum: 19 };
@@ -110,7 +116,7 @@ describe('useScrollToRange', () => {
     document.body.append(editorContainer);
     measuredRange = document.createRange();
     vi.mocked(getEditorSelectionRange).mockReturnValue(measuredRange);
-    vi.mocked(measureRangeScrollGeometry).mockReturnValue(stableGeometry());
+    vi.mocked(measureRangeScrollGeometry).mockReturnValue(measured(stableGeometry()));
     vi.mocked(scrollToRange).mockReturnValue(true);
   });
 
@@ -168,6 +174,56 @@ describe('useScrollToRange', () => {
 
     expect(fake.setSelection).not.toHaveBeenCalled();
     expect(scrollToRange).not.toHaveBeenCalled();
+  });
+
+  it('does not abandon a jump requested before the editor had ever applied content', async () => {
+    // chapterKeyAtRequest is undefined here (the editor has shown nothing yet), so a chapter that
+    // does not match it must not read as "navigated elsewhere".
+    const fake = createFakeEditor();
+    const { result, rerender } = renderScrollToRange(fake.editor, {
+      editorChapterKey: undefined,
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    rerender({ editorChapterKey: 'GEN 11', isViewVisible: true });
+    rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
+    await runFrames();
+
+    expect(fake.setSelection).toHaveBeenCalledWith(MATCH);
+    expect(scrollToRange).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the verse when the target chapter never arrives within the bound', async () => {
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 1',
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames(SCROLL_MAX_WAIT_MS / 2);
+    expect(scrollToVerse).not.toHaveBeenCalled();
+
+    await runFrames(SCROLL_MAX_WAIT_MS);
+    expect(fake.setSelection).not.toHaveBeenCalled();
+    expect(scrollToRange).not.toHaveBeenCalled();
+    expect(scrollToVerse).toHaveBeenCalledWith(GEN_10_19, 'smooth');
+  });
+
+  it('does not bound the wait for the target chapter while the view is hidden', async () => {
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 1',
+      isViewVisible: false,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    // Well past SCROLL_MAX_WAIT_MS: a tab can legitimately sit hidden for minutes, so none of this
+    // time may count against the bound.
+    await runFrames(SCROLL_MAX_WAIT_MS * 3);
+
+    expect(scrollToVerse).not.toHaveBeenCalled();
   });
 
   it('hidden: selects at once, defers the scroll, and catches up once, instantly, when shown', async () => {
@@ -290,13 +346,45 @@ describe('useScrollToRange', () => {
     expect(scrollToVerse).toHaveBeenCalledWith(GEN_10_19, 'smooth');
   });
 
+  it('no editor mounted: a request stays pending until an editor is present', async () => {
+    const fake = createFakeEditor();
+    // Mirrors the real ref's starting value before any element has mounted.
+    // eslint-disable-next-line no-null/no-null
+    let mountedEditor: EditorRef | null = null;
+    const { result, rerender } = renderHook(
+      (props: HookProps) => {
+        const editorRef = useRef<EditorRef | null>(mountedEditor);
+        // Mirrors a callback ref being (re)assigned on every render, the way the real web view's
+        // `ref={editorRef}` would be as the editor mounts.
+        editorRef.current = mountedEditor;
+        return useScrollToRange({ editorRef, ...props });
+      },
+      { initialProps: { editorChapterKey: 'GEN 10', isViewVisible: false } },
+    );
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+    expect(fake.setSelection).not.toHaveBeenCalled();
+    expect(scrollToRange).not.toHaveBeenCalled();
+
+    mountedEditor = fake.editor;
+    // isViewVisible has to actually change for the effect to re-run and notice the now-mounted
+    // editor: editorRef keeps the same identity across renders, so mutating `mountedEditor` alone
+    // does not retrigger it.
+    rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
+    await runFrames();
+
+    expect(fake.setSelection).toHaveBeenCalledWith(MATCH);
+    expect(scrollToRange).toHaveBeenCalledTimes(1);
+  });
+
   it('gives up waiting for layout to settle after the bound and still scrolls exactly once', async () => {
     // The geometry keeps changing forever (never two consecutive samples agree), so only the
     // SCROLL_MAX_WAIT_MS bound — not settling — can end the wait.
     let growingHeight = 1000;
     vi.mocked(measureRangeScrollGeometry).mockImplementation(() => {
       growingHeight += 10;
-      return { ...stableGeometry(), scrollHeight: growingHeight };
+      return measured({ ...stableGeometry(), scrollHeight: growingHeight });
     });
     const fake = createFakeEditor();
     const { result } = renderScrollToRange(fake.editor, {
@@ -323,7 +411,7 @@ describe('useScrollToRange', () => {
     vi.mocked(measureRangeScrollGeometry).mockImplementation(() => {
       const scrollTop = scrollTopSamples[Math.min(sampleIndex, scrollTopSamples.length - 1)];
       sampleIndex += 1;
-      return { ...stableGeometry(), scrollTop };
+      return measured({ ...stableGeometry(), scrollTop });
     });
     let sampleIndexAtScrollCall: number | undefined;
     vi.mocked(scrollToRange).mockImplementation(() => {
@@ -364,7 +452,7 @@ describe('useScrollToRange', () => {
     vi.mocked(measureRangeScrollGeometry).mockImplementation(() => {
       const sample = growingSamples[Math.min(sampleIndex, growingSamples.length - 1)];
       sampleIndex += 1;
-      return sample;
+      return measured(sample);
     });
     const fake = createFakeEditor();
     const { result } = renderScrollToRange(fake.editor, {
@@ -403,7 +491,7 @@ describe('useScrollToRange', () => {
     vi.mocked(getEditorSelectionRange).mockImplementation(() =>
       committed ? measuredRange : undefined,
     );
-    vi.mocked(measureRangeScrollGeometry).mockReturnValue(stableGeometry());
+    vi.mocked(measureRangeScrollGeometry).mockReturnValue(measured(stableGeometry()));
 
     const { result } = renderScrollToRange(laggingEditor, {
       editorChapterKey: 'GEN 10',
@@ -429,14 +517,14 @@ describe('useScrollToRange', () => {
       isViewVisible: true,
     });
 
-    expect(result.current.isRangeScrollTarget(GEN_10_19)).toBe(false);
+    expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
 
     act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
 
-    expect(result.current.isRangeScrollTarget(GEN_10_19)).toBe(true);
+    expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(true);
   });
 
-  it('isRangeScrollTarget answers for the requested verse until another reference is seen', () => {
+  it('consumeRangeScrollClaimFor answers for the requested verse until another reference is seen', () => {
     const fake = createFakeEditor();
     const { result } = renderScrollToRange(fake.editor, {
       editorChapterKey: 'GEN 10',
@@ -445,9 +533,9 @@ describe('useScrollToRange', () => {
 
     act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
 
-    expect(result.current.isRangeScrollTarget({ ...GEN_10_19 })).toBe(true);
-    expect(result.current.isRangeScrollTarget(GEN_10_3)).toBe(false);
-    expect(result.current.isRangeScrollTarget(GEN_10_19)).toBe(false);
+    expect(result.current.consumeRangeScrollClaimFor({ ...GEN_10_19 })).toBe(true);
+    expect(result.current.consumeRangeScrollClaimFor(GEN_10_3)).toBe(false);
+    expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
   });
 });
 
@@ -467,8 +555,8 @@ describe('isSelectionAt', () => {
   });
 });
 
-describe('toChapterKey', () => {
+describe('toBookChapterKey', () => {
   it('identifies a chapter by book and number', () => {
-    expect(toChapterKey(GEN_10_19)).toBe('GEN 10');
+    expect(toBookChapterKey(GEN_10_19)).toBe('GEN 10');
   });
 });

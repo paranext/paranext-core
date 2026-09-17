@@ -464,8 +464,16 @@ interface TextGeometry {
 }
 
 /**
- * Measures the first occurrence of `text` in the editor's chapter content against the element that
- * actually scrolls that content.
+ * Finds the editor's real scroll container — the same discovery `findScrollContainer` in
+ * editor-dom.util.ts does: the nearest ancestor that is styled scrollable AND overflows — and, in
+ * one pass, optionally pins its scroll position and/or measures where `needle` sits inside it.
+ *
+ * Both browser-side actions this suite needs against the editor (pinning the scroll position for
+ * {@link showEditorAt}, measuring text for {@link readTextGeometry}) start with this identical walk,
+ * so it is written once here rather than twice: an `evaluate` callback cannot close over module
+ * scope, so a Node-side helper the callback merely CALLED would not be shippable to the browser at
+ * all — the walk has to live inside whichever function actually runs there, which means sharing it
+ * means passing this same function to both callers' `evaluate` calls.
  *
  * Locates the text itself rather than reading the editor's selection or Find's highlight: the
  * editor positions its scroll from the selection, so measuring the selection would let a wrong
@@ -473,48 +481,65 @@ interface TextGeometry {
  * `indexOf` over scripture text is acceptable here only because every needle this suite uses is
  * plain ASCII with no combining marks after it in the WEB text.
  *
+ * @returns `undefined` when the editor has no scrolling content, or when `needle` was given but is
+ *   not in the chapter; when `needle` is omitted, `undefined` on success too (there is nothing to
+ *   report — {@link showEditorAt} only wants the pin performed)
+ */
+function locateEditorScrollerAndAct({
+  pinTo,
+  needle,
+}: {
+  pinTo?: 'top' | 'bottom';
+  needle?: string;
+}): TextGeometry | undefined {
+  const editorContainer = document.querySelector<HTMLElement>('.editor-container');
+  if (!editorContainer) return undefined;
+  let scroller: HTMLElement | null = editorContainer;
+  while (scroller) {
+    const { overflowY } = getComputedStyle(scroller);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      scroller.scrollHeight > scroller.clientHeight
+    )
+      break;
+    scroller = scroller.parentElement;
+  }
+  if (!scroller) return undefined;
+
+  if (pinTo) scroller.scrollTop = pinTo === 'top' ? 0 : scroller.scrollHeight;
+  if (needle === undefined) return undefined;
+
+  const walker = document.createTreeWalker(editorContainer, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node && !(node.textContent ?? '').includes(needle)) node = walker.nextNode();
+  if (!node) return undefined;
+
+  const start = (node.textContent ?? '').indexOf(needle);
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, start + needle.length);
+  const rect = range.getBoundingClientRect();
+  const viewportTop = scroller.getBoundingClientRect().top + scroller.clientTop;
+  return {
+    matchTop: rect.top - viewportTop,
+    matchBottom: rect.bottom - viewportTop,
+    viewportHeight: scroller.clientHeight,
+    viewportWidth: scroller.clientWidth,
+    scrollTop: scroller.scrollTop,
+  };
+}
+
+/**
+ * Measures the first occurrence of `text` in the editor's chapter content against the element that
+ * actually scrolls that content. See {@link locateEditorScrollerAndAct}.
+ *
  * @returns `undefined` when the editor has no scrolling content or the text is not in the chapter
  */
 async function readTextGeometry(
   editorFrame: Frame,
   text: string,
 ): Promise<TextGeometry | undefined> {
-  return editorFrame.evaluate((needle) => {
-    const editorContainer = document.querySelector<HTMLElement>('.editor-container');
-    if (!editorContainer) return undefined;
-    // Same discovery as `findScrollContainer` in editor-dom.util.ts: the nearest ancestor that is
-    // styled scrollable AND overflows.
-    let scroller: HTMLElement | null = editorContainer;
-    while (scroller) {
-      const { overflowY } = getComputedStyle(scroller);
-      if (
-        (overflowY === 'auto' || overflowY === 'scroll') &&
-        scroller.scrollHeight > scroller.clientHeight
-      )
-        break;
-      scroller = scroller.parentElement;
-    }
-    if (!scroller) return undefined;
-
-    const walker = document.createTreeWalker(editorContainer, NodeFilter.SHOW_TEXT);
-    let node = walker.nextNode();
-    while (node && !(node.textContent ?? '').includes(needle)) node = walker.nextNode();
-    if (!node) return undefined;
-
-    const start = (node.textContent ?? '').indexOf(needle);
-    const range = document.createRange();
-    range.setStart(node, start);
-    range.setEnd(node, start + needle.length);
-    const rect = range.getBoundingClientRect();
-    const viewportTop = scroller.getBoundingClientRect().top + scroller.clientTop;
-    return {
-      matchTop: rect.top - viewportTop,
-      matchBottom: rect.bottom - viewportTop,
-      viewportHeight: scroller.clientHeight,
-      viewportWidth: scroller.clientWidth,
-      scrollTop: scroller.scrollTop,
-    };
-  }, text);
+  return editorFrame.evaluate(locateEditorScrollerAndAct, { needle: text });
 }
 
 /**
@@ -559,19 +584,7 @@ async function showEditorAt(
 ): Promise<TextGeometry> {
   await navigateToolbarBcv(mainPage, reference);
   await waitForGeometryToSettle(editorFrame, settleText);
-  await editorFrame.evaluate((edge) => {
-    let scroller: HTMLElement | null = document.querySelector<HTMLElement>('.editor-container');
-    while (scroller) {
-      const { overflowY } = getComputedStyle(scroller);
-      if (
-        (overflowY === 'auto' || overflowY === 'scroll') &&
-        scroller.scrollHeight > scroller.clientHeight
-      )
-        break;
-      scroller = scroller.parentElement;
-    }
-    if (scroller) scroller.scrollTop = edge === 'top' ? 0 : scroller.scrollHeight;
-  }, pinTo);
+  await editorFrame.evaluate(locateEditorScrollerAndAct, { pinTo });
   return waitForGeometryToSettle(editorFrame, settleText);
 }
 

@@ -12,22 +12,26 @@
  * per element. `overflow-y` is set via inline styles, which jsdom's getComputedStyle reflects.
  */
 
-import { afterEach, beforeAll, describe, expect, it, vi, Mock } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, Mock } from 'vitest';
 import {
   BASELINE_PROBE_ATTRIBUTE,
   clampTopToVisibleArea,
   computeRangeScrollTop,
   findScrollContainer,
   getEditorSelectionRange,
+  getVerseElement,
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
   measureBaselineOffset,
   measureRangeScrollGeometry,
   paraAtPoint,
   RANGE_SCROLL_TOP_OFFSET,
+  resolveScrollBehavior,
+  SCROLL_MAX_WAIT_MS,
   scrollToAnnotation,
   scrollToRange,
   scrollToVerse,
+  waitForLayoutToSettle,
 } from './editor-dom.util';
 
 vi.mock('@papi/frontend', () => ({
@@ -236,6 +240,30 @@ describe('findScrollContainer', () => {
   });
 });
 
+describe('getVerseElement', () => {
+  it('finds the marker for the given verse number', () => {
+    const { editorContainer } = buildEditorDom({ verseNumbers: [15] });
+
+    const element = getVerseElement(15);
+
+    expect(element).toBe(editorContainer.querySelector('span[data-marker="v"]'));
+  });
+
+  it('returns undefined when no marker exists for the verse number', () => {
+    buildEditorDom({ verseNumbers: [15] });
+
+    expect(getVerseElement(3)).toBeUndefined();
+  });
+
+  it('returns undefined for verseNum < 1 without matching any marker', () => {
+    // Verse 0 is not a real verse marker; a chapter-start marker (if one ever existed) must not
+    // match it.
+    buildEditorDom({ verseNumbers: [0] });
+
+    expect(getVerseElement(0)).toBeUndefined();
+  });
+});
+
 describe('scrollToVerse', () => {
   it('REGRESSION: scrolls the element that actually scrolls, not .editor-container', () => {
     // Mirrors the shipped bug: .editor-container styled scrollable but grown to content height.
@@ -334,6 +362,36 @@ describe('scrollToVerse', () => {
 
     expect(scrollToVerse({ book: 'GEN', chapterNum: 10, verseNum: 19 })).toBeUndefined();
     expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveScrollBehavior', () => {
+  function stubReducedMotionPreference(matches: boolean): void {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches }));
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("downgrades 'smooth' to 'instant' when the user prefers reduced motion", () => {
+    stubReducedMotionPreference(true);
+    expect(resolveScrollBehavior('smooth')).toBe('instant');
+  });
+
+  it("leaves 'smooth' alone when the user has not asked to reduce motion", () => {
+    stubReducedMotionPreference(false);
+    expect(resolveScrollBehavior('smooth')).toBe('smooth');
+  });
+
+  it("leaves 'instant' alone regardless of the preference", () => {
+    stubReducedMotionPreference(true);
+    expect(resolveScrollBehavior('instant')).toBe('instant');
+  });
+
+  it('leaves the requested behavior alone when matchMedia is unavailable', () => {
+    vi.stubGlobal('matchMedia', undefined);
+    expect(resolveScrollBehavior('smooth')).toBe('smooth');
   });
 });
 
@@ -679,6 +737,24 @@ describe('computeRangeScrollTop', () => {
     // maxScrollTop = 5000 - 900 = 4100; the range at 4950 is then 850 px down a 900 px viewport.
     expect(computeRangeScrollTop({ ...viewport, rangeTop: 4950, rangeBottom: 4970 })).toBe(4100);
   });
+
+  it('shrinks the offset on a short viewport, so the match does not land past the midpoint', () => {
+    // A 150 px pane: a quarter of that (37.5) is well under the fixed 80 px offset, so the smaller
+    // value wins.
+    const shortViewport = { scrollTop: 0, clientHeight: 150, scrollHeight: 1000 };
+    expect(computeRangeScrollTop({ ...shortViewport, rangeTop: 500, rangeBottom: 510 })).toBe(
+      500 - 150 / 4,
+    );
+  });
+
+  it('keeps the offset at exactly RANGE_SCROLL_TOP_OFFSET on an ordinary-height viewport', () => {
+    // At clientHeight 320, a quarter (80) exactly equals the fixed offset — the boundary above
+    // which the cap never engages.
+    const ordinaryViewport = { scrollTop: 0, clientHeight: 320, scrollHeight: 5000 };
+    expect(computeRangeScrollTop({ ...ordinaryViewport, rangeTop: 1000, rangeBottom: 1020 })).toBe(
+      1000 - RANGE_SCROLL_TOP_OFFSET,
+    );
+  });
 });
 
 describe('getEditorSelectionRange', () => {
@@ -736,9 +812,10 @@ describe('measureRangeScrollGeometry', () => {
   it('measures the range against the container that actually scrolls, not .editor-container', () => {
     const { editorContainer } = buildEditorDom({ verseNumbers: [] });
 
-    const geometry = measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20));
+    const measurement = measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20));
 
-    expect(geometry).toEqual({
+    expect(measurement).toEqual({
+      status: 'measured',
       scrollContainer: editorContainer.parentElement?.parentElement, // the wrapper
       rangeTop: 2094,
       rangeHeight: 20,
@@ -754,24 +831,29 @@ describe('measureRangeScrollGeometry', () => {
     const { editorContainer, wrapper } = buildEditorDom({ verseNumbers: [] });
     wrapper.scrollTop = 500;
 
-    const geometry = measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20));
+    const measurement = measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20));
+    if (measurement.status !== 'measured') throw new Error('expected a measured geometry');
 
-    expect(geometry?.scrollContainer).toBe(wrapper);
-    expect(geometry?.scrollTop).toBe(500);
-    expect(geometry?.clientHeight).toBe(VIEWPORT_HEIGHT);
-    expect(geometry?.scrollHeight).toBe(CONTENT_HEIGHT);
+    expect(measurement.scrollContainer).toBe(wrapper);
+    expect(measurement.scrollTop).toBe(500);
+    expect(measurement.clientHeight).toBe(VIEWPORT_HEIGHT);
+    expect(measurement.scrollHeight).toBe(CONTENT_HEIGHT);
   });
 
-  it('returns undefined when the range has no layout (the all-zero-rect case)', () => {
+  it("reports 'no-layout' when the range has no layout (the all-zero-rect case)", () => {
     const { editorContainer } = buildEditorDom({ verseNumbers: [] });
 
-    expect(measureRangeScrollGeometry(rangeInEditor(editorContainer, 0, 0))).toBeUndefined();
+    expect(measureRangeScrollGeometry(rangeInEditor(editorContainer, 0, 0))).toEqual({
+      status: 'no-layout',
+    });
   });
 
-  it('returns undefined when nothing scrollable exists', () => {
+  it("reports 'no-scroll-container' when nothing scrollable exists", () => {
     const { editorContainer } = buildEditorDom({ verseNumbers: [], wrapperScrolls: false });
 
-    expect(measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20))).toBeUndefined();
+    expect(measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20))).toEqual({
+      status: 'no-scroll-container',
+    });
   });
 });
 
@@ -820,5 +902,143 @@ describe('scrollToRange', () => {
 
     expect(scrollToRange(rangeInEditor(editorContainer, 0, 0), 'smooth')).toBe(false);
     expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('waitForLayoutToSettle', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+        'Date',
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Advances enough animation frames for the wait to react, without resolving the whole bound. */
+  async function runFrames(ms = 100) {
+    await vi.advanceTimersByTimeAsync(ms);
+  }
+
+  it('settles once two consecutive samples agree, and samples no further', async () => {
+    const nextValues = [1, 2, 2, 2, 2];
+    const sample = vi.fn(() => nextValues.shift() ?? 2);
+    const onSettled = vi.fn(() => 'settled' as const);
+    const onTimedOut = vi.fn();
+
+    waitForLayoutToSettle({
+      sample,
+      samplesMatch: (previous, current) => previous === current,
+      onSettled,
+      onTimedOut,
+    });
+    await runFrames();
+
+    // Sample 1: nothing to compare against yet (not settled). Sample 2: disagrees with sample 1
+    // (1 vs 2, not settled). Sample 3: agrees with sample 2 (2 vs 2) -> settles here, and the queue
+    // is left with two more agreeing values it should never need to consume.
+    expect(sample).toHaveBeenCalledTimes(3);
+    expect(onSettled).toHaveBeenCalledTimes(1);
+    expect(onSettled).toHaveBeenCalledWith(2, false);
+    expect(onTimedOut).not.toHaveBeenCalled();
+  });
+
+  it("a 'keep-waiting' result discards the agreement, requiring two fresh samples before settling again", async () => {
+    const sample = vi.fn(() => 5); // constant, so every pair after the first agrees
+    const onSettled = vi.fn().mockReturnValueOnce('keep-waiting').mockReturnValueOnce('settled');
+    const onTimedOut = vi.fn();
+
+    waitForLayoutToSettle({
+      sample,
+      samplesMatch: (previous, current) => previous === current,
+      onSettled,
+      onTimedOut,
+    });
+    await runFrames();
+
+    // First agreement (samples 1-2) is rejected via 'keep-waiting', which must cost a full fresh
+    // pair (samples 3-4) rather than accepting the very next sample against the rejected one.
+    expect(sample).toHaveBeenCalledTimes(4);
+    expect(onSettled).toHaveBeenCalledTimes(2);
+    expect(onTimedOut).not.toHaveBeenCalled();
+  });
+
+  it('fires the timeout callback once, and only once, when samples never agree', async () => {
+    let counter = 0;
+    const sample = vi.fn(() => {
+      counter += 1;
+      return counter; // always different from the previous sample -> never settles
+    });
+    const onSettled = vi.fn(() => 'settled' as const);
+    const onTimedOut = vi.fn();
+
+    waitForLayoutToSettle({
+      sample,
+      samplesMatch: (previous, current) => previous === current,
+      onSettled,
+      onTimedOut,
+    });
+
+    await runFrames(SCROLL_MAX_WAIT_MS / 2);
+    expect(onTimedOut).not.toHaveBeenCalled();
+
+    // Advance well past the bound, giving many more frames a chance to fire the callback again.
+    await runFrames(SCROLL_MAX_WAIT_MS * 3);
+    expect(onTimedOut).toHaveBeenCalledTimes(1);
+    expect(onSettled).not.toHaveBeenCalled();
+  });
+
+  it('stops every callback once cancelled', async () => {
+    let counter = 0;
+    const sample = vi.fn(() => {
+      counter += 1;
+      return counter; // never settles on its own
+    });
+    const onSettled = vi.fn(() => 'settled' as const);
+    const onTimedOut = vi.fn();
+
+    const cancel = waitForLayoutToSettle({
+      sample,
+      samplesMatch: (previous, current) => previous === current,
+      onSettled,
+      onTimedOut,
+    });
+    cancel();
+
+    await runFrames(SCROLL_MAX_WAIT_MS * 3);
+
+    expect(onSettled).not.toHaveBeenCalled();
+    expect(onTimedOut).not.toHaveBeenCalled();
+    // Only the one synchronous call made before cancellation took effect.
+    expect(sample).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes isTimedOut: true to onSettled when the agreement lands only once the bound has elapsed', async () => {
+    const testStart = Date.now();
+    const sample = vi.fn(() => 9);
+    const onSettled = vi.fn(() => 'settled' as const);
+    const onTimedOut = vi.fn();
+
+    waitForLayoutToSettle({
+      sample,
+      // Every reading is identical, but this refuses to call it an agreement until the bound has
+      // elapsed, so the accepted agreement always carries isTimedOut: true.
+      samplesMatch: (previous, current) =>
+        previous === current && Date.now() - testStart > SCROLL_MAX_WAIT_MS,
+      onSettled,
+      onTimedOut,
+    });
+    await runFrames(SCROLL_MAX_WAIT_MS * 2);
+
+    expect(onSettled).toHaveBeenCalledWith(9, true);
+    // Settling — even this late — still resolves through onSettled, never onTimedOut.
+    expect(onTimedOut).not.toHaveBeenCalled();
   });
 });
