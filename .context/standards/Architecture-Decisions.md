@@ -6415,10 +6415,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** A view that marks no zoom area ignores the chords entirely — the bootstrap does
   not even register its wheel listener while a pane has no areas — and the platform scales such a view
   whole at the Settings default instead. On Windows and Linux this is what a user notices first:
-  Ctrl+`+`, Ctrl+`-` and Ctrl+`0` now do nothing anywhere except a view that marks a zoom area —
-  today the Scripture editor alone. Main no longer claims those chords, nothing replaces them, and a
-  pane with no marked area deliberately leaves the keystroke to whoever else may want it rather than
-  swallowing it for no effect. So a user on Resources, Notes or the Text Collection presses Ctrl+0
+  Ctrl+`+`, Ctrl+`-` and Ctrl+`0` now do nothing anywhere except a view that answers them itself —
+  today the Scripture editor, through the zoom areas it marks, and Enhanced Resources, through the
+  keydown handler it has always had for its own scripture-pane zoom
+  (`extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx`). Main
+  no longer claims those chords, nothing replaces them, and a pane with no marked area deliberately
+  leaves the keystroke to whoever else may want it rather than swallowing it for no effect. So a user
+  on Notes, or on the Text Collection — whose own pane zoom is wheel and menu only — presses Ctrl+0
   and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
   and it shrinks as views adopt the mechanism (the Text Collection grid in PT-4582, Enhanced
   Resources in PT-4583). The bootstrap listens in the **bubble** phase on purpose, so
