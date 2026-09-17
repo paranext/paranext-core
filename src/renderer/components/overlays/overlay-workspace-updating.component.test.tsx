@@ -74,6 +74,23 @@ describe('WorkspaceUpdatingOverlay', () => {
     expect(isWindowBlockedByOverlay()).toBe(false);
   });
 
+  // The production release path: this overlay is mounted for the life of the window (it renders
+  // nothing when idle rather than unmounting), so the block is never lifted by an unmount. A
+  // registration that only ever released on unmount would leave the window blocked for the rest of
+  // the session, and every content-zoom chord in it dead, with nothing said.
+  it('releases the block when the update finishes, without unmounting', () => {
+    render(<WorkspaceUpdatingOverlay />);
+    let release: (() => void) | undefined;
+    act(() => {
+      release = startWorkspaceUpdate();
+    });
+    expect(isWindowBlockedByOverlay()).toBe(true);
+    act(() => {
+      release?.();
+    });
+    expect(isWindowBlockedByOverlay()).toBe(false);
+  });
+
   it('insets 48px from the top in power mode, matching the tw:h-12 toolbar', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
     render(<WorkspaceUpdatingOverlay />);
