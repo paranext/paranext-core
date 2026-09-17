@@ -153,7 +153,7 @@ function ResourceSection({
               : undefined
           }
         >
-          <TableCell className="tw:w-5 tw:border-0 tw:py-1 tw:pr-1">
+          <TableCell className="tw:border-0 tw:py-1 tw:pr-1">
             {showCheckmark && (
               <>
                 <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
@@ -161,12 +161,18 @@ function ResourceSection({
               </>
             )}
           </TableCell>
-          <TableCell className="tw:border-0 tw:py-1 tw:pr-2 tw:font-normal tw:whitespace-nowrap">
-            {r.displayName}
+          {/* Every name cell truncates instead of widening the table, and carries its untruncated
+              text as a native hover label so nothing becomes unreadable. A cell in a table only
+              truncates once it is allowed to be narrower than its content, which `max-w-0` plus the
+              column widths on the table do. */}
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pr-2 tw:font-normal">
+            <span title={r.displayName}>{r.displayName}</span>
           </TableCell>
-          <TableCell className="tw:border-0 tw:py-1 tw:pl-2">{r.fullName}</TableCell>
-          <TableCell className="tw:border-0 tw:py-1 tw:pl-4 tw:text-right tw:text-muted-foreground">
-            {r.bestLanguageName}
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pl-2">
+            <span title={r.fullName}>{r.fullName}</span>
+          </TableCell>
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pl-4 tw:text-right tw:text-muted-foreground">
+            <span title={r.bestLanguageName}>{r.bestLanguageName}</span>
           </TableCell>
         </TableRow>
       ))}
@@ -468,7 +474,10 @@ export default function ResourcePickerDialog({
           })}
         </p>
       )}
-      <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
+      {/* `overflow-x-hidden` is load-bearing, not tidying: asking only for `overflow-y: auto` leaves
+          the other axis computing from `visible` to `auto`, so any row wider than the dialog earns a
+          horizontal scrollbar nobody chose. The columns below truncate instead. */}
+      <div className="tw:min-h-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:px-4 tw:pb-4">
         {bodyState === 'loading' && (
           <p className="tw:py-8 tw:text-center">
             <Spinner />
@@ -501,8 +510,18 @@ export default function ResourcePickerDialog({
         {bodyState === 'empty' && (
           <EmptyState className="tw:py-8 tw:text-center" message={noResultsText} />
         )}
+        {/* Fixed layout so the columns cannot be widened by their content: under the default `auto`
+            layout a single long resource name sets the table's width and pushes the language column
+            out of the dialog. The proportions come from the colgroup rather than per-cell widths,
+            because the section-heading rows span all four columns and so cannot carry them. */}
         {bodyState === 'list' && (
-          <Table>
+          <Table className="tw:table-fixed">
+            <colgroup>
+              <col className="tw:w-5" />
+              <col className="tw:w-1/4" />
+              <col />
+              <col className="tw:w-1/4" />
+            </colgroup>
             <TableBody>
               <ResourceSection
                 label={alreadySelectedLabel}

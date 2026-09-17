@@ -145,3 +145,44 @@ export const InstalledNotSelectable: Story = {
       'No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.',
   },
 };
+
+/**
+ * A resource whose names are far wider than the 560px dialog this file's decorator renders. The
+ * columns truncate; the list must not gain a horizontal scrollbar, which hides the language column
+ * off the right edge and is never the right answer for a name that is merely long.
+ *
+ * Asserted in a real browser rather than jsdom on purpose: jsdom has no layout, so `scrollWidth`
+ * and `clientWidth` are both 0 there and the check would pass no matter what the CSS said.
+ */
+export const LongNamesDoNotScrollHorizontally: Story = {
+  args: {
+    allResources: [
+      {
+        dblEntryUid: 'long-1',
+        displayName: 'aVeryLongShortNameThatRefusesToWrapAnywhere',
+        fullName:
+          'An Extremely Long Resource Full Name That Keeps Going Well Past Any Reasonable Dialog Width',
+        bestLanguageName: 'A Language With An Unreasonably Long Display Name',
+        type: 'ScriptureResource',
+        size: 1,
+        installed: false,
+        updateAvailable: false,
+        projectId: 'long-proj',
+      },
+    ],
+    selectedResourceIds: [],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const row = await canvas.findByText(
+      'An Extremely Long Resource Full Name That Keeps Going Well Past Any Reasonable Dialog Width',
+    );
+
+    const scroller = row.closest('.tw\\:overflow-y-auto');
+    if (!scroller) throw new Error('resource list scroll container not found');
+
+    // The defect this pins: `overflow-y: auto` alone leaves the other axis computing from
+    // `visible` to `auto`, so a row wider than the dialog earns a scrollbar nobody asked for.
+    expect(scroller.scrollWidth).toBeLessThanOrEqual(scroller.clientWidth);
+  },
+};
