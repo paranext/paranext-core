@@ -26,7 +26,7 @@ import {
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
-import { isModalOverlayOpen } from '@renderer/services/modal-overlay-open.util';
+import { isWindowInputBlocked } from '@renderer/services/window-input-blocked.util';
 import { registerContentZoomChromeKeys } from '@renderer/services/web-view-content-zoom.chrome-keys';
 import {
   adjustContentZoom,
@@ -150,7 +150,7 @@ initConnectionLostService();
       getAllOpenDefinitions: getAllOpenWebViewDefinitionsSync,
       onDidUpdateWebView,
       getLastFocusedTabId,
-      isModalOverlayOpen,
+      isWindowInputBlocked,
     }).catch((e) =>
       logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
     );
@@ -158,7 +158,7 @@ initConnectionLostService();
     registerContentZoomChromeKeys({
       adjustContentZoom,
       resetContentZoom,
-      isModalOverlayOpen,
+      isWindowInputBlocked,
       canContentZoomAct: canContentZoomActOnActiveTarget,
     });
 

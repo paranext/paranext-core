@@ -129,7 +129,7 @@ describe('web-view-content-zoom.service', () => {
         return () => false;
       },
       getLastFocusedTabId: () => lastFocused,
-      isModalOverlayOpen: () => modalOverlayOpen,
+      isWindowInputBlocked: () => modalOverlayOpen,
       settings: {
         get: async (key: string) => settings[key],
         set: settingsSet,
