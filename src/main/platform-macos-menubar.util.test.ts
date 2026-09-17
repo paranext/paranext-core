@@ -69,7 +69,10 @@ const ZOOM_ITEM_IDS = ['contentZoomIn', 'contentZoomOut', 'contentZoomReset'];
 describe('translatePlatformMenuItemsAndCombine', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('a contributed View column does not delete the built-in zoom items', async () => {
+  // Scoped to what the combine guarantees: a contributed View column replaces the View submenu in
+  // the menubar THAT build produces, but must not damage the template every later build reads —
+  // which is what used to remove the zoom items for the rest of the process.
+  it('leaves a later build’s zoom items intact after a contributed View column', async () => {
     await translatePlatformMenuItemsAndCombine(menuWithContributedColumn('%mainMenu_view%'));
     const second = await translatePlatformMenuItemsAndCombine(
       menuWithContributedColumn('%mainMenu_file%'),
