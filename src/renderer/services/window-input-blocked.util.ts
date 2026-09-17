@@ -16,9 +16,9 @@ import { isWindowBlockedByOverlay } from '@renderer/services/window-blocking-ove
  * A docked PAPI dialog request (`dialog.service-shard.ts`) is deliberately not one of these: those
  * dialogs are non-modal tabs the user keeps working behind, so they stop nothing.
  *
- * @returns True if a modal overlay or a full-screen blocking overlay is up; false otherwise
+ * @returns True if this window's input is currently blocked; false otherwise
  */
-export function isModalOverlayOpen(): boolean {
+export function isWindowInputBlocked(): boolean {
   return (
     hasOverlayOfType('modalDialog') ||
     hasOverlayOfType('commandPalette') ||

@@ -20,7 +20,7 @@ function dispatchKeyDown(target: EventTarget, init: KeyboardEventInit): Keyboard
 describe('registerContentZoomChromeKeys', () => {
   let adjustContentZoom: ReturnType<typeof vi.fn>;
   let resetContentZoom: ReturnType<typeof vi.fn>;
-  let isModalOverlayOpen: ReturnType<typeof vi.fn>;
+  let isWindowInputBlocked: ReturnType<typeof vi.fn>;
   let canContentZoomAct: ReturnType<typeof vi.fn>;
   let unsubscribe: () => void;
 
@@ -28,12 +28,12 @@ describe('registerContentZoomChromeKeys', () => {
     vi.clearAllMocks();
     adjustContentZoom = vi.fn().mockResolvedValue(undefined);
     resetContentZoom = vi.fn().mockResolvedValue(undefined);
-    isModalOverlayOpen = vi.fn().mockReturnValue(false);
+    isWindowInputBlocked = vi.fn().mockReturnValue(false);
     canContentZoomAct = vi.fn().mockReturnValue(true);
     unsubscribe = registerContentZoomChromeKeys({
       adjustContentZoom,
       resetContentZoom,
-      isModalOverlayOpen,
+      isWindowInputBlocked,
       canContentZoomAct,
     });
   });
@@ -127,7 +127,7 @@ describe('registerContentZoomChromeKeys', () => {
   });
 
   it('does not act while a modal overlay is open', () => {
-    isModalOverlayOpen.mockReturnValue(true);
+    isWindowInputBlocked.mockReturnValue(true);
     const event = dispatchKeyDown(document.body, { key: '=', ctrlKey: true });
     expect(adjustContentZoom).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
@@ -150,7 +150,7 @@ describe('registerContentZoomChromeKeys', () => {
   it('does not ask whether a modal overlay is open for a key it would not act on anyway', () => {
     dispatchKeyDown(document.body, { key: 'c', ctrlKey: true });
     dispatchKeyDown(document.body, { key: 'ArrowDown', ctrlKey: true, shiftKey: true });
-    expect(isModalOverlayOpen).not.toHaveBeenCalled();
+    expect(isWindowInputBlocked).not.toHaveBeenCalled();
   });
 
   it('acts even when a descendant stops propagation before the bubble phase', () => {
