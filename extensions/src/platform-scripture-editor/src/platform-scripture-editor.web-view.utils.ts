@@ -411,42 +411,28 @@ export function createInsertContextMenuItems(
 const EDITOR_CONTEXT_MENU = '.typeahead-popover.auto-embed-menu';
 
 /**
- * Matches the highlighted item of that menu — the plugin marks the keyboard-or-hover-highlighted
- * item `selected`.
- */
-const EDITOR_CONTEXT_MENU_HIGHLIGHTED_ITEM = `${EDITOR_CONTEXT_MENU} li.selected`;
-
-/**
- * Whether the editor's right-click context menu — not this web view — owns the Enter about to be
- * handled.
- *
- * `ContextMenuPlugin` claims Enter from a CAPTURE-phase listener on `document`; this web view
- * claims it from one on `window`. Capture descends window → document, so this web view's claim
- * lands FIRST however late it registered, and its `stopPropagation()` would end the press before
- * the menu's listener ran at all — the menu would never see the Enter that is meant to invoke its
- * highlighted item. Standing down on this hands the press back down to the menu.
- *
- * Keyed on a HIGHLIGHTED item rather than merely an open menu, because that is exactly the state in
- * which the menu claims Enter. With the menu open and nothing highlighted the plugin ignores Enter,
- * so standing down would instead let Lexical plain-split the paragraph — the unmarked-split data
- * problem the Enter palette exists to prevent.
- */
-export function doesEditorContextMenuOwnEnter(): boolean {
-  return !!document.querySelector(EDITOR_CONTEXT_MENU_HIGHLIGHTED_ITEM);
-}
-
-/**
  * Whether the editor's right-click context menu is open at all.
  *
- * Gates the marker palette's `\\` trigger. The menu has no idea the palette exists and stays open
- * across it, and the palette then swallows the Escape that would have closed the menu (a palette
- * session claims its keys with `stopPropagation` on `window`, one capture step above the menu's
- * `document` listener) — leaving a menu whose highlighted item silently runs on the next Enter.
- * Standing down keeps the menu the one thing driving the keyboard while it is up.
+ * Gates BOTH of this web view's standard-view key triggers. While the menu is up it is the only
+ * keyboard mode on screen: neither the `\\` marker palette nor the Enter paragraph palette may open
+ * underneath it, and neither key may reach the document behind it. The menu has no idea the
+ * palettes exist and stays open across one, and a palette session then claims Escape with
+ * `stopPropagation` on `window` — one capture step above the menu's `document` listener — so a
+ * palette opened underneath survives the dismissal that was meant for the menu, leaving a menu
+ * whose highlighted item silently runs on the next Enter.
  *
- * Keyed on the menu being OPEN, not on a highlighted item: unlike Enter, the menu never acts on
- * `\\`, so there is nothing to hand it — the point is only to not start a second keyboard mode
- * underneath it.
+ * Keyed on the menu being OPEN rather than on a highlighted item, because a menu holding nothing to
+ * invoke still holds the keyboard. The two triggers then stand down differently, because the menu
+ * wants one of the keys and not the other:
+ *
+ * - `\\` is CLAIMED by the caller. The editor keeps DOM focus while the menu is up, so an unclaimed
+ *   `\\` falls through to Lexical and types a backslash into the document behind the menu. The menu
+ *   has no use for the key either, so nothing acts on it at all.
+ * - Enter is HANDED DOWN to the menu, which owns it outright while it is open — invoking its
+ *   highlighted item when it has an enabled one and swallowing the press otherwise.
+ *   `ContextMenuPlugin` claims Enter from a CAPTURE-phase listener on `document` while this web
+ *   view's is on `window`; capture descends window → document, so a `stopPropagation()` here would
+ *   end the press before the menu's listener ran at all.
  */
 export function isEditorContextMenuOpen(): boolean {
   return !!document.querySelector(EDITOR_CONTEXT_MENU);

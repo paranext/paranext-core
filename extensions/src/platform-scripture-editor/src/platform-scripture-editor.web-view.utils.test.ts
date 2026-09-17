@@ -11,7 +11,6 @@ import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-e
 import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
   createInsertContextMenuItems,
-  doesEditorContextMenuOwnEnter,
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -629,7 +628,7 @@ describe('createInsertContextMenuItems', () => {
   });
 });
 
-describe('doesEditorContextMenuOwnEnter', () => {
+describe('isEditorContextMenuOpen', () => {
   /**
    * The markup `ContextMenuPlugin` actually portals into the document: both classes on the outer
    * element, a second `.typeahead-popover` nested inside it, and `selected` on the highlighted
@@ -651,54 +650,12 @@ describe('doesEditorContextMenuOwnEnter', () => {
   });
 
   it('is false with no context menu open', () => {
-    expect(doesEditorContextMenuOwnEnter()).toBe(false);
-  });
-
-  // The menu does not claim Enter with nothing highlighted, so the web view must keep it and open
-  // the Enter palette — standing down here would leave Lexical to plain-split the paragraph.
-  it('is false while the menu is open with nothing highlighted', () => {
-    renderContextMenu({ highlighted: false });
-    expect(doesEditorContextMenuOwnEnter()).toBe(false);
-  });
-
-  it('is true once an item is highlighted', () => {
-    renderContextMenu({ highlighted: true });
-    expect(doesEditorContextMenuOwnEnter()).toBe(true);
-  });
-
-  // Other popovers reuse `.typeahead-popover` and the same `selected` item class; only the
-  // context-menu portal (`auto-embed-menu`) claims Enter on `document`.
-  it('ignores a highlighted item in a popover that is not the context menu', () => {
-    const other = document.createElement('div');
-    other.className = 'typeahead-popover';
-    other.innerHTML = '<ul><li class="item selected"><span class="text">q1</span></li></ul>';
-    document.body.append(other);
-    expect(doesEditorContextMenuOwnEnter()).toBe(false);
-  });
-});
-
-describe('isEditorContextMenuOpen', () => {
-  function renderContextMenu({ highlighted }: { highlighted: boolean }) {
-    const portal = document.createElement('div');
-    portal.className = 'typeahead-popover auto-embed-menu';
-    portal.innerHTML = `<div class="typeahead-popover"><ul>
-      <li class="item${highlighted ? ' selected' : ''}" role="option"><span class="text">Cut</span></li>
-    </ul></div>`;
-    document.body.append(portal);
-    return portal;
-  }
-
-  afterEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  it('is false with no context menu open', () => {
     expect(isEditorContextMenuOpen()).toBe(false);
   });
 
-  // Unlike Enter ownership, this does NOT wait for a highlighted item: the `\\` trigger has to
-  // stand down for the whole time the menu is up, because a palette opened under it survives the
-  // Escape that would otherwise have closed the menu.
+  // Both triggers stand down for the whole time the menu is up, not only while it holds something
+  // to invoke: a menu holding nothing still holds the keyboard, and a palette opened under it
+  // survives the Escape that was meant to close the menu.
   it('is true while the menu is open with nothing highlighted', () => {
     renderContextMenu({ highlighted: false });
     expect(isEditorContextMenuOpen()).toBe(true);
@@ -709,8 +666,9 @@ describe('isEditorContextMenuOpen', () => {
     expect(isEditorContextMenuOpen()).toBe(true);
   });
 
-  // The marker typeahead and the marker palette reuse `.typeahead-popover`; neither is the menu
-  // this gate is about, and blocking `\\` on one of those would break the palette's own reopen.
+  // The marker typeahead and the marker palette reuse `.typeahead-popover` and the same `selected`
+  // item class; neither is the menu this gate is about, and standing down on one of those would
+  // break the palette's own reopen.
   it('ignores a popover that is not the context menu', () => {
     const other = document.createElement('div');
     other.className = 'typeahead-popover';
