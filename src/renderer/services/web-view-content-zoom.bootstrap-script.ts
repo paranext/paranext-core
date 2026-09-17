@@ -6,6 +6,7 @@ import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_MAIN_AREA_ATTRIBUTE_VALUES,
   CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE,
+  CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
   CONTENT_ZOOM_STYLE_ELEMENT_ID,
   CONTENT_ZOOM_UNNESTED_CLAUSE,
@@ -124,6 +125,13 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
   (() => {
     const webViewId = ${id};
     const ATTR = '${attr}';
+    // Pop-up content (a popover or menu portaled out of an area) carries its area's marker so the
+    // zoom rule scales it, plus this flag: it is never a pane of its own, so it is left out of the
+    // reported areas and the indicator's placement. A click or wheel inside it still targets its area.
+    // Hidden case: nothing to catch up — a pop-up is only open in a visible pane, and its zoom is a
+    // CSS variable that updates while the tab is hidden.
+    const POPUP_ATTR = '${CONTENT_ZOOM_POPUP_ATTRIBUTE}';
+    const isPopup = (element) => element.hasAttribute(POPUP_ATTR);
     const MAIN = '${MAIN_CONTENT_ZOOM_AREA}';
     const AREA_ID = new RegExp(${JSON.stringify(CONTENT_ZOOM_AREA_ID_PATTERN.source)});
     const RESERVED_ID = ${JSON.stringify(RESERVED_CONTENT_ZOOM_AREA_ID)};
@@ -206,6 +214,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const collectAreas = () => {
       const found = [];
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
+        if (isPopup(element)) return;
         const areaId = idOf(element);
         if (!isAreaId(areaId)) { warnOnce('ignoring zoom area with invalid id "' + areaId + '"'); return; }
         if (element.parentElement && element.parentElement.closest('[' + ATTR + ']')) { warnOnce('ignoring nested zoom area "' + areaId + '"'); return; }
@@ -720,7 +729,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const cornerOf = (areaId) => {
       let top = Infinity; let left = Infinity; let right = -Infinity; let anchor;
       document.querySelectorAll('[' + ATTR + ']').forEach((element) => {
-        if (idOf(element) !== areaId) return;
+        if (idOf(element) !== areaId || isPopup(element)) return;
         if (!anchor) anchor = element;
         const rect = element.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) return;
