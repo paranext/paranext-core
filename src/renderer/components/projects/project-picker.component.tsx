@@ -130,8 +130,10 @@ function ProjectSection({
           }}
           onFocus={() => onFocusOption(p.id)}
         >
-          {/* Column 1 — short name, right-aligned */}
-          <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
+          {/* Column 1 — short name. Starts at the leading edge, as it does in the titlebar
+              `ProjectSelector` popover and in `ResourcePickerDialog`; see the picker row layout
+              entry in `.context/standards/Architecture-Decisions.md`. */}
+          <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-start tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
             {p.id === currentProjectId && (
               // Wrapped rather than labelled directly so it carries a hover label like the
               // read-only padlock beside it — a Lucide icon takes no `title`, and without the
