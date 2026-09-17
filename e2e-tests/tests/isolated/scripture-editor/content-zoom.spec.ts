@@ -16,7 +16,7 @@
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor`.
  */
-import { type Frame, type Locator } from '@playwright/test';
+import { type Frame, type Locator, type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   areaBox,
@@ -155,6 +155,82 @@ async function readCaretBox(frame: Frame): Promise<PageBox> {
   });
   if (!frameBox || !caret) throw new Error('No frame box or no text caret');
   return { ...caret, x: caret.x + frameBox.x, y: caret.y + frameBox.y };
+}
+
+/**
+ * {@link expectPopupBesideTriggerAndInsideFrame}, retried until it holds: a pop-up that has just
+ * opened is still being positioned and runs a short open animation, so its first boxes are not its
+ * settled ones. A pop-up that never settles beside its trigger still fails.
+ */
+async function expectSettledBeside(
+  frame: Frame,
+  popup: Locator,
+  trigger: Locator | PageBox,
+): Promise<void> {
+  await expect(async () => expectPopupBesideTriggerAndInsideFrame(frame, popup, trigger)).toPass({
+    timeout: 5_000,
+  });
+}
+
+/** A locator's main-frame box; throws when it has none. */
+async function boxOf(locator: Locator): Promise<PageBox> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('Element has no box');
+  return box;
+}
+
+/**
+ * Selects verse 2's text from "great" into "before" with a click and a Shift+click, which wraps
+ * onto a second line at 200 % in the default window, and returns the selection's main-frame box.
+ * Checks that the selection really spans more than one line.
+ */
+async function selectWrappedText(page: Page, frame: Frame, input: Locator): Promise<PageBox> {
+  const frameBox = await (await frame.frameElement()).boundingBox();
+  if (!frameBox) throw new Error('Editor frame has no box');
+  await input.getByText('that great city', { exact: false }).first().scrollIntoViewIfNeeded();
+  const points = await input.evaluate((root) => {
+    const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.textContent ?? '';
+      const from = text.indexOf('great city');
+      const to = text.indexOf('before me');
+      if (from >= 0 && to > from) {
+        const textNode = node;
+        const charCenter = (offset: number) => {
+          const range = root.ownerDocument.createRange();
+          range.setStart(textNode, offset);
+          range.setEnd(textNode, offset + 1);
+          const rect = range.getBoundingClientRect();
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        };
+        return { start: charCenter(from + 1), end: charCenter(to + 3) };
+      }
+    }
+    return undefined;
+  });
+  if (!points) throw new Error('Verse 2 text not found');
+  await page.mouse.click(frameBox.x + points.start.x, frameBox.y + points.start.y);
+  await page.keyboard.down('Shift');
+  await page.mouse.click(frameBox.x + points.end.x, frameBox.y + points.end.y);
+  await page.keyboard.up('Shift');
+  const lines = await frame.evaluate(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return [];
+    return Array.from(selection.getRangeAt(0).getClientRects())
+      .filter((rect) => rect.width > 0)
+      .map((rect) => ({
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      }));
+  });
+  expect(new Set(lines.map((line) => Math.round(line.top))).size).toBeGreaterThan(1);
+  const left = Math.min(...lines.map((line) => line.left));
+  const top = Math.min(...lines.map((line) => line.top));
+  const right = Math.max(...lines.map((line) => line.right));
+  const bottom = Math.max(...lines.map((line) => line.bottom));
+  return { x: frameBox.x + left, y: frameBox.y + top, width: right - left, height: bottom - top };
 }
 
 test.describe('scripture editor content zoom', () => {
@@ -334,30 +410,43 @@ test.describe('scripture editor content zoom', () => {
     });
 
     await test.step('the footnote popover follows the text zoom and stays beside its caller, even scrolled and in a narrow pane', async () => {
-      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
       const caller = editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first();
       const popover = editorFrame.locator('[data-slot="popover-content"]').filter({
         has: editorFrame.locator('.editor-input'),
       });
+      const cancel = popover.getByRole('button', { name: 'Cancel', exact: true });
       // The editor controls this popover and does not close it on Escape or an outside click; its
       // own Cancel button closes it, leaving an existing note unchanged.
       const closeFootnotePopover = async () => {
-        await popover.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await cancel.click();
         await expect(popover).toBeHidden();
       };
+      const openFootnotePopover = async () => {
+        await caller.click({ force: true });
+        await expect(popover).toBeVisible();
+        await expect(popover).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expectSettledBeside(editorFrame, popover, caller);
+      };
 
-      await caller.click({ force: true });
-      await expect(popover).toBeVisible();
-      await expectPopupBesideTriggerAndInsideFrame(editorFrame, popover, caller);
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
+      await openFootnotePopover();
+      // The popover keeps its 500 px minimum width at 100 %.
+      expect((await boxOf(popover)).width).toBeGreaterThanOrEqual(499);
+      const cancelAtDefault = await boxOf(cancel);
+      await closeFootnotePopover();
+
+      // Growth by the zoom factor is measured on the popover's controls: the popover's own width is
+      // sized by its content (`w-max`) and capped by the pane, so it does not scale linearly.
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1.5);
+      await openFootnotePopover();
+      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(1.5, 1);
       await closeFootnotePopover();
 
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
       // Scroll the text before opening, so the caller is no longer where it sat at the top.
       expect((await scrollText(editorFrame, { to: 120 })).after).toBe(120);
-      await caller.click({ force: true });
-      await expect(popover).toBeVisible();
-      await expect(popover).toHaveAttribute('data-platform-content-zoom-root', '');
-      await expectPopupBesideTriggerAndInsideFrame(editorFrame, popover, caller);
+      await openFootnotePopover();
+      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(2, 1);
 
       // Scroll after opening: the popover moves with its caller.
       await scrollTextKeepingVisible(editorFrame, 60, caller);
@@ -376,15 +465,22 @@ test.describe('scripture editor content zoom', () => {
       await expect.poll(() => readFactor(editorFrame, '')).toBe(2);
       await closeFootnotePopover();
 
-      // Narrow pane: the popover must still fit inside it at 200 %. A real OS window resize, never
+      // Narrow pane: the popover and its content must still fit inside it, at 200 % and at the
+      // 300 % maximum (the app does not allow a narrower window). A real OS window resize, never
       // `mainPage.setViewportSize()` — on this CDP-attached fixture that applies an emulation
       // override that bypasses the app's enforced `minWidth` instead of actually narrowing the
       // window (see `setWindowWidth` in fixtures/helpers.ts).
       await setWindowWidth(electronApp, mainPage, 900);
-      await caller.click({ force: true });
-      await expect(popover).toBeVisible();
-      await expectPopupBesideTriggerAndInsideFrame(editorFrame, popover, caller);
-      await closeFootnotePopover();
+      // Sequential: each zoom level's pop-up must be opened, checked and closed before the next.
+      /* eslint-disable no-await-in-loop */
+      const narrowFactors = [2, 3];
+      for (let i = 0; i < narrowFactors.length; i += 1) {
+        await zoomAreaTo(mainPage, editorFrame, editorId, 'main', narrowFactors[i]);
+        await openFootnotePopover();
+        await closeFootnotePopover();
+      }
+      /* eslint-enable no-await-in-loop */
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
       // Restore the window width for the steps that follow.
       await setWindowWidth(electronApp, mainPage, DEFAULT_WINDOW_SIZE.width);
     });
@@ -398,54 +494,104 @@ test.describe('scripture editor content zoom', () => {
       await expect(mainInput).toHaveClass(/\bmarker-visible\b/, { timeout: 20_000 });
       await sendCommandWithId(mainPage, 'platformScriptureEditor.changeView', editorId);
       await expect(mainInput).toHaveClass(/\bmarker-hidden\b/, { timeout: 20_000 });
-      expect(await readFactor(editorFrame, '')).toBe(2);
 
       const text = mainInput.getByText('that great city', { exact: false }).first();
-
-      // Both pop-ups are anchored to the text caret, so the caret's box is their trigger.
-      await text.click();
-      const caretForMenu = await readCaretBox(editorFrame);
-      await mainPage.keyboard.press('\\');
       const markerMenu = editorFrame.locator('[data-slot="popover-content"]').filter({
         has: editorFrame.locator('input'),
       });
-      await expect(markerMenu).toBeVisible();
-      await expect(markerMenu).toHaveAttribute('data-platform-content-zoom-root', '');
-      await expectPopupBesideTriggerAndInsideFrame(editorFrame, markerMenu, caretForMenu);
-      const menuScrolled = await scrollTextKeepingVisible(editorFrame, 60, caretForMenu);
-      await expect(async () =>
-        expectPopupBesideTriggerAndInsideFrame(editorFrame, markerMenu, {
-          ...caretForMenu,
-          y: caretForMenu.y - menuScrolled,
-        }),
-      ).toPass({ timeout: 5_000 });
-      await mainPage.keyboard.press('Escape');
-      await expect(markerMenu).toBeHidden();
-
-      await text.click();
-      const caretForComment = await readCaretBox(editorFrame);
-      await mainPage.keyboard.press('Control+Shift+N');
       const commentEditor = editorFrame
         .locator('[data-slot="popover-content"]')
         .filter({ hasNot: editorFrame.locator('.editor-input') })
         .last();
-      await expect(commentEditor).toBeVisible();
-      await expect(commentEditor).toHaveAttribute('data-platform-content-zoom-root', '');
-      await expectPopupBesideTriggerAndInsideFrame(editorFrame, commentEditor, caretForComment);
-      // Scroll the text down rather than up: at 200 % the comment editor cannot shrink below about
-      // 350 px, so moving the caret up would leave room for it on neither side of the line.
-      const commentScrolled = await scrollTextKeepingVisible(editorFrame, -60, caretForComment);
-      await expect(async () =>
-        expectPopupBesideTriggerAndInsideFrame(editorFrame, commentEditor, {
-          ...caretForComment,
-          y: caretForComment.y - commentScrolled,
-        }),
-      ).toPass({ timeout: 5_000 });
-      // The comment editor takes focus shortly after it opens, and only its focused text box
-      // closes it on Escape.
-      await expect(commentEditor.locator('[contenteditable="true"]')).toBeFocused();
-      await mainPage.keyboard.press('Escape');
-      await expect(commentEditor).toBeHidden();
+
+      // Both pop-ups are anchored to the text caret (or selection), so its box is their trigger.
+      const placeCaret = async () => {
+        await text.click();
+        return readCaretBox(editorFrame);
+      };
+      const openMarkerMenu = async () => {
+        const caret = await placeCaret();
+        await mainPage.keyboard.press('\\');
+        await expect(markerMenu).toBeVisible();
+        await expect(markerMenu).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expectSettledBeside(editorFrame, markerMenu, caret);
+        return caret;
+      };
+      const closeMarkerMenu = async () => {
+        await mainPage.keyboard.press('Escape');
+        await expect(markerMenu).toBeHidden();
+      };
+      const openCommentEditor = async (trigger: PageBox) => {
+        await mainPage.keyboard.press('Control+Shift+N');
+        await expect(commentEditor).toBeVisible();
+        await expect(commentEditor).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expectSettledBeside(editorFrame, commentEditor, trigger);
+      };
+      const closeCommentEditor = async () => {
+        // The comment editor takes focus shortly after it opens, and only its focused text box
+        // closes it on Escape.
+        await expect(commentEditor.locator('[contenteditable="true"]')).toBeFocused();
+        await mainPage.keyboard.press('Escape');
+        await expect(commentEditor).toBeHidden();
+      };
+      /** Scrolls the text while a pop-up is open and checks it stays beside its moved trigger. */
+      const expectFollowsScroll = async (popup: Locator, trigger: PageBox, delta: number) => {
+        const moved = await scrollTextKeepingVisible(editorFrame, delta, trigger);
+        await expect(async () =>
+          expectPopupBesideTriggerAndInsideFrame(editorFrame, popup, {
+            ...trigger,
+            y: trigger.y - moved,
+          }),
+        ).toPass({ timeout: 5_000 });
+      };
+
+      // Growth: both pop-ups have fixed widths (500 px and 400 px) that fit the pane at every level
+      // here, so their painted width scales by the zoom factor.
+      const widths = new Map<number, { menu: number; comment: number }>();
+      // Sequential: each zoom level's pop-ups must be opened, measured and closed before the next.
+      /* eslint-disable no-await-in-loop */
+      const factors = [1, 1.5, 2];
+      for (let i = 0; i < factors.length; i += 1) {
+        const factor = factors[i];
+        await zoomAreaTo(mainPage, editorFrame, editorId, 'main', factor);
+        await openMarkerMenu();
+        const menu = (await boxOf(markerMenu)).width;
+        await closeMarkerMenu();
+        await openCommentEditor(await placeCaret());
+        const comment = (await boxOf(commentEditor)).width;
+        await closeCommentEditor();
+        widths.set(factor, { menu, comment });
+      }
+      /* eslint-enable no-await-in-loop */
+      const atDefault = widths.get(1);
+      if (!atDefault) throw new Error('No 100 % widths recorded');
+      [1.5, 2].forEach((factor) => {
+        expect((widths.get(factor)?.menu ?? 0) / atDefault.menu).toBeCloseTo(factor, 1);
+        expect((widths.get(factor)?.comment ?? 0) / atDefault.comment).toBeCloseTo(factor, 1);
+      });
+
+      // Still at 200 %: scroll after opening, and each pop-up moves with its caret.
+      const caretForMenu = await openMarkerMenu();
+      await expectFollowsScroll(markerMenu, caretForMenu, 60);
+      await closeMarkerMenu();
+
+      const caretForComment = await placeCaret();
+      await openCommentEditor(caretForComment);
+      await expectFollowsScroll(commentEditor, caretForComment, 60);
+      await closeCommentEditor();
+
+      // A selection that wraps onto a second line: the comment editor sits beside the whole
+      // selection, never on part of it, also once the editor has re-rendered the selection as the
+      // pending comment and the text scrolls.
+      const selection = await selectWrappedText(mainPage, editorFrame, mainInput);
+      await openCommentEditor(selection);
+      const scrolledTop = (await scrollText(editorFrame, {})).box.y;
+      await expectFollowsScroll(
+        commentEditor,
+        selection,
+        selection.y - scrolledTop > 180 ? 60 : -60,
+      );
+      await closeCommentEditor();
 
       // Back to the standard view (formatted -> standard) for the steps that follow.
       await sendCommandWithId(mainPage, 'platformScriptureEditor.changeView', editorId);
