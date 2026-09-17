@@ -593,8 +593,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // is one area's travel in one direction, and a notch that leaves either behind flushes what is
     // pending first (see requestZoomSteps), so a burst lands exactly where the same notches applied
     // one at a time would and no notch is lost. Only the tick path coalesces: a chord is one
-    // keystroke and one step, and a pinch already arrives once per frame, so neither has anything
-    // to coalesce with.
+    // keystroke and one step, and a pinch already arrives once per frame, so both apply straight
+    // away - handing over whatever is pending first, so arrival order is preserved.
+    //
+    // Hidden pane: an inactive rc-dock tab's iframe is display:none, where no animation frame runs,
+    // so a total left pending when the tab is hidden waits there rather than being applied or
+    // dropped. Deliberate: it is at most the notches of the frame the tab was hidden in, it lands
+    // whole the moment the tab is shown again, and a timer instead would write a level to a pane
+    // nobody is looking at.
     let zoomFrame;
     let zoomArea;
     // Signed the way a tick count is, so the pending total reads like the ticks that fed it:
@@ -647,13 +653,17 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (e.deltaY === 0) return;
       // Line and page delta modes carry small counts of lines or pages, which neither a tick count
       // nor a scale describes; such an event is one step in its direction and leaves the
-      // accumulator alone.
+      // accumulator alone. Both immediate paths hand over whatever the tick path has pending before
+      // they act, so the parent is always asked to step in the order the events arrived: its clamp
+      // is not commutative, so at either end of the range the order IS the level they land on.
       if (e.deltaMode !== 0) {
+        applyZoomSteps();
         act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
         return;
       }
       const now = performance.now();
       if (isPinchWheel(e, areaId, now)) {
+        applyZoomSteps();
         stepPinch(e, areaId, now);
         return;
       }

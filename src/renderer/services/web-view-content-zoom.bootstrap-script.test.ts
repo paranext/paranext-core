@@ -1178,6 +1178,39 @@ describe('content-zoom bootstrap script', () => {
     ]);
   });
 
+  it('hands over a pending notch before a line-mode event in the same frame acts', async () => {
+    const { bound } = install('wv-wheel-line-order', TWO_AREAS);
+    await nextFrame();
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -3, deltaMode: 1, ctrlKey: true }, byId('verse'));
+    // Arrival order is the order the parent is asked to step in: its clamp is not commutative, so
+    // two steps that arrive one way round can land on a different level from the other way round.
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-wheel-line-order', -1, 'main'],
+      ['wv-wheel-line-order', 1, 'main'],
+    ]);
+
+    await oneFrame();
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(2);
+  });
+
+  it('hands over a pending notch before a pinch in the same frame steps', async () => {
+    const { bound } = install('wv-wheel-pinch-order', TWO_AREAS);
+    await nextFrame();
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    // Five pinch frames are one step in; the notch above is a step out and arrived first.
+    for (let index = 0; index < 5; index += 1) {
+      wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    }
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-wheel-pinch-order', -1, 'main'],
+      ['wv-wheel-pinch-order', 1, 'main'],
+    ]);
+
+    await oneFrame();
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(2);
+  });
+
   it('applies the steps pending for one area before it accumulates for another', async () => {
     const { bound } = install('wv-wheel-areas', TWO_AREAS);
     await nextFrame();
