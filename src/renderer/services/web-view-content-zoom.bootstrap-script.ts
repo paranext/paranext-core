@@ -364,19 +364,16 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       }
     };
     // The keydown chord rule below mirrors web-view-content-zoom.chrome-keys.ts's
-    // isChordModifier / isAllowedShiftState / actionFor. This script is serialized to a string
-    // and cannot import that module, so the two copies are independently maintained - change
-    // both together. web-view-content-zoom.chord-parity.test.ts is the guard that keeps them
-    // in sync.
+    // isChordModifier / actionFor. This script is serialized to a string and cannot import that
+    // module, so the two copies are independently maintained - change both together.
+    // web-view-content-zoom.chord-parity.test.ts is the guard that keeps them in sync.
+    // Shift is accepted for every action: on AZERTY and Czech layouts the top-row 0 and - are
+    // shifted keys, so rejecting Shift would put reset out of reach there entirely.
     const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey;
 
     const onKeyDown = (e) => {
       if (!hasModifier(e)) return;
       const zoomIn = e.key === '=' || e.key === '+' || e.code === 'NumpadAdd';
-      // On US and UK layouts the published + is Shift+=, and Chromium's own zoom in accepts
-      // Ctrl+Shift+= for the same reason, so the zoom-in chord takes Shift. Zoom out and reset
-      // reject it, leaving Ctrl+Shift+- and Ctrl+Shift+0 to whoever else wants them.
-      if (e.shiftKey && !zoomIn) return;
       const areaId = targetFor(document.activeElement);
       if (!areaId) return;
       let command;

@@ -18,21 +18,17 @@ export type ContentZoomChromeKeysDeps = {
   canContentZoomAct: () => boolean;
 };
 
-/** Ctrl (or ⌘) is required. Alt is excluded, because Ctrl+Alt chords carry their own meanings. */
+/**
+ * Ctrl (or ⌘) is required. Alt is excluded, because Ctrl+Alt chords carry their own meanings. Shift
+ * is accepted for every zoom action: on AZERTY and Czech layouts the top-row `0` and `-` are
+ * shifted keys, so rejecting Shift would put reset out of reach there entirely, and Chromium's own
+ * zoom accepts it the same way.
+ */
 function isChordModifier(e: KeyboardEvent): boolean {
   return (e.ctrlKey || e.metaKey) && !e.altKey;
 }
 
 type ChordAction = 'in' | 'out' | 'reset';
-
-/**
- * Whether Shift may accompany the given action. Shift is accepted only for zoom-in, since
- * `Ctrl+Shift+=` is how many keyboards type `Ctrl++`; a held Shift on the zoom-out or reset keys is
- * rejected so `Ctrl+Shift+-` and `Ctrl+Shift+0` stay free for other handlers.
- */
-function isAllowedShiftState(e: KeyboardEvent, action: ChordAction): boolean {
-  return !e.shiftKey || action === 'in';
-}
 
 /**
  * Keystrokes inside a web view's iframe belong to the in-view bootstrap. They do not bubble into
@@ -86,13 +82,12 @@ export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): 
     if (isInsideIframe(e.target)) return;
     const action = actionFor(e);
     if (!action) return;
-    if (!isAllowedShiftState(e, action)) return;
     // A deliberate fast path, not duplication: `canContentZoomAct` below already answers false
     // behind a modal overlay (its resolver refuses a chord that carries no ids), but asking here
     // keeps this listener's overlay contract its own — checkable without a resolvable pane, and
-    // unaffected by whatever the service decides to resolve next. Checked only after the action and
-    // shift-state filters above (not before), so the overlay-map scan runs for a genuine zoom chord
-    // and not for every Ctrl/⌘ combination this capture-phase window listener sees.
+    // unaffected by whatever the service decides to resolve next. Checked only after the action
+    // filter above (not before), so the overlay-map scan runs for a genuine zoom chord and not for
+    // every Ctrl/⌘ combination this capture-phase window listener sees.
     if (deps.isModalOverlayOpen()) return;
     if (!deps.canContentZoomAct()) return;
     e.preventDefault();
