@@ -103,21 +103,33 @@ describe('translatePlatformMenuItemsAndCombine', () => {
   });
 
   // The combine writes into a per-build copy, never into the module-level template every later
-  // build reads again — writing through it would delete the View menu's zoom items for the rest of
-  // the process.
-  it('leaves a later build’s zoom items intact after a contributed View column', async () => {
-    await translatePlatformMenuItemsAndCombine(menuWithContributedColumn('%mainMenu_view%'));
-    const second = await translatePlatformMenuItemsAndCombine(
-      menuWithContributedColumn('%mainMenu_file%'),
+  // build reads again. Compared as a whole sequence rather than for the zoom items' presence: the
+  // contributed column is APPENDED to the matching menu, so a write through the template grows it —
+  // the second build would carry the first build's contributed item as well as its own, and the
+  // zoom items would all still be there.
+  it('gives a second build the same View menu as the first, not the first build’s leftovers', async () => {
+    const first = await translatePlatformMenuItemsAndCombine(
+      menuWithContributedColumn('%mainMenu_view%'),
     );
-    const ids = viewSubmenuOf(second).map((item) => item.id);
-    expect(ids).toEqual(expect.arrayContaining(ZOOM_ITEM_IDS));
+    const second = await translatePlatformMenuItemsAndCombine(
+      menuWithContributedColumn('%mainMenu_view%'),
+    );
+    expect(viewSubmenuOf(second).map((item) => item.id ?? item.label)).toEqual(
+      viewSubmenuOf(first).map((item) => item.id ?? item.label),
+    );
+    // Positive control: the sequence compared above is the real View menu, zoom items and all.
+    expect(viewSubmenuOf(second).map((item) => item.id)).toEqual(
+      expect.arrayContaining(ZOOM_ITEM_IDS),
+    );
   });
 
   it('leaves the shared template untouched', async () => {
+    // Read before and after rather than against a literal, so the assertion holds wherever this
+    // test runs in the file's order and still fails on an item the combine added.
+    const before = viewSubmenuOf(macosMenubarObject).map((item) => item.id ?? item.label);
+    expect(before).toEqual(expect.arrayContaining(ZOOM_ITEM_IDS));
     await translatePlatformMenuItemsAndCombine(menuWithContributedColumn('%mainMenu_view%'));
-    const ids = viewSubmenuOf(macosMenubarObject).map((item) => item.id);
-    expect(ids).toEqual(expect.arrayContaining(ZOOM_ITEM_IDS));
+    expect(viewSubmenuOf(macosMenubarObject).map((item) => item.id ?? item.label)).toEqual(before);
   });
 
   it('does not let a contributed app-menu column grow the template', async () => {
