@@ -1,6 +1,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MAX_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
+import { adjustZoomFactor } from '@shared/utils/content-zoom.util';
 import { getContentZoomStyleElement } from './web-view-content-zoom.bootstrap-script';
 import { install } from './web-view-content-zoom.bootstrap-script.test-utils';
 
@@ -56,6 +58,17 @@ function modifierKey(type: 'keydown' | 'keyup', physicalKey: 'Control' | 'Meta')
 async function nextFrame(): Promise<void> {
   await new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+  });
+}
+
+/**
+ * Exactly one animation frame — the boundary the wheel handler coalesces on, so a test can tell
+ * "once per frame" from "once in the end". A callback the bootstrap scheduled from the task that
+ * dispatched the notches was registered before this one, so it has already run when this resolves.
+ */
+async function oneFrame(): Promise<void> {
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => resolve(undefined));
   });
 }
 
@@ -474,12 +487,16 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
   });
 
-  it('maps Ctrl+wheel to the area under the pointer (up = in, down = out), consuming the gesture; plain wheel passes; outside every area → active area', () => {
+  it('maps Ctrl+wheel to the area under the pointer (up = in, down = out), consuming the gesture; plain wheel passes; outside every area → active area', async () => {
     const { bound } = install('wv-5', TWO_AREAS);
+    // A notch per frame, so each one is its own write: notches inside one frame are coalesced.
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('note')).defaultPrevented).toBe(true);
+    await oneFrame();
     expect(wheel({ deltaY: 100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+    await oneFrame();
     expect(wheel({ deltaY: 100 }, byId('verse')).defaultPrevented).toBe(false);
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('toolbar')).defaultPrevented).toBe(true);
+    await oneFrame();
     expect(bound.adjustContentZoomById.mock.calls).toEqual([
       ['wv-5', 1, 'footnotes'],
       ['wv-5', -1, 'main'],
@@ -487,19 +504,20 @@ describe('content-zoom bootstrap script', () => {
     ]);
   });
 
-  it('takes one wheel notch as one zoom step on a Windows mouse, whose notch is 100 px', () => {
+  it('takes one wheel notch as one zoom step on a Windows mouse, whose notch is 100 px', async () => {
     const { bound } = install('wv-notch-windows', TWO_AREAS);
     for (let i = 0; i < 10; i += 1) {
       expect(
         wheel({ deltaY: -100, ctrlKey: true, wheelDeltaY: 120 }, byId('verse')).defaultPrevented,
       ).toBe(true);
     }
-    expect(bound.adjustContentZoomById.mock.calls).toEqual(
-      Array.from({ length: 10 }, () => ['wv-notch-windows', 1, 'main']),
-    );
+    // The notches of one frame travel as a single write carrying the steps they add up to, so what
+    // the tick count buys is read off that one call rather than off a call per notch.
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-windows', 10, 'main']]);
   });
 
-  it('takes one wheel notch as one zoom step on a macOS mouse, whose notch is a few pixels, however long the pause between notches', () => {
+  it('takes one wheel notch as one zoom step on a macOS mouse, whose notch is a few pixels, however long the pause between notches', async () => {
     const { bound } = install('wv-notch-macos', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -511,15 +529,15 @@ describe('content-zoom bootstrap script', () => {
         now += 1000;
         wheel({ deltaY: -4, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
       }
-      expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(10);
-      expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-macos', 1, 'main');
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-macos', 10, 'main']]);
     } finally {
       modifierKey('keyup', 'Control');
       nowSpy.mockRestore();
     }
   });
 
-  it('takes a macOS notch as a notch while Ctrl is held with the focus outside this iframe', () => {
+  it('takes a macOS notch as a notch while Ctrl is held with the focus outside this iframe', async () => {
     const { bound } = install('wv-notch-unfocused', TWO_AREAS);
     // The bootstrap runs inside the web view's iframe, so keydown only reaches it while that iframe
     // has focus — but a wheel is delivered by hit test, so Ctrl held while the focus sits in another
@@ -529,8 +547,8 @@ describe('content-zoom bootstrap script', () => {
     byId('verse').dispatchEvent(new MouseEvent('pointermove', { bubbles: true, ctrlKey: true }));
     for (let i = 0; i < 10; i += 1)
       wheel({ deltaY: -4, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
-    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(10);
-    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-unfocused', 1, 'main');
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-unfocused', 10, 'main']]);
   });
 
   it('lets what the pointer saw go stale, so one modified pointer event cannot outlaw pinching for good', () => {
@@ -568,49 +586,49 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(4);
   });
 
-  it('never takes ⌘+wheel for a pinch, since a synthesized pinch always carries Ctrl', () => {
+  it('never takes ⌘+wheel for a pinch, since a synthesized pinch always carries Ctrl', async () => {
     const { bound } = install('wv-notch-meta', TWO_AREAS);
     // Chromium synthesizes a pinch as ctrl+wheel on every platform, never as ⌘+wheel, so a small
     // ⌘-modified delta on a Mac is a mouse notch whatever the iframe has seen of the keyboard.
     for (let i = 0; i < 10; i += 1)
       wheel({ deltaY: -4, deltaX: 0, metaKey: true, wheelDeltaY: 120 }, byId('verse'));
-    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(10);
-    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-meta', 1, 'main');
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-meta', 10, 'main']]);
   });
 
-  it('takes one wheel notch as one zoom step on a Linux mouse, whose notch is 120 px', () => {
+  it('takes one wheel notch as one zoom step on a Linux mouse, whose notch is 120 px', async () => {
     const { bound } = install('wv-notch-linux', TWO_AREAS);
     for (let i = 0; i < 10; i += 1)
       wheel({ deltaY: -120, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
-    expect(bound.adjustContentZoomById.mock.calls).toEqual(
-      Array.from({ length: 10 }, () => ['wv-notch-linux', 1, 'main']),
-    );
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-linux', 10, 'main']]);
   });
 
-  it('takes one wheel notch as one zoom step when the system scrolls one line at a time', () => {
+  it('takes one wheel notch as one zoom step when the system scrolls one line at a time', async () => {
     const { bound } = install('wv-notch-one-line', TWO_AREAS);
     // Windows multiplies its lines-per-notch setting by 33 px; at a setting of one line a notch
     // carries a third of the pixels it usually does, and still exactly one tick.
     for (let i = 0; i < 10; i += 1)
       wheel({ deltaY: -33, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
-    expect(bound.adjustContentZoomById.mock.calls).toEqual(
-      Array.from({ length: 10 }, () => ['wv-notch-one-line', 1, 'main']),
-    );
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-one-line', 10, 'main']]);
   });
 
-  it('falls back to the pixel delta, carrying what is left of a tick, when the engine reports no wheelDeltaY', () => {
+  it('falls back to the pixel delta, carrying what is left of a tick, when the engine reports no wheelDeltaY', async () => {
     const { bound } = install('wv-notch-fallback', TWO_AREAS);
     wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    await oneFrame();
     expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(1);
     // Two half-ticks are one step between them, not one each and not none at all, which is only
     // true if the fraction left over by the first is still there for the second.
     wheel({ deltaY: -50, ctrlKey: true }, byId('verse'));
     wheel({ deltaY: -50, ctrlKey: true }, byId('verse'));
+    await oneFrame();
     expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(2);
     expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-fallback', 1, 'main');
   });
 
-  it('keeps a part of a tick through a pause of any length', () => {
+  it('keeps a part of a tick through a pause of any length', async () => {
     const { bound } = install('wv-notch-pause', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -620,30 +638,35 @@ describe('content-zoom bootstrap script', () => {
       // Part of a tick is a position within one notch, not a gesture that can go stale: the wheel
       // has not moved since, so waiting does not put it back where it was.
       wheel({ deltaY: -40, ctrlKey: true, wheelDeltaY: 48 }, byId('verse'));
+      await oneFrame();
       expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
       now += 5000;
       wheel({ deltaY: -40, ctrlKey: true, wheelDeltaY: 48 }, byId('verse'));
+      await oneFrame();
       expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-pause', 1, 'main']]);
     } finally {
       nowSpy.mockRestore();
     }
   });
 
-  it('starts a new count when the wheel direction reverses', () => {
+  it('starts a new count when the wheel direction reverses', async () => {
     const { bound } = install('wv-notch-reverse', TWO_AREAS);
     // Four tenths of a tick banked one way must not have to be unwound before the other way steps.
     wheel({ deltaY: -40, ctrlKey: true, wheelDeltaY: 48 }, byId('verse'));
+    await oneFrame();
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
     wheel({ deltaY: 60, ctrlKey: true, wheelDeltaY: -72 }, byId('verse'));
+    await oneFrame();
     expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-reverse', -1, 'main']]);
   });
 
-  it('cannot step past the width of the zoom range on one outsized delta', () => {
+  it('cannot step past the width of the zoom range on one outsized delta', async () => {
     const { bound } = install('wv-notch-cap', TWO_AREAS);
     // Thirty ticks in one event is more than 0.5 → 3.0 in steps of 0.1 holds; the rest would be
-    // calls into the parent that can move nothing.
+    // steps asked of a parent that can move nothing.
     wheel({ deltaY: -3000, ctrlKey: true, wheelDeltaY: 3600 }, byId('verse'));
-    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(25);
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-cap', 25, 'main']]);
   });
 
   it('takes a line-mode wheel event as one step, since a tick count means nothing there', () => {
@@ -687,7 +710,7 @@ describe('content-zoom bootstrap script', () => {
     ]);
   });
 
-  it('keeps reading a pinch as a pinch once its frames outgrow the scale window, and lets go when they stop', () => {
+  it('keeps reading a pinch as a pinch once its frames outgrow the scale window, and lets go when they stop', async () => {
     const { bound } = install('wv-pinch-brisk', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -709,13 +732,16 @@ describe('content-zoom bootstrap script', () => {
       // once they stop, the very same event is a mouse notch again.
       now += 500;
       wheel({ deltaY: -6, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      // A notch's step is applied a frame later, unlike a pinch frame's, which is what the twelve
+      // calls above are.
+      await oneFrame();
       expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(13);
     } finally {
       nowSpy.mockRestore();
     }
   });
 
-  it('does not let a pinch in one area carry a notch in another', () => {
+  it('does not let a pinch in one area carry a notch in another', async () => {
     const { bound } = install('wv-pinch-other-area', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -729,6 +755,7 @@ describe('content-zoom bootstrap script', () => {
       }
       now += 16;
       wheel({ deltaY: -6, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('note'));
+      await oneFrame();
       expect(bound.adjustContentZoomById.mock.calls).toEqual([
         ['wv-pinch-other-area', 1, 'footnotes'],
       ]);
@@ -737,22 +764,26 @@ describe('content-zoom bootstrap script', () => {
     }
   });
 
-  it('takes a brisk frame with no pinch running before it as a wheel notch', () => {
+  it('takes a brisk frame with no pinch running before it as a wheel notch', async () => {
     const { bound } = install('wv-pinch-cold', TWO_AREAS);
     // 6 px is outside the window one frame is judged by on its own, and no gesture is underway to
     // carry it, so this is a notch rather than the opening frame of a pinch.
     wheel({ deltaY: -6, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    await oneFrame();
     expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-cold', 1, 'main']]);
   });
 
-  it('takes the very same events as wheel notches while a modifier key is physically held', () => {
+  it('takes the very same events as wheel notches while a modifier key is physically held', async () => {
     const { bound } = install('wv-pinch-key', TWO_AREAS);
     modifierKey('keydown', 'Control');
     try {
       for (let i = 0; i < 20; i += 1) {
         wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
       }
-      expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(20);
+      // One tick each down the notch path, coalesced into the frame's single write — a pinch would
+      // have made four steps of the same twenty events.
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-key', 20, 'main']]);
     } finally {
       modifierKey('keyup', 'Control');
     }
@@ -761,7 +792,8 @@ describe('content-zoom bootstrap script', () => {
     for (let i = 0; i < 20; i += 1) {
       wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
     }
-    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(24);
+    // Four pinch steps on top of the one coalesced notch write.
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(5);
   });
 
   it('forgets a modifier key the window was holding when it lost focus', () => {
@@ -792,7 +824,7 @@ describe('content-zoom bootstrap script', () => {
     );
   });
 
-  it('leaves Ctrl+Shift+wheel and Ctrl+Alt+wheel untouched, matching the chords’ modifier rule', () => {
+  it('leaves Ctrl+Shift+wheel and Ctrl+Alt+wheel untouched, matching the chords’ modifier rule', async () => {
     const { bound } = install('wv-5b', TWO_AREAS);
     expect(
       wheel({ deltaY: -100, ctrlKey: true, shiftKey: true }, byId('verse')).defaultPrevented,
@@ -800,9 +832,11 @@ describe('content-zoom bootstrap script', () => {
     expect(
       wheel({ deltaY: -100, ctrlKey: true, altKey: true }, byId('verse')).defaultPrevented,
     ).toBe(false);
+    await oneFrame();
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
     // Positive control: the same gesture without the extra modifier is taken.
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+    await oneFrame();
     expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-5b', 1, 'main');
   });
 
@@ -825,6 +859,7 @@ describe('content-zoom bootstrap script', () => {
       await nextFrame();
       expect(wheelRegistrations()).toBe(1);
       expect(wheel({ deltaY: -100, ctrlKey: true }, area).defaultPrevented).toBe(true);
+      await oneFrame();
       expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-wheel-gate', 1, 'main');
 
       area.remove();
@@ -837,7 +872,7 @@ describe('content-zoom bootstrap script', () => {
     }
   });
 
-  it('is suppressed by an inner capture handler that stops propagation (Text Collection grid rule)', () => {
+  it('is suppressed by an inner capture handler that stops propagation (Text Collection grid rule)', async () => {
     const { bound } = install('wv-6', TWO_AREAS);
     const inner = document.createElement('div');
     byId('main').appendChild(inner);
@@ -852,6 +887,7 @@ describe('content-zoom bootstrap script', () => {
     inner.dispatchEvent(
       new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -100, ctrlKey: true }),
     );
+    await oneFrame();
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
   });
 
@@ -998,44 +1034,164 @@ describe('content-zoom bootstrap script', () => {
     spy.mockRestore();
   });
 
-  it('measures the badge corner once per animation frame, however many notches a wheel burst delivers', async () => {
-    // What shows the badge is the parent's answer to a notch, so the bound helper stands in for the
-    // zoom service calling back into the pane once it has written the new level.
-    let percent = 100;
-    const adjustContentZoomById = vi.fn(() => {
-      percent += 10;
-      // The bootstrap script defines this global; the double underscore marks it as an internal
-      // platform/pane contract, not a name this file invents.
-      // eslint-disable-next-line no-underscore-dangle
-      window.__platformContentZoom?.showIndicator('main', `${percent} %`);
-    });
-    install('wv-wheel-burst', TWO_AREAS, { adjustContentZoomById });
+  it('measures the badge corner once per animation frame, however many levels arrive in one task', async () => {
+    // A show is the parent's answer to a zoom change, so a level arriving per call is the zoom
+    // service calling back into the pane once it has written each one.
+    install('wv-show-burst', TWO_AREAS);
     await nextFrame();
-    // The two reads that force style and layout when they run inside the input handler.
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    // The two reads that force style and layout when they run in the task that wrote the zoom.
     const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     const computedStyles = vi.spyOn(window, 'getComputedStyle');
-    const notches = 5;
-    for (let index = 0; index < notches; index += 1) {
-      wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    let percent = 100;
+    for (let index = 0; index < 5; index += 1) {
+      percent += 10;
+      api.showIndicator('main', `${percent} %`);
     }
-    // Positive control: the burst really did reach the handler, so the counts below say that
-    // placement was deferred rather than that nothing happened at all.
-    expect(adjustContentZoomById).toHaveBeenCalledTimes(notches);
+    // Positive control: the shows really did land, so the counts below say that placement was
+    // deferred rather than that nothing happened at all.
+    expect(byId('platform-content-zoom-indicator').textContent).toBe('150 %');
     expect(computedStyles).not.toHaveBeenCalled();
     expect(rects).not.toHaveBeenCalled();
 
-    await nextFrame();
-    // One placement for the whole burst: one direction read, and one rect for the single element
-    // the target area has.
+    await oneFrame();
+    // One placement for the whole run of shows: one direction read, and one rect for the single
+    // element the target area has.
     expect(computedStyles).toHaveBeenCalledTimes(1);
     expect(rects).toHaveBeenCalledTimes(1);
-    // And it places the badge for the level the burst settled on.
+    // And it places the badge for the level the run settled on.
     const badge = byId('platform-content-zoom-indicator');
     expect(badge.textContent).toBe('150 %');
     expect(badge.dataset.area).toBe('main');
     expect(badge.style.top).not.toBe('');
     rects.mockRestore();
     computedStyles.mockRestore();
+  });
+
+  it('applies one zoom change per animation frame, carrying the net steps of the notches in it', async () => {
+    const { bound } = install('wv-wheel-burst', TWO_AREAS);
+    await nextFrame();
+    const notches = 5;
+    for (let index = 0; index < notches; index += 1) {
+      // Positive control: every notch is consumed as it arrives, so the absence of a write below
+      // is the coalescing and not a gesture the handler never saw.
+      expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+    }
+    // Writing the level restyles the whole pane and persists it, and only the level the gesture
+    // has reached by the end of a frame is ever painted.
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-wheel-burst', notches, 'main']]);
+  });
+
+  it('nets out a burst that changes direction inside one frame', async () => {
+    const { bound } = install('wv-wheel-net', TWO_AREAS);
+    await nextFrame();
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+
+    await oneFrame();
+    // Three notches in and one out is the same end level as two notches in — no notch is lost, and
+    // the levels in between are never written.
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-wheel-net', 2, 'main']]);
+  });
+
+  it('lands a coalesced burst on the level the same notches would reach one at a time, clamp included', async () => {
+    // A stand-in for the parent: the zoom service steps its stored level with this same helper, so
+    // where a net-step write lands can be compared with where single-step writes would.
+    const start = MAX_ZOOM_FACTOR - 0.2;
+    let factor = start;
+    const adjustContentZoomById = vi.fn((_webViewId: string, deltaSteps: number) => {
+      factor = adjustZoomFactor(factor, deltaSteps);
+    });
+    install('wv-wheel-level', TWO_AREAS, { adjustContentZoomById });
+    await nextFrame();
+    const notches = 5;
+    let oneAtATime = start;
+    for (let index = 0; index < notches; index += 1) oneAtATime = adjustZoomFactor(oneAtATime, 1);
+    // The burst asks for more than the range allows, so the comparison below is the clamp's answer
+    // and not just the arithmetic's.
+    expect(oneAtATime).toBe(MAX_ZOOM_FACTOR);
+
+    for (let index = 0; index < notches; index += 1) {
+      wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    }
+    await oneFrame();
+    expect(adjustContentZoomById).toHaveBeenCalledTimes(1);
+    expect(factor).toBe(oneAtATime);
+  });
+
+  it('writes once in each animation frame a burst spans', async () => {
+    const { bound } = install('wv-wheel-frames', TWO_AREAS);
+    await nextFrame();
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    await oneFrame();
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-wheel-frames', 2, 'main'],
+      ['wv-wheel-frames', -3, 'main'],
+    ]);
+  });
+
+  it('applies the steps pending for one area before it accumulates for another', async () => {
+    const { bound } = install('wv-wheel-areas', TWO_AREAS);
+    await nextFrame();
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('note'));
+    // The pointer crossing into another area inside one frame hands "main" its notch straight
+    // away: one area's steps are never added to another's.
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-wheel-areas', 1, 'main']]);
+
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-wheel-areas', 1, 'main'],
+      ['wv-wheel-areas', 1, 'footnotes'],
+    ]);
+  });
+
+  it('sends the command once per step when no helper is bound, since the command carries no count', async () => {
+    const { papi } = install('wv-wheel-fallback', TWO_AREAS, {
+      adjustContentZoomById: undefined,
+    });
+    await nextFrame();
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+
+    await oneFrame();
+    expect(papi.commands.sendCommand.mock.calls).toEqual([
+      ['platform.webViewContentZoomIn', 'wv-wheel-fallback', 'main'],
+      ['platform.webViewContentZoomIn', 'wv-wheel-fallback', 'main'],
+      ['platform.webViewContentZoomIn', 'wv-wheel-fallback', 'main'],
+    ]);
+  });
+
+  it('drops a wheel burst it has not applied yet when it is destroyed', async () => {
+    const { bound } = install('wv-wheel-destroyed', TWO_AREAS);
+    await nextFrame();
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    // Positive control: the notches were consumed, so they were pending when destroy() ran.
+    expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+    expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+
+    api.destroy();
+    await nextFrame();
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
   });
 
   it('still rescans when a marker changes in the same task as an indicator write', async () => {
@@ -1080,6 +1236,7 @@ describe('content-zoom bootstrap script', () => {
     expect(reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-retry', ['main', 'footnotes']);
 
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+    await oneFrame();
     expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-retry', 1, 'main');
   });
 
@@ -1264,7 +1421,9 @@ describe('content-zoom bootstrap script', () => {
       'footnotes',
     ]);
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('note1')).defaultPrevented).toBe(true);
+    await oneFrame();
     expect(wheel({ deltaY: -100, ctrlKey: true }, byId('note2')).defaultPrevented).toBe(true);
+    await oneFrame();
     expect(bound.adjustContentZoomById.mock.calls).toEqual([
       ['wv-10', 1, 'footnotes'],
       ['wv-10', 1, 'footnotes'],

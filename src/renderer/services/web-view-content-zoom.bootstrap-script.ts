@@ -355,19 +355,26 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         return false;
       }
     };
-    const act = (command, areaId) => {
+    // The steps argument is how many steps of this command to take; only the coalesced wheel burst
+    // below passes it, and every other caller means one. The bound helper takes a step count, so a
+    // burst is one call; the commands take none, so that path repeats the command per step rather
+    // than dropping the notches it cannot express.
+    const act = (command, areaId, steps) => {
+      const count = steps === undefined ? 1 : steps;
       try {
         if (command === '${CONTENT_ZOOM_COMMANDS.reset}' && boundReset) { boundReset(webViewId, areaId); return; }
-        if (command === '${CONTENT_ZOOM_COMMANDS.in}' && boundAdjust) { boundAdjust(webViewId, 1, areaId); return; }
-        if (command === '${CONTENT_ZOOM_COMMANDS.out}' && boundAdjust) { boundAdjust(webViewId, -1, areaId); return; }
+        if (command === '${CONTENT_ZOOM_COMMANDS.in}' && boundAdjust) { boundAdjust(webViewId, count, areaId); return; }
+        if (command === '${CONTENT_ZOOM_COMMANDS.out}' && boundAdjust) { boundAdjust(webViewId, -count, areaId); return; }
         const papi = getPapi();
         if (!papi || !papi.commands || typeof papi.commands.sendCommand !== 'function') {
           warnPapi('Content zoom command ' + command + ' could not run: papi is unavailable');
           return;
         }
-        papi.commands.sendCommand(command, webViewId, areaId).catch((e) => {
-          warnPapi('Content zoom command ' + command + ' failed: ' + (e && e.message ? e.message : e));
-        });
+        for (let i = 0; i < count; i += 1) {
+          papi.commands.sendCommand(command, webViewId, areaId).catch((e) => {
+            warnPapi('Content zoom command ' + command + ' failed: ' + (e && e.message ? e.message : e));
+          });
+        }
       } catch (e) {
         warnPapi('Content zoom command ' + command + ' threw: ' + (e && e.message ? e.message : e));
       }
@@ -578,6 +585,48 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       stepArea(steps, areaId);
     };
 
+    // A wheel gesture delivers 50-120 notches a second, and applying one is not cheap: the parent
+    // restyles the whole pane and persists the new level, and only the level the gesture has
+    // reached by the end of a frame is ever painted. So a notch adds its steps to a pending total
+    // instead of applying them, and one adjustment per frame carries that total. The net is what
+    // travels, so a burst that changes direction inside a frame lands exactly where the same
+    // notches applied one at a time would - the parent steps and clamps through the same helper
+    // either way - and no notch is lost. Only the tick path coalesces: a chord is one keystroke and
+    // one step, and a pinch already arrives once per frame, so neither has anything to coalesce
+    // with.
+    let zoomFrame;
+    let zoomArea;
+    // Signed the way a tick count is, so the pending total reads like the ticks that fed it:
+    // negative zooms in, positive zooms out.
+    let zoomSteps = 0;
+    const applyZoomSteps = () => {
+      const areaId = zoomArea;
+      const steps = zoomSteps;
+      zoomArea = undefined;
+      zoomSteps = 0;
+      // A burst that nets to nothing asks for the level the pane already shows.
+      if (areaId === undefined || steps === 0) return;
+      const command = steps < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}';
+      // The bound helper takes a step count, so the whole frame travels as one call; the commands
+      // take none, so that path repeats the command per step rather than dropping notches.
+      act(command, areaId, Math.min(Math.abs(steps), WHEEL_MAX_STEPS));
+    };
+    const onZoomFrame = () => {
+      zoomFrame = undefined;
+      applyZoomSteps();
+    };
+    const requestZoomSteps = (areaId, steps) => {
+      // Steps pending for another area belong to that area: they are applied before this one
+      // starts accumulating rather than added to its total.
+      if (zoomArea !== undefined && zoomArea !== areaId) applyZoomSteps();
+      zoomArea = areaId;
+      zoomSteps += steps;
+      // A realm without rAF (an unusual host, or a document that never animates) still zooms; it
+      // just pays for it in the handler, as it did before.
+      if (typeof window.requestAnimationFrame !== 'function') { applyZoomSteps(); return; }
+      if (zoomFrame === undefined) zoomFrame = window.requestAnimationFrame(onZoomFrame);
+    };
+
     // Ctrl or the meta key, and neither Shift nor Alt: a shifted wheel is horizontal scroll on many
     // platforms, and Chromium and the OS give Ctrl+Alt+wheel its own meaning, so both pass through.
     const onWheel = (e) => {
@@ -618,7 +667,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       // Only the whole ticks are consumed; carrying the fraction is what lets a wheel whose notch
       // reports less than a full tick, or an engine that reports none, still step steadily.
       wheelRemainder -= steps;
-      stepArea(steps, areaId);
+      requestZoomSteps(areaId, steps);
     };
     // A non-passive listener is what lets this cancel the gesture, but it also means the compositor
     // consults the main thread for the first event of every scrolling sequence - a cost a pane with
@@ -773,6 +822,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       window.removeEventListener('blur', onModifierLost);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       if (wheelListening) { window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS); wheelListening = false; }
+      // Steps a burst left pending go with the pane they were meant for, rather than reaching a
+      // parent that has already let this view go.
+      if (zoomFrame !== undefined) {
+        if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(zoomFrame);
+        zoomFrame = undefined;
+      }
+      zoomArea = undefined;
+      zoomSteps = 0;
       if (observer) { observer.disconnect(); observer = undefined; }
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = undefined; }
       if (announceTimer) { clearTimeout(announceTimer); announceTimer = undefined; }
