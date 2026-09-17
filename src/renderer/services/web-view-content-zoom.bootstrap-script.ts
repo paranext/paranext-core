@@ -230,6 +230,26 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // childList mutation; a zoom step would otherwise pay for a second full-document scan.
     const isIndicatorRecord = (record) =>
       (badge && badge.contains(record.target)) || (liveRegion && liveRegion.contains(record.target));
+    const carriesMarker = (node) =>
+      node.nodeType === 1 && (node.matches('[' + ATTR + ']') || !!node.querySelector('[' + ATTR + ']'));
+    const someCarriesMarker = (nodes) => Array.prototype.some.call(nodes, carriesMarker);
+    // Only a record that carries a marker can change the area list: an added or removed node that is
+    // one or contains one, or a change to the marker attribute itself, which is the only attribute
+    // this observer is given. Typing in a view moves text nodes and unmarked elements, so without
+    // this the editor would pay for a whole-document scan per keystroke. A removed node's subtree is
+    // intact and queryable while the record holds it, so a marker removed inside a larger subtree is
+    // seen too; nesting needs no case of its own, because any change to a marker's marked ancestry
+    // is itself the addition, removal or retitling of a marker. A marker inside a shadow root is
+    // still invisible here, as it was before, since the observer does not traverse shadow trees.
+    const isAreaRecord = (record) => {
+      if (isIndicatorRecord(record)) return false;
+      // Until the parent has taken a report, every mutation is worth another try: that retry is the
+      // only thing between a report that threw and a pane left unzoomable for its whole life, and
+      // the DOM change that carries it across need not touch a marker.
+      if (!reported) return true;
+      if (record.type !== 'childList') return true;
+      return someCarriesMarker(record.addedNodes) || someCarriesMarker(record.removedNodes);
+    };
     let observer;
     const start = () => {
       // Ahead of the observer, so the two nodes it appends are not themselves a mutation to scan.
@@ -238,7 +258,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       // Observing before the first scan is what makes the retry above reachable: a throw out of that
       // scan then still leaves the view watching for the DOM change that tries again.
       observer = new MutationObserver((records) => {
-        if (!records.every(isIndicatorRecord)) refresh();
+        if (records.some(isAreaRecord)) refresh();
       });
       observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
       refresh();

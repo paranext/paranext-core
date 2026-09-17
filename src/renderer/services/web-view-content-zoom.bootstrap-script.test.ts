@@ -421,6 +421,62 @@ describe('content-zoom bootstrap script', () => {
     expect(selectors.some((selector) => byId('main').matches(selector))).toBe(true);
   });
 
+  it('does not rescan the document when a node with no zoom marker is added', async () => {
+    install('wv-no-marker-mutation', TWO_AREAS);
+    await nextFrame();
+    const spy = vi.spyOn(document, 'querySelectorAll');
+    const markerScanCount = () =>
+      spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
+        .length;
+    try {
+      const before = markerScanCount();
+      // The shape a keystroke has: the view moves unmarked content around inside an area.
+      byId('main').appendChild(document.createElement('span'));
+      await nextFrame();
+      expect(markerScanCount() - before).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('reports a new area when the marker arrives inside an added subtree', async () => {
+    const { bound } = install('wv-marker-in-subtree', TWO_AREAS);
+    await nextFrame();
+    const wrapper = document.createElement('div');
+    const inner = document.createElement('aside');
+    inner.setAttribute('data-platform-content-zoom-root', 'sidebar');
+    wrapper.appendChild(inner);
+    document.body.appendChild(wrapper);
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-marker-in-subtree', [
+      'main',
+      'footnotes',
+      'sidebar',
+    ]);
+  });
+
+  it('drops an area when the element carrying its marker is removed', async () => {
+    const { bound } = install('wv-marker-removed', TWO_AREAS);
+    await nextFrame();
+    byId('foot').remove();
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-marker-removed', [
+      'main',
+    ]);
+  });
+
+  it('still rescans when the marker attribute is set on an element that had none', async () => {
+    const { bound } = install('wv-marker-attribute', TWO_AREAS);
+    await nextFrame();
+    byId('toolbar').setAttribute('data-platform-content-zoom-root', 'sidebar');
+    await nextFrame();
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-marker-attribute', [
+      'sidebar',
+      'main',
+      'footnotes',
+    ]);
+  });
+
   it("writing the indicator's text does not re-scan the document for zoom areas", async () => {
     install('wv-indicator-no-scan', TWO_AREAS);
     await nextFrame();
