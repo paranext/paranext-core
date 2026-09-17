@@ -396,10 +396,12 @@ function clearAllFallbackGraces(): void {
  * Starts the wait during which a pane with no known areas may still be mounting content that will
  * report some. If the pane still has no area when it elapses, its content is taken to have no zoom
  * area at all and the whole-iframe fallback is applied from then on. Started by a pane's first
- * empty area report ({@link setContentZoomAreas}) and by every non-URL iframe load
+ * empty area report ({@link setContentZoomAreas}) and by every iframe load
  * ({@link applyContentZoomForWebView}, which clears any grant left over from the previous content
  * first, so this always waits out a fresh grace rather than reusing one inherited from that
- * content); idempotent either way, since a grace already pending is left alone.
+ * content, and then cancels the grace again for the panes that must not wait one out — a URL pane,
+ * which is scaled whole from the start, and a pane whose definition has gone, which has nothing to
+ * scale). Idempotent either way, since a grace already pending is left alone.
  */
 function startFallbackGrace(webViewId: WebViewId): void {
   if (fallbackAllowedWebViewIds.has(webViewId) || fallbackGraceTimers.has(webViewId)) return;

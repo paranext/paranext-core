@@ -392,8 +392,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // display's refresh rate, so anything arriving within this window is the same gesture; a
     // deliberate second mouse notch never lands inside it.
     const PINCH_LATCH_MS = 100;
-    // The travel one zoom step is worth: a step is 10 % of scale, and scale is exponential in the
-    // travel, so it is a constant ln(1.1)·100 ≈ 9.53 px of pinch whatever the current level.
+    // The travel one zoom step is worth, as an approximation calibrated at 100 %: there a step of
+    // {@link ZOOM_STEP} is 10 % of scale, and scale is exponential in the travel, so it is
+    // ln(1.1)·100 ≈ 9.53 px of pinch. A step is ADDITIVE (\`adjustZoomFactor\` adds the step to the
+    // factor), so it is a smaller share of scale the further in the area is zoomed and a larger one
+    // the further out; deriving the travel per level would need the area's current level, which
+    // lives in the parent and never reaches this script. So the content tracks the fingers exactly
+    // at 100 %, outruns them below it and lags them above it - a pinch that is slightly off pace,
+    // never one that stops or runs away.
     const PINCH_STEP_PIXELS = Math.log(1 + ${ZOOM_STEP}) * PINCH_SCALE_PIXELS;
     let pinchTravel = 0;
     let pinchArea;
