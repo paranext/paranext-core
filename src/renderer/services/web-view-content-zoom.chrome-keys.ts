@@ -4,8 +4,9 @@ import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 
 /**
- * The zoom actions and the modal-overlay query {@link registerContentZoomChromeKeys} calls, injected
- * so this module does not import the content-zoom service or the modal-overlay query directly.
+ * The zoom actions and the window-input-blocked query {@link registerContentZoomChromeKeys} calls,
+ * injected so this module does not import the content-zoom service or the window-input-blocked
+ * query directly.
  */
 export type ContentZoomChromeKeysDeps = {
   adjustContentZoom: (
@@ -14,7 +15,7 @@ export type ContentZoomChromeKeysDeps = {
     areaId?: ContentZoomAreaId,
   ) => Promise<void>;
   resetContentZoom: (webViewId: WebViewId | undefined, areaId?: ContentZoomAreaId) => Promise<void>;
-  isModalOverlayOpen: () => boolean;
+  isWindowInputBlocked: () => boolean;
   /** Whether a pane and an area resolve for a chord carrying no ids — see the service's own query. */
   canContentZoomAct: () => boolean;
 };
@@ -67,17 +68,18 @@ function actionFor(e: KeyboardEvent): ChordAction | undefined {
  * Calls the injected actions with no web view id and no area id, so the content-zoom service
  * resolves the window's active tab and that tab's active area on its own.
  *
- * No-ops while a modal overlay is open ({@link ContentZoomChromeKeysDeps.isModalOverlayOpen}): a
- * modal dialog or the command palette is what the user is working in, it is out of scope for
- * content zoom, and its own use of these keys, if any, must not be shadowed by this listener. A
- * non-modal docked dialog stops nothing — the user keeps working in the panes behind it.
+ * No-ops while this window's input is blocked
+ * ({@link ContentZoomChromeKeysDeps.isWindowInputBlocked}): a modal dialog, the command palette, or
+ * one of the full-screen overlays is what the user is working in (or is dimmed/hidden behind), and
+ * its own use of these keys, if any, must not be shadowed by this listener. A non-modal docked
+ * dialog stops nothing — the user keeps working in the panes behind it.
  *
  * Consumes the keystroke only when the action will really happen
  * ({@link ContentZoomChromeKeysDeps.canContentZoomAct}): a pane that marks no zoom area cannot zoom,
  * and swallowing the chord there would take it from whoever else might want it while giving the
  * user nothing back.
  *
- * @param deps The zoom actions, the modal-overlay query and the can-act query to call.
+ * @param deps The zoom actions, the window-input-blocked query and the can-act query to call.
  * @returns A function that removes the listener.
  */
 export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): () => void {
@@ -87,12 +89,12 @@ export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): 
     const action = actionFor(e);
     if (!action) return;
     // A deliberate fast path, not duplication: `canContentZoomAct` below already answers false
-    // behind a modal overlay (its resolver refuses a chord that carries no ids), but asking here
-    // keeps this listener's overlay contract its own — checkable without a resolvable pane, and
-    // unaffected by whatever the service decides to resolve next. Checked only after the action
-    // filter above (not before), so the overlay-map scan runs for a genuine zoom chord and not for
-    // every Ctrl/⌘ combination this capture-phase window listener sees.
-    if (deps.isModalOverlayOpen()) return;
+    // while the window's input is blocked (its resolver refuses a chord that carries no ids), but
+    // asking here keeps this listener's overlay contract its own — checkable without a resolvable
+    // pane, and unaffected by whatever the service decides to resolve next. Checked only after the
+    // action filter above (not before), so the overlay-map scan runs for a genuine zoom chord and not
+    // for every Ctrl/⌘ combination this capture-phase window listener sees.
+    if (deps.isWindowInputBlocked()) return;
     if (!deps.canContentZoomAct()) return;
     e.preventDefault();
     const promise =

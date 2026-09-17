@@ -145,7 +145,7 @@ describe('content-zoom chord rule parity: window-chrome keys vs. in-view bootstr
       const unsubscribe = registerContentZoomChromeKeys({
         adjustContentZoom,
         resetContentZoom,
-        isModalOverlayOpen: () => false,
+        isWindowInputBlocked: () => false,
         canContentZoomAct: () => true,
       });
       try {
