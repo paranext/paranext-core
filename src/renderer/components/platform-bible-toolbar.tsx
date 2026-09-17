@@ -20,6 +20,7 @@ import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-targe
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
+import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
@@ -36,7 +37,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { HomeIcon, LockIcon } from 'lucide-react';
+import { HomeIcon } from 'lucide-react';
 import {
   Badge,
   BOOK_CHAPTER_CONTROL_STRING_KEYS,
@@ -121,6 +122,37 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 /**
+ * Single-line trigger text that offers its whole value on hover once the visible text is clipped.
+ *
+ * Every string the trigger can show has to route through here rather than a native `title`:
+ * `ProjectSelector` keeps `title` off its trigger on purpose (two tooltips over one control is
+ * worse than none), so the browser default would never open, and at the narrowest shrink step the
+ * trigger is ~96px — narrow enough to clip any of these. This is the same truncation-tooltip
+ * mechanism {@link ToolbarCompoundLabel} uses for the project name.
+ */
+function TruncatingTriggerText({ text, className }: { text: string; className?: string }) {
+  const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLSpanElement>();
+
+  return (
+    <TooltipProvider>
+      <Tooltip open={open}>
+        <TooltipTrigger asChild>
+          <span
+            ref={ref}
+            className={cn('tw:min-w-0 tw:flex-1 tw:truncate', className)}
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
+          >
+            {text}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{text}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/**
  * The project selector's trigger label.
  *
  * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which `Toolbar`
@@ -139,38 +171,12 @@ function ProjectSelectorLabel({
 }) {
   const shrinkStep = useShrinkStepValue();
   const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
-  const {
-    ref: errorRef,
-    open: isErrorClipHovered,
-    onPointerEnter: onErrorPointerEnter,
-    onPointerLeave: onErrorPointerLeave,
-  } = useTruncationTooltip<HTMLSpanElement>();
 
   // An error replaces the label rather than sharing it. Putting it in the compound label's
   // secondary slot would clip it mid-sentence and then drop it entirely at the narrowest step,
   // leaving red text as the only signal that anything is wrong.
-  //
-  // The whole message is offered through the app's own truncation tooltip, the mechanism
-  // {@link ToolbarCompoundLabel} uses: `ProjectSelector` keeps a native `title` off its trigger on
-  // purpose, so the browser default would never open here.
   if (errorMessage) {
-    return (
-      <TooltipProvider>
-        <Tooltip open={isErrorClipHovered}>
-          <TooltipTrigger asChild>
-            <span
-              ref={errorRef}
-              className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive"
-              onPointerEnter={onErrorPointerEnter}
-              onPointerLeave={onErrorPointerLeave}
-            >
-              {errorMessage}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{errorMessage}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
+    return <TruncatingTriggerText text={errorMessage} className="tw:text-destructive" />;
   }
 
   return (
@@ -196,7 +202,7 @@ function ProjectSelectorLabel({
 function ToolbarProjectSelector({
   projects,
   recentIds,
-  displayedProject,
+  currentProject,
   currentProjectError,
   pendingProject,
   isLoading,
@@ -206,16 +212,12 @@ function ToolbarProjectSelector({
 }: {
   projects: ProjectItem[];
   recentIds: readonly string[];
-  /**
-   * The project to name and mark as selected — the pending pick if there is one, otherwise the open
-   * project. Already folds in {@link pendingProject}, so the two are not independent.
-   */
-  displayedProject: ProjectItem | undefined;
+  /** The project the editor currently reports, or `undefined` if none. */
+  currentProject: ProjectItem | undefined;
   currentProjectError: string | undefined;
   /**
-   * Whether {@link displayedProject} is a pick the editor has not caught up with yet. Passed
-   * separately only so a pending pick can outrank a stale `currentProjectError` — see
-   * `renderTriggerLabel`.
+   * A pick the editor has not caught up with yet, which outranks both {@link currentProject} and a
+   * stale {@link currentProjectError}.
    */
   pendingProject: ProjectItem | undefined;
   isLoading: boolean;
@@ -224,6 +226,10 @@ function ToolbarProjectSelector({
   onShowMoreProjects: () => void;
 }) {
   const shrinkStep = useShrinkStepValue();
+
+  // Derived here rather than taken as a prop: it is a function of the two above, and a caller given
+  // the chance to pass all three can pass a combination that contradicts itself.
+  const displayedProject = pendingProject ?? currentProject;
 
   // `ProjectItem` and `ProjectSelectorProject` invert the meaning of `language`: the item's is a
   // BCP-47 tag and its `languageDisplayName` is the readable name, while the selector's `language`
@@ -275,6 +281,10 @@ function ToolbarProjectSelector({
       {
         // Names its own boundary: this list is what is on this machine, so a project the user can
         // reach on the server but has not downloaded is accounted for rather than silently absent.
+        //
+        // Deliberately narrower than the dialog's plain "Your projects", which is reached from the
+        // footer action and is the surface slated to gain server-reachable projects (PT-4552). The
+        // two labels name two different sets, so unifying them would make one of them wrong.
         id: 'yours',
         label: localizedStrings['%projectPicker_section_projects_localOnly%'],
         match: () => true,
@@ -286,16 +296,10 @@ function ToolbarProjectSelector({
   const renderProjectIndicator = useCallback(
     (project: ProjectSelectorProject) =>
       readOnlyIds.has(normalizeProjectId(project.id)) ? (
-        // The selector treats the indicator as decorative and does not name it in the row
-        // tooltip, so the glyph is the only carrier of "read-only". `role="img"` gives the
-        // accessible name a reliable host, and `title` gives sighted users a hover label.
-        <span
-          role="img"
-          aria-label={localizedStrings['%projectPicker_readOnly_label%']}
-          title={localizedStrings['%projectPicker_readOnly_label%']}
-        >
-          <LockIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
-        </span>
+        // No native title here, unlike the dialog's rows: a selector row is itself a shadcn tooltip
+        // trigger, so a `title` inside one would open the browser's default tooltip on top of the
+        // app's. The accessible name still reaches screen readers through the indicator's own role.
+        <ReadOnlyIndicator label={localizedStrings['%projectPicker_readOnly_label%']} />
       ) : undefined,
     [readOnlyIds, localizedStrings],
   );
@@ -328,11 +332,23 @@ function ToolbarProjectSelector({
       if (currentProjectError)
         return <ProjectSelectorLabel fullName="" shortName="" errorMessage={currentProjectError} />;
       const named = selected ?? displayedProject;
-      if (!named) return placeholder;
+      if (!named) return <TruncatingTriggerText text={placeholder} />;
       return <ProjectSelectorLabel fullName={named.fullName} shortName={named.shortName} />;
     },
     [pendingProject, displayedProject, currentProjectError, placeholder],
   );
+
+  // `ariaLabel` becomes the trigger's `aria-label`, which REPLACES its content in the accessible
+  // name rather than adding to it. Naming only the control would leave a screen reader announcing
+  // "Select project" with no way to hear which project is open, while sighted users read it off the
+  // trigger — so the name carries the control and its current value, mirroring what
+  // `renderTriggerLabel` shows.
+  const triggerAriaLabel = useMemo(() => {
+    const selectProject = localizedStrings['%projectPicker_toolbar_select_project%'];
+    if (!pendingProject && currentProjectError) return `${selectProject}, ${currentProjectError}`;
+    if (!displayedProject) return placeholder;
+    return `${selectProject}, ${displayedProject.fullName} (${displayedProject.shortName})`;
+  }, [localizedStrings, pendingProject, displayedProject, currentProjectError, placeholder]);
 
   const selectorLocalizedStrings = useMemo(
     () => ({ searchPlaceholder: localizedStrings['%projectPicker_search_placeholder%'] }),
@@ -372,7 +388,7 @@ function ToolbarProjectSelector({
       footerAction={footerAction}
       isLoading={isLoading}
       localizedStrings={selectorLocalizedStrings}
-      ariaLabel={localizedStrings['%projectPicker_toolbar_select_project%']}
+      ariaLabel={triggerAriaLabel}
       commandEmptyMessage={localizedStrings['%projectPicker_no_results%']}
       buttonVariant="ghost"
       buttonClassName={cn(
@@ -526,10 +542,7 @@ export function PlatformBibleToolbar() {
     await svc?.recordProjectOpened(projectId);
   }, []);
 
-  const { pendingProject, displayedProject, beginOpenProject } = usePendingProject(
-    currentSimpleProject,
-    openProject,
-  );
+  const { pendingProject, beginOpenProject } = usePendingProject(currentSimpleProject, openProject);
 
   // The union of both sections. The hook returns them disjoint (`allProjects` already excludes
   // recents), so concatenating cannot duplicate a project.
@@ -811,7 +824,7 @@ export function PlatformBibleToolbar() {
           <ToolbarProjectSelector
             projects={pickerProjects}
             recentIds={recentIds}
-            displayedProject={displayedProject}
+            currentProject={currentSimpleProject}
             currentProjectError={currentSimpleProjectError}
             pendingProject={pendingProject}
             isLoading={isProjectPickerLoading}

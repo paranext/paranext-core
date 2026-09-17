@@ -56,6 +56,30 @@ describe('computeRows — case-insensitive open-tab join (I12 regression)', () =
     expect(rowA!.isMuted).toBe(false);
   });
 
+  it('marks the selected row regardless of id casing (project mode)', () => {
+    // The same canonical-vs-lowercase mismatch reaches `selection` too: a caller whose selected id
+    // came from a different source than its project list — an editor reporting the open project in
+    // its own casing, say — would otherwise see no row marked at all.
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { projectId: 'abc123' },
+    });
+    expect(rows.find((r) => r.projectId === 'ABC123')?.isSelected).toBe(true);
+    expect(rows.filter((r) => r.isSelected)).toHaveLength(1);
+  });
+
+  it('marks no row when nothing is selected, rather than matching on undefined', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects: upperProjects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    expect(rows.filter((r) => r.isSelected)).toHaveLength(0);
+  });
+
   it('matches open tabs to projects regardless of id casing (project-multi mode)', () => {
     const rows = computeRows({
       mode: 'project-multi',

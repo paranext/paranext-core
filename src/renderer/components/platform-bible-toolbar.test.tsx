@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -306,7 +306,7 @@ vi.mock('platform-bible-react/experimental', async (importOriginal) => {
         : (selected?.shortName ?? buttonPlaceholder);
       return (
         <div
-          data-testid="toolbar-project-selector"
+          data-testid="project-selector-stub"
           data-trigger-classname={buttonClassName}
           aria-disabled={isDisabled}
         >
@@ -752,7 +752,7 @@ describe('PlatformBibleToolbar — project selector visibility by interface mode
   it('renders the project selector when platform.interfaceMode is "simple"', async () => {
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
   });
 
@@ -760,7 +760,7 @@ describe('PlatformBibleToolbar — project selector visibility by interface mode
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.queryByTestId('toolbar-project-selector')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('project-selector-stub')).not.toBeInTheDocument();
     });
   });
 
@@ -771,13 +771,13 @@ describe('PlatformBibleToolbar — project selector visibility by interface mode
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
     const { rerender } = render(<PlatformBibleToolbar />);
     await screen.findByText('1.0.0');
-    expect(screen.queryByTestId('toolbar-project-selector')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('project-selector-stub')).not.toBeInTheDocument();
 
     // Positive control: the same render shows the picker as soon as the mode settles.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     rerender(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
   });
 });
@@ -1011,7 +1011,7 @@ describe('PlatformBibleToolbar — top BCV and project selector styling by inter
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+      expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
     });
     expect(
       document.querySelector('[data-trigger-classname]')?.getAttribute('data-trigger-classname'),
@@ -1462,7 +1462,7 @@ async function renderSimpleToolbarWith(data: Partial<ProjectPickerData>) {
   });
   const renderResult = render(<PlatformBibleToolbar />);
   await waitFor(() => {
-    expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+    expect(screen.getByTestId('project-selector-stub')).toBeInTheDocument();
   });
   return renderResult;
 }
@@ -1511,12 +1511,33 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
     ).toEqual(['p3', 'p1']);
   });
 
-  it('offers the footer action and stays enabled with zero local projects', async () => {
+  it('offers the footer action and disables nothing with zero local projects', async () => {
     await renderSimpleToolbarWith({ recentProjects: [], allProjects: [] });
 
-    const { footerAction, isDisabled } = requireCapturedProjectSelectorProps();
+    const { footerAction, isDisabled, isLoading } = requireCapturedProjectSelectorProps();
     expect(footerAction).toBeDefined();
-    expect(isDisabled).toBeFalsy();
+    // An empty list must not disable the trigger — the picker this replaced tied `disabled` to the
+    // list being non-empty, which took the escape hatch away exactly when it was the only way out.
+    // `ProjectSelector` disables on `isDisabled || isLoading`, so both levers are checked: asserting
+    // `isDisabled` alone would pass against a prop the toolbar never passes. That the rendered
+    // trigger really is enabled here is asserted in the integration test.
+    expect(isDisabled ?? false).toBe(false);
+    expect(isLoading).toBe(false);
+  });
+
+  it('disables the trigger only while loading, never for an empty list', async () => {
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: true });
+
+    // Busy is a state the selector shows with a spinner and recovers from; the empty list above is
+    // not. Pinned so a future change cannot route the empty case back through the same disable.
+    const whileLoading = requireCapturedProjectSelectorProps();
+    expect(whileLoading.isLoading).toBe(true);
+    expect(whileLoading.footerAction).toBeDefined();
+
+    cleanup();
+    await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: false });
+
+    expect(requireCapturedProjectSelectorProps().isLoading).toBe(false);
   });
 
   it('marks a read-only project and leaves an editable one unmarked', async () => {

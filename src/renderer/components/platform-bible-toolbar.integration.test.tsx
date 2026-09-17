@@ -12,6 +12,13 @@ import { PlatformBibleToolbar } from './platform-bible-toolbar';
 // here instead of passing green against a double. It is a seam test: `ProjectSelector`'s own list,
 // section and footer behavior is covered in
 // `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.test.tsx`.
+//
+// Scope limit, because it is easy to over-trust these assertions: `platform-bible-react`'s
+// `exports` map sends `./experimental` to `dist/experimental.js`, so the component under test here
+// is the BUILT bundle, not `project-selector.component.tsx`. These tests therefore guard the
+// toolbar's side of the seam — the props it passes, and whether the real component accepts that
+// combination as shipped. A regression in the component's own source is caught by its source-level
+// test above, and only reaches this file once `dist/` is rebuilt.
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -227,11 +234,35 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
 
     // `combobox` is the real trigger's role, and the aria label is the one the toolbar localizes —
     // a stub selector satisfies neither.
-    const trigger = await screen.findByRole('combobox', { name: 'Test select a project' });
+    const trigger = await screen.findByRole('combobox', {
+      name: 'Test select a project, Project One (P1)',
+    });
     expect(trigger).toBeInTheDocument();
     // Nothing measures the toolbar in jsdom, so the shrink step sits at its narrowest and the
     // compound label shows the short name alone.
     expect(trigger).toHaveTextContent('P1');
+  });
+
+  it('names the open project in the accessible name, not just the control', async () => {
+    await renderSimpleToolbarWith({
+      currentSimpleProject: PROJECTS[0],
+      recentProjects: [PROJECTS[0]],
+      allProjects: [PROJECTS[1]],
+    });
+
+    // `aria-label` replaces the trigger's content in the accessible-name computation rather than
+    // adding to it, so naming only the control would leave the project visible to sighted users
+    // and inaudible to a screen reader. Queried by role rather than by reading the attribute, so
+    // the assertion fails if any future change reintroduces a content-suppressing name.
+    expect(
+      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to the placeholder in the accessible name when no project is open', async () => {
+    await renderSimpleToolbarWith({ currentSimpleProject: undefined });
+
+    expect(await screen.findByRole('combobox', { name: 'Test no projects' })).toBeInTheDocument();
   });
 
   it('shows the toolbar-supplied sections and the more-projects footer when opened', async () => {
@@ -241,7 +272,9 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
       allProjects: [PROJECTS[1]],
     });
 
-    await user.click(await screen.findByRole('combobox', { name: 'Test select a project' }));
+    await user.click(
+      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
+    );
 
     // The real component accepts the toolbar's custom grouping — `availableGroupings: ['custom']`
     // with `hideFilterMenu` — and renders the toolbar's own section headings over its projects.
@@ -255,5 +288,61 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     expect(screen.getByTestId('project-selector-footer-action')).toHaveTextContent(
       'Test more projects',
     );
+  });
+
+  it('shows no untranslated selector default anywhere in the open popover', async () => {
+    const user = await renderSimpleToolbarWith({
+      currentSimpleProject: PROJECTS[0],
+      recentProjects: [PROJECTS[0]],
+      allProjects: [PROJECTS[1]],
+    });
+
+    await user.click(
+      await screen.findByRole('combobox', { name: 'Test select a project, Project One (P1)' }),
+    );
+    await screen.findByTestId('project-selector-footer-action');
+
+    // The toolbar localizes only `searchPlaceholder` of `ProjectSelectorLocalizedStrings`; the rest
+    // keep the component's English defaults and stay unreachable only because of how this call site
+    // is configured (`hideFilterMenu`, empty `openTabs`, and a catch-all last section that leaves
+    // the unmatched bucket empty). Change any of those and a default starts rendering untranslated,
+    // which no other assertion here would notice.
+    // Taken verbatim from the component's own DEFAULT_STRINGS, so a rename there surfaces here
+    // rather than leaving this asserting the absence of text that no longer exists.
+    const defaults = [
+      'Search projects & resources',
+      'Group by',
+      'View options',
+      'Opened project & resource tabs',
+      'Your projects & resources',
+      'Open',
+      'Other',
+    ];
+    defaults.forEach((text) => {
+      expect(screen.queryByText(text)).toBeNull();
+    });
+  });
+
+  it('offers more-projects AND the empty message with zero local projects', async () => {
+    const user = await renderSimpleToolbarWith({
+      currentSimpleProject: undefined,
+      recentProjects: [],
+      allProjects: [],
+    });
+
+    // The trigger stays enabled with nothing to list — the escape hatch matters most here, and the
+    // picker this replaced disabled itself in exactly this state.
+    const trigger = await screen.findByRole('combobox', { name: 'Test no projects' });
+    expect(trigger).toBeEnabled();
+    await user.click(trigger);
+
+    // Both, against the REAL component under the toolbar's own prop combination: `forceMount` keeps
+    // the footer out of cmdk's registered-item set, so `filtered.count` stays 0 and CommandEmpty
+    // still renders. An ordinarily-registered footer row would satisfy the first assertion and
+    // silently break the second, which the prop-level test against the stub cannot see.
+    expect(await screen.findByTestId('project-selector-footer-action')).toHaveTextContent(
+      'Test more projects',
+    );
+    expect(screen.getByText('Test no projects found')).toBeInTheDocument();
   });
 });
