@@ -11,6 +11,7 @@ import {
   decideNoteCallerClickAction,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
   openDefaultActiveProjectIfApplicable,
@@ -3365,3 +3366,43 @@ describe('openOrUpdateRelatedPanels', () => {
 });
 
 // #endregion openOrUpdateRelatedPanels
+
+describe('getTabTitleProjectName', () => {
+  /** A PAPI whose `platform.base` PDP returns the settings this test hands it. */
+  function papiWithSettings(settings: Record<string, unknown>) {
+    const mockGetSetting = vi.fn(async (key: string) => settings[key]);
+    const mockGet = vi.fn().mockResolvedValue({ getSetting: mockGetSetting });
+    // Mocking just the part of the PAPI that we need for these tests
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = {
+      projectDataProviders: { get: mockGet },
+    } as unknown as typeof PapiBackend;
+    return { papi, mockGet, mockGetSetting };
+  }
+
+  it('shows the short name, not the full name', async () => {
+    const { papi } = papiWithSettings({
+      'platform.name': 'WEB',
+      'platform.fullName': 'World English Bible',
+    });
+
+    // Both settings are populated, so a tab title reading the wrong one — or joining the two the
+    // way every other surface now does — is distinguishable from the correct answer here.
+    expect(await getTabTitleProjectName(papi, 'project-1')).toBe('WEB');
+  });
+
+  it('reads the short name from the project data provider', async () => {
+    const { papi, mockGet, mockGetSetting } = papiWithSettings({ 'platform.name': 'WEB' });
+
+    await getTabTitleProjectName(papi, 'project-1');
+
+    expect(mockGet).toHaveBeenCalledWith('platform.base', 'project-1');
+    expect(mockGetSetting).toHaveBeenCalledWith('platform.name');
+  });
+
+  it('falls back to the project id when the project has no short name', async () => {
+    const { papi } = papiWithSettings({});
+
+    expect(await getTabTitleProjectName(papi, 'project-1')).toBe('project-1');
+  });
+});

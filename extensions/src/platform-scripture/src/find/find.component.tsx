@@ -46,6 +46,7 @@ import {
   ProjectSelectorLocalizedStrings,
 } from 'platform-bible-react/experimental';
 import {
+  compareProjectsByName,
   formatReplacementString,
   LanguageStrings,
   LocalizedStringValue,
@@ -772,13 +773,11 @@ export function Find({
 
   const sortedProjects = useMemo<ProjectSelectorProject[]>(
     () =>
-      [...projects]
-        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-        .map((project) => ({
-          id: project.id,
-          shortName: project.shortName,
-          fullName: project.fullName,
-        })),
+      [...projects].sort(compareProjectsByName).map((project) => ({
+        id: project.id,
+        shortName: project.shortName,
+        fullName: project.fullName,
+      })),
     [projects],
   );
 

@@ -48,11 +48,11 @@ export type ProjectSelectorProject = {
 	/** Short name shown as the row's first line and as the trigger label. */
 	shortName: string;
 	/**
-	 * Full name shown as the row's muted second line and as the tooltip title. Pass the short name
-	 * (or omit the distinction upstream) when there is no longer name — the selector suppresses the
-	 * second line rather than repeat it.
+	 * Full name shown as the row's muted second line and as the tooltip title. Optional — omit it (or
+	 * pass the short name) when the project has no separate longer name, and the selector renders a
+	 * single line rather than repeating it.
 	 */
-	fullName: string;
+	fullName?: string;
 	/**
 	 * Human-readable language name (e.g. `"English"`). Surfaced in the row tooltip, searchable from
 	 * the popover's search box, and used as the section heading when grouping by language.

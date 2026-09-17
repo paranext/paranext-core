@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ManageBooksDialog,
   type ManageBooksDialogBookInfo,
@@ -237,5 +237,65 @@ describe('ManageBooksDialog project pickers', () => {
     );
     expect(within(popover).getByText('Vulgate versification')).toBeInTheDocument();
     expect(within(popover).queryByLabelText('View options')).not.toBeInTheDocument();
+  });
+});
+
+describe('ManageBooksDialog header subtitle', () => {
+  /**
+   * The subtitle is gated on `useIsNarrow`, which measures the dialog root against a 448px
+   * breakpoint. jsdom has no layout, so every element reports width 0 and the dialog renders in its
+   * collapsed form with the subtitle hidden — the line under test never mounts. Report a width past
+   * the breakpoint for these tests only; widening it globally would change how the other suites in
+   * this file render.
+   */
+  let wideRect: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    wideRect = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(0, 0, 900, 600));
+  });
+
+  afterEach(() => {
+    wideRect.mockRestore();
+  });
+
+  /**
+   * The `PROJECTS` fixture above carries no `fullName`, so it exercises only the short-name-alone
+   * branch. These spell out the three field combinations the project label has to tell apart.
+   */
+  const withNames = (shortName: string, fullName?: string): ManageBooksDialogProject[] => [
+    { id: 'WEB', shortName, name: shortName, fullName },
+  ];
+
+  /** The subtitle is the only line reading "{n} books in …"; it renders once projects have loaded. */
+  const subtitle = () => screen.findByText(/books in/i);
+
+  it('leads the project label with the short name', async () => {
+    render(dialog({ loadProjects: () => withNames('WEB', 'World English Bible') }));
+
+    // Asserted as one ordered string rather than two `toContain`s: the point of the shared helper is
+    // the ORDER, and a long-name-first label contains both names just as happily.
+    expect(await subtitle()).toHaveTextContent('books in WEB - World English Bible');
+  });
+
+  it('shows the short name alone when the project carries no full name', async () => {
+    render(dialog({ loadProjects: () => withNames('WEB') }));
+
+    // No dangling separator — `formatProjectName` drops it along with the absent field.
+    expect(await subtitle()).toHaveTextContent(/books in WEB \u22c5/);
+  });
+
+  it('does not repeat a full name that equals the short name', async () => {
+    render(dialog({ loadProjects: () => withNames('WEB', 'WEB') }));
+
+    // The `fullName === shortName` de-dup, asserted at the consumer rather than only in the helper's
+    // units: a consumer that stopped routing through the helper would render "WEB - WEB" while the
+    // helper's own tests stayed green.
+    const line = await subtitle();
+    expect(line).not.toHaveTextContent('WEB - WEB');
+    // Positive control — without it this passes just as happily against a subtitle that never
+    // rendered a project label at all.
+    expect(line).toHaveTextContent(/books in WEB \u22c5/);
   });
 });

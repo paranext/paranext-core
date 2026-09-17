@@ -15,7 +15,12 @@ import { projectLookupService } from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
-import { formatReplacementString, Localized, LocalizeKey } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  Localized,
+  LocalizeKey,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import { ProjectOrOtherSettingsList } from './settings-components/project-or-other-settings-list.component';
@@ -40,11 +45,19 @@ async function getAllProjectIdsFromMetadata() {
   return allMetadata.flatMap((metadata) => metadata.id);
 }
 
-async function getProjectName(projectIdToGetName: string) {
+async function getProjectNames(
+  projectIdToGetName: string,
+): Promise<{ projectName: string; projectFullName?: string }> {
   const pdp = await projectDataProviders.get('platform.base', projectIdToGetName);
-  const projectName = await pdp.getSetting('platform.name');
-
-  return projectName;
+  // Fetch both names in parallel so the sidebar can render short + full name (matching
+  // manage-books / checks-side-panel behavior). `normalizeFullName` owns what counts as an absent
+  // full name, so the sidebar's row renderer falls back to a single-line layout for a project that
+  // has none.
+  const [projectName, projectFullNameRaw] = await Promise.all([
+    pdp.getSetting('platform.name'),
+    pdp.getSetting('platform.fullName'),
+  ]);
+  return { projectName, projectFullName: normalizeFullName(projectFullNameRaw) };
 }
 
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
@@ -183,10 +196,10 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
       }
 
       const projectOptions = await Promise.all(
-        allProjectIdsFromMetadata.map(async (id) => ({
-          projectId: id,
-          projectName: await getProjectName(id),
-        })),
+        allProjectIdsFromMetadata.map(async (id) => {
+          const { projectName, projectFullName } = await getProjectNames(id);
+          return { projectId: id, projectName, projectFullName };
+        }),
       );
       return projectOptions;
     }, []),

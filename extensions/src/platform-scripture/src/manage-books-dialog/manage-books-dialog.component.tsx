@@ -51,6 +51,7 @@ import {
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
+import { formatProjectName } from 'platform-bible-utils';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   BookGridGroupBy,
@@ -762,8 +763,10 @@ export function ManageBooksDialog({
   // The Copy "From" and Create "Based on" pickers are <ProjectSelector mode="project">, which
   // takes a `ProjectSelectorProject` shape (`{ id, shortName, fullName }`). Map the dialog's
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
-  // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
-  // configured. The target project itself is filtered out (already done in `otherProjects`).
+  // upstream) becomes the secondary label, and is passed through as-is: the selector suppresses a
+  // full name that is absent or equal to the short name, so mirroring one into the other here would
+  // make every project look like it has a distinct full name. The target project itself is filtered
+  // out (already done in `otherProjects`).
   // Commentaries should be excluded from both the Copy "From" and Create "Based on" pickers.
   // DEFERRED — there is no reliable commentary signal in
   // the current data model: DBL classifies resources only by medium (text/audio/print), ParatextData
@@ -785,7 +788,7 @@ export function ManageBooksDialog({
       otherProjects.map((p) => ({
         id: p.id,
         shortName: p.shortName,
-        fullName: p.fullName ?? p.shortName,
+        fullName: p.fullName,
         versificationId: p.versificationId,
         // Group header reads "{name} versification" (lowercase), localized via a template so word
         // order can vary by language. The "Unknown
@@ -819,7 +822,7 @@ export function ManageBooksDialog({
         .map((p) => ({
           id: p.id,
           shortName: p.shortName,
-          fullName: p.fullName ?? p.shortName,
+          fullName: p.fullName,
         })),
     [otherProjects],
   );
@@ -1534,14 +1537,14 @@ export function ManageBooksDialog({
   const totalPresent = current.present.size;
 
   // The subtitle reads
-  // "{count} books in {full project name} ⋅ {versification name} Versification". The
+  // "{count} books in {project label} ⋅ {versification name} Versification". The
   // versification name is resolved from the numeric `ScrVersType` enum (which `loadVersification`
   // returns as a string) via `versificationLabelKey` + `t()`. The trailing literal " Versification"
   // is part of the template, not the localized name (the names are bare — "English", "Vulgate",
   // …). Falls back to the no-versification template when the versification setting is absent.
-  // Project label prefers `fullName` (the project's `platform.fullName` setting) and falls back to
-  // `shortName` so the subtitle reads naturally for both fully-configured and bare-bones projects.
-  const projectDisplayName = project.fullName ?? project.shortName;
+  // Project label leads with the short name — the field that identifies a project to a Paratext
+  // user — and appends the full name only when it carries information the short name does not.
+  const projectDisplayName = formatProjectName(project);
   const subtitleTemplate = versification
     ? t('%manageBooks_header_subtitle%', '{0} books in {1} ⋅ {2} Versification')
     : t('%manageBooks_header_subtitleNoVersification%', '{0} books in {1}');

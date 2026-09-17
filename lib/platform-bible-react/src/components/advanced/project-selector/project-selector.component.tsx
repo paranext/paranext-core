@@ -24,7 +24,9 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import {
+  formatProjectName,
   getLocalizeKeyForScrollGroupId,
+  hasDistinctFullName,
   normalizeProjectId,
   type ScrollGroupId,
 } from 'platform-bible-utils';
@@ -672,7 +674,7 @@ function ProjectRowView({
   const rowNode = (
     <CommandItem
       ref={row.isSelected ? selectedRowRef : undefined}
-      value={`${row.rowKey} ${row.shortName} ${row.fullName} ${row.language ?? ''} ${row.languageCode ?? ''}`}
+      value={`${row.rowKey} ${row.shortName} ${row.fullName ?? ''} ${row.language ?? ''} ${row.languageCode ?? ''}`}
       onSelect={() => {
         if (row.isDisabled) return;
         onClick(row);
@@ -700,18 +702,16 @@ function ProjectRowView({
           below. Each line truncates independently. Tooltip-on-clip still
           works because the wrapping span is what scrollWidth/clientWidth is
           measured on (truncation in EITHER child contributes to overflow).
-          When `fullName` is missing
-          or equal to `shortName` the second line would render the same
-          string the user already sees above (e.g. consumers that fall back
-          `fullName ?? shortName` upstream and forward an unset project
-          fullName). Suppress the muted line in that case so the row reads
-          as a single name. */}
+          The muted second line is suppressed whenever `hasDistinctFullName`
+          says there is nothing distinct to show, so the row reads as a
+          single name rather than repeating it — edit that helper, not this
+          condition, to change what counts as distinct. */}
       <span
         ref={labelRef}
         className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-start tw:overflow-hidden tw:text-start"
       >
         <span className="tw:w-full tw:truncate tw:font-medium">{row.shortName}</span>
-        {row.fullName && row.fullName !== row.shortName && (
+        {hasDistinctFullName(row) && (
           <span className="tw:w-full tw:truncate tw:text-xs tw:text-muted-foreground">
             {row.fullName}
           </span>
@@ -740,7 +740,10 @@ function ProjectRowView({
         className="tw:max-w-xs tw:text-center"
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
-        <div className="tw:font-semibold">{row.fullName}</div>
+        {/* The whole label, not the full name alone: this tooltip doubles as the row's
+            truncation disclosure (`useTruncationTooltip` opens it when EITHER line is clipped), so
+            dropping the short name here would hide the very field a narrow row clipped. */}
+        <div className="tw:font-semibold">{formatProjectName(row)}</div>
         {tooltipHasLanguage && (
           <div className="tw:text-sm">
             {row.language}
@@ -1022,7 +1025,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       result = result.filter(
         (r) =>
           r.shortName.toLowerCase().includes(needle) ||
-          r.fullName.toLowerCase().includes(needle) ||
+          (r.fullName ?? '').toLowerCase().includes(needle) ||
           (r.language ?? '').toLowerCase().includes(needle) ||
           (r.languageCode ?? '').toLowerCase().includes(needle),
       );
@@ -1215,28 +1218,23 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     if (showSelectedOnly) setShowSelectedOnly(false);
   };
 
-  const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
+  const triggerContent = useMemo<{ node: ReactNode; title: string; hasSelection: boolean }>(() => {
     switch (props.mode) {
       case 'project': {
         const selected = props.projects.find((p) => p.id === props.selection.projectId);
         // An empty title suppresses the tooltip wrapper below — see `renderTriggerLabel`'s TSDoc.
         if (props.renderTriggerLabel)
-          return { node: props.renderTriggerLabel(selected), title: '' };
+          return { node: props.renderTriggerLabel(selected), title: '', hasSelection: !!selected };
         let text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
-        if (
-          selected &&
-          props.triggerLabelFormat === 'shortNameAndFullName' &&
-          selected.fullName &&
-          selected.fullName !== selected.shortName
-        )
-          text = `${selected.shortName} - ${selected.fullName}`;
-        return { node: text, title: text };
+        if (selected && props.triggerLabelFormat === 'shortNameAndFullName')
+          text = formatProjectName(selected);
+        return { node: text, title: text, hasSelection: !!selected };
       }
       case 'project-multi': {
         const { pairs } = props.selection;
         if (pairs.length === 0) {
           const text = props.buttonPlaceholder ?? '';
-          return { node: text, title: text };
+          return { node: text, title: text, hasSelection: false };
         }
         type Tuple = { project: ProjectSelectorProject; scrollGroupId?: ScrollGroupId };
         const tuples: Tuple[] = [];
@@ -1246,11 +1244,11 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         });
         if (tuples.length === 0) {
           const text = props.buttonPlaceholder ?? '';
-          return { node: text, title: text };
+          return { node: text, title: text, hasSelection: false };
         }
         if (props.getSelectedText) {
           const text = props.getSelectedText(tuples);
-          return { node: text, title: text };
+          return { node: text, title: text, hasSelection: true };
         }
         const items = tuples
           .map(({ project, scrollGroupId }) =>
@@ -1260,7 +1258,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
           )
           .join(', ');
         // One pair selected → drop the count; the name already conveys the cardinality.
-        if (tuples.length === 1) return { node: items, title: items };
+        if (tuples.length === 1) return { node: items, title: items, hasSelection: true };
         const countText = tuples.length.toString();
         return {
           node: (
@@ -1272,23 +1270,24 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             </>
           ),
           title: `${countText} ${items}`,
+          hasSelection: true,
         };
       }
       case 'projectScrollGroup': {
         const selected = props.projects.find((p) => p.id === props.selection.projectId);
         if (!selected) {
           const text = props.buttonPlaceholder ?? '';
-          return { node: text, title: text };
+          return { node: text, title: text, hasSelection: false };
         }
         const group = props.selection.scrollGroupId;
         if (group === undefined) {
-          return { node: selected.shortName, title: selected.shortName };
+          return { node: selected.shortName, title: selected.shortName, hasSelection: true };
         }
         const text = `${selected.shortName} · ${scrollGroupLetterFromMap(group)}`;
-        return { node: text, title: text };
+        return { node: text, title: text, hasSelection: true };
       }
       default:
-        return { node: '', title: '' };
+        return { node: '', title: '', hasSelection: false };
     }
   }, [props]);
 
@@ -1310,6 +1309,20 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       ? handleOpenProjectInGroup
       : undefined;
 
+  // `aria-label` REPLACES a button's text content for assistive tech, so a bare group label
+  // ("Project settings") would leave a screen-reader user unable to tell which project is
+  // selected — the one thing the visible trigger is there to say. Name the selection alongside the
+  // group label instead.
+  //
+  // Gated on `hasSelection` rather than on the title being non-empty: with nothing selected the
+  // title is the PLACEHOLDER, and "Project: Select a project" announces a selection that does not
+  // exist. `title` is separately empty when a consumer supplies `renderTriggerLabel` — the label
+  // node is arbitrary then, so the consumer owns naming it, as the Simple-mode toolbar does.
+  const triggerAriaLabel =
+    props.ariaLabel && triggerContent.hasSelection && triggerContent.title
+      ? `${props.ariaLabel}: ${triggerContent.title}`
+      : props.ariaLabel;
+
   // The trigger's untruncated label is exposed through the shadcn Tooltip wrapped around the
   // PopoverTrigger below, never through a native `title` attribute: `title` surfaces the
   // browser-default yellow tooltip, inconsistent with the app's shadcn tooltip styling. Keep
@@ -1319,7 +1332,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       variant={props.buttonVariant ?? 'outline'}
       role="combobox"
       aria-expanded={open}
-      aria-label={props.ariaLabel}
+      aria-label={triggerAriaLabel}
       disabled={(props.isDisabled ?? false) || (props.isLoading ?? false)}
       className={cn(
         'tw:flex tw:w-[180px] tw:items-center tw:justify-between tw:overflow-hidden',

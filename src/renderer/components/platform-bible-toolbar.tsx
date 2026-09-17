@@ -63,12 +63,15 @@ import {
   type ProjectSelectorSection,
 } from 'platform-bible-react/experimental';
 import {
+  formatProjectName,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  hasDistinctFullName,
   isPlatformError,
   type LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
+  PROJECT_NAME_SEPARATOR,
 } from 'platform-bible-utils';
 import { CSSProperties, useCallback, useMemo } from 'react';
 
@@ -133,7 +136,7 @@ function ProjectSelectorLabel({
   shortName,
   errorMessage,
 }: {
-  fullName: string;
+  fullName?: string;
   shortName: string;
   errorMessage?: string;
 }) {
@@ -175,13 +178,13 @@ function ProjectSelectorLabel({
 
   return (
     <ToolbarCompoundLabel
-      // The short name is the identifying part, so it is the field that must survive — but it reads
-      // second, hence `secondaryFirst`.
-      primary={isAtMinimum ? shortName : `(${shortName})`}
-      secondary={fullName}
-      secondaryFirst
+      // The short name identifies the project, so it leads and is the field that survives the
+      // narrowest step; the full name is the one that clips and then drops.
+      primary={shortName}
+      secondary={hasDistinctFullName({ shortName, fullName }) ? fullName : undefined}
+      separator={PROJECT_NAME_SEPARATOR}
       showSecondary={!isAtMinimum}
-      fullText={`${fullName} (${shortName})`}
+      fullText={formatProjectName({ shortName, fullName })}
     />
   );
 }
@@ -334,6 +337,17 @@ function ToolbarProjectSelector({
     [pendingProject, displayedProject, currentProjectError, placeholder],
   );
 
+  // This selector supplies `renderTriggerLabel`, so `ProjectSelector` cannot derive the selection
+  // from its own trigger text and leaves the accessible name to the consumer. Without the project
+  // name here a screen-reader user hears only "Select project", at every shrink step — and at the
+  // narrowest step the full name is dropped from the visible label too, so this is the only place
+  // it remains reachable.
+  const selectorAriaLabel = useMemo(() => {
+    const action = localizedStrings['%projectPicker_toolbar_select_project%'];
+    const named = displayedProject ?? pendingProject;
+    return named ? `${action}: ${formatProjectName(named)}` : action;
+  }, [localizedStrings, displayedProject, pendingProject]);
+
   const selectorLocalizedStrings = useMemo(
     () => ({ searchPlaceholder: localizedStrings['%projectPicker_search_placeholder%'] }),
     [localizedStrings],
@@ -372,7 +386,7 @@ function ToolbarProjectSelector({
       footerAction={footerAction}
       isLoading={isLoading}
       localizedStrings={selectorLocalizedStrings}
-      ariaLabel={localizedStrings['%projectPicker_toolbar_select_project%']}
+      ariaLabel={selectorAriaLabel}
       commandEmptyMessage={localizedStrings['%projectPicker_no_results%']}
       buttonVariant="ghost"
       buttonClassName={cn(
@@ -547,7 +561,7 @@ export function PlatformBibleToolbar() {
       // so its id stands in for them until the editor reports the project itself.
       // TODO(PT-4552): Carry the chosen project's name in the dialog response. PT-4552 adds
       // server-reachable projects, which make this the common case rather than the exception.
-      beginOpenProject(item ?? { id: projectId, shortName: projectId, fullName: projectId });
+      beginOpenProject(item ?? { id: projectId, shortName: projectId, fullName: '' });
     },
     [pickerProjects, beginOpenProject],
   );

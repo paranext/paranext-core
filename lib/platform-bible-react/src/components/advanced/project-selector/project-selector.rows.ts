@@ -1,4 +1,8 @@
-import { normalizeProjectId, type ScrollGroupId } from 'platform-bible-utils';
+import {
+  compareProjectsByName,
+  normalizeProjectId,
+  type ScrollGroupId,
+} from 'platform-bible-utils';
 
 // #region Types
 
@@ -15,11 +19,11 @@ export type ProjectSelectorProject = {
   /** Short name shown as the row's first line and as the trigger label. */
   shortName: string;
   /**
-   * Full name shown as the row's muted second line and as the tooltip title. Pass the short name
-   * (or omit the distinction upstream) when there is no longer name — the selector suppresses the
-   * second line rather than repeat it.
+   * Full name shown as the row's muted second line and as the tooltip title. Optional — omit it (or
+   * pass the short name) when the project has no separate longer name, and the selector renders a
+   * single line rather than repeating it.
    */
-  fullName: string;
+  fullName?: string;
   /**
    * Human-readable language name (e.g. `"English"`). Surfaced in the row tooltip, searchable from
    * the popover's search box, and used as the section heading when grouping by language.
@@ -150,7 +154,7 @@ export type ProjectRow = {
   rowKey: string;
   projectId: string;
   shortName: string;
-  fullName: string;
+  fullName?: string;
   language?: string;
   languageCode?: string;
   /**
@@ -448,7 +452,7 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
   // scrollGroupId. The component scrolls the selected row into view on open,
   // so selected rows do NOT float to the top — users can predict where any
   // project will land after selecting it.
-  const nameCmp = a.shortName.localeCompare(b.shortName, undefined, { sensitivity: 'base' });
+  const nameCmp = compareProjectsByName(a, b);
   if (nameCmp !== 0) return nameCmp;
   // Tie-break: scrollGroupId asc so the same project lists A before B before C.
   const aGroup = a.scrollGroupId ?? Number.POSITIVE_INFINITY;

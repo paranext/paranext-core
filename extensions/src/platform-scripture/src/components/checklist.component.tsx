@@ -17,7 +17,7 @@ import { LinkedScrRefButton } from 'platform-bible-react/experimental';
 import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import { formatScrRef } from 'platform-bible-utils';
+import { formatScrRef, normalizeFullName } from 'platform-bible-utils';
 import type {
   ChecklistCell,
   ChecklistLocalizedStringKey,
@@ -235,7 +235,7 @@ function ColumnHeaderWithTooltip({
   fullName,
   ariaLabelTemplate,
 }: ColumnHeaderWithTooltipProps) {
-  const displayFullName = fullName ?? shortName;
+  const displayFullName = normalizeFullName(fullName) ?? shortName;
   const ariaLabel = ariaLabelTemplate.replace('{name}', displayFullName);
   return (
     // delayDuration={0} → tooltip appears immediately on hover (per Sebastian's PR #2219
