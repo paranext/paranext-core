@@ -172,7 +172,6 @@ async function expectSettledBeside(
   await expect(async () => expectPopupBesideTriggerAndInsideFrame(frame, popup, trigger)).toPass({
     timeout: 5_000,
   });
-  await waitForPopupAnimations(popup);
 }
 
 /** A locator's main-frame box; throws when it has none. */
@@ -484,8 +483,11 @@ test.describe('scripture editor content zoom', () => {
       }
       /* eslint-enable no-await-in-loop */
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
-      // Restore the window width for the steps that follow.
+      // Restore the window width and the text's scroll position for the steps that follow: they
+      // click verses with `{ force: true }`, which skips Playwright's visibility checks, so a verse
+      // left scrolled out of view would be clicked where it is no longer painted.
       await setWindowWidth(electronApp, mainPage, DEFAULT_WINDOW_SIZE.width);
+      expect((await scrollText(editorFrame, { to: 0 })).after).toBe(0);
     });
 
     await test.step('the inline marker menu and the comment editor follow the text zoom', async () => {

@@ -187,7 +187,13 @@ export async function expectPopupBesideTriggerAndInsideFrame(
     clientHeight: element.clientHeight,
     scrollsVertically: ['auto', 'scroll'].includes(getComputedStyle(element).overflowY),
   }));
-  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + tolerance);
+  expect(
+    overflow.scrollWidth,
+    `content fits sideways (scroll ${overflow.scrollWidth}, client ${overflow.clientWidth}): ${boxes}`,
+  ).toBeLessThanOrEqual(overflow.clientWidth + tolerance);
   if (!overflow.scrollsVertically)
-    expect(overflow.scrollHeight).toBeLessThanOrEqual(overflow.clientHeight + tolerance);
+    expect(
+      overflow.scrollHeight,
+      `content fits vertically in a pop-up that does not scroll (scroll ${overflow.scrollHeight}, client ${overflow.clientHeight}): ${boxes}`,
+    ).toBeLessThanOrEqual(overflow.clientHeight + tolerance);
 }
