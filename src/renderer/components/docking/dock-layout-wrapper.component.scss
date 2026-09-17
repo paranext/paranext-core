@@ -304,6 +304,11 @@ body:has(> .dragging-layer.dock-style-platform-bible)
   // (its overflow math only reads `.dock-nav-wrap`/`.dock-nav-list`), so hiding it is safe. The
   // `:not()` above isn't enough on its own: rc-dock's own `.dock-nav-operations { display: flex }`
   // still applies to a `.dock-nav-operations-hidden` element, so it needs this override too.
+  //
+  // Deliberately unscoped to `.dock-style-platform-bible`, so it also applies in Simple mode: the
+  // same "rc-tabs measures only `.dock-nav-wrap`/`.dock-nav-list`" invariant holds there too, and
+  // Simple mode's tab-collapse threshold (comparing the panel's width against the tabs plus a
+  // constant, never against the bar's free space) is identical with or without this rule.
   &.dock-nav-operations-hidden {
     display: none;
   }
@@ -333,7 +338,9 @@ body:has(> .dragging-layer.dock-style-platform-bible)
   margin-right: unset;
   border: unset;
 
-  --dock-tab-height: 30px; // also from rc-dock
+  // Kept equal to the panel buttons' height ($panel-button-size), not a separate literal, so the
+  // tab and the "+"/"more" buttons render at the same height.
+  --dock-tab-height: #{tab-bar-metrics.$panel-button-size}; // also from rc-dock
   height: calc(var(--dock-tab-height) + var(--tab-header-to-content-gap));
 
   display: flex;
