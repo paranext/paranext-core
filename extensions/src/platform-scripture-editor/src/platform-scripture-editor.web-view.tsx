@@ -169,7 +169,6 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
   createInsertContextMenuItems,
-  doesEditorContextMenuOwnEnter,
   isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -2292,7 +2291,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           //
           // CLAIMED, not merely declined: the editor keeps DOM focus while the menu is up, so an
           // unclaimed `\` falls through to Lexical and types a backslash into the document behind
-          // the menu. The menu has no use for the key either, so it does nothing at all.
+          // the menu. The menu has no use for the key either, so it does nothing at all. Enter
+          // below stands down the OTHER way, because the menu does want that key.
           if (isEditorContextMenuOpen()) {
             event.preventDefault();
             event.stopPropagation();
@@ -2318,10 +2318,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // representation, so it serializes as a plain space: the same data problem as an unmarked
         // split.
         if (event.key === 'Enter') {
-          // The editor's own right-click menu is open with an item highlighted: that menu claims
-          // Enter itself, one capture step further down (on `document`), and never sees the press if
-          // this handler stops it here. See `doesEditorContextMenuOwnEnter`.
-          if (doesEditorContextMenuOwnEnter()) return;
+          // The editor's own right-click menu is up: it owns Enter outright for as long as it is
+          // open — invoking its highlighted item when it has an enabled one, swallowing the press
+          // otherwise — so no palette may open underneath it and nothing reaches the document.
+          // HANDED DOWN rather than claimed here: the menu's listener is one capture step further
+          // down (on `document`) and never sees a press this handler stops. See
+          // `isEditorContextMenuOpen`.
+          if (isEditorContextMenuOpen()) return;
           const ctx = editorRef.current?.getMarkerMenuContext();
           // Pass through untouched when there's no context, inside a note, or inside marker glyph
           // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).
