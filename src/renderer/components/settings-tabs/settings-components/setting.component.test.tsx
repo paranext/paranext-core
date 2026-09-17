@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
@@ -20,6 +20,14 @@ const ZOOM_STRINGS = {
   '%settings_platform_webViewContentZoom_increase%': 'Increase default zoom',
   '%settings_platform_webViewContentZoom_decrease%': 'Decrease default zoom',
   '%settings_platform_webViewContentZoom_reset%': 'Reset default zoom',
+};
+
+// The error block renders two localized labels; the tests that assert an error is (still) on screen
+// need real strings for them, since the default mock hands back an empty string map.
+const ERROR_STRINGS = {
+  '%settings_errorMessages_errorOccurred%': 'An error occurred',
+  '%settings_errorMessages_viewError%': 'View error',
+  '%settings_errorMessages_invalidValue%': 'Invalid value',
 };
 
 // Props shared by every case below; only settingKey/setting/label (and `disabled`) differ per test,
@@ -150,6 +158,58 @@ describe('debounced text-setting writes', () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(setSetting).toHaveBeenCalledTimes(1);
     expect(setSetting).toHaveBeenCalledWith('Spanish');
+  });
+});
+
+describe('a setting with no writer', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('leaves an error on screen when a valid change has nothing to write it', async () => {
+    vi.useFakeTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
+    // The first change is rejected by validation so there is an error on screen to preserve; the
+    // second passes validation, which is the change that used to clear it and report success.
+    const validateProjectSetting = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+    render(
+      <Setting
+        setSetting={undefined}
+        isLoading={false}
+        validateProjectSetting={validateProjectSetting}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+      />,
+    );
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: '' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(screen.getByText('An error occurred')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'Spanish' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(screen.getByText('An error occurred')).toBeInTheDocument();
+  });
+
+  it('does not move the zoom readout when there is nothing to write the factor', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
+    render(
+      <Setting
+        setSetting={undefined}
+        isLoading={false}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.webViewContentZoom"
+        setting={1.2}
+        label="Tab content default zoom"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Increase default zoom' }));
+    // The readout is `aria-live`, so a jump here is announced to a screen-reader user as a change
+    // that was never written.
+    expect(screen.getByText('120 %')).toBeInTheDocument();
+    expect(screen.queryByText('130 %')).toBeNull();
   });
 });
 
