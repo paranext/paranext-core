@@ -267,6 +267,23 @@ test.describe('comment list content zoom', () => {
         return { menu, height: box.height };
       };
 
+      // Assign popover: only when the thread offers assignment to this user.
+      const canAssign = await assignTrigger.isEnabled();
+      const assign = listFrame.locator('[data-slot="popover-content"]');
+      /** Opens the assign popover, checks it, and returns its first entry's height. */
+      const measureAssignItem = async () => {
+        await assignTrigger.click();
+        await expect(assign).toBeVisible();
+        await expect(assign).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expectPopupBesideTriggerAndInsideFrame(listFrame, assign, assignTrigger);
+        const box = await assign.locator('[data-slot="command-item"]').first().boundingBox();
+        if (!box) throw new Error('Assign entry has no box');
+        // The assign popover stops its own Escape, so the card stays expanded.
+        await mainPage.keyboard.press('Escape');
+        await expect(assign).toBeHidden();
+        return box.height;
+      };
+
       await zoomAreaTo(mainPage, listFrame, listId, 'main', 1);
       const atDefault = await measureMenuItem();
       await mainPage.keyboard.press('Escape');
@@ -275,6 +292,7 @@ test.describe('comment list content zoom', () => {
       // (`handleKeyDownWithEscape` in comment-list.component.tsx) and closes the card along with
       // the menu. Re-select it so the trigger exists for the next measurement.
       await card.click();
+      const assignAtDefault = canAssign ? await measureAssignItem() : undefined;
 
       const factors = [1.5, 2];
       // Sequential zoom steps: each factor's zoom, measurement and pop-up assertion must complete
@@ -287,21 +305,14 @@ test.describe('comment list content zoom', () => {
         expect(zoomed.height / atDefault.height).toBeCloseTo(factor, 1);
         await expectPopupBesideTriggerAndInsideFrame(listFrame, zoomed.menu, menuTrigger);
         await mainPage.keyboard.press('Escape');
-        // Same collapse-on-Escape side effect as above; re-select for the next iteration (or, on
-        // the last one, for the assign-popover check right below the loop).
+        // Same collapse-on-Escape side effect as above; re-select for the next measurement.
         await card.click();
+        if (assignAtDefault !== undefined)
+          expect((await measureAssignItem()) / assignAtDefault).toBeCloseTo(factor, 1);
       }
       /* eslint-enable no-await-in-loop */
 
-      // Assign popover: only when the thread offers assignment to this user.
-      if (await assignTrigger.isEnabled()) {
-        await assignTrigger.click();
-        const assign = listFrame.locator('[data-slot="popover-content"]');
-        await expect(assign).toBeVisible();
-        await expect(assign).toHaveAttribute('data-platform-content-zoom-root', '');
-        await expectPopupBesideTriggerAndInsideFrame(listFrame, assign, assignTrigger);
-        await mainPage.keyboard.press('Escape');
-      } else {
+      if (!canAssign) {
         // Recorded so a fixture change that removes assignable users is visible in the report.
         test.info().annotations.push({
           type: 'skipped-substep',

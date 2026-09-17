@@ -112,8 +112,9 @@ export type PageBox = { x: number; y: number; width: number; height: number };
 /**
  * Asserts an open pop-up sits beside its trigger (touching or within
  * {@link POPUP_TRIGGER_MAX_GAP_PX} on one axis and overlapping on the other, without covering the
- * trigger) and lies fully inside the web view's frame. `trigger` is an element, or a
- * main-frame-relative box for a trigger that is no element of its own (a text caret or selection).
+ * trigger), lies fully inside the web view's frame, and holds its content without overflowing.
+ * `trigger` is an element, or a main-frame-relative box for a trigger that is no element of its own
+ * (a text caret or selection).
  */
 export async function expectPopupBesideTriggerAndInsideFrame(
   frame: Frame,
@@ -134,15 +135,39 @@ export async function expectPopupBesideTriggerAndInsideFrame(
     triggerBox.x - (popupBox.x + popupBox.width),
   );
   const tolerance = 1;
+  const boxes = `pop-up ${JSON.stringify(popupBox)}, trigger ${JSON.stringify(triggerBox)}, frame ${JSON.stringify(frameBox)}`;
   // Beside = separated on at most one axis, by a small gap, and never covering the trigger: two
   // boxes intersect exactly when both gaps are negative, so the larger gap must not be.
-  expect(Math.min(Math.max(gapY, 0), Math.max(gapX, 0))).toBe(0);
-  expect(Math.max(gapX, gapY)).toBeGreaterThanOrEqual(-tolerance);
-  expect(Math.max(gapX, gapY)).toBeLessThanOrEqual(POPUP_TRIGGER_MAX_GAP_PX);
-  expect(popupBox.x).toBeGreaterThanOrEqual(frameBox.x - tolerance);
-  expect(popupBox.y).toBeGreaterThanOrEqual(frameBox.y - tolerance);
-  expect(popupBox.x + popupBox.width).toBeLessThanOrEqual(frameBox.x + frameBox.width + tolerance);
-  expect(popupBox.y + popupBox.height).toBeLessThanOrEqual(
+  expect(
+    Math.min(Math.max(gapY, 0), Math.max(gapX, 0)),
+    `separated on one axis only: ${boxes}`,
+  ).toBe(0);
+  expect(Math.max(gapX, gapY), `not covering the trigger: ${boxes}`).toBeGreaterThanOrEqual(
+    -tolerance,
+  );
+  expect(Math.max(gapX, gapY), `close to the trigger: ${boxes}`).toBeLessThanOrEqual(
+    POPUP_TRIGGER_MAX_GAP_PX,
+  );
+  expect(popupBox.x, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameBox.x - tolerance);
+  expect(popupBox.y, `inside the frame: ${boxes}`).toBeGreaterThanOrEqual(frameBox.y - tolerance);
+  expect(popupBox.x + popupBox.width, `inside the frame: ${boxes}`).toBeLessThanOrEqual(
+    frameBox.x + frameBox.width + tolerance,
+  );
+  expect(popupBox.y + popupBox.height, `inside the frame: ${boxes}`).toBeLessThanOrEqual(
     frameBox.y + frameBox.height + tolerance,
   );
+  // The box alone is not enough: content that cannot shrink to a capped box paints past its edges
+  // while the box itself looks fine. Its own scroll size must fit its client size (both in its own
+  // CSS pixels, so the zoom factor cancels out). Never sideways; vertically only when the box is a
+  // scroll box, where taller content scrolls inside it instead of painting past it.
+  const overflow = await popup.evaluate((element) => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+    scrollsVertically: ['auto', 'scroll'].includes(getComputedStyle(element).overflowY),
+  }));
+  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + tolerance);
+  if (!overflow.scrollsVertically)
+    expect(overflow.scrollHeight).toBeLessThanOrEqual(overflow.clientHeight + tolerance);
 }
