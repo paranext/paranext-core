@@ -69,9 +69,20 @@ const ZOOM_ITEM_IDS = ['contentZoomIn', 'contentZoomOut', 'contentZoomReset'];
 describe('translatePlatformMenuItemsAndCombine', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // Scoped to what the combine guarantees: a contributed View column replaces the View submenu in
-  // the menubar THAT build produces, but must not damage the template every later build reads —
-  // which is what used to remove the zoom items for the rest of the process.
+  // On macOS the View menu's accelerators are the only menu route to ⌘=/⌘-/⌘0, and the platform
+  // items beside them (reload, dev tools, full screen) have no other entry point either, so a
+  // contributed column carrying the same header has to join them rather than take their place.
+  it('combines a contributed View column with the platform’s own View items', async () => {
+    const combined = await translatePlatformMenuItemsAndCombine(
+      menuWithContributedColumn('%mainMenu_view%'),
+    );
+    const submenu = viewSubmenuOf(combined);
+    expect(submenu.map((item) => item.id)).toEqual(expect.arrayContaining(ZOOM_ITEM_IDS));
+    expect(submenu.map((item) => item.label)).toContain('%test_contributedItem%');
+  });
+
+  // The combine writes into a per-build copy, never into the module-level template every later
+  // build reads again — which is what used to remove the zoom items for the rest of the process.
   it('leaves a later build’s zoom items intact after a contributed View column', async () => {
     await translatePlatformMenuItemsAndCombine(menuWithContributedColumn('%mainMenu_view%'));
     const second = await translatePlatformMenuItemsAndCombine(
