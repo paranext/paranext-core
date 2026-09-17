@@ -403,6 +403,42 @@ describe('content-zoom bootstrap script', () => {
     ]);
   });
 
+  it('keeps reading a pinch as a pinch once its frames outgrow the scale window, and lets go when they stop', () => {
+    const { bound } = install('wv-pinch-brisk', TWO_AREAS);
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      // A pinch accelerates, and Chromium clamps nothing: one that doubles in about a fifth of a
+      // second carries ≈6 px a frame, which is wider than any window a single frame can be judged
+      // by without swallowing a macOS mouse notch too. So the first, slow frame is what the size
+      // test catches, and the gesture carries the brisk ones that follow.
+      wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      for (let i = 0; i < 20; i += 1) {
+        now += 16;
+        wheel({ deltaY: -6, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      }
+      // 122 px of travel at 9.53 px a step — not the one step per frame the tick path would give,
+      // which is the runaway this whole branch exists to avoid.
+      expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(12);
+
+      // What carries the gesture is the frames still coming, not a mode the first one switched on:
+      // once they stop, the very same event is a mouse notch again.
+      now += 500;
+      wheel({ deltaY: -6, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(13);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('takes a brisk frame with no pinch running before it as a wheel notch', () => {
+    const { bound } = install('wv-pinch-cold', TWO_AREAS);
+    // 6 px is outside the window one frame is judged by on its own, and no gesture is underway to
+    // carry it, so this is a notch rather than the opening frame of a pinch.
+    wheel({ deltaY: -6, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-cold', 1, 'main']]);
+  });
+
   it('takes the very same events as wheel notches while a modifier key is physically held', () => {
     const { bound } = install('wv-pinch-key', TWO_AREAS);
     modifierKey('keydown', 'Control');

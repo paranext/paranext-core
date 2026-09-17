@@ -367,25 +367,40 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // A trackpad pinch never reaches a document as a gesture of its own: Chromium's touchpad pinch
     // event queue (\`touchpad_pinch_event_queue.cc\`) synthesizes one as ctrl+wheel with
     // \`deltaMode\` 0, no horizontal component, a tick of exactly ±1 and
-    // \`deltaY = -100·ln(scale)\` - a couple of pixels per frame at the refresh rate. Counted as
-    // ticks that would be a full zoom step per frame, so a pinch is recognised BEFORE the tick path
-    // and measured as travel through the zoom scale instead, the way pdf.js separates the two
-    // (\`isPinchToZoom\` in its \`web/app.js\`). Nothing in the event marks it as synthetic; the one
-    // thing that distinguishes it is that the modifier the chord requires is set while no modifier
-    // key is physically down. Misreading it either way only changes a gesture's speed: a pinch
-    // taken for notches zooms a step per frame, and notches taken for a pinch need two or three of
-    // them per step. Neither silences the input.
+    // \`deltaY = -100·ln(scale)\`. Counted as ticks that would be a full zoom step per frame, so a
+    // pinch is recognised BEFORE the tick path and measured as travel through the zoom scale
+    // instead, the way pdf.js separates the two (\`isPinchToZoom\` in its \`web/app.js\`).
+    //
+    // Nothing in the event marks it as synthetic, and no single frame is decisive either, because
+    // two different things are being told apart at once. A frame is read as a pinch when it is
+    // SMALL enough to be a fraction of a scale change rather than a whole notch - which is what
+    // opens a gesture - or when the gesture it belongs to is still RUNNING. The second half is not
+    // a refinement: \`deltaY\` is unclamped, so a pinch that doubles in a fifth of a second carries
+    // about 6 px a frame, well past any size window narrow enough to keep a macOS mouse notch
+    // (≈4 px) out of it. Judged frame by frame, the brisk middle of every pinch would fall to the
+    // tick path at a full step each, so the faster the gesture the coarser it would respond.
+    //
+    // Misreading a gesture changes its speed, never silences it: notches read as a pinch need two
+    // or three of them per step, pinch frames read as notches zoom a step per frame, and both
+    // paths stay inside the range cap.
     const PINCH_SCALE_PIXELS = 100;
-    // How far \`exp(-deltaY / 100)\` may sit from 1 and still be one frame of a pinch rather than a
-    // wheel notch. A notch clears it on every platform but macOS, where the physical-key test is
+    // How far \`exp(-deltaY / 100)\` may sit from 1 and still OPEN a pinch rather than be a wheel
+    // notch. A notch clears it on every platform but macOS, where the physical-modifier test is
     // what tells the two apart.
     const PINCH_MAX_SCALE_DEVIATION = 0.05;
+    // How long a pinch's classification survives its last frame. A pinch is a stream at the
+    // display's refresh rate, so anything arriving within this window is the same gesture; a
+    // deliberate second mouse notch never lands inside it.
+    const PINCH_LATCH_MS = 100;
     // The travel one zoom step is worth: a step is 10 % of scale, and scale is exponential in the
     // travel, so it is a constant ln(1.1)·100 ≈ 9.53 px of pinch whatever the current level.
     const PINCH_STEP_PIXELS = Math.log(1 + ${ZOOM_STEP}) * PINCH_SCALE_PIXELS;
     let pinchTravel = 0;
     let pinchArea;
     let pinchDirection = 0;
+    // When the last frame of a pinch arrived. Starts out of reach of every clock reading, so the
+    // first frame of a pane's life is judged on its size alone.
+    let pinchLatchTime = -Infinity;
 
     // A modifier key held while the window loses focus or visibility has its keyup delivered to
     // somebody else, so the set is cleared there as well - a flag left set would send every later
@@ -406,13 +421,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     window.addEventListener('blur', onModifierLost);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    const isPinchWheel = (e) =>
+    const isPinchWheel = (e, now) =>
       physicalModifiers.size === 0 &&
       e.deltaMode === 0 &&
       e.deltaX === 0 &&
-      Math.abs(Math.exp(-e.deltaY / PINCH_SCALE_PIXELS) - 1) < PINCH_MAX_SCALE_DEVIATION;
+      (Math.abs(Math.exp(-e.deltaY / PINCH_SCALE_PIXELS) - 1) < PINCH_MAX_SCALE_DEVIATION ||
+        now - pinchLatchTime < PINCH_LATCH_MS);
 
-    const stepPinch = (e, areaId) => {
+    const stepPinch = (e, areaId, now) => {
       // Travel only accumulates over one area and in one direction, so reversing a pinch does not
       // have to unwind what the other direction banked.
       const direction = e.deltaY < 0 ? -1 : 1;
@@ -420,6 +436,9 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       pinchArea = areaId;
       pinchDirection = direction;
       pinchTravel += e.deltaY;
+      // Every frame renews the gesture, whether or not it crossed a step boundary: what the next
+      // frame is asking is whether this pinch is still under way, not whether it has stepped.
+      pinchLatchTime = now;
       const steps = Math.trunc(pinchTravel / PINCH_STEP_PIXELS);
       if (steps === 0) return;
       // Only the step boundaries actually crossed are consumed; the rest of the travel stays put,
@@ -447,8 +466,9 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
         return;
       }
-      if (isPinchWheel(e)) {
-        stepPinch(e, areaId);
+      const now = performance.now();
+      if (isPinchWheel(e, now)) {
+        stepPinch(e, areaId, now);
         return;
       }
       const ticks = ticksOf(e);
