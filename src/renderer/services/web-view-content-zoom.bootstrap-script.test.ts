@@ -444,15 +444,15 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-unreported', 1, 'main');
   });
 
-  it('accepts the meta key as the modifier, takes Shift only for zoom in, and ignores Alt and plain keys', () => {
+  it('accepts the meta key as the modifier, takes Shift for every action, and ignores Alt and plain keys', () => {
     const { bound } = install('wv-3', TWO_AREAS);
     expect(key({ key: '=', metaKey: true }).defaultPrevented).toBe(true);
-    // `+` is Shift+`=` on US/UK layouts, so the zoom-in chord takes Shift.
+    // `+` is Shift+`=` on US/UK layouts, and on AZERTY and Czech layouts the top-row `0` and `-`
+    // are shifted too, so every action takes Shift or reset is out of reach on those layouts.
     expect(key({ key: '=', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(true);
     expect(key({ key: '+', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(true);
-    // Zoom out and reset keep rejecting it, so Ctrl+Shift+- and Ctrl+Shift+0 stay free.
-    expect(key({ key: '-', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
-    expect(key({ key: '0', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(key({ key: '-', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(true);
+    expect(key({ key: '0', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(true);
     expect(key({ key: '=', ctrlKey: true, altKey: true }).defaultPrevented).toBe(false);
     expect(key({ key: '-', ctrlKey: true, altKey: true }).defaultPrevented).toBe(false);
     expect(key({ key: '=' }).defaultPrevented).toBe(false);
@@ -460,8 +460,9 @@ describe('content-zoom bootstrap script', () => {
       ['wv-3', 1, 'main'],
       ['wv-3', 1, 'main'],
       ['wv-3', 1, 'main'],
+      ['wv-3', -1, 'main'],
     ]);
-    expect(bound.resetContentZoomById).not.toHaveBeenCalled();
+    expect(bound.resetContentZoomById).toHaveBeenCalledWith('wv-3', 'main');
   });
 
   it('leaves keys and wheel alone in a view without areas and reports an empty list', async () => {
