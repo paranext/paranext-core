@@ -33,7 +33,11 @@ function waitForPort(port: number, timeout: number): Promise<void> {
         reject(new Error(`Port ${port} did not become available within ${timeout}ms`));
         return;
       }
-      const socket = net.createConnection(port, '127.0.0.1');
+      // Dial by name, not the `127.0.0.1` literal. The renderer dev server binds `localhost`, which
+      // on Windows resolves to `::1` first — a literal-IPv4 dial against that bind gets
+      // `ECONNREFUSED` forever and burns this wait's whole timeout. Node dials a name across both
+      // address families, so it matches whichever one the server ended up on.
+      const socket = net.createConnection(port, 'localhost');
       socket.on('connect', () => {
         socket.destroy();
         resolve();

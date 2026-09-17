@@ -1,15 +1,20 @@
 /* Based on scripture-editors' packages/platform/src/usj-nodes.css:
-   https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
+   https://github.com/paranext/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (synced from the `standard-view` branch at commit
    d95907eed30395f0b551c7ce402b9e4fbc265bea).
    Deliberate divergences from the source, each explained at its rule below:
+   - The .psc-gutter-markers.text-spacing compensation block carries entries the synced
+     commit lacked (see the "Indent compensation" comment there); the platform-scripture-editor
+     extension's usj-nodes-scss-coverage.test.ts derives the required set from this copy's own
+     base rules and asserts it matches the shipping copy, so a re-sync that drops them fails.
    - The subdued grays for `.unknown-block`/`.unknown-inline` and the empty-verse ellipsis are
      written with literal `rgba()` / a plain `var(--muted-foreground, <hex>)` instead of the
      source's `hsl(var(--muted-foreground, 215 16% 65%) / alpha)`.
    - `.verse-selected` and the armed-verse blink bind to this repo's `--destructive` theme token
      instead of the editor library's literal reds.
    - The table-cell box border binds to `var(--foreground, #000000)` instead of the source's
-     literal black, so it stays visible against a dark app theme. */
+     literal black, so it stays visible against a dark app theme.
+   - The source's four `local()`-only Charis SIL `@font-face` rules are dropped. */
 
 /* stylelint-disable */
 
@@ -30,31 +35,36 @@
 .align_end {
   text-align: end;
 }
-@font-face {
-  font-family: 'Charis SIL';
-  src:
-    local('Charis SIL'), local('Charis SIL Bold'), local('Charis SIL Bold Italic'),
-    local('Charis SIL Italic');
-  font-weight: normal;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold');
-  font-weight: bold;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Italic');
-  font-style: italic;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold Italic');
-  font-weight: bold;
-  font-style: italic;
+/* Don't declare Scripture fonts here. A `local()`-only face errors where the font is not installed,
+   and an erroring face makes the family unusable at that weight and style instead of deferring to a
+   working declaration — which drops bold and italic Scripture text onto a system font. The app
+   declares Charis SIL in src/renderer/styles/fonts.css; neither Storybook loads that stylesheet, so
+   .storybook/scripture-fonts.css carries a copy of the same faces — copied rather than fetched, so
+   a network-restricted run keeps them. It is loaded from BOTH Storybooks' previews rather than from
+   one story's stylesheet, because the stories that reach this file arrive by several routes and
+   through both Storybooks. fonts.test.ts pins that copy against fonts.css face for face, and fails
+   if either preview stops loading it. */
+/* Fallback chain for the editor's generated project stylesheet, which emits
+   `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
+   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
+   view. The literal chain is the library's, and applies where fonts.css is not loaded. */
+.usfm {
+  --usj-font-fallback: var(
+    --scripture-font-stack,
+    'Charis SIL',
+    'Times New Roman',
+    'Liberation Serif',
+    'DejaVu Serif',
+    Georgia,
+    serif
+  );
 }
 .usfm.formatted-font {
-  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+  /* Same `serif` fallback the generated project rules carry: a `var()` whose property turns out to
+     be invalid at computed-value time takes the whole declaration with it, dropping Scripture text
+     onto the inherited UI font. */
+  font-family: var(--usj-font-fallback, serif);
   font-size: 12pt;
 }
 
@@ -2899,13 +2909,24 @@ span.read img {
 /* Indent compensation — mirrors the inline-start margin values above.
    Only active when .text-spacing is present (same condition as the source rules).
    pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
-   respectively), so no direction restriction is needed here. */
+   respectively), so no direction restriction is needed here.
+   Invariant for THIS stylesheet: every marker its text-spacing rules give a margin-left needs
+   an entry here with the same value, or the gutter glyph lands inside the text. The
+   platform-scripture-editor extension's usj-nodes-scss-coverage.test.ts derives that
+   requirement from this copy's base rules and asserts the block matches the shipping copy.
+   Table rows (tr, tr1, tr2) deliberately have no entry: a real table row is a <tr>, not a
+   .para, so the glyph rule never matches it. */
+.psc-gutter-markers.text-spacing .usfm_p2 {
+  --para-indent: 2.5vw;
+}
 .psc-gutter-markers.text-spacing .usfm_io,
 .psc-gutter-markers.text-spacing .usfm_io1,
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
 .psc-gutter-markers.text-spacing .usfm_li,
 .psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_ph,
+.psc-gutter-markers.text-spacing .usfm_ph1,
 .psc-gutter-markers.text-spacing .usfm_pi2 {
   --para-indent: 10vw;
 }
@@ -2919,14 +2940,22 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_li2,
 .psc-gutter-markers.text-spacing .usfm_lim,
 .psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_ph2,
 .psc-gutter-markers.text-spacing .usfm_pi3 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
 .psc-gutter-markers.text-spacing .usfm_qm1,
+.psc-gutter-markers.text-spacing .usfm_qm2,
+.psc-gutter-markers.text-spacing .usfm_qm3,
+.psc-gutter-markers.text-spacing .usfm_iq,
+.psc-gutter-markers.text-spacing .usfm_iq1,
+.psc-gutter-markers.text-spacing .usfm_iq2,
+.psc-gutter-markers.text-spacing .usfm_iq3,
 .psc-gutter-markers.text-spacing .usfm_io3,
 .psc-gutter-markers.text-spacing .usfm_li3,
-.psc-gutter-markers.text-spacing .usfm_lim2 {
+.psc-gutter-markers.text-spacing .usfm_lim2,
+.psc-gutter-markers.text-spacing .usfm_ph3 {
   --para-indent: 20vw;
 }
 .psc-gutter-markers.text-spacing .usfm_io4,
@@ -2939,20 +2968,25 @@ span.read img {
 }
 .psc-gutter-markers.text-spacing .usfm_ipi,
 .psc-gutter-markers.text-spacing .usfm_imi,
+.psc-gutter-markers.text-spacing .usfm_ipq,
+.psc-gutter-markers.text-spacing .usfm_imq,
+.psc-gutter-markers.text-spacing .usfm_ipr,
 .psc-gutter-markers.text-spacing .usfm_pmo,
 .psc-gutter-markers.text-spacing .usfm_pm,
 .psc-gutter-markers.text-spacing .usfm_pmc,
 .psc-gutter-markers.text-spacing .usfm_pmr,
 .psc-gutter-markers.text-spacing .usfm_pi,
 .psc-gutter-markers.text-spacing .usfm_pi1,
-.psc-gutter-markers.text-spacing .usfm_mi {
+.psc-gutter-markers.text-spacing .usfm_psi,
+.psc-gutter-markers.text-spacing .usfm_mi,
+.psc-gutter-markers.text-spacing .usfm_qd {
   --para-indent: 5vw;
 }
 
 /* --verse-text-start mirrors the text-indent values for paragraphs with a
    negative text-indent (hanging indent). These paragraphs render their first
    line to the inline-start of the element's border edge, so the active focus box
-   ::before must start at text-indent to align with the text. */
+   ::after must start at text-indent to align with the text. */
 .psc-gutter-markers.text-spacing .usfm_q,
 .psc-gutter-markers.text-spacing .usfm_q1 {
   --verse-text-start: -10vw;
@@ -2999,6 +3033,12 @@ span.read img {
   --verse-text-start: -10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_iq3 {
+  --verse-text-start: -5vw;
+}
+.psc-gutter-markers.text-spacing .usfm_ph,
+.psc-gutter-markers.text-spacing .usfm_ph1,
+.psc-gutter-markers.text-spacing .usfm_ph2,
+.psc-gutter-markers.text-spacing .usfm_ph3 {
   --verse-text-start: -5vw;
 }
 

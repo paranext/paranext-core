@@ -447,6 +447,11 @@ declare module 'papi-shared-types' {
      *
      * Note: this command is served from the dotnet process.
      *
+     * The backend runs one Send/Receive at a time and rejects a concurrent call with a
+     * `FAILED_PRECONDITION` platform error before doing any work, so callers whose calls may
+     * overlap have to batch the projects into one call or serialize them rather than firing
+     * several.
+     *
      * @param projectIds Ids of projects to send/receive
      * @param suppressNotification When `true`, the dotnet process skips its own progress toast (the
      *   caller — e.g. the open S/R dialog — shows its own progress + Cancel). Defaults to `false`.
