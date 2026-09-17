@@ -1,7 +1,10 @@
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   ButtonGroup,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
   isMacOs,
   isWindows,
   Kbd,
@@ -25,6 +28,13 @@ const UNLOCK_STRUCTURE_FOR_PROJECT_KEY =
 const PROJECT_ARIA_LABEL_KEY =
   '%webView_platformScriptureEditor_structureProtection_projectAriaLabel%';
 const ERROR_LOADING_KEY = '%webView_platformScriptureEditor_structureProtection_errorLoading%';
+const STATE_EDITABLE_KEY = '%webView_platformScriptureEditor_structureProtection_stateEditable%';
+const STATE_PROTECTED_KEY = '%webView_platformScriptureEditor_structureProtection_stateProtected%';
+const TEAM_STATE_UNLOCKED_KEY =
+  '%webView_platformScriptureEditor_structureProtection_teamStateUnlocked%';
+const TEAM_STATE_LOCKED_KEY =
+  '%webView_platformScriptureEditor_structureProtection_teamStateLocked%';
+const AFFECTS_TEAM_KEY = '%webView_platformScriptureEditor_structureProtection_affectsTeam%';
 
 /**
  * Localization keys used by {@link StructureProtectionButton}. Spread these into the editor
@@ -39,6 +49,11 @@ export const STRUCTURE_PROTECTION_BUTTON_STRING_KEYS = Object.freeze([
   ARIA_LABEL_KEY,
   PROJECT_ARIA_LABEL_KEY,
   ERROR_LOADING_KEY,
+  STATE_EDITABLE_KEY,
+  STATE_PROTECTED_KEY,
+  TEAM_STATE_UNLOCKED_KEY,
+  TEAM_STATE_LOCKED_KEY,
+  AFFECTS_TEAM_KEY,
 ] as const);
 
 export type StructureProtectionStringKey = (typeof STRUCTURE_PROTECTION_BUTTON_STRING_KEYS)[number];
@@ -71,10 +86,10 @@ export type LockToggleButtonViewProps = {
   lockedIcon: ReactNode;
   /** Icon shown while unlocked. */
   unlockedIcon: ReactNode;
-  /** Tooltip shown while unlocked — names the lock action a click performs. */
-  lockTooltipKey: StructureProtectionStringKey;
-  /** Tooltip shown while locked — names the unlock action a click performs. */
-  unlockTooltipKey: StructureProtectionStringKey;
+  /** Tooltip shown while unlocked — reports that state, rather than naming a click's action. */
+  unlockedTooltipKey: StructureProtectionStringKey;
+  /** Tooltip shown while locked — reports that state, rather than naming a click's action. */
+  lockedTooltipKey: StructureProtectionStringKey;
   /** Tooltip shown while disabled. Falls back to the lock/unlock tooltip if omitted. */
   disabledTooltipKey?: StructureProtectionStringKey;
   /** Localization key for the button's aria-label. */
@@ -85,6 +100,8 @@ export type LockToggleButtonViewProps = {
   localizedStrings?: StructureProtectionButtonLocalizedStrings;
   /** CSS class name for the button. */
   className?: string;
+  /** Forwarded to the underlying button, so a popover can anchor to it. */
+  ref?: Ref<HTMLButtonElement>;
 };
 
 /**
@@ -101,13 +118,14 @@ export function LockToggleButtonView({
   onToggle,
   lockedIcon,
   unlockedIcon,
-  lockTooltipKey,
-  unlockTooltipKey,
+  unlockedTooltipKey,
+  lockedTooltipKey,
   disabledTooltipKey,
   ariaLabelKey,
   shortcut,
   localizedStrings = {},
   className,
+  ref,
 }: LockToggleButtonViewProps) {
   // The visible state. Drives both the tooltip text and the auto-open trigger, so the two can never
   // disagree. 'disabled' takes precedence because the disabled button shows its own tooltip text
@@ -154,7 +172,7 @@ export function LockToggleButtonView({
 
   let tooltipKey: StructureProtectionStringKey;
   if (isDisabled && disabledTooltipKey) tooltipKey = disabledTooltipKey;
-  else tooltipKey = isLocked ? unlockTooltipKey : lockTooltipKey;
+  else tooltipKey = isLocked ? lockedTooltipKey : unlockedTooltipKey;
 
   // Unlocked + enabled is the "danger" state (structure is editable) — warn with the destructive
   // variant. Locked and disabled states stay ghost.
@@ -165,6 +183,7 @@ export function LockToggleButtonView({
       <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
         <TooltipTrigger asChild>
           <Button
+            ref={ref}
             aria-label={localize(localizedStrings, ariaLabelKey)}
             className={className}
             size="icon"
@@ -237,8 +256,15 @@ export function StructureProtectionButton({
     setUserProtection(!isStructureProtected);
   }, [personalDisabled, isStructureProtected, setUserProtection]);
 
+  const [isAdminPopoverOpen, setIsAdminPopoverOpen] = useState(false);
+
   const handleProjectToggle = useCallback(() => {
+    setIsAdminPopoverOpen((isOpen) => !isOpen);
+  }, []);
+
+  const handleApplyAdminProtection = useCallback(() => {
     setAdminProtection(!isProtectedByAdmin);
+    setIsAdminPopoverOpen(false);
   }, [isProtectedByAdmin, setAdminProtection]);
 
   // `!event.altKey` keeps the personal shortcut distinct from the admin combo below.
@@ -279,8 +305,8 @@ export function StructureProtectionButton({
         onToggle={handlePersonalToggle}
         lockedIcon={<Lock />}
         unlockedIcon={<LockOpen />}
-        lockTooltipKey={LOCK_STRUCTURE_KEY}
-        unlockTooltipKey={UNLOCK_STRUCTURE_KEY}
+        unlockedTooltipKey={STATE_EDITABLE_KEY}
+        lockedTooltipKey={STATE_PROTECTED_KEY}
         disabledTooltipKey={personalDisabledTooltipKey}
         ariaLabelKey={ARIA_LABEL_KEY}
         shortcut={personalShortcut}
@@ -288,20 +314,39 @@ export function StructureProtectionButton({
         className={className}
       />
       {canAdminToggle && (
-        <LockToggleButtonView
-          isLocked={isProtectedByAdmin}
-          isDisabled={hasAdminError}
-          onToggle={handleProjectToggle}
-          lockedIcon={<Shield />}
-          unlockedIcon={<ShieldOff />}
-          lockTooltipKey={LOCK_STRUCTURE_FOR_PROJECT_KEY}
-          unlockTooltipKey={UNLOCK_STRUCTURE_FOR_PROJECT_KEY}
-          disabledTooltipKey={ERROR_LOADING_KEY}
-          ariaLabelKey={PROJECT_ARIA_LABEL_KEY}
-          shortcut={projectShortcut}
-          localizedStrings={localizedStrings}
-          className={className}
-        />
+        <Popover open={isAdminPopoverOpen} onOpenChange={setIsAdminPopoverOpen}>
+          {/* Anchored to the button itself rather than wrapping it: ButtonGroup styles its direct
+              children, so an extra wrapper element would break the merged-border seam. */}
+          <PopoverAnchor asChild>
+            <LockToggleButtonView
+              isLocked={isProtectedByAdmin}
+              isDisabled={hasAdminError}
+              onToggle={handleProjectToggle}
+              lockedIcon={<Shield />}
+              unlockedIcon={<ShieldOff />}
+              unlockedTooltipKey={TEAM_STATE_UNLOCKED_KEY}
+              lockedTooltipKey={TEAM_STATE_LOCKED_KEY}
+              disabledTooltipKey={ERROR_LOADING_KEY}
+              ariaLabelKey={PROJECT_ARIA_LABEL_KEY}
+              shortcut={projectShortcut}
+              localizedStrings={localizedStrings}
+              className={className}
+            />
+          </PopoverAnchor>
+          <PopoverContent className="tw:flex tw:w-auto tw:flex-col tw:gap-2 tw:p-3">
+            <Button variant="outline" size="sm" onClick={handleApplyAdminProtection}>
+              {localize(
+                localizedStrings,
+                isProtectedByAdmin
+                  ? UNLOCK_STRUCTURE_FOR_PROJECT_KEY
+                  : LOCK_STRUCTURE_FOR_PROJECT_KEY,
+              )}
+            </Button>
+            <span className="tw:text-xs tw:text-muted-foreground">
+              {localize(localizedStrings, AFFECTS_TEAM_KEY)}
+            </span>
+          </PopoverContent>
+        </Popover>
       )}
     </ButtonGroup>
   );

@@ -227,6 +227,32 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.queryByRole('button', { name: 'NLT' })).not.toBeInTheDocument();
   });
 
+  it('titles the dialog as the team layout rather than as the act of sharing it', () => {
+    renderContent();
+
+    expect(screen.getByText('%shareLayoutDialog_teamLayout_title%')).toBeInTheDocument();
+    expect(screen.queryByText('%shareLayoutDialog_title%')).not.toBeInTheDocument();
+  });
+
+  // The default-tab choice names one of the rows in the resources card, so it belongs in that card.
+  // Asserted structurally rather than by position: the smallest element holding both the default-tab
+  // control and the resource rows must not also hold Model text.
+  it('groups the default-tab control with the resource rows it refers to', () => {
+    renderContent();
+
+    const defaultTabLabel = screen.getByText('%shareLayoutDialog_activeTab_label%');
+    const textCollectionLabel = screen.getByText(
+      '%shareLayoutDialog_textCollectionResources_label%',
+    );
+    const modelTextLabel = screen.getByText('%shareLayoutDialog_modelText_label%');
+
+    let card: HTMLElement | undefined = defaultTabLabel.parentElement ?? undefined;
+    while (card && !card.contains(textCollectionLabel)) card = card.parentElement ?? undefined;
+
+    expect(card).toBeDefined();
+    expect(card?.contains(modelTextLabel)).toBe(false);
+  });
+
   it('renders the Text Collection Resources section with a checkbox per scripture and commentary resource', () => {
     renderContent({ initialCommentaryResources: [IVP] });
 

@@ -8,10 +8,10 @@ import {
 } from 'platform-bible-react';
 import { useProjectDataProvider } from '@papi/frontend/react';
 import { useCallback } from 'react';
-import { Share2 } from 'lucide-react';
+import { PanelsTopLeft } from 'lucide-react';
 import papi from '@papi/frontend';
 
-const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_shareLayout_ariaLabel%';
+const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_teamLayout_ariaLabel%';
 
 /**
  * Localization keys used by {@link ShareLayoutButton}. Spread these into the editor web-view's
@@ -38,8 +38,8 @@ export type ShareLayoutButtonProps = {
 };
 
 /**
- * Toolbar button that opens the Share Layout with Team dialog for a project. Renders nothing for
- * non-admins and while the permission check is loading, since the project data provider's
+ * Toolbar button that opens the Team layout dialog for a project. Renders nothing for non-admins
+ * and while the permission check is loading, since the project data provider's
  * `canUserWriteProjectTextConnectionSettings()` (project-admin authority) says non-admins cannot
  * use this action — mirrors `StructureProtectionButton`'s admin-only project lock button, which
  * hides the same way for the same reason. This button previously lived as a "Share Layout with
@@ -84,7 +84,7 @@ export function ShareLayoutButton({
               papi.dialogs.showDialog('platform.shareLayoutDialog', { projectId, isModal: true });
             }}
           >
-            <Share2 />
+            <PanelsTopLeft />
           </Button>
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>

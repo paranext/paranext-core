@@ -284,6 +284,30 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts'],
   },
   {
+    id: 'scripture-structure-protection-personal',
+    purpose: "Toggle the reader's own USFM structure protection for the project",
+    category: 'Editing',
+    // Simple mode only — the structure-protection controls do not render in power mode. Disabled,
+    // and the shortcut inert, for a non-admin while an admin has locked the project.
+    context: 'Scripture editor web view',
+    keys: { macOS: '⇧⌘L', windows: 'Ctrl+Shift+L', linux: 'Ctrl+Shift+L' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-structure-protection-team',
+    purpose: 'Open the confirmation for locking or unlocking USFM structure for the whole team',
+    category: 'Editing',
+    // Admin-only (the control renders when the user can write project settings), Simple mode only.
+    // Opens the popover rather than applying the change, matching a click on the same button.
+    context: 'Scripture editor web view',
+    keys: { macOS: '⌥⇧⌘L', windows: 'Ctrl+Shift+Alt+L', linux: 'Ctrl+Alt+Shift+L' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
+    ],
+  },
+  {
     id: 'scripture-markers-menu',
     purpose: 'Open the inline markers menu',
     category: 'Editing',

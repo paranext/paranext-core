@@ -50,7 +50,7 @@ export type ShareLayoutResult = {
 };
 
 export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
-  '%shareLayoutDialog_title%',
+  '%shareLayoutDialog_teamLayout_title%',
   '%shareLayoutDialog_description%',
   '%shareLayoutDialog_modelText_label%',
   '%shareLayoutDialog_modelText_none%',
@@ -301,7 +301,7 @@ export function ShareLayoutDialogContent({
   return (
     <>
       <DialogHeader className="tw:p-4 tw:pb-0">
-        <DialogTitle>{localizeString(strings, '%shareLayoutDialog_title%')}</DialogTitle>
+        <DialogTitle>{localizeString(strings, '%shareLayoutDialog_teamLayout_title%')}</DialogTitle>
         <DialogDescription>
           {localizeString(strings, '%shareLayoutDialog_description%')}
         </DialogDescription>
@@ -377,43 +377,6 @@ export function ShareLayoutDialogContent({
               </PopoverContent>
             </Popover>
           </div>
-
-          <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
-            <div className="tw:flex tw:flex-col">
-              <span className="tw:font-medium">
-                {localizeString(strings, '%shareLayoutDialog_activeTab_label%')}
-              </span>
-              <span className="tw:text-xs tw:text-muted-foreground">
-                {localizeString(strings, '%shareLayoutDialog_activeTab_sublabel%')}
-              </span>
-            </div>
-            <Select
-              value={activeTab}
-              onValueChange={(value) => {
-                if (isShareLayoutActiveTab(value)) setActiveTab(value);
-              }}
-            >
-              <SelectTrigger className="tw:h-8 tw:bg-background">
-                <SelectValue
-                  placeholder={localizeString(strings, '%shareLayoutDialog_activeTab_none%')}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ScriptureResource">
-                  {localizeString(strings, '%shareLayoutDialog_activeTab_scriptureResource%')}
-                </SelectItem>
-                <SelectItem value="CommentaryResource">
-                  {localizeString(strings, '%shareLayoutDialog_activeTab_commentaryResource%')}
-                </SelectItem>
-                <SelectItem value="Comments">
-                  {localizeString(strings, '%shareLayoutDialog_activeTab_comments%')}
-                </SelectItem>
-                <SelectItem value="TextCollection">
-                  {localizeString(strings, '%shareLayoutDialog_activeTab_textCollection%')}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
         <div className="tw:shrink-0 tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
@@ -460,6 +423,46 @@ export function ShareLayoutDialogContent({
                 />
               </div>
             ))}
+          </div>
+
+          {/* The default-tab options name the rows above, so the choice lives in this card rather
+              than beside Model text — and last, since it is a choice over what has just been
+              picked. */}
+          <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-t tw:border-border tw:px-4 tw:py-3">
+            <div className="tw:flex tw:flex-col">
+              <span className="tw:font-medium">
+                {localizeString(strings, '%shareLayoutDialog_activeTab_label%')}
+              </span>
+              <span className="tw:text-xs tw:text-muted-foreground">
+                {localizeString(strings, '%shareLayoutDialog_activeTab_sublabel%')}
+              </span>
+            </div>
+            <Select
+              value={activeTab}
+              onValueChange={(value) => {
+                if (isShareLayoutActiveTab(value)) setActiveTab(value);
+              }}
+            >
+              <SelectTrigger className="tw:h-8 tw:bg-background">
+                <SelectValue
+                  placeholder={localizeString(strings, '%shareLayoutDialog_activeTab_none%')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ScriptureResource">
+                  {localizeString(strings, '%shareLayoutDialog_activeTab_scriptureResource%')}
+                </SelectItem>
+                <SelectItem value="CommentaryResource">
+                  {localizeString(strings, '%shareLayoutDialog_activeTab_commentaryResource%')}
+                </SelectItem>
+                <SelectItem value="Comments">
+                  {localizeString(strings, '%shareLayoutDialog_activeTab_comments%')}
+                </SelectItem>
+                <SelectItem value="TextCollection">
+                  {localizeString(strings, '%shareLayoutDialog_activeTab_textCollection%')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>

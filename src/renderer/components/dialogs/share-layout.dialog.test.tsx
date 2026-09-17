@@ -383,6 +383,12 @@ describe('SHARE_LAYOUT_DIALOG registration', () => {
   it('defines a Component to render', () => {
     expect(typeof SHARE_LAYOUT_DIALOG.Component).toBe('function');
   });
+
+  // The tab title and the DialogTitle inside the dialog body are separate strings that must name
+  // the dialog identically; nothing but this ties them together.
+  it('titles its tab with the team layout name', () => {
+    expect(SHARE_LAYOUT_DIALOG.defaultTitle).toBe('%shareLayoutDialog_teamLayout_title%');
+  });
 });
 
 describe('ShareLayoutDialogWrapper admin gate', () => {

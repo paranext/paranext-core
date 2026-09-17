@@ -41,10 +41,10 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 });
 
 const STRINGS = {
-  '%webView_platformScriptureEditor_shareLayout_ariaLabel%': 'Share layout with team',
+  '%webView_platformScriptureEditor_teamLayout_ariaLabel%': 'Team layout',
 };
 
-const LABEL = 'Share layout with team';
+const LABEL = 'Team layout';
 
 /** `usePromise` returns `[value, isLoading]`; `canShareLayout` is `undefined` while unresolved. */
 function setPermission(canShareLayout: boolean | undefined, isLoading: boolean) {
@@ -74,6 +74,16 @@ describe('ShareLayoutButton', () => {
     expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument();
   });
 
+  // The button names a layout, so it shows a layout glyph; generic share arrows read as "export"
+  // beside the other toolbar actions.
+  it('shows a layout icon rather than a share icon', () => {
+    setPermission(true, false);
+    render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
+    const button = screen.getByRole('button', { name: LABEL });
+    expect(button.querySelector('.lucide-panels-top-left')).toBeInTheDocument();
+    expect(button.querySelector('.lucide-share-2')).not.toBeInTheDocument();
+  });
+
   it('opens the Share Layout dialog for the project on click', () => {
     setPermission(true, false);
     render(<ShareLayoutButton projectId="p1" localizedStrings={STRINGS} />);
@@ -89,7 +99,7 @@ describe('ShareLayoutButton', () => {
     render(<ShareLayoutButton projectId="p1" />);
     expect(
       screen.getByRole('button', {
-        name: '%webView_platformScriptureEditor_shareLayout_ariaLabel%',
+        name: '%webView_platformScriptureEditor_teamLayout_ariaLabel%',
       }),
     ).toBeInTheDocument();
   });

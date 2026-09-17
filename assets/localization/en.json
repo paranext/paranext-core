@@ -522,6 +522,7 @@
   "%shareLayoutDialog_retry%": "Try again",
   "%shareLayoutDialog_scriptureResources_label%": "Project Bible texts",
   "%shareLayoutDialog_shownByDefault_label%": "Show {resourceName} by default",
+  "%shareLayoutDialog_teamLayout_title%": "Team layout",
   "%shareLayoutDialog_textCollectionResources_label%": "Text collection resources",
   "%shareLayoutDialog_title%": "Share layout with team",
   "%some_localization_key%": "This is the English text for %some_localization_key%.",

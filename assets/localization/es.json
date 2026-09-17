@@ -632,6 +632,7 @@
   "%shareLayoutDialog_retry%": "Reintentar",
   "%shareLayoutDialog_scriptureResources_label%": "Recursos bíblicos del proyecto",
   "%shareLayoutDialog_shownByDefault_label%": "Mostrar {resourceName} de forma predeterminada",
+  "%shareLayoutDialog_teamLayout_title%": "Diseño del equipo",
   "%shareLayoutDialog_textCollectionResources_label%": "Recursos de la colección de textos",
   "%shareLayoutDialog_title%": "Compartir diseño con el equipo",
   "%some_localization_key%": "Esto es el texto en español para %some_localization_key%.",

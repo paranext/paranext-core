@@ -277,7 +277,7 @@ export const SHARE_LAYOUT_DIALOG: DialogDefinition<typeof SHARE_LAYOUT_DIALOG_TY
   {
     ...DIALOG_BASE,
     tabType: SHARE_LAYOUT_DIALOG_TYPE,
-    defaultTitle: '%shareLayoutDialog_title%',
+    defaultTitle: '%shareLayoutDialog_teamLayout_title%',
     initialSize: { width: 640, height: 720 },
     Component: ShareLayoutDialogWrapper,
   },

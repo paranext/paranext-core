@@ -9,7 +9,7 @@ import {
 } from './share-layout.component';
 
 const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
-  '%shareLayoutDialog_title%': 'Share layout with team',
+  '%shareLayoutDialog_teamLayout_title%': 'Team layout',
   '%shareLayoutDialog_description%':
     "Review what you're about to share with your team before confirming.",
   '%shareLayoutDialog_modelText_label%': 'Model text',
