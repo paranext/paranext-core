@@ -402,10 +402,21 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // first frame of a pane's life is judged on its size alone.
     let pinchLatchTime = -Infinity;
 
+    // Which modifier keys are PHYSICALLY down - the thing a synthesized pinch's \`ctrlKey\` is not.
+    // Two sources feed it, because neither sees the whole picture on its own:
+    //
+    // - Key events, in capture phase so a view that stops them from propagating cannot strand a
+    //   flag. This bootstrap runs inside the web view's iframe, so these only arrive while that
+    //   iframe has focus.
+    // - Pointer events, which arrive by hit test rather than by focus, and whose own \`ctrlKey\` and
+    //   \`metaKey\` report the real physical state. Chromium synthesizes no pointer event for a
+    //   pinch - a pinch moves no cursor - so the last one seen is always from before the gesture.
+    //   Without them, Ctrl held while another pane has the focus and the wheel turned over THIS one
+    //   arrives with nothing seen, and a macOS notch is small enough to be read as a pinch.
+    //
     // A modifier key held while the window loses focus or visibility has its keyup delivered to
     // somebody else, so the set is cleared there as well - a flag left set would send every later
-    // pinch down the notch path for the rest of the pane's life. Capture phase, so a view that
-    // stops key events from propagating cannot strand it either.
+    // pinch down the notch path for the rest of the pane's life.
     const PHYSICAL_MODIFIER_KEYS = ['Control', 'Meta'];
     const physicalModifiers = new Set();
     const onModifierKeyDown = (e) => {
@@ -414,14 +425,27 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     const onModifierKeyUp = (e) => {
       if (PHYSICAL_MODIFIER_KEYS.indexOf(e.key) !== -1) physicalModifiers.delete(e.key);
     };
+    // A pointer event states both flags outright, so it REPLACES what the set holds rather than
+    // adding to it: it is as much evidence that a key is up as that one is down.
+    const onPointerModifiers = (e) => {
+      if (e.ctrlKey) physicalModifiers.add('Control');
+      else physicalModifiers.delete('Control');
+      if (e.metaKey) physicalModifiers.add('Meta');
+      else physicalModifiers.delete('Meta');
+    };
     const onModifierLost = () => physicalModifiers.clear();
     const onVisibilityChange = () => { if (document.hidden) physicalModifiers.clear(); };
     window.addEventListener('keydown', onModifierKeyDown, true);
     window.addEventListener('keyup', onModifierKeyUp, true);
+    window.addEventListener('pointerdown', onPointerModifiers, true);
+    window.addEventListener('pointermove', onPointerModifiers, true);
     window.addEventListener('blur', onModifierLost);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     const isPinchWheel = (e, now) =>
+      // Chromium's synthesized pinch is ctrl+wheel on every platform, never meta+wheel, so ⌘+wheel
+      // on a Mac is a mouse gesture however small its delta - the same test pdf.js makes.
+      e.ctrlKey &&
       physicalModifiers.size === 0 &&
       e.deltaMode === 0 &&
       e.deltaX === 0 &&
@@ -613,6 +637,8 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keydown', onModifierKeyDown, true);
       window.removeEventListener('keyup', onModifierKeyUp, true);
+      window.removeEventListener('pointerdown', onPointerModifiers, true);
+      window.removeEventListener('pointermove', onPointerModifiers, true);
       window.removeEventListener('blur', onModifierLost);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       if (wheelListening) { window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS); wheelListening = false; }

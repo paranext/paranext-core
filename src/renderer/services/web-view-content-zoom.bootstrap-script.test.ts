@@ -296,6 +296,30 @@ describe('content-zoom bootstrap script', () => {
     }
   });
 
+  it('takes a macOS notch as a notch while Ctrl is held with the focus outside this iframe', () => {
+    const { bound } = install('wv-notch-unfocused', TWO_AREAS);
+    // The bootstrap runs inside the web view's iframe, so keydown only reaches it while that iframe
+    // has focus — but a wheel is delivered by hit test, so Ctrl held while the focus sits in another
+    // pane arrives here with no key event ever seen. A pointer event carries the real physical state
+    // in its own `ctrlKey`, and Chromium synthesizes no pointer events for a pinch (a pinch moves no
+    // cursor), so the last thing the pointer saw stands in for the keydown that never came.
+    byId('verse').dispatchEvent(new MouseEvent('pointermove', { bubbles: true, ctrlKey: true }));
+    for (let i = 0; i < 10; i += 1)
+      wheel({ deltaY: -4, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(10);
+    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-unfocused', 1, 'main');
+  });
+
+  it('never takes ⌘+wheel for a pinch, since a synthesized pinch always carries Ctrl', () => {
+    const { bound } = install('wv-notch-meta', TWO_AREAS);
+    // Chromium synthesizes a pinch as ctrl+wheel on every platform, never as ⌘+wheel, so a small
+    // ⌘-modified delta on a Mac is a mouse notch whatever the iframe has seen of the keyboard.
+    for (let i = 0; i < 10; i += 1)
+      wheel({ deltaY: -4, deltaX: 0, metaKey: true, wheelDeltaY: 120 }, byId('verse'));
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(10);
+    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-meta', 1, 'main');
+  });
+
   it('takes one wheel notch as one zoom step on a Linux mouse, whose notch is 120 px', () => {
     const { bound } = install('wv-notch-linux', TWO_AREAS);
     for (let i = 0; i < 10; i += 1)
