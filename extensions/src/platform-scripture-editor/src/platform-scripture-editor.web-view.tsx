@@ -3820,8 +3820,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
-          The Scripture text zoom area: toolbar and the footnotes-pane divider live outside it, in
-          the surrounding layout, so only the text itself scales. */}
+          The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
+          in the surrounding layout; the editor and everything it renders inline (including the
+          Simple-mode character-marker bar) scale with the text. Content that portals out of it
+          (menus, pop-ups) is not inside the area. */}
       <InPortal node={editorPortalNode}>
         <PortalContents>
           <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
