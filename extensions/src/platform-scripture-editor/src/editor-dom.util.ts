@@ -542,19 +542,60 @@ export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
 }
 
 /**
+ * The selector for every element of the annotation with the given ID within the editor content.
+ * Annotation/comment ids can contain CSS metacharacters (":", ".", etc.); escaping the whole class
+ * token via CSS.escape keeps the selector valid (same approach as selectorForAnnotationIds in
+ * platform-enhanced-resources' scripture-pane.component.tsx).
+ */
+function annotationSelector(id: string): string {
+  return `.editor-container .${CSS.escape(`annotationId-${id}`)}`;
+}
+
+/**
  * Finds the (first) element of the annotation with the given ID within the editor content.
  *
  * @param id The ID of the annotation to find
  * @returns The DOM element of the annotation if found; otherwise undefined
  */
-export function getAnnotationElement(id: string): HTMLElement | undefined {
-  // annotation/comment ids can contain CSS metacharacters (":", ".", etc.); escaping the whole
-  // class token via CSS.escape keeps the selector valid (same approach as selectorForAnnotationIds
-  // in platform-enhanced-resources' scripture-pane.component.tsx).
-  const escapedAnnotationClass = CSS.escape(`annotationId-${id}`);
-  return (
-    document.querySelector<HTMLElement>(`.editor-container .${escapedAnnotationClass}`) ?? undefined
+function getAnnotationElement(id: string): HTMLElement | undefined {
+  return document.querySelector<HTMLElement>(annotationSelector(id)) ?? undefined;
+}
+
+/**
+ * The viewport rect around every rendered fragment of the annotation with the given ID. An
+ * annotation over wrapped or partly formatted text renders as several elements, each with one or
+ * more line boxes.
+ *
+ * @param id The ID of the annotation to measure
+ * @returns The union of the fragments' client rects, or undefined when nothing is rendered
+ */
+export function measureAnnotation(id: string): DOMRect | undefined {
+  const rects = Array.from(document.querySelectorAll(annotationSelector(id))).flatMap((element) =>
+    Array.from(element.getClientRects()),
   );
+  if (rects.length === 0) return undefined;
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return new DOMRect(left, top, right - left, bottom - top);
+}
+
+/**
+ * The current viewport rect of a text range, or `undefined` when the range no longer lies in
+ * rendered text (its nodes were replaced, so it collapsed to an element boundary that has no box).
+ */
+export function measureRange(range: Range): DOMRect | undefined {
+  if (range.getClientRects().length === 0) return undefined;
+  return range.getBoundingClientRect();
+}
+
+/**
+ * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
+ * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
+ */
+export function leftEdgeRect(rect: DOMRect): DOMRect {
+  return new DOMRect(rect.left, rect.top, 0, rect.height);
 }
 
 /**
