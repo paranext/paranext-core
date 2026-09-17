@@ -1071,6 +1071,56 @@ describe('web-view-content-zoom.service', () => {
     expect(settingsSet).not.toHaveBeenCalled();
   });
 
+  /**
+   * Drives a pane's memory edit all the way to give-up: three consecutive failed reads, with the
+   * warning asserted as the positive control that the give-up branch really ran.
+   */
+  async function giveUpTheMemoryWrite(reads: {
+    failNextReads: (count: number) => void;
+  }): Promise<void> {
+    reads.failNextReads(3);
+    await __flushContentZoomWritesForTesting();
+    await __flushContentZoomWritesForTesting();
+    await __flushContentZoomWritesForTesting();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('giving up'));
+  }
+
+  it("keeps a pane's level after the memory write was given up, when an unrelated key changes", async () => {
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.3 };
+    const reads = useControllableMemoryReads();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main'); // 1.4, which never reaches the setting
+    await giveUpTheMemoryWrite(reads);
+
+    // Another window stores an unrelated area's level. The emission carries this identity's whole
+    // record, including the `main` entry this window failed to overwrite.
+    memoryCallbacks.forEach((cb) =>
+      cb({ 'editor:PROJ-A:main': 1.3, 'editor:PROJ-A:footnotes': 0.9 }),
+    );
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.4');
+    expect(definitions.get('editor-1')?.state).toEqual({ [LEVELS]: { main: 1.4, footnotes: 0.9 } });
+    // Control: the unrelated area did take its update, so the level above is the given-up key being
+    // honored rather than the whole walk having been skipped.
+    expect(cssVar(iframe, '--platform-content-zoom-footnotes')).toBe('0.9');
+  });
+
+  it("follows another window's later level for a key it gave up on", async () => {
+    settings[MEMORY] = { 'editor:PROJ-A:main': 1.3 };
+    const reads = useControllableMemoryReads();
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'main'); // 1.4, which never reaches the setting
+    await giveUpTheMemoryWrite(reads);
+
+    // Anything other than the level this window failed to replace is real news from elsewhere.
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.6 }));
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.6');
+    // The entry is spent, so the value it used to suppress now reaches the pane like any other.
+    memoryCallbacks.forEach((cb) => cb({ 'editor:PROJ-A:main': 1.3 }));
+    expect(cssVar(iframe, '--platform-content-zoom-main')).toBe('1.3');
+  });
+
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
     setContentZoomAreas('editor-1', []);
     await adjustContentZoom('editor-1', 1);

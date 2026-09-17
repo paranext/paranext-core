@@ -169,6 +169,19 @@ const MEMORY_WRITE_DEBOUNCE_MS = 250;
 /** Memory edits not yet stored in the setting, keyed by memory key; `undefined` means delete. */
 const pendingMemoryWrites = new Map<string, number | undefined>();
 
+/**
+ * Memory edits this window gave up on, by key: the level the failed write carried and the stored
+ * level it was meant to replace. The pane already shows and stores the former through its own
+ * definition state, which a memory fault does not touch, so an emission carrying the latter is not
+ * news and must not push the old level back into the pane. Any OTHER value is a real change from
+ * elsewhere: it is applied and the entry spent, so a key is never ignored beyond the one value this
+ * window failed to overwrite.
+ */
+const givenUpMemoryWrites = new Map<
+  string,
+  { wanted: number | undefined; superseded: number | undefined }
+>();
+
 /** What a memory transaction did, so its caller can tell a write that failed from one that ran. */
 type MemoryTransactionOutcome = 'written' | 'unchanged' | 'failed';
 
@@ -237,6 +250,7 @@ export function __setContentZoomDepsForTesting(partial: Partial<ContentZoomDeps>
   ownLevelWriteTimers.clear();
   pendingOwnLevels.clear();
   pendingMemoryWrites.clear();
+  givenUpMemoryWrites.clear();
   memoryFlushFailures = 0;
   flushMemoryWritesDebounced.cancel();
   memoryChain = Promise.resolve();
@@ -726,6 +740,8 @@ async function flushMemoryWrites(): Promise<void> {
   if (outcome !== 'failed') {
     memoryFlushFailures = 0;
     clearStoredMemoryWrites(flushing);
+    // The setting carries these keys now, so nothing about them is owed special treatment.
+    flushing.forEach((_level, key) => givenUpMemoryWrites.delete(key));
     return;
   }
   memoryFlushFailures += 1;
@@ -736,6 +752,13 @@ async function flushMemoryWrites(): Promise<void> {
   }
   memoryFlushFailures = 0;
   clearStoredMemoryWrites(flushing);
+  // `pendingMemoryWrites` is the echo guard as well as the retry queue, so dropping these keys would
+  // leave the next emission of the level this window failed to replace looking like news and undo
+  // the user's zoom. Each key that no newer edit has re-pended is recorded instead.
+  flushing.forEach((level, key) => {
+    if (pendingMemoryWrites.has(key)) return;
+    givenUpMemoryWrites.set(key, { wanted: level, superseded: cachedMemory[key] });
+  });
   logger.warn(
     `Content zoom: giving up on ${flushing.size} memory edit(s) after ${MAX_MEMORY_FLUSH_ATTEMPTS} failed attempts.`,
   );
@@ -753,6 +776,9 @@ function writeMemory(
 ): void {
   const key = memoryKeyFor(definition, areaId);
   if (!key) return;
+  // A new edit supersedes a given-up one whichever way it goes, so the record of that older attempt
+  // has nothing left to protect.
+  givenUpMemoryWrites.delete(key);
   pendingMemoryWrites.set(key, level);
   // A rejection here only ever means a test reset canceled this write; nothing else awaits it.
   flushMemoryWritesDebounced().catch(() => {});
@@ -991,6 +1017,13 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
         // need it: the setting's echo and the write's own resolution are not ordered against each
         // other, so it can arrive while the edit is still pending.
         if (pendingMemoryWrites.has(key) && pendingMemoryWrites.get(key) !== remembered) return;
+        const givenUp = givenUpMemoryWrites.get(key);
+        if (givenUp) {
+          // The level this window failed to replace is still what the setting holds; it is not news,
+          // and applying it would undo the zoom the user chose.
+          if (remembered === givenUp.superseded) return;
+          givenUpMemoryWrites.delete(key);
+        }
         if (levels[areaId] === remembered) return;
         if (remembered === undefined) delete levels[areaId];
         else levels[areaId] = remembered;
