@@ -279,7 +279,12 @@ export function Setting({
           setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
         }
       } catch (error) {
-        setErrorMessage(`Error changing setting ${settingKey}: ${getErrorMessage(error)}`);
+        const message = `Error changing setting ${settingKey}: ${getErrorMessage(error)}`;
+        // The error message below only reaches a mounted component, so a failure landing after the
+        // settings tab is closed — a rejected write is at least a debounce plus a round trip behind
+        // the edit that caused it — would otherwise leave no trace at all.
+        logger.warn(message);
+        setErrorMessage(message);
       }
     },
     [localizedStrings, setting, settingKey, setSetting, validateSetting],
