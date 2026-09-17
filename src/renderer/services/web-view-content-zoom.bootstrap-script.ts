@@ -10,7 +10,10 @@ import {
   CONTENT_ZOOM_UNNESTED_CLAUSE,
   DEFAULT_ZOOM_FACTOR,
   getContentZoomCssVariable,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
   RESERVED_CONTENT_ZOOM_AREA_ID,
+  ZOOM_STEP,
 } from '@shared/models/content-zoom.model';
 import { MAIN_CONTENT_ZOOM_AREA } from '@shared/models/web-view.model';
 import { isValidContentZoomAreaId, isValidZoomFactor } from '@shared/utils/content-zoom.util';
@@ -305,15 +308,62 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     };
     window.addEventListener('keydown', onKeyDown);
 
+    // One mouse-wheel notch is 100 px of pixel-mode delta in Chromium, so a notch is still exactly
+    // one step; a trackpad pinch, which arrives as a burst of small deltas at refresh rate, needs
+    // the same 100 px of travel per step instead of stepping once per event.
+    const WHEEL_STEP_DELTA = 100;
+    // A gap this long ends the gesture. The modifier being released, the user starting a fresh
+    // pinch, and a pause mid-gesture all look like this, and a leftover part-step must not be
+    // carried into whatever comes next.
+    const WHEEL_GESTURE_GAP_MS = 400;
+    // The zoom range measured in steps: however large one delta is, a single event can never ask
+    // for more steps than would take an area from one end of its range to the other.
+    const WHEEL_MAX_STEPS = ${Math.ceil((MAX_ZOOM_FACTOR - MIN_ZOOM_FACTOR) / ZOOM_STEP)};
+    const wheelNow = () =>
+      window.performance && typeof window.performance.now === 'function'
+        ? window.performance.now()
+        : Date.now();
+    let wheelAccumulated = 0;
+    let wheelArea;
+    let wheelTime = 0;
+
     // Ctrl or the meta key, and neither Shift nor Alt: a shifted wheel is horizontal scroll on many
     // platforms, and Chromium and the OS give Ctrl+Alt+wheel its own meaning, so both pass through.
     const onWheel = (e) => {
       if (!hasModifier(e) || e.shiftKey) return;
       const areaId = targetFor(e.target);
       if (!areaId) return;
+      // Cancelled for every modified wheel over an area, sub-threshold ones included: the events
+      // the accumulator swallows would otherwise reach Chromium's own page zoom.
       e.preventDefault();
       if (e.deltaY === 0) return;
-      act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
+      // Line and page delta modes carry small counts of lines or pages, where a pixel threshold
+      // means nothing; such an event is one step in its direction and leaves the accumulator alone.
+      if (e.deltaMode !== 0) {
+        act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
+        return;
+      }
+      const now = wheelNow();
+      // Travel only accumulates within one gesture: over one area, in one direction, without a gap.
+      if (
+        areaId !== wheelArea ||
+        now - wheelTime > WHEEL_GESTURE_GAP_MS ||
+        (wheelAccumulated < 0) !== (e.deltaY < 0)
+      )
+        wheelAccumulated = 0;
+      wheelArea = areaId;
+      wheelTime = now;
+      wheelAccumulated += e.deltaY;
+      const steps = Math.trunc(wheelAccumulated / WHEEL_STEP_DELTA);
+      if (steps === 0) return;
+      // Only the thresholds actually crossed are consumed; keeping the remainder is what makes slow
+      // pinching step steadily rather than losing part of every gesture.
+      wheelAccumulated -= steps * WHEEL_STEP_DELTA;
+      const command = steps < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}';
+      const count = Math.min(Math.abs(steps), WHEEL_MAX_STEPS);
+      // Sequential calls compound as intended: each one writes the pane's pending level before the
+      // next reads it, so n steps of travel move the area n steps.
+      for (let step = 0; step < count; step += 1) act(command, areaId);
     };
     // A non-passive listener is what lets this cancel the gesture, but it also means the compositor
     // consults the main thread for the first event of every scrolling sequence - a cost a pane with

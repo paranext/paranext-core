@@ -237,6 +237,63 @@ describe('content-zoom bootstrap script', () => {
     ]);
   });
 
+  it('emits one zoom step per notch of pinch travel, not one per wheel event', () => {
+    const { bound } = install('wv-pinch', TWO_AREAS);
+    // A trackpad pinch arrives as a burst of small deltas at refresh rate; ten of them are one
+    // notch of travel, so they are one step rather than ten.
+    for (let i = 0; i < 10; i += 1) {
+      expect(wheel({ deltaY: -10, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+    }
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch', 1, 'main']]);
+  });
+
+  it('keeps the leftover travel of a gesture, so slow pinching still steps', () => {
+    const { bound } = install('wv-pinch-remainder', TWO_AREAS);
+    // 120 px crosses the threshold once and leaves 20 px over; the next 90 px would not reach it on
+    // their own, so a second step only arrives if that remainder was kept.
+    for (let i = 0; i < 4; i += 1) wheel({ deltaY: -30, ctrlKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 3; i += 1) wheel({ deltaY: -30, ctrlKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts a new count when the pinch reverses', () => {
+    const { bound } = install('wv-pinch-reverse', TWO_AREAS);
+    for (let i = 0; i < 5; i += 1) wheel({ deltaY: -10, ctrlKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+    // The travel already banked in the other direction must not have to be unwound first.
+    for (let i = 0; i < 10; i += 1) wheel({ deltaY: 10, ctrlKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-reverse', -1, 'main']]);
+  });
+
+  it('forgets a part-step once the gesture has gone quiet', () => {
+    const { bound } = install('wv-pinch-gap', TWO_AREAS);
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      for (let i = 0; i < 5; i += 1) wheel({ deltaY: -10, ctrlKey: true }, byId('verse'));
+      expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+      now += 500;
+      for (let i = 0; i < 5; i += 1) wheel({ deltaY: -10, ctrlKey: true }, byId('verse'));
+      expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+      // Positive control: the same travel with no gap in it does reach a step, so the silence above
+      // is the gesture having been forgotten rather than the threshold never being reachable here.
+      for (let i = 0; i < 5; i += 1) wheel({ deltaY: -10, ctrlKey: true }, byId('verse'));
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-gap', 1, 'main']]);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('takes a line-mode wheel event as one step, since a pixel threshold means nothing there', () => {
+    const { bound } = install('wv-pinch-line-mode', TWO_AREAS);
+    // `deltaMode` 1 is lines: a handful of them, never 100 of anything.
+    expect(wheel({ deltaY: -3, deltaMode: 1, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(
+      true,
+    );
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-line-mode', 1, 'main']]);
+  });
+
   it('leaves Ctrl+Shift+wheel and Ctrl+Alt+wheel untouched, matching the chords’ modifier rule', () => {
     const { bound } = install('wv-5b', TWO_AREAS);
     expect(
