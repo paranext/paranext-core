@@ -1,3 +1,4 @@
+import { CONTENT_ZOOM_CHORDS, ContentZoomChord } from '@shared/models/content-zoom.model';
 import { ContentZoomAreaId, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
@@ -20,15 +21,15 @@ export type ContentZoomChromeKeysDeps = {
 
 /**
  * Ctrl (or ⌘) is required. Alt is excluded, because Ctrl+Alt chords carry their own meanings. Shift
- * is accepted for every zoom action: on AZERTY and Czech layouts the top-row `0` and `-` are
- * shifted keys, so rejecting Shift would put reset out of reach there entirely, and Chromium's own
- * zoom accepts it the same way.
+ * is accepted for every zoom action — see {@link CONTENT_ZOOM_CHORDS} for why. This is the one chord
+ * rule still stated in each handler rather than carried by the shared table, because it is two
+ * booleans and no table entry could say it more clearly.
  */
 function isChordModifier(e: KeyboardEvent): boolean {
   return (e.ctrlKey || e.metaKey) && !e.altKey;
 }
 
-type ChordAction = 'in' | 'out' | 'reset';
+type ChordAction = ContentZoomChord['action'];
 
 /**
  * Keystrokes inside a web view's iframe belong to the in-view bootstrap. They do not bubble into
@@ -42,21 +43,20 @@ function isInsideIframe(target: EventTarget | null): boolean {
 }
 
 /**
- * Keys exactly as the in-view bootstrap script's own keydown handler recognizes them (`onKeyDown`
- * inside `getContentZoomBootstrapScript` in `web-view-content-zoom.bootstrap-script.ts`). That
- * script is serialized to a string and cannot import this module, so the two copies are
- * independently maintained — change both together. `web-view-content-zoom.chord-parity.test.ts` is
- * the guard that keeps them in sync.
+ * The action a keystroke names, read from {@link CONTENT_ZOOM_CHORDS} — the same table the in-view
+ * bootstrap script serializes into the source it injects, so both key handlers are projections of
+ * one declaration rather than two hand-maintained copies.
+ * `web-view-content-zoom.chord-parity.test.ts` checks both against a rule stated by hand, so the
+ * table is under test rather than checking itself.
  */
 function actionFor(e: KeyboardEvent): ChordAction | undefined {
-  if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd') return 'in';
-  if (e.key === '-' || e.code === 'NumpadSubtract') return 'out';
-  // The numpad 0 only means reset while NumLock is on. With NumLock off it reports itself as
-  // Insert, and Ctrl+Insert is Chromium's legacy Copy chord — losing Copy silently mid-edit is a
-  // data-entry hazard. NumpadAdd and NumpadSubtract are NumLock-independent, so only this branch
-  // needs the guard.
-  if (e.key === '0' || (e.code === 'Numpad0' && e.key === '0')) return 'reset';
-  return undefined;
+  return CONTENT_ZOOM_CHORDS.find(
+    (chord) =>
+      chord.keys.includes(e.key) ||
+      chord.codes.some(
+        (entry) => entry.code === e.code && (!entry.requiredKey || entry.requiredKey === e.key),
+      ),
+  )?.action;
 }
 
 /**
