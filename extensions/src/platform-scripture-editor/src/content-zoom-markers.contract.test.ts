@@ -4,12 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /*
- * Guards the two `ContentZoomRoot` markers in `platform-scripture-editor.web-view.tsx` — the
- * file is a 3 981-line web view that cannot be mounted in jsdom (it depends on the editor
- * iframe, PAPI services, and a reverse portal), so this is a source-reading contract test rather
- * than a render test, the same shape as `editor-character-marker-contract.test.ts`. The two
- * markers *are* the entire zoom opt-in for this view: a refactor that silently drops one leaves
- * no other signal anywhere that the text or footnote-editing popover stopped zooming.
+ * Guards the text marker and the provider around the popovers beside it in
+ * `platform-scripture-editor.web-view.tsx` — the file is a 3 981-line web view that cannot be
+ * mounted in jsdom (it depends on the editor iframe, PAPI services, and a reverse portal), so
+ * this is a source-reading contract test rather than a render test, the same shape as
+ * `editor-character-marker-contract.test.ts`. These markers *are* the entire zoom opt-in for
+ * this view: a refactor that silently drops one leaves no other signal anywhere that the text
+ * or the popovers beside it stopped zooming.
  *
  * Behaviour (that the marked areas actually zoom, together with the platform's
  * `web-view-content-zoom` service) is covered by the e2e spec
@@ -35,14 +36,17 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
     );
   });
 
-  it('wraps the footnote editor popover in a ContentZoomRoot', () => {
-    // Structure only. The popover's own class list is styling and no part of the zoom contract, so
-    // it stays out of the pattern — the sibling assertion above does the same. An optional JSX
-    // comment may sit between the popover and the marker (explaining why this `main`-area marker
-    // isn't nested under the editor's), so it's tolerated but not required.
+  it('puts the three popovers rendered beside the editor in the text area', () => {
+    // The markers menu, footnote editor and comment editor popovers sit beside the editor in the
+    // tree, outside its ContentZoomRoot, so they name the text area through the provider and zoom
+    // with the text. An optional JSX comment may precede the first popover.
     expect(source).toMatch(
-      /<PopoverContent[^>]*> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot> <FootnoteEditor/,
+      /<ContentZoomAreaProvider> (?:\{\/\*.*?\*\/\} )?(?:\{\/\*\* Inline markers menu components \*\/\} )?<Popover open={showMarkersMenu}>.*<Popover open={showFootnoteEditor}>.*<Popover open={showCommentEditor}>.*?<\/Popover> <\/ContentZoomAreaProvider>/,
     );
+  });
+
+  it('does not nest a second marker inside the footnote editor popover', () => {
+    expect(source).not.toMatch(/<PopoverContent[^>]*> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot>/);
   });
 
   it('marks both areas as `main` (neither ContentZoomRoot carries an `area` prop)', () => {
