@@ -87,9 +87,9 @@ describe('macosMenubarObject View menu', () => {
     CONTENT_ZOOM_CHORDS.forEach((chord) => {
       chord.macosMenuItems.forEach((declared) => {
         const item = getItem(declared.id);
-        expect(item, `missing View-menu item ${declared.id}`).toBeDefined();
-        expect(item?.accelerator).toBe(declared.accelerator);
-        expect(item?.label).toBe(chord.macosLabel);
+        if (!item) throw new Error(`missing View-menu item ${declared.id}`);
+        expect(item.accelerator).toBe(declared.accelerator);
+        expect(item.label).toBe(chord.macosLabel);
       });
     });
   });

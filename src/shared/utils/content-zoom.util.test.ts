@@ -27,6 +27,13 @@ describe('content-zoom.util', () => {
     expect(adjustZoomFactor(1.2, -1)).toBe(1.1);
   });
 
+  it('snaps an off-grid factor to the nearest tenth as it steps', () => {
+    // A stored 1.25 moves 15 points, not 10, because the step snaps to the grid. The command
+    // summaries say so; this pins it.
+    expect(adjustZoomFactor(1.25, 1)).toBe(1.4);
+    expect(adjustZoomFactor(1.25, -1)).toBe(1.2);
+  });
+
   it('clamps to the shared range', () => {
     expect(clampZoom(0.2)).toBe(0.5);
     expect(clampZoom(9)).toBe(3);
