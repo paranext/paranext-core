@@ -50,6 +50,7 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
+  ContentZoomAreaProvider,
   ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
@@ -3949,51 +3950,50 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           </div>,
         )}
       </div>
-      {/** Inline markers menu components */}
-      <Popover open={showMarkersMenu}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: markersMenuAnchorY,
-            left: markersMenuAnchorX,
-            height: markersMenuAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent
-          className="tw:w-[500px] tw:p-0"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          <MarkerMenu
-            markerMenuItems={inlineMarkerMenuItems}
-            localizedStrings={localizedStrings}
-            searchRef={markerMenuSearchRef}
-            searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
+      {/* The popovers below are rendered beside the editor and anchored to positions in its text,
+          so they belong to the text's zoom area and scale with it. */}
+      <ContentZoomAreaProvider>
+        {/** Inline markers menu components */}
+        <Popover open={showMarkersMenu}>
+          <PopoverAnchor
+            className="tw:absolute"
+            style={{
+              top: markersMenuAnchorY,
+              left: markersMenuAnchorX,
+              height: markersMenuAnchorHeight,
+              width: 0,
+              pointerEvents: 'none',
+            }}
           />
-        </PopoverContent>
-      </Popover>
-      {/** Footnote editor components */}
-      <Popover open={showFootnoteEditor}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: notePopoverAnchorY,
-            left: notePopoverAnchorX,
-            // This height makes it so that visually the popover displays below the current line where the footnote is
-            height: notePopoverAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
-          {/* This popover is portaled to document.body, a separate subtree from the text area, so
-              this second `main`-area marker is not nested under the editor's: a note edited in
-              place follows the text's zoom level. */}
-          <ContentZoomRoot>
+          <PopoverContent
+            className="tw:w-[500px] tw:p-0"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <MarkerMenu
+              markerMenuItems={inlineMarkerMenuItems}
+              localizedStrings={localizedStrings}
+              searchRef={markerMenuSearchRef}
+              searchPlaceholder={localizedStrings['%markerMenu_searchPlaceholder_insert%']}
+            />
+          </PopoverContent>
+        </Popover>
+        {/** Footnote editor components */}
+        <Popover open={showFootnoteEditor}>
+          <PopoverAnchor
+            className="tw:absolute"
+            style={{
+              top: notePopoverAnchorY,
+              left: notePopoverAnchorX,
+              // This height makes it so that visually the popover displays below the current line where the footnote is
+              height: notePopoverAnchorHeight,
+              width: 0,
+              pointerEvents: 'none',
+            }}
+          />
+          <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
             <FootnoteEditor
               classNameForEditor="scripture-font"
               noteOps={editingNoteOps.current}
@@ -4007,31 +4007,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               parentEditorRef={editorRef}
               markerPalette={footnoteMarkerPalette}
             />
-          </ContentZoomRoot>
-        </PopoverContent>
-      </Popover>
-      {/** Comment editor for creating new comment threads */}
-      <Popover open={showCommentEditor}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: commentPopoverAnchorY,
-            left: commentPopoverAnchorX,
-            height: commentPopoverAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent className="tw:w-[400px] tw:p-[10px]">
-          <CommentEditor
-            assignableUsers={commentEditorAssignableUsers}
-            onSave={onCommentEditorSave}
-            onClose={onCommentEditorCancel}
-            localizedStrings={localizedStrings}
-            initialAssignedUser={lastAssignedUser}
+          </PopoverContent>
+        </Popover>
+        {/** Comment editor for creating new comment threads */}
+        <Popover open={showCommentEditor}>
+          <PopoverAnchor
+            className="tw:absolute"
+            style={{
+              top: commentPopoverAnchorY,
+              left: commentPopoverAnchorX,
+              height: commentPopoverAnchorHeight,
+              width: 0,
+              pointerEvents: 'none',
+            }}
           />
-        </PopoverContent>
-      </Popover>
+          <PopoverContent className="tw:w-[400px] tw:p-[10px]">
+            <CommentEditor
+              assignableUsers={commentEditorAssignableUsers}
+              onSave={onCommentEditorSave}
+              onClose={onCommentEditorCancel}
+              localizedStrings={localizedStrings}
+              initialAssignedUser={lastAssignedUser}
+            />
+          </PopoverContent>
+        </Popover>
+      </ContentZoomAreaProvider>
     </div>
   );
 };
