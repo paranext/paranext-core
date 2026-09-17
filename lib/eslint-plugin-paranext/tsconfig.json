@@ -9,5 +9,5 @@
     "typeRoots": ["./node_modules/@types", "../../node_modules/@types"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+  "exclude": ["node_modules", "dist", "src/fixtures", "src/**/*.test.ts"]
 }

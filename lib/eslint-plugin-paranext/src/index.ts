@@ -26,6 +26,7 @@
  * - Paranext/no-hardcoded-jsx-strings: Detect hardcoded strings in JSX
  * - Paranext/require-localized-strings-array: Require LOCALIZED_STRINGS in web-views
  * - Paranext/no-hardcoded-string-comparison: Disallow comparisons against hardcoded strings
+ * - Paranext/no-nullish-localized-fallback: Disallow dead nullish fallbacks on localized lookups
  *
  * Code quality:
  *
@@ -47,6 +48,7 @@ import noHardcodedJsxStrings from './rules/no-hardcoded-jsx-strings';
 import requireLocalizedStringsArray from './rules/require-localized-strings-array';
 import requireProvenanceComment from './rules/require-provenance-comment';
 import noHardcodedStringComparison from './rules/no-hardcoded-string-comparison';
+import noNullishLocalizedFallback from './rules/no-nullish-localized-fallback';
 import registrationCleanup from './rules/registration-cleanup';
 import requireDisableComment from './rules/require-disable-comment';
 
@@ -69,6 +71,7 @@ const plugin = {
     'require-localized-strings-array': requireLocalizedStringsArray,
     'require-provenance-comment': requireProvenanceComment,
     'no-hardcoded-string-comparison': noHardcodedStringComparison,
+    'no-nullish-localized-fallback': noNullishLocalizedFallback,
     'registration-cleanup': registrationCleanup,
     'require-disable-comment': requireDisableComment,
   },
@@ -89,6 +92,7 @@ const plugin = {
         'paranext/require-localized-strings-array': 'warn',
         'paranext/require-provenance-comment': 'warn',
         'paranext/no-hardcoded-string-comparison': 'error',
+        'paranext/no-nullish-localized-fallback': 'warn',
         'paranext/registration-cleanup': 'warn',
         'paranext/require-disable-comment': 'error',
       },
@@ -109,6 +113,7 @@ const plugin = {
         'paranext/require-localized-strings-array': 'error',
         'paranext/require-provenance-comment': 'error',
         'paranext/no-hardcoded-string-comparison': 'error',
+        'paranext/no-nullish-localized-fallback': 'error',
         'paranext/registration-cleanup': 'error',
         'paranext/require-disable-comment': 'error',
       },
