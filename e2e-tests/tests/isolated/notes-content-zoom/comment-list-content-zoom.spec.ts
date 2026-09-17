@@ -25,6 +25,7 @@ import {
   INDICATOR_SELECTOR,
   readContentZoomMemory,
   readIndicatorText,
+  waitForPopupAnimations,
   zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
@@ -261,6 +262,7 @@ test.describe('comment list content zoom', () => {
         await menuTrigger.click();
         const menu = listFrame.locator('[data-slot="dropdown-menu-content"]');
         await expect(menu).toBeVisible();
+        await waitForPopupAnimations(menu);
         const item = menu.locator('[data-slot="dropdown-menu-item"]').first();
         const box = await item.boundingBox();
         if (!box) throw new Error('Menu item has no box');
@@ -275,6 +277,7 @@ test.describe('comment list content zoom', () => {
         await assignTrigger.click();
         await expect(assign).toBeVisible();
         await expect(assign).toHaveAttribute('data-platform-content-zoom-root', '');
+        // Also waits for the popover's open animation, so the entry below is read at its settled size.
         await expectPopupBesideTriggerAndInsideFrame(listFrame, assign, assignTrigger);
         const box = await assign.locator('[data-slot="command-item"]').first().boundingBox();
         if (!box) throw new Error('Assign entry has no box');

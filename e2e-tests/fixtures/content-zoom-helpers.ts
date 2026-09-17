@@ -103,6 +103,24 @@ export async function zoomAreaTo(
   /* eslint-enable no-await-in-loop */
 }
 
+/**
+ * Waits until the finite animations on `popup` and its descendants have finished. A pop-up that has
+ * just opened runs a short scale-in animation, and `boundingBox()` includes that transform, so a
+ * box read before it ends is smaller than the settled one. Infinite animations (a spinner inside
+ * the pop-up) never finish and are not waited for.
+ */
+export async function waitForPopupAnimations(popup: Locator): Promise<void> {
+  await popup.evaluate(async (element) => {
+    await Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        // A cancelled animation rejects `finished`; it no longer transforms the box either.
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
+  });
+}
+
 /** Largest gap, in pixels, between a pop-up and its trigger that still counts as "beside" it. */
 const POPUP_TRIGGER_MAX_GAP_PX = 24;
 
@@ -114,13 +132,15 @@ export type PageBox = { x: number; y: number; width: number; height: number };
  * {@link POPUP_TRIGGER_MAX_GAP_PX} on one axis and overlapping on the other, without covering the
  * trigger), lies fully inside the web view's frame, and holds its content without overflowing.
  * `trigger` is an element, or a main-frame-relative box for a trigger that is no element of its own
- * (a text caret or selection).
+ * (a text caret or selection). Waits for the pop-up's open animation first, so the boxes compared
+ * are its settled ones.
  */
 export async function expectPopupBesideTriggerAndInsideFrame(
   frame: Frame,
   popup: Locator,
   trigger: Locator | PageBox,
 ): Promise<void> {
+  await waitForPopupAnimations(popup);
   const frameElement = await frame.frameElement();
   const frameBox = await frameElement.boundingBox();
   const popupBox = await popup.boundingBox();
