@@ -282,6 +282,28 @@ describe('ZoomStepper', () => {
     }
   });
 
+  it('still steps from an unconfirmed press while the window is open', () => {
+    // The other side of the window above, and the side that matters in use: it has to outlast the
+    // debounce the write waits behind plus the round trip that confirms it, or the second press of
+    // an ordinary burst re-derives from a prop that has not caught up and repeats the first.
+    vi.useFakeTimers();
+    try {
+      const onChange = vi.fn();
+      const { rerender } = render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+      fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+      expect(onChange).toHaveBeenCalledWith(1.1);
+      act(() => {
+        vi.advanceTimersByTime(1400);
+      });
+      rerender(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+      fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+      expect(onChange).toHaveBeenLastCalledWith(1.2);
+      expect(screen.getByText('120 %')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a confirmation of an earlier press does not discard a later one', () => {
     // Press 1's write landing while press 2 is still outstanding is the ordinary shape of a burst.
     const onChange = vi.fn();
