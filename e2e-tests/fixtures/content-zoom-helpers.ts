@@ -6,7 +6,8 @@
  * drives, the memory-setting reader every one of them polls, and the indicator/zoom-area selectors
  * every one of them reads.
  */
-import { type Frame, type Page } from '@playwright/test';
+import { type Frame, type Locator, type Page, expect } from '@playwright/test';
+import { CONTENT_ZOOM_COMMANDS, readFactor, sendCommandWithId } from './scripture-editor-helpers';
 
 /**
  * Setting key the memory-key-shape assertions read directly
@@ -65,4 +66,77 @@ export async function areaBox(
   const box = await frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).boundingBox();
   if (!box) throw new Error(`Zoom area "${areaId}" has no bounding box`);
   return box;
+}
+
+/**
+ * Steps one area to `target` through the zoom commands, polling the area's factor after each step
+ * (a step lands after a debounced write, so a bare loop would race it). `areaId` is `'main'` or a
+ * named area; `readFactor` takes `''` for `main`.
+ */
+export async function zoomAreaTo(
+  page: Page,
+  frame: Frame,
+  webViewId: string,
+  areaId: string,
+  target: number,
+): Promise<void> {
+  const factorKey = areaId === 'main' ? '' : areaId;
+  await sendCommandWithId(page, CONTENT_ZOOM_COMMANDS.reset, webViewId, areaId);
+  await expect.poll(() => readFactor(frame, factorKey)).toBe(1);
+  let current = 1;
+  // Sequential zoom steps: each step's write must land (confirmed by the poll) before the next
+  // command is sent, or the loop would race a debounced write.
+  /* eslint-disable no-await-in-loop */
+  while (Math.abs(current - target) > 0.001) {
+    const stepIn = target > current;
+    // Each command changes the level by exactly one 10 % step; see `adjustZoomFactor`.
+    await sendCommandWithId(
+      page,
+      stepIn ? CONTENT_ZOOM_COMMANDS.in : CONTENT_ZOOM_COMMANDS.out,
+      webViewId,
+      areaId,
+    );
+    current = Math.round((current + (stepIn ? 0.1 : -0.1)) * 10) / 10;
+    const expected = current;
+    await expect.poll(() => readFactor(frame, factorKey)).toBe(expected);
+  }
+  /* eslint-enable no-await-in-loop */
+}
+
+/** Largest gap, in pixels, between a pop-up and its trigger that still counts as "beside" it. */
+const POPUP_TRIGGER_MAX_GAP_PX = 24;
+
+/**
+ * Asserts an open pop-up sits beside its trigger (touching or within
+ * {@link POPUP_TRIGGER_MAX_GAP_PX} on one axis and overlapping on the other) and lies fully inside
+ * the web view's frame.
+ */
+export async function expectPopupBesideTriggerAndInsideFrame(
+  frame: Frame,
+  popup: Locator,
+  trigger: Locator,
+): Promise<void> {
+  const frameElement = await frame.frameElement();
+  const frameBox = await frameElement.boundingBox();
+  const popupBox = await popup.boundingBox();
+  const triggerBox = await trigger.boundingBox();
+  if (!frameBox || !popupBox || !triggerBox) throw new Error('Pop-up, trigger or frame has no box');
+  const gapY = Math.max(
+    popupBox.y - (triggerBox.y + triggerBox.height),
+    triggerBox.y - (popupBox.y + popupBox.height),
+  );
+  const gapX = Math.max(
+    popupBox.x - (triggerBox.x + triggerBox.width),
+    triggerBox.x - (popupBox.x + popupBox.width),
+  );
+  // Beside = separated on at most one axis, by a small gap.
+  expect(Math.min(Math.max(gapY, 0), Math.max(gapX, 0))).toBe(0);
+  expect(Math.max(gapX, gapY)).toBeLessThanOrEqual(POPUP_TRIGGER_MAX_GAP_PX);
+  const tolerance = 1;
+  expect(popupBox.x).toBeGreaterThanOrEqual(frameBox.x - tolerance);
+  expect(popupBox.y).toBeGreaterThanOrEqual(frameBox.y - tolerance);
+  expect(popupBox.x + popupBox.width).toBeLessThanOrEqual(frameBox.x + frameBox.width + tolerance);
+  expect(popupBox.y + popupBox.height).toBeLessThanOrEqual(
+    frameBox.y + frameBox.height + tolerance,
+  );
 }

@@ -21,9 +21,11 @@ import {
 } from '../../../fixtures/comment-test-helpers';
 import {
   ctrlWheel,
+  expectPopupBesideTriggerAndInsideFrame,
   INDICATOR_SELECTOR,
   readContentZoomMemory,
   readIndicatorText,
+  zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../../fixtures/helpers';
 import {
@@ -246,6 +248,61 @@ test.describe('comment list content zoom', () => {
         })
         .toBe('main');
       await expect.poll(() => readIndicatorText(listFrame), { timeout: 2_000 }).toBe('110%');
+    });
+
+    await test.step('the card menu and the assign popover follow the list zoom and stay beside their buttons', async () => {
+      const card = cardLocator(listFrame, threadIds[0]);
+      await card.click();
+      const menuTrigger = card.locator('button[aria-haspopup="menu"]').first();
+      const assignTrigger = card.locator('button[aria-haspopup="dialog"]').first();
+      await expect(menuTrigger).toBeVisible();
+
+      const measureMenuItem = async () => {
+        await menuTrigger.click();
+        const menu = listFrame.locator('[data-slot="dropdown-menu-content"]');
+        await expect(menu).toBeVisible();
+        const item = menu.locator('[data-slot="dropdown-menu-item"]').first();
+        const box = await item.boundingBox();
+        if (!box) throw new Error('Menu item has no box');
+        return { menu, height: box.height };
+      };
+
+      await zoomAreaTo(mainPage, listFrame, listId, 'main', 1);
+      const atDefault = await measureMenuItem();
+      await mainPage.keyboard.press('Escape');
+
+      const factors = [1.5, 2];
+      // Sequential zoom steps: each factor's zoom, measurement and pop-up assertion must complete
+      // before the next factor is applied.
+      /* eslint-disable no-await-in-loop */
+      for (let i = 0; i < factors.length; i += 1) {
+        const factor = factors[i];
+        await zoomAreaTo(mainPage, listFrame, listId, 'main', factor);
+        const zoomed = await measureMenuItem();
+        expect(zoomed.height / atDefault.height).toBeCloseTo(factor, 1);
+        await expectPopupBesideTriggerAndInsideFrame(listFrame, zoomed.menu, menuTrigger);
+        await mainPage.keyboard.press('Escape');
+      }
+      /* eslint-enable no-await-in-loop */
+
+      // Assign popover: only when the thread offers assignment to this user.
+      if (await assignTrigger.isEnabled()) {
+        await assignTrigger.click();
+        const assign = listFrame.locator('[data-slot="popover-content"]');
+        await expect(assign).toBeVisible();
+        await expect(assign).toHaveAttribute('data-platform-content-zoom-root', '');
+        await expectPopupBesideTriggerAndInsideFrame(listFrame, assign, assignTrigger);
+        await mainPage.keyboard.press('Escape');
+      } else {
+        // Recorded so a fixture change that removes assignable users is visible in the report.
+        test.info().annotations.push({
+          type: 'skipped-substep',
+          description: 'assign popover: no assignable users in the fixture project',
+        });
+      }
+
+      // Leave the level where the following steps expect it (1.1, set by the wheel step above).
+      await zoomAreaTo(mainPage, listFrame, listId, 'main', 1.1);
     });
 
     await test.step('memory key shape — keyed by project identity under the notes namespace', async () => {
