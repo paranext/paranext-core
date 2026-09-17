@@ -528,8 +528,10 @@ export function pushContentZoom(
 ): void {
   const iframe = deps.getIframe(webViewId);
   if (!iframe) return;
-  // Only a non-URL pane bakes the real default into its head, and that bake awaits the same read
-  // that fills `cachedDefault`, so this fallback can never outrank a baked value.
+  // Only a non-URL pane that runs scripts bakes the real default into its head, and that bake
+  // awaits the same read that fills `cachedDefault`, so this fallback can never outrank a baked
+  // value. A pane that bakes none — a URL pane, or one opened with `allowScripts: false` — has no
+  // baked value for this to outrank.
   const defaultZoom = cachedDefault ?? DEFAULT_ZOOM_FACTOR;
   const root = iframe.contentDocument?.documentElement;
   root?.style.setProperty(CONTENT_ZOOM_DEFAULT_CSS_VARIABLE, String(defaultZoom));
