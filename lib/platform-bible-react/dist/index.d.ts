@@ -1404,6 +1404,15 @@ export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
 };
+/**
+ * A project as this sidebar's consumer supplies it.
+ *
+ * `projectName`/`projectFullName` are the same pair `platform-bible-utils` calls
+ * `ProjectNames.shortName`/`fullName`; the names differ because this type predates that helper and
+ * is exported from the stable barrel, where renaming a field is a breaking change. The two shapes
+ * meet in exactly one adapter — the `projectSelectorProjects` memo below — so the helper's rules
+ * still apply to every project this component renders.
+ */
 export type ProjectInfo = {
 	projectId: string;
 	/**

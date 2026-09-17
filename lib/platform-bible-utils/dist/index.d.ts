@@ -4695,13 +4695,23 @@ export type ProjectNames = {
  */
 export declare function hasDistinctFullName(names: ProjectNames): boolean;
 /**
+ * Joins a project's short name to its full name in {@link formatProjectName}.
+ *
+ * Exported because a consumer that renders the two names in separate elements — a toolbar label
+ * with its own separator node, say — has to draw the same character the joined string uses, or the
+ * visible label and its own tooltip disagree the moment this changes.
+ *
+ * Not localized: it joins two proper nouns rather than translatable prose, and the surrounding
+ * element's direction handles right-to-left layout.
+ */
+export declare const PROJECT_NAME_SEPARATOR = " - ";
+/**
  * Formats a project for display as `"{shortName} - {fullName}"`, or as the short name alone when
  * {@link hasDistinctFullName} is false.
  *
  * The short name leads because it is the field that identifies a project to a Paratext user, so it
- * is the half that must survive ellipsis truncation in a narrow container. The separator is not
- * localized: it joins two proper nouns rather than translatable prose, and the surrounding
- * element's direction handles right-to-left layout.
+ * is the half that must survive ellipsis truncation in a narrow container. The separator is
+ * {@link PROJECT_NAME_SEPARATOR}.
  *
  * @param names The project's short and optional full name.
  * @returns The display string.
@@ -4720,6 +4730,19 @@ export declare function formatProjectName(names: ProjectNames): string;
  * @returns Negative, zero or positive, as `Array.prototype.sort` expects.
  */
 export declare function compareProjectsByName(a: ProjectNames, b: ProjectNames): number;
+/**
+ * Narrows a raw `platform.fullName` project setting to the full name, or `undefined` when the
+ * project effectively has none.
+ *
+ * The setting is typed `string`, but a project data provider yields `null` or `undefined` for a
+ * setting that was never written, and legacy projects carry `''`. This is the single place that
+ * decides which of those counts as absent, so a reader can hand the raw value straight through
+ * rather than writing its own guard.
+ *
+ * @param fullName The raw setting value.
+ * @returns The full name, or `undefined` when it is absent, empty, or not a string.
+ */
+export declare function normalizeFullName(fullName: unknown): string | undefined;
 /**
  * Get a localized string representation of the time between two dates
  *

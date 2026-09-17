@@ -1660,3 +1660,55 @@ describe('PlatformBibleToolbar — pending project display', () => {
     expect(trigger).not.toHaveTextContent('Project failed to load');
   });
 });
+
+describe('PlatformBibleToolbar — project selector accessible name', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+    // `clearAllMocks()` above drops the module factory's implementation, so the picker data has to
+    // be re-established here (same reason the "books beyond the active project" block does it).
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+  });
+
+  it('names the current project, not just the action', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+    });
+
+    // This selector supplies `renderTriggerLabel`, so `ProjectSelector` has no trigger text to
+    // derive an accessible name from and leaves it to the consumer. Asserted on the prop rather
+    // than the DOM because the selector is stubbed here; the composed name's effect on the real
+    // button is covered in `project-selector.component.test.tsx`.
+    expect(requireCapturedProjectSelectorProps().ariaLabel).toBe(
+      'Test select a project: TP - Test Project',
+    );
+  });
+
+  it('falls back to the action alone when no project is current', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValue({
+      currentSimpleProject: undefined,
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: undefined,
+      isLoading: false,
+    });
+
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-project-selector')).toBeInTheDocument();
+    });
+
+    // Naming it "…: " with nothing after the colon would announce a selection that does not exist.
+    expect(requireCapturedProjectSelectorProps().ariaLabel).toBe('Test select a project');
+  });
+});

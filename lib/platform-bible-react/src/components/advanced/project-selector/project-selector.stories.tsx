@@ -570,7 +570,7 @@ export const CustomSectionsPower: Story = {
     };
 
     await step('The picker opens on the custom sections', async () => {
-      await userEvent.click(body.getByRole('combobox', { name: 'Projects' }));
+      await userEvent.click(body.getByRole('combobox', { name: /^Projects/ }));
       await expect(await body.findByText('Recent')).toBeInTheDocument();
       await expect(body.getByText('Your projects')).toBeInTheDocument();
     });

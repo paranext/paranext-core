@@ -20,6 +20,7 @@ import {
   formatScrRef,
   getErrorMessage,
   isPlatformError,
+  normalizeFullName,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
@@ -371,8 +372,8 @@ global.webViewComponent = function ChecklistWebView({
         ids.map(async (id): Promise<[string, string]> => {
           try {
             const pdp = await papi.projectDataProviders.get('platform.base', id);
-            const fullName = await pdp.getSetting('platform.fullName');
-            if (typeof fullName === 'string' && fullName.length > 0) return [id, fullName];
+            const fullName = normalizeFullName(await pdp.getSetting('platform.fullName'));
+            if (fullName) return [id, fullName];
             const name = await pdp.getSetting('platform.name');
             return [id, typeof name === 'string' && name.length > 0 ? name : id];
           } catch (err) {
@@ -595,7 +596,7 @@ global.webViewComponent = function ChecklistWebView({
               results.push({
                 id: metadata.id,
                 shortName,
-                fullName: fullName ?? undefined,
+                fullName: normalizeFullName(fullName),
                 language,
               });
             }

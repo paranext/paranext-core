@@ -3,7 +3,9 @@ import {
   compareProjectsByName,
   formatProjectName,
   hasDistinctFullName,
+  normalizeFullName,
   normalizeProjectId,
+  PROJECT_NAME_SEPARATOR,
 } from './project-util';
 
 describe('normalizeProjectId', () => {
@@ -80,5 +82,50 @@ describe('compareProjectsByName', () => {
       'ESVUS16',
       'WEB',
     ]);
+  });
+});
+
+describe('normalizeFullName', () => {
+  it('keeps a real full name', () => {
+    expect(normalizeFullName('World English Bible')).toBe('World English Bible');
+  });
+
+  it.each([
+    ['undefined', undefined],
+    // A project data provider really does yield `null` for a setting that was never written, so the
+    // helper has to be exercised against it; asserting only `undefined` would leave the shape this
+    // guard mainly exists for uncovered.
+    // eslint-disable-next-line no-null/no-null
+    ['null', null],
+    ['an empty string', ''],
+  ])('treats %s as absent', (_label, value) => {
+    // The three shapes a project data provider actually yields for a setting that was never
+    // written, plus the empty string legacy projects carry.
+    expect(normalizeFullName(value)).toBeUndefined();
+  });
+
+  it('treats a non-string setting value as absent rather than passing it through', () => {
+    // `platform.fullName` is typed `string`, so a number here can only arrive from bad data — but
+    // returning it would put a non-string into a `string | undefined` slot and break the caller
+    // further downstream than the guard.
+    expect(normalizeFullName(42)).toBeUndefined();
+  });
+
+  it('agrees with hasDistinctFullName about what counts as absent', () => {
+    // Both own a piece of the same rule, so a change to one that is not mirrored in the other
+    // silently reintroduces the per-consumer drift they exist to prevent.
+    expect(hasDistinctFullName({ shortName: 'WEB', fullName: normalizeFullName('') })).toBe(false);
+    expect(hasDistinctFullName({ shortName: 'WEB', fullName: '' })).toBe(false);
+  });
+});
+
+describe('PROJECT_NAME_SEPARATOR', () => {
+  it('is the separator formatProjectName actually joins with', () => {
+    // A consumer that draws the separator in its own element (the toolbar's compound label) reads
+    // this constant. If the two drift, the visible label and its tooltip disagree — and no test of
+    // either one alone would notice.
+    expect(formatProjectName({ shortName: 'WEB', fullName: 'World English Bible' })).toBe(
+      `WEB${PROJECT_NAME_SEPARATOR}World English Bible`,
+    );
   });
 });

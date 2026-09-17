@@ -227,7 +227,7 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
 
     // `combobox` is the real trigger's role, and the aria label is the one the toolbar localizes —
     // a stub selector satisfies neither.
-    const trigger = await screen.findByRole('combobox', { name: 'Test select a project' });
+    const trigger = await screen.findByRole('combobox', { name: /^Test select a project/ });
     expect(trigger).toBeInTheDocument();
     // Nothing measures the toolbar in jsdom, so the shrink step sits at its narrowest and the
     // compound label shows the short name alone.
@@ -241,7 +241,7 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
       allProjects: [PROJECTS[1]],
     });
 
-    await user.click(await screen.findByRole('combobox', { name: 'Test select a project' }));
+    await user.click(await screen.findByRole('combobox', { name: /^Test select a project/ }));
 
     // The real component accepts the toolbar's custom grouping — `availableGroupings: ['custom']`
     // with `hideFilterMenu` — and renders the toolbar's own section headings over its projects.

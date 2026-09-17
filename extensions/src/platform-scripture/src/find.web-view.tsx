@@ -35,6 +35,7 @@ import {
   normalizeProjectId,
   ScrollGroupId,
   UnsubscriberAsync,
+  normalizeFullName,
 } from 'platform-bible-utils';
 import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 import {
@@ -127,7 +128,10 @@ async function getProjectNames(
   const pdp = await papi.projectDataProviders.get('platform.base', projectId);
   const projectShortName = await pdp.getSetting('platform.name');
   const projectFullName = await pdp.getSetting('platform.fullName');
-  return { shortName: projectShortName, fullName: projectFullName };
+  // This project shape requires a `string` full name, so an absent one becomes '' rather
+  // than `undefined` — `hasDistinctFullName` treats both as absent, and coalescing here
+  // keeps a `null` setting out of a slot the type promises is a string.
+  return { shortName: projectShortName, fullName: normalizeFullName(projectFullName) ?? '' };
 }
 
 /**

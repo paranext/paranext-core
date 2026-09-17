@@ -136,7 +136,9 @@ export { default as ensureArray } from './array-util';
 export {
   normalizeProjectId,
   hasDistinctFullName,
+  normalizeFullName,
   formatProjectName,
+  PROJECT_NAME_SEPARATOR,
   compareProjectsByName,
   type ProjectNames,
 } from './project-util';

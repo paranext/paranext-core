@@ -2109,9 +2109,12 @@ step, no automation. Just a record.
   `ToolbarCompoundLabel` loses its only in-repo consumer
   but is retained, because the component is in the stable barrel and removing a documented prop is
   a breaking change. `ProjectSelectorProject.fullName` became optional so a project with no full
-  name stops mirroring its short name into that field. Tab titles are out of scope: they already
-  carry only the short name, and they compose it inside a localized template that the sweep cannot
-  see — a follow-up is needed to route them through the helper.
+  name stops mirroring its short name into that field. Tab titles deliberately do NOT call
+  `formatProjectName`: a tab strip is the most space-constrained surface in the app, so appending
+  the full name would push the short name toward the truncation leading with it is meant to avoid.
+  They show the short name alone — short-name-first in its strongest form — which
+  `getTabTitleProjectName` now pins to the `platform.name` setting, because `formatEditorTitle`'s
+  tests inject the name and so stay green whichever setting feeds them.
 
 ## adr-project-selector-custom-sections: ProjectSelector takes ordered section descriptors, not a grouping callback
 

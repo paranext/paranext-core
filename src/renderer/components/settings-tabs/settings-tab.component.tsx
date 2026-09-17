@@ -15,7 +15,12 @@ import { projectLookupService } from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
-import { formatReplacementString, Localized, LocalizeKey } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  Localized,
+  LocalizeKey,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import { ProjectOrOtherSettingsList } from './settings-components/project-or-other-settings-list.component';
@@ -45,18 +50,14 @@ async function getProjectNames(
 ): Promise<{ projectName: string; projectFullName?: string }> {
   const pdp = await projectDataProviders.get('platform.base', projectIdToGetName);
   // Fetch both names in parallel so the sidebar can render short + full name (matching
-  // manage-books / checks-side-panel behaviour). `platform.fullName` may be an empty string on
-  // legacy projects — collapse that to `undefined` so the sidebar's row renderer treats it as
-  // absent (falling back to a single-line layout).
+  // manage-books / checks-side-panel behavior). `normalizeFullName` owns what counts as an absent
+  // full name, so the sidebar's row renderer falls back to a single-line layout for a project that
+  // has none.
   const [projectName, projectFullNameRaw] = await Promise.all([
     pdp.getSetting('platform.name'),
     pdp.getSetting('platform.fullName'),
   ]);
-  const projectFullName =
-    typeof projectFullNameRaw === 'string' && projectFullNameRaw.length > 0
-      ? projectFullNameRaw
-      : undefined;
-  return { projectName, projectFullName };
+  return { projectName, projectFullName: normalizeFullName(projectFullNameRaw) };
 }
 
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
