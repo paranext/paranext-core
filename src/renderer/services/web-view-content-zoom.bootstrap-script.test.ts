@@ -55,10 +55,37 @@ function key(init: KeyboardEventInit, target: EventTarget = window): KeyboardEve
   return event;
 }
 
-function wheel(init: WheelEventInit, target: EventTarget = window): WheelEvent {
-  const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ...init });
+/**
+ * Dispatches a wheel event, optionally carrying the non-standard `wheelDeltaY` Chromium sets on
+ * every one of them (120 per mouse notch, sign opposite to `deltaY`). Jsdom implements no such
+ * property, so a test that exercises the tick path has to put it on the event itself; a test that
+ * omits it exercises the pixel fallback instead.
+ */
+function wheel(
+  init: WheelEventInit & { wheelDeltaY?: number },
+  target: EventTarget = window,
+): WheelEvent {
+  const { wheelDeltaY, ...eventInit } = init;
+  const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ...eventInit });
+  if (wheelDeltaY !== undefined)
+    Object.defineProperty(event, 'wheelDeltaY', { value: wheelDeltaY });
   target.dispatchEvent(event);
   return event;
+}
+
+/**
+ * Presses or releases a modifier key physically, which is the only thing that tells a real
+ * Ctrl/⌘+wheel from the ctrl+wheel Chromium synthesizes for a trackpad pinch.
+ */
+function modifierKey(type: 'keydown' | 'keyup', physicalKey: 'Control' | 'Meta'): void {
+  window.dispatchEvent(
+    new KeyboardEvent(type, {
+      bubbles: true,
+      key: physicalKey,
+      ctrlKey: physicalKey === 'Control',
+      metaKey: physicalKey === 'Meta',
+    }),
+  );
 }
 
 /**
@@ -237,69 +264,94 @@ describe('content-zoom bootstrap script', () => {
     ]);
   });
 
-  it('emits one zoom step per notch of pinch travel, not one per wheel event', () => {
-    const { bound } = install('wv-pinch', TWO_AREAS);
-    // A trackpad pinch arrives as a burst of small deltas at refresh rate; ten of them are one
-    // notch of travel, so they are one step rather than ten.
+  it('takes one wheel notch as one zoom step on a Windows mouse, whose notch is 100 px', () => {
+    const { bound } = install('wv-notch-windows', TWO_AREAS);
     for (let i = 0; i < 10; i += 1) {
-      expect(wheel({ deltaY: -10, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(true);
+      expect(
+        wheel({ deltaY: -100, ctrlKey: true, wheelDeltaY: 120 }, byId('verse')).defaultPrevented,
+      ).toBe(true);
     }
-    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch', 1, 'main']]);
+    expect(bound.adjustContentZoomById.mock.calls).toEqual(
+      Array.from({ length: 10 }, () => ['wv-notch-windows', 1, 'main']),
+    );
   });
 
-  it('keeps the leftover travel of a gesture, so slow pinching still steps', () => {
-    const { bound } = install('wv-pinch-remainder', TWO_AREAS);
-    // 120 px crosses the threshold once and leaves 20 px over; the next 90 px would not reach it on
-    // their own, so a second step only arrives if that remainder was kept.
-    for (let i = 0; i < 4; i += 1) wheel({ deltaY: -30, ctrlKey: true }, byId('verse'));
-    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(1);
-    for (let i = 0; i < 3; i += 1) wheel({ deltaY: -30, ctrlKey: true }, byId('verse'));
-    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(2);
-  });
-
-  it('starts a new count when the pinch reverses', () => {
-    const { bound } = install('wv-pinch-reverse', TWO_AREAS);
-    for (let i = 0; i < 5; i += 1) wheel({ deltaY: -10, ctrlKey: true }, byId('verse'));
-    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
-    // The travel already banked in the other direction must not have to be unwound first.
-    for (let i = 0; i < 10; i += 1) wheel({ deltaY: 10, ctrlKey: true }, byId('verse'));
-    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-reverse', -1, 'main']]);
-  });
-
-  it('forgets a part-step once the gesture has gone quiet', () => {
-    const { bound } = install('wv-pinch-gap', TWO_AREAS);
+  it('takes one wheel notch as one zoom step on a macOS mouse, whose notch is a few pixels, however long the pause between notches', () => {
+    const { bound } = install('wv-notch-macos', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    // A notch this small is also the size of one frame of a trackpad pinch, so it is the modifier
+    // key being physically down that tells the platform which of the two this is.
+    modifierKey('keydown', 'Control');
     try {
-      for (let i = 0; i < 5; i += 1) wheel({ deltaY: -10, ctrlKey: true }, byId('verse'));
-      expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
-      now += 500;
-      for (let i = 0; i < 5; i += 1) wheel({ deltaY: -10, ctrlKey: true }, byId('verse'));
-      expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
-      // Positive control: the same travel with no gap in it does reach a step, so the silence above
-      // is the gesture having been forgotten rather than the threshold never being reachable here.
-      for (let i = 0; i < 5; i += 1) wheel({ deltaY: -10, ctrlKey: true }, byId('verse'));
-      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-gap', 1, 'main']]);
+      for (let i = 0; i < 10; i += 1) {
+        now += 1000;
+        wheel({ deltaY: -4, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      }
+      expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(10);
+      expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-macos', 1, 'main');
     } finally {
+      modifierKey('keyup', 'Control');
       nowSpy.mockRestore();
     }
   });
 
+  it('takes one wheel notch as one zoom step on a Linux mouse, whose notch is 120 px', () => {
+    const { bound } = install('wv-notch-linux', TWO_AREAS);
+    for (let i = 0; i < 10; i += 1)
+      wheel({ deltaY: -120, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    expect(bound.adjustContentZoomById.mock.calls).toEqual(
+      Array.from({ length: 10 }, () => ['wv-notch-linux', 1, 'main']),
+    );
+  });
+
+  it('takes one wheel notch as one zoom step when the system scrolls one line at a time', () => {
+    const { bound } = install('wv-notch-one-line', TWO_AREAS);
+    // Windows multiplies its lines-per-notch setting by 33 px; at a setting of one line a notch
+    // carries a third of the pixels it usually does, and still exactly one tick.
+    for (let i = 0; i < 10; i += 1)
+      wheel({ deltaY: -33, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    expect(bound.adjustContentZoomById.mock.calls).toEqual(
+      Array.from({ length: 10 }, () => ['wv-notch-one-line', 1, 'main']),
+    );
+  });
+
+  it('falls back to the pixel delta, carrying what is left of a tick, when the engine reports no wheelDeltaY', () => {
+    const { bound } = install('wv-notch-fallback', TWO_AREAS);
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(1);
+    // Two half-ticks are one step between them, not one each and not none at all, which is only
+    // true if the fraction left over by the first is still there for the second.
+    wheel({ deltaY: -50, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -50, ctrlKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(2);
+    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-fallback', 1, 'main');
+  });
+
+  it('starts a new count when the wheel direction reverses', () => {
+    const { bound } = install('wv-notch-reverse', TWO_AREAS);
+    // Four tenths of a tick banked one way must not have to be unwound before the other way steps.
+    wheel({ deltaY: -40, ctrlKey: true, wheelDeltaY: 48 }, byId('verse'));
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+    wheel({ deltaY: 60, ctrlKey: true, wheelDeltaY: -72 }, byId('verse'));
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-reverse', -1, 'main']]);
+  });
+
   it('cannot step past the width of the zoom range on one outsized delta', () => {
-    const { bound } = install('wv-pinch-cap', TWO_AREAS);
-    // 3000 px of travel is 30 thresholds, but 0.5 → 3.0 in steps of 0.1 is only 25; the rest would
-    // be calls into the parent that can move nothing.
-    wheel({ deltaY: -3000, ctrlKey: true }, byId('verse'));
+    const { bound } = install('wv-notch-cap', TWO_AREAS);
+    // Thirty ticks in one event is more than 0.5 → 3.0 in steps of 0.1 holds; the rest would be
+    // calls into the parent that can move nothing.
+    wheel({ deltaY: -3000, ctrlKey: true, wheelDeltaY: 3600 }, byId('verse'));
     expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(25);
   });
 
-  it('takes a line-mode wheel event as one step, since a pixel threshold means nothing there', () => {
-    const { bound } = install('wv-pinch-line-mode', TWO_AREAS);
-    // `deltaMode` 1 is lines: a handful of them, never 100 of anything.
+  it('takes a line-mode wheel event as one step, since a tick count means nothing there', () => {
+    const { bound } = install('wv-notch-line-mode', TWO_AREAS);
+    // `deltaMode` 1 is lines: a handful of them, never 120 of anything.
     expect(wheel({ deltaY: -3, deltaMode: 1, ctrlKey: true }, byId('verse')).defaultPrevented).toBe(
       true,
     );
-    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-line-mode', 1, 'main']]);
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-line-mode', 1, 'main']]);
   });
 
   it('leaves Ctrl+Shift+wheel and Ctrl+Alt+wheel untouched, matching the chords’ modifier rule', () => {
