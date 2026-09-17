@@ -8,6 +8,7 @@ const LABELS = {
   reset: 'Reset default zoom',
   atMaximum: 'Already at the largest zoom (300 %)',
   atMinimum: 'Already at the smallest zoom (50 %)',
+  atDefault: 'Already at the default zoom',
 };
 
 const meta: Meta<typeof ZoomStepper> = {

@@ -31,6 +31,7 @@ const LABELS = {
   reset: 'Reset default zoom',
   atMaximum: 'Already at the largest zoom (300 %)',
   atMinimum: 'Already at the smallest zoom (50 %)',
+  atDefault: 'Already at the default zoom',
 };
 const baseProps = {
   defaultValue: 1,
@@ -161,6 +162,18 @@ describe('ZoomStepper', () => {
     render(<ZoomStepper {...baseProps} value={0.5} onChange={vi.fn()} />);
     screen.getByRole('button', { name: LABELS.decrease }).focus();
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atMinimum);
+  });
+
+  it('names the default rather than the button when reset has nothing to reset', async () => {
+    render(<ZoomStepper {...baseProps} value={1} onChange={vi.fn()} />);
+    screen.getByRole('button', { name: LABELS.reset }).focus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atDefault);
+  });
+
+  it('names the reset button while there is something to reset', async () => {
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
+    screen.getByRole('button', { name: LABELS.reset }).focus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.reset);
   });
 
   it('names the button when it is not at a bound', async () => {

@@ -145,6 +145,7 @@ const STEPPER_WRITE_DEBOUNCE_MS = 150;
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
+  '%settings_platform_webViewContentZoom_atDefault%',
   '%settings_platform_webViewContentZoom_atMaximum%',
   '%settings_platform_webViewContentZoom_atMinimum%',
   '%settings_platform_webViewContentZoom_decrease%',
@@ -266,9 +267,9 @@ export function Setting({
 
       try {
         if (validateSetting && (await validateSetting(settingKey, newValue, setting))) {
-          // A setting whose data provider has not handed back a writer cannot be changed, so the
-          // change is a failure rather than a silent no-op: without this it would clear any error
-          // on screen and every control would go on showing the value it was never able to write.
+          // A setting whose data provider has not handed back a writer cannot be changed. That is a
+          // failure, not a silent no-op: reporting it is what keeps an error on screen and stops a
+          // control announcing a value it was never able to write.
           if (!setSetting) throw new Error('no writer is available for it yet');
           // Await so a rejected write (e.g. the Send/Receive write-gate) reaches the catch below
           // and surfaces as an error message instead of vanishing as an unhandled rejection.
@@ -323,6 +324,7 @@ export function Setting({
             reset: localizedStrings['%settings_platform_webViewContentZoom_reset%'],
             atMaximum: localizedStrings['%settings_platform_webViewContentZoom_atMaximum%'],
             atMinimum: localizedStrings['%settings_platform_webViewContentZoom_atMinimum%'],
+            atDefault: localizedStrings['%settings_platform_webViewContentZoom_atDefault%'],
           }}
           onChange={debouncedHandleStepperChange}
         />
