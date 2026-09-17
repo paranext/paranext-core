@@ -442,7 +442,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     window.addEventListener('blur', onModifierLost);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    const isPinchWheel = (e, now) =>
+    const isPinchWheel = (e, areaId, now) =>
       // Chromium's synthesized pinch is ctrl+wheel on every platform, never meta+wheel, so ⌘+wheel
       // on a Mac is a mouse gesture however small its delta - the same test pdf.js makes.
       e.ctrlKey &&
@@ -450,7 +450,9 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       e.deltaMode === 0 &&
       e.deltaX === 0 &&
       (Math.abs(Math.exp(-e.deltaY / PINCH_SCALE_PIXELS) - 1) < PINCH_MAX_SCALE_DEVIATION ||
-        now - pinchLatchTime < PINCH_LATCH_MS);
+        // The running gesture belongs to the area it is running in: a gesture that lands somewhere
+        // else is a new one, and starts on its own evidence however close behind it arrives.
+        (areaId === pinchArea && now - pinchLatchTime < PINCH_LATCH_MS));
 
     const stepPinch = (e, areaId, now) => {
       // Travel only accumulates over one area and in one direction, so reversing a pinch does not
@@ -491,7 +493,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         return;
       }
       const now = performance.now();
-      if (isPinchWheel(e, now)) {
+      if (isPinchWheel(e, areaId, now)) {
         stepPinch(e, areaId, now);
         return;
       }

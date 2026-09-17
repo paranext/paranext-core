@@ -455,6 +455,28 @@ describe('content-zoom bootstrap script', () => {
     }
   });
 
+  it('does not let a pinch in one area carry a notch in another', () => {
+    const { bound } = install('wv-pinch-other-area', TWO_AREAS);
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      // A pinch running over the main area says nothing about a gesture over the footnotes area:
+      // however close behind it arrives, that one is a gesture of its own and starts on its own
+      // evidence.
+      for (let i = 0; i < 4; i += 1) {
+        now += 16;
+        wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      }
+      now += 16;
+      wheel({ deltaY: -6, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('note'));
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([
+        ['wv-pinch-other-area', 1, 'footnotes'],
+      ]);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it('takes a brisk frame with no pinch running before it as a wheel notch', () => {
     const { bound } = install('wv-pinch-cold', TWO_AREAS);
     // 6 px is outside the window one frame is judged by on its own, and no gesture is underway to
