@@ -614,6 +614,7 @@
   "%settings_platform_supporter_group_description%": "Configuraciones que una persona de soporte puede pedirle ajustar al ayudarle",
   "%settings_platform_supporter_group_label%": "Configuración de soporte",
   "%settings_platform_syncOnStartup_label%": "Sincronizar automáticamente al iniciar",
+  "%settings_platform_webViewContentZoom_atDefault%": "Ya está en el zoom predeterminado",
   "%settings_platform_webViewContentZoom_atMaximum%": "Ya está en el zoom máximo (300 %)",
   "%settings_platform_webViewContentZoom_atMinimum%": "Ya está en el zoom mínimo (50 %)",
   "%settings_platform_webViewContentZoom_decrease%": "Reducir el zoom predeterminado",
