@@ -204,7 +204,8 @@ export async function translatePlatformMenuItemsAndCombine(
   // Each entry gets its own object AND its own submenu array: the combine below pushes contributed
   // items into the app menu's and a matching column's submenu, and `macosMenubarObject` is a
   // module-level template that `fallbackToDefaultMacosMenubar` and every later rebuild read again.
-  // Writing through it once would delete the View menu's zoom items for the rest of the process.
+  // Writing through it would leave every later build carrying the items of the builds before it —
+  // one more copy of each contributed item per menu rebuild, for the life of the process.
   // Deliberately not `structuredClone` or a JSON round trip: the zoom items carry `click` closures,
   // which `structuredClone` refuses outright and a JSON round trip drops silently — leaving menu
   // items that render and do nothing.
