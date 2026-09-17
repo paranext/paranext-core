@@ -93,6 +93,13 @@ describe('content zoom settings', () => {
     });
   });
 
+  it('labels the whole-application zoom with the renamed key, leaving the shipped one for fallback', () => {
+    const [group] = Array.isArray(platformSettings) ? platformSettings : [platformSettings];
+    expect(group.properties['platform.zoomFactor']).toMatchObject({
+      label: '%settings_platform_zoomFactor_label_2%',
+    });
+  });
+
   it('validates the default zoom range with a localized message', async () => {
     const validate = coreSettingsValidators['platform.webViewContentZoom'];
     if (!validate) throw new Error('validator missing');

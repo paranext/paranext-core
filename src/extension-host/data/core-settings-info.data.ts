@@ -42,7 +42,7 @@ export const platformSettings: SettingsContribution = [
         default: 30,
       },
       'platform.zoomFactor': {
-        label: '%settings_platform_zoomFactor_label%',
+        label: '%settings_platform_zoomFactor_label_2%',
         description: '%settings_platform_zoomFactor_description%',
         default: DEFAULT_ZOOM_FACTOR,
       },

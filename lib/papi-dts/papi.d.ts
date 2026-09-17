@@ -647,9 +647,9 @@ declare module 'shared/models/web-view.model' {
    * zoom has at least this area.
    *
    * Three attribute values name it: an empty value (`data-platform-content-zoom-root=""`), the id
-   * itself (`="main"`), and `="true"` — the value React serializes a bare JSX prop
-   * (`<div data-platform-content-zoom-root />`) to. Because `"true"` names this area, an area
-   * genuinely called `true` is not available.
+   * itself (`="main"`), and `="true"` — the value React serializes a bare JSX prop (`<div
+   * data-platform-content-zoom-root />`) to. Because `"true"` names this area, an area genuinely
+   * called `true` is not available.
    *
    * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
    * writes the literal `'main'` itself and keeps it equal to this constant.
@@ -675,11 +675,11 @@ declare module 'shared/models/web-view.model' {
    * {@link MAIN_CONTENT_ZOOM_AREA} area instead: an empty value
    * (`data-platform-content-zoom-root=""`), `="main"`, and the `="true"` React serializes a bare JSX
    * prop (`<div data-platform-content-zoom-root />`) to. Write the empty value in static markup and
-   * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies `zoom:
-   * var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored — matched
-   * by neither the platform's stylesheet nor its report of the view's areas — so nesting never
-   * compounds one area's zoom into another's. Web views without this attribute ignore per-area zoom
-   * input and are scaled whole at the Settings default.
+   * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
+   * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
+   * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
+   * never compounds one area's zoom into another's. Web views without this attribute ignore per-area
+   * zoom input and are scaled whole at the Settings default.
    *
    * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
    * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
@@ -5883,10 +5883,11 @@ declare module 'papi-shared-types' {
     'platform.requestTimeout': number;
     /**
      * Default content zoom applied to every zoom area of a web view pane that has no level of its
-     * own. A factor: 1.0 = 100 %. Allowed range is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area
-     * its own level; Ctrl+`0` returns that area to this default. This factor multiplies with any
-     * font size a view sets for itself (for example a project's font size) and never replaces it;
-     * resetting a pane returns it to this default, not to that font size.
+     * own (shown in Settings as "Tab content default zoom"). A factor: 1.0 = 100 %. Allowed range
+     * is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area its own level; Ctrl+`0` returns that area to
+     * this default. This factor multiplies with any font size a view sets for itself (for example a
+     * project's font size) and never replaces it; resetting a pane returns it to this default, not
+     * to that font size.
      *
      * @experimental This setting is unstable and may change or disappear without notice
      */
@@ -5909,10 +5910,11 @@ declare module 'papi-shared-types' {
       [key: string]: number;
     };
     /**
-     * The zoom factor that applies to the entire application, including menus and toolbars. 1.0 is
-     * the default. Allowed range is 0.5 to 3.0. Written from Settings, by the `platform.zoomIn` /
-     * `platform.zoomOut` commands, and by the application's own zoom keyboard shortcuts; per-pane
-     * content zoom is `platform.webViewContentZoom`.
+     * The zoom factor that applies to the entire application, including menus and toolbars (shown
+     * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
+     * from Settings, by the `platform.zoomIn` / `platform.zoomOut` commands, and by the
+     * application's own zoom keyboard shortcuts; per-pane content zoom is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
