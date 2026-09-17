@@ -136,7 +136,9 @@ import {
   removeDecorations,
 } from './decorations.util';
 import {
-  getAnnotationElement,
+  leftEdgeRect,
+  measureAnnotation,
+  measureRange,
   runOnFirstLoad,
   scrollToAnnotation,
   scrollToVerse,
@@ -146,7 +148,7 @@ import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
-import { leftEdgeRect, measureRange, useLivePopoverAnchor } from './use-live-popover-anchor.hook';
+import { useLivePopoverAnchor } from './use-live-popover-anchor.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
@@ -285,6 +287,19 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 
 /** Annotation ID used for a pending comment that hasn't been saved yet */
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
+
+/**
+ * The footnote editor popover's minimum width: 500 px, yielding to the zoomed width cap (the pane's
+ * available width divided by the zoom factor) so a zoomed popover still fits a narrow pane. Until
+ * Radix has published the available width, the viewport width stands in for it: the footnote editor
+ * locks its own width on its first layout, which happens before that.
+ *
+ * Set inline rather than as a Tailwind arbitrary class: the web view's SCSS + PostCSS pipeline
+ * drops a rule whose value is this `min()` expression, which silently removed the minimum
+ * altogether.
+ */
+const FOOTNOTE_POPOVER_MIN_WIDTH =
+  'min(500px, calc(var(--radix-popover-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
@@ -1061,8 +1076,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             ? element
             : editorRef.current?.getElementByKey(noteKey);
           if (!target) return undefined;
-          const rect = target.getBoundingClientRect();
-          return leftEdgeRect(rect, rect.top, rect.height);
+          return leftEdgeRect(target.getBoundingClientRect());
         },
         contextElement: element.closest('.editor-input') ?? element,
       });
@@ -1496,26 +1510,44 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const domSelection = window.getSelection();
       if (domSelection && domSelection.rangeCount > 0) {
         const range = domSelection.getRangeAt(0).cloneRange();
-        // The editor re-renders the selected text to mark it as the pending comment, which
-        // detaches the range's text node. From then on the pending annotation is measured instead,
-        // keeping the caret's horizontal offset within it.
-        let lastRangeRect: DOMRect | undefined;
-        let offsetInAnnotation: number | undefined;
+        const rangeRectAtOpen = measureRange(range);
+        const { startContainer, startOffset, endContainer, endOffset } = range;
+        const isRangeIntact = () =>
+          startContainer.isConnected &&
+          range.startContainer === startContainer &&
+          range.startOffset === startOffset &&
+          range.endContainer === endContainer &&
+          range.endOffset === endOffset;
+        // The editor re-renders the selected text to mark it as the pending comment. That moves the
+        // range to the start of its text node (or detaches the node), so once the mark exists all
+        // of its fragments are measured instead of the range: the anchor spans the whole (possibly
+        // wrapped) selection, so a popover above or below it never covers part of it, and keeps
+        // the caret's horizontal position as a fraction of the mark's width, which survives a zoom
+        // change.
+        let fractionInAnnotation: number | undefined;
         commentPopoverAnchor.setSource({
           measure: () => {
-            const rangeRect = measureRange(range);
-            if (rangeRect) {
-              lastRangeRect = rangeRect;
-              // The whole line's height, so a popover flipped above the selection clears the line
-              return leftEdgeRect(rangeRect, rangeRect.top, rangeRect.height);
+            const annotationRect = measureAnnotation(PENDING_COMMENT_ANNOTATION_ID);
+            if (!annotationRect) {
+              // Between the re-render and the mark appearing, a moved range would place the
+              // popover at the start of the text node; keep the last good rect instead.
+              if (!isRangeIntact()) return undefined;
+              const rangeRect = measureRange(range);
+              return rangeRect && leftEdgeRect(rangeRect);
             }
-            const annotation = getAnnotationElement(PENDING_COMMENT_ANNOTATION_ID);
-            if (!annotation) return undefined;
-            const annotationRect =
-              annotation.getClientRects()[0] ?? annotation.getBoundingClientRect();
-            offsetInAnnotation ??= lastRangeRect ? lastRangeRect.left - annotationRect.left : 0;
+            if (fractionInAnnotation === undefined)
+              fractionInAnnotation =
+                rangeRectAtOpen && annotationRect.width > 0
+                  ? Math.min(
+                      Math.max(
+                        (rangeRectAtOpen.left - annotationRect.left) / annotationRect.width,
+                        0,
+                      ),
+                      1,
+                    )
+                  : 0;
             return new DOMRect(
-              annotationRect.left + offsetInAnnotation,
+              annotationRect.left + fractionInAnnotation * annotationRect.width,
               annotationRect.top,
               0,
               annotationRect.height,
@@ -1919,14 +1951,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           ? range.startContainer
           : range.startContainer.parentElement;
       const contextElement = rangeElement?.closest('.editor-input') ?? rangeElement;
-      if (contextElement)
-        markersMenuAnchor.setSource({
-          measure: () => {
-            const rect = measureRange(range);
-            return rect && leftEdgeRect(rect, rect.top, rect.height);
-          },
-          contextElement,
-        });
+      // A selection outside any element has nothing to anchor to; opening anyway would place the
+      // menu against a previous selection.
+      if (!contextElement) return;
+      markersMenuAnchor.setSource({
+        measure: () => {
+          const rect = measureRange(range);
+          return rect && leftEdgeRect(rect);
+        },
+        contextElement,
+      });
       setShowMarkersMenu(true);
     }
   }, [inlineMarkerMenuItems, markersMenuAnchor]);
@@ -3990,9 +4024,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         {/** Footnote editor components */}
         <Popover open={showFootnoteEditor}>
           <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
-          {/* The minimum width yields to the zoomed width cap (the pane's available width divided
-              by the zoom factor), so a zoomed popover still fits a narrow pane. */}
-          <PopoverContent className="tw:w-max tw:min-w-[min(500px,calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1)))] tw:p-[10px]">
+          <PopoverContent
+            className="tw:w-max tw:p-[10px]"
+            style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
+          >
             <FootnoteEditor
               classNameForEditor="scripture-font"
               noteOps={editingNoteOps.current}
@@ -4011,7 +4046,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         {/** Comment editor for creating new comment threads */}
         <Popover open={showCommentEditor}>
           <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />
-          <PopoverContent className="tw:w-[400px] tw:p-[10px]">
+          {/* `always`: re-measured every frame while open. Marking the selection as the pending
+              comment re-renders the text under the anchor without any scroll, resize or layout
+              shift that would otherwise trigger a re-measure. */}
+          <PopoverContent className="tw:w-[400px] tw:p-[10px]" updatePositionStrategy="always">
             <CommentEditor
               assignableUsers={commentEditorAssignableUsers}
               onSave={onCommentEditorSave}

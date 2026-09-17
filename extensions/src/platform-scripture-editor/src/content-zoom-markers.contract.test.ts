@@ -47,11 +47,15 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
 
   it('lets the footnote editor popover’s minimum width yield to the zoomed width cap', () => {
     // A plain `min-w-[500px]` zooms to 1000 px at 200 % and beats the cap's `max-width`, so the
-    // popover would overflow a narrow pane.
+    // popover would overflow a narrow pane. The `100vw` fallback keeps the minimum defined before
+    // Radix publishes the available width, on the first layout the footnote editor locks its width
+    // on. Inline, because the web view's style pipeline drops this value as a Tailwind class.
     expect(source).toContain(
-      'tw:min-w-[min(500px,calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1)))]',
+      "'min(500px, calc(var(--radix-popover-content-available-width, 100vw) / var(--platform-content-zoom-popup-factor, 1)))'",
     );
+    expect(source).toContain('style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}');
     expect(source).not.toContain('tw:min-w-[500px]');
+    expect(source).not.toContain('tw:min-w-[min(');
   });
 
   it('anchors all three popovers to live positions in the text', () => {
