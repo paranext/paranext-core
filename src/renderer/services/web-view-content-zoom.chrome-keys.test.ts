@@ -97,16 +97,15 @@ describe('registerContentZoomChromeKeys', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  it('does nothing on Ctrl+Shift+-, leaving it free for other uses', () => {
-    const event = dispatchKeyDown(document.body, { key: '-', ctrlKey: true, shiftKey: true });
-    expect(adjustContentZoom).not.toHaveBeenCalled();
-    expect(event.defaultPrevented).toBe(false);
+  it('resets on Ctrl+Shift+0, the only way to press Ctrl+0 on a French or Czech layout', () => {
+    const event = dispatchKeyDown(document.body, { key: '0', ctrlKey: true, shiftKey: true });
+    expect(resetContentZoom).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
   });
 
-  it('does nothing on Ctrl+Shift+0, leaving it free for other uses', () => {
-    const event = dispatchKeyDown(document.body, { key: '0', ctrlKey: true, shiftKey: true });
-    expect(resetContentZoom).not.toHaveBeenCalled();
-    expect(event.defaultPrevented).toBe(false);
+  it('zooms out on Ctrl+Shift+-, which those layouts need for the same reason', () => {
+    dispatchKeyDown(document.body, { key: '-', ctrlKey: true, shiftKey: true });
+    expect(adjustContentZoom).toHaveBeenCalledWith(undefined, -1);
   });
 
   it('does not act when Alt is held, since Ctrl+Alt chords have their own meanings', () => {
@@ -138,13 +137,13 @@ describe('registerContentZoomChromeKeys', () => {
 
   it('does not ask whether anything can zoom for a key it would not act on anyway', () => {
     dispatchKeyDown(document.body, { key: 'k', ctrlKey: true });
-    dispatchKeyDown(document.body, { key: '-', ctrlKey: true, shiftKey: true });
+    dispatchKeyDown(document.body, { key: 'ArrowDown', ctrlKey: true, shiftKey: true });
     expect(canContentZoomAct).not.toHaveBeenCalled();
   });
 
   it('does not ask whether a modal overlay is open for a key it would not act on anyway', () => {
     dispatchKeyDown(document.body, { key: 'c', ctrlKey: true });
-    dispatchKeyDown(document.body, { key: '-', ctrlKey: true, shiftKey: true });
+    dispatchKeyDown(document.body, { key: 'ArrowDown', ctrlKey: true, shiftKey: true });
     expect(isModalOverlayOpen).not.toHaveBeenCalled();
   });
 

@@ -57,15 +57,15 @@ const KEY_CASES: KeyCase[] = [
 ];
 
 /**
- * The chord rule stated independently of both `isChordModifier`/`isAllowedShiftState`/`actionFor`
- * (chrome-keys.ts) and the bootstrap script's own `hasModifier` + keydown handler: Ctrl or ⌘ is
- * required and Alt rejects the chord outright; Shift is accepted only when the key's own action is
- * zoom-in (`Ctrl+Shift+=` is how many keyboards type `Ctrl++`).
+ * The chord rule stated independently of both `actionFor` (chrome-keys.ts) and the bootstrap
+ * script's own `hasModifier` + keydown handler: Ctrl or ⌘ is required and Alt rejects the chord
+ * outright. Shift is accepted for every action — on AZERTY and Czech layouts the top-row `0` and
+ * `-` are shifted keys, so rejecting Shift puts reset out of reach there, and Chromium's own zoom
+ * accepts it the same way.
  */
 function expectedAction(keyCase: KeyCase, modifiers: ModifierCase): ChordAction | undefined {
   const hasChordModifier = (modifiers.ctrlKey || modifiers.metaKey) && !modifiers.altKey;
   if (!hasChordModifier) return undefined;
-  if (modifiers.shiftKey && keyCase.baseAction !== 'in') return undefined;
   return keyCase.baseAction;
 }
 
