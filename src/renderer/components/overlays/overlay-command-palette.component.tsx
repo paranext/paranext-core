@@ -415,6 +415,10 @@ export function OverlayCommandPalettePresentational({
   // typing went to the document (replacing the selection), arrows never reached cmdk, and the
   // palette's Escape handler never fired. Retry across animation frames until the focus sticks
   // (bounded, and cancelled if the palette unmounts first).
+  //
+  // The input may not exist yet on the first attempts: an anchored palette renders it inside a
+  // Radix Popover portal, which mounts its content on a render AFTER this effect has run. Those
+  // attempts retry too, or no anchored palette would ever take focus.
   useEffect(() => {
     if (passive) return () => {};
     let rafId: number | undefined;
@@ -422,9 +426,8 @@ export function OverlayCommandPalettePresentational({
     const MAX_FOCUS_ATTEMPTS = 20;
     const tryFocus = () => {
       const input = inputRef.current;
-      if (!input) return;
-      input.focus();
-      if (document.activeElement === input || attempts >= MAX_FOCUS_ATTEMPTS) return;
+      input?.focus();
+      if ((input && document.activeElement === input) || attempts >= MAX_FOCUS_ATTEMPTS) return;
       attempts += 1;
       rafId = requestAnimationFrame(tryFocus);
     };
