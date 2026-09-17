@@ -8,19 +8,19 @@
  * Deliberately import-free, like `connection-lost-store.ts` and `workspace-updating-store.ts`: the
  * overlays register themselves while they are up, so a consumer's test can drive this store
  * directly instead of mocking a component graph to reach it.
+ *
+ * Read-on-demand only, with no subscription half: the one reader (`window-input-blocked.util.ts`)
+ * answers a keystroke that has already arrived, so it asks the question at that moment rather than
+ * tracking the answer. A consumer that has to re-render when this changes would need a `subscribe`
+ * added here alongside `useSyncExternalStore`.
  */
 
 /**
- * One token per registered overlay, rather than a count: an unregister that ran twice — which React
- * does on its own in development, by mounting effects twice — would take a count below zero and
- * silently stop blocking, while deleting an absent token is simply nothing.
+ * One token per registered overlay, rather than a count: `unregister` is a closure the caller holds
+ * and nothing stops it being called twice, which would take a count below zero and leave the window
+ * reading as unblocked while an overlay is still up. Deleting an absent token is simply nothing.
  */
 const blockers = new Set<symbol>();
-const listeners = new Set<() => void>();
-
-function notify(): void {
-  listeners.forEach((listener) => listener());
-}
 
 /** Whether any full-screen overlay is currently holding this window. */
 export function isWindowBlockedByOverlay(): boolean {
@@ -34,17 +34,8 @@ export function isWindowBlockedByOverlay(): boolean {
 export function registerWindowBlockingOverlay(): () => void {
   const token = Symbol('window-blocking-overlay');
   blockers.add(token);
-  notify();
   return () => {
-    if (blockers.delete(token)) notify();
-  };
-}
-
-/** Subscribe to state changes. Returns an unsubscribe function. */
-export function subscribeToWindowBlockingOverlays(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
+    blockers.delete(token);
   };
 }
 
@@ -57,5 +48,4 @@ export function subscribeToWindowBlockingOverlays(listener: () => void): () => v
  */
 export function resetWindowBlockingOverlays(): void {
   blockers.clear();
-  listeners.clear();
 }
