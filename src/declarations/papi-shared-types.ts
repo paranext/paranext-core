@@ -113,13 +113,15 @@ declare module 'papi-shared-types' {
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
     /**
-     * Increase all windows' zoom level — menus, toolbars and content — by 10 %. Has no default
-     * keyboard shortcut; per-pane content zoom uses `platform.webViewContentZoomIn`.
+     * Increase the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomIn`.
      */
     'platform.zoomIn': () => Promise<void>;
     /**
-     * Decrease all windows' zoom level — menus, toolbars and content — by 10 %. Has no default
-     * keyboard shortcut; per-pane content zoom uses `platform.webViewContentZoomOut`.
+     * Decrease the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomOut`.
      */
     'platform.zoomOut': () => Promise<void>;
     /**
