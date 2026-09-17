@@ -18,6 +18,7 @@ import {
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Group, Loader2 } from 'lucide-react';
 import {
   getLocalizeKeyForScrollGroupId,
+  isLocalizeKey,
   normalizeProjectId,
   type ScrollGroupId,
 } from 'platform-bible-utils';
@@ -73,6 +74,7 @@ import {
 import {
   makeOpenTabsGrouping,
   makeSelectionGrouping,
+  isBlankLocalizedValue,
   readProjectSelectorString,
   type ProjectSelectorStringLookup,
 } from './project-selector.groupings';
@@ -191,12 +193,27 @@ function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
   if (!partial) return { ...DEFAULT_STRINGS };
-  // Drop `undefined` values instead of spreading them: `buildProjectSelectorLocalizedStrings` emits
-  // a property for EVERY field, holding `undefined` wherever the lookup did not resolve one, and a
-  // plain spread lets that `undefined` overwrite the English default — leaving the field blank
-  // rather than falling back.
+  // Drop `undefined` and still-unresolved values instead of spreading them, so the English default
+  // applies in both cases.
+  //
+  // `undefined`: `buildProjectSelectorLocalizedStrings` emits a property for EVERY field, holding
+  // `undefined` wherever the lookup did not resolve one, and a plain spread lets that `undefined`
+  // overwrite the English default — leaving the field blank rather than falling back.
+  //
+  // A localize key as the VALUE: `useLocalizedStrings` seeds its state with `defaultState[key] =
+  // key` and returns that same state on a platform error, so a consumer that merges its own
+  // `%webView_…%` lookups on top of this bag (`ariaLabel`, `buttonPlaceholder`,
+  // `commandEmptyMessage`) can hand over a raw key as the value — both in the window before strings
+  // resolve and permanently if localization fails. That is a defined string, so only an
+  // `isLocalizeKey` check catches it. No real translation is lost to this: a localized value
+  // wrapped in `%` on both ends is not a thing any `assets/localization/*.json` file contains.
+  //
+  // A blank value: same failure, invisible symptom. An empty or whitespace-only translation leaves
+  // the trigger with no text and no accessible name, which reads as a broken control rather than a
+  // wrong label — `isBlankLocalizedValue` keeps that on the fallback path too.
   const resolved = Object.entries(partial).filter(
-    (entry): entry is [string, string] => entry[1] !== undefined,
+    (entry): entry is [string, string] =>
+      entry[1] !== undefined && !isLocalizeKey(entry[1]) && !isBlankLocalizedValue(entry[1]),
   );
   return { ...DEFAULT_STRINGS, ...Object.fromEntries(resolved) };
 }

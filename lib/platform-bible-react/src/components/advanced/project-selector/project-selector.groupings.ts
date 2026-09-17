@@ -55,22 +55,36 @@ export type ProjectSelectorLocalizedStringKey = (typeof PROJECT_SELECTOR_STRING_
 export type ProjectSelectorStringLookup = Readonly<Record<`%${string}%`, unknown>>;
 
 /**
+ * Whether a localized value carries no visible text, and so cannot serve as a label. Whitespace
+ * counts as blank: a label of spaces is indistinguishable from an empty one on screen, so both
+ * belong on the fallback path rather than rendering an invisible control.
+ *
+ * Shared by the two places that own the "unresolved" notion — {@link readProjectSelectorString} and
+ * the picker's `localizedStrings` merge — so they cannot drift on what counts as blank.
+ */
+export function isBlankLocalizedValue(value: string): boolean {
+  return value.trim() === '';
+}
+
+/**
  * Read one `%projectSelector_*%` entry out of a {@link ProjectSelectorStringLookup}. Returns
  * `undefined` for a missing, non-string, or unresolved value so the caller's own English fallback
  * applies.
  *
- * "Unresolved" means the value is still the key itself. `useLocalizedStrings` seeds its state with
- * `defaultState[key] = key`, and returns that same state on a platform error — so a lookup can hand
- * back `'%projectSelector_searchPlaceholder%'` as the placeholder's VALUE, both in the window
- * before strings resolve and permanently if localization fails. That is a string, so a bare
- * `typeof` check accepts it and renders the raw key in the UI instead of falling back to English.
+ * "Unresolved" means the value is still the key itself, or carries no visible text.
+ * `useLocalizedStrings` seeds its state with `defaultState[key] = key`, and returns that same state
+ * on a platform error — so a lookup can hand back `'%projectSelector_searchPlaceholder%'` as the
+ * placeholder's VALUE, both in the window before strings resolve and permanently if localization
+ * fails. That is a string, so a bare `typeof` check accepts it and renders the raw key in the UI
+ * instead of falling back to English. A blank value is the same failure with an invisible symptom:
+ * an unlabeled control rather than a wrong label.
  */
 export function readProjectSelectorString(
   strings: ProjectSelectorStringLookup,
   key: ProjectSelectorLocalizedStringKey,
 ): string | undefined {
   const value = strings[key];
-  if (typeof value !== 'string' || value === key) return undefined;
+  if (typeof value !== 'string' || value === key || isBlankLocalizedValue(value)) return undefined;
   return value;
 }
 

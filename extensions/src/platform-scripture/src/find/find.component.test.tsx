@@ -9,6 +9,7 @@ import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
 import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { isProjectSelectorSharedKey, localizedValueFor } from '../project-selector.test-utils';
 import {
   BookResultEntry,
   Find,
@@ -57,27 +58,33 @@ beforeAll(() => {
 });
 
 /**
- * The resolved value this stub gives a shared-picker key. It NAMES the key without being equal to
- * it, so assertions stay independent of the shipped English wording.
- *
- * It must not BE the key. `useLocalizedStrings` returns key-as-value only while strings are
- * UNRESOLVED, and `readProjectSelectorString` treats such a value as "not localized yet" and falls
- * back to English — so a key-valued stub would assert the fallback path, not the localized one.
+ * Find's own keys whose values are merged onto the `ProjectSelector`'s `localizedStrings` bag as
+ * `ariaLabel`, `buttonPlaceholder` and `commandEmptyMessage`. Like the shared `%projectSelector_*%`
+ * block they must resolve to a real value — the picker treats any localize key as its own value as
+ * "not localized yet" and falls back to English, whatever the key's prefix.
  */
-const localizedValueFor = (key: string) => `localized ${key}`;
+const PICKER_BOUND_FIND_KEYS: readonly LocalizeKey[] = [
+  '%webView_find_projectSelector_label%',
+  '%webView_find_projectFilter_noOpenProjectsOrResources%',
+  '%webView_find_projectFilter_noProjectsFound%',
+];
 
 /**
  * Maps every localized key to the key itself, so assertions can target an exact, stable string
  * without depending on the shipped English wording (which is free to change).
  *
- * The shared `%projectSelector_*%` block is the exception — see {@link localizedValueFor}. Only
- * those keys pass through the picker's unresolved-value guard; this component's own
- * `%webView_find_*%` keys are rendered verbatim, so identity is still the clearest stub for them.
+ * The exceptions are the keys the picker reads: the shared `%projectSelector_*%` block (by
+ * membership, see {@link isProjectSelectorSharedKey}) and {@link PICKER_BOUND_FIND_KEYS}, which get a
+ * resolved value instead — see {@link localizedValueFor}. This component's other `%webView_find_*%`
+ * keys are rendered verbatim, so identity is still the clearest stub for them.
  */
 function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
   const strings: LanguageStrings = {};
   keys.forEach((key) => {
-    strings[key] = key.startsWith('%projectSelector_') ? localizedValueFor(key) : key;
+    strings[key] =
+      isProjectSelectorSharedKey(key) || PICKER_BOUND_FIND_KEYS.includes(key)
+        ? localizedValueFor(key)
+        : key;
   });
   return strings;
 }
@@ -284,7 +291,8 @@ const OPEN_TABS_TWO_GROUPS: ProjectSelectorOpenTab[] = [
 
 const OTHER_PROJECT: FindProject = { id: 'OTH', shortName: 'OTH', fullName: 'Other Bible' };
 
-const PROJECT_SELECTOR_LABEL_KEY = '%webView_find_projectSelector_label%';
+/** The picker's resolved accessible name — see {@link PICKER_BOUND_FIND_KEYS}. */
+const PROJECT_SELECTOR_LABEL = localizedValueFor('%webView_find_projectSelector_label%');
 
 /**
  * Radix Popover and cmdk rely on PointerEvent sequences `fireEvent.click` does not synthesize;
@@ -296,14 +304,14 @@ function setupUser() {
 }
 
 function openProjectSelector(user: ReturnType<typeof setupUser>) {
-  return user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY }));
+  return user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL }));
 }
 
 describe('Find project selector — simple interface mode', () => {
   it('appends the scroll group letter to the trigger in power mode', () => {
     render(<Find {...buildProps()} />);
 
-    expect(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY })).toHaveTextContent(
+    expect(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL })).toHaveTextContent(
       'WEB · A',
     );
   });
@@ -311,7 +319,7 @@ describe('Find project selector — simple interface mode', () => {
   it('shows the bare project short name in the trigger when scroll groups are hidden', () => {
     render(<Find {...buildProps({ hideScrollGroups: true })} />);
 
-    const trigger = screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY });
+    const trigger = screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL });
     expect(trigger).toHaveTextContent('WEB');
     // The separator is what carries the group letter in power mode; its absence is the assertion.
     expect(trigger).not.toHaveTextContent('·');
@@ -373,11 +381,11 @@ describe('Find project selector — simple interface mode', () => {
 
 /**
  * The picker's grouping menu labels come from the shared `%projectSelector_grouping_*%` keys, which
- * `buildProps` stubs key-as-value along with the rest of `FIND_LOCALIZED_STRING_KEYS`.
+ * `buildProps` stubs with a resolved value — see {@link localizedValueFor}.
  */
-const LANGUAGE_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_language_label%');
-const TYPE_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_type_label%');
-const LAST_USED_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_lastUsed_label%');
+const LANGUAGE_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_language_label%');
+const TYPE_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_type_label%');
+const LAST_USED_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_lastUsed_label%');
 
 const PROJECTS_WITH_LANGUAGES: FindProject[] = [
   { id: 'WEB', shortName: 'WEB', fullName: 'World English Bible', language: 'English' },
@@ -417,9 +425,7 @@ describe('Find project selector — groupings', () => {
     );
 
     await openGroupByMenu(user);
-    await user.click(
-      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
-    );
+    await user.click(await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL }));
 
     // Section headings, not row text: no project's short or full name is exactly 'English' or
     // 'Spanish', so these match the language buckets and nothing else.
@@ -440,13 +446,13 @@ describe('Find project selector — groupings', () => {
     // Falsifies the negative assertions below: the menu did open, and it offers the groupings Find
     // can actually populate.
     expect(
-      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL_KEY }),
+      screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL_KEY }),
+      screen.queryByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL }),
     ).not.toBeInTheDocument();
   });
 });

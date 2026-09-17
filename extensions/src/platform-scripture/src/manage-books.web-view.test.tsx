@@ -7,6 +7,7 @@ import { useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { newPlatformError } from 'platform-bible-utils';
 import { installManageBooksJsdomShims } from './manage-books-dialog/manage-books-dialog.test-utils';
+import { isProjectSelectorSharedKey, localizedValueFor } from './project-selector.test-utils';
 
 let uninstallShims: () => void;
 
@@ -63,26 +64,13 @@ vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-/**
- * The resolved value this stub gives a shared-picker key. Declared via `vi.hoisted` so the hoisted
- * `vi.mock` factory below can reach it.
- *
- * It NAMES the key without being equal to it. Echoing a key back as its own value is what
- * `useLocalizedStrings` does while strings are UNRESOLVED, and `readProjectSelectorString` treats
- * such a value as "not localized yet" and falls back to English — so a key-valued stub would assert
- * the fallback path rather than the localized one.
- */
-const { localizedValueFor } = vi.hoisted(() => ({
-  localizedValueFor: (key: string) => `localized ${key}`,
-}));
-
 vi.mock('@papi/frontend/react', () => ({
   // Echo each requested key back as its own value, which is what useLocalizedStrings does before it
-  // resolves. The shared `%projectSelector_*%` block is the exception — those pass through the
-  // picker's unresolved-value guard, so they get a resolved-looking value instead.
+  // resolves. The shared `%projectSelector_*%` block is the exception — the picker treats a key
+  // echoed as its own value as unresolved, so those get a resolved-looking value instead.
   useLocalizedStrings: (keys: string[]) => [
     Object.fromEntries(
-      keys.map((key) => [key, key.startsWith('%projectSelector_') ? localizedValueFor(key) : key]),
+      keys.map((key) => [key, isProjectSelectorSharedKey(key) ? localizedValueFor(key) : key]),
     ),
     false,
   ],
