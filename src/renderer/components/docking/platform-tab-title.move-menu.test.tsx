@@ -409,6 +409,33 @@ describe('PlatformTabTitle reading its contributed menu', () => {
     expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(1);
   });
 
+  it("reads a web view type's menu again when the interface mode changes", async () => {
+    // The menu data provider filters tab items by the current mode, so the two modes are genuinely
+    // different menus and one cached read cannot stand for both.
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, true]);
+    const { rerender } = render(
+      <PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />,
+    );
+    await waitFor(() => expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(1));
+
+    vi.mocked(useInterfaceMode).mockReturnValue(['power', undefined, true]);
+    rerender(
+      <PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />,
+    );
+
+    await waitFor(() => expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not read the menu before the interface mode is known', async () => {
+    // The menu is withheld until the mode is settled anyway, so a read under the loading fallback
+    // would only cache the wrong mode's menu.
+    vi.mocked(useInterfaceMode).mockReturnValue(['simple', undefined, false]);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+
+    expect(menuDataService.getWebViewMenu).not.toHaveBeenCalled();
+  });
+
   it('reads again for a different web view type — the positive control for the case above', async () => {
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
     render(<PlatformTabTitle id="tab-2" webViewId="web-view-2" webViewType="foo.baz" text="Tab" />);
