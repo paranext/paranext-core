@@ -51,7 +51,11 @@ function isInsideIframe(target: EventTarget | null): boolean {
 function actionFor(e: KeyboardEvent): ChordAction | undefined {
   if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd') return 'in';
   if (e.key === '-' || e.code === 'NumpadSubtract') return 'out';
-  if (e.key === '0' || e.code === 'Numpad0') return 'reset';
+  // The numpad 0 only means reset while NumLock is on. With NumLock off it reports itself as
+  // Insert, and Ctrl+Insert is Chromium's legacy Copy chord — losing Copy silently mid-edit is a
+  // data-entry hazard. NumpadAdd and NumpadSubtract are NumLock-independent, so only this branch
+  // needs the guard.
+  if (e.key === '0' || (e.code === 'Numpad0' && e.key === '0')) return 'reset';
   return undefined;
 }
 
