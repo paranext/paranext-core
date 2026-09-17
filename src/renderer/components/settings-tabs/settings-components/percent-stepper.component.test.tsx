@@ -31,9 +31,6 @@ const LABELS = {
   reset: 'Reset default zoom',
 };
 const baseProps = {
-  min: 0.5,
-  max: 3,
-  step: 0.1,
   defaultValue: 1,
   labels: LABELS,
   groupLabel: 'Tab content default zoom',
@@ -201,40 +198,6 @@ describe('PercentStepper', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('steps by a quarter when the caller asks for it', () => {
-    const onChange = vi.fn();
-    render(
-      <PercentStepper
-        {...baseProps}
-        min={0.5}
-        max={3}
-        step={0.25}
-        value={0.5}
-        onChange={onChange}
-      />,
-    );
-    const increase = screen.getByRole('button', { name: LABELS.increase });
-    fireEvent.click(increase);
-    expect(onChange).toHaveBeenCalledWith(0.75);
-    fireEvent.click(increase);
-    expect(onChange).toHaveBeenCalledWith(1);
-  });
-
-  it('steps by five hundredths without float drift', () => {
-    const onIncrease = vi.fn();
-    const increaseRender = render(
-      <PercentStepper {...baseProps} step={0.05} value={1.1} onChange={onIncrease} />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
-    expect(onIncrease).toHaveBeenCalledWith(1.15);
-    increaseRender.unmount();
-
-    const onDecrease = vi.fn();
-    render(<PercentStepper {...baseProps} step={0.05} value={1.1} onChange={onDecrease} />);
-    fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
-    expect(onDecrease).toHaveBeenCalledWith(1.05);
-  });
-
   it('keeps the existing tenth step exact', () => {
     const onChange = vi.fn();
     render(<PercentStepper {...baseProps} value={2.9} onChange={onChange} />);
@@ -242,11 +205,26 @@ describe('PercentStepper', () => {
     expect(onChange).toHaveBeenCalledWith(3);
   });
 
-  it('rounds correctly for a step given in exponential notation', () => {
+  it('steps by the platform rule from an off-tenth factor', () => {
+    // The shared helper steps first and rounds the result to a tenth, so 0.95 goes to 0.9 — a rule
+    // that rounds the input first would land on 0.8 instead.
     const onChange = vi.fn();
-    render(<PercentStepper {...baseProps} step={1e-2} value={1.1} onChange={onChange} />);
+    render(<PercentStepper {...baseProps} value={0.95} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
+    expect(onChange).toHaveBeenCalledWith(0.9);
+  });
+
+  it('clamps to the platform range rather than to caller props', () => {
+    const atMinimum = vi.fn();
+    const { unmount } = render(<PercentStepper {...baseProps} value={0.5} onChange={atMinimum} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
+    expect(atMinimum).not.toHaveBeenCalled();
+    unmount();
+
+    const atMaximum = vi.fn();
+    render(<PercentStepper {...baseProps} value={3} onChange={atMaximum} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
-    expect(onChange).toHaveBeenCalledWith(1.11);
+    expect(atMaximum).not.toHaveBeenCalled();
   });
 
   it('does not reuse a stale baseline after the window', () => {

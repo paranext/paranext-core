@@ -13,9 +13,6 @@ const meta: Meta<typeof PercentStepper> = {
   component: PercentStepper,
   tags: ['autodocs'],
   args: {
-    min: 0.5,
-    max: 3,
-    step: 0.1,
     defaultValue: 1,
     labels: LABELS,
     groupLabel: 'Tab content default zoom',

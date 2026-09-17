@@ -9,7 +9,8 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { useEffect, useRef } from 'react';
-import { formatZoomPercent } from '@shared/utils/content-zoom.util';
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
+import { adjustZoomFactor, formatZoomPercent } from '@shared/utils/content-zoom.util';
 
 /**
  * How long a just-emitted factor stays available as the arithmetic baseline for the next press. The
@@ -37,12 +38,6 @@ const BOUND_BUTTON_CLASSNAME =
 export type PercentStepperProps = {
   /** Current factor, e.g. `1.2` for 120 %. */
   value: number;
-  /** Smallest factor the stepper will emit. */
-  min: number;
-  /** Largest factor the stepper will emit. */
-  max: number;
-  /** Amount one `+` / `−` press moves the factor. */
-  step: number;
   /** Factor the reset button returns to; reset is disabled while the value is already here. */
   defaultValue: number;
   /** When true, every button is disabled. Defaults to `false`. */
@@ -58,15 +53,14 @@ export type PercentStepperProps = {
 };
 
 /**
- * A `+`/`−`/reset control for editing a zoom-style factor without typing a decimal. Displays the
- * factor as a percentage and clamps every step to the caller's own `min`/`max`/`step`, so the
- * bounds are not hard-coded to any one feature's zoom range.
+ * The platform's zoom stepper: a `+`/`−`/reset control for editing a zoom factor without typing a
+ * decimal, displaying the factor as a percentage. Its step and its range come from the platform's
+ * shared zoom arithmetic ({@link adjustZoomFactor}), so a press here moves the factor by exactly the
+ * rule every other zoom surface follows. `defaultValue` stays a prop because the reset target is
+ * the calling setting's own default.
  */
 export function PercentStepper({
   value,
-  min,
-  max,
-  step,
   defaultValue,
   disabled = false,
   labels,
@@ -90,25 +84,6 @@ export function PercentStepper({
     lastEmittedRef.current = undefined;
   }, [value]);
 
-  // The shared platform helper rounds to a tenth because that is the platform's own zoom step;
-  // `min`/`max`/`step` are the contract this component actually offers callers, so rounding must
-  // follow the caller's `step` instead — otherwise any step other than a tenth would have its
-  // output silently snapped to the wrong precision. `step.toString()` can render in exponential
-  // notation for small values (e.g. `1e-2`), which has no `.` for the split below to find, so count
-  // decimals by scaling the value up by 10 until it lands on an integer instead of parsing the string.
-  const stepDecimals = (() => {
-    let decimals = 0;
-    let scaled = step;
-    while (!Number.isInteger(scaled) && decimals < 10) {
-      scaled *= 10;
-      decimals += 1;
-    }
-    return decimals;
-  })();
-  const roundToStep = (factor: number) => Number(factor.toFixed(stepDecimals));
-
-  const clampToProps = (factor: number) => Math.min(max, Math.max(min, roundToStep(factor)));
-
   const emit = (candidate: (baseline: number) => number) => {
     // Step from the last emitted factor while it is still fresh — the effect above already clears it
     // as soon as the prop moves for any reason, confirmed or not, so a surviving ref here means the
@@ -116,7 +91,7 @@ export function PercentStepper({
     const last = lastEmittedRef.current;
     const stillFresh = last !== undefined && performance.now() - last.at < STEP_BASELINE_WINDOW_MS;
     const baseline = stillFresh ? last.factor : value;
-    const next = clampToProps(candidate(baseline));
+    const next = candidate(baseline);
     if (next === baseline) return;
     lastEmittedRef.current = { factor: next, at: performance.now() };
     onChange(next);
@@ -127,8 +102,8 @@ export function PercentStepper({
   // Radix `TooltipTrigger`, which would make the reason for the bound unreachable by keyboard.
   // `onClick` is guarded explicitly (rather than relying on the browser to withhold the click)
   // because `aria-disabled` does not stop the click event from firing.
-  const decreaseDisabled = disabled || value <= min;
-  const increaseDisabled = disabled || value >= max;
+  const decreaseDisabled = disabled || value <= MIN_ZOOM_FACTOR;
+  const increaseDisabled = disabled || value >= MAX_ZOOM_FACTOR;
   const resetDisabled = disabled || value === defaultValue;
 
   return (
@@ -145,7 +120,7 @@ export function PercentStepper({
               className={BOUND_BUTTON_CLASSNAME}
               onClick={() => {
                 if (decreaseDisabled) return;
-                emit((baseline) => baseline - step);
+                emit((baseline) => adjustZoomFactor(baseline, -1));
               }}
             >
               <Minus />
@@ -172,7 +147,7 @@ export function PercentStepper({
               className={BOUND_BUTTON_CLASSNAME}
               onClick={() => {
                 if (increaseDisabled) return;
-                emit((baseline) => baseline + step);
+                emit((baseline) => adjustZoomFactor(baseline, 1));
               }}
             >
               <Plus />
