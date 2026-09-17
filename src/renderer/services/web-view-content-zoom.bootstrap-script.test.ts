@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
 import { adjustZoomFactor } from '@shared/utils/content-zoom.util';
 import { getContentZoomStyleElement } from './web-view-content-zoom.bootstrap-script';
 import { install } from './web-view-content-zoom.bootstrap-script.test-utils';
@@ -1089,7 +1089,7 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-wheel-burst', notches, 'main']]);
   });
 
-  it('nets out a burst that changes direction inside one frame', async () => {
+  it('hands each direction of a burst its own write, rather than netting across the turn', async () => {
     const { bound } = install('wv-wheel-net', TWO_AREAS);
     await nextFrame();
     wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
@@ -1098,9 +1098,13 @@ describe('content-zoom bootstrap script', () => {
     wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
 
     await oneFrame();
-    // Three notches in and one out is the same end level as two notches in — no notch is lost, and
-    // the levels in between are never written.
-    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-wheel-net', 2, 'main']]);
+    // Three notches in travel as one write, and the turn back out as another: no notch is lost, the
+    // levels in between are never written, and the pair steps and clamps exactly as four separate
+    // notches would.
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-wheel-net', 3, 'main'],
+      ['wv-wheel-net', -1, 'main'],
+    ]);
   });
 
   it('lands a coalesced burst on the level the same notches would reach one at a time, clamp included', async () => {
@@ -1125,6 +1129,36 @@ describe('content-zoom bootstrap script', () => {
     }
     await oneFrame();
     expect(adjustContentZoomById).toHaveBeenCalledTimes(1);
+    expect(factor).toBe(oneAtATime);
+  });
+
+  it('lands a burst that reverses at a bound where the same notches would land one at a time', async () => {
+    // At a bound the parent's clamp makes the arithmetic non-linear: travel the area cannot take is
+    // absorbed rather than banked, so notches back the other way start from the bound. Netting a
+    // frame that reverses would hand the reversal the absorbed travel instead.
+    const start = MIN_ZOOM_FACTOR;
+    let factor = start;
+    const adjustContentZoomById = vi.fn((_webViewId: string, deltaSteps: number) => {
+      factor = adjustZoomFactor(factor, deltaSteps);
+    });
+    install('wv-wheel-reverse-bound', TWO_AREAS, { adjustContentZoomById });
+    await nextFrame();
+    const oneAtATime = [-1, -1, 1, 1, 1].reduce(
+      (level, deltaSteps) => adjustZoomFactor(level, deltaSteps),
+      start,
+    );
+    // The two notches out are absorbed by the bound, so the three back in land three steps above it.
+    expect(oneAtATime).toBe(adjustZoomFactor(start, 3));
+
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+
+    await oneFrame();
+    // One write per run of notches in one direction, not one per notch and not one for the frame.
+    expect(adjustContentZoomById.mock.calls.map((call) => call[1])).toEqual([-2, 3]);
     expect(factor).toBe(oneAtATime);
   });
 

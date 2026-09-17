@@ -422,8 +422,9 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // stands in at the 100 px per tick that \`deltaMode\` 0 is defined around.
     const WHEEL_TICK_DELTA = 120;
     const WHEEL_FALLBACK_TICK_PIXELS = 100;
-    // The zoom range measured in steps: however large one delta is, a single event can never ask
-    // for more steps than would take an area from one end of its range to the other.
+    // The zoom range measured in steps: however large one delta is, and however many notches one
+    // frame of a burst carries, an area can never be asked for more steps than would take it from
+    // one end of its range to the other.
     const WHEEL_MAX_STEPS = ${Math.ceil((MAX_ZOOM_FACTOR - MIN_ZOOM_FACTOR) / ZOOM_STEP)};
     const ticksOf = (e) => {
       const wheelDelta = e.wheelDeltaY;
@@ -588,12 +589,12 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // A wheel gesture delivers 50-120 notches a second, and applying one is not cheap: the parent
     // restyles the whole pane and persists the new level, and only the level the gesture has
     // reached by the end of a frame is ever painted. So a notch adds its steps to a pending total
-    // instead of applying them, and one adjustment per frame carries that total. The net is what
-    // travels, so a burst that changes direction inside a frame lands exactly where the same
-    // notches applied one at a time would - the parent steps and clamps through the same helper
-    // either way - and no notch is lost. Only the tick path coalesces: a chord is one keystroke and
-    // one step, and a pinch already arrives once per frame, so neither has anything to coalesce
-    // with.
+    // instead of applying them, and one adjustment per frame carries that total. What accumulates
+    // is one area's travel in one direction, and a notch that leaves either behind flushes what is
+    // pending first (see requestZoomSteps), so a burst lands exactly where the same notches applied
+    // one at a time would and no notch is lost. Only the tick path coalesces: a chord is one
+    // keystroke and one step, and a pinch already arrives once per frame, so neither has anything
+    // to coalesce with.
     let zoomFrame;
     let zoomArea;
     // Signed the way a tick count is, so the pending total reads like the ticks that fed it:
@@ -604,7 +605,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       const steps = zoomSteps;
       zoomArea = undefined;
       zoomSteps = 0;
-      // A burst that nets to nothing asks for the level the pane already shows.
+      // Nothing has landed since the last flush, so there is no travel to carry.
       if (areaId === undefined || steps === 0) return;
       const command = steps < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}';
       // The bound helper takes a step count, so the whole frame travels as one call; the commands
@@ -616,9 +617,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       applyZoomSteps();
     };
     const requestZoomSteps = (areaId, steps) => {
-      // Steps pending for another area belong to that area: they are applied before this one
-      // starts accumulating rather than added to its total.
-      if (zoomArea !== undefined && zoomArea !== areaId) applyZoomSteps();
+      // Steps pending for another area belong to that area, and steps pending in the other
+      // direction belong to the travel that asked for them: either way they are applied before this
+      // notch joins a total rather than netted against it. Netting across a reversal is exact only
+      // in the middle of the range - at either end the parent's clamp ABSORBS the travel an area
+      // cannot take, so notches back the other way start from the bound, while a net would hand the
+      // reversal the absorbed travel back.
+      const reverses = zoomSteps !== 0 && steps < 0 !== zoomSteps < 0;
+      if (zoomArea !== undefined && (zoomArea !== areaId || reverses)) applyZoomSteps();
       zoomArea = areaId;
       zoomSteps += steps;
       // A realm without rAF (an unusual host, or a document that never animates) still zooms; it
@@ -758,8 +764,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // directionOf's computed style, both of which force style and layout on the spot because the
     // zoom write that preceded them has just invalidated both. A wheel gesture delivers 50-120
     // notches a second and only the last one in a frame is ever painted, so a notch asks for a
-    // placement instead of performing one: the request collapses into a single callback that runs
-    // after the frame's own style and layout, with whichever area the burst settled on.
+    // placement instead of performing one: the requests collapse into a single callback, running
+    // once before the frame is painted with whichever area the burst settled on. The reads still
+    // force style and layout where they stand - a rAF callback runs ahead of the frame's own style
+    // and layout pass, not after it - but once per frame rather than once per notch.
     const placeBadge = () => {
       placementFrame = undefined;
       const areaId = placementArea;
