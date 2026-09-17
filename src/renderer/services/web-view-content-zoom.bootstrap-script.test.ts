@@ -354,6 +354,85 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-line-mode', 1, 'main']]);
   });
 
+  it('takes a trackpad pinch as travel through the zoom scale, not one step per event', () => {
+    const { bound } = install('wv-pinch', TWO_AREAS);
+    // Chromium synthesizes a two-finger pinch as ctrl+wheel with no key down, no horizontal
+    // component, a tick of exactly ±1 and `deltaY = -100·ln(scale)` — a couple of pixels per frame
+    // at 60 Hz. Twenty of them are a scale of about 1.49, which is four 10 % steps, not twenty.
+    for (let i = 0; i < 20; i += 1) {
+      expect(
+        wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'))
+          .defaultPrevented,
+      ).toBe(true);
+    }
+    expect(bound.adjustContentZoomById.mock.calls).toEqual(
+      Array.from({ length: 4 }, () => ['wv-pinch', 1, 'main']),
+    );
+  });
+
+  it('starts a pinch’s travel over again when the gesture reverses', () => {
+    const { bound } = install('wv-pinch-reverse', TWO_AREAS);
+    for (let i = 0; i < 4; i += 1) {
+      wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    }
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+    // The travel already banked in the other direction must not have to be unwound first.
+    for (let i = 0; i < 10; i += 1) {
+      wheel({ deltaY: 2, deltaX: 0, ctrlKey: true, wheelDeltaY: -120 }, byId('verse'));
+    }
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-pinch-reverse', -1, 'main'],
+      ['wv-pinch-reverse', -1, 'main'],
+    ]);
+  });
+
+  it('takes the very same events as wheel notches while a modifier key is physically held', () => {
+    const { bound } = install('wv-pinch-key', TWO_AREAS);
+    modifierKey('keydown', 'Control');
+    try {
+      for (let i = 0; i < 20; i += 1) {
+        wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      }
+      expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(20);
+    } finally {
+      modifierKey('keyup', 'Control');
+    }
+    // Releasing the key hands the same burst back to the pinch path, so the flag is really the
+    // key's state rather than a latch the first keydown set for good.
+    for (let i = 0; i < 20; i += 1) {
+      wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    }
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(24);
+  });
+
+  it('forgets a modifier key the window was holding when it lost focus', () => {
+    const { bound } = install('wv-pinch-blur', TWO_AREAS);
+    // The keyup for a key held while focus moves away is delivered to somebody else, so a flag
+    // left set here would send every later pinch down the notch path for the life of the pane.
+    modifierKey('keydown', 'Control');
+    window.dispatchEvent(new Event('blur'));
+    for (let i = 0; i < 20; i += 1) {
+      wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+    }
+    expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(4);
+  });
+
+  it('cancels every modified wheel over a zoom area, including one too small to step', () => {
+    const { bound } = install('wv-sub-threshold', TWO_AREAS);
+    // Chromium stops honouring preventDefault for the rest of a gesture whose first event was not
+    // cancelled, so the events an accumulator swallows have to be cancelled all the same.
+    expect(
+      wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'))
+        .defaultPrevented,
+    ).toBe(true);
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+    // Positive control: the same event without the modifier is left alone, so the cancellation
+    // above is this handler's doing.
+    expect(wheel({ deltaY: -2, deltaX: 0, wheelDeltaY: 120 }, byId('verse')).defaultPrevented).toBe(
+      false,
+    );
+  });
+
   it('leaves Ctrl+Shift+wheel and Ctrl+Alt+wheel untouched, matching the chords’ modifier rule', () => {
     const { bound } = install('wv-5b', TWO_AREAS);
     expect(

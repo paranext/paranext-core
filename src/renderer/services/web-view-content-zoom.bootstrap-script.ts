@@ -364,14 +364,80 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       for (let step = 0; step < count; step += 1) act(command, areaId);
     };
 
+    // A trackpad pinch never reaches a document as a gesture of its own: Chromium's touchpad pinch
+    // event queue (\`touchpad_pinch_event_queue.cc\`) synthesizes one as ctrl+wheel with
+    // \`deltaMode\` 0, no horizontal component, a tick of exactly ±1 and
+    // \`deltaY = -100·ln(scale)\` - a couple of pixels per frame at the refresh rate. Counted as
+    // ticks that would be a full zoom step per frame, so a pinch is recognised BEFORE the tick path
+    // and measured as travel through the zoom scale instead, the way pdf.js separates the two
+    // (\`isPinchToZoom\` in its \`web/app.js\`). Nothing in the event marks it as synthetic; the one
+    // thing that distinguishes it is that the modifier the chord requires is set while no modifier
+    // key is physically down. Misreading it either way only changes a gesture's speed: a pinch
+    // taken for notches zooms a step per frame, and notches taken for a pinch need two or three of
+    // them per step. Neither silences the input.
+    const PINCH_SCALE_PIXELS = 100;
+    // How far \`exp(-deltaY / 100)\` may sit from 1 and still be one frame of a pinch rather than a
+    // wheel notch. A notch clears it on every platform but macOS, where the physical-key test is
+    // what tells the two apart.
+    const PINCH_MAX_SCALE_DEVIATION = 0.05;
+    // The travel one zoom step is worth: a step is 10 % of scale, and scale is exponential in the
+    // travel, so it is a constant ln(1.1)·100 ≈ 9.53 px of pinch whatever the current level.
+    const PINCH_STEP_PIXELS = Math.log(1 + ${ZOOM_STEP}) * PINCH_SCALE_PIXELS;
+    let pinchTravel = 0;
+    let pinchArea;
+    let pinchDirection = 0;
+
+    // A modifier key held while the window loses focus or visibility has its keyup delivered to
+    // somebody else, so the set is cleared there as well - a flag left set would send every later
+    // pinch down the notch path for the rest of the pane's life. Capture phase, so a view that
+    // stops key events from propagating cannot strand it either.
+    const PHYSICAL_MODIFIER_KEYS = ['Control', 'Meta'];
+    const physicalModifiers = new Set();
+    const onModifierKeyDown = (e) => {
+      if (PHYSICAL_MODIFIER_KEYS.indexOf(e.key) !== -1) physicalModifiers.add(e.key);
+    };
+    const onModifierKeyUp = (e) => {
+      if (PHYSICAL_MODIFIER_KEYS.indexOf(e.key) !== -1) physicalModifiers.delete(e.key);
+    };
+    const onModifierLost = () => physicalModifiers.clear();
+    const onVisibilityChange = () => { if (document.hidden) physicalModifiers.clear(); };
+    window.addEventListener('keydown', onModifierKeyDown, true);
+    window.addEventListener('keyup', onModifierKeyUp, true);
+    window.addEventListener('blur', onModifierLost);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    const isPinchWheel = (e) =>
+      physicalModifiers.size === 0 &&
+      e.deltaMode === 0 &&
+      e.deltaX === 0 &&
+      Math.abs(Math.exp(-e.deltaY / PINCH_SCALE_PIXELS) - 1) < PINCH_MAX_SCALE_DEVIATION;
+
+    const stepPinch = (e, areaId) => {
+      // Travel only accumulates over one area and in one direction, so reversing a pinch does not
+      // have to unwind what the other direction banked.
+      const direction = e.deltaY < 0 ? -1 : 1;
+      if (areaId !== pinchArea || direction !== pinchDirection) pinchTravel = 0;
+      pinchArea = areaId;
+      pinchDirection = direction;
+      pinchTravel += e.deltaY;
+      const steps = Math.trunc(pinchTravel / PINCH_STEP_PIXELS);
+      if (steps === 0) return;
+      // Only the step boundaries actually crossed are consumed; the rest of the travel stays put,
+      // which is what makes a slow pinch step steadily instead of losing part of every frame.
+      pinchTravel -= steps * PINCH_STEP_PIXELS;
+      stepArea(steps, areaId);
+    };
+
     // Ctrl or the meta key, and neither Shift nor Alt: a shifted wheel is horizontal scroll on many
     // platforms, and Chromium and the OS give Ctrl+Alt+wheel its own meaning, so both pass through.
     const onWheel = (e) => {
       if (!hasModifier(e) || e.shiftKey) return;
       const areaId = targetFor(e.target);
       if (!areaId) return;
-      // Cancelled for every modified wheel over an area, sub-threshold ones included: the events
-      // the accumulator swallows would otherwise reach Chromium's own page zoom.
+      // Cancelled for every modified wheel over an area, sub-threshold ones included: the events an
+      // accumulator swallows would otherwise reach Chromium's own page zoom, and Chromium stops
+      // honouring preventDefault for the remainder of a gesture whose first event went uncancelled
+      // - which for a pinch is the smallest event of all.
       e.preventDefault();
       if (e.deltaY === 0) return;
       // Line and page delta modes carry small counts of lines or pages, which neither a tick count
@@ -379,6 +445,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       // accumulator alone.
       if (e.deltaMode !== 0) {
         act(e.deltaY < 0 ? '${CONTENT_ZOOM_COMMANDS.in}' : '${CONTENT_ZOOM_COMMANDS.out}', areaId);
+        return;
+      }
+      if (isPinchWheel(e)) {
+        stepPinch(e, areaId);
         return;
       }
       const ticks = ticksOf(e);
@@ -521,6 +591,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       window.removeEventListener('pointerdown', onPointerDown, true);
       window.removeEventListener('focusin', onFocusIn, true);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keydown', onModifierKeyDown, true);
+      window.removeEventListener('keyup', onModifierKeyUp, true);
+      window.removeEventListener('blur', onModifierLost);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (wheelListening) { window.removeEventListener('wheel', onWheel, WHEEL_OPTIONS); wheelListening = false; }
       if (observer) { observer.disconnect(); observer = undefined; }
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = undefined; }
