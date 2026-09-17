@@ -663,6 +663,8 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     };
     let hideTimer;
     let announceTimer;
+    let placementFrame;
+    let placementArea;
     let badge;
     let liveRegion;
     // Both nodes exist, and the live region is empty, from the moment the view's DOM is ready: a
@@ -697,9 +699,17 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         document.body.appendChild(liveRegion);
       }
     };
-    const showIndicator = (areaId, text) => {
-      ensureIndicatorElements();
-      if (!badge) return;
+    // Placing the badge is the only part of a show that reads layout: cornerOf's rects and
+    // directionOf's computed style, both of which force style and layout on the spot because the
+    // zoom write that preceded them has just invalidated both. A wheel gesture delivers 50-120
+    // notches a second and only the last one in a frame is ever painted, so a notch asks for a
+    // placement instead of performing one: the request collapses into a single callback that runs
+    // after the frame's own style and layout, with whichever area the burst settled on.
+    const placeBadge = () => {
+      placementFrame = undefined;
+      const areaId = placementArea;
+      placementArea = undefined;
+      if (!badge || areaId === undefined) return;
       const corner = cornerOf(areaId);
       badge.style.top = corner.top + 'px';
       if (corner.rtl) {
@@ -709,6 +719,19 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         badge.style.right = corner.right + 'px';
         badge.style.left = '';
       }
+    };
+    const requestPlacement = (areaId) => {
+      placementArea = areaId;
+      // A realm without rAF (an unusual host, or a document that never animates) still gets a
+      // placed badge; it just pays for it in the handler, as it did before.
+      if (typeof window.requestAnimationFrame !== 'function') { placeBadge(); return; }
+      if (placementFrame !== undefined) return;
+      placementFrame = window.requestAnimationFrame(placeBadge);
+    };
+    const showIndicator = (areaId, text) => {
+      ensureIndicatorElements();
+      if (!badge) return;
+      requestPlacement(areaId);
       badge.dataset.area = areaId;
       badge.textContent = text;
       // Reduced motion still hides the badge on schedule, as a hard cut instead of a fade (an
@@ -753,6 +776,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (observer) { observer.disconnect(); observer = undefined; }
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = undefined; }
       if (announceTimer) { clearTimeout(announceTimer); announceTimer = undefined; }
+      if (placementFrame !== undefined) {
+        if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(placementFrame);
+        placementFrame = undefined;
+      }
+      placementArea = undefined;
       if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
       if (liveRegion && liveRegion.parentNode) liveRegion.parentNode.removeChild(liveRegion);
       badge = undefined;

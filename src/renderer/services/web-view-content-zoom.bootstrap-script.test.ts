@@ -987,14 +987,55 @@ describe('content-zoom bootstrap script', () => {
     const markerScanCount = () =>
       spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
         .length;
-    // showIndicator itself scans once, synchronously, to place the badge at its area's corner; the
-    // count taken after it returns already includes that scan, so the delta below isolates only
+    // A show scans once, in the frame it places the badge at its area's corner in; the count is
+    // taken after that frame so it already includes that scan, and the delta below isolates only
     // what the observer's callback does once the write's mutation record reaches it.
     api.showIndicator('main', '120 %');
+    await nextFrame();
     const afterShow = markerScanCount();
     await nextFrame();
     expect(markerScanCount() - afterShow).toBe(0);
     spy.mockRestore();
+  });
+
+  it('measures the badge corner once per animation frame, however many notches a wheel burst delivers', async () => {
+    // What shows the badge is the parent's answer to a notch, so the bound helper stands in for the
+    // zoom service calling back into the pane once it has written the new level.
+    let percent = 100;
+    const adjustContentZoomById = vi.fn(() => {
+      percent += 10;
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      window.__platformContentZoom?.showIndicator('main', `${percent} %`);
+    });
+    install('wv-wheel-burst', TWO_AREAS, { adjustContentZoomById });
+    await nextFrame();
+    // The two reads that force style and layout when they run inside the input handler.
+    const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    const computedStyles = vi.spyOn(window, 'getComputedStyle');
+    const notches = 5;
+    for (let index = 0; index < notches; index += 1) {
+      wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    }
+    // Positive control: the burst really did reach the handler, so the counts below say that
+    // placement was deferred rather than that nothing happened at all.
+    expect(adjustContentZoomById).toHaveBeenCalledTimes(notches);
+    expect(computedStyles).not.toHaveBeenCalled();
+    expect(rects).not.toHaveBeenCalled();
+
+    await nextFrame();
+    // One placement for the whole burst: one direction read, and one rect for the single element
+    // the target area has.
+    expect(computedStyles).toHaveBeenCalledTimes(1);
+    expect(rects).toHaveBeenCalledTimes(1);
+    // And it places the badge for the level the burst settled on.
+    const badge = byId('platform-content-zoom-indicator');
+    expect(badge.textContent).toBe('150 %');
+    expect(badge.dataset.area).toBe('main');
+    expect(badge.style.top).not.toBe('');
+    rects.mockRestore();
+    computedStyles.mockRestore();
   });
 
   it('still rescans when a marker changes in the same task as an indicator write', async () => {
@@ -1238,7 +1279,7 @@ describe('content-zoom bootstrap script', () => {
     expect(badge?.dataset.area).toBe('footnotes');
   });
 
-  it('anchors the indicator at inline-end: right for an LTR area, left for an RTL area', () => {
+  it('anchors the indicator at inline-end: right for an LTR area, left for an RTL area', async () => {
     install('wv-14', TWO_AREAS);
     // jsdom does not map the `dir` attribute to a computed `direction` the way a browser's UA
     // stylesheet does, so an explicit author rule stands in for that here.
@@ -1252,12 +1293,16 @@ describe('content-zoom bootstrap script', () => {
     const api = window.__platformContentZoom;
     if (!api) throw new Error('indicator api missing');
 
+    // A show asks for placement rather than placing the badge itself, so each corner is read in the
+    // frame that follows it.
     api.showIndicator('main', '120 %');
+    await nextFrame();
     const badge = byId('platform-content-zoom-indicator');
     expect(badge.style.right).not.toBe('');
     expect(badge.style.left).toBe('');
 
     api.showIndicator('footnotes', '120 %');
+    await nextFrame();
     expect(badge.style.left).not.toBe('');
     expect(badge.style.right).toBe('');
   });
