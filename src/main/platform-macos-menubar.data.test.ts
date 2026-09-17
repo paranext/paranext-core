@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONTENT_ZOOM_COMMANDS } from '@shared/models/content-zoom.model';
+import { CONTENT_ZOOM_CHORDS, CONTENT_ZOOM_COMMANDS } from '@shared/models/content-zoom.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { macosMenubarObject } from './platform-macos-menubar.data';
@@ -37,6 +37,12 @@ function getItem(id: string): Record<string, unknown> | undefined {
   return submenu.find((item) => item.id === id);
 }
 
+/** A submenu item's `order`, or -1 when the item (or its order) is missing. */
+function orderOf(id: string): number {
+  const order = getItem(id)?.order;
+  return typeof order === 'number' ? order : -1;
+}
+
 describe('macosMenubarObject View menu', () => {
   // Without this, `sendCommand`'s call history accumulates across tests in this file, so a later
   // `toHaveBeenCalledWith` assertion can pass on a call an EARLIER test made rather than the one
@@ -68,6 +74,33 @@ describe('macosMenubarObject View menu', () => {
     const zoomIn = getItem('contentZoomIn');
     expect(zoomIn?.accelerator).toBe('CommandOrControl+=');
     expect(typeof zoomIn?.click).toBe('function');
+  });
+
+  it('binds ⌘= to zoom in, and ⇧⌘= to the same action through a hidden duplicate', () => {
+    expect(getItem('contentZoomIn')?.accelerator).toBe('CommandOrControl+=');
+    const hidden = getItem('contentZoomInShift');
+    expect(hidden?.accelerator).toBe('CommandOrControl+Shift+=');
+    expect(hidden?.visible).toBe(false);
+  });
+
+  it('gives every chord in the shared table its declared View-menu items', () => {
+    CONTENT_ZOOM_CHORDS.forEach((chord) => {
+      chord.macosMenuItems.forEach((declared) => {
+        const item = getItem(declared.id);
+        expect(item, `missing View-menu item ${declared.id}`).toBeDefined();
+        expect(item?.accelerator).toBe(declared.accelerator);
+        expect(item?.label).toBe(chord.macosLabel);
+      });
+    });
+  });
+
+  it('keeps the View-menu zoom items in order between the dev-tools and full-screen separators', () => {
+    const zoomOrders = CONTENT_ZOOM_CHORDS.flatMap((chord) =>
+      chord.macosMenuItems.map((item) => orderOf(item.id)),
+    );
+    expect(Math.min(...zoomOrders)).toBeGreaterThan(orderOf('viewSeparatorAfterDevTools'));
+    expect(Math.max(...zoomOrders)).toBeLessThan(orderOf('viewSeparatorBeforeFullScreen'));
+    expect([...zoomOrders].sort((a, b) => a - b)).toEqual(zoomOrders);
   });
 
   it.each([
