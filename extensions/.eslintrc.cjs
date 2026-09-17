@@ -138,6 +138,13 @@ module.exports = {
 
     'import/no-unresolved': ['error', { ignore: ['@papi'] }],
 
+    // Localized lookups must not fall back with `??`/`||`: an unresolved lookup returns the raw
+    // key, a defined string, so the fallback never runs. Use `resolveLocalizedString` from
+    // `platform-bible-utils`. See .context/standards/Localization-Guide.md.
+    // Deliberately the only `paranext/*` rule enabled here — the plugin's `recommended`/`strict`
+    // configs are not pulled in, so no other paranext rule runs on extension source.
+    'paranext/no-nullish-localized-fallback': 'warn',
+
     // #endregion
   },
   globals: {
@@ -188,6 +195,17 @@ module.exports = {
         // Dropping some rules for storybook stories
         'no-alert': 'off', // alert is fine here
         'jsx-a11y/control-has-associated-label': 'off', // no need for a11y
+        // Stories stand in fake localized strings, so a fallback there is scaffolding rather than
+        // a lookup that reaches a user
+        'paranext/no-nullish-localized-fallback': 'off',
+      },
+    },
+    {
+      files: ['*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx'],
+      rules: {
+        // Tests construct localized-string maps directly, so a fallback there is scaffolding
+        // rather than a lookup that reaches a user
+        'paranext/no-nullish-localized-fallback': 'off',
       },
     },
   ],
@@ -201,7 +219,7 @@ module.exports = {
   // Note: this folder's package.json does not contain these plugins or any other eslint packages
   // because eslint was finding multiple copies of plugins and failing. So we use the packages from
   // repo root instead
-  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null'],
+  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null', 'paranext'],
   settings: {
     'import/resolver': {
       // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below
