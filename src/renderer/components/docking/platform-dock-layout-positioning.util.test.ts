@@ -13,7 +13,7 @@ import {
   TAB_GROUP,
   TAB_GROUP_RESOURCES,
 } from './platform-dock-layout-positioning.util';
-import { createDockContext, createPanel } from './__tests__/tab-bar-drop-zone-test.util';
+import { createDockContext, createPanel } from './__tests__/tab-bar-drop-zone.test-utils';
 
 /** Minimal WebView {@link TabInfo} fixture for `getTabGroup` tests. */
 function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo {

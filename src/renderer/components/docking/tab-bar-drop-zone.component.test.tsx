@@ -15,7 +15,7 @@ import {
   DOCK_ID,
   OTHER_GROUP,
   resetDragStateStore,
-} from './__tests__/tab-bar-drop-zone-test.util';
+} from './__tests__/tab-bar-drop-zone.test-utils';
 
 interface MockDragDropDivProps {
   getRef?: React.Ref<HTMLDivElement>;
