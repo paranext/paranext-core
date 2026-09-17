@@ -8,12 +8,11 @@ import {
   Button,
   Checkbox,
   Dialog,
+  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+  DialogTrigger,
   Select,
   SelectContent,
   SelectItem,
@@ -28,13 +27,11 @@ import { ResourcePickerDialog } from 'platform-bible-react/experimental';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
 import { ChevronDown, X } from 'lucide-react';
 
-// Tailwind arbitrary-value width overrides on PopoverContent (`tw:w-[32rem]`, with or without the
-// `!` important modifier) do not take effect in the running app — the class shows up in the DOM but
-// no matching CSS rule is generated, even though the same syntax works in Storybook's build. An
-// inline style sidesteps the class-generation/tailwind-merge dependency entirely and is guaranteed
-// to apply. Sized to match ResourcePickerDialog's own Storybook decorator (560x600) so the resource
-// list has room to show many entries and scroll within a bounded area instead of growing unbounded.
-const RESOURCE_PICKER_POPOVER_STYLE = { width: 560, maxHeight: 400 };
+// Each embedded picker is a modal in its own right, layered over this dialog. Its height is capped
+// so the resource list scrolls within a bounded area instead of growing to fit every entry; the
+// width is the shared dialog maximum rather than a hand-picked pixel count.
+const RESOURCE_PICKER_DIALOG_CLASS =
+  'tw:flex tw:max-h-[85vh] tw:min-h-0 tw:flex-col tw:gap-0 tw:overflow-hidden tw:p-0 tw:sm:max-w-xl';
 
 export type ShareLayoutActiveTab =
   | 'ScriptureResource'
@@ -239,62 +236,63 @@ export function ShareLayoutDialogContent({
   ) => (
     <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
       <span className="tw:font-medium">{localizeString(strings, sectionLabelKey)}</span>
-      <Popover
+      {/* A nested Dialog.Root, not a popover: the picker is a separate task that should take the
+          screen over this dialog. It also gives ResourcePickerDialog — which renders a DialogTitle
+          but deliberately ships no Dialog.Root of its own — a title context distinct from this
+          dialog's, instead of two titles colliding on one id. */}
+      <Dialog
         open={openAddPickerTab === tab}
         onOpenChange={(open) => setOpenAddPickerTab(open ? tab : undefined)}
       >
-        <PopoverTrigger asChild>
+        <DialogTrigger asChild>
           <Button variant="outline" size="sm" className="tw:w-fit">
             {localizeString(strings, manageLabelKey[tab])}
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="tw:p-0" style={RESOURCE_PICKER_POPOVER_STYLE}>
-          {/* flex/h-full/min-h-0 so this fills the fixed-height PopoverContent above, giving
-            ResourcePickerDialog's internal `flex-1 overflow-y-auto` list a bounded height to scroll
-            within instead of growing to fit every resource. */}
-          <div className="tw:relative tw:flex tw:h-full tw:min-h-0 tw:flex-col">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
-                    onClick={() => setOpenAddPickerTab(undefined)}
-                    aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-                  >
-                    <X className="tw:size-4" aria-hidden />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {/*
-                ResourcePickerDialog renders its own DialogTitle internally but has no Dialog.Root
-                of its own by design (it's meant to be embedded in a host-provided Dialog context).
-                Since this popover is rendered inside the outer ShareLayoutDialogContent's
-                Dialog.Root, wrap it in its own isolated Dialog.Root here so its DialogTitle gets a
-                distinct id from the outer dialog's title instead of colliding with it.
-              */}
-            <Dialog open modal={false}>
-              <ResourcePickerDialog
-                allResources={allResources}
-                isResourcesLoading={isResourcesLoading}
-                hasResourcesError={hasResourcesError}
-                onRetryResources={onRetryResources}
-                areDownloadsUnavailable={areDownloadsUnavailable}
-                resourceType={tab}
-                selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
-                localizedStrings={resourcePickerLocalizedStrings}
-                allowDeselect
-                onSelect={(resource) => handleTogglePickedResource(tab, resource)}
-              />
-            </Dialog>
-          </div>
-        </PopoverContent>
-      </Popover>
+        </DialogTrigger>
+        {/* The built-in close button is replaced by a localized one: shadcn's carries a hardcoded
+            English "Close" label, and this dialog already ships a translated string for it. */}
+        {/* The picker renders a title but deliberately no description; saying so silences Radix's
+            missing-description warning without inventing prose for it. */}
+        <DialogContent
+          className={RESOURCE_PICKER_DIALOG_CLASS}
+          showCloseButton={false}
+          aria-describedby={undefined}
+        >
+          <ResourcePickerDialog
+            allResources={allResources}
+            isResourcesLoading={isResourcesLoading}
+            hasResourcesError={hasResourcesError}
+            onRetryResources={onRetryResources}
+            areDownloadsUnavailable={areDownloadsUnavailable}
+            resourceType={tab}
+            selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
+            localizedStrings={resourcePickerLocalizedStrings}
+            allowDeselect
+            onSelect={(resource) => handleTogglePickedResource(tab, resource)}
+          />
+          {/* After the picker in DOM order, not before it: a dialog focuses its first tabbable
+              element on open, and leading with this button would open its tooltip over the list and
+              start a keyboard user on "leave" instead of on the search box. */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
+                  onClick={() => setOpenAddPickerTab(undefined)}
+                  aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+                >
+                  <X className="tw:size-4" aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
@@ -339,8 +337,9 @@ export function ShareLayoutDialogContent({
             <span className="tw:font-medium">
               {localizeString(strings, '%shareLayoutDialog_modelText_label%')}
             </span>
-            <Popover open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
-              <PopoverTrigger asChild>
+            {/* Same nested-modal treatment as the Manage pickers above, for the same reasons. */}
+            <Dialog open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
+              <DialogTrigger asChild>
                 <Button
                   variant="outline"
                   className="tw:w-fit tw:justify-between tw:gap-2 tw:font-normal"
@@ -355,27 +354,21 @@ export function ShareLayoutDialogContent({
                     aria-hidden
                   />
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="tw:p-0" style={RESOURCE_PICKER_POPOVER_STYLE}>
-                {/*
-                  See the comment on the resource-card popovers below: wrap in its own Dialog.Root
-                  so its internal DialogTitle gets a distinct id from the outer dialog's title.
-                */}
-                <Dialog open modal={false}>
-                  <ResourcePickerDialog
-                    allResources={allResources}
-                    isResourcesLoading={isResourcesLoading}
-                    hasResourcesError={hasResourcesError}
-                    onRetryResources={onRetryResources}
-                    areDownloadsUnavailable={areDownloadsUnavailable}
-                    resourceType="ScriptureResource"
-                    selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
-                    localizedStrings={resourcePickerLocalizedStrings}
-                    onSelect={handleSelectModelText}
-                  />
-                </Dialog>
-              </PopoverContent>
-            </Popover>
+              </DialogTrigger>
+              <DialogContent className={RESOURCE_PICKER_DIALOG_CLASS} aria-describedby={undefined}>
+                <ResourcePickerDialog
+                  allResources={allResources}
+                  isResourcesLoading={isResourcesLoading}
+                  hasResourcesError={hasResourcesError}
+                  onRetryResources={onRetryResources}
+                  areDownloadsUnavailable={areDownloadsUnavailable}
+                  resourceType="ScriptureResource"
+                  selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
+                  localizedStrings={resourcePickerLocalizedStrings}
+                  onSelect={handleSelectModelText}
+                />
+              </DialogContent>
+            </Dialog>
           </div>
 
           <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">

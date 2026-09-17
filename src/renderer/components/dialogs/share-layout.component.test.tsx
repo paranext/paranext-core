@@ -227,6 +227,39 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.queryByRole('button', { name: 'NLT' })).not.toBeInTheDocument();
   });
 
+  // Manage opens a second modal that sits OVER this dialog. It used to be a popover anchored to
+  // the button, which a narrow window pushed off-screen and which read as a menu hanging off the
+  // dialog rather than the separate task it is.
+  it('opens the resource picker as a modal dialog rather than a popover anchored to the button', () => {
+    renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+
+    const pickerRow = screen.getByRole('button', { name: 'NLT' });
+    // A dialog surface with a backdrop, not a popover anchored to the trigger. The backdrop is what
+    // makes it read as replacing this dialog rather than hanging off it.
+    expect(pickerRow.closest('[data-slot="dialog-content"]')).not.toBeNull();
+    expect(pickerRow.closest('[data-slot="popover-content"]')).toBeNull();
+    expect(document.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull();
+  });
+
+  // A dialog focuses its first tabbable element on open. With the close button first in DOM order
+  // that is the close button, which pops its own tooltip over the picker the instant it opens and
+  // puts the keyboard user on "leave" rather than on the search they came to do.
+  it('puts opening focus on the search box, not on the close button', () => {
+    renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+
+    expect(screen.getByPlaceholderText('%resourcePicker_search_placeholder%')).toHaveFocus();
+  });
+
   it('renders the Text Collection Resources section with a checkbox per scripture and commentary resource', () => {
     renderContent({ initialCommentaryResources: [IVP] });
 
