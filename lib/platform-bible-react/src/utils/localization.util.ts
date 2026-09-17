@@ -5,19 +5,51 @@
 const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
 
 /**
- * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
+ * Whether a value read out of a localized-strings map carries text that can actually be shown to a
+ * user.
  *
- * `useLocalizedStrings` seeds its result with `{ [key]: key }` and keeps that seed for the whole
- * first render pass — and permanently if the localization provider errors. A key is a non-empty
- * string, so the usual `localizedStrings?.[key] || 'Default'` idiom does NOT fall back: it hands
- * back the literal `%some_key%`. That is harmless in an `aria-label`, where nothing renders it, and
- * user-visible the moment the same value is put on screen as tooltip or button text.
+ * Three states fail that test, and only one of them is nullish:
+ *
+ * - `undefined` — the lookup produced nothing, or a builder emitted a field it could not populate.
+ * - A raw localization key — `useLocalizedStrings` seeds its result with `{ [key]: key }` and keeps
+ *   that seed for the whole first render pass, and permanently if the localization provider errors.
+ *   A key is a non-empty string, so the usual `localizedStrings[key] ?? 'Default'` idiom does NOT
+ *   fall back: it hands back the literal `%some_key%` and renders it at the user.
+ * - Blank or whitespace-only text — a label of spaces is indistinguishable on screen from an empty
+ *   one, and leaves the control with no accessible name. That reads as broken rather than as
+ *   untranslated, so it belongs on the fallback path too.
  *
  * @param value The value read out of a localized-strings map, if any.
- * @param fallback Text to show when `value` is missing or is still a raw key.
- * @returns `value` when it carries real localized text, `fallback` otherwise.
+ * @returns Whether `value` carries real localized text.
+ */
+export function isResolvedLocalizedValue(value: string | undefined): value is string {
+  return value !== undefined && !LOCALIZATION_KEY_PATTERN.test(value) && value.trim() !== '';
+}
+
+/**
+ * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
+ *
+ * @param value The value read out of a localized-strings map, if any.
+ * @param fallback Text to show when `value` does not carry real localized text.
+ * @returns `value` when {@link isResolvedLocalizedValue} accepts it, `fallback` otherwise.
  */
 export function resolveLocalizedString(value: string | undefined, fallback: string): string {
-  if (!value || LOCALIZATION_KEY_PATTERN.test(value)) return fallback;
-  return value;
+  return isResolvedLocalizedValue(value) ? value : fallback;
+}
+
+/**
+ * The first candidate that can actually be shown to a user, or `undefined` if none can.
+ *
+ * For call sites that have more than one source to try before reaching a literal they own — a
+ * consumer's own localized override, then a value read from a setting, then English. Each candidate
+ * is judged by {@link isResolvedLocalizedValue}, so an unresolved lookup is skipped rather than
+ * rendered, which a nullish chain (`a ?? b ?? c`) cannot do.
+ *
+ * @param candidates Values to try, best first.
+ * @returns The first candidate carrying real text, or `undefined` when none does.
+ */
+export function firstResolvedLocalizedString(
+  ...candidates: (string | undefined)[]
+): string | undefined {
+  return candidates.find(isResolvedLocalizedValue);
 }
