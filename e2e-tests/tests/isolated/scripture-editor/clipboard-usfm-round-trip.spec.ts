@@ -5,6 +5,14 @@
  * and the rebuild it triggers are a single undo step; and pasting a `\c` chapter marker cannot
  * corrupt the open chapter, because the engine strips `\c`/`\id` bytes on external paste.
  *
+ * It then covers the same round trip where the SELECTION and the FLAVOURS are what decide the
+ * bytes: a real mouse drag that starts or ends inside a read-only construct's glyphs copies those
+ * glyphs whole (a `\fig`'s opener, and its `|src="…"` attribute run); a copy's `text/html` flavour
+ * carries the same USFM bytes as its `text/plain`, so no consumer can receive a different document
+ * by preferring one flavour over the other; and a Paratext 9 clipboard — whose `text/plain` reduces
+ * a footnote to the single caller glyph it displays — pastes as a real note, decoded from the
+ * `<!--usfm:…-->` comment only its `text/html` carries.
+ *
  * Run it with `npm run test:e2e:isolated scripture-editor/clipboard-usfm-round-trip`. It needs a
  * current editor build linked into the app (the clipboard behavior it asserts lives in the editor
  * engine, not in this repo), so a behavior failure here means that engine work regressed rather
@@ -24,6 +32,7 @@
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root): `npm run test:e2e:isolated scripture-editor`.
  */
+import { type Locator, type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   makeSampleProjectEditable,
@@ -53,6 +62,102 @@ const CHAPTER_PASTE_TOKEN = 'CLIPROUNDTRIPBETA';
 // USFM a previous run (or a previous retry attempt) left there — see that step's own comment.
 const CLIPBOARD_SENTINEL = 'CLIPROUNDTRIPSENTINELNOTCOPIED';
 
+// The figure steps' caption, the read-only attribute run the engine renders after it, and a token
+// pasted after the figure for the mouse to aim at. `avnt016.jpg` with `size="span"` is the corpus
+// figure's own attribute list, so these are the bytes a real `\fig` line carries rather than an
+// invented shape. The `|…` run displays as its own `.attribute` span, separate from the `\fig*`
+// closer glyph, which is what makes "the whole attribute run" an observable unit at all
+// (unknownUsfm.utils.ts's `figure` case, rendered by `createUnknown` in usj-editor.adaptor.ts).
+const FIGURE_CAPTION_TOKEN = 'CLIPROUNDTRIPFIG';
+const FIGURE_TAIL_TOKEN = 'CLIPROUNDTRIPTAIL';
+const FIGURE_ATTRIBUTE_BYTES = '|src="avnt016.jpg" size="span"';
+const FIGURE_USFM = `\\fig ${FIGURE_CAPTION_TOKEN}${FIGURE_ATTRIBUTE_BYTES}\\fig*`;
+
+// The footnote the flavour step copies. Jonah 1 ships four notes of its own (vv. 1, 6 x2, 9 in the
+// bundled WEB SFM) whose bytes the same whole-document copy also carries, so the assertions below
+// match on the whole byte run including this token rather than on `\f ` alone.
+const NOTE_TOKEN = 'CLIPROUNDTRIPNOTE';
+const NOTE_USFM = `\\f + \\fr 1:1 \\ft ${NOTE_TOKEN}\\f*`;
+
+// The Paratext 9 paste step's payload. P9's clipboard is HTML-FIRST: a collapsed note renders as its
+// caller glyph alone inside a `class="… exclude …"` span, and the note's real bytes ride the
+// fragment as an escaped `<!--usfm:…-->` comment — so P9's own `text/plain` for this copy is the
+// paragraph text with a bare `a` where the note is, carrying no `\f` at all. That difference is the
+// whole point of the step: only a paste that reads the html can produce a note.
+const PARATEXT_9_NOTE_TOKEN = 'E2ENOTEBODY';
+const PARATEXT_9_NOTE_USFM = `\\f + \\fr 1.1 \\ft ${PARATEXT_9_NOTE_TOKEN}\\f*`;
+const PARATEXT_9_CLIPBOARD_TEXT = '\\p In the beginning a God';
+
+/**
+ * Paratext 9's html-comment escaping: every character outside `a-zA-Z` becomes `%` plus four
+ * uppercase hex digits, so `\` travels as `%005C`, a space as `%0020` and `+` as `%002B`. The
+ * escape exists because an html comment may contain neither `--` nor `>`, which is what lets a note
+ * body carry any byte at all.
+ *
+ * Computed rather than written out: the escape of the note below is ~150 characters of hex in which
+ * a drift from the USFM it is supposed to encode would be invisible.
+ */
+function escapeForParatext9Comment(usfm: string): string {
+  return usfm.replace(
+    /[^a-zA-Z]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`,
+  );
+}
+
+/**
+ * A Paratext 9 Standard-view copy of one `\p` paragraph whose text carries a footnote — the
+ * fragment shape P9 writes to the html clipboard flavour. Its markers ride as literal `.marker`
+ * text, because that is how P9's Standard view renders them; the note rides as the caller-glyph
+ * span, whose `exclude` class suppresses the span's own text (the displayed `a`) while its comments
+ * still contribute — which is what turns the glyph back into the note's bytes.
+ */
+const PARATEXT_9_CLIPBOARD_HTML =
+  '<div class="usfm_p"><span class="marker">\\p </span>In the beginning' +
+  '<span class="caller caller_big exclude showtooltip" id="caller_x" attachmentId="" ' +
+  `contenteditable="false"><!--note--><!--f--><!--%002B--><!--usfm:${escapeForParatext9Comment(
+    PARATEXT_9_NOTE_USFM,
+  )}-->a</span> God</div>`;
+
+/** An on-screen box in the coordinate space `Page.mouse` works in. */
+interface ElementBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The on-screen box of `locator`, failing with `description` instead of handing back a null box.
+ *
+ * `boundingBox()` reports MAIN-FRAME coordinates even for an element inside an iframe — the very
+ * space `mainPage.mouse` works in — so a drag between two elements of the editor's web view needs
+ * no iframe-offset arithmetic of its own.
+ */
+async function requireElementBox(locator: Locator, description: string): Promise<ElementBox> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error(`${description} has no box on screen, so a drag cannot aim at it`);
+  return box;
+}
+
+/**
+ * Press at (`fromX`, `fromY`), drag to (`toX`, `toY`), release — one real mouse selection.
+ *
+ * Stepped rather than a single jump: a selection drag is driven by the `mousemove`s the browser
+ * actually receives, so a lone move to the far end can leave the selection where the press landed.
+ */
+async function dragSelect(
+  page: Page,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+): Promise<void> {
+  await page.mouse.move(fromX, fromY);
+  await page.mouse.down();
+  await page.mouse.move(toX, toY, { steps: 10 });
+  await page.mouse.up();
+}
+
 // `Control+C`/`V`/`Z` and `Control+Home`/`End` are the OS's own editing chords, not app
 // accelerators, so they must be spelled per-platform — macOS uses `Meta` for clipboard/undo and
 // `Meta+Arrow` for document start/end. Same pattern as navigation-history.spec.ts.
@@ -72,6 +177,12 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, several clipboard round
     // trips each awaiting a settle/save). 3x "slow" budget — see standard-default-power-mode.spec.ts.
     test.slow();
+    // …and then an explicit ceiling above it, because eight steps no longer fit that budget's worst
+    // case: a cold launch spends ~85s of it before the first step, and each step then waits on a
+    // paste or a clipboard poll with its own 15-20s allowance, which adds up past the 360s `slow()`
+    // grants. The steps are not individually slower than before — there are simply enough of them
+    // that one genuinely slow paste would turn a real pass into a timeout.
+    test.setTimeout(480_000);
 
     await waitForHomeTab(mainPage);
     await makeSampleProjectEditable();
@@ -82,7 +193,10 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     // Jonah 1 (same book used by type-through-save-echo.spec.ts) — a small single chapter that
     // opens with a `\p` paragraph marker immediately followed by `\v 1`.
     await navigateToolbarBcv(mainPage, 'Jonah 1:1');
-    const editorInput = editorFrame.locator('.editor-input.marker-editable');
+    // `.first()`: a pasted footnote opens the note popover, whose own editor also matches
+    // `.editor-input.marker-editable`; the document editor is the first in DOM order and is the one
+    // every step reads and types into.
+    const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
     await expect(editorInput).toBeAttached({ timeout: 60_000 });
     await expect(editorInput).toContainText('Amittai', { timeout: 60_000 });
 
@@ -198,6 +312,235 @@ test.describe('scripture editor clipboard USFM round trip', () => {
       await expect(chapterMarker).toHaveCount(1, { timeout: 20_000 });
       await expect(editorInput).not.toContainText('\\c 99');
       await expect(bcvTrigger).toContainText('Jonah 1', { timeout: 10_000 });
+    });
+
+    // The figure the two drag steps below share. Standard view does not model `\fig` as a node of its
+    // own: it round-trips through an UnknownNode, rendered as a read-only
+    // `contenteditable="false"` block (UnknownNode.createDOM) whose own USFM bytes are immutable
+    // `.marker`/`.attribute` spans flanking the caption. Those glyphs are the read-only boundaries a
+    // selection has to snap around, and `[data-tag="figure"]` addresses the block whatever element
+    // name it renders as.
+    const figure = editorFrame.locator('[data-tag="figure"]');
+    // The opener is the FIRST `.marker` span inside the figure and the `\fig*` closer the last; the
+    // `|src="…"` run between them is `.attribute`, not `.marker` (`createUnknown` pushes them in that
+    // order), so `.first()` is the opener rather than whichever glyph happened to come first.
+    const figureOpenerGlyph = figure.locator('span[data-text-type="marker"]').first();
+    const figureAttributeRun = figure.locator('span[data-text-type="attribute"]');
+    // The `\nd*` closer pasted after the figure: the drag target past the figure in the first drag
+    // step, and the neutral click target that collapses that step's selection in the second.
+    const figureTailGlyph = editorFrame.locator('span.closing[data-marker="nd"]');
+
+    await test.step('copying a selection that starts on a figure’s `\\fig` glyph copies the whole figure', async () => {
+      // The tail token rides the same payload purely so the drag has an ELEMENT to aim at past the
+      // figure. Playwright cannot locate a bare text node, while a `\nd` char span renders real
+      // `span.opening`/`span.closing` glyphs (MarkerNode.createDOM) whose `boundingBox()` is already
+      // in the coordinate space the mouse works in. It is NOT expected in the copied bytes: Chromium
+      // clamps a drag that begins inside a `contenteditable="false"` island to that island
+      // (EditingBoundaryAdjuster moves a focus outside the anchor's root boundary element back to
+      // that element's edge), so releasing past the figure selects up to the figure's end — the
+      // whole figure, which is what this step measures.
+      await electronApp.evaluate(
+        ({ clipboard }, payload) => clipboard.writeText(payload),
+        `${FIGURE_USFM} \\nd ${FIGURE_TAIL_TOKEN}\\nd* `,
+      );
+      await editorInput.click();
+      await editorInput.press(DOC_END_KEY);
+      await editorInput.press(PASTE_KEY);
+      await expect(figure).toHaveCount(1, { timeout: 20_000 });
+      await expect(editorInput).toContainText(FIGURE_CAPTION_TOKEN, { timeout: 20_000 });
+      await expect(editorInput).toContainText(FIGURE_TAIL_TOKEN, { timeout: 20_000 });
+
+      // The sentinel matters more here than anywhere else in this spec: the paste just above put
+      // these very bytes on the clipboard, so without overwriting them first the poll below would
+      // pass on the paste's own payload with the copy path completely broken.
+      await electronApp.evaluate(
+        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+        CLIPBOARD_SENTINEL,
+      );
+
+      // Centre the figure before measuring: the boxes have to be on screen for the mouse to land on
+      // them, and `scrollIntoViewIfNeeded` centres an element that is not already visible, which
+      // leaves the tail glyph just below it comfortably in view too.
+      await figure.scrollIntoViewIfNeeded();
+      const openerBox = await requireElementBox(figureOpenerGlyph, 'the figure’s `\\fig` opener');
+      const tailBox = await requireElementBox(
+        figureTailGlyph,
+        'the `\\nd*` glyph after the figure',
+      );
+
+      // Press a few pixels inside the opener glyph's LEFT edge rather than at its centre, so the
+      // native selection starts at the glyph's first characters: the copied bytes can then only
+      // begin with `\fig ` if the engine expanded the boundary out over the whole read-only glyph.
+      await dragSelect(
+        mainPage,
+        openerBox.x + 3,
+        openerBox.y + openerBox.height / 2,
+        tailBox.x + tailBox.width / 2,
+        tailBox.y + tailBox.height / 2,
+      );
+      // Pressed on the editor, not the page: keystrokes sent to the parent document never reach the
+      // web view. The drag left the editor focused, so this cannot disturb the selection it made.
+      await editorInput.press(COPY_KEY);
+
+      let clipboardText = '';
+      await expect
+        .poll(
+          async () => {
+            clipboardText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+            return clipboardText;
+          },
+          { timeout: 15_000 },
+        )
+        .toContain(FIGURE_USFM);
+      // The press landed a few pixels INTO the opener glyph, so the copied bytes can only begin with
+      // the glyph's first byte if the engine grew the selection out over the whole read-only glyph
+      // rather than starting mid-glyph — the poll above proves the run is complete, this proves
+      // where it starts.
+      expect(clipboardText.startsWith('\\fig ')).toBe(true);
+    });
+
+    await test.step('a selection ending inside a figure’s attribute run copies the whole run', async () => {
+      await electronApp.evaluate(
+        ({ clipboard }, sentinel) => clipboard.writeText(sentinel),
+        CLIPBOARD_SENTINEL,
+      );
+
+      await expect(figureAttributeRun).toHaveCount(1);
+      await figure.scrollIntoViewIfNeeded();
+      const openerBox = await requireElementBox(figureOpenerGlyph, 'the figure’s `\\fig` opener');
+      const attributeBox = await requireElementBox(
+        figureAttributeRun,
+        'the figure’s `|src="…"` attribute run',
+      );
+
+      // Start a few pixels past the opener glyph's RIGHT edge — the caption's first character, which
+      // is ordinary editable text, so nothing about the start of this selection needs expanding.
+      // Derived from the opener's box because the caption is a bare text node with no box of its
+      // own; deriving it that way also survives the figure's bytes wrapping onto a second line,
+      // where a point interpolated toward the attribute run would land on the wrong line entirely.
+      // A keyboard selection cannot stand in for this: the mouse path through a read-only glyph is
+      // what the behaviour is about.
+      // The previous step left the whole figure selected — its drag was clamped to the block and then
+      // materialized — and a press INSIDE an existing selection is, to Chromium, the start of a
+      // text drag-and-drop rather than a new selection. Collapse it somewhere outside the figure
+      // first, exactly as a user would click before dragging afresh.
+      await figureTailGlyph.click();
+      await dragSelect(
+        mainPage,
+        openerBox.x + openerBox.width + 3,
+        openerBox.y + openerBox.height / 2,
+        attributeBox.x + attributeBox.width / 2,
+        attributeBox.y + attributeBox.height / 2,
+      );
+      await editorInput.press(COPY_KEY);
+
+      let clipboardText = '';
+      await expect
+        .poll(
+          async () => {
+            clipboardText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+            return clipboardText;
+          },
+          { timeout: 15_000 },
+        )
+        .toContain(FIGURE_ATTRIBUTE_BYTES);
+      // The whole attribute run, with nothing after it. The drag released INSIDE the run, so the
+      // copied bytes can only end on the run's last byte if the selection expanded over the whole
+      // read-only glyph — and comparing the tail slice rather than asserting `endsWith` reports what
+      // the bytes actually were when it does not.
+      expect(clipboardText.slice(-FIGURE_ATTRIBUTE_BYTES.length)).toBe(FIGURE_ATTRIBUTE_BYTES);
+      // Nor did it over-expand past the run to the `\fig*` closer, which sits immediately after it.
+      expect(clipboardText).not.toContain('\\fig*');
+      // The caption side is a real, non-empty tail of the caption: the attribute run is pinned to the
+      // end above, so these are exactly the bytes between where the drag started and where the run
+      // begins, and `toContain` then holds only for a genuine substring of the caption.
+      const copiedCaption = clipboardText.slice(0, -FIGURE_ATTRIBUTE_BYTES.length);
+      expect(copiedCaption).not.toBe('');
+      expect(FIGURE_CAPTION_TOKEN).toContain(copiedCaption);
+    });
+
+    await test.step('copying a footnote carries its USFM bytes in the `text/html` flavour too', async () => {
+      await electronApp.evaluate(
+        ({ clipboard }, usfm) => clipboard.writeText(`${usfm} `),
+        NOTE_USFM,
+      );
+      // Leave the figure first. The previous step's selection ends inside the figure's
+      // `contenteditable="false"` block, and from there Ctrl+End does not carry the caret out of the
+      // island — so the paste would land on a selection still inside the read-only block, which the
+      // opaque-block guard refuses. A click on the tail glyph is a caret in ordinary text; a fresh
+      // click on `.editor-input` is not used because its centre can be the figure block itself.
+      await figureTailGlyph.click();
+      await editorInput.press(DOC_END_KEY);
+      await editorInput.press(PASTE_KEY);
+      // `toContainText` reads textContent, so a collapsed note's CSS-hidden body still matches it —
+      // which is what makes the pasted note's own bytes observable without expanding the note.
+      await expect(editorInput).toContainText(NOTE_TOKEN, { timeout: 20_000 });
+
+      // A sentinel in BOTH flavours. The html is what this step measures, and `writeText` alone would
+      // leave whatever html a previous run or retry attempt wrote still sitting on the clipboard —
+      // exactly the stale payload the poll below must not be allowed to pass on.
+      await electronApp.evaluate(
+        ({ clipboard }, sentinel) =>
+          clipboard.write({ text: sentinel, html: `<p>${sentinel}</p>` }),
+        CLIPBOARD_SENTINEL,
+      );
+
+      await editorInput.press(DOC_START_KEY);
+      await editorInput.press(SELECT_TO_DOC_END_KEY);
+      await editorInput.press(COPY_KEY);
+
+      let clipboardHtml = '';
+      await expect
+        .poll(
+          async () => {
+            clipboardHtml = await electronApp.evaluate(({ clipboard }) => clipboard.readHTML());
+            // Compared with NBSP normalized away: the marker bytes are what this measures, and a
+            // display-NBSP or an `&nbsp;` a clipboard intermediary re-serialized would otherwise
+            // fail the match on the serialization rather than on the content. None of `\`, `+`, `:`
+            // or `*` needs html escaping, so the bytes themselves travel literally.
+            return clipboardHtml.replaceAll('&nbsp;', ' ').replaceAll('\u00a0', ' ');
+          },
+          { timeout: 15_000 },
+        )
+        .toContain(NOTE_USFM);
+      // The html is the USFM bytes, not an export of the editor's own DOM. Every DOM export of a note
+      // caller carries `data-caller` (ImmutableNoteCallerNode.exportDOM), so its absence is what
+      // separates the two — and it is the one attribute that cannot survive a bytes-only flavour.
+      expect(clipboardHtml).not.toContain('data-caller');
+      // Both flavours say the same thing, so a consumer's flavour preference cannot change the
+      // document it receives.
+      const clipboardText = await electronApp.evaluate(({ clipboard }) => clipboard.readText());
+      expect(clipboardText).toContain(NOTE_USFM);
+    });
+
+    await test.step('pasting Paratext 9 clipboard html decodes the footnote from its `usfm:` comment', async () => {
+      // Counted rather than assumed: Jonah 1 ships four notes of its own and the step above pasted a
+      // fifth, so only the DELTA can show that this paste produced a note.
+      // Scoped to the document editor: an open note popover renders its own copy of a note.
+      const noteCallers = editorInput.locator('span.immutable-note-caller');
+      const callerCountBeforePaste = await noteCallers.count();
+
+      await electronApp.evaluate(({ clipboard }, payload) => clipboard.write(payload), {
+        text: PARATEXT_9_CLIPBOARD_TEXT,
+        html: PARATEXT_9_CLIPBOARD_HTML,
+      });
+      // Same reason as the step above for not re-clicking first: the copy above left the caret in the
+      // editor, and a click could land on the figure's read-only block.
+      await editorInput.press(DOC_END_KEY);
+      await editorInput.press(PASTE_KEY);
+
+      // The discriminator. This clipboard's `text/plain` carries no `\f` at all, so a note can only
+      // appear if the paste decoded the html's `usfm:` comment instead of preferring the plain text.
+      await expect(noteCallers).toHaveCount(callerCountBeforePaste + 1, { timeout: 20_000 });
+      await expect(editorInput).toContainText(PARATEXT_9_NOTE_TOKEN, { timeout: 20_000 });
+      // Positive control for the negative below: an editor that dropped the paste on the floor
+      // satisfies "no literal caller glyph" vacuously, so anchor on text the paste must have landed.
+      await expect(editorInput).toContainText('In the beginning', { timeout: 20_000 });
+      // The caller glyph is P9's DISPLAY text, not document data, so it must not reach the document —
+      // which is exactly what the `text/plain` fallback would have typed in. Matched on `a God`
+      // rather than the longer `beginning a God` so it still fires if the glyph lands somewhere other
+      // than where the plain text would have put it; the phrase occurs nowhere in Jonah 1's WEB text.
+      await expect(editorInput).not.toContainText('a God');
     });
   });
 });
