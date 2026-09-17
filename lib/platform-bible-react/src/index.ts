@@ -82,6 +82,7 @@ export {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  MAIN_CONTENT_ZOOM_AREA_ID,
   useContentZoomArea,
 } from './components/advanced/content-zoom-root.component';
 export type {
