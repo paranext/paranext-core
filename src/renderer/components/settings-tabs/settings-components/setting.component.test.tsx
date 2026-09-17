@@ -195,6 +195,35 @@ describe('failed setting writes', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('platform.language'));
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('SR_EDIT_BLOCKED'));
   });
+
+  it('clears an error left by a failed validation once a later change writes successfully', async () => {
+    vi.useFakeTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    // The first change fails validation, leaving an error on screen; the second passes validation
+    // and has a real writer, so the write should complete and the error should clear — unlike the
+    // "a setting with no writer" describe below, where a passing validation still cannot clear it.
+    const validateProjectSetting = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
+    render(
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateProjectSetting={validateProjectSetting}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+      />,
+    );
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: '' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(screen.getByText('An error occurred')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'Spanish' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(screen.queryByText('An error occurred')).toBeNull();
+    expect(setSetting).toHaveBeenCalledWith('Spanish');
+  });
 });
 
 describe('a setting with no writer', () => {
@@ -207,7 +236,8 @@ describe('a setting with no writer', () => {
     vi.useFakeTimers();
     vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
     // The first change is rejected by validation so there is an error on screen to preserve; the
-    // second passes validation, which is the change that used to clear it and report success.
+    // second passes validation but there is no writer to write it, so the error stays on screen
+    // instead of clearing.
     const validateProjectSetting = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
     render(
       <Setting
