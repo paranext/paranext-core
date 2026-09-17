@@ -683,8 +683,8 @@ export declare const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = "--platform-content-zoom
  */
 export declare const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = "--platform-content-zoom-default";
 /**
- * Id of the view's unnamed main zoom area, the fallback used when {@link useContentZoomArea}
- * reports the empty string. Mirrors `MAIN_CONTENT_ZOOM_AREA` in paranext-core's
+ * Id of the view's unnamed main zoom area, the fallback used when {@link useContentZoomArea} reports
+ * the empty string. Mirrors `MAIN_CONTENT_ZOOM_AREA` in paranext-core's
  * `src/shared/models/web-view.model.ts`; a platform test keeps the two equal.
  *
  * @experimental This export is unstable and may change shape or disappear without notice
@@ -719,12 +719,9 @@ export type ContentZoomAreaProviderProps = {
  * Popovers, dropdown menus and tooltips from this library that open inside an area are scaled with
  * that area's zoom, and their size is capped so they stay inside the pane.
  *
- * Written with `createElement` rather than JSX: this module keeps the `.ts` extension the rest of
- * the context directory uses (`menu.context.ts`), and JSX syntax is not available there.
- *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function ContentZoomAreaProvider({ area, children }: ContentZoomAreaProviderProps): import("react").FunctionComponentElement<import("react").ProviderProps<string | undefined>>;
+export declare function ContentZoomAreaProvider({ area, children }: ContentZoomAreaProviderProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The zoom area the calling component is rendered in: `''` for the view's main area, the area id
  * for a named area, or `undefined` outside every `ContentZoomRoot` and `ContentZoomAreaProvider`.
