@@ -357,6 +357,86 @@ describe('Find project selector — simple interface mode', () => {
   });
 });
 
+/**
+ * The picker's grouping menu labels come from the shared `%projectSelector_grouping_*%` keys, which
+ * `buildProps` stubs key-as-value along with the rest of `FIND_LOCALIZED_STRING_KEYS`.
+ */
+const LANGUAGE_GROUPING_LABEL_KEY = '%projectSelector_grouping_language_label%';
+const TYPE_GROUPING_LABEL_KEY = '%projectSelector_grouping_type_label%';
+const LAST_USED_GROUPING_LABEL_KEY = '%projectSelector_grouping_lastUsed_label%';
+
+const PROJECTS_WITH_LANGUAGES: FindProject[] = [
+  { id: 'WEB', shortName: 'WEB', fullName: 'World English Bible', language: 'English' },
+  { id: 'OTH', shortName: 'OTH', fullName: 'Other Bible', language: 'Spanish' },
+];
+const OPEN_TABS_TWO_PROJECTS: ProjectSelectorOpenTab[] = [
+  ...OPEN_TABS,
+  { projectId: 'OTH', scrollGroupId: 0 },
+];
+
+/**
+ * The picker's group-by menu trigger, found by its menu-popup semantics rather than by its
+ * accessible name: the name comes from the shared `%projectSelector_*%` block, and matching on the
+ * role a dropdown trigger must expose keeps these tests independent of how that string is spelled.
+ * The length assertion keeps the query honest — it is the only menu-opening button in the picker.
+ */
+function getGroupByTrigger(): HTMLElement {
+  const menuTriggers = within(screen.getByRole('dialog'))
+    .getAllByRole('button')
+    .filter((button) => button.getAttribute('aria-haspopup') === 'menu');
+  expect(menuTriggers).toHaveLength(1);
+  return menuTriggers[0];
+}
+
+async function openGroupByMenu(user: ReturnType<typeof setupUser>) {
+  await openProjectSelector(user);
+  await user.click(getGroupByTrigger());
+}
+
+describe('Find project selector — groupings', () => {
+  it('buckets projects by language when the caller supplies it', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({ projects: PROJECTS_WITH_LANGUAGES, openTabs: OPEN_TABS_TWO_PROJECTS })}
+      />,
+    );
+
+    await openGroupByMenu(user);
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
+    );
+
+    // Section headings, not row text: no project's short or full name is exactly 'English' or
+    // 'Spanish', so these match the language buckets and nothing else.
+    expect(await screen.findByText('English')).toBeInTheDocument();
+    expect(screen.getByText('Spanish')).toBeInTheDocument();
+  });
+
+  it('offers neither Type nor Last used, which Find cannot split into real buckets', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({ projects: PROJECTS_WITH_LANGUAGES, openTabs: OPEN_TABS_TWO_PROJECTS })}
+      />,
+    );
+
+    await openGroupByMenu(user);
+
+    // Falsifies the negative assertions below: the menu did open, and it offers the groupings Find
+    // can actually populate.
+    expect(
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL_KEY }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL_KEY }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 // #region PT-4343 lifecycle + permission suites
 
 /**

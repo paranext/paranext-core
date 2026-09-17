@@ -83,6 +83,7 @@ import {
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import {
   FIND_SEARCHABLE_WEB_VIEW_TYPES,
   REFERENCE_PANEL_WEB_VIEW_TYPES,
@@ -117,20 +118,34 @@ const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
 
-/** Short and full names for every scripture project/resource, keyed by canonical project id. */
-type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
+/** Display names and language for every scripture project/resource, keyed by canonical project id. */
+type ProjectNamesById = {
+  [id: string]: Pick<FindProject, 'shortName' | 'fullName' | 'language'>;
+};
 
 /**
- * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
- * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
+ * Gets the short name, full name, and language of a project from its ID. Kept in the webview (not
+ * the shared, `@papi`-free utils) so the utils stay importable by the presentational component and
+ * its story.
+ *
+ * `platform.language` feeds the picker's Language grouping; it degrades to `undefined` (an "unknown
+ * language" bucket) rather than failing the whole lookup, since a project without it is still
+ * perfectly searchable.
  */
 async function getProjectNames(
   projectId: string,
-): Promise<Pick<FindProject, 'shortName' | 'fullName'>> {
+): Promise<Pick<FindProject, 'shortName' | 'fullName' | 'language'>> {
   const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const projectShortName = await pdp.getSetting('platform.name');
-  const projectFullName = await pdp.getSetting('platform.fullName');
-  return { shortName: projectShortName, fullName: projectFullName };
+  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
+    pdp.getSetting('platform.name'),
+    pdp.getSetting('platform.fullName'),
+    pdp.getSetting('platform.language').catch(() => undefined),
+  ]);
+  return {
+    shortName: projectShortName,
+    fullName: projectFullName,
+    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
+  };
 }
 
 /**
@@ -452,12 +467,19 @@ global.webViewComponent = function FindWebView({
     return ids;
   }, [allOpenProjectTabs]);
 
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('FindWebView');
+
   const projects = useMemo<FindProject[]>(
     () =>
       Object.entries(projectIdsAndNames)
         .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
-        .map(([id, names]) => ({ id, ...names })),
-    [projectIdsAndNames, openProjectIds],
+        .map(([id, names]) => ({
+          id,
+          ...names,
+          lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+        })),
+    [projectIdsAndNames, openProjectIds, recencyMap],
   );
 
   // An open editor tab whose project the metadata fetch never returned means the fetch predates the
