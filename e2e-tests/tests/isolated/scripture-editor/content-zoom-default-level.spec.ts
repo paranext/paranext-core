@@ -7,10 +7,6 @@
  * launches, and a spec must never call `preConfigureSettings` itself (see the `IsolatedFixtures`
  * doc in `fixtures/isolated.fixture.ts`).
  *
- * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a second Electron
- * instance against the shared renderer dev server has a documented dock-tab failure mode (see
- * standard-default-power-mode.spec.ts).
- *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor`.
  */

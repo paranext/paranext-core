@@ -9,9 +9,9 @@
  * real content — though the assertions below never depend on that: the footnotes `ContentZoomRoot`
  * exists once the pane is toggled visible regardless of whether the list is empty.
  *
- * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a second Electron
- * instance against the shared renderer dev server has a documented dock-tab failure mode (see
- * standard-default-power-mode.spec.ts). Sub-scenarios are test.step()s sharing the one instance.
+ * The sub-scenarios below are test.step()s sharing one Electron instance rather than separate
+ * test()s, because each test() launches its own instance and this file has no reason to pay for
+ * three.
  *
  * Runs against an isolated project root (the bundled sample WEB is installed into the empty root):
  * `npm run test:e2e:isolated scripture-editor`.
