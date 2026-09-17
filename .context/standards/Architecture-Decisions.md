@@ -1109,6 +1109,56 @@ step, no automation. Just a record.
   open follow-up work.
 - **Source:** PR #2770.
 
+## adr-derived-stylesheet-coverage-tests: A stylesheet invariant is tested by deriving the expectation from the same file, not from a hand-typed list
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** The editor stylesheet's gutter view positions each paragraph's marker glyph at
+  `left: calc(-(gutter width) + 0.5em - var(--para-indent))`, so every marker whose text-spacing
+  rule gives it a `margin-left` needs a matching `--para-indent` entry in the gutter block, and every
+  hanging-indent marker needs a matching `--verse-text-start`. The block had been maintained by hand
+  and covered five markers out of roughly fifty; the glyph overlapped the text for the rest at every
+  window width. A regression test for the fix had to decide what "every indented marker" means. The
+  stylesheet is also vendored three times (the extension's `_usj-nodes.scss`, the
+  `platform-bible-react` demo `usj-nodes.css`, and the upstream `scripture-editors` source), each
+  re-synced by hand.
+- **Decision:** The coverage test parses the stylesheet itself into flat `selector { declarations }`
+  blocks, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
+  cascade: a `[dir='ltr']` rule beats a direction-agnostic one, table rows excluded because they never
+  render as `.para`) and the expected `--verse-text-start` map from negative `text-indent`, then
+  asserts the gutter block matches in both directions: every derived marker present with the same
+  value, and no gutter entry without a base rule calling for it. The parser's blind spots are
+  themselves asserted away — a setter nested in an at-rule, a direction-qualified gutter rule, a
+  `margin` shorthand or logical `margin-inline-*` on a marker, an LTR/RTL margin mismatch — so the
+  test fails loudly rather than passing vacuously when the stylesheet's shape moves outside what the
+  parser reads. A small hand-typed oracle from the USFM stylesheet (`usfm.sty` LeftMargin and
+  FirstLineIndent for one marker per distinct value) sits alongside, because a derivation alone
+  accepts a base rule that drifted from the spec as long as its compensation drifted with it. The
+  same test runs over both in-repo copies and compares their derived gutter maps to each other; the
+  upstream repo carries a single-file twin.
+- **Alternatives:** **A hand-typed list of expected markers** — rejected: it encodes whatever gap
+  existed when it was written and passes forever after, which is exactly how the block came to cover
+  five markers. **Assert the copies are byte-identical** — rejected: the copies legitimately diverge
+  (SCSS versus CSS, host-specific rules), so a byte comparison would either fail permanently or need a
+  hand-maintained exclusion list with the same staleness problem. **Parse with `postcss`** — declined
+  for now: the flat parser plus its blind-spot assertions is ~100 lines and reads without a dependency;
+  a real parser becomes worth it if the stylesheet grows nesting the assertions cannot exclude.
+- **Consequences:** Adding an indented marker to the base rules without compensating it fails the
+  build; so does adding a compensation nothing calls for. Re-syncing a copy from upstream is checked
+  structurally for this block, so the cross-copy pin comments in the two `usj-nodes-styles.test.ts`
+  suites cover only the rules outside it. The invariant is scoped to margins set in the file under
+  test; the PT9-derived commentary stylesheets (`marker-styles/*.scss`) and project-stylesheet CSS
+  (`generateUsjCss`) load later in source order and can move a marker's margin away from the
+  compensated value — that is open work (PT-4624), not covered. The durable home for the
+  compensation is those generators, `tools/pt9-css-converter` and `generateUsjCss`: each should emit
+  the gutter variables beside every margin it emits, and once a generator produces the default sheet
+  for every project the hand-maintained block and this test retire with the placeholder
+  `usj-nodes.css`. The pattern generalises to any "for every X in
+  this file there must be a Y" invariant over a generated or vendored asset: derive X from the asset,
+  assert the parser's blind spots, keep a small independent oracle.
+- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; upstream
+  `paranext/scripture-editors` PR #10.
+
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
 
 - **Date:** 2026-08-31
@@ -3122,6 +3172,33 @@ step, no automation. Just a record.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ProjectSelector`'s `project-multi` mode keys each row by `(projectId,
+  scrollGroupId)`, so a project open in two scroll groups renders two selectable rows. The
+  checklist's comparative-texts storage is per-project and carries no scroll group, so a stored ref
+  matched neither row: both rendered unselected, and clicking one added a duplicate ref instead of
+  toggling the existing one off
+  (`extensions/src/platform-scripture/src/checklist.web-view.tsx`). The component could have grown a
+  per-project mode that keys rows by `projectId` alone.
+- **Decision:** Consumers whose selection semantics are per-project collapse the rows themselves —
+  keep one row per project (the lowest scroll group) and pair each stored ref with that row's scroll
+  group on the way in and de-duplicate on the way back out. `ProjectSelector` keeps a single row
+  identity, `(projectId, scrollGroupId)`.
+- **Alternatives:** (a) A `project-multi-per-project` mode in `ProjectSelector` — rejected as a
+  second row-identity scheme through selection, grouping, and the trigger summary for one consumer.
+  (b) Disabling the open-tabs grouping on per-project pickers so duplicate rows never appear —
+  rejected: it removes the most useful grouping to dodge a data-shape mismatch. (c) Storing the
+  scroll group alongside each comparative-text ref — rejected: comparative texts are a property of
+  the project, and persisting a scroll group would make saved state depend on window layout.
+- **Consequences:** A project open in several scroll groups shows only the lowest group's chip in a
+  per-project picker, so the trigger under-reports where the project is open. Any future per-project
+  consumer must repeat the collapse; if a second one appears, move the collapse into
+  `ProjectSelector` as a real per-project mode rather than copying it a third time.
+- **Source:** PR #2673 (project-selector groupings).
+
 ## adr-per-web-view-ctrl-f-for-find: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 
 - **Formerly:** ADR-0015
@@ -3539,6 +3616,45 @@ step, no automation. Just a record.
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+
+## adr-project-selector-consumer-driven-groupings: ProjectSelector groupings are consumer-supplied descriptors over an untyped `customData` bag
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ProjectSelector` owned its grouping options as a fixed prop set
+  (`groupByOpenTabs`, `groupByVersification` + `priorityVersificationId`, `showSelectedOnly`, and
+  their `filter*`/`onChange*` companions). Every new axis a picker wanted meant new props on a
+  shared component, and every picker was offered every axis whether or not its rows carried the
+  data — the manage-books picker showed a "Versification" option only because the component had
+  been taught about versification. `platform-bible-react` is PAPI-free, so the component cannot
+  fetch the data an axis needs; only the consumer can.
+- **Decision:** A consumer passes `availableGroupings` — an array of `ProjectSelectorGrouping`
+  descriptor objects, each saying how to bucket a row, what to call the bucket, how to order
+  buckets, and what to do with rows it cannot classify. Row data travels in an untyped
+  `customData` bag on `ProjectSelectorProject`, packed by `makeProjectSelectorCustomData`
+  (`platform-bible-utils`). The component never interprets `customData`; only the descriptor the
+  same consumer supplied reads it. `makeBuiltInGroupings` / `makeSelectionGrouping` build the stock
+  descriptors from the shared `%projectSelector_*%` block so the common case is one line, but they
+  are a convenience layer, not a privileged one — they return exactly what a consumer-defined
+  descriptor is.
+- **Alternatives:** (a) Keep growing the typed prop set — rejected: every axis is a change to a
+  shared component, and pickers keep being offered axes their rows cannot populate. (b) A typed
+  union of known grouping kinds — rejected: it still centralizes knowledge of every axis in the
+  component, and an extension outside this repo could not add one. (c) A typed `customData`
+  interface instead of an open record — rejected for the same reason; the open bag is what lets a
+  surface offer "Language" without the component having a language field.
+- **Consequences:** The type system no longer connects "this picker offers Language" to "this
+  picker packs a language", so a picker can offer a grouping that silently buckets every row as
+  unknown. That hole is covered by convention rather than types: each surface exports a
+  `*_PROJECT_SELECTOR_GROUPING_IDS` allow-list, and
+  `extensions/src/platform-scripture/src/project-selector-grouping-coverage.test.ts` drives each
+  list through that surface's own row builder and fails when an offered id is not backed by packed
+  data. That test is extension-scoped, so the same defect introduced inside `platform-bible-react`
+  would not be caught — a check inside `ProjectSelector` is the durable fix. The rework also
+  removed ~16 public `ProjectSelectorProps` members and renamed two localization keys with no
+  deprecation cycle, which `experimental.ts` sanctions by its own contract but which any
+  out-of-repo consumer (e.g. Paratext 10 Studio) must absorb at once.
+- **Source:** PR #2673 (project-selector groupings).
 
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 

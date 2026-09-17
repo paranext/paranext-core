@@ -244,7 +244,9 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // with each suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation,
     // the ::after outline) can land in one copy and silently miss the other. The demo suite
     // carries the same three pins, so a fix landing in one copy fails the other's suite until it
-    // is forwarded.
+    // is forwarded. The gutter indent-compensation block is covered structurally instead:
+    // usj-nodes-scss-coverage.test.ts derives it from each copy's base rules and compares the two
+    // copies' results, so no pin is needed for it here.
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
       expect(scss).toMatch(
         /\.psc-gutter-markers \.para > \.marker:not\(\.verse\):not\(\.chapter\):first-child,\s*\.psc-gutter-markers \.book > \.marker:first-child \{[^}]*unicode-bidi: isolate;/,

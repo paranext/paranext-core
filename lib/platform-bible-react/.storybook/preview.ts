@@ -5,6 +5,7 @@ import { persistDirection, readDirection } from '../src/utils/dir-helper.util';
 import { DocsPageWithFilePath } from './blocks/DocsPageWithFilePath';
 import { withPlatformBibleThemes } from './theme-decorator';
 import '../src/index.css';
+import './scripture-fonts.css';
 import './preview-storybook.css';
 import './storybook-themes.css';
 

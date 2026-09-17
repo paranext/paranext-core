@@ -42,13 +42,18 @@ import {
   ProjectSelectorLocalizedStrings,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
+  PROJECT_SELECTOR_STRING_KEYS,
   ScopeWithRange,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  makeBuiltInGroupings,
   summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
   LanguageStrings,
   LocalizedStringValue,
+  makeProjectSelectorCustomData,
   ScrollGroupId,
   Section,
 } from 'platform-bible-utils';
@@ -113,9 +118,6 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_projectFilter_noOpenProjectsOrResources%',
   '%webView_find_projectFilter_noProjectsFound%',
   '%webView_find_projectSelector_label%',
-  '%webView_find_projectSelector_openTabsSectionHeading%',
-  '%webView_find_projectSelector_otherProjectsSectionHeading%',
-  '%webView_find_projectSelector_searchPlaceholder%',
   '%webView_find_recent%',
   '%webView_find_replace%',
   '%webView_find_replaceAll%',
@@ -143,6 +145,9 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_verseTextOnly%',
   // Preview-options keys live with their component; spread them so the two lists can't drift.
   ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
+  // Shared ProjectSelector keys — every ProjectSelector in the app resolves the same block, then
+  // the caller merges its own placeholder/ariaLabel on top.
+  ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const;
 
 /**
@@ -199,6 +204,15 @@ export type FindProject = {
   shortName: string;
   /** Full display name. */
   fullName: string;
+  /** Language name, used by the picker's Language grouping. Omitted when unknown. */
+  language?: string;
+  /**
+   * Presence flag the picker's Last-used grouping reads: any number puts the project in the
+   * "recently used" bucket. The magnitude is never compared, so it does not order anything. Build
+   * it with `recencyMapFromOrderedIds` over the recently-opened-projects list. Omitted when the
+   * project has not been opened.
+   */
+  lastUsedAt?: number;
 };
 
 /** Props for the {@link Find} presentational component. */
@@ -434,6 +448,68 @@ export type FindProps = {
   /** Whether the project has AllowInvisibleChars enabled. Forwarded to the result cards. */
   allowInvisibleCharacters?: boolean;
 };
+
+/**
+ * The built-in grouping ids Find's project picker offers in the default (scroll-group) branch, in
+ * `makeBuiltInGroupings` order. The Simple-interface branch offers a different list — see
+ * {@link FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS}.
+ *
+ * Two of the four built-ins are left out because Find cannot populate them into more than one
+ * bucket, and a menu item that always yields a single bucket is a dead option:
+ *
+ * - `type`: Find has no project-type source. `FindProject` carries no type and nothing upstream
+ *   supplies one, so every row would land under "Unknown type".
+ * - `lastUsed`: Find lists ONLY projects open in a searchable tab, and opening a project is what
+ *   records it as recently used. The recents list is capped at 5, so the "Other" bucket is
+ *   non-empty only when more than five projects are open at once. The grouping also cannot order by
+ *   recency — the picker sorts every bucket alphabetically by short name.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toFindSelectorRows} actually packs, so adding an id here without adding its
+ * data is a build failure rather than a dead menu item.
+ */
+export const FIND_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['openTabs', 'language'];
+
+/**
+ * The built-in grouping ids Find's project picker offers in the Simple-interface branch, where the
+ * picker is handed an empty `openTabs` list to suppress scroll-group badges.
+ *
+ * It is {@link FIND_PROJECT_SELECTOR_GROUPING_IDS} minus `openTabs`: with no open tabs, the "open
+ * tabs" section has no eligible row, so that grouping collapses the list into one undifferentiated
+ * bucket — the same result as no grouping at all. Offering it would put a dead item at the top of
+ * the menu, and it is the item the picker's initial-grouping resolver picks first when present.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list too, so an id added here without the
+ * row data to back it is a build failure rather than a dead menu item.
+ */
+export const FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = ['language'];
+
+/**
+ * Maps caller-supplied Find projects onto ProjectSelector rows: sorted by full name, with the
+ * grouping inputs the picker's built-in groupings read packed into `customData`. Exported for
+ * coverage tests.
+ *
+ * `lastUsedAt` is packed even though Find's grouping menu does not currently offer `lastUsed` (see
+ * {@link FIND_PROJECT_SELECTOR_GROUPING_IDS} for why). It costs nothing, and a Find that ever lists
+ * projects beyond the open ones would want it without a second round of plumbing.
+ */
+export function toFindSelectorRows(projects: readonly FindProject[]): ProjectSelectorProject[] {
+  return [...projects]
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
+    .map((project) => ({
+      id: project.id,
+      shortName: project.shortName,
+      fullName: project.fullName,
+      customData: makeProjectSelectorCustomData({
+        language: project.language,
+        lastUsedAt: project.lastUsedAt,
+      }),
+    }));
+}
 
 /**
  * A centered, screen-reader-announced message shown in the results area in place of the results
@@ -887,66 +963,50 @@ export function Find({
   };
 
   const sortedProjects = useMemo<ProjectSelectorProject[]>(
-    () =>
-      [...projects]
-        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-        .map((project) => ({
-          id: project.id,
-          shortName: project.shortName,
-          fullName: project.fullName,
-        })),
+    () => toFindSelectorRows(projects),
     [projects],
   );
 
-  // `ProjectSelector`'s popover strings default to hardcoded English (`DEFAULT_STRINGS` in
-  // `project-selector.component.tsx`), so they must be supplied explicitly or the picker's insides
-  // stay untranslated. Mirrors the `manage-books.web-view.tsx` precedent.
-  //
-  // Deliberately only the strings REACHABLE from Find's configuration, since localized keys are
-  // immutable once shipped and one that can never render is permanent dead surface. Omitted, with
-  // the reason each cannot appear here:
-  // - `filterAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `filterGroupByOpenTabs` —
-  //   the funnel menu is not mounted at all (`hideFilterMenu` below).
-  // - `selectAll` / `clearAll` / `filterShowSelectedOnly` — multi-select only; both of Find's
-  //   configurations are single-select (`mode="projectScrollGroup"` / `mode="project"`).
-  // - `versificationUnknownSectionHeading` — requires versification grouping.
-  // - `boundButClosedTooltip` / `openButtonLabel` — render only on bound-but-closed rows, which Find
-  //   cannot produce (see `onOpenProjectInGroup`'s defensive no-op) and which `mode="project"` has no
-  //   code path for at all.
-  //
-  // `otherProjectsSectionHeading` is kept even though today's list is all open tabs (so that section
-  // is empty and its heading does not render): unlike the above, its reachability depends on what
-  // ends up in `projects` rather than on a setting here, so it is the one worth holding.
-  //
-  // `openTabsSectionHeading` is only reachable in the power-mode configuration: `defaultGroupByOpenTabs`
-  // defaults to `true`, and there every row carries a `scrollGroupId` so all of them land in the
-  // "open tabs" section. The simple-mode configuration passes `openTabs={[]}`, which leaves no row
-  // eligible for that section and collapses the list to a single unheaded group.
+  // Every ProjectSelector across the app resolves the shared `%projectSelector_*%` keys, then
+  // merges Find-specific overrides (placeholder, empty message, aria-label) on top.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
-      searchPlaceholder: localizedStrings['%webView_find_projectSelector_searchPlaceholder%'],
-      openTabsSectionHeading:
-        localizedStrings['%webView_find_projectSelector_openTabsSectionHeading%'],
-      otherProjectsSectionHeading:
-        localizedStrings['%webView_find_projectSelector_otherProjectsSectionHeading%'],
+      ...buildProjectSelectorLocalizedStrings(localizedStrings),
+      buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
+      commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
+      ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
     }),
     [localizedStrings],
   );
 
-  // Presentation and localization shared by both project-picker configurations, so the
-  // `hideScrollGroups` branch below differs only in the parts that actually vary: the mode, the
-  // selection shape, and the change/open callbacks.
+  // Built-in groupings wired to the shared central `%projectSelector_grouping_*%` keys. Each branch
+  // is narrowed to the ids it can populate; see FIND_PROJECT_SELECTOR_GROUPING_IDS and
+  // FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
+  const builtInGroupings = useMemo(
+    () => makeBuiltInGroupings(buildBuiltInGroupingStrings(localizedStrings)),
+    [localizedStrings],
+  );
+  const projectSelectorGroupings = useMemo(
+    () =>
+      builtInGroupings.filter((grouping) =>
+        FIND_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [builtInGroupings],
+  );
+  const simpleProjectSelectorGroupings = useMemo(
+    () =>
+      builtInGroupings.filter((grouping) =>
+        FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [builtInGroupings],
+  );
+
+  // Presentation shared by both project-picker configurations, so the `hideScrollGroups` branch
+  // below differs only in the parts that actually vary: the mode, the selection shape, the offered
+  // groupings, and the change/open callbacks.
   const sharedProjectSelectorProps = {
     localizedStrings: projectSelectorLocalizedStrings,
     isLoading: isLoadingProjects,
-    hideFilterMenu: true,
-    buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
-    commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
-    ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
-    buttonVariant: 'outline' as const,
-    buttonClassName: 'tw:w-full tw:font-normal',
-    popoverContentClassName: 'tw:w-[300px]',
-    alignDropDown: 'start' as const,
   };
 
   return (
@@ -966,14 +1026,16 @@ export function Find({
                  `openTabs={[]}` is what suppresses them — `mode="project"` derives each row's
                  group badges from `openTabs`, so passing Find's real tabs here would still badge
                  every open project with its group letter. It also leaves no row eligible for the
-                 "open tabs" section, collapsing the list into one unheaded group. Matches the
-                 `ProjectSelector` "Simple Flat List" story. */
+                 "open tabs" section, which is why this branch offers
+                 `FIND_SIMPLE_PROJECT_SELECTOR_GROUPING_IDS` instead. Matches the `ProjectSelector`
+                 "Simple Flat List" story. */
               <ProjectSelector
                 mode="project"
                 projects={sortedProjects}
                 openTabs={NO_OPEN_TABS}
                 selection={{ projectId: selectedProjectId }}
                 onChangeSelection={({ projectId: nextId }) => onSelectProject(nextId)}
+                availableGroupings={simpleProjectSelectorGroupings}
                 {...sharedProjectSelectorProps}
               />
             ) : (
@@ -986,6 +1048,7 @@ export function Find({
                   onSelectProjectScrollGroup(nextId, nextScrollGroupId)
                 }
                 onOpenProjectInGroup={onOpenProjectInGroup}
+                availableGroupings={projectSelectorGroupings}
                 {...sharedProjectSelectorProps}
               />
             )}
