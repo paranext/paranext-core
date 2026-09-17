@@ -669,6 +669,19 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-cap', 25, 'main']]);
   });
 
+  it('caps what one frame of notches asks for, not just what one event does', async () => {
+    const { bound } = install('wv-notch-cap-frame', TWO_AREAS);
+    await nextFrame();
+    // Thirty one-tick notches inside one frame: each is far under the cap on its own, so this is
+    // the cap holding the frame's total rather than any single event.
+    for (let index = 0; index < 30; index += 1) {
+      wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    }
+
+    await oneFrame();
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-cap-frame', 25, 'main']]);
+  });
+
   it('takes a line-mode wheel event as one step, since a tick count means nothing there', () => {
     const { bound } = install('wv-notch-line-mode', TWO_AREAS);
     // `deltaMode` 1 is lines: a handful of them, never 120 of anything.
