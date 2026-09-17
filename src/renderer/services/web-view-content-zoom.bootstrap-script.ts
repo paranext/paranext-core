@@ -374,10 +374,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     };
     // The zoom chords, baked in from CONTENT_ZOOM_CHORDS in content-zoom.model.ts. This script runs
     // as injected text inside the web view, so it cannot import that module - it gets the table
-    // serialized at build time instead, which is how the injected stylesheet's rule template travels
-    // here too. The macOS menu half is dropped: a web view has no menu. The modifier rule is the one
-    // chord rule still stated twice, because it is two booleans; Shift is accepted for every action,
-    // since on AZERTY and Czech layouts the top-row 0 and - are shifted keys.
+    // serialized into the script text as the script is generated, the same way the injected
+    // stylesheet's rule template travels here. The macOS menu half is dropped: a web view has no
+    // menu. The modifier rule is the one chord rule stated in both places, because it is two
+    // booleans; Shift is accepted for every action, since on AZERTY and Czech layouts the top-row 0
+    // and - are shifted keys.
     const CHORDS = ${chords};
     const hasModifier = (e) => (e.ctrlKey || e.metaKey) && !e.altKey;
     const chordFor = (e) => {

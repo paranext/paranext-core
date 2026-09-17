@@ -64,10 +64,11 @@ export type ZoomStepperProps = {
 
 /**
  * The platform's zoom stepper: a `+`/`−`/reset control for editing a zoom factor without typing a
- * decimal, displaying the factor as a percentage. Its step and its range come from the platform's
- * shared zoom arithmetic ({@link adjustZoomFactor}), so a press here moves the factor by exactly the
- * rule every other zoom surface follows. `defaultValue` stays a prop because the reset target is
- * the calling setting's own default.
+ * decimal, displaying the factor as a percentage. Its step comes from the platform's shared zoom
+ * arithmetic ({@link adjustZoomFactor}) and its range from {@link MIN_ZOOM_FACTOR} /
+ * {@link MAX_ZOOM_FACTOR}, so a press here moves the factor by exactly the rule every other zoom
+ * surface follows. `defaultValue` is a prop because the reset target is the calling setting's own
+ * default rather than a platform constant.
  */
 export function ZoomStepper({
   value,
