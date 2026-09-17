@@ -13,10 +13,7 @@ import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
 import { Z_INDEX_TOOLTIP } from '@/components/z-index';
 // CUSTOM: Import the content-zoom area context so a tooltip opened from zoomed content follows
 // that area's zoom
-import {
-  getContentZoomPopupStyle,
-  useContentZoomArea,
-} from '@/components/advanced/content-zoom-root.component';
+import { getContentZoomPopupStyle, useContentZoomArea } from '@/context/content-zoom-area.context';
 
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */

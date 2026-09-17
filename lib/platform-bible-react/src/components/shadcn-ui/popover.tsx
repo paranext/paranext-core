@@ -10,10 +10,7 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 // CUSTOM: Import the content-zoom area context so a popover opened from zoomed content follows
 // that area's zoom
-import {
-  getContentZoomPopupStyle,
-  useContentZoomArea,
-} from '@/components/advanced/content-zoom-root.component';
+import { getContentZoomPopupStyle, useContentZoomArea } from '@/context/content-zoom-area.context';
 
 /**
  * The Popover component displays rich content in a portal, triggered by a button. This component is
