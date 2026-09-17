@@ -90,7 +90,7 @@ Every keyboard handler change here must also update `src/stories/keyboard-shortc
 
 ---
 
-## 4. The footnote editor popover
+## 4. The footnote editor
 
 `lib/platform-bible-react/src/components/advanced/footnote-editor/`.
 
@@ -126,6 +126,11 @@ Every keyboard handler change here must also update `src/stories/keyboard-shortc
   onto the note as an attribute, so anything rendering a footnote from `content` alone drops it
   silently. `footnote-item.component.tsx` reads the field and renders the run after the caller, in
   the file's own order.
+- **In Standard view, the same component runs `inline` inside the footnotes pane — there is no
+  popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
+  live-apply re-keys the note in the parent editor, so the host must re-sync its session key from
+  `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new `noteOps` identity
+  for its own live-apply — that reloads the editor mid-typing.
 
 ---
 

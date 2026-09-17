@@ -22,7 +22,12 @@ import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
 // only `papi`, so this package must never become a runtime import here (see the note at the top of
 // this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
-import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import type {
+  MarkerContent,
+  MarkerObject,
+  Usj,
+  USJ_VERSION,
+} from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
   formatReplacementString,
@@ -146,15 +151,67 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
 }
 
+/** Where a note is edited: the footnotes pane (Standard view), the popover, or nowhere. */
+export type NoteEditingSurface = 'pane' | 'popover' | 'none';
+
+/**
+ * Decides the note-editing surface for a click on a note caller. Standard view edits notes in the
+ * footnotes pane, in place, matching PT9's model; every other view keeps the popover. A read-only
+ * text has no editing surface at all — a caller click still navigates (see
+ * {@link decideNoteCallerClickAction}) but never opens an editor.
+ *
+ * @param viewType The scripture editor's current view type
+ * @param isReadOnly Whether the text is read-only (editing is disabled)
+ * @returns Where a click on a collapsed note caller should open its editor
+ */
+export function resolveNoteEditingSurface({
+  viewType,
+  isReadOnly,
+}: {
+  viewType: ScriptureEditorViewType;
+  isReadOnly: boolean;
+}): NoteEditingSurface {
+  if (isReadOnly) return 'none';
+  return viewType === 'standard' ? 'pane' : 'popover';
+}
+
+/**
+ * Decides which note's caller carries the highlight border, mirroring PT9's
+ * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
+ * only while the footnotes pane both holds a selected row AND owns DOM focus. Clicking back into
+ * the Scripture text leaves the row selected but takes the border off the caller; clicking the row
+ * (or its editor) again puts it back. Standard view is the only view that highlights callers at
+ * all.
+ *
+ * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
+ *   inline row editor)
+ * @param options.selectedIndex The footnotes pane's selected row, or `undefined` when nothing is
+ *   selected
+ * @returns The note index to highlight, or `undefined` to clear the highlight
+ */
+export function resolveCallerHighlight({
+  isStandardView,
+  paneHasFocus,
+  selectedIndex,
+}: {
+  isStandardView: boolean;
+  paneHasFocus: boolean;
+  selectedIndex: number | undefined;
+}): number | undefined {
+  if (!isStandardView || !paneHasFocus) return undefined;
+  return selectedIndex;
+}
+
 /** Snapshot of the state a collapsed-note caller click decides against. */
-export interface NoteCallerClickState {
+export type NoteCallerClickState = {
   /**
    * Whether the clicked note is collapsed (expanded notes are edited in place, not via click).
    * `undefined` (the adaptor could not tell) is treated as not collapsed, matching the original
    * `noteCallerOnClick` guard.
    */
   isCollapsed: boolean | undefined;
-  /** The note key of an in-progress footnote-editor session, if any. */
+  /** The note key of an in-progress note-editing session, if any (popover or pane). */
   editingNoteKey: string | undefined;
   /** Whether the footnote-editor popover is actually shown right now. */
   popoverShown: boolean;
@@ -162,16 +219,38 @@ export interface NoteCallerClickState {
   paneVisible: boolean;
   /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
   paneRendered: boolean;
-  /** Whether the footnotes pane's auto-show behavior is enabled. */
-  isAutoShowEnabled: boolean;
-}
+  /**
+   * Whether the interface is in Power mode. A caller click reveals a hidden pane only in Power
+   * mode; Simple mode keeps PT9's manual pane visibility.
+   */
+  isPowerMode: boolean;
+  /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
+  surface: NoteEditingSurface;
+  /**
+   * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
+   * navigation half of the pane model; every other view keeps a read-only caller inert, as it was
+   * before the pane became an editing surface.
+   */
+  isStandardView: boolean;
+};
+
+/** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
+export type NoteCallerClickAction =
+  | 'ignore-expanded'
+  | 'ignore-popover-open'
+  | 'ignore-read-only'
+  | 'open-popover'
+  | 'open-pane-editor'
+  | 'navigate-only';
 
 /** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
-export interface NoteCallerClickDecision {
+export type NoteCallerClickDecision = {
   /**
-   * True when `editingNoteKey` belongs to a session whose popover is no longer shown — orphaned
-   * bookkeeping that would otherwise dead-end every future caller click; clearing it keeps the
-   * failure benign. The caller must clear the editing-session refs before acting.
+   * True when `editingNoteKey` belongs to a popover session whose popover is no longer shown —
+   * orphaned bookkeeping that would otherwise dead-end every future caller click; clearing it keeps
+   * the failure benign. A pane-editor session keeps its key between clicks by design (the row stays
+   * open across navigation), so it is never stale. The caller must clear the editing-session refs
+   * before acting.
    */
   clearStaleEditingSession: boolean;
   /**
@@ -179,57 +258,230 @@ export interface NoteCallerClickDecision {
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
    * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
-   * - `open-popover` — open the footnote-editor popover for the clicked note. The popover always
-   *   opens on a routed click, because it is the only surface that can EDIT a note today; the pane
-   *   flags below are navigation alongside it, never a substitute for it.
+   * - `ignore-read-only` — the text is read-only and not in Standard view, so the caller is inert:
+   *   the pane's navigation model belongs to Standard view alone.
+   * - `open-popover` — open the footnote-editor popover for the clicked note (every view but
+   *   Standard).
+   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (Standard view).
+   * - `navigate-only` — the text is read-only in Standard view, so there is no editing surface; the
+   *   click still navigates (reveals/scrolls the pane) without opening an editor.
    */
-  action: 'ignore-expanded' | 'ignore-popover-open' | 'open-popover';
+  action: NoteCallerClickAction;
   /**
    * Also select/highlight/scroll to the clicked note in the footnotes pane (PT9 navigate-to-note).
    * True when the pane is rendered — or is being shown by this very click ({@link showPane}); the
    * pane's focus-request machinery retries a request that arrives before its data mounts.
    */
   sendPaneFocusRequest: boolean;
-  /** Also show the footnotes pane: it is currently toggled off and auto-show is enabled. */
+  /** Also show the footnotes pane: it is currently toggled off and the interface is in Power mode. */
   showPane: boolean;
-}
+};
 
 /**
  * Decides what a click on a note caller does. Pure decision logic extracted from
- * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests:
+ * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests.
+ *
+ * The editing surface ({@link NoteCallerClickState.surface}, from {@link resolveNoteEditingSurface})
+ * decides where a routed click opens an editor: the footnotes pane in Standard view, the popover
+ * everywhere else, and nowhere in a read-only text, where the click still navigates without opening
+ * an editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
- * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
- * - An editing-session key without a shown popover is STALE — it must not block the click.
- * - Otherwise the popover OPENS — always, in every view, because it is the only surface that can edit
- *   a note today. Alongside it, the pane highlights the clicked note when it is rendered, and a
- *   click also SHOWS the pane when it is toggled off and auto-show is enabled.
+ * - A read-only text outside Standard view does nothing either: the pane's navigate-to-note model is
+ *   Standard view's, and every other view keeps the inert caller it has always had.
+ * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
+ *   pane-editor session has no such limit — its row stays open across clicks.
+ * - A popover session's key left behind without a shown popover is STALE and must not block the
+ *   click; a pane-editor session's key is never stale, since the pane keeps it by design.
+ *
+ * Alongside whichever action is chosen, the pane highlights the clicked note when it is rendered,
+ * and a click also SHOWS the pane when it is toggled off and the interface is in Power mode.
+ *
+ * {@link NoteCallerClickDecision.clearStaleEditingSession} is decided independently of the action
+ * and is reported on EVERY branch, the dead-click ones included: orphaned popover bookkeeping has
+ * to be cleared whether or not this particular click does anything with it, or it dead-ends every
+ * future click.
  */
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
+  const clearStaleEditingSession =
+    state.editingNoteKey !== undefined && !state.popoverShown && state.surface !== 'pane';
+  const showPane = state.isPowerMode && !state.paneVisible;
+  const sendPaneFocusRequest = state.paneRendered || showPane;
+
   if (!state.isCollapsed)
     return {
-      clearStaleEditingSession: false,
+      clearStaleEditingSession,
       action: 'ignore-expanded',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  // A truthy editingNoteKey marks an editing session (matches the original inline guard's
-  // truthiness check; an empty-string key is never a live session).
-  if (state.editingNoteKey && state.popoverShown)
+  if (state.surface === 'none' && !state.isStandardView)
     return {
-      clearStaleEditingSession: false,
+      clearStaleEditingSession,
+      action: 'ignore-read-only',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
+  if (state.surface === 'popover' && state.popoverShown)
+    return {
+      clearStaleEditingSession,
       action: 'ignore-popover-open',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  const clearStaleEditingSession = !!state.editingNoteKey;
-  const showPane = state.isAutoShowEnabled && !state.paneVisible;
+
+  let action: NoteCallerClickAction = 'navigate-only';
+  if (state.surface === 'pane') action = 'open-pane-editor';
+  else if (state.surface === 'popover') action = 'open-popover';
+  return { clearStaleEditingSession, action, sendPaneFocusRequest, showPane };
+}
+
+/** Snapshot of what an editor change did to an open pane note-editing session. */
+export type NoteSessionUpdateState = {
+  /** Whether the session's note key still resolves to a note in the editor's document. */
+  sessionKeyResolves: boolean;
+  /**
+   * Whether the change's inserted node key resolves to a note. When the session's key stopped
+   * resolving, that inserted note IS the session's note, replaced in place by the row editor's own
+   * live-apply (`replaceEmbedUpdate` swaps the node and re-mints its key).
+   */
+  insertedKeyIsNote: boolean;
+  /**
+   * Whether the session note's current content differs from the comparison baseline — what the row
+   * editor is known to be showing. Only meaningful while {@link sessionKeyResolves}.
+   */
+  noteChanged: boolean;
+};
+
+/** What an editor change does to an open pane note-editing session. */
+export type NoteSessionUpdateAction = 'rekey' | 'end-session' | 'follow-note';
+
+/** What an editor change should do to an open pane session — see {@link decideNoteSessionUpdate}. */
+export type NoteSessionUpdateDecision = {
+  /**
+   * What the change resolves to:
+   *
+   * - `rekey` — the session's note was replaced in place, so the session follows the new key.
+   * - `end-session` — the note is gone and nothing replaced it, so there is nothing left to edit.
+   * - `follow-note` — the note is still there; the editing row follows its (possibly moved) index.
+   */
+  action: NoteSessionUpdateAction;
+  /**
+   * Hand the row editor a fresh `noteOps` ARRAY IDENTITY, which is what reloads its document. Only
+   * ever true for a change that came from somewhere other than the row editor itself: reloading a
+   * row editor mid-typing throws away its caret and replaces its document with content that is
+   * missing anything still inside its apply debounce.
+   */
+  reloadRowEditor: boolean;
+  /**
+   * Refresh the comparison baseline ({@link NoteSessionUpdateState.noteChanged}) to the note's
+   * current content. True on a re-key — where the row editor's own live-apply is the new content —
+   * as well as on a reload, so the next external change is compared against what the row editor is
+   * actually showing rather than against the ops it was first loaded with.
+   */
+  refreshBaseline: boolean;
+};
+
+/**
+ * Decides what an editor change does to an open footnotes-pane note-editing session. Pure decision
+ * logic extracted from `handleEditorialUsjChange` in the web view, where the reload/baseline
+ * invariant below has no component-level test harness of its own.
+ *
+ * The ops cannot tell the row editor's own live-apply from a note inserted in the text: both carry
+ * a note insert-embed op. The DOCUMENT tells them apart — the row editor's apply replaces the
+ * session's note node, so the session's key stops resolving while an inserted key resolves to the
+ * replacement.
+ *
+ * The invariant that makes the row editor usable: a reload is for changes from ELSEWHERE only, and
+ * the baseline the "changed?" comparison runs against must track the row editor's own applies too.
+ * A baseline left at the ops the row was loaded with makes every later external change compare
+ * unequal, reloading the row editor once per edit cycle.
+ */
+export function decideNoteSessionUpdate(state: NoteSessionUpdateState): NoteSessionUpdateDecision {
+  if (!state.sessionKeyResolves) {
+    if (state.insertedKeyIsNote)
+      return { action: 'rekey', reloadRowEditor: false, refreshBaseline: true };
+    return { action: 'end-session', reloadRowEditor: false, refreshBaseline: false };
+  }
   return {
-    clearStaleEditingSession,
-    action: 'open-popover',
-    sendPaneFocusRequest: state.paneRendered || showPane,
-    showPane,
+    action: 'follow-note',
+    reloadRowEditor: state.noteChanged,
+    refreshBaseline: state.noteChanged,
   };
+}
+
+/**
+ * Whether the editor's freshly settled document has to be republished to the footnotes pane.
+ *
+ * Typing in the Scripture body changes the document on every keystroke and the note list on none of
+ * them, and republishing regardless re-renders the whole web view - the Scripture editor included -
+ * per character, which is felt as typing lag with the pane open. Editing inside a row editor does
+ * change a note, but only once per live-apply debounce, so the pane still repaints as fast as
+ * anything it shows actually changes.
+ *
+ * That makes the published document's guarantee "a document whose NOTES are current" rather than
+ * "the current document" - which is what the pane and `EditorRef.getNoteIndex` have to agree on.
+ *
+ * @param newNotes The notes read out of the document about to be published, or `undefined` when
+ *   they could not be read - a document this reader cannot walk must publish, so it can never wedge
+ *   the pane on stale notes
+ * @param publishedNotes The notes the pane is already showing, or `undefined` when nothing has been
+ *   published yet
+ * @returns Whether to publish the document
+ */
+export function shouldPublishPaneDocument(
+  newNotes: MarkerObject[] | undefined,
+  publishedNotes: MarkerObject[] | undefined,
+): boolean {
+  if (!newNotes || !publishedNotes) return true;
+  return !valuesAreDeeplyEqual(newNotes, publishedNotes);
+}
+
+/**
+ * The Scripture reference of the verse a note sits in, so selecting a note in the footnotes pane
+ * (or clicking its caller) can move the scroll group there, as PT9's notes pane does.
+ *
+ * Resolved from the USJ rather than from the editor's own selection reporting, so a read-only text
+ * — which has no caret to report from — navigates exactly like an editable one.
+ *
+ * Only the VERSE is taken from the note's position: the editor holds exactly one chapter, so book,
+ * chapter and versification all ride through from the reference in effect. That also keeps a
+ * document with no `\c` of its own (which resolves as chapter 0) from navigating the user into
+ * front matter.
+ *
+ * @param usj The chapter document the pane and `EditorRef.getNoteIndex` both index; pass the
+ *   editor's live document, not the PDP's, or an index typed ahead of the save debounce names a
+ *   different note
+ * @param noteIndex Document-order index of the note among the chapter's notes
+ * @param currentScrRef The reference in effect now — everything but the verse comes from it
+ * @returns The reference to publish, or `undefined` when the note cannot be located (no note at
+ *   that index, or USJ this reader cannot walk) — in which case the caller should leave the current
+ *   reference alone rather than guess, and report that it did
+ */
+export function resolveNoteVerseRef(
+  usj: Usj | undefined,
+  noteIndex: number,
+  currentScrRef: SerializedVerseRef,
+): SerializedVerseRef | undefined {
+  if (!usj || noteIndex < 0) return undefined;
+  try {
+    const usjReaderWriter = new UsjReaderWriter(usj, {
+      markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+    });
+    const note = usjReaderWriter.findAllNotes()[noteIndex];
+    if (!note) return undefined;
+    const { verseRef } = usjReaderWriter.nodeToUsfmVerseRefVerseLocation(
+      note,
+      undefined,
+      currentScrRef.book,
+    );
+    return { ...currentScrRef, verseNum: verseRef.verseNum };
+  } catch {
+    // Malformed USJ is a navigation that does not happen, never a thrown error out of a click
+    // handler. Stays silent here — this is a pure helper with no logger of its own — and the
+    // caller reports the `undefined` it gets back.
+    return undefined;
+  }
 }
 
 // #region Editor Title Formatting

@@ -5,10 +5,17 @@ import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
-import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
+import {
+  USJ_TYPE,
+  USJ_VERSION,
+  type MarkerObject,
+  type Usj,
+} from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
   decideNoteCallerClickAction,
+  decideNoteSessionUpdate,
+  resolveNoteVerseRef,
   finalizeProjectSwitch,
   formatEditorTitle,
   generateParagraphMenuListItems,
@@ -36,6 +43,9 @@ import {
   isMissingBookOnScreen,
   parseMissingBookError,
   resolveResourceContentState,
+  resolveCallerHighlight,
+  resolveNoteEditingSurface,
+  shouldPublishPaneDocument,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2827,11 +2837,13 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     popoverShown: false,
     paneVisible: false,
     paneRendered: false,
-    isAutoShowEnabled: false,
+    isPowerMode: true,
+    surface: 'popover' as const,
+    isStandardView: false,
   };
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
-    expect(decideNoteCallerClickAction(base)).toEqual({
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2860,9 +2872,14 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
-    // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
+    // A leftover editingNoteKey must not silently swallow every future caller click.
     expect(
-      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
+      decideNoteCallerClickAction({
+        ...base,
+        editingNoteKey: 'note-1',
+        popoverShown: false,
+        isPowerMode: false,
+      }),
     ).toEqual({
       clearStaleEditingSession: true,
       action: 'open-popover',
@@ -2872,8 +2889,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('still opens the popover when the pane is rendered — the pane highlight rides alongside', () => {
-    // The popover is the only surface that can EDIT a note today, so a routed click always opens
-    // it; the rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
+    // On the popover surface (every view but Standard), a routed click opens the popover; the
+    // rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
     expect(decideNoteCallerClickAction({ ...base, paneVisible: true, paneRendered: true })).toEqual(
       {
         clearStaleEditingSession: false,
@@ -2884,8 +2901,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     );
   });
 
-  it('shows a closed pane when auto-show is on, and highlights the note once it mounts', () => {
-    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: true })).toEqual({
+  it('shows a closed pane in Power mode, and highlights the note once it mounts', () => {
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: true,
@@ -2893,8 +2910,8 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     });
   });
 
-  it('leaves a closed pane closed when auto-show is off', () => {
-    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: false })).toEqual({
+  it('leaves a closed pane closed in Simple mode', () => {
+    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2905,9 +2922,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   it('does not re-show a pane that is already toggled visible but still mounting its data', () => {
     // paneVisible without paneRendered: the toggle is on but the data has not loaded — nothing to
     // show and nothing to highlight yet.
-    expect(
-      decideNoteCallerClickAction({ ...base, paneVisible: true, isAutoShowEnabled: true }),
-    ).toEqual({
+    expect(decideNoteCallerClickAction({ ...base, paneVisible: true, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
       sendPaneFocusRequest: false,
@@ -2929,6 +2944,277 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       sendPaneFocusRequest: true,
       showPane: false,
     });
+  });
+
+  it('Standard view: opens the pane editor and reveals a hidden pane', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', isStandardView: true });
+    expect(d).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-pane-editor',
+      showPane: true,
+      sendPaneFocusRequest: true,
+    });
+  });
+
+  it('Standard view: an open pane session is not stale bookkeeping', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      surface: 'pane',
+      isStandardView: true,
+      editingNoteKey: 'k1',
+      paneVisible: true,
+      paneRendered: true,
+    });
+    expect(d.clearStaleEditingSession).toBe(false);
+    expect(d.action).toBe('open-pane-editor');
+  });
+
+  it('read-only Standard view: navigates only, still revealing the pane in Power mode', () => {
+    const d = decideNoteCallerClickAction({ ...base, surface: 'none', isStandardView: true });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it('read-only Standard view in Simple mode: navigates within an already-rendered pane only', () => {
+    // Simple mode has no Standard view of its own, but the flag is read independently of the mode,
+    // so pin the pair rather than assume they cannot co-occur.
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'none',
+        isStandardView: true,
+        isPowerMode: false,
+      }),
+    ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: false });
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'none',
+        isStandardView: true,
+        isPowerMode: false,
+        paneVisible: true,
+        paneRendered: true,
+      }),
+    ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: true });
+  });
+
+  it.each([true, false])(
+    'read-only outside Standard view leaves the caller inert (isPowerMode=%s)',
+    (isPowerMode) => {
+      expect(
+        decideNoteCallerClickAction({
+          ...base,
+          surface: 'none',
+          isStandardView: false,
+          isPowerMode,
+          paneVisible: true,
+          paneRendered: true,
+        }),
+      ).toEqual({
+        clearStaleEditingSession: false,
+        action: 'ignore-read-only',
+        sendPaneFocusRequest: false,
+        showPane: false,
+      });
+    },
+  );
+
+  it('expanded caller is ignored regardless of surface', () => {
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        surface: 'pane',
+        isStandardView: true,
+        isCollapsed: false,
+      }).action,
+    ).toBe('ignore-expanded');
+  });
+
+  it('popover surface keeps ignoring a click while the popover is open', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, popoverShown: true, editingNoteKey: 'k' }).action,
+    ).toBe('ignore-popover-open');
+  });
+
+  it('popover shown without a tracked key still blocks the click (never open a second popover)', () => {
+    // popoverShown alone is enough to block a routed click, even without editingNoteKey: opening a
+    // second popover while one is already on screen would be the bug, not the safe outcome.
+    const d = decideNoteCallerClickAction({
+      ...base,
+      surface: 'popover',
+      popoverShown: true,
+      editingNoteKey: undefined,
+    });
+    expect(d.action).toBe('ignore-popover-open');
+    expect(d.clearStaleEditingSession).toBe(false);
+  });
+});
+
+describe('decideNoteSessionUpdate (a row edit must not reload the row editor)', () => {
+  it('re-keys without reloading when the row editor replaced its own note', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: false,
+        insertedKeyIsNote: true,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'rekey', reloadRowEditor: false, refreshBaseline: true });
+  });
+
+  it('refreshes the comparison baseline on that re-key, so the next external change compares against what the row applied', () => {
+    // The defect this pins: leaving the baseline at the ops the row was LOADED with makes every
+    // later external change look like a change to this note, reloading the row editor once per
+    // edit cycle and dropping whatever is still inside the row editor's apply debounce.
+    const decision = decideNoteSessionUpdate({
+      sessionKeyResolves: false,
+      insertedKeyIsNote: true,
+      noteChanged: false,
+    });
+    expect(decision.refreshBaseline).toBe(true);
+    expect(decision.reloadRowEditor).toBe(false);
+  });
+
+  it('ends the session when the note is gone and nothing replaced it', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: false,
+        insertedKeyIsNote: false,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'end-session', reloadRowEditor: false, refreshBaseline: false });
+  });
+
+  it('leaves the row editor alone when the change was somewhere else in the chapter', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: false,
+        noteChanged: false,
+      }),
+    ).toEqual({ action: 'follow-note', reloadRowEditor: false, refreshBaseline: false });
+  });
+
+  it('reloads the row editor when this note itself changed elsewhere', () => {
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: false,
+        noteChanged: true,
+      }),
+    ).toEqual({ action: 'follow-note', reloadRowEditor: true, refreshBaseline: true });
+  });
+
+  it('keeps following the still-resolving note even when an insert came with the change', () => {
+    // A note inserted elsewhere in the chapter does not re-key the session's own note, so the
+    // insert must not divert the session into the re-key branch.
+    expect(
+      decideNoteSessionUpdate({
+        sessionKeyResolves: true,
+        insertedKeyIsNote: true,
+        noteChanged: false,
+      }).action,
+    ).toBe('follow-note');
+  });
+
+  it('never reloads without refreshing the baseline (a reload is what the baseline tracks)', () => {
+    const cases = [true, false].flatMap((sessionKeyResolves) =>
+      [true, false].flatMap((insertedKeyIsNote) =>
+        [true, false].map((noteChanged) =>
+          decideNoteSessionUpdate({ sessionKeyResolves, insertedKeyIsNote, noteChanged }),
+        ),
+      ),
+    );
+    expect(
+      cases.filter((decision) => decision.reloadRowEditor && !decision.refreshBaseline),
+    ).toEqual([]);
+  });
+});
+
+describe('resolveNoteEditingSurface', () => {
+  it('routes Standard view to the pane', () => {
+    expect(resolveNoteEditingSurface({ viewType: 'standard', isReadOnly: false })).toBe('pane');
+  });
+
+  it.each(['formatted', 'markers'] as const)('routes %s view to the popover', (viewType) => {
+    expect(resolveNoteEditingSurface({ viewType, isReadOnly: false })).toBe('popover');
+  });
+
+  it('has no editing surface when read-only, in any view', () => {
+    expect(resolveNoteEditingSurface({ viewType: 'standard', isReadOnly: true })).toBe('none');
+    expect(resolveNoteEditingSurface({ viewType: 'formatted', isReadOnly: true })).toBe('none');
+  });
+});
+
+describe('resolveCallerHighlight', () => {
+  it('highlights the selected note while Standard view has the pane focused', () => {
+    expect(
+      resolveCallerHighlight({ isStandardView: true, paneHasFocus: true, selectedIndex: 0 }),
+    ).toBe(0);
+  });
+
+  it('clears the highlight while the pane has no selection', () => {
+    expect(
+      resolveCallerHighlight({
+        isStandardView: true,
+        paneHasFocus: true,
+        selectedIndex: undefined,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('clears the highlight while focus is outside the pane', () => {
+    expect(
+      resolveCallerHighlight({ isStandardView: true, paneHasFocus: false, selectedIndex: 2 }),
+    ).toBeUndefined();
+  });
+
+  it('clears the highlight outside Standard view', () => {
+    expect(
+      resolveCallerHighlight({ isStandardView: false, paneHasFocus: true, selectedIndex: 2 }),
+    ).toBeUndefined();
+  });
+
+  it('restores the highlight when Standard view comes back with the pane untouched', () => {
+    // A view round trip leaves the pane mounted, its row selected, and DOM focus where it was, so
+    // re-deriving on the way back has to give the index again rather than staying cleared.
+    const paneState = { paneHasFocus: true, selectedIndex: 2 };
+    expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
+    expect(resolveCallerHighlight({ isStandardView: false, ...paneState })).toBeUndefined();
+    expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
+  });
+});
+
+describe('shouldPublishPaneDocument (the pane repaints only when its notes change)', () => {
+  const note = (text: string): MarkerObject => ({
+    type: 'note',
+    marker: 'f',
+    caller: '+',
+    content: [{ type: 'char', marker: 'ft', content: [text] }],
+  });
+
+  it('publishes the first document the pane ever sees', () => {
+    expect(shouldPublishPaneDocument([note('a')], undefined)).toBe(true);
+  });
+
+  it('skips a document whose notes are unchanged', () => {
+    // The typing hot path: every keystroke in the Scripture body re-settles the document and
+    // changes no note. Republishing there re-renders the whole web view per character.
+    expect(shouldPublishPaneDocument([note('a')], [note('a')])).toBe(false);
+  });
+
+  it("publishes when a note's content changed", () => {
+    expect(shouldPublishPaneDocument([note('a')], [note('b')])).toBe(true);
+  });
+
+  it('publishes when a note was added or removed', () => {
+    expect(shouldPublishPaneDocument([note('a'), note('b')], [note('a')])).toBe(true);
+    expect(shouldPublishPaneDocument([], [note('a')])).toBe(true);
+  });
+
+  it('publishes a document whose notes could not be read', () => {
+    // A document this reader cannot walk must never wedge the pane on a stale note list.
+    expect(shouldPublishPaneDocument(undefined, [note('a')])).toBe(true);
   });
 });
 
@@ -3670,3 +3956,108 @@ describe('buildScriptureTextGridWebView', () => {
 });
 
 // #endregion
+
+// #region resolveNoteVerseRef
+
+describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
+  const currentScrRef = {
+    book: 'GEN',
+    chapterNum: 1,
+    verseNum: 1,
+    versificationStr: 'English',
+  };
+
+  function note(text: string): object {
+    return {
+      type: 'note',
+      marker: 'f',
+      caller: '+',
+      content: [{ type: 'char', marker: 'ft', content: [text] }],
+    };
+  }
+
+  const chapterWithNotesInTwoVerses: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN', content: ['Test'] },
+      { type: 'chapter', marker: 'c', number: '1' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'a ',
+          note('alpha'),
+          { type: 'verse', marker: 'v', number: '4' },
+          'b ',
+          note('beta'),
+        ],
+      },
+    ],
+  };
+
+  it('resolves each note to the verse it sits in', () => {
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 0, currentScrRef)).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 1,
+      versificationStr: 'English',
+    });
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, currentScrRef)).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 4,
+      versificationStr: 'English',
+    });
+  });
+
+  it('changes nothing but the verse — the editor holds one chapter', () => {
+    const resolved = resolveNoteVerseRef(chapterWithNotesInTwoVerses, 1, {
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 1,
+      versificationStr: 'Vulgate',
+    });
+    expect(resolved).toEqual({
+      book: 'GEN',
+      chapterNum: 1,
+      verseNum: 4,
+      versificationStr: 'Vulgate',
+    });
+  });
+
+  it('resolves a note that sits before the first verse to verse 0, not to nothing', () => {
+    const noteInAHeading: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'book', marker: 'id', code: 'GEN', content: ['Test'] },
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'para', marker: 's', content: ['Heading ', note('about the heading')] },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '1' }, 'a'],
+        },
+      ],
+    };
+    expect(resolveNoteVerseRef(noteInAHeading, 0, currentScrRef)?.verseNum).toBe(0);
+  });
+
+  it('leaves the reference alone when there is no note at that index', () => {
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, 5, currentScrRef)).toBeUndefined();
+    expect(resolveNoteVerseRef(chapterWithNotesInTwoVerses, -1, currentScrRef)).toBeUndefined();
+    expect(resolveNoteVerseRef(undefined, 0, currentScrRef)).toBeUndefined();
+  });
+
+  it('reports nothing rather than throwing out of a click handler on USJ it cannot read', () => {
+    // Content that is not an array at all: the reader throws walking it, and a caller-click
+    // handler must see `undefined` rather than an exception.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const unreadable = { type: USJ_TYPE, version: USJ_VERSION, content: 'oops' } as unknown as Usj;
+    expect(resolveNoteVerseRef(unreadable, 0, currentScrRef)).toBeUndefined();
+  });
+});
+
+// #endregion resolveNoteVerseRef

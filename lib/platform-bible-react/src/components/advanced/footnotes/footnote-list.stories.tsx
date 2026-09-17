@@ -134,6 +134,32 @@ export const Raw: Story = {
   },
 };
 
+/**
+ * One row swapped for a host-supplied editor, via `editingFootnoteIndex` + `renderEditingFootnote`.
+ * The row keeps its place in the list and is tinted as the entry being edited, and Tab reaches the
+ * editor's own controls at that position rather than skipping past the row.
+ *
+ * The stand-in below is deliberately not the real footnote editor: this list's contract is only
+ * that it renders whatever node the host returns, in that note's place. For the real editor in this
+ * slot, see the `InlineToolbarGroupsUndoRedoWithTheDropdowns` story under
+ * `Advanced/FootnoteEditor`.
+ */
+export const EditingRow: Story = {
+  render: Template,
+  args: {
+    footnotes: usjFootnotes,
+    listId: 'storybook-EditingRow',
+    showMarkers: false,
+    layout: 'horizontal',
+    editingFootnoteIndex: 1,
+    renderEditingFootnote: (footnote, index) => (
+      <div className="tw:rounded-[6px] tw:border-2 tw:border-ring tw:p-2 tw:text-sm">
+        {`Host-supplied editor for note ${index + 1} (\\${footnote.marker})`}
+      </div>
+    ),
+  },
+};
+
 export const Formatted: Story = {
   render: ScripturePanelTemplate,
   args: {

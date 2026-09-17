@@ -178,6 +178,7 @@ function placeDomCaretOutsideNote(editorInput: HTMLElement): void {
 function renderFootnoteEditor(
   editorOptions: EditorOptions,
   markerPalette?: FootnoteEditorMarkerPalette,
+  { inline = false }: { inline?: boolean } = {},
 ) {
   // EditorRef has many required methods; using a partial mock via type assertion is simpler than
   // stubbing all of them in a test (same rationale as
@@ -225,6 +226,7 @@ function renderFootnoteEditor(
       defaultMarkerMenuTrigger={'\\'}
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}
+      inline={inline}
     />
   );
 
@@ -267,6 +269,40 @@ function mockMarkerMenuContext(editorRef: EditorRef, ctx: MockMarkerMenuContext)
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   (editorRef.getMarkerMenuContext as ReturnType<typeof vi.fn>).mockReturnValue(ctx);
 }
+
+const standardView: EditorOptions['view'] = {
+  markerMode: 'editable',
+  hasSpacing: true,
+  isFormattedFont: true,
+};
+
+describe('FootnoteEditor toolbar layout', () => {
+  it('groups undo/redo with the caller dropdown when inline', () => {
+    // In the footnotes pane the editor is one row among the notes, so the controls read as a
+    // single cluster at the start of the row rather than splitting across its full width.
+    const { getByRole } = renderFootnoteEditor({ view: standardView }, undefined, { inline: true });
+    const callerButton = getByRole('button', { name: /callerDropdown_item_generated/ });
+    const undoButton = getByRole('button', { name: '%undoButton_tooltip%' });
+
+    expect(callerButton.parentElement?.contains(undoButton)).toBe(true);
+  });
+
+  it('keeps undo/redo out of the caller group and at the end of the row in the popover', () => {
+    const { getByRole } = renderFootnoteEditor({ view: standardView });
+    const callerButton = getByRole('button', { name: /callerDropdown_item_generated/ });
+    const undoButton = getByRole('button', { name: '%undoButton_tooltip%' });
+    const callerGroup = callerButton.parentElement;
+
+    expect(callerGroup?.contains(undoButton)).toBe(false);
+    // Still the same toolbar row, just the other end of it - alongside Cancel/Save.
+    expect(callerGroup?.parentElement?.contains(undoButton)).toBe(true);
+    expect(
+      callerGroup?.parentElement?.contains(
+        getByRole('button', { name: '%footnoteEditor_saveButton_tooltip%' }),
+      ),
+    ).toBe(true);
+  });
+});
 
 describe('FootnoteEditor marker palette wiring', () => {
   describe('editable marker mode, no markerPalette prop (pass-through degradation)', () => {

@@ -55,15 +55,6 @@ declare module 'platform-scripture-editor' {
     method: 'toggleFootnotesPaneVisibility';
   };
 
-  /**
-   * Tell the editor to toggle the footnotes-pane auto-show/hide setting (which diverges from PT9)
-   * in standard view (default off; when on, the pane auto-shows/hides based on whether the current
-   * chapter has notes, unless the user has manually overridden it for that chapter)
-   */
-  export type EditorMessageToggleFootnotesAutoShow = {
-    method: 'toggleFootnotesAutoShow';
-  };
-
   /** Tell the editor to change (toggle between bottom and side) footnotes pane location */
   export type EditorMessageChangeFootnotesPaneLocation = {
     method: 'changeFootnotesPaneLocation';
@@ -152,7 +143,6 @@ declare module 'platform-scripture-editor' {
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
-    | EditorMessageToggleFootnotesAutoShow
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
     | EditorMessageInsertCommentAtSelection
@@ -365,11 +355,6 @@ declare module 'platform-scripture-editor' {
     changeScriptureView(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
-    /**
-     * Toggle the footnotes-pane auto-show/hide setting (which diverges from PT9) in standard view
-     * (default off)
-     */
-    toggleFootnotesAutoShow(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
     /**
@@ -816,17 +801,6 @@ declare module 'papi-shared-types' {
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
     'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
-
-    /**
-     * Toggles the footnotes-pane auto-show/hide setting (which diverges from PT9; default off) for
-     * the given the WebView ID. When on, the footnotes pane automatically shows/hides in standard
-     * view based on whether the current chapter has notes, unless manually overridden.
-     *
-     * @param webViewId The WebView ID of the scripture editor or resource viewer.
-     */
-    'platformScriptureEditor.toggleFootnotesAutoShow': (
-      webViewId: string | undefined,
-    ) => Promise<void>;
 
     /**
      * Changes the location of the footnotes pane (if visible) for the given the WebView ID,

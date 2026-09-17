@@ -13,11 +13,9 @@ import {
   markerMenuItemsToResolvedPaletteItems,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
-  resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
-  type FootnotesPaneAutoVisibilityInput,
 } from './platform-scripture-editor.web-view.utils';
 
 /** Build a mock editor ref exposing a spy for the method the generator calls. */
@@ -246,76 +244,6 @@ describe('getChapterKey', () => {
   it('differs when only the versification differs', () => {
     expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('GEN', 1, 'Septuagint'));
     expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('GEN', 1, undefined));
-  });
-});
-
-describe('resolveFootnotesPaneAutoVisibility', () => {
-  const GENESIS_1 = 'GEN|1';
-  const GENESIS_2 = 'GEN|2';
-
-  /** Auto-show on, current chapter has notes, no manual override in play. */
-  const AUTO_SHOWING: FootnotesPaneAutoVisibilityInput = {
-    isAutoShowEnabled: true,
-    chapterHasNotes: true,
-    manualOverrideChapterKey: undefined,
-    currentChapterKey: GENESIS_1,
-  };
-
-  it('shows the pane when the chapter has notes', () => {
-    expect(resolveFootnotesPaneAutoVisibility(AUTO_SHOWING)).toBe(true);
-  });
-
-  it('hides the pane when the chapter has no notes', () => {
-    expect(resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, chapterHasNotes: false })).toBe(
-      false,
-    );
-  });
-
-  it('has no opinion while auto-show is off, so the pane keeps whatever the user set', () => {
-    expect(
-      resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, isAutoShowEnabled: false }),
-    ).toBeUndefined();
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...AUTO_SHOWING,
-        isAutoShowEnabled: false,
-        chapterHasNotes: false,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('lets a manual show/hide in the current chapter win over the auto decision', () => {
-    // The user hid the pane in a chapter that HAS notes: auto would show it, and must not.
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...AUTO_SHOWING,
-        manualOverrideChapterKey: GENESIS_1,
-      }),
-    ).toBeUndefined();
-    // ...and the mirror image: shown by hand in a chapter with no notes, auto must not hide it.
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...AUTO_SHOWING,
-        chapterHasNotes: false,
-        manualOverrideChapterKey: GENESIS_1,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('resumes the auto decision once a chapter change leaves the override behind', () => {
-    const overriddenInPreviousChapter: FootnotesPaneAutoVisibilityInput = {
-      ...AUTO_SHOWING,
-      manualOverrideChapterKey: GENESIS_1,
-      currentChapterKey: GENESIS_2,
-    };
-
-    expect(resolveFootnotesPaneAutoVisibility(overriddenInPreviousChapter)).toBe(true);
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...overriddenInPreviousChapter,
-        chapterHasNotes: false,
-      }),
-    ).toBe(false);
   });
 });
 
