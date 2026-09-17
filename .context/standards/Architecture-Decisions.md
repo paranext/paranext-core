@@ -4409,6 +4409,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
   measured against the top of the multi-window stack.
 
+## adr-pop-ups-follow-their-content-zoom-area: A pop-up takes the zoom of the area it opens from
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** pop-ups portal to `document.body`, outside the zoom area, so they rendered at
+  interface scale next to zoomed content, and a hand-wrapped editor popover was misplaced at
+  200 %.
+- **Decision:** a pop-up takes the zoom of the area it opens from. `ContentZoomRoot` publishes
+  its area through React context, and the library's popover, dropdown menu and tooltip mark
+  their portaled content with the area and a pop-up flag and cap their size by the zoom factor.
+  The platform bootstrap never counts flagged content as a pane or anchors the indicator on it.
+  `ContentZoomAreaProvider` covers pop-ups rendered outside the area element.
+- **Alternatives:**
+  - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment
+    list (repeated at every site, easy to forget);
+  - the bootstrap detecting Radix pop-ups and copying the trigger's area (depends on Radix
+    internals);
+  - keeping pop-ups at interface scale (rejected by the product owner).
+- **Consequences:**
+  - three shadcn files carry `CUSTOM` changes;
+  - `Select`, `ContextMenu` and `HoverCard` do not follow yet, and each needs the same small
+    change when first opened from zoomed content;
+  - a pop-up portaled into a container inside another area inherits that container's zoom.
+- **Source:** PT-4634.
+
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
 - **Date:** 2026-08-27
