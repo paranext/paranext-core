@@ -233,10 +233,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Zoom',
     context:
       'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
-    // The handler also accepts `=` (the unshifted key sharing the `+` cap), the numpad `+` key, and
-    // Ctrl+Shift+`=` — the `+` key itself on US/UK layouts — so the published `Ctrl++` is literally the working chord.
-    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
+    // The macOS View menu binds ⌘= (what it renders) and, through a hidden duplicate item, ⇧⌘= —
+    // which is how a Mac reports ⌘+. The in-view and window-chrome handlers also accept `=`, the
+    // numpad `+`, and any Shift state.
+    keys: { macOS: '⌘=', windows: 'Ctrl++', linux: 'Ctrl++' },
     locations: [
+      'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
       'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
       'src/main/platform-macos-menubar.data.ts',
@@ -249,9 +251,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Zoom',
     context:
       'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
-    // The handler also accepts the numpad `-` key.
+    // The handler also accepts the numpad `-` key. Shift is accepted too, which is what puts this
+    // chord within reach on AZERTY and Czech layouts, where the top-row key is shifted.
     keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
     locations: [
+      'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
       'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
       'src/main/platform-macos-menubar.data.ts',
@@ -265,9 +269,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Zoom',
     context:
       'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while a modal overlay is open, and leaves the key alone when nothing can zoom); or the macOS View menu',
-    // The handler also accepts the numpad `0` key.
+    // The handler also accepts the numpad `0` key while NumLock is on; with NumLock off that key
+    // reports itself as Insert and is left to Chromium's legacy Copy chord. Shift is accepted too,
+    // which is what puts this chord within reach on AZERTY and Czech layouts, where the top-row key
+    // is shifted.
     keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
     locations: [
+      'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
       'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
       'src/main/platform-macos-menubar.data.ts',
