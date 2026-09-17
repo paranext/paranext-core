@@ -551,4 +551,105 @@ describe('unresolved localized strings', () => {
     expect(screen.queryByPlaceholderText(/^%projectSelector_/)).not.toBeInTheDocument();
     expect(screen.queryByText(/%projectSelector_/)).not.toBeInTheDocument();
   });
+
+  it('falls back to English when a consumer overrides with its own unresolved keys', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: '' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{
+          ...buildProjectSelectorLocalizedStrings(UNRESOLVED_STRINGS),
+          // Consumers merge their OWN `%webView_…%` lookups over the shared block, and those
+          // arrive as raw keys under the same `useLocalizedStrings` seeding behavior.
+          ariaLabel: '%webView_find_projectSelector_label%',
+          buttonPlaceholder: '%webView_find_projectFilter_selectProject%',
+          commandEmptyMessage: '%webView_find_projectFilter_noProjectsFound%',
+        }}
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Projects & resources' });
+    expect(trigger).toHaveTextContent('Select a project');
+
+    await user.click(trigger);
+    const searchInput = await screen.findByPlaceholderText('Search projects & resources');
+    await user.type(searchInput, 'zzzzz');
+    expect(await screen.findByText('No projects found')).toBeInTheDocument();
+
+    // The load-bearing half: asserting the English strings alone would still pass if the fallback
+    // were reached some other way. Nothing may render a raw key, whatever its prefix.
+    expect(screen.queryByPlaceholderText(/^%/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%\w+_/)).not.toBeInTheDocument();
+    expect(trigger).not.toHaveAccessibleName(expect.stringContaining('%'));
+  });
+
+  // A blank translation reaches the merge as a defined, non-key string, so neither the `undefined`
+  // arm nor the localize-key arm catches it. Left alone it renders a trigger with no visible text
+  // and no accessible name.
+  it('falls back to English for a blank localized value', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: '' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: '', buttonPlaceholder: '   ' }}
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox', { name: 'Projects & resources' });
+    expect(trigger).toHaveTextContent('Select a project');
+  });
+
+  it('keeps a resolved value whose visible text is merely padded with whitespace', () => {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: '' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{ ariaLabel: '  Padded label  ' }}
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Padded label' })).toBeInTheDocument();
+  });
+
+  // A partially-translated locale is the realistic case: one bag carries resolved strings, raw
+  // keys and `undefined` side by side, and each field has to be decided on its own value rather
+  // than the bag being all-or-nothing.
+  it('resolves each field independently in a partially translated bag', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={SAMPLE_PROJECTS}
+        openTabs={[]}
+        selection={{ projectId: '' }}
+        onChangeSelection={() => {}}
+        localizedStrings={{
+          ariaLabel: 'Projekte & Ressourcen',
+          buttonPlaceholder: '%webView_find_projectFilter_selectProject%',
+          commandEmptyMessage: undefined,
+          searchPlaceholder: 'Projekte durchsuchen',
+        }}
+      />,
+    );
+
+    // Resolved fields win over the English default...
+    const trigger = screen.getByRole('combobox', { name: 'Projekte & Ressourcen' });
+    // ...while the unresolved key and the `undefined` fall back to it.
+    expect(trigger).toHaveTextContent('Select a project');
+
+    await user.click(trigger);
+    expect(screen.getByPlaceholderText('Projekte durchsuchen')).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Projekte durchsuchen'), 'zzzzz');
+    expect(await screen.findByText('No projects found')).toBeInTheDocument();
+  });
 });

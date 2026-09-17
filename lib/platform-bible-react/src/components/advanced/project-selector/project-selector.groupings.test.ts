@@ -84,6 +84,30 @@ describe('readProjectSelectorString', () => {
     ).toBeUndefined();
   });
 
+  // A blank translation is as unusable as a missing one: it renders a control with no text and no
+  // accessible name. Whitespace counts as blank — spaces are invisible on screen, so a
+  // whitespace-only value has to take the same fallback path as `''`.
+  it('returns undefined for a blank value, so the English fallback applies', () => {
+    expect(
+      readProjectSelectorString({ '%projectSelector_clearAll%': '' }, '%projectSelector_clearAll%'),
+    ).toBeUndefined();
+    expect(
+      readProjectSelectorString(
+        { '%projectSelector_clearAll%': '   \t\n ' },
+        '%projectSelector_clearAll%',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('still returns a value whose visible text is merely surrounded by whitespace', () => {
+    expect(
+      readProjectSelectorString(
+        { '%projectSelector_clearAll%': '  Clear all  ' },
+        '%projectSelector_clearAll%',
+      ),
+    ).toBe('  Clear all  ');
+  });
+
   it('still returns a resolved value that merely contains the key text', () => {
     expect(
       readProjectSelectorString(

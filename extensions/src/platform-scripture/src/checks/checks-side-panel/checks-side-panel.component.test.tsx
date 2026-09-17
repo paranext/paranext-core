@@ -7,6 +7,7 @@ import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { CheckJobStatusReport } from 'platform-scripture';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { isProjectSelectorSharedKey, localizedValueFor } from '../../project-selector.test-utils';
 import { CheckScopes } from '../../checks-side-panel.utils';
 import {
   ChecksSidePanel,
@@ -52,41 +53,51 @@ beforeAll(() => {
 });
 
 /**
- * The resolved value this stub gives a shared-picker key. It NAMES the key without being equal to
- * it, so assertions stay independent of the shipped English wording.
- *
- * It must not BE the key. `useLocalizedStrings` returns key-as-value only while strings are
- * UNRESOLVED, and `readProjectSelectorString` treats such a value as "not localized yet" and falls
- * back to English — so a key-valued stub would assert the fallback path, not the localized one.
+ * This panel's own keys whose values are merged onto the `ProjectSelector`'s `localizedStrings` bag
+ * as `ariaLabel`, `buttonPlaceholder` and `commandEmptyMessage`. Like the shared
+ * `%projectSelector_*%` block they must resolve to a real value — the picker treats any localize
+ * key as its own value as "not localized yet" and falls back to English, whatever the key's
+ * prefix.
  */
-const localizedValueFor = (key: string) => `localized ${key}`;
+const PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS: readonly LocalizeKey[] = [
+  '%webView_checksSidePanel_projectFilter_projectsAndResources%',
+  '%webView_checksSidePanel_projectFilter_noProjectSelected%',
+  '%webView_checksSidePanel_projectFilter_noProjectsFound%',
+];
 
 /**
  * Maps every localized key to the key itself, so assertions can target an exact, stable string
  * without depending on the shipped English wording (which is free to change).
  *
- * The shared `%projectSelector_*%` block is the exception — see {@link localizedValueFor}. Only
- * those keys pass through the picker's unresolved-value guard; this component's own
- * `%webView_checksSidePanel_*%` keys are rendered verbatim, so identity is still the clearest stub
- * for them.
+ * The exceptions are the keys the picker reads: the shared `%projectSelector_*%` block (by
+ * membership, see {@link isProjectSelectorSharedKey}) and
+ * {@link PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS}, which get a resolved value instead — see
+ * {@link localizedValueFor}. This panel's other `%webView_checksSidePanel_*%` keys are rendered
+ * verbatim, so identity is still the clearest stub for them.
  */
 function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
   const strings: LanguageStrings = {};
   keys.forEach((key) => {
-    strings[key] = key.startsWith('%projectSelector_') ? localizedValueFor(key) : key;
+    strings[key] =
+      isProjectSelectorSharedKey(key) || PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS.includes(key)
+        ? localizedValueFor(key)
+        : key;
   });
   return strings;
 }
 
-const PROJECT_SELECTOR_LABEL_KEY = '%webView_checksSidePanel_projectFilter_projectsAndResources%';
+/** The picker's resolved accessible name — see {@link PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS}. */
+const PROJECT_SELECTOR_LABEL = localizedValueFor(
+  '%webView_checksSidePanel_projectFilter_projectsAndResources%',
+);
 
 /**
  * The picker's grouping menu labels come from the shared `%projectSelector_grouping_*%` keys, which
- * `buildProps` stubs key-as-value along with the rest of `CHECKS_SIDE_PANEL_STRING_KEYS`.
+ * `buildProps` stubs with a resolved value — see {@link localizedValueFor}.
  */
-const LANGUAGE_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_language_label%');
-const TYPE_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_type_label%');
-const LAST_USED_GROUPING_LABEL_KEY = localizedValueFor('%projectSelector_grouping_lastUsed_label%');
+const LANGUAGE_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_language_label%');
+const TYPE_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_type_label%');
+const LAST_USED_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_lastUsed_label%');
 
 const JOB_STATUS_REPORT: CheckJobStatusReport = {
   jobId: '',
@@ -150,7 +161,7 @@ function getGroupByTrigger(): HTMLElement {
 }
 
 async function openGroupByMenu(user: ReturnType<typeof setupUser>) {
-  await user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY }));
+  await user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL }));
   await user.click(getGroupByTrigger());
 }
 
@@ -160,9 +171,7 @@ describe('Checks side panel project selector — groupings', () => {
     render(<ChecksSidePanel {...buildProps()} />);
 
     await openGroupByMenu(user);
-    await user.click(
-      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
-    );
+    await user.click(await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL }));
 
     // Section headings, not row text: no project's short or full name is exactly 'English' or
     // 'Spanish', so these match the language buckets and nothing else.
@@ -179,13 +188,13 @@ describe('Checks side panel project selector — groupings', () => {
     // Falsifies the negative assertion below: the menu did open, and it offers the groupings this
     // panel can actually populate.
     expect(
-      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL_KEY }),
+      await screen.findByRole('menuitemradio', { name: LANGUAGE_GROUPING_LABEL }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL_KEY }),
+      screen.getByRole('menuitemradio', { name: LAST_USED_GROUPING_LABEL }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL_KEY }),
+      screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL }),
     ).not.toBeInTheDocument();
   });
 });

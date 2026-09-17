@@ -26,6 +26,7 @@ import {
   formatReplacementString,
   formatScrRef,
   getErrorMessage,
+  isLocalizeKey,
   isPlatformError,
   makeProjectSelectorCustomData,
   normalizeProjectId,
@@ -112,6 +113,22 @@ function buildClipboardText(columnHeaders: string[], includedRows: ChecklistRow[
     return [row.firstRef ? formatScrRef(row.firstRef.start) : '', ...cellStrings].join('\t');
   });
   return [headerLine, ...bodyLines].join('\n');
+}
+
+/**
+ * The first candidate that can actually be shown to a user, or `undefined` if none can.
+ *
+ * `useLocalizedStrings` seeds its state with `defaultState[key] = key` and returns that same state
+ * on a platform error, so an unresolved lookup arrives as the raw key — a DEFINED string. A nullish
+ * test (`??`, `||` on `undefined`) therefore never sees it, and the raw key reaches the UI as a
+ * label. A project name read from a setting has the opposite failure: it is blank until the async
+ * read lands. Both have to be skipped for a later candidate to be reached, which is why the last
+ * candidate at each call site is a literal the code owns.
+ */
+function firstUsableLabel(...candidates: (string | undefined)[]): string | undefined {
+  return candidates.find(
+    (candidate) => candidate !== undefined && !isLocalizeKey(candidate) && candidate.trim() !== '',
+  );
 }
 
 /** Flatten a cell's paragraph/item structure to a single clipboard-friendly string. */
@@ -807,9 +824,10 @@ global.webViewComponent = function ChecklistWebView({
           onChangeSelection={handleComparativeTextsChange}
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
-            buttonPlaceholder:
-              localizedStrings['%markersChecklist_toolbar_comparativeProjects%'] ??
+            buttonPlaceholder: firstUsableLabel(
+              localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
               'Select comparative projects',
+            ),
             ariaLabel: localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
           }}
           availableGroupings={comparativeTextsGroupings}
@@ -941,8 +959,11 @@ global.webViewComponent = function ChecklistWebView({
           availableGroupings={primaryProjectGroupings}
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
-            buttonPlaceholder:
-              localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel,
+            buttonPlaceholder: firstUsableLabel(
+              localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+              primaryProjectLabel,
+              'Select primary Scripture text',
+            ),
             ariaLabel: localizedStrings['%markersChecklist_toolbar_primaryProject%'],
           }}
         />
