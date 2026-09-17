@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   BookOpen,
+  CloudOff,
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
@@ -57,6 +58,8 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_noSearchResults%',
   '%resources_open%',
   '%resources_searchedFor%',
+  '%resources_serverUnreachable_description%',
+  '%resources_serverUnreachable_title%',
   '%resources_syncFailed_title%',
   '%resources_sync%',
 ] as const);
@@ -147,6 +150,13 @@ export type HomeProps = {
   isLoadingLocalProjects?: boolean;
   /** Whether loading remote projects is in progress. */
   isLoadingRemoteProjects?: boolean;
+  /**
+   * Whether the attempt to load projects from the send/receive server failed, so the list shows
+   * only what is already on this computer. Drives a banner saying so: without it, an unreachable
+   * server is indistinguishable from a server with no projects on it, and a user who is offline is
+   * told their projects do not exist.
+   */
+  didRemoteProjectsFailToLoad?: boolean;
   /** Array of local project information, containing projects and resources. */
   localProjectsInfo?: LocalProjectInfo[];
   /** Object of shared project information, containing projects on the send/receive server. */
@@ -175,6 +185,8 @@ export type HomeProps = {
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {isLoadingRemoteProjects} - Whether loading remote projects is in progress.
+ * @param {didRemoteProjectsFailToLoad} - Whether loading projects from the send/receive server
+ *   failed, so only local projects are listed.
  * @param {localProjectsInfo} - Array of local project information, containing projects and
  *   resources.
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
@@ -195,6 +207,7 @@ export function Home({
   isSendReceiveInProgress = false,
   isLoadingLocalProjects = false,
   isLoadingRemoteProjects = false,
+  didRemoteProjectsFailToLoad = false,
   localProjectsInfo = [],
   sharedProjectsInfo = {},
   activeSendReceiveProjects = [],
@@ -227,6 +240,12 @@ export function Home({
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
+  const serverUnreachableTitleText: string = getLocalizedString(
+    '%resources_serverUnreachable_title%',
+  );
+  const serverUnreachableDescriptionText: string = getLocalizedString(
+    '%resources_serverUnreachable_description%',
+  );
 
   // Surfaces a business error (e.g. a project locked by another user) when an async action
   // callback rejects, so failures are visible in the UI rather than only logged by the webview.
@@ -441,6 +460,21 @@ export function Home({
           </Alert>
         </div>
       )}
+      {/*
+       * Sits above the list rather than inside its empty state: the server half can be missing
+       * while local projects still fill the table, and that is the case where nothing else on
+       * screen suggests the list is incomplete. Not `destructive` — the list shown is accurate as
+       * far as it goes, which is a narrower claim than the failed sync above.
+       */}
+      {didRemoteProjectsFailToLoad && (
+        <div className="tw:mx-4 tw:mb-2">
+          <Alert>
+            <CloudOff className="tw:h-4 tw:w-4" />
+            <AlertTitle>{serverUnreachableTitleText}</AlertTitle>
+            <AlertDescription>{serverUnreachableDescriptionText}</AlertDescription>
+          </Alert>
+        </div>
+      )}
       {isLoadingLocalProjects || isLoadingRemoteProjects ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
@@ -448,7 +482,12 @@ export function Home({
       ) : (
         <CardContent className="tw:flex-grow tw:overflow-auto tw:min-h-32 tw:px-0">
           <div className="tw:flex tw:flex-col tw:gap-4">
-            {!localProjectsInfo ? (
+            {/*
+             * Nothing to list at all, as opposed to a search that excluded everything: the two
+             * need different advice, and the no-results message quotes the query, so using it here
+             * would show `Searched for ""` to someone who never searched.
+             */}
+            {mergedProjectInfo.length === 0 ? (
               <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
                 <Label className="tw:text-muted-foreground">{noProjectsText}</Label>
                 <Label className="tw:text-muted-foreground tw:font-normal">

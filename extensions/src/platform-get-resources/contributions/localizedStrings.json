@@ -35,6 +35,8 @@
       "%resources_results%": "results",
       "%resources_retry%": "Try again",
       "%resources_searchedFor%": "Searched for",
+      "%resources_serverUnreachable_description%": "Only projects already on this computer are shown.",
+      "%resources_serverUnreachable_title%": "Can't reach the Send/Receive server",
       "%resources_showing%": "Showing",
       "%resources_size%": "Size",
       "%resources_sync%": "Sync",
