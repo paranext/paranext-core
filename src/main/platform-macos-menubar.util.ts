@@ -201,8 +201,8 @@ export async function translatePlatformMenuItemsAndCombine(
       ).filter((menuItem) => menuItem.label !== '%mainMenu_exit%'), // Remove duplicate 'Exit' here
     })) as MenuItemConstructorOptionsWithOrder[];
 
-  // Each entry gets its own object AND its own submenu array: the combine below pushes into the app
-  // menu's submenu and replaces a matching column's submenu outright, and `macosMenubarObject` is a
+  // Each entry gets its own object AND its own submenu array: the combine below pushes contributed
+  // items into the app menu's and a matching column's submenu, and `macosMenubarObject` is a
   // module-level template that `fallbackToDefaultMacosMenubar` and every later rebuild read again.
   // Writing through it once would delete the View menu's zoom items for the rest of the process.
   // Deliberately not `structuredClone` or a JSON round trip: the zoom items carry `click` closures,
@@ -233,7 +233,12 @@ export async function translatePlatformMenuItemsAndCombine(
     );
 
     if (existingMenu) {
-      existingMenu.submenu = column.submenu;
+      // Combine rather than replace: a contributed column sharing a header with a platform menu
+      // must not displace that menu's own items. On the View menu those are the only delivery path
+      // for ⌘=/⌘-/⌘0, reload, dev tools and full screen. `sortMenuAndRemoveAddedProps` interleaves
+      // both sets by `order`, the same way a contributed app-menu column is merged above.
+      if (Array.isArray(existingMenu.submenu)) existingMenu.submenu.push(...column.submenu);
+      else existingMenu.submenu = column.submenu;
     } else {
       combinedMenubar.push(column);
     }
