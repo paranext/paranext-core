@@ -169,3 +169,17 @@ describe('read-only projects', () => {
     expect(screen.queryByLabelText('Read-only')).toBeNull();
   });
 });
+
+describe('short name column', () => {
+  // Every other project/resource picker — the titlebar `ProjectSelector` popover and
+  // `ResourcePickerDialog` — starts the short name at the leading edge of its column. This dialog
+  // was the one surface right-aligning it, which read as a different list of a different thing.
+  it('starts the short name at the leading edge of its column', () => {
+    renderDialog();
+
+    const shortNameCell = screen.getByText('WEB').closest('div');
+    expect(shortNameCell).not.toBeNull();
+    expect(shortNameCell?.className).toContain('tw:justify-start');
+    expect(shortNameCell?.className).not.toContain('tw:justify-end');
+  });
+});
