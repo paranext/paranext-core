@@ -103,6 +103,19 @@ describe('macosMenubarObject View menu', () => {
     expect([...zoomOrders].sort((a, b) => a - b)).toEqual(zoomOrders);
   });
 
+  // Literal, not read back out of CONTENT_ZOOM_CHORDS: the menu is generated from that table, so an
+  // assertion sourced from it could only ever catch a bug in the generator, never a wrong
+  // accelerator in the table. These three are the bindings the View menu actually shows a user.
+  it.each([
+    ['contentZoomIn', 'CommandOrControl+='],
+    ['contentZoomOut', 'CommandOrControl+-'],
+    ['contentZoomReset', 'CommandOrControl+0'],
+  ])('shows %s bound to %s', (id, accelerator) => {
+    const item = getItem(id);
+    expect(item?.accelerator).toBe(accelerator);
+    expect(item?.visible).not.toBe(false);
+  });
+
   it.each([
     ['contentZoomIn', CONTENT_ZOOM_COMMANDS.in],
     ['contentZoomOut', CONTENT_ZOOM_COMMANDS.out],
