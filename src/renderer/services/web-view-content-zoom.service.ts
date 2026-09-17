@@ -321,11 +321,12 @@ function effectiveOwnLevels(
 /**
  * Explicit id → the window's last focused tab → nothing. Exported for tests.
  *
- * A modal overlay (a modal dialog or the command palette) stops only the path that has to guess
- * which pane is meant: the caller named no pane, so the last focused tab is all there is to go on,
- * and that tab is behind the overlay the user is actually working in. A caller that names a pane —
- * the tab menu, a wheel or chord inside a view, an extension's command — has said which pane it
- * means and is answered whatever is on top.
+ * Anything holding this window's input — a modal dialog, the command palette, or one of the
+ * full-screen overlays (connection lost, workspace updating, first run) — stops only the path that
+ * has to guess which pane is meant: the caller named no pane, so the last focused tab is all there
+ * is to go on, and that tab is behind whatever the user is actually looking at. A caller that names
+ * a pane — the tab menu, a wheel or chord inside a view, an extension's command — has said which
+ * pane it means and is answered whatever is on top.
  */
 export function resolveContentZoomTarget(
   explicitWebViewId: string | undefined,

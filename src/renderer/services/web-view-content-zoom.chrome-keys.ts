@@ -23,8 +23,8 @@ export type ContentZoomChromeKeysDeps = {
 /**
  * Ctrl (or ⌘) is required. Alt is excluded, because Ctrl+Alt chords carry their own meanings. Shift
  * is accepted for every zoom action — see {@link CONTENT_ZOOM_CHORDS} for why. This is the one chord
- * rule still stated in each handler rather than carried by the shared table, because it is two
- * booleans and no table entry could say it more clearly.
+ * rule stated in each handler rather than carried by the shared table, because it is two booleans
+ * and no table entry could say it more clearly.
  */
 function isChordModifier(e: KeyboardEvent): boolean {
   return (e.ctrlKey || e.metaKey) && !e.altKey;
@@ -46,9 +46,8 @@ function isInsideIframe(target: EventTarget | null): boolean {
 /**
  * The action a keystroke names, read from {@link CONTENT_ZOOM_CHORDS} — the same table the in-view
  * bootstrap script serializes into the source it injects, so both key handlers are projections of
- * one declaration rather than two hand-maintained copies.
- * `web-view-content-zoom.chord-parity.test.ts` checks both against a rule stated by hand, so the
- * table is under test rather than checking itself.
+ * one declaration. `web-view-content-zoom.chord-parity.test.ts` checks both against a rule stated
+ * by hand, so the table is under test rather than checking itself.
  */
 function actionFor(e: KeyboardEvent): ChordAction | undefined {
   return CONTENT_ZOOM_CHORDS.find(
@@ -92,8 +91,8 @@ export function registerContentZoomChromeKeys(deps: ContentZoomChromeKeysDeps): 
     // while the window's input is blocked (its resolver refuses a chord that carries no ids), but
     // asking here keeps this listener's overlay contract its own — checkable without a resolvable
     // pane, and unaffected by whatever the service decides to resolve next. Checked only after the
-    // action filter above (not before), so the overlay-map scan runs for a genuine zoom chord and not
-    // for every Ctrl/⌘ combination this capture-phase window listener sees.
+    // action filter above (not before), so the blocked-window check runs for a genuine zoom chord and
+    // not for every Ctrl/⌘ combination this capture-phase window listener sees.
     if (deps.isWindowInputBlocked()) return;
     if (!deps.canContentZoomAct()) return;
     e.preventDefault();

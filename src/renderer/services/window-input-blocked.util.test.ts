@@ -8,7 +8,7 @@ vi.mock('@renderer/services/overlays/overlay-store', () => ({
 // The subject deliberately does NOT import this module: a docked PAPI dialog is a non-modal tab the
 // user keeps working behind, so it must not stop content zoom — a dialog that did would take zoom
 // away window-wide for as long as it stayed docked. Mocking it here is what makes that regression
-// visible: put a `hasAnyDialogRequest() ||` term back into the predicate and this file turns red.
+// visible: add a `hasAnyDialogRequest() ||` term to the predicate and this file turns red.
 vi.mock('@renderer/services/dialog.service-shard', () => ({
   hasAnyDialogRequest: () => true,
   hasDialogRequest: () => true,
