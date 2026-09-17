@@ -1063,8 +1063,54 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
 }
 
 /**
- * Idempotent. Reads the default and the remembered levels, then subscribes to both and to web-view
- * updates.
+ * The Settings-default subscription. A function of its own so initialization can start it without
+ * waiting on it; its body and its callback are what they have always been.
+ */
+async function subscribeToDefault(): Promise<void> {
+  try {
+    await deps.settings.subscribe('platform.webViewContentZoom', (value) => {
+      if (isPlatformError(value)) {
+        logger.warn(`Content zoom: error reading the default: ${getErrorMessage(value)}`);
+        return;
+      }
+      cachedDefault = asNumber(value);
+      repushAllPanes();
+    });
+  } catch (e) {
+    logger.warn(`Content zoom: could not subscribe to the default. ${getErrorMessage(e)}`);
+  }
+}
+
+/** The memory subscription, a function of its own for the same reason as {@link subscribeToDefault}. */
+async function subscribeToMemory(): Promise<void> {
+  try {
+    await deps.settings.subscribe('platform.webViewContentZoomMemory', (value) => {
+      if (isPlatformError(value)) {
+        logger.warn(`Content zoom: error reading memory: ${getErrorMessage(value)}`);
+        return;
+      }
+      const memory = asMemory(value);
+      const previousMemory = lastSyncedMemory;
+      cachedMemory = memory;
+      memoryLoaded = true;
+      try {
+        // Only a walk in which every pane took its update may advance the record the next delta
+        // is computed against: a pane whose write did not land is retried against the same delta
+        // on the next memory change, because the deletion half of the delta exists nowhere else.
+        // A throw leaves the record where it was for the same reason.
+        if (syncSiblingsFromMemory(memory, previousMemory)) lastSyncedMemory = memory;
+      } catch (e) {
+        logger.warn(`Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`);
+      }
+    });
+  } catch (e) {
+    logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Idempotent. Wires this window for zoom — both settings subscriptions, web-view updates and the
+ * unload flush — and reads the default and the remembered levels.
  *
  * @param shardDeps The renderer's composition root supplies the web-view and window shards'
  *   `getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView` and
@@ -1085,53 +1131,11 @@ export function initializeContentZoomService(
   if (shardDeps) deps = { ...deps, ...shardDeps };
   if (initialized) return initialized;
   initialized = (async () => {
-    // The first pane's head variables need both, and neither read depends on the other.
-    // Pre-warming memory here is also what keeps `getInitialContentZoomForWebView` off the
-    // settings round trip when a read fails: without it, every eligible pane retries it.
-    await Promise.all([getDefaultZoom(), readMemory()]);
-    try {
-      cachedDefaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
-    } catch (e) {
-      cachedDefaultLabel = DEFAULT_LABEL_FALLBACK;
-      logger.warn(
-        `Content zoom: could not read the reset indicator's label; using "${DEFAULT_LABEL_FALLBACK}". ${getErrorMessage(e)}`,
-      );
-    }
-    try {
-      await deps.settings.subscribe('platform.webViewContentZoom', (value) => {
-        if (isPlatformError(value)) {
-          logger.warn(`Content zoom: error reading the default: ${getErrorMessage(value)}`);
-          return;
-        }
-        cachedDefault = asNumber(value);
-        repushAllPanes();
-      });
-    } catch (e) {
-      logger.warn(`Content zoom: could not subscribe to the default. ${getErrorMessage(e)}`);
-    }
-    try {
-      await deps.settings.subscribe('platform.webViewContentZoomMemory', (value) => {
-        if (isPlatformError(value)) {
-          logger.warn(`Content zoom: error reading memory: ${getErrorMessage(value)}`);
-          return;
-        }
-        const memory = asMemory(value);
-        const previousMemory = lastSyncedMemory;
-        cachedMemory = memory;
-        memoryLoaded = true;
-        try {
-          // Only a walk in which every pane took its update may advance the record the next delta
-          // is computed against: a pane whose write did not land is retried against the same delta
-          // on the next memory change, because the deletion half of the delta exists nowhere else.
-          // A throw leaves the record where it was for the same reason.
-          if (syncSiblingsFromMemory(memory, previousMemory)) lastSyncedMemory = memory;
-        } catch (e) {
-          logger.warn(`Content zoom: could not bring sibling panes in line. ${getErrorMessage(e)}`);
-        }
-      });
-    } catch (e) {
-      logger.warn(`Content zoom: could not subscribe to memory. ${getErrorMessage(e)}`);
-    }
+    // Registration first: a slow settings or localization round trip must not leave this window
+    // unable to hear a Settings change, bring a sibling pane in line, or flush a pending edit when
+    // it closes. Both reads are still awaited below, so initialization still resolves only once the
+    // default and the remembered levels are in hand.
+    //
     // This event carries every update to a web-view definition in this window: a pane adopted from
     // another window arriving with its state, every `useWebViewState` write an extension makes,
     // every per-pane scroll-group reference write. Most of them leave zoom alone, and the push is
@@ -1163,6 +1167,24 @@ export function initializeContentZoomService(
       };
       window.addEventListener('beforeunload', beforeUnloadListener);
     }
+    // Started, not awaited. A settings subscription delivers the current value immediately, so a
+    // callback may run before the reads below resolve; that only ever fills a cache from the fresher
+    // value, which is what a pane opening meanwhile should seed from.
+    const subscriptions = Promise.all([subscribeToDefault(), subscribeToMemory()]);
+    // The first pane's head variables need both, and neither read depends on the other.
+    // Pre-warming memory here is also what keeps `getInitialContentZoomForWebView` off the
+    // settings round trip when a read fails: without it, every eligible pane retries it.
+    await Promise.all([getDefaultZoom(), readMemory()]);
+    try {
+      cachedDefaultLabel = await deps.localize('%webView_contentZoom_indicator_default%');
+    } catch (e) {
+      cachedDefaultLabel = DEFAULT_LABEL_FALLBACK;
+      logger.warn(
+        `Content zoom: could not read the reset indicator's label; using "${DEFAULT_LABEL_FALLBACK}". ${getErrorMessage(e)}`,
+      );
+    }
+    // So the promise this function returns still means "fully wired".
+    await subscriptions;
   })();
   return initialized;
 }

@@ -1202,6 +1202,55 @@ describe('web-view-content-zoom.service', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
   });
 
+  it('subscribes and registers the unload flush before the startup reads come back', async () => {
+    let releaseReads = () => {};
+    const parked = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    __setContentZoomDepsForTesting({
+      settings: {
+        get: async (key: string) => {
+          await parked;
+          return settings[key];
+        },
+        set: settingsSet,
+        subscribe: async (key: string, callback: (value: unknown) => void) => {
+          if (key === MEMORY) memoryCallbacks.push(callback);
+          else if (key === 'platform.webViewContentZoom') defaultCallbacks.push(callback);
+          callback(settings[key]);
+          return async () => {};
+        },
+      },
+    });
+    settings['platform.webViewContentZoom'] = 1.3;
+    // The suite's own setup already initialized once; these are what this initialization registers.
+    memoryCallbacks.length = 0;
+    defaultCallbacks.length = 0;
+    onDidUpdateWebViewCallback = undefined;
+
+    const addListener = vi.spyOn(window, 'addEventListener');
+    try {
+      const initializing = initializeContentZoomService();
+      // Let the synchronous registrations and the not-yet-awaited subscriptions run.
+      await Promise.resolve();
+      await Promise.resolve();
+      // Everything that makes this window hear about zoom is in place while the reads are still out.
+      expect(defaultCallbacks).toHaveLength(1);
+      expect(memoryCallbacks).toHaveLength(1);
+      expect(onDidUpdateWebViewCallback).toBeDefined();
+      expect(addListener.mock.calls.some(([type]) => type === 'beforeunload')).toBe(true);
+
+      releaseReads();
+      await initializing;
+      // Control: both reads are still awaited, so the default they carry is in hand by the time
+      // initialization resolves.
+      setContentZoomAreas('editor-1', ['main']);
+      expect(cssVar(iframe, '--platform-content-zoom-default')).toBe('1.3');
+    } finally {
+      addListener.mockRestore();
+    }
+  });
+
   it('does nothing for a pane that reported no areas (menu and macOS paths)', async () => {
     setContentZoomAreas('editor-1', []);
     await adjustContentZoom('editor-1', 1);
