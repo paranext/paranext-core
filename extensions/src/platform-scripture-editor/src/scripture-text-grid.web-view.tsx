@@ -35,7 +35,7 @@ import {
 import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
 import {
   DOWNLOADED_NO_PROJECT_KEY,
-  resolveLocalizedString,
+  localizedStringOrUndefined,
   resolvePickerNotice,
   VIEW_OPTIONS_NOTICE_STRING_KEYS,
 } from './scripture-text-grid/view-options-notice.utils';
@@ -603,7 +603,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               disabledMessage={
                 effectiveProjectId
                   ? undefined
-                  : resolveLocalizedString(localizedStrings, NO_PROJECT_KEY)
+                  : localizedStringOrUndefined(localizedStrings, NO_PROJECT_KEY)
               }
               localizedStrings={localizedStrings}
             />
