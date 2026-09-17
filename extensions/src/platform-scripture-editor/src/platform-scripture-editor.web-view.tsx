@@ -2332,7 +2332,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // It stays open across a palette, and a palette session then claims Escape one capture
           // step above the menu's listener, so the menu would survive the dismissal with its
           // highlighted item still armed for the next Enter. See `isEditorContextMenuOpen`.
-          if (isEditorContextMenuOpen()) return;
+          //
+          // CLAIMED, not merely declined: the editor keeps DOM focus while the menu is up, so an
+          // unclaimed `\` falls through to Lexical and types a backslash into the document behind
+          // the menu. The menu has no use for the key either, so it does nothing at all.
+          if (isEditorContextMenuOpen()) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           // ACTIVE palette: the trigger never lands, whatever the selection shape — typing
           // filters the palette, not the document. In capture phase the claim keeps Lexical
           // from ever seeing the `\`. (`passive` still selects the overlay's
