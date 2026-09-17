@@ -41,7 +41,10 @@ function menuWithContributedColumn(label: LocalizeKey): MultiColumnMenu {
       {
         label: '%test_contributedItem%',
         group: 'test.group',
-        order: 1,
+        // Between the platform View menu's toggleDevTools (order 3) and the separator below it
+        // (order 4), so the ordered-sequence assertion below can pin that a contributed item is
+        // interleaved by order rather than appended after the platform items.
+        order: 3.5,
         command: 'test.command',
         localizeNotes: 'Fixture item contributed by a test.',
       },
@@ -77,12 +80,31 @@ describe('translatePlatformMenuItemsAndCombine', () => {
       menuWithContributedColumn('%mainMenu_view%'),
     );
     const submenu = viewSubmenuOf(combined);
-    expect(submenu.map((item) => item.id)).toEqual(expect.arrayContaining(ZOOM_ITEM_IDS));
-    expect(submenu.map((item) => item.label)).toContain('%test_contributedItem%');
+    // A contributed item carries no `id` (only `label`, `click` and `order` — see
+    // `getMenubarColumnContent`), so falling back to `label` keeps its position in the sequence
+    // readable. Asserting the full order — not just membership — pins that it is interleaved by
+    // `order` rather than appended after the platform items.
+    expect(submenu.map((item) => item.id ?? item.label)).toEqual([
+      'reload',
+      'forceReload',
+      'toggleDevTools',
+      '%test_contributedItem%',
+      'viewSeparatorAfterDevTools',
+      'contentZoomIn',
+      'contentZoomInShift',
+      'contentZoomInNumpad',
+      'contentZoomOut',
+      'contentZoomOutNumpad',
+      'contentZoomReset',
+      'contentZoomResetNumpad',
+      'viewSeparatorBeforeFullScreen',
+      'togglefullscreen',
+    ]);
   });
 
   // The combine writes into a per-build copy, never into the module-level template every later
-  // build reads again — which is what used to remove the zoom items for the rest of the process.
+  // build reads again — writing through it would delete the View menu's zoom items for the rest of
+  // the process.
   it('leaves a later build’s zoom items intact after a contributed View column', async () => {
     await translatePlatformMenuItemsAndCombine(menuWithContributedColumn('%mainMenu_view%'));
     const second = await translatePlatformMenuItemsAndCombine(
