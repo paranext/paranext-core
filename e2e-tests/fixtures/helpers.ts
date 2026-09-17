@@ -5,6 +5,7 @@ import {
   FrameLocator,
   Page,
 } from '@playwright/test';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -711,6 +712,18 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // eslint-disable-next-line no-undef
   const killGroup = (sig: NodeJS.Signals) => {
     if (!pid) return;
+    // Windows has no process groups: a signal to -pid throws, and a signal to pid ends the Electron
+    // main process alone, leaving its children alive with port 8876 still bound — so the next
+    // launch cannot bind its own PAPI server and its test talks to this app instead. taskkill /T
+    // ends the whole process tree.
+    if (process.platform === 'win32') {
+      try {
+        execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+      } catch {
+        /* already dead */
+      }
+      return;
+    }
     try {
       process.kill(-pid, sig);
     } catch {
