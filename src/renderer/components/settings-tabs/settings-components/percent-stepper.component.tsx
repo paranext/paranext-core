@@ -8,17 +8,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
 import { adjustZoomFactor, formatZoomPercent } from '@shared/utils/content-zoom.util';
 
 /**
- * How long a just-emitted factor stays available as the arithmetic baseline for the next press. The
- * stored value round-trips through the platform's own setting/data-provider subscription before
- * this component sees it again — tens of milliseconds in practice — so a second press inside this
- * window steps from the still-unconfirmed factor rather than re-deriving from a prop that hasn't
- * caught up yet. Past the window (or once the prop catches up), the baseline is simply the prop
- * again.
+ * How long an unconfirmed press stays the baseline for the arithmetic, the buttons and the readout.
+ * A press is written through a debounce and then round-trips through the platform's own
+ * setting/data-provider subscription before this component sees it again, so a press inside this
+ * window steps from the still-unconfirmed factor rather than re-deriving from a prop that has not
+ * caught up yet. Past the window — a write that never lands at all — the baseline is the prop
+ * again, so an unconfirmed press cannot pin the buttons open forever.
  */
 const STEP_BASELINE_WINDOW_MS = 1500;
 
@@ -68,32 +68,51 @@ export function PercentStepper({
   onChange,
   className,
 }: PercentStepperProps) {
-  // The displayed value is always the confirmed prop — never an optimistic guess — because there
-  // is no way to tell a write the platform is still applying from one it silently rejected or
-  // clamped, and showing the wrong guess is worse than a tens-of-milliseconds lag behind a press.
-  // What still needs help is the arithmetic for a rapid second press: without a baseline, it would
-  // step from the same stale `value` twice (1.1, 1.1 instead of 1.1, 1.2). `lastEmittedRef` records
-  // the most recent press so the next one can step from it while the round trip is in flight.
-  const lastEmittedRef = useRef<{ factor: number; at: number } | undefined>(undefined);
+  /**
+   * The factor this component has asked the platform for and the platform has not confirmed yet, or
+   * `undefined` when the confirmed prop is the last word. State rather than a ref because the three
+   * buttons and the readout are all derived from it: a press has to re-render, or `+` at 290 %
+   * would stay enabled and reset would stay disabled for the whole round trip while the arithmetic
+   * had already moved on.
+   */
+  const [pending, setPending] = useState<{ factor: number; at: number } | undefined>(undefined);
+
+  /**
+   * The last two factors emitted. A `value` that matches one of them is the platform confirming a
+   * press, not a write from elsewhere — and confirming an OLDER press must not discard a newer one
+   * that is still outstanding (press `+` three times quickly and the third would otherwise repeat
+   * the second). The trade this makes, deliberately: a write from another window that happens to
+   * equal a factor this component emitted in its last two presses is indistinguishable from a
+   * confirmation, so it does not reset the baseline immediately.
+   */
+  const recentlyEmittedRef = useRef<number[]>([]);
 
   useEffect(() => {
-    // Any change to the prop — whether it is the platform confirming the press this component made,
-    // or a write from elsewhere (another window, a clamp) — makes `value` the right baseline again.
-    // Clearing on every change (not only a matching one) is what makes a foreign write win
-    // immediately instead of being masked by a baseline the platform never confirmed.
-    lastEmittedRef.current = undefined;
+    // A prop this component never asked for is a write from elsewhere (another window, a clamp) and
+    // is authoritative at once; a prop it did ask for is a confirmation, which leaves any newer
+    // press still outstanding.
+    if (recentlyEmittedRef.current.includes(value)) return;
+    recentlyEmittedRef.current = [];
+    setPending(undefined);
   }, [value]);
 
-  const emit = (candidate: (baseline: number) => number) => {
-    // Step from the last emitted factor while it is still fresh — the effect above already clears it
-    // as soon as the prop moves for any reason, confirmed or not, so a surviving ref here means the
-    // round trip for that press is still outstanding.
-    const last = lastEmittedRef.current;
-    const stillFresh = last !== undefined && performance.now() - last.at < STEP_BASELINE_WINDOW_MS;
-    const baseline = stillFresh ? last.factor : value;
-    const next = candidate(baseline);
+  // A press that never gets confirmed must not pin the buttons' enabled state forever. Expiring on
+  // a timer rather than reading the clock during render keeps the flags, the readout and the
+  // arithmetic answering the same question at the same moment.
+  useEffect(() => {
+    if (!pending) return undefined;
+    const remaining = STEP_BASELINE_WINDOW_MS - (performance.now() - pending.at);
+    const timeout = setTimeout(() => setPending(undefined), Math.max(0, remaining));
+    return () => clearTimeout(timeout);
+  }, [pending]);
+
+  // What the control answers with: the press it is still waiting on, or the confirmed prop.
+  const baseline = pending?.factor ?? value;
+
+  const emit = (next: number) => {
     if (next === baseline) return;
-    lastEmittedRef.current = { factor: next, at: performance.now() };
+    recentlyEmittedRef.current = [next, ...recentlyEmittedRef.current].slice(0, 2);
+    setPending({ factor: next, at: performance.now() });
     onChange(next);
   };
 
@@ -102,9 +121,9 @@ export function PercentStepper({
   // Radix `TooltipTrigger`, which would make the reason for the bound unreachable by keyboard.
   // `onClick` is guarded explicitly (rather than relying on the browser to withhold the click)
   // because `aria-disabled` does not stop the click event from firing.
-  const decreaseDisabled = disabled || value <= MIN_ZOOM_FACTOR;
-  const increaseDisabled = disabled || value >= MAX_ZOOM_FACTOR;
-  const resetDisabled = disabled || value === defaultValue;
+  const decreaseDisabled = disabled || baseline <= MIN_ZOOM_FACTOR;
+  const increaseDisabled = disabled || baseline >= MAX_ZOOM_FACTOR;
+  const resetDisabled = disabled || baseline === defaultValue;
 
   return (
     <TooltipProvider>
@@ -120,7 +139,7 @@ export function PercentStepper({
               className={BOUND_BUTTON_CLASSNAME}
               onClick={() => {
                 if (decreaseDisabled) return;
-                emit((baseline) => adjustZoomFactor(baseline, -1));
+                emit(adjustZoomFactor(baseline, -1));
               }}
             >
               <Minus />
@@ -128,13 +147,16 @@ export function PercentStepper({
           </TooltipTrigger>
           <TooltipContent>{labels.decrease}</TooltipContent>
         </Tooltip>
-        {/* aria-live announces the new percentage after a press; the buttons keep focus, so nothing
+        {/* The readout shows the press this control is still waiting on, so the number, the buttons
+            and the arithmetic always agree: a write travels through a debounce before it is even
+            sent, and a number that sits still for that long reads as a press the control ignored.
+            aria-live announces the new percentage after a press; the buttons keep focus, so nothing
             else would say it. */}
         <ButtonGroupText
           aria-live="polite"
           className="tw:min-w-14 tw:justify-center tw:tabular-nums"
         >
-          {formatZoomPercent(value)}
+          {formatZoomPercent(baseline)}
         </ButtonGroupText>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -147,7 +169,7 @@ export function PercentStepper({
               className={BOUND_BUTTON_CLASSNAME}
               onClick={() => {
                 if (increaseDisabled) return;
-                emit((baseline) => adjustZoomFactor(baseline, 1));
+                emit(adjustZoomFactor(baseline, 1));
               }}
             >
               <Plus />
@@ -166,7 +188,7 @@ export function PercentStepper({
               className={BOUND_BUTTON_CLASSNAME}
               onClick={() => {
                 if (resetDisabled) return;
-                emit(() => defaultValue);
+                emit(defaultValue);
               }}
             >
               <RotateCcw />
