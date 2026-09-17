@@ -141,11 +141,20 @@ const EMPTY_TAB_MENU: Localized<SingleColumnMenu> = Object.freeze({ groups: {}, 
  */
 const TAB_WITHOUT_WEB_VIEW_TYPE = 'platform.tab';
 
+/** The interface mode as the hook that reads it reports it, so the two cannot drift apart. */
+type InterfaceMode = ReturnType<typeof useInterfaceMode>[0];
+
 /**
- * Process-lifetime cache of each web view type's contributed tab menu, keyed by the effective type
- * (see {@link TAB_WITHOUT_WEB_VIEW_TYPE}). Every tab of a given type shares the SAME read rather
- * than each firing its own cross-process request at mount — Simple mode alone opens several web
- * views on the startup path, and most tabs in a layout share a handful of types.
+ * Process-lifetime cache of each web view type's contributed tab menu, keyed by the interface mode
+ * and the effective type (see {@link TAB_WITHOUT_WEB_VIEW_TYPE}). Every tab of a given type in a
+ * given mode shares the SAME read rather than each firing its own cross-process request at mount —
+ * Simple mode alone opens several web views on the startup path, and most tabs in a layout share a
+ * handful of types.
+ *
+ * The interface mode is part of the key because the menu data provider filters tab items by
+ * `currentMode` and fires an update on every mode change, so the two modes are genuinely different
+ * menus: a cache keyed on the type alone would pin whichever mode a tab first mounted under for the
+ * life of the process.
  *
  * A rejected read is deliberately NOT kept here (see {@link getContributedTabMenu}), so this only
  * ever holds a promise that is pending or has resolved.
@@ -153,16 +162,18 @@ const TAB_WITHOUT_WEB_VIEW_TYPE = 'platform.tab';
 const contributedTabMenuCache = new Map<string, Promise<Localized<SingleColumnMenu>>>();
 
 /**
- * Reads a web view type's contributed tab menu, sharing one read across every tab of that type for
- * the life of the process rather than one per tab mount.
+ * Reads a web view type's contributed tab menu for one interface mode, sharing one read across
+ * every tab of that type in that mode for the life of the process rather than one per tab mount.
  *
  * A failed read is not cached: it is removed the moment it rejects, so the next tab of this type
  * gets a fresh attempt instead of inheriting a promise that can only ever reject.
  */
 function getContributedTabMenu(
   webViewType: string | undefined,
+  interfaceMode: InterfaceMode,
 ): Promise<Localized<SingleColumnMenu>> {
-  const key = webViewType ?? TAB_WITHOUT_WEB_VIEW_TYPE;
+  const webViewTypeKey = webViewType ?? TAB_WITHOUT_WEB_VIEW_TYPE;
+  const key = `${interfaceMode}:${webViewTypeKey}`;
   const cached = contributedTabMenuCache.get(key);
   if (cached) return cached;
 
@@ -170,7 +181,7 @@ function getContributedTabMenu(
     .getWebViewMenu(
       // Assume the web view type is correctly formatted; it has already been checked where it is set
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      key as `${string}.${string}`,
+      webViewTypeKey as `${string}.${string}`,
     )
     .then((webViewMenu) => webViewMenu.tabMenu ?? EMPTY_TAB_MENU);
   read.catch(() => contributedTabMenuCache.delete(key));
@@ -450,12 +461,16 @@ export function PlatformTabTitle({
   // An extension installed or removed mid-session shows its tab items only at the next window
   // reload — the cache for its web view type survives until then.
   useEffect(() => {
+    // The read waits for the mode, because the menu is withheld until the mode is known either — so
+    // reading under the loading fallback would only cache the wrong mode's menu.
+    if (!isModeKnown) return undefined;
+
     let isStillMounted = true;
     (async () => {
       try {
         // Every tab has a tab menu. One hosting no web view has no type to look a contributed menu
         // up by, and the cache answers an unrecognized name with the platform's own items
-        const tabMenu = await getContributedTabMenu(webViewType);
+        const tabMenu = await getContributedTabMenu(webViewType, interfaceMode);
         if (isStillMounted) setContributedTabMenu(tabMenu);
       } catch (error) {
         // Said out loud rather than swallowed into an empty menu: the extension host logs the cause
@@ -470,7 +485,7 @@ export function PlatformTabTitle({
     return () => {
       isStillMounted = false;
     };
-  }, [webViewType, id]);
+  }, [webViewType, id, interfaceMode, isModeKnown]);
 
   /**
    * What this tab can currently do, read when the menu opens rather than subscribed to. The menu
