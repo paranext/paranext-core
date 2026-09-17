@@ -54,6 +54,7 @@ import {
   Toolbar,
   ToolbarCompoundLabel,
   Tooltip,
+  TOOLTIP_DELAY_MS,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
@@ -67,8 +68,6 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
-
-const TOOLTIP_DELAY = 300;
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
@@ -559,7 +558,7 @@ export function PlatformBibleToolbar() {
               )}
             </div>
             {marketingVersion !== '' && (
-              <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+              <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge
@@ -580,7 +579,7 @@ export function PlatformBibleToolbar() {
         }
       >
         {isPowerMode && (
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+          <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
