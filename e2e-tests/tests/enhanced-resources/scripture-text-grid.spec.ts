@@ -4,7 +4,8 @@
  * Covered: the view opens as a non-closable, icon-only dock tab (located by the opened web view id,
  * since the tab has no text label) — no `.dock-tab-close-btn`, checked against a positive-control
  * tab so a class rename can't make the assertion pass vacuously. The app has no keyboard close
- * shortcut, so the missing button covers both close paths.
+ * shortcut, and middle-click close reads the same `closable` flag as the button (pinned by the dock
+ * layout's middle-click contract test), so the missing button stands in for every close path.
  *
  * There is no menu/command for this view (it is injected into the default Simple-mode layout via
  * the dock-layout supplement), so the test opens it directly via `window.papi.webViews.openWebView`
