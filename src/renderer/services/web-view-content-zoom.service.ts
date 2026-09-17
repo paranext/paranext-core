@@ -442,9 +442,9 @@ function forgetAreaState(webViewId: WebViewId): void {
  * on; a pane that does have areas keeps them only if its current document still runs a content-zoom
  * bootstrap ({@link isContentZoomBootstrapAlive}) — otherwise those areas belonged to content that
  * is gone, so they are dropped and the pane falls back the same way a pane with no areas would.
- * Started by a pane's first empty area report ({@link setContentZoomAreas}) and by every iframe
- * load ({@link applyContentZoomForWebView}, which clears any grant left over from the previous
- * content first, so this always waits out a fresh grace rather than reusing one inherited from that
+ * Started by a pane's first empty area report ({@link setContentZoomAreas}) and by every iframe load
+ * ({@link applyContentZoomForWebView}, which clears any grant left over from the previous content
+ * first, so this always waits out a fresh grace rather than reusing one inherited from that
  * content, and then cancels the grace again for the panes that must not wait one out — a URL pane,
  * which is scaled whole from the start, and a pane whose definition has gone, which has nothing to
  * scale). Idempotent either way, since a grace already pending is left alone.
@@ -651,12 +651,11 @@ export function pushContentZoom(
  * earlier content reported areas keeps them for the length of the grace (see the paragraph below),
  * and then either for good, if the replacement content's own bootstrap is still running once the
  * grace elapses, or gives them up for that same whole-iframe fallback, if it is not. The
- * whole-iframe `zoom` a reload does not
- * reset on its own (it lives on the host `<iframe>` element, not the content a reload replaces) is
- * cleared by the {@link pushContentZoom} below, which assigns the host zoom in both directions, so
- * the new content never renders whole-scaled on the strength of the old grant. A URL pane keeps its
- * immediate fallback and is left out of the grace: {@link mayScaleWholeIframe} always allows a URL
- * pane, so that same push reapplies it.
+ * whole-iframe `zoom` a reload does not reset on its own (it lives on the host `<iframe>` element,
+ * not the content a reload replaces) is cleared by the {@link pushContentZoom} below, which assigns
+ * the host zoom in both directions, so the new content never renders whole-scaled on the strength
+ * of the old grant. A URL pane keeps its immediate fallback and is left out of the grace:
+ * {@link mayScaleWholeIframe} always allows a URL pane, so that same push reapplies it.
  *
  * The pane's last-reported areas are deliberately kept across the load itself rather than dropped
  * here. A real load replaces the iframe's realm, so the fresh content's bootstrap reports its own
