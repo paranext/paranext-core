@@ -6397,7 +6397,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   explicit View-menu items carrying ⌘=/⌘-/⌘0 in place of the native `zoomIn`/`zoomOut`/`resetZoom`
   roles, and a renderer top-document `keydown` listener covers the case where keyboard focus is on
   window chrome — the tab bar, the reference box, a toolbar button — where no iframe sees the key at
-  all.
+  all. The three chord copies — the window-chrome listener, the in-view bootstrap and the macOS
+  View-menu accelerators — are all built from one table, `CONTENT_ZOOM_CHORDS` in
+  `src/shared/models/content-zoom.model.ts`; the bootstrap gets it serialized into the script it
+  injects, the same way the injected stylesheet's rule template travels there. The View menu carries
+  a hidden ⇧⌘= duplicate so ⌘+, which is what a Mac reports for that chord, reaches the menu path
+  too.
 - **Alternatives:** (a) **Keep it in main and route to the focused window** — rejected: main knows the
   window, not the pane and not the area; the same objection `adr-per-web-view-ctrl-f-for-find`
   records. (b) **A renderer window-level listener that forwards keys into the right iframe** —
@@ -6409,7 +6414,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   views could not opt in at all.
 - **Consequences:** A view that marks no zoom area ignores the chords entirely — the bootstrap does
   not even register its wheel listener while a pane has no areas — and the platform scales such a view
-  whole at the Settings default instead. The bootstrap listens in the **bubble** phase on purpose, so
+  whole at the Settings default instead. On Windows and Linux this is what a user notices first:
+  Ctrl+`+`, Ctrl+`-` and Ctrl+`0` now do nothing anywhere except a view that marks a zoom area —
+  today the Scripture editor alone. Main no longer claims those chords, nothing replaces them, and a
+  pane with no marked area deliberately leaves the keystroke to whoever else may want it rather than
+  swallowing it for no effect. So a user on Resources, Notes or the Text Collection presses Ctrl+0
+  and nothing happens. That is the intended cost of scoping zoom to a pane rather than to the window,
+  and it shrinks as views adopt the mechanism (the Text Collection grid in PT-4582, Enhanced
+  Resources in PT-4583). The bootstrap listens in the **bubble** phase on purpose, so
   a view that owns Ctrl+wheel for a sub-region keeps precedence by stopping propagation in the capture
   phase; the Text Collection grid's per-resource zoom does exactly that
   (`extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts`).
@@ -6417,7 +6429,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   resolves the pane's *active* area rather than the area holding the caret; the bootstrap's
   `pointerdown`/`focusin` tracking re-converges the two, except while a click's own answering refocus
   into another area is being suppressed — that one move is held off so the clicked area stays the
-  target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once.
+  target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once. The
+  window-chrome listener also stands down behind the three full-screen overlays that bypass
+  `OverlayHost` (connection lost, workspace updating, first run), not only behind a modal dialog:
+  the level is persisted, so a zoom made behind one of those would outlive it.
   **Revisit** if a second platform-injected shortcut appears
   — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
