@@ -20,6 +20,7 @@ import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
   measureBaselineOffset,
+  paraAtPoint,
   scrollToAnnotation,
   scrollToVerse,
 } from './editor-dom.util';
@@ -39,6 +40,13 @@ const cssPolyfill = {
 beforeAll(() => {
   if (typeof CSS === 'undefined' || !CSS.escape) {
     globalThis.CSS = cssPolyfill;
+  }
+  // jsdom has no layout engine and doesn't implement elementFromPoint at all; stub it so paraAtPoint
+  // tests below have a real function to vi.spyOn (spyOn requires the property to already exist).
+  if (!document.elementFromPoint) {
+    // Matches the real API's nullable return type.
+    // eslint-disable-next-line no-null/no-null
+    document.elementFromPoint = () => null;
   }
 });
 
@@ -544,5 +552,55 @@ describe('hasNewScrollTarget', () => {
   it('compares content by identity, not value', () => {
     // The panel pushes whatever object the PDP hands it; an equal-but-new object is a real update.
     expect(hasNewScrollTarget({ scrRef: JHN_3_16, usj: USJ_A }, JHN_3_16, { ...USJ_A })).toBe(true);
+  });
+});
+
+describe('paraAtPoint', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns the paragraph element actually hit-tested at the given point', () => {
+    const para = document.createElement('p');
+    para.className = 'para usfm_q1';
+    const span = document.createElement('span');
+    para.appendChild(span);
+    document.body.appendChild(para);
+
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(span);
+
+    expect(paraAtPoint(10, 20)).toBe(para);
+  });
+
+  it('returns undefined when the point is outside any paragraph', () => {
+    const nonPara = document.createElement('div');
+    document.body.appendChild(nonPara);
+
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(nonPara);
+
+    expect(paraAtPoint(10, 20)).toBeUndefined();
+  });
+
+  it('returns undefined when the point hits nothing', () => {
+    // elementFromPoint's real return type is nullable.
+    // eslint-disable-next-line no-null/no-null
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(null);
+
+    expect(paraAtPoint(10, 20)).toBeUndefined();
+  });
+
+  it("disagrees with a stale event target when the DOM has moved on since the event's target was captured", () => {
+    // Regression guard: a mouse event's target/relatedTarget can name an element that is no longer
+    // what is really at the cursor's position by the time it's read (e.g. after editor-internal DOM
+    // churn). paraAtPoint must reflect the live hit-test, not whatever an event target claims.
+    const staleTarget = document.createElement('p');
+    staleTarget.className = 'para usfm_p';
+    const liveHit = document.createElement('div');
+    document.body.append(staleTarget, liveHit);
+
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(liveHit);
+
+    expect(paraAtPoint(10, 20)).not.toBe(staleTarget);
+    expect(paraAtPoint(10, 20)).toBeUndefined();
   });
 });

@@ -29,7 +29,26 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
   }
+  // jsdom has no layout engine and doesn't implement elementFromPoint at all; stub it so the
+  // stubHoverTarget helper below has a real function to vi.spyOn (spyOn requires the property to
+  // already exist).
+  if (!document.elementFromPoint) {
+    // Matches the real API's nullable return type.
+    // eslint-disable-next-line no-null/no-null
+    document.elementFromPoint = () => null;
+  }
 });
+
+/**
+ * Stubs `document.elementFromPoint` to always return the given element regardless of coordinates.
+ * The component derives the hovered paragraph from this hit-test (`paraAtPoint`), never from a
+ * mouse event's own `target`/`relatedTarget` — see `paraAtPoint` in `editor-dom.util.ts` for why —
+ * so tests drive "what is really under the cursor" through this stub, independently of which
+ * element a `fireEvent` call happens to dispatch on.
+ */
+function stubHoverTarget(element: Element | null) {
+  vi.spyOn(document, 'elementFromPoint').mockReturnValue(element);
+}
 
 // The repo-wide alias for '@papi/frontend/react' (extensions/__test-mocks__) doesn't export
 // useLocalizedStrings, so this component needs its own mock. Echoes each requested key back as its
@@ -81,6 +100,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     renderEditor();
     const para = screen.getByText('First paragraph');
 
+    stubHoverTarget(para);
     fireEvent.mouseOver(para);
     expect(queryTooltip()).not.toBeInTheDocument();
 
@@ -99,6 +119,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     renderEditor();
     const para = screen.getByText('First paragraph');
 
+    stubHoverTarget(para);
     fireEvent.mouseOver(para);
     act(() => {
       vi.advanceTimersByTime(100);
@@ -107,6 +128,9 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     // against a version with no timer at all (which would leave the count at 0 throughout).
     expect(vi.getTimerCount()).toBe(1);
 
+    // Ground truth: nothing under the cursor now.
+    // eslint-disable-next-line no-null/no-null
+    stubHoverTarget(null);
     fireEvent.mouseOut(para);
     expect(vi.getTimerCount()).toBe(0);
 
@@ -121,13 +145,20 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     const paraA = screen.getByText('First paragraph');
     const paraB = screen.getByText('Second paragraph');
 
+    stubHoverTarget(paraA);
     fireEvent.mouseOver(paraA);
     act(() => {
       vi.advanceTimersByTime(300);
     });
     expect(queryTooltip()).toHaveTextContent(P_TEXT);
 
-    // Real adjacent-paragraph hover fires mouseout(A, entering=B) then mouseover(B).
+    // Real adjacent-paragraph hover fires mouseout(A, relatedTarget=B) then mouseover(B). The
+    // transition itself is decided by ground truth (the stub), not by either event's
+    // target/relatedTarget — but relatedTarget still has to name the real entering element here,
+    // because React synthesizes mouseleave from mouseout by checking whether relatedTarget is
+    // contained in the wrapper; an absent relatedTarget would (correctly, for a real "left the
+    // window" case) fire handleMouseLeave and reset state, which is not what this scenario is.
+    stubHoverTarget(paraB);
     fireEvent.mouseOut(paraA, { relatedTarget: paraB });
     fireEvent.mouseOver(paraB, { relatedTarget: paraA });
 
@@ -143,6 +174,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     const paraA = screen.getByText('First paragraph');
     const paraB = screen.getByText('Second paragraph');
 
+    stubHoverTarget(paraA);
     fireEvent.mouseOver(paraA);
     act(() => {
       vi.advanceTimersByTime(300);
@@ -150,6 +182,9 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     expect(queryTooltip()).toHaveTextContent(P_TEXT);
 
     // Adjacent transition well within the grace window: switches instantly — no advance needed.
+    // relatedTarget must name the real entering element (see the previous test's comment) so React
+    // doesn't synthesize a mouseleave and reset state out from under this assertion.
+    stubHoverTarget(paraB);
     fireEvent.mouseOut(paraA, { relatedTarget: paraB });
     fireEvent.mouseOver(paraB, { relatedTarget: paraA });
     expect(queryTooltip()).toHaveTextContent(Q1_TEXT);
@@ -161,6 +196,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
 
     // Adjacent transition back to A, now outside the grace window: hides the stale tooltip
     // immediately and re-arms the full delay, rather than leaving B's tooltip lingering.
+    stubHoverTarget(paraA);
     fireEvent.mouseOut(paraB, { relatedTarget: paraA });
     fireEvent.mouseOver(paraA, { relatedTarget: paraB });
     expect(queryTooltip()).not.toBeInTheDocument();
@@ -185,6 +221,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     renderEditor();
     const para = screen.getByText('First paragraph');
 
+    stubHoverTarget(para);
     fireEvent.mouseOver(para);
     expect(computePositionSpy).not.toHaveBeenCalled();
 
@@ -199,6 +236,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     renderEditor();
     const para = screen.getByText('First paragraph');
 
+    stubHoverTarget(para);
     fireEvent.mouseOver(para);
     // Simulates a chapter change or remote edit swapping the DOM out from under a pending hover,
     // with no mouseout or keydown to cancel the timer.
@@ -214,6 +252,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     renderEditor();
     const para = screen.getByText('First paragraph');
 
+    stubHoverTarget(para);
     fireEvent.mouseOver(para);
     expect(vi.getTimerCount()).toBe(1);
 
@@ -230,6 +269,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     const { unmount } = renderEditor();
     const para = screen.getByText('First paragraph');
 
+    stubHoverTarget(para);
     fireEvent.mouseOver(para);
     expect(vi.getTimerCount()).toBe(1);
 
@@ -241,6 +281,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     const { rerender } = renderEditor(true);
     const para = screen.getByText('First paragraph');
 
+    stubHoverTarget(para);
     fireEvent.mouseOver(para);
     act(() => {
       vi.advanceTimersByTime(100);
@@ -270,6 +311,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     const paraA = screen.getByText('First paragraph');
     const paraB = screen.getByText('Second paragraph');
 
+    stubHoverTarget(paraA);
     fireEvent.mouseOver(paraA);
     act(() => {
       vi.advanceTimersByTime(300);
@@ -293,6 +335,7 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
     // Must not remount already-open from stale state.
     expect(queryTooltip()).not.toBeInTheDocument();
 
+    stubHoverTarget(paraB);
     fireEvent.mouseOver(paraB);
     // Must earn the delay again, not take the "already showing" instant path.
     expect(queryTooltip()).not.toBeInTheDocument();
@@ -302,5 +345,59 @@ describe('ParagraphMarkerTooltipOverlay hover delay', () => {
       vi.advanceTimersByTime(300);
     });
     expect(queryTooltip()).toHaveTextContent(Q1_TEXT);
+  });
+
+  it('ignores a churn-driven mouseout/mouseover pair whose target disagrees with what is actually under the cursor', () => {
+    // Regression test (PT-4536): the editor's own DOM churn (e.g. an active-paragraph decoration
+    // swap) can make the browser fire a mouseout/mouseover pair whose target/relatedTarget claim a
+    // boundary crossing that never really happened — the cursor never moved, and a live hit-test
+    // still resolves to the same paragraph. Such a pair must not touch the tooltip at all.
+    renderEditor();
+    const para = screen.getByText('First paragraph');
+    const other = screen.getByText('Second paragraph');
+
+    stubHoverTarget(para);
+    fireEvent.mouseOver(para);
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(queryTooltip()).toHaveTextContent(P_TEXT);
+    // Baseline, not necessarily 0: Radix/ResizeObserver machinery can leave its own unrelated timers
+    // pending here. What this test pins is that the churn pair below arms no *additional* one.
+    const timerCountBeforeChurn = vi.getTimerCount();
+
+    // Ground truth still says the cursor is over `para` — nothing really moved — even though this
+    // pair's own target/relatedTarget claim a crossing to `other`.
+    fireEvent.mouseOut(para, { relatedTarget: other });
+    fireEvent.mouseOver(other, { relatedTarget: para });
+
+    expect(queryTooltip()).toHaveTextContent(P_TEXT);
+    expect(vi.getTimerCount()).toBe(timerCountBeforeChurn);
+  });
+
+  it('cancels a pending reveal once ground truth shows the cursor has left, even though the arming event’s own target claimed otherwise', () => {
+    // Regression test (PT-4536): previously, arming and revalidating a delayed reveal both trusted
+    // an event's target/relatedTarget, so a churn-driven event landing between "cursor genuinely
+    // left" and "timer fires" could resurrect a tooltip the user was no longer hovering. The
+    // decision must come from a live hit-test at the point the event actually names, not from
+    // which DOM node the event nominally fired on.
+    renderEditor();
+    const para = screen.getByText('First paragraph');
+
+    stubHoverTarget(para);
+    fireEvent.mouseOver(para);
+    expect(vi.getTimerCount()).toBe(1);
+
+    // Ground truth now shows nothing under the cursor (e.g. the paragraph's trailing margin) —
+    // even though this event still fires with `para` as its target.
+    // eslint-disable-next-line no-null/no-null
+    stubHoverTarget(null);
+    fireEvent.mouseMove(para, { clientX: 5, clientY: 5 });
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(queryTooltip()).not.toBeInTheDocument();
   });
 });
