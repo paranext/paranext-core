@@ -197,6 +197,39 @@ describe('platform.webViewContentZoom stepper', () => {
     await waitFor(() => expect(baseProps.setSetting).toHaveBeenCalledWith(1.3));
   });
 
+  it("writes once for a burst of presses, after the stepper's own shorter debounce", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
+      const setSetting = vi.fn().mockResolvedValue(undefined);
+      const validateOtherSetting = vi.fn().mockResolvedValue(true);
+      render(
+        <Setting
+          setSetting={setSetting}
+          isLoading={baseProps.isLoading}
+          validateOtherSetting={validateOtherSetting}
+          settingKey="platform.webViewContentZoom"
+          setting={1}
+          label="Tab content default zoom"
+        />,
+      );
+      const increase = screen.getByRole('button', { name: 'Increase default zoom' });
+      fireEvent.click(increase);
+      fireEvent.click(increase);
+      fireEvent.click(increase);
+      expect(setSetting).not.toHaveBeenCalled();
+      // Just short of the stepper's own delay: still nothing written.
+      await vi.advanceTimersByTimeAsync(140);
+      expect(setSetting).not.toHaveBeenCalled();
+      // Past it, and well short of the page's 500 ms default, the whole burst lands as one write.
+      await vi.advanceTimersByTimeAsync(20);
+      expect(setSetting).toHaveBeenCalledTimes(1);
+      expect(setSetting).toHaveBeenCalledWith(1.3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('still renders a text box for the app-wide zoom factor', () => {
     render(
       <Setting
