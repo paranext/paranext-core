@@ -106,20 +106,24 @@ export async function zoomAreaTo(
 /** Largest gap, in pixels, between a pop-up and its trigger that still counts as "beside" it. */
 const POPUP_TRIGGER_MAX_GAP_PX = 24;
 
+/** A main-frame-relative box, as Playwright's `boundingBox()` returns it. */
+export type PageBox = { x: number; y: number; width: number; height: number };
+
 /**
  * Asserts an open pop-up sits beside its trigger (touching or within
- * {@link POPUP_TRIGGER_MAX_GAP_PX} on one axis and overlapping on the other) and lies fully inside
- * the web view's frame.
+ * {@link POPUP_TRIGGER_MAX_GAP_PX} on one axis and overlapping on the other, without covering the
+ * trigger) and lies fully inside the web view's frame. `trigger` is an element, or a
+ * main-frame-relative box for a trigger that is no element of its own (a text caret or selection).
  */
 export async function expectPopupBesideTriggerAndInsideFrame(
   frame: Frame,
   popup: Locator,
-  trigger: Locator,
+  trigger: Locator | PageBox,
 ): Promise<void> {
   const frameElement = await frame.frameElement();
   const frameBox = await frameElement.boundingBox();
   const popupBox = await popup.boundingBox();
-  const triggerBox = await trigger.boundingBox();
+  const triggerBox = 'boundingBox' in trigger ? await trigger.boundingBox() : trigger;
   if (!frameBox || !popupBox || !triggerBox) throw new Error('Pop-up, trigger or frame has no box');
   const gapY = Math.max(
     popupBox.y - (triggerBox.y + triggerBox.height),
@@ -129,10 +133,12 @@ export async function expectPopupBesideTriggerAndInsideFrame(
     popupBox.x - (triggerBox.x + triggerBox.width),
     triggerBox.x - (popupBox.x + popupBox.width),
   );
-  // Beside = separated on at most one axis, by a small gap.
-  expect(Math.min(Math.max(gapY, 0), Math.max(gapX, 0))).toBe(0);
-  expect(Math.max(gapX, gapY)).toBeLessThanOrEqual(POPUP_TRIGGER_MAX_GAP_PX);
   const tolerance = 1;
+  // Beside = separated on at most one axis, by a small gap, and never covering the trigger: two
+  // boxes intersect exactly when both gaps are negative, so the larger gap must not be.
+  expect(Math.min(Math.max(gapY, 0), Math.max(gapX, 0))).toBe(0);
+  expect(Math.max(gapX, gapY)).toBeGreaterThanOrEqual(-tolerance);
+  expect(Math.max(gapX, gapY)).toBeLessThanOrEqual(POPUP_TRIGGER_MAX_GAP_PX);
   expect(popupBox.x).toBeGreaterThanOrEqual(frameBox.x - tolerance);
   expect(popupBox.y).toBeGreaterThanOrEqual(frameBox.y - tolerance);
   expect(popupBox.x + popupBox.width).toBeLessThanOrEqual(frameBox.x + frameBox.width + tolerance);
