@@ -21,9 +21,11 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   areaBox,
   ctrlWheel,
+  expectPopupBesideTriggerAndInsideFrame,
   INDICATOR_SELECTOR,
   readContentZoomMemory,
   readIndicatorText,
+  zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
 import {
   CONTENT_ZOOM_COMMANDS,
@@ -38,6 +40,16 @@ import {
   sendCommandWithId,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
+import { DEFAULT_WINDOW_SIZE, setWindowWidth } from '../../../fixtures/helpers';
+
+/**
+ * The in-text caller that opens the footnote editor popover (`.immutable-note-caller > button`,
+ * shared with cross-references). Scoped to `data-note-kind="footnote"` so it lands on a real
+ * footnote — the sample WEB project's Jonah 1 carries footnote callers at verses 1, 6 and 9
+ * (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), and this suite navigates to Jonah 1:1.
+ */
+const TEXT_NOTE_CALLER_SELECTOR =
+  '.note[data-note-kind="footnote"] .immutable-note-caller > button';
 
 test.use({
   interfaceMode: 'power',
@@ -64,6 +76,7 @@ async function readActiveArea(frame: Frame): Promise<string | undefined> {
 
 test.describe('scripture editor content zoom', () => {
   test('Ctrl+wheel and the zoom commands scale the text and footnotes areas independently and remember each level', async ({
+    electronApp,
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, several zoom gestures each waiting on a
@@ -235,6 +248,80 @@ test.describe('scripture editor content zoom', () => {
       await sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.reset, editorId);
       await expect.poll(() => readFactor(editorFrame, '')).toBe(1);
       expect(await readFactor(editorFrame, 'footnotes')).toBe(1.1);
+    });
+
+    await test.step('the footnote popover follows the text zoom and stays beside its caller, even scrolled and in a narrow pane', async () => {
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
+      const caller = editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first();
+      await caller.click({ force: true });
+      const popover = editorFrame.locator('[data-slot="popover-content"]').filter({
+        has: editorFrame.locator('.editor-input'),
+      });
+      await expect(popover).toBeVisible();
+      const atDefault = await popover.boundingBox();
+      if (!atDefault) throw new Error('Footnote popover has no box');
+      await mainPage.keyboard.press('Escape');
+
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
+      // Scroll the text so the caller is no longer at the top of the pane.
+      await editorFrame.locator('.editor-container').evaluate((element) => {
+        const scroller = element.closest('.tw\\:overflow-auto') ?? element;
+        scroller.scrollTop = 120;
+      });
+      await caller.click({ force: true });
+      await expect(popover).toBeVisible();
+      await expect(popover).toHaveAttribute('data-platform-content-zoom-root', '');
+      await expectPopupBesideTriggerAndInsideFrame(editorFrame, popover, caller);
+      await mainPage.keyboard.press('Escape');
+
+      // Narrow pane: the popover must still fit inside it at 200 %. A real OS window resize, never
+      // `mainPage.setViewportSize()` — on this CDP-attached fixture that applies an emulation
+      // override that bypasses the app's enforced `minWidth` instead of actually narrowing the
+      // window (see `setWindowWidth` in fixtures/helpers.ts).
+      await setWindowWidth(electronApp, mainPage, 900);
+      await caller.click({ force: true });
+      await expect(popover).toBeVisible();
+      await expectPopupBesideTriggerAndInsideFrame(editorFrame, popover, caller);
+      await mainPage.keyboard.press('Escape');
+      // Restore the window width for the steps that follow.
+      await setWindowWidth(electronApp, mainPage, DEFAULT_WINDOW_SIZE.width);
+    });
+
+    await test.step('the inline marker menu and the comment editor follow the text zoom', async () => {
+      await verseLocator.click({ force: true });
+      await mainPage.keyboard.press('\\');
+      const markerMenu = editorFrame.locator('[data-slot="popover-content"]').filter({
+        has: editorFrame.locator('input'),
+      });
+      await expect(markerMenu).toBeVisible();
+      await expect(markerMenu).toHaveAttribute('data-platform-content-zoom-root', '');
+      await expectPopupBesideTriggerAndInsideFrame(editorFrame, markerMenu, verseLocator);
+      await mainPage.keyboard.press('Escape');
+
+      await verseLocator.click({ force: true });
+      await mainPage.keyboard.press('Control+Shift+N');
+      const commentEditor = editorFrame
+        .locator('[data-slot="popover-content"]')
+        .filter({ hasNot: editorFrame.locator('.editor-input') })
+        .last();
+      await expect(commentEditor).toBeVisible();
+      await expect(commentEditor).toHaveAttribute('data-platform-content-zoom-root', '');
+      await expectPopupBesideTriggerAndInsideFrame(editorFrame, commentEditor, verseLocator);
+      await mainPage.keyboard.press('Escape');
+    });
+
+    await test.step('a toolbar pop-up stays at interface scale while the text is zoomed', async () => {
+      const toolbarMenuTrigger = editorFrame
+        .locator('.scripture-editor-tab-nav button[aria-haspopup="menu"]')
+        .first();
+      await toolbarMenuTrigger.click();
+      const toolbarMenu = editorFrame.locator('[data-slot="dropdown-menu-content"]').last();
+      await expect(toolbarMenu).toBeVisible();
+      // Positive control that the text really is zoomed right now.
+      expect(await readFactor(editorFrame, '')).toBe(2);
+      await expect(toolbarMenu).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
+      await mainPage.keyboard.press('Escape');
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
     });
 
     await test.step('a read-only editor of the same project shares the same memory identity', async () => {
