@@ -105,12 +105,20 @@ describe('pop-ups opened from zoomed content', () => {
     expect(element.className).not.toContain(zoomedClass);
   });
 
+  test('popover-content outside every area has no zoomed height cap', () => {
+    render(popover());
+    expect(content('popover-content').className).not.toContain(
+      '--radix-popover-content-available-height',
+    );
+  });
+
   test.each([
     [
       'popover-content',
       popover(),
       [
         'tw:max-w-[calc(var(--radix-popover-content-available-width)/var(--platform-content-zoom-popup-factor,1))]',
+        'tw:max-h-[calc(var(--radix-popover-content-available-height)/var(--platform-content-zoom-popup-factor,1))]',
       ],
     ],
     [
