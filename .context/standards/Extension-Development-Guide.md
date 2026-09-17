@@ -332,7 +332,8 @@ to a position in it — joins the area only when wrapped in `ContentZoomAreaProv
 same `area` as the root; omit it for the main area). Toolbar pop-ups outside every area stay at
 interface scale. `ContentZoomRoot` and `ContentZoomAreaProvider` are experimental. A pop-up you
 build without these components can opt in by putting `data-platform-content-zoom-root="<area>"`
-and `data-platform-content-zoom-popup` on its portaled content.
+and `data-platform-content-zoom-popup` on its portaled content. Those attributes only scale it:
+such a pop-up gets none of the library's size caps, so it must keep itself inside the pane.
 
 ---
 
