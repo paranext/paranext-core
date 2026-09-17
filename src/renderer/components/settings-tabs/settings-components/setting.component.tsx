@@ -132,6 +132,16 @@ type CombinedSettingProps =
       (settingKey: any, newValue: any, currentValue: any) => Promise<boolean>
     >;
 
+/** How long a control waits after the last edit before the setting is validated and written. */
+const SETTING_WRITE_DEBOUNCE_MS = 500;
+
+/**
+ * The stepper's own, shorter wait. Its buttons and its readout move on the press, so the wait the
+ * typed controls use would leave every pane it scales visibly trailing the number on screen, while
+ * still being long enough to collapse a burst of presses into one write.
+ */
+const STEPPER_WRITE_DEBOUNCE_MS = 150;
+
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
@@ -268,8 +278,14 @@ export function Setting({
     [localizedStrings, setting, settingKey, setSetting, validateSetting],
   );
 
+  // One debounce mechanism, two waits. Every control collapses a burst of edits into a single
+  // validate-and-write, so a burst is one cross-process write rather than a race between several.
   const debouncedHandleChange = useMemo(
-    () => debounce(handleChangeSetting, 500),
+    () => debounce(handleChangeSetting, SETTING_WRITE_DEBOUNCE_MS),
+    [handleChangeSetting],
+  );
+  const debouncedHandleStepperChange = useMemo(
+    () => debounce(handleChangeSetting, STEPPER_WRITE_DEBOUNCE_MS),
     [handleChangeSetting],
   );
 
@@ -291,7 +307,7 @@ export function Setting({
             decrease: localizedStrings['%settings_platform_webViewContentZoom_decrease%'],
             reset: localizedStrings['%settings_platform_webViewContentZoom_reset%'],
           }}
-          onChange={handleChangeSetting}
+          onChange={debouncedHandleStepperChange}
         />
       );
     else if (typeof setting === 'string' || typeof setting === 'number')
@@ -361,7 +377,7 @@ export function Setting({
     settingKey,
     label,
     debouncedHandleChange,
-    handleChangeSetting,
+    debouncedHandleStepperChange,
     errorMessage,
     languages,
     defaultLanguages,
