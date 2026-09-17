@@ -1,4 +1,5 @@
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useWindowBlockingOverlay } from '@renderer/hooks/use-window-blocking-overlay.hook';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
 import {
@@ -64,6 +65,8 @@ export function WorkspaceUpdatingOverlay() {
 
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
   const isPowerMode = useIsPowerMode();
+
+  useWindowBlockingOverlay(isUpdating);
 
   if (!isUpdating) return undefined;
 

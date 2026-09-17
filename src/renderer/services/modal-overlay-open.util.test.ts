@@ -5,6 +5,15 @@ vi.mock('@renderer/services/overlays/overlay-store', () => ({
   hasOverlayOfType: mockHasOverlayOfType,
 }));
 
+// The subject deliberately does NOT import this module: a docked PAPI dialog is a non-modal tab the
+// user keeps working behind, so it must not stop content zoom — a dialog that did would take zoom
+// away window-wide for as long as it stayed docked. Mocking it here is what makes that regression
+// visible: put a `hasAnyDialogRequest() ||` term back into the predicate and this file turns red.
+vi.mock('@renderer/services/dialog.service-shard', () => ({
+  hasAnyDialogRequest: () => true,
+  hasDialogRequest: () => true,
+}));
+
 describe('modal-overlay-open.util', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -26,6 +35,25 @@ describe('modal-overlay-open.util', () => {
     mockHasOverlayOfType.mockImplementation((type: string) => type === 'commandPalette');
     const { isModalOverlayOpen } = await import('./modal-overlay-open.util');
     expect(isModalOverlayOpen()).toBe(true);
+  });
+
+  it('counts a full-screen overlay that bypasses the overlay store', async () => {
+    const { registerWindowBlockingOverlay, resetWindowBlockingOverlays } = await import(
+      '@renderer/services/window-blocking-overlay-store'
+    );
+    const { isModalOverlayOpen } = await import('./modal-overlay-open.util');
+    const unregister = registerWindowBlockingOverlay();
+    try {
+      expect(isModalOverlayOpen()).toBe(true);
+    } finally {
+      unregister();
+      resetWindowBlockingOverlays();
+    }
+  });
+
+  it('a docked non-modal dialog request does not count', async () => {
+    const { isModalOverlayOpen } = await import('./modal-overlay-open.util');
+    expect(isModalOverlayOpen()).toBe(false);
   });
 
   // Runs against the real overlay store instead of the mock above. A docked PAPI dialog request
