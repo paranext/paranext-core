@@ -758,7 +758,7 @@ export function getDockLayout(): Promise<PapiDockLayout> {
  * @returns The papi dock layout
  * @throws If the papi dock layout has not been registered
  */
-function getDockLayoutSync(): PapiDockLayout {
+export function getDockLayoutSync(): PapiDockLayout {
   if (!papiDockLayoutVarSync)
     throw new Error(
       'WebView Service error: Dock layout was requested synchronously, but the dock layout has not been registered!',
@@ -1339,6 +1339,10 @@ async function getPersistedLayout(
     return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false, isBakedDefault: false };
   }
   isRunningOnFallbackLayout = false;
+  // Cleared with the flag it guards, so a LATER fallback episode says so too. Left latched, a window
+  // that fell back, recovered, and fell back again would hold every push with nothing logged — and
+  // the warning is the only sign the user's layout changes are being dropped.
+  hasLoggedHeldLayoutPushes = false;
   if (response.kind === 'entry')
     return { layout: response.layout, isPendingContent: false, isBakedDefault: false };
   if (response.kind === 'empty')
@@ -1663,6 +1667,68 @@ async function withTimeout<T>(
 }
 
 /**
+ * How long to wait for the main process to say which window holds the primary role before going
+ * ahead. Short: the answer is a read of state main already holds, and the switch is waiting on it.
+ */
+const PRIMARY_WINDOW_QUESTION_TIMEOUT_MS = 5_000;
+
+/**
+ * Whether this window is the one that should carry out a switch to simple mode.
+ *
+ * Simple mode is single-window, so the main process closes every other window as part of the same
+ * switch. A window on its way out must not run the switch, because the switch writes state shared
+ * by every window — it starts a send/receive, applies the administrator's shared layout, records
+ * the project as recently opened, and caches it under a browser-storage key that is one key for the
+ * whole application. Running all of that in a window nobody will see duplicates each of them, and
+ * can settle on a different project than the surviving window when the cache is cold.
+ *
+ * Asked of the main process, which is the only place that knows which window holds the role.
+ *
+ * Decided from THIS window's own entry and nothing else. A window runs the switch when the list
+ * says it is the primary, and stands down otherwise — including when the list names no primary at
+ * all, which happens when the primary is absent from it: a window whose renderer has been given up
+ * on is deliberately left open but omitted, as is one already recorded as closing. Silence is not
+ * evidence that this window holds the role: reading it that way has every secondary run the switch
+ * at once, duplicating the shared writes above and putting the fixed simple-mode tab ids in several
+ * windows together — the collision single-window simple mode is supposed to make unreachable.
+ *
+ * A question that could not be asked is the one case that still answers `true`: nothing was
+ * learned, and leaving the mode changed with the dock never reloaded is the worse outcome. On that
+ * path the duplication above is unchanged.
+ */
+async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
+  // Read outside the try below: a missing window id is this window's own precondition failing, not
+  // a case where the primary-window question could not be asked, so it must not be swallowed into
+  // the same fail-open answer as a rejected or timed-out question.
+  const thisWindowId = getWindowIdOrThrow();
+  try {
+    // Bounded like every other wait in this switch. It is served by a main process that is
+    // concurrently closing windows, and an unbounded wait here would hold the switch behind the
+    // network default with the overlay up and the mode already flipped.
+    const windows = await withTimeout(
+      async () => sendCommand('platform.getWindows'),
+      PRIMARY_WINDOW_QUESTION_TIMEOUT_MS,
+    );
+    if (windows === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `The main process did not say which window holds the primary role within ${PRIMARY_WINDOW_QUESTION_TIMEOUT_MS}ms; running the switch to Simple mode here`,
+      );
+      return true;
+    }
+    // Absent from the list means already recorded as closing — which is what the main process does
+    // to a window just before it closes it for this very switch — or given up on
+    const thisWindow = windows.find((summary) => summary.windowId === thisWindowId);
+    if (!thisWindow) return false;
+    return thisWindow.isMain;
+  } catch (e) {
+    logger.warn(
+      `Could not establish whether this window should run the switch to Simple mode; running it: ${getErrorMessage(e)}`,
+    );
+    return true;
+  }
+}
+
+/**
  * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares multiple
  * tabs with empty state (no `projectId`); restoring it would mount those empty webviews, fire
  * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all those
@@ -1715,6 +1781,13 @@ export async function handleSwitchToSimpleMode(
     // batch with later state changes and the overlay never actually appears on screen. Bounded: see
     // waitForNextPaint's doc comment for the hidden/occluded-window case this guards against.
     await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
+
+    // Behind the overlay, so the round trip below is covered by it like every other lookup here:
+    // by this point the mode has already flipped, so anything the user rearranges in the Power
+    // layout still on screen would be silently refused by `saveLayout`. Ahead of the layout build,
+    // the project cache and the finalize, all of which write state the whole application shares.
+    // The `finally` releases the overlay on this return like any other.
+    if (!(await isThisWindowRunningTheSwitchToSimple())) return;
 
     const cached = getLastOpenedProject();
     if (cached) {
@@ -2121,11 +2194,13 @@ export function updateWebViewDefinitionSync(
   webViewId: WebViewId,
   webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
   shouldBringToFront = false,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): boolean {
   const didUpdateWebView = getDockLayoutSync().updateWebViewDefinition(
     webViewId,
     webViewDefinitionUpdateInfo,
     shouldBringToFront,
+    activateWithoutDocumentFocus,
   );
   if (didUpdateWebView) {
     const webView = getSavedWebViewDefinitionSync(webViewId);
@@ -2619,6 +2694,12 @@ async function admitContentToDock(operation: string): Promise<void> {
  *   is asking for it again, which is what makes the same web view's absence at the dock write
  *   meaningful — see the check there. An open and an adopt both name an id no tab here has yet, so
  *   there is nothing for them to have lost.
+ * @param activateWithoutDocumentFocus Whether to dock the content without taking document focus.
+ *   Passed by the process that created this window when it created it in the background and the
+ *   user has not activated it since; focusing the new tab focuses its iframe, and a `focus()`
+ *   inside a window that does not hold OS focus sets that document's active element without
+ *   activating the window — latently, until the window is next activated — so it would still claim
+ *   the caret for a window that was deliberately opened in the background.
  * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
  *   not create a WebView for this request.
  *
@@ -2632,6 +2713,7 @@ export async function openOrReloadWebView(
   layout: Layout = { type: 'tab' },
   optionsDefaulted: OpenWebViewOptions = {},
   isReloadOfAnOpenWebView = false,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> {
   const { webViewType } = savedWebViewDefinition;
   // A load that starts and finishes entirely inside the provider await below, with nothing left in
@@ -3113,6 +3195,7 @@ export async function openOrReloadWebView(
       finalWebView,
       layout,
       optionsDefaulted.bringToFront,
+      activateWithoutDocumentFocus,
     );
   } catch (e) {
     // A throw can leave this web view's own tab in the dock: a definition its tab loader refuses
@@ -3178,6 +3261,7 @@ export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
   options: OpenWebViewOptions = {},
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> => {
   // Ahead of everything, including the provider: a window on its way out must not run a web view
   // provider's side effects for a tab that is about to be destroyed with it
@@ -3221,8 +3305,11 @@ export const openWebView = async (
 
     // If we found an existing WebView, handle it and return it
     if (existingWebView) {
-      // We found an existing web view, so bring it to front
-      if (optionsDefaulted.bringToFront) updateWebViewDefinitionSync(existingWebView.id, {}, true);
+      // We found an existing web view, so bring it to front. The tab is raised either way; whether
+      // it also takes document focus follows the same rule as a fresh open, so reusing a view in a
+      // window the user has not been in yet does not pull the caret there.
+      if (optionsDefaulted.bringToFront)
+        updateWebViewDefinitionSync(existingWebView.id, {}, true, activateWithoutDocumentFocus);
 
       // We found an existing WebView, so no need to do anything else
       return existingWebView.id;
@@ -3251,11 +3338,17 @@ export const openWebView = async (
     id: newGuid(),
   };
 
-  return openOrReloadWebView(newWebViewDefinition, layout, {
-    ...optionsDefaulted,
-    // Always bring new WebViews to the front
-    bringToFront: true,
-  });
+  return openOrReloadWebView(
+    newWebViewDefinition,
+    layout,
+    {
+      ...optionsDefaulted,
+      // Always bring new WebViews to the front
+      bringToFront: true,
+    },
+    false,
+    activateWithoutDocumentFocus,
+  );
 };
 
 /**
@@ -3733,6 +3826,7 @@ async function deleteSeededStateUnlessDocked(webViewId: WebViewId): Promise<void
 /** See {@link WebViewServiceShard.adoptWebView} */
 async function adoptWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> {
   // Ahead of the seeding below, and of anything that reads the bundle: this method is reachable
   // from any process, so an unvalidated bundle would let an arbitrary caller write a state blob
@@ -3794,6 +3888,8 @@ async function adoptWebView(
       savedWebViewDefinition,
       { type: 'tab' },
       getWebViewOptionsDefaults({}),
+      false,
+      activateWithoutDocumentFocus,
     );
     // A provider that declines returns no id, which is a failed adopt like any other: the seed is
     // a write this window would not otherwise have made, and it persists as soon as it is made
@@ -3864,6 +3960,11 @@ async function setDetachedScrRef(
  */
 const webViewServiceShard: WebViewServiceShard = {
   ...papiWebViewService,
+  // Named rather than left to the spread: `papiWebViewService` is typed as the public service,
+  // whose `openWebView` stops at three parameters. A function with fewer parameters is assignable
+  // to one with more optional ones, so the spread would satisfy the shard's widened signature with
+  // a value typed as though the fourth argument did not exist — and the main process passes it.
+  openWebView,
   dockContainsTab,
   hasContentArrivedSinceEmptyReport,
   openSettingsTab,

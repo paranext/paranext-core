@@ -25,7 +25,11 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from '@shared/services/scroll-group.service-model';
-  import type { AppWindowInputEvent, WindowSummary } from '@shared/services/window.service-model';
+  import type {
+    AppWindowInputEvent,
+    FocusedWindowIdEvent,
+    WindowSummary,
+  } from '@shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
@@ -81,7 +85,10 @@ declare module 'papi-shared-types' {
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /**
-     * Create a new application window
+     * Create a new application window.
+     *
+     * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
+     * second window. The first window of a launch is never refused.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -96,6 +103,11 @@ declare module 'papi-shared-types' {
      * List every open window with the title it is currently showing, for offering the user a choice
      * of window. Titles follow each window's own content, so two windows showing the same thing
      * carry the same label and nothing distinguishes them.
+     *
+     * Only windows that can still take the work are listed: a window whose close has begun, and one
+     * whose renderer has been given up on, are both left out. Either can be the window holding the
+     * primary role, so the list can carry no `isMain` at all — absence is not evidence that some
+     * other window holds it.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -173,11 +185,19 @@ declare module 'papi-shared-types' {
      * the marker before showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
      * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
      *   above
-     * @experimental
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
-    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its window id (see
      * `papi.window.getWindowId()` for the id of the window the caller is in, or
@@ -191,13 +211,20 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own. A target window the platform opened without activation and the user has not yet
+     *   been in stays backgrounded unless this is `true`: naming it is the user asking to go there,
+     *   which is what raises it. Pass `true` only from a control the user operated
      * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
      *   `platform.moveWebViewToNewWindow`
-     * @experimental
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
     'platform.moveWebViewToWindow': (
       webViewId: WebViewId,
       targetWindowId: string,
+      isUserRequested?: boolean,
     ) => Promise<WebViewId>;
 
     /** Open a dialog that displays essential information about the application */
@@ -1066,6 +1093,14 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidAppWindowInput': AppWindowInputEvent;
+    /**
+     * Emitted by the main process when the window it considers focused changes. Survives the whole
+     * application losing OS focus (alt-tabbing to another application) — the payload keeps naming
+     * the window the user was last working in.
+     *
+     * @experimental
+     */
+    'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */

@@ -75,6 +75,52 @@ step, no automation. Just a record.
 
 ---
 
+## adr-abandoned-window-notice-offers-manual-close: A window whose renderer crash-loops past its reload budget gets a native "close it?" notice, not a silent leave-open or an automatic close
+
+- **Date:** 2026-09-07
+- **Status:** Accepted
+- **Context:** `decideRendererCrashReload`'s reload budget (`renderer-crash-reload-budget.util.ts`,
+  seeded from `NO_RENDERER_CRASH_RELOADS_YET`) already leaves a window whose renderer keeps dying
+  open rather than closing it out from under the user — closing it costs nothing once
+  `keepsItsEntryOnClose` (`window-entry-disposition.util.ts`) keeps its entry, but taking a window
+  away unasked is not this handler's to decide. Left alone and merely marked (`markWindowAbandoned`),
+  that window is a dead page with no explanation, excluded from `platform.getWindows`, and the only
+  trace is a log line nobody reads.
+- **Decision:** `offerToCloseAbandonedWindow` (in `main.ts`) puts a native message box to the user,
+  mirroring `confirmCloseAllWindows`'s shape (bounded localization race, `AbortSignal` dismissal on
+  quit, English fallback on a failed localization lookup) so the application's native yes/no
+  questions about closing windows look and behave alike. Whether to ask at all, and which window
+  carries the question when the abandoned one is off screen, are decided through pure, unit-tested
+  functions — `decideAbandonedWindowNotice`, `chooseNoticeParentWindowId`, and
+  `eligibleNoticeParentCandidates` (`abandoned-window-notice.util.ts`) — rather than inline in the
+  handler. Offering the close is safe specifically because `keepsItsEntryOnClose` already keeps an
+  abandoned window's entry, so closing it only brings the window back later rather than costing the
+  user its tabs.
+- **Alternatives:** Automatically close the window once its crash budget is spent — rejected: closing
+  a window unasked is not the crash handler's to decide, and a user working around a misbehaving
+  extension might disagree. Leave it open with no further signal — rejected: that is exactly the
+  confusing dead page this notice exists to explain. A different UI shape (a toast, a persistent
+  banner) — rejected: the application's other one-shot question about closing windows already uses a
+  native message box (`confirmCloseAllWindows`), and a second idiom for the same kind of question
+  would itself be an inconsistency.
+- **Consequences:** The notice's own text promises only that the window comes back, not that closing
+  it is free of side effects — an abandoned window that still holds the primary role reaches the same
+  `decideWindowClose`/`confirmCloseAllWindows` path an ordinary primary-window close does when the
+  user answers "close it", so closing what looks like one dead window can still surface the
+  whole-application close-all prompt. That escalation is a known gap this decision does not
+  resolve; it is accepted as-is, since reaching it needs a primary window whose renderer has already
+  exhausted its crash-reload budget, and the prompt it surfaces defaults to cancelling. Keeping the
+  entry has its own cost, and it is what the notice's text promises: a layout that reliably kills its
+  renderer is rebuilt on every launch and on every switch back to power mode, so a window that dies
+  because of what it holds crash-loops again each time it comes back, with nothing in the application
+  that lets the user break the cycle. What recovery to offer in that case — dropping or emptying the
+  entry after repeated abandonment, or a way to reopen the window without its tabs — is deferred to
+  PT-4636.
+- **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
+  (`2026-09-02-pt-4286-mode-switch-spec.md`); depends on `adr-primary-window-owns-app-lifetime` for
+  what makes a window "primary" and on the crash-reload-budget decision in
+  `renderer-crash-reload-budget.util.ts` for when a window counts as abandoned.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -924,6 +970,36 @@ step, no automation. Just a record.
     filed, all three sites carry the literal marker `TODO(main-renderer-shutdown-relay)` — a slug rather than
     a `PT-XXXX`, because inventing an id that resolves to nothing is worse than admitting there
     is not one yet. Grep the marker to find every site; replace it with the real id once it exists.
+- **Amended 2026-09-14 (PT-4435, branch `pt-4435-tour-stand-down-connection-lost`):** two more
+  surfaces stand down on the latch. The arbitration bullet above — two Radix modal `Dialog`s, with
+  `FocusScope` and `DismissableLayer` arbitrating by mount order and z-index deciding only what is
+  visible — covers `OverlayHost` as well as `FirstRunOverlay`. It is not the reason for
+  `OnboardingTour`.
+  - `OverlayHost` stood down in the same commit as this entry (#2742) without being recorded here.
+    Its reason is the arbitration argument above: `OverlayModalDialog` is a Radix modal `Dialog`, so
+    a `showDialog` still in flight when the socket drops would mount second, take the focus trap,
+    and leave Reload unreachable (`overlay-host.component.tsx`).
+  - `OnboardingTour` stands down for a different reason entirely. `Tour` is a hand-written overlay
+    (`adr-hand-written-tour-spotlight`), not a Radix layer: a plain `div[role="dialog"]` with a
+    capture-phase `keydown` listener on `window` and a capture-phase focus trap on `document`. Those
+    beat any Radix layer regardless of mount order, and `Z_INDEX_ONBOARDING_TOUR` is below both
+    `Z_INDEX_FIRST_RUN` and `Z_INDEX_CONNECTION_LOST`, so neither half of the argument above would
+    have saved it. What makes standing it down necessary rather than tidy: the tour's Escape routes
+    through `onSkip`, which persists a permanent `localStorage` "tour done" flag shared across
+    same-origin windows — so Escape at a banner whose only action is a reload would spend a tour the
+    user never saw, and the reload would come back to an app that believed the tour had been given.
+    Muting the key would have been available — the listener could consult the latch and return —
+    but it treats one key at a time. Withdrawing the component withdraws the Escape handler and the
+    `document`-level focus trap in a single move, which is why the gate is a mount gate rather than
+    a check inside each handler.
+  - A fourth full-area gating sibling in the same `Main` block, `WorkspaceUpdatingOverlay`, does NOT
+    consult the latch, and that has not been examined against this entry. It is a bounded
+    (30 s local leash) `role="status"` spinner rather than a focus-trapping dialog, so it is not an
+    obvious instance of the same problem — but it is not an established exception either. It carries
+    the literal marker `TODO(gating-surface-latch-audit)` at its own definition, so the open question
+    is greppable rather than living only in this log — a slug rather than a `PT-XXXX` for the same
+    reason `TODO(main-renderer-shutdown-relay)` above is one.
+
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
@@ -1108,6 +1184,56 @@ step, no automation. Just a record.
   hand-added entry can silently break it — no such check existed as of 2026-09-03, and adding one is
   open follow-up work.
 - **Source:** PR #2770.
+
+## adr-derived-stylesheet-coverage-tests: A stylesheet invariant is tested by deriving the expectation from the same file, not from a hand-typed list
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** The editor stylesheet's gutter view positions each paragraph's marker glyph at
+  `left: calc(-(gutter width) + 0.5em - var(--para-indent))`, so every marker whose text-spacing
+  rule gives it a `margin-left` needs a matching `--para-indent` entry in the gutter block, and every
+  hanging-indent marker needs a matching `--verse-text-start`. The block had been maintained by hand
+  and covered five markers out of roughly fifty; the glyph overlapped the text for the rest at every
+  window width. A regression test for the fix had to decide what "every indented marker" means. The
+  stylesheet is also vendored three times (the extension's `_usj-nodes.scss`, the
+  `platform-bible-react` demo `usj-nodes.css`, and the upstream `scripture-editors` source), each
+  re-synced by hand.
+- **Decision:** The coverage test parses the stylesheet itself into flat `selector { declarations }`
+  blocks, derives the expected `--para-indent` map from the base `margin-left` rules (resolving the
+  cascade: a `[dir='ltr']` rule beats a direction-agnostic one, table rows excluded because they never
+  render as `.para`) and the expected `--verse-text-start` map from negative `text-indent`, then
+  asserts the gutter block matches in both directions: every derived marker present with the same
+  value, and no gutter entry without a base rule calling for it. The parser's blind spots are
+  themselves asserted away — a setter nested in an at-rule, a direction-qualified gutter rule, a
+  `margin` shorthand or logical `margin-inline-*` on a marker, an LTR/RTL margin mismatch — so the
+  test fails loudly rather than passing vacuously when the stylesheet's shape moves outside what the
+  parser reads. A small hand-typed oracle from the USFM stylesheet (`usfm.sty` LeftMargin and
+  FirstLineIndent for one marker per distinct value) sits alongside, because a derivation alone
+  accepts a base rule that drifted from the spec as long as its compensation drifted with it. The
+  same test runs over both in-repo copies and compares their derived gutter maps to each other; the
+  upstream repo carries a single-file twin.
+- **Alternatives:** **A hand-typed list of expected markers** — rejected: it encodes whatever gap
+  existed when it was written and passes forever after, which is exactly how the block came to cover
+  five markers. **Assert the copies are byte-identical** — rejected: the copies legitimately diverge
+  (SCSS versus CSS, host-specific rules), so a byte comparison would either fail permanently or need a
+  hand-maintained exclusion list with the same staleness problem. **Parse with `postcss`** — declined
+  for now: the flat parser plus its blind-spot assertions is ~100 lines and reads without a dependency;
+  a real parser becomes worth it if the stylesheet grows nesting the assertions cannot exclude.
+- **Consequences:** Adding an indented marker to the base rules without compensating it fails the
+  build; so does adding a compensation nothing calls for. Re-syncing a copy from upstream is checked
+  structurally for this block, so the cross-copy pin comments in the two `usj-nodes-styles.test.ts`
+  suites cover only the rules outside it. The invariant is scoped to margins set in the file under
+  test; the PT9-derived commentary stylesheets (`marker-styles/*.scss`) and project-stylesheet CSS
+  (`generateUsjCss`) load later in source order and can move a marker's margin away from the
+  compensated value — that is open work (PT-4624), not covered. The durable home for the
+  compensation is those generators, `tools/pt9-css-converter` and `generateUsjCss`: each should emit
+  the gutter variables beside every margin it emits, and once a generator produces the default sheet
+  for every project the hand-maintained block and this test retire with the placeholder
+  `usj-nodes.css`. The pattern generalises to any "for every X in
+  this file there must be a Y" invariant over a generated or vendored asset: derive X from the asset,
+  assert the parser's blind spots, keep a small independent oracle.
+- **Source:** PR #2807 (`pt-4313-gutter-indent-compensation`) and its review; upstream
+  `paranext/scripture-editors` PR #10.
 
 ## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
 
@@ -1651,6 +1777,68 @@ step, no automation. Just a record.
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
 
+## adr-focus-in-a-background-window-is-latent: A `focus()` call inside a backgrounded window sets the active element without raising the window
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** Two comments in the withhold-activation code (PT-4465) asserted opposite claims about
+  the same call. One line of comments said a `focus()` call inside a window that does not hold OS
+  focus "asks the browser to activate that window" — implying the call itself could pull a
+  backgrounded window to the foreground, which is exactly what `activateWithoutDocumentFocus` exists
+  to prevent. Another line said the same call "is silently dropped rather than deferred" — implying
+  the element never becomes focused at all, so nothing is lost by skipping the withholding. Both
+  cannot be true, and the whole design of `activateWithoutDocumentFocus`
+  (`shouldContentAvoidDocumentFocus`, `noteWindowWithheldFromActivation`,
+  `web-view.service-router.ts`, `platform-dock-layout-storage.util.ts`,
+  `web-view.service-shard.model.ts`) rests on knowing which one is true.
+- **Decision:** Settle it by measurement rather than by documentation or memory — Electron does not
+  specify this. A throwaway two-window Electron probe was run on native Windows, not WSLg: WSLg's
+  compositor does not implement client-initiated window activation, so a negative result there would
+  be indistinguishable from Electron's own behavior and would misread as confirmation that nothing
+  happens. Window A was given OS focus; window B was left visible but backgrounded
+  (`winA.isFocused() === true`, `winB.isFocused() === false`, and B's own document reporting
+  `hasFocus() === false`). Then, inside backgrounded B:
+
+  | call inside backgrounded B | did B come forward? | B's `activeElement` after | B's `document.hasFocus()` after |
+  | --- | --- | --- | --- |
+  | `input.focus()` on a plain element | no | `target` | `false` |
+  | `iframe.focus()` on the iframe element | no | `frame` | `false` |
+  | `input.focus()` on an element inside the iframe | no | `frame` | `false` |
+  | control: `BrowserWindow.focus()` from main | yes | — | — |
+
+  The control is what makes the other three rows readable: this environment can activate a window on
+  request, so "B did not come forward" is a fact about `focus()`, not about the compositor refusing
+  every activation request. The result: a `focus()` call inside a window that does not hold OS focus
+  sets that document's active element — on a plain element, on an iframe, and on an element inside
+  the iframe alike — and does nothing at the OS level. The window is never raised and
+  `document.hasFocus()` stays `false`. The focus is real but latent: it becomes live keyboard focus
+  only if and when the window is separately raised.
+- **Alternatives:** Neither prior claim was arrived at by measurement — both were plausible-sounding
+  guesses about undocumented Electron/Chromium behavior, confident enough in code comments to become
+  load-bearing for why `activateWithoutDocumentFocus` exists. There was no live alternative to
+  measuring directly; the only choice was where to run the probe, and WSLg was rejected as the venue
+  for the reason above.
+- **Consequences:** The withholding flag's original stated rationale — that skipping it risks a
+  backgrounded window being pulled to the foreground by its own content — does not hold; `focus()`
+  never does that, with or without the flag. Its established remaining job is caret ownership at the
+  moment the window is ACTIVATED, by any means — including the user activating it themselves, which
+  is the common way a background window is next entered: several tabs' content can each call
+  `focus()` while a window sits backgrounded, and without withholding, whichever call lands last
+  claims the latent active element and wins the caret the instant the window is activated,
+  regardless of which tab that activation is actually
+  showing. Every comment and TSDoc entry across the withholding code (`activateWithoutDocumentFocus`
+  and its call sites, in both main and renderer, and the generated `papi.d.ts` entries that come from
+  it) that described what a `focus()` call does was corrected to state the latent-focus fact and this
+  narrower rationale in place of the two disproved claims; comments describing a genuine OS-level
+  raise (`shouldBringToFront`, `focusWindow`, `raiseMoveTarget`) needed no change; a `focus()` call is
+  not in tension with any of them. On a window that is never activated at all, the latent caret
+  itself has no effect while the window stays in the background — the one reader of
+  `document.activeElement` outside a web view's own document is the window service's
+  `detectFocus()`, driven by its `focusin`/`focusout` listeners, and it updates only the
+  last-focused-tab and BCV-navigation trackers; whether a latent `focus()` call dispatches `focusin`
+  in a backgrounded window was not measured by the probe above.
+- **Source:** PT-4465; probe run 2026-09-09 on native Windows.
+
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Formerly:** ADR-0008
@@ -1912,6 +2100,80 @@ step, no automation. Just a record.
   `.claude/rules/architecture/react-patterns.md`.
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
+
+## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** Simple mode is single-window and power mode is not, but nothing in the main process
+  reacted to the mode changing: its only settings subscription was `platform.zoomFactor`, and every
+  `platform.interfaceMode` read there was one-shot. A live switch therefore reloaded each open
+  window's own dock independently and did nothing to the set of windows — so switching to simple
+  left secondary windows open in a mode whose chrome cannot reach them, and switching back brought
+  nothing back. The requirement is that switching to simple saves the power layout including
+  secondaries, closes them, and loads simple in one window, and that switching back reopens them.
+- **Decision:** The mode owns the window set, and the set needs no new record. `window-layouts.json`
+  already holds one entry per window, `handleWindowRemoved` can keep an entry while dropping its
+  runtime id, and a write emits every entry whether or not a window lives in it — so a preserved
+  entry IS a saved window with nothing on screen, and "the windows the power session had open" is
+  exactly the entries with no live window. Main subscribes to the mode once for the session and, on
+  a switch to simple, closes every window but the primary with its entry kept; on a switch back to
+  power, creates a window from each entry left behind. The survivor is whoever the runtime primary
+  lookup names — the window holding the marked entry when one is live, and otherwise the oldest live
+  window. The persisted flag does not move; the role can. Usually they are the same window, so the
+  survivor is also the entry simple mode restores next launch; in the fallback state they are not,
+  and the survivor's layout is then not the one that comes back, because the restore opens the
+  marked entry. When no live window is fit to be the survivor — every one is either abandoned or
+  already closing — nothing closes at all: the switch aborts, the cached mode rolls back to what it
+  was, and the setting is written back to match, so a switch that could not be carried out does not
+  leave the cache and the setting disagreeing with a window set that never changed. Once the switch
+  is known to be to simple, refusing to create a further window keeps that mode from *gaining* a
+  window beyond the survivor — but a delivery of "simple" arriving while the cache is still unknown
+  is adopted outright with nothing closed, so the mode can briefly read simple while every window
+  from before remains open, until the next delivery gives the switch a known "from" to act on. Only
+  the primary window runs the renderer-side switch at all:
+  that switch starts a send/receive, applies the administrator's shared layout, records a
+  recently-opened project and writes an application-wide browser-storage cache, all of which a
+  window being closed by the same switch would duplicate — and could resolve to a different project
+  than the survivor when the cache is cold.
+- **Alternatives:** A new session-scoped record of "the power window set" — rejected: the entry list
+  already is it, and a second account of which windows exist is the thing that goes stale. Reusing
+  the quit latch to make the secondaries keep their entries, as the window-close rule does —
+  rejected: the application is not quitting, and setting that latch would both make window creation
+  refuse (breaking the switch back) and run the application's shutdown tasks. Having a renderer ask
+  main to close the other windows — rejected: which renderer, and what if two ask. Having the
+  renderer decide for itself which window it is — rejected: only the main process knows which window
+  holds the role, and it is the process that acts on the answer. Making
+  the renderer switch idempotent in the extension host instead of gating it — rejected as a second
+  mechanism for one problem, and it would not have covered the cold-cache case.
+- **Consequences:** Closing secondaries on a switch to simple makes the colliding-web-view-id
+  precondition true rather than assumed: the simple-mode fast path loads a static layout whose tab
+  ids are identical in every window and are never window-scoped, and only single-window simple mode
+  keeps two windows from holding them at once. It also depends on how a window decides whether it is
+  the one to run the switch, and that decision fails CLOSED. The window list leaves out windows that
+  can no longer take work — one whose close has begun, and one whose renderer has been given up on —
+  and either can be the window holding the role, so the list can name no primary at all. A window
+  therefore runs the switch only when the list says it is the primary, and stands down on silence.
+  Reading silence as "then it must be me" was what let every secondary run the switch at once. Closing the secondaries narrows the
+  colliding-id window rather than closing it outright: the ids are still unscoped, and two windows
+  can still hold them if a window runs the switch when it should not. Two residuals are deliberate.
+  A question that cannot be answered still runs the switch, because nothing was learned and leaving
+  the mode changed with the dock never reloaded is worse; on that path the duplicate side effects
+  above are unchanged. And the renderer stands down expecting the main process to close it, with no
+  fallback if that half never runs — reachable four ways, all tolerated: the subscription failing
+  at startup, the reaction returning early because it is unwired or the application is shutting
+  down, the mode arriving in the main process as an error while the renderer got a good value, and a
+  window that stood down and was then rescued by `undoModeSwitchClose` rather than actually closed —
+  it is shown again on its power-mode dock while the cached mode already reads simple, with nothing
+  left to re-trigger the renderer-side switch since the mode is not changing again.
+  A window stranded that way keeps its power layout while the application reads simple, and its
+  layout pushes are refused, until the mode changes again. And the layout-push refusal is scoped to windows closing for
+  a mode switch rather than to any closing window: a window is recorded as closing before it flushes
+  its layout, so the wider guard would lose a layout change made just before a quit. The
+  simple-to-power overwrite defect in the renderer's own save guards is out of scope and unchanged.
+- **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
+  (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
+  `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
@@ -2268,6 +2530,36 @@ step, no automation. Just a record.
 - **Source:** manage-books port (menu-availability deferred); keyboard-switching port (OS-keyboard
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
+
+## adr-mode-switch-sends-one-send-receive-for-all-closing-windows: A mode switch starts ONE send/receive covering every window it closes, not one per window
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** The backend handler for `paratextBibleSendReceive.sendReceiveProjects` (the Paratext
+  10 Studio overlay, outside this repository) runs one send/receive at a time and rejects a
+  concurrent call with a `FAILED_PRECONDITION` platform error before doing any work. A window's
+  close syncs the projects of the writable editors open in it, because nothing else can report them
+  once it is gone; a switch to simple mode closes N−1 windows at once. One request per window meant
+  the first ran and every sibling's was refused — each of those windows already closed and unable to
+  be asked again.
+- **Decision:** `closeSecondaryWindows` hands every window it is about to close to a single
+  `startWindowCloseTasksWithoutWaiting` call, made before any of them is closed and while all can
+  still be asked. That call reads each window's open definitions, unions the writable projects, and
+  makes one request. A mode-switch close starts no sync of its own in the per-window close handler.
+- **Alternatives:** one request per closing window — rejected, it is the failure above. A
+  cross-window de-duplication registry (makes the siblings' requests smaller) — rejected: under an
+  exclusive gate a smaller request is refused exactly as a larger one is. A queue serializing every
+  window-close sync — rejected here: it holds a hand-closed window on screen behind another
+  window's sync and compounds the quit drain; deferred to PT-4640 for the overlaps that remain.
+- **Consequences:** the one request waits for the slowest window's read, and a quit arriving
+  meanwhile waits with it (both bounded by `platform.requestTimeout`, 30 s by default). A window
+  whose close is undone has still been synced. Syncs from separate batches, or a hand close during a
+  batch, still overlap and the second is refused — PT-4640. The exclusivity is a cross-repo
+  dependency, stated on purpose in the TSDoc of `startWindowCloseTasksWithoutWaiting`
+  (`src/main/shutdown-tasks.ts`) and in `src/@types/paratext-bible-send-receive/index.d.ts`;
+  **revisit** this entry if that handler ever accepts concurrent calls, which would make batching an
+  optimization rather than the thing that makes every closing window's work go out.
+- **Source:** PT-4286 / PR #2752 review.
 
 ## adr-move-destination-lifetime: `WebViewMoveInFlight.destinationWindowId` is scoped to the readopt actually running, not to a recovery rung
 
@@ -3060,6 +3352,33 @@ step, no automation. Just a record.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ProjectSelector`'s `project-multi` mode keys each row by `(projectId,
+  scrollGroupId)`, so a project open in two scroll groups renders two selectable rows. The
+  checklist's comparative-texts storage is per-project and carries no scroll group, so a stored ref
+  matched neither row: both rendered unselected, and clicking one added a duplicate ref instead of
+  toggling the existing one off
+  (`extensions/src/platform-scripture/src/checklist.web-view.tsx`). The component could have grown a
+  per-project mode that keys rows by `projectId` alone.
+- **Decision:** Consumers whose selection semantics are per-project collapse the rows themselves —
+  keep one row per project (the lowest scroll group) and pair each stored ref with that row's scroll
+  group on the way in and de-duplicate on the way back out. `ProjectSelector` keeps a single row
+  identity, `(projectId, scrollGroupId)`.
+- **Alternatives:** (a) A `project-multi-per-project` mode in `ProjectSelector` — rejected as a
+  second row-identity scheme through selection, grouping, and the trigger summary for one consumer.
+  (b) Disabling the open-tabs grouping on per-project pickers so duplicate rows never appear —
+  rejected: it removes the most useful grouping to dodge a data-shape mismatch. (c) Storing the
+  scroll group alongside each comparative-text ref — rejected: comparative texts are a property of
+  the project, and persisting a scroll group would make saved state depend on window layout.
+- **Consequences:** A project open in several scroll groups shows only the lowest group's chip in a
+  per-project picker, so the trigger under-reports where the project is open. Any future per-project
+  consumer must repeat the collapse; if a second one appears, move the collapse into
+  `ProjectSelector` as a real per-project mode rather than copying it a third time.
+- **Source:** PR #2673 (project-selector groupings).
+
 ## adr-per-web-view-ctrl-f-for-find: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 
 - **Formerly:** ADR-0015
@@ -3106,6 +3425,105 @@ step, no automation. Just a record.
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
+
+## adr-per-window-focus-ring-keys-off-broadcast-window-id: A per-window focus ring keys off a main-broadcast window id, not local DOM focus
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** In multi-window layouts, each renderer window runs its own dock and its own DOM focus
+  tracking (`WindowDataProviderEngine`'s `focusin`/`focusout` listeners, feeding the `Focus` data
+  the active-tab focus ring keys off in `platform-tab-title.component.tsx`). That tracking is
+  correct per window but blind to every other window: several windows can each report a tab focused
+  in their own dock at the same time, so gating the ring purely on local DOM focus shows it in every
+  window at once, including windows the user is not currently in. Two related defects follow from
+  the same gap. First, opening or revealing a web view in a window other than the one the user is
+  working in can leave that window's tab marked as the DOM focus subject with nothing yet reflecting
+  that the window itself is backgrounded — the ring problem above. Second,
+  `openWebViewInOwningWindow` (`src/main/services/web-view.service-router.ts`) calls the shard's
+  `focus()` on the owner's tab while the owner window is still backgrounded, then raises the window
+  afterward with `focusWindow` — and a `focus()` call made from inside a window that does not hold
+  OS focus sets that document's active element without raising the window, latently, so whichever
+  tab's content focuses last owns the caret the moment the raise lands, rather than the tab the
+  raise is showing. See `adr-focus-in-a-background-window-is-latent` for the measurement.
+- **Decision:** Main is the process that already knows which window is focused
+  (`getFocusedWindowId`/`setFocusedWindowId` in `src/main/services/window-state.service.ts`), so it
+  is the source of truth broadcast to every renderer, rather than each renderer trying to infer "am
+  I the one the user is in" from its own DOM focus or OS blur events. A new network event,
+  `platform.onDidChangeFocusedWindowId` (`EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID` /
+  `FocusedWindowIdEvent` in `src/shared/services/window.service-model.ts`), announces
+  `getFocusedWindowId()` changes; each renderer seeds from the `platform.getFocusedWindowId` command
+  and then tracks the event (`window.service-shard.ts`'s `getIsThisWindowFocused` /
+  `onDidChangeIsThisWindowFocused`, consumed by the `useIsFocusedWindow` hook). The active-tab focus
+  ring effect in `platform-tab-title.component.tsx` is gated on `useIsFocusedWindow()` in addition
+  to the existing local focus-subject check, and a `platform-window-not-focused` class toggled on
+  `document.documentElement` suppresses the browser's own `:focus` outline on a backgrounded
+  window's web view in Power mode (`dock-layout-wrapper.component.scss`; Simple mode already
+  suppresses that outline unconditionally). For the router's cross-window reveal, the fix is to stop
+  treating the shard's own `focus()` call and the OS-level `focusWindow` raise as unrelated steps:
+  `openWebViewInOwningWindow` now computes whether it is about to raise the owner across windows
+  (`willLikelyRaiseAcrossWindows`) before opening, and when so, passes `activateWithoutDocumentFocus`
+  through the SAME withholding channel PT-4465 already built for windows awaiting their first
+  activation (`shouldContentAvoidDocumentFocus`, `noteTabAwaitingDocumentFocus`,
+  `takeTabAwaitingDocumentFocus`). The renderer then needs a second way to catch up on that note,
+  distinct from PT-4465's existing gesture-gated one (a click or keystroke inside a window still
+  awaiting its first activation): `runFocusCatchUpForRaisedWindow` in `window.service-shard.ts` runs
+  whenever this window transitions to focused via the broadcast above, and focuses the tab a
+  cross-window raise left waiting.
+- **Deliberately reused main's `focusedWindowId`, not `doesFocusedWindowHoldOsFocus`.** Main tracks
+  two related but different facts: which window is focused (survives the app losing OS focus
+  entirely, e.g. alt-tabbing to another application — it keeps naming the window the user was last
+  in) and whether the app currently holds OS focus at all (cleared on blur). The ring and the
+  catch-up both need the survive-blur answer — alt-tabbing away must not clear every window's ring,
+  and must not leave a raise's catch-up permanently stranded just because the user glanced at
+  another application in between. `FocusedWindowIdEvent` is deliberately built on
+  `getFocusedWindowId()`, not `isApplicationFocused()`/`doesFocusedWindowHoldOsFocus`.
+- **The renderer catch-up needs its own time bound, separate from PT-4465's gesture-gated one.** A
+  gesture-gated catch-up (a click IS the arrival it is catching up on) has no notion of staleness —
+  waiting indefinitely for the user to first interact with a backgrounded window is correct. A
+  focus-driven catch-up does not have that property: the OS focus change that triggers it can be
+  wholly unrelated to the raise that left the note (a much later, ordinary alt-tab back into a
+  window that has since moved on to something else), so consuming the note unboundedly would let a
+  stale raise steal focus into a tab days after the fact. `takeTabAwaitingDocumentFocusIfFresh`
+  (`window-activation.util.ts`) adds a bounded read gated on
+  `CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS` (5000ms — generous relative to how long a window
+  raise actually takes, since the cost of too short is the defect returning, and the cost of too
+  long is a rare stale catch-up firing on an activation the user was going to make anyway); the
+  unbounded `takeTabAwaitingDocumentFocus` remains for the gesture-gated path, which has no such
+  staleness risk.
+- **Alternatives:** Inferring window focus from each renderer's own blur/focus DOM events —
+  rejected: a renderer only sees its own window's events, and correlating "did some OTHER window
+  just take focus" from that alone would need every window comparing timestamps or racing each
+  other, reinventing what main already knows for certain as the process that owns every
+  `BrowserWindow`. Awaiting the raise before opening (reordering `openWebViewInOwningWindow` to
+  `focusWindow` first, open second) — rejected: raising a window the platform has not yet decided
+  to open anything into changes what the user sees before the content that motivated the raise
+  exists, and does not fit the router's existing shape where the shard's own open call already
+  decides tab activation.
+- **Consequences:** A ring shown in a backgrounded window (defect 1) and a tab left DOM-focused with
+  no visible indication or later ring after a cross-window raise (defect 2) are both fixed by the
+  same broadcast. The two halves are not alike, and the difference matters for the hidden-tab
+  question below: the ring is read-only state derivation and a CSS class toggle and moves nothing,
+  while the catch-up deliberately DOES move document focus — `runFocusCatchUpForRaisedWindow` calls
+  `focusTab`, which focuses the tab's web view iframe — because handing the caret to the tab the
+  raise is showing is the entire point of it. Single-window behavior is unaffected:
+  `useIsFocusedWindow()` is `true` for the sole window from the seed onward, so the new gate is a
+  no-op there.
+- **The hidden-tab case (`.claude/rules/cross-view-sync-hidden-views.md`):** the ring effect behaves
+  identically whether a tab is the visible one or not — it toggles a class on the root element and
+  reads no layout. The catch-up is layout-dependent and is **deliberately not guarded**. `focusTab`
+  makes the tab active and focuses its iframe in one synchronous stack, so a tab that was not
+  already its panel's active tab is still inside a `display: none` pane when `focus()` lands, and
+  the focus goes to the document body instead — the same trap `setDocumentFocusToTab` already
+  guards for its `lastFocusedElement` path with an `IntersectionObserver`. Reaching it needs the
+  noted tab to stop being its panel's active tab between the note and the raise, and no door
+  currently does that: every path that changes a withheld window's active tab goes through
+  `revealTabGroupAndSetDocumentFocusToTab`, which writes a fresh note for whichever tab it just
+  activated, and only the latest note is kept — so the note tracks the active tab rather than
+  drifting from it. Guarding it would mean deferring a focus move that must also survive a window
+  which is never raised at all, for a failure no path reaches; the note to whoever adds a door that
+  activates a tab without passing through that chokepoint is that this is the assumption it breaks.
+- **Source:** PT-4465 (`pt-4465-withhold-activation`), PR #2756, fix round addressing the
+  cross-window ring and reveal-without-a-ring reports.
 
 ## adr-per-window-service-scoping: Per-window service scoping via `${name}-${windowId}` network-object names
 
@@ -3378,6 +3796,45 @@ step, no automation. Just a record.
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+
+## adr-project-selector-consumer-driven-groupings: ProjectSelector groupings are consumer-supplied descriptors over an untyped `customData` bag
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ProjectSelector` owned its grouping options as a fixed prop set
+  (`groupByOpenTabs`, `groupByVersification` + `priorityVersificationId`, `showSelectedOnly`, and
+  their `filter*`/`onChange*` companions). Every new axis a picker wanted meant new props on a
+  shared component, and every picker was offered every axis whether or not its rows carried the
+  data — the manage-books picker showed a "Versification" option only because the component had
+  been taught about versification. `platform-bible-react` is PAPI-free, so the component cannot
+  fetch the data an axis needs; only the consumer can.
+- **Decision:** A consumer passes `availableGroupings` — an array of `ProjectSelectorGrouping`
+  descriptor objects, each saying how to bucket a row, what to call the bucket, how to order
+  buckets, and what to do with rows it cannot classify. Row data travels in an untyped
+  `customData` bag on `ProjectSelectorProject`, packed by `makeProjectSelectorCustomData`
+  (`platform-bible-utils`). The component never interprets `customData`; only the descriptor the
+  same consumer supplied reads it. `makeBuiltInGroupings` / `makeSelectionGrouping` build the stock
+  descriptors from the shared `%projectSelector_*%` block so the common case is one line, but they
+  are a convenience layer, not a privileged one — they return exactly what a consumer-defined
+  descriptor is.
+- **Alternatives:** (a) Keep growing the typed prop set — rejected: every axis is a change to a
+  shared component, and pickers keep being offered axes their rows cannot populate. (b) A typed
+  union of known grouping kinds — rejected: it still centralizes knowledge of every axis in the
+  component, and an extension outside this repo could not add one. (c) A typed `customData`
+  interface instead of an open record — rejected for the same reason; the open bag is what lets a
+  surface offer "Language" without the component having a language field.
+- **Consequences:** The type system no longer connects "this picker offers Language" to "this
+  picker packs a language", so a picker can offer a grouping that silently buckets every row as
+  unknown. That hole is covered by convention rather than types: each surface exports a
+  `*_PROJECT_SELECTOR_GROUPING_IDS` allow-list, and
+  `extensions/src/platform-scripture/src/project-selector-grouping-coverage.test.ts` drives each
+  list through that surface's own row builder and fails when an offered id is not backed by packed
+  data. That test is extension-scoped, so the same defect introduced inside `platform-bible-react`
+  would not be caught — a check inside `ProjectSelector` is the durable fix. The rework also
+  removed ~16 public `ProjectSelectorProps` members and renamed two localization keys with no
+  deprecation cycle, which `experimental.ts` sanctions by its own contract but which any
+  out-of-repo consumer (e.g. Paratext 10 Studio) must absorb at once.
+- **Source:** PR #2673 (project-selector groupings).
 
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
@@ -4456,7 +4913,8 @@ step, no automation. Just a record.
   a second key leaves both plugs declared. The rename therefore lives in a `patch-package` patch on
   `app-builder-lib`'s template. `base` is the single source of truth for the pairing, enforced
   against the patched template and the workflow runners by
-  `.erb/scripts/electron-builder-snap-config.test.ts`.
+  `.erb/scripts/electron-builder-snap-config.test.ts`, and against the snap that build produces by
+  `.erb/scripts/assert-generated-snap-metadata.ts`, which every snap-building workflow runs.
 - **Alternatives:** Override the attributes under the template's name — rejected, empirically: it
   makes every existing install a coin flip. Declare a second, correctly-named plug in config —
   rejected: config cannot remove the template's plug, so both ship and collide. Neutralise the
@@ -5316,7 +5774,7 @@ step, no automation. Just a record.
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 
 - **Date:** 2026-08-31
-- **Status:** Accepted — capability deferred to PT-4465
+- **Status:** Accepted — applied in PT-4465
 - **Context:** A window created while the user is working in another application should appear
   without stealing the foreground, and a window the user asked for must come to the front. The
   obvious source for that distinction is focus state, and it has been reached for multiple times
@@ -5330,30 +5788,85 @@ step, no automation. Just a record.
   window the user just asked for unfocused and flashing.
 - **Decision:** The question is *"did a person in this app ask for this window?"*, which is the
   caller's knowledge and nothing else's, so it is declared by the caller rather than inferred. No
-  window-creation path reads focus state to decide activation. The mechanism is PT-4465's to build:
+  window-creation path reads focus state to decide activation. The mechanism, built in PT-4465:
   an explicit user-intent flag on `createWindow`, passed by each call site (menu and
   `platform.createWindow`, dock-click and startup restore: yes; a `{ type: 'window' }` web-view
-  open or `moveWebViewToNewWindow` arriving from an extension: no). **None of that is wired yet** —
-  `createWindow` takes `restoreInfo` and `{ pendingContent }` and nothing else, and no
-  intent flag exists in the tree — so a reader looking for it will find it on the ticket, not in
-  the code. This entry exists so the inference is not re-attempted in the meantime.
-- **Scope — this is about activating a NEW window, not about raising an existing one.** Focus state
-  remains the right input for a raise, and is used deliberately today: `isApplicationFocused()`
-  gates the cross-window open raise (`web-view.service-router.ts`) and the move raise, so an in-app
-  action never pulls the app in front of whatever the user is working in. `handleUri` in `main.ts`
-  is just as deliberately *not* gated on it, and its comment states this entry's principle for the
-  case that was already shipped: the raise runs precisely when the app does not own the foreground,
-  because the user asked by following the link. Those guards answer "is this app in front?", which
-  focus state does know. Nothing here argues against them.
+  open or `moveWebViewToNewWindow` arriving from an extension: no).
+  `createWindow` takes a required `isUserRequested` on its creation options, and
+  `planWindowActivation` (`src/main/window-activation.util.ts`) turns that into what the window
+  does to become visible. The flag is required rather than defaulted so a call site added later has
+  to answer the question rather than inherit an answer. This entry exists so the inference is not
+  re-attempted.
+- **Scope — this is about activating a NEW window, not about raising an existing one.** Focus
+  state remains the right input for a raise, and is used deliberately today:
+  `isApplicationFocused()` gates the cross-window open raise (`web-view.service-router.ts`), the
+  move raise, and the withheld-window hand-back, so an in-app action never pulls the app in front
+  of whatever the user is working in. `handleUri` in `main.ts` is just as deliberately *not*
+  gated on it, and its comment states this entry's principle for the case that was already
+  shipped: the raise runs precisely when the app does not own the foreground, because the user
+  asked by following the link. Those guards answer "is this app in front?", which focus state
+  does know. Nothing here argues against them.
+- **Amended 2026-09-09:** The move raise picked up a second, inferred guard that this Scope note
+  did not cover: `raiseMoveTarget` (`web-view-move.util.ts`) started leaving a target window alone
+  whenever the platform was withholding it from activation, on the theory that a move landing
+  content there is never the user asking to go there. That theory is wrong for
+  `platform.moveWebViewToWindow`'s only production caller — the tab context menu's "Move to window",
+  which names a background window on purpose — so it reintroduced exactly the inference this entry
+  rules out, this time for a raise rather than a creation. The fix extends the same mechanism
+  instead of a new one: `platform.moveWebViewToWindow` gained its own optional `isUserRequested`,
+  mirroring `platform.moveWebViewToNewWindow`'s, and the tab context menu declares `true`.
+  `raiseMoveTarget` now raises a withheld target when the move declares it, and otherwise leaves it
+  alone, same as before. The cross-window open raise and `handleUri` are untouched by this — neither
+  gained a declared flag, and the paragraph above still describes them as written.
 - **Alternatives:** Infer from `getFocusedWindowId()` — rejected, cleared by `removeWindow`. Infer
   from an app-ever-focused latch — rejected, indistinguishable from the dock-click restore. Ship
   the third variation of a focus heuristic — rejected: every variation answers a question about the
   foreground, and the question being asked is about a person's intent.
-- **Consequences:** Until PT-4465 lands, every new window activates, including one an extension
-  creates while the user is elsewhere. That is the known cost of not guessing. When it does land,
-  withholding the constructor's `show` must stay scoped to the not-asked-for case: `did-fail-load`
+- **Consequences:** A window nobody asked for appears without taking the foreground and flashes;
+  every window a person asked for behaves exactly as before. Withholding the constructor's `show`
+  is scoped to the not-asked-for case, and that case carries a fallback for a page that never
+  reaches `ready-to-show`: `did-fail-load`
   only logs, so a window that never reaches `ready-to-show` would otherwise stay invisible, which is
-  worse than a badly-timed foreground.
+  worse than a badly-timed foreground. Withholding activation at creation is not enough on its own:
+  the declared status rides the content call to the renderer, since docking a web view focuses its
+  iframe and the dock cannot infer intent from focus state any more than window creation could.
+- **Withholding cannot actually keep a window out of the foreground, so the foreground is taken back
+  instead.** A window held back from the constructor still takes focus the moment its page first
+  paints, with no call from either process asking for it — established by instrumenting every raise
+  in main and every focus call in the renderer and finding neither fires. So a window the user did
+  not ask for DOES briefly hold the foreground, and focus is handed straight back to the window that
+  held it. Three bounds make that safe rather than a fight: it happens at most once per window, or a
+  window nobody can enter; only while the target still exists and is not minimized, or handing back
+  would undo the user putting it away; and only inside a short window after first paint —
+  2000ms (`SELF_FOCUS_WINDOW_MS`, `src/main/window-activation.util.ts`) — because on a compositor
+  that does not self-focus the first focus event IS the user's click and undoing it would be
+  worse than the problem. The visible cost is a brief flicker, and any keystroke landing in that
+  gap goes to the window that had focus for those milliseconds. The bound has two failure modes
+  at its edges: a user who reacts within those 2000ms to the deliberate taskbar flash and clicks
+  the window is bounced back out once anyway, because the click still lands inside the window;
+  and a self-focus that arrives after 2000ms — a slow cold start — skips the bounce, and any
+  record of it, entirely, leaving the window with whatever focus it already has.
+- **The hand-back cannot return focus to a foreign application.** A window that takes the
+  foreground from another application cannot hand it back, because `focusWindow` only moves focus
+  between our own windows. The hand-back is gated on whether this application already held focus
+  before the withheld window was revealed (`wasApplicationFocusedBeforeReveal` in
+  `shouldBounceFocusBack`, `src/main/window-activation.util.ts`): when it did, the bounce returns
+  focus to the window the user was actually in, which is the case this mechanism fixes. When it did
+  not — the user was in another application, or nothing of ours had focus at all — the gate leaves
+  the foreground on the newly-revealed window rather than raising a second window of ours over
+  whatever the user was in, but it cannot put the foreground back where it came from. That residual
+  case is unsolved by this PR. The gate also has a case where it answers wrong in the other
+  direction: a focus handover between two of our own windows leaves `isApplicationFocused()`
+  briefly false, so a withheld window revealed in that gap reads "the user was in another
+  application" and keeps a foreground it was meant to hand back. One background window is enough
+  to reach it. That is this entry's own thesis on the raise side — a question about the
+  foreground standing in for a question about intent.
+- **Where two answers disagree about the same window, the main process wins.** The renderer keeps
+  its own latch for the focus requests its panels and web views make as they mount, which never
+  leave that process; but that latch only sees gestures in the shell document, and a web view's
+  iframe swallows the user's clicks and keys. Main watches the window's own focus events and is
+  therefore better informed, so its explicit answer overrules the latch and the latch speaks only
+  where main has no opinion.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.
 

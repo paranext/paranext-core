@@ -48,9 +48,11 @@ import {
 import {
   ProjectSelectorOpenTab,
   ProjectSelector,
+  ProjectSelectorGrouping,
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
+import { makeProjectSelectorCustomData } from 'platform-bible-utils';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   BookGridGroupBy,
@@ -264,6 +266,17 @@ export type ManageBooksDialogProps = {
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 
   /**
+   * Grouping options offered by the sidebar's primary project picker and the Copy "From" picker.
+   * Optional — when omitted, those pickers fall back to the component's auto-add behavior.
+   * Typically the wiring layer builds this once via `makeBuiltInGroupings(strings)` and passes the
+   * same array to both consumers.
+   *
+   * The Create "Based on" picker deliberately does NOT consume this — it locks into a bespoke
+   * versification grouping built on the dialog side, where the versification catalog lives.
+   */
+  projectSelectorGroupings?: readonly ProjectSelectorGrouping[];
+
+  /**
    * Section to open on. Defaults to `'view'`. Applied at mount ONLY — a later change to this prop
    * is deliberately ignored, because the user's in-dialog navigation must not be overridden by a
    * launch value. Mount-only is sufficient even for a relaunch onto an already-open dialog, because
@@ -450,9 +463,7 @@ function PresenceFilterMenu({
         >
           {(['all', 'new', 'existing'] as const).map((s) => (
             // Default `onSelect` behavior closes the dropdown after a radio pick — that's what
-            // we want here (single-select). PS's `FilterMenu` uses `event.preventDefault()`
-            // because its checkboxes allow multi-toggle without re-opening; that doesn't apply
-            // to a radio group.
+            // we want here (single-select).
             <DropdownMenuRadioItem key={s} value={s} data-testid={`${testIdPrefix}-${s}`}>
               {presenceFilterLabel(s)}
             </DropdownMenuRadioItem>
@@ -477,6 +488,53 @@ const toProjectBookState = (books: ManageBooksDialogBookInfo[] | undefined): Pro
   });
   return { present, dates };
 };
+
+/**
+ * The grouping ids the Copy "From" picker offers, in `makeBuiltInGroupings` order. Narrower than
+ * the `projectSelectorGroupings` the wiring layer hands the dialog, which the sidebar picker uses
+ * in full.
+ *
+ * `lastUsed` is left out: recency lives in the wiring layer's recents subscription, and threading
+ * it onto the dialog's project list would re-fetch that whole list every time the recents order
+ * changed while the dialog was open. Offering the grouping without the data would put every project
+ * under a single "Other" bucket.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in this picker. That is deliberate: a new grouping reaches users only once
+ * someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toCopyFromSelectorRows} actually packs, so adding an id here without adding
+ * its data is a build failure rather than a dead menu item.
+ */
+export const MANAGE_BOOKS_COPY_FROM_GROUPING_IDS: readonly string[] = ['openTabs', 'type'];
+
+/**
+ * Maps the dialog's project list onto Copy "From" picker rows, packing the grouping inputs into
+ * `customData`. Exported for coverage tests.
+ *
+ * Resources are excluded for licensing reasons — copying text OUT of a published resource into a
+ * project is not permitted (PT9 parity: `CopyBooksForm` only lists `IsNonProtectedText()` sources).
+ * Read-only non-resource projects remain valid copy sources. Contrast the Create "Based on" picker,
+ * which deliberately INCLUDES resources: it only reads the reference's book/chapter structure to
+ * scaffold empty books, and copies no text (PT9 parity: `CreateBooksForm`'s model combobox lists
+ * all accessible scripture texts including resources).
+ */
+export function toCopyFromSelectorRows(
+  projects: readonly ManageBooksDialogProject[],
+): ProjectSelectorProject[] {
+  return projects
+    .filter((project) => !project.isResource)
+    .map((project) => ({
+      id: project.id,
+      shortName: project.shortName,
+      fullName: project.fullName ?? project.shortName,
+      customData: makeProjectSelectorCustomData({
+        type: project.type,
+        typeName: project.typeName,
+      }),
+    }));
+}
 
 // --------------------------------------------------------------------------
 // Component
@@ -540,6 +598,7 @@ export function ManageBooksDialog({
   sidebarProjects = [],
   openTabs,
   projectSelectorLocalizedStrings,
+  projectSelectorGroupings,
   initialSection,
   initialSelectedBooks,
 }: ManageBooksDialogProps) {
@@ -775,54 +834,80 @@ export function ManageBooksDialog({
   // already excludes all resources for licensing reasons, so commentaries (being resources) stay out
   // of Copy regardless.
   //
-  // The picker is also enriched
-  // with versification id + localized name so the consumer can opt into
-  // versification-grouping (Create "Based on" does; Copy "From" leaves it
-  // off). The name resolution lives here on the dialog side because we own
-  // the `t()` + `versificationLabelKey` map.
+  // The picker is also enriched with versification id + localized name (in `customData`) so the
+  // Create "Based on" picker can group by versification via a custom `ProjectSelectorGrouping`
+  // (constructed below). Copy "From" leaves the versification grouping off. Name resolution lives
+  // here on the dialog side because we own the `t()` + `versificationLabelKey` map.
   const allOtherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
       otherProjects.map((p) => ({
         id: p.id,
         shortName: p.shortName,
         fullName: p.fullName ?? p.shortName,
-        versificationId: p.versificationId,
-        // Group header reads "{name} versification" (lowercase), localized via a template so word
-        // order can vary by language. The "Unknown
-        // versification" bucket is labeled separately (versificationUnknownSectionHeading) and is
-        // unaffected, so no double "versification" suffix.
-        versificationName: p.versificationId
-          ? fmtTemplate(
-              t('%manageBooks_projectSelector_versificationSectionHeading%', '{0} versification'),
-              t(
-                versificationLabelKey(p.versificationId),
-                versificationFallbackName(p.versificationId),
-              ),
-            )
-          : undefined,
+        customData: {
+          versificationId: p.versificationId,
+          // Group header reads "{name} versification" (lowercase), localized via a template so
+          // word order can vary by language. The "Unknown versification" bucket is labeled
+          // separately (via `unknownSectionHeading`) so there is no double "versification"
+          // suffix.
+          versificationName: p.versificationId
+            ? fmtTemplate(
+                t('%manageBooks_projectSelector_versificationSectionHeading%', '{0} versification'),
+                t(
+                  versificationLabelKey(p.versificationId),
+                  versificationFallbackName(p.versificationId),
+                ),
+              )
+            : undefined,
+        },
       })),
     [otherProjects, t],
   );
-  // The Copy "From" picker excludes resources for licensing reasons — copying
-  // text OUT of a published resource into a project is not permitted (PT9
-  // parity: CopyBooksForm only lists IsNonProtectedText() sources). Read-only
-  // non-resource projects remain valid copy sources.
-  //
-  // The Create "Based on" picker deliberately INCLUDES resources: it only
-  // reads the reference's book/chapter structure to scaffold empty books, no
-  // text is copied (PT9 parity: CreateBooksForm's model combobox lists all
-  // accessible scripture texts including resources).
   const copyFromProjectsAsPS = useMemo<ProjectSelectorProject[]>(
-    () =>
-      otherProjects
-        .filter((p) => !p.isResource)
-        .map((p) => ({
-          id: p.id,
-          shortName: p.shortName,
-          fullName: p.fullName ?? p.shortName,
-        })),
+    () => toCopyFromSelectorRows(otherProjects),
     [otherProjects],
   );
+  // The Copy "From" picker offers a narrower set than the sidebar: see
+  // MANAGE_BOOKS_COPY_FROM_GROUPING_IDS for which ids and why.
+  const copyFromGroupings = useMemo<ProjectSelectorGrouping[] | undefined>(
+    () =>
+      projectSelectorGroupings?.filter((grouping) =>
+        MANAGE_BOOKS_COPY_FROM_GROUPING_IDS.includes(grouping.id),
+      ),
+    [projectSelectorGroupings],
+  );
+  // Custom grouping for the Create "Based on" picker: bucket by `versificationId` (lifted from
+  // `customData`), display the localized `versificationName` as the section heading, and pin the
+  // destination project's versification bucket to the top via `priorityKey`. Passed as the only
+  // grouping in `availableGroupings`, which locks the picker into versification grouping (no
+  // "None" toggle) — the versification grouping is the whole point of this picker.
+  const versificationGrouping = useMemo<ProjectSelectorGrouping>(
+    () => ({
+      id: 'versification',
+      // Never renders — this grouping is passed as the only entry in `availableGroupings`, which
+      // locks the picker into it and hides the filter menu. Kept as a static English string so
+      // no localization wiring exists just for a string that isn't drawn.
+      label: 'Versification',
+      getGroupKey: (candidateProject) =>
+        typeof candidateProject.customData?.versificationId === 'string'
+          ? candidateProject.customData.versificationId
+          : undefined,
+      getSectionHeading: (key, groupProjects) => {
+        const first = groupProjects.find(
+          (p) => typeof p.customData?.versificationName === 'string',
+        );
+        const heading = first?.customData?.versificationName;
+        return typeof heading === 'string' ? heading : key;
+      },
+      unknownSectionHeading: t(
+        '%manageBooks_projectSelector_versificationUnknownSectionHeading%',
+        'Unknown versification',
+      ),
+      priorityKey: versification,
+    }),
+    [t, versification],
+  );
+
   const copySourceProject = copySourceId ? projects.find((p) => p.id === copySourceId) : undefined;
   const createReferenceProject = createReferenceId
     ? projects.find((p) => p.id === createReferenceId)
@@ -2061,6 +2146,7 @@ export function ManageBooksDialog({
             targetShortName={project.shortName}
             t={t}
             projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
+            projectSelectorGroupings={projectSelectorGroupings}
             isNarrow={dialogIsNarrow}
           />
           <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
@@ -2260,19 +2346,18 @@ export function ManageBooksDialog({
                             setCopySourceId(nextId || undefined)
                           }
                           isDisabled={isSubmitting}
-                          ariaLabel={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
-                          buttonPlaceholder={t(
-                            '%manageBooks_copy_sourcePlaceholder%',
-                            'Select project',
-                          )}
-                          localizedStrings={projectSelectorLocalizedStrings}
-                          // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
-                          // the picker reads as a call-to-action until a source project is set.
-                          buttonClassName={cn(
-                            'tw:h-8 tw:w-full',
-                            !copySourceId &&
-                              'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
-                          )}
+                          localizedStrings={{
+                            ...projectSelectorLocalizedStrings,
+                            ariaLabel: t('%manageBooks_copy_sourcePlaceholder%', 'Select project'),
+                            buttonPlaceholder: t(
+                              '%manageBooks_copy_sourcePlaceholder%',
+                              'Select project',
+                            ),
+                          }}
+                          availableGroupings={copyFromGroupings}
+                          // Mirror the prior <SelectTrigger> "primary fill while empty" affordance
+                          // — the picker reads as a call-to-action until a source project is set.
+                          buttonVariant={copySourceId ? 'outline' : 'default'}
                         />
                       </div>
                     </div>
@@ -2400,13 +2485,15 @@ export function ManageBooksDialog({
                   )}
                   {/* The View / Import presence-filter chip
                   rows were replaced with a single Filter-icon button that opens a popover
-                  containing the radio choices. Mirrors the pattern in
+                  containing the radio choices — the same icon-trigger-plus-radio-popover shape
+                  as `GroupByMenu` in
                   `lib/platform-bible-react/src/components/advanced/project-selector/
-                  project-selector.component.tsx` (`FilterMenu`). The trigger picks up an
-                  accent background when a filter is active so the affordance still reads as
-                  "filter applied" without dragging the user's eye to a chip row. The Copy-
-                  mode comparison-state filter (New/Newer/Older/Same/Undetermined) was
-                  removed entirely — see comment block on `ViewPresenceFilter` declaration. */}
+                  project-selector.component.tsx` (that trigger uses a Group icon instead of
+                  Filter). The trigger picks up an accent background when a filter is active so
+                  the affordance still reads as "filter applied" without dragging the user's eye
+                  to a chip row. The Copy-mode comparison-state filter
+                  (New/Newer/Older/Same/Undetermined) was removed entirely — see comment block
+                  on `ViewPresenceFilter` declaration. */}
                   {action === 'view' && (
                     <PresenceFilterMenu
                       testIdPrefix="presence-filter"
@@ -2539,7 +2626,13 @@ export function ManageBooksDialog({
                       </Tooltip>
                     )}
                     {createMethod === 'fromTemplate' && (
-                      <div id="af-reference" data-testid="manage-books-create-reference-trigger">
+                      // Flexible width via the wrapper (mirrors the copy source picker) so the
+                      // trigger shrinks with the dialog instead of overflowing at narrow widths.
+                      <div
+                        id="af-reference"
+                        data-testid="manage-books-create-reference-trigger"
+                        className="tw:min-w-0 tw:flex-1 tw:basis-48"
+                      >
                         <ProjectSelector
                           mode="project"
                           projects={allOtherProjectsAsPS}
@@ -2549,28 +2642,24 @@ export function ManageBooksDialog({
                             setCreateReferenceId(nextId || undefined)
                           }
                           isDisabled={isSubmitting}
-                          ariaLabel={t(
-                            '%manageBooks_create_referenceProjectPlaceholder%',
-                            'Select reference project',
-                          )}
-                          buttonPlaceholder={t(
-                            '%manageBooks_create_referenceProjectPlaceholder%',
-                            'Select reference project',
-                          )}
-                          localizedStrings={projectSelectorLocalizedStrings}
-                          // Group reference candidates by versification so the
-                          // user can pick one whose canon matches the
-                          // destination project. The destination's own
-                          // versification group is pinned to the top.
-                          groupByVersification
-                          priorityVersificationId={versification}
-                          // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
-                          // the picker reads as a call-to-action until a reference project is set.
-                          buttonClassName={cn(
-                            'tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48',
-                            !createReferenceId &&
-                              'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
-                          )}
+                          localizedStrings={{
+                            ...projectSelectorLocalizedStrings,
+                            ariaLabel: t(
+                              '%manageBooks_create_referenceProjectPlaceholder%',
+                              'Select reference project',
+                            ),
+                            buttonPlaceholder: t(
+                              '%manageBooks_create_referenceProjectPlaceholder%',
+                              'Select reference project',
+                            ),
+                          }}
+                          // Single custom grouping locks the picker into versification grouping
+                          // — the destination's own versification bucket is pinned to the top via
+                          // the grouping's `priorityKey`. No "None" toggle renders.
+                          availableGroupings={[versificationGrouping]}
+                          // Mirror the prior <SelectTrigger> "primary fill while empty" affordance
+                          // — the picker reads as a call-to-action until a reference project is set.
+                          buttonVariant={createReferenceId ? 'outline' : 'default'}
                         />
                       </div>
                     )}

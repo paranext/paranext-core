@@ -9,6 +9,13 @@ import {
 } from 'platform-bible-react';
 import {
   ProjectSelector,
+  PROJECT_SELECTOR_STRING_KEYS,
+  buildBuiltInGroupingStrings,
+  buildProjectSelectorLocalizedStrings,
+  buildSelectionGroupingStrings,
+  makeBuiltInGroupings,
+  makeSelectionGrouping,
+  type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
@@ -20,6 +27,8 @@ import {
   formatScrRef,
   getErrorMessage,
   isPlatformError,
+  makeProjectSelectorCustomData,
+  normalizeProjectId,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
@@ -42,6 +51,7 @@ import {
 } from './components/marker-settings-dialog.component';
 import { useChecklistService } from './hooks/use-checklist';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
@@ -125,6 +135,58 @@ function cellToText(cell: ChecklistCell): string {
       return [markerToken, ...itemTokens].join(' ');
     })
     .join(' | ');
+}
+
+/**
+ * The built-in grouping ids both checklist project pickers offer, in `makeBuiltInGroupings` order.
+ * The comparative-texts picker appends `makeSelectionGrouping` on top of these — `'selection'` is
+ * not a built-in, so it is not a member of this list.
+ *
+ * `type` is left out because the checklist has no project-type source: the project fetch reads
+ * `platform.name`, `platform.fullName`, and `platform.language` only, so the grouping would put
+ * every row under a single "Unknown type" bucket.
+ *
+ * This is an allow-list, so a built-in added to `makeBuiltInGroupings` later has to be opted into
+ * here before it appears in these pickers. That is deliberate: a new grouping reaches users only
+ * once someone has confirmed the rows carry data for it.
+ *
+ * `project-selector-grouping-coverage.test.ts` reads this list and fails if any id on it is not
+ * backed by data {@link toChecklistSelectorRows} actually packs, so adding an id here without adding
+ * its data is a build failure rather than a dead menu item.
+ */
+export const CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS: readonly string[] = [
+  'openTabs',
+  'lastUsed',
+  'language',
+];
+
+/**
+ * A checklist project as fetched, before its grouping inputs are packed. `rawLanguage` is held
+ * beside the row rather than inside `customData` so recency (which arrives from a separate
+ * subscription) can be merged in one pass.
+ */
+export type ChecklistRawProject = ProjectSelectorProject & { rawLanguage: string | undefined };
+
+/**
+ * Maps fetched checklist projects onto ProjectSelector rows, packing the grouping inputs the
+ * picker's built-in groupings read into `customData`. Exported for coverage tests.
+ *
+ * `recencyMap` must already be keyed by {@link normalizeProjectId}-normalized ids — the recents
+ * service stores whatever id its caller handed it, while these are canonical project ids, so
+ * normalizing only one side can miss on casing alone and route every project into the grouping's
+ * "Other" bucket.
+ */
+export function toChecklistSelectorRows(
+  projects: readonly ChecklistRawProject[],
+  recencyMap: ReadonlyMap<string, number>,
+): ProjectSelectorProject[] {
+  return projects.map(({ rawLanguage, ...rest }) => ({
+    ...rest,
+    customData: makeProjectSelectorCustomData({
+      language: rawLanguage,
+      lastUsedAt: recencyMap.get(normalizeProjectId(rest.id)),
+    }),
+  }));
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -215,6 +277,9 @@ global.webViewComponent = function ChecklistWebView({
 
   const scopeSelectorStringKeys = useMemo(() => Array.from(SCOPE_SELECTOR_STRING_KEYS), []);
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(scopeSelectorStringKeys);
+
+  const projectSelectorStringKeys = useMemo(() => Array.from(PROJECT_SELECTOR_STRING_KEYS), []);
+  const [projectSelectorResolvedStrings] = useLocalizedStrings(projectSelectorStringKeys);
 
   // ─── Service + editability ────────────────────────────────────────────────
 
@@ -571,14 +636,17 @@ global.webViewComponent = function ChecklistWebView({
   // tabs for the "Open tabs" section in the popover. On selection change, map the returned
   // `ProjectSelectorProjectPair[]` back to our `ChecklistComparativeTextRef[]` persistence shape.
 
-  const [allProjects] = usePromise(
+  const [allProjectsRaw] = usePromise(
     useCallback(async () => {
       const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
         // Scripture + Paratext project interfaces — mirrors checks-side-panel's filter so we pick
         // up the same project set that the scripture editor shows.
         includeProjectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.USFM_Book'],
       });
-      const results: ProjectSelectorProject[] = [];
+      // Load id/name/fullName/language for every project in parallel. `platform.language` is a
+      // core project setting; fetching it here lets the built-in `language` grouping partition
+      // rows into real per-language buckets rather than everything under "Unknown language".
+      const results: ChecklistRawProject[] = [];
       await Promise.all(
         allMetadata.map(async (metadata) => {
           try {
@@ -586,7 +654,7 @@ global.webViewComponent = function ChecklistWebView({
             const [shortName, fullName, language] = await Promise.all([
               pdp.getSetting('platform.name'),
               pdp.getSetting('platform.fullName'),
-              Promise.resolve(undefined), // language not strictly required
+              pdp.getSetting('platform.language').catch(() => undefined),
             ]);
             // pdp.getSetting can return `null` for missing settings — must compare against null
             // explicitly here, so we disable the no-null rule for this guard only.
@@ -596,7 +664,7 @@ global.webViewComponent = function ChecklistWebView({
                 id: metadata.id,
                 shortName,
                 fullName: fullName ?? shortName,
-                language,
+                rawLanguage: typeof language === 'string' ? language : undefined,
               });
             }
           } catch (err) {
@@ -608,7 +676,15 @@ global.webViewComponent = function ChecklistWebView({
       );
       return results;
     }, []),
-    useMemo<ProjectSelectorProject[]>(() => [], []),
+    useMemo<ChecklistRawProject[]>(() => [], []),
+  );
+
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('ChecklistWebView');
+
+  const allProjects = useMemo<ProjectSelectorProject[]>(
+    () => toChecklistSelectorRows(allProjectsRaw, recencyMap),
+    [allProjectsRaw, recencyMap],
   );
 
   const comparativeProjects = useMemo<ProjectSelectorProject[]>(
@@ -638,37 +714,117 @@ global.webViewComponent = function ChecklistWebView({
     [editorTabs],
   );
 
+  // `project-multi` renders one row per (project, scroll group) open tab, but a comparative-text
+  // ref names a project and carries no scroll group. Feed the picker one open tab per project —
+  // the lowest scroll group it is open in — so a project open in several groups is a single
+  // selectable row whose identity matches what gets stored. That keeps the "Open tabs" grouping
+  // usable without ever offering two rows that would store the same project twice.
+  const comparativeOpenTabByProject = useMemo(() => {
+    const lowestTabByProject = new Map<string, ProjectSelectorOpenTab>();
+    comparativeOpenTabs.forEach((tab) => {
+      const key = normalizeProjectId(tab.projectId);
+      const existing = lowestTabByProject.get(key);
+      if (!existing || tab.scrollGroupId < existing.scrollGroupId) lowestTabByProject.set(key, tab);
+    });
+    return lowestTabByProject;
+  }, [comparativeOpenTabs]);
+
+  const collapsedComparativeOpenTabs = useMemo(
+    () => [...comparativeOpenTabByProject.values()],
+    [comparativeOpenTabByProject],
+  );
+
+  // A row for an open project is keyed by (projectId, scrollGroupId), so pair each stored ref with
+  // the scroll group of the row it belongs to. Without it the stored selection would never light
+  // up its row, and clicking that row would add a second copy instead of toggling the ref off.
   const comparativeSelection = useMemo(
-    () => ({ pairs: comparativeTexts.map((ref) => ({ projectId: ref.id })) }),
-    [comparativeTexts],
+    () => ({
+      pairs: comparativeTexts.map((ref) => ({
+        projectId: ref.id,
+        scrollGroupId: comparativeOpenTabByProject.get(normalizeProjectId(ref.id))?.scrollGroupId,
+      })),
+    }),
+    [comparativeTexts, comparativeOpenTabByProject],
   );
 
   const handleComparativeTextsChange = useCallback(
     (selection: { pairs: ProjectSelectorProjectPair[] }) => {
       const projectIdToName = new Map(allProjects.map((p) => [p.id, p.shortName]));
-      const nextRefs: ChecklistComparativeTextRef[] = selection.pairs.map((pair) => ({
-        id: pair.projectId,
-        name: projectIdToName.get(pair.projectId) ?? pair.projectId,
-      }));
+      // Comparative texts are stored per project, so collapse the incoming pairs to one ref per
+      // project id: whatever rows a project is reachable through, it is stored exactly once.
+      const seenProjectIds = new Set<string>();
+      const nextRefs: ChecklistComparativeTextRef[] = [];
+      selection.pairs.forEach((pair) => {
+        const key = normalizeProjectId(pair.projectId);
+        if (seenProjectIds.has(key)) return;
+        seenProjectIds.add(key);
+        nextRefs.push({
+          id: pair.projectId,
+          name: projectIdToName.get(pair.projectId) ?? pair.projectId,
+        });
+      });
       setComparativeTexts(nextRefs);
     },
     [allProjects, setComparativeTexts],
   );
 
+  const projectSelectorLocalizedStrings = useMemo(
+    () => buildProjectSelectorLocalizedStrings(projectSelectorResolvedStrings),
+    [projectSelectorResolvedStrings],
+  );
+
+  // Built-in groupings for the primary-project picker, narrowed to the ids the checklist offers.
+  // See CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS for which ones and why.
+  const primaryProjectGroupings = useMemo(
+    () =>
+      makeBuiltInGroupings(buildBuiltInGroupingStrings(projectSelectorResolvedStrings)).filter(
+        (grouping) => CHECKLIST_PROJECT_SELECTOR_GROUPING_IDS.includes(grouping.id),
+      ),
+    [projectSelectorResolvedStrings],
+  );
+
+  // Comparative-texts picker: the same built-in options as the primary picker PLUS the multi-select
+  // Selection grouping (Selected / Unselected bucketing), which partitions off row selection state
+  // rather than `customData` and so is appended after the narrowing rather than named in it.
+  // Explicit array — when a consumer passes `availableGroupings`, the component uses it verbatim
+  // with no auto-additions.
+  const comparativeTextsGroupings = useMemo<ProjectSelectorGrouping[]>(
+    () => [
+      ...primaryProjectGroupings,
+      makeSelectionGrouping(buildSelectionGroupingStrings(projectSelectorResolvedStrings)),
+    ],
+    [primaryProjectGroupings, projectSelectorResolvedStrings],
+  );
+
   const comparativeTextsSelectorNode = useMemo(
     () => (
-      <div data-testid="checklist-comparative-texts-trigger">
+      <div data-testid="checklist-comparative-texts-trigger" className="tw:min-w-32">
         <ProjectSelector
           mode="project-multi"
           projects={comparativeProjects}
-          openTabs={comparativeOpenTabs}
+          openTabs={collapsedComparativeOpenTabs}
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
-          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
+          localizedStrings={{
+            ...projectSelectorLocalizedStrings,
+            buttonPlaceholder:
+              localizedStrings['%markersChecklist_toolbar_comparativeProjects%'] ??
+              'Select comparative projects',
+            ariaLabel: localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
+          }}
+          availableGroupings={comparativeTextsGroupings}
         />
       </div>
     ),
-    [comparativeProjects, comparativeOpenTabs, comparativeSelection, handleComparativeTextsChange],
+    [
+      collapsedComparativeOpenTabs,
+      comparativeProjects,
+      comparativeSelection,
+      handleComparativeTextsChange,
+      projectSelectorLocalizedStrings,
+      comparativeTextsGroupings,
+      localizedStrings,
+    ],
   );
 
   // ─── ScopeSelector handlers (R1: snapshot at click-time) ─────────────────
@@ -773,7 +929,7 @@ global.webViewComponent = function ChecklistWebView({
 
   const primaryProjectSelectorNode = useMemo(
     () => (
-      <div data-testid="checklist-primary-project-trigger">
+      <div data-testid="checklist-primary-project-trigger" className="tw:min-w-32">
         <ProjectSelector
           mode="project"
           projects={allProjects}
@@ -782,11 +938,13 @@ global.webViewComponent = function ChecklistWebView({
           onChangeSelection={(next: { projectId: string }) =>
             updateWebViewDefinition({ projectId: next.projectId })
           }
-          buttonClassName="tw:h-8 tw:min-w-32 tw:font-normal"
-          buttonPlaceholder={
-            localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel
-          }
-          ariaLabel={localizedStrings['%markersChecklist_toolbar_primaryProject%']}
+          availableGroupings={primaryProjectGroupings}
+          localizedStrings={{
+            ...projectSelectorLocalizedStrings,
+            buttonPlaceholder:
+              localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel,
+            ariaLabel: localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+          }}
         />
       </div>
     ),
@@ -797,6 +955,8 @@ global.webViewComponent = function ChecklistWebView({
       updateWebViewDefinition,
       localizedStrings,
       primaryProjectLabel,
+      projectSelectorLocalizedStrings,
+      primaryProjectGroupings,
     ],
   );
 
