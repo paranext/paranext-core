@@ -2569,53 +2569,47 @@ export function ManageBooksDialog({
                 first and configures the create method just before applying. */}
                 {action === 'create' && (
                   <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-t tw:px-6 tw:py-2">
-                    <Select
-                      value={createMethod}
-                      onValueChange={(v) => {
-                        if (isCreateMethod(v)) setCreateMethod(v);
-                      }}
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger
-                        id="af-method"
-                        className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="empty">
-                          {t('%manageBooks_create_method_empty%', 'Create empty book')}
-                        </SelectItem>
-                        <SelectItem
-                          value="chapterVerse"
-                          disabled={!cvAllowed}
-                          aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
-                        >
-                          {t(
-                            '%manageBooks_create_method_chapterVerse%',
-                            'Create with all chapter and verse numbers',
-                          )}
-                        </SelectItem>
-                        <SelectItem value="fromTemplate">
-                          {t('%manageBooks_create_method_referenceText%', 'Create based on')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {!cvAllowed && (
-                      <span id={cvDisabledHintId} className="tw:sr-only">
-                        {t(
-                          '%manageBooks_create_method_chapterVerse_disabledTooltip%',
-                          'Disabled because the selection contains only non-canonical books.',
-                        )}
-                      </span>
-                    )}
-                    {createMethod === 'fromTemplate' && (
+                    {createMethod === 'fromTemplate' ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Info
-                            className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
-                            aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
-                          />
+                          <div className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-48 tw:items-center tw:gap-2">
+                            <Select
+                              value={createMethod}
+                              onValueChange={(v) => {
+                                if (isCreateMethod(v)) setCreateMethod(v);
+                              }}
+                              disabled={isSubmitting}
+                            >
+                              <SelectTrigger id="af-method" className="tw:h-8 tw:min-w-0 tw:flex-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="empty">
+                                  {t('%manageBooks_create_method_empty%', 'Create empty book')}
+                                </SelectItem>
+                                <SelectItem
+                                  value="chapterVerse"
+                                  disabled={!cvAllowed}
+                                  aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
+                                >
+                                  {t(
+                                    '%manageBooks_create_method_chapterVerse%',
+                                    'Create with all chapter and verse numbers',
+                                  )}
+                                </SelectItem>
+                                <SelectItem value="fromTemplate">
+                                  {t(
+                                    '%manageBooks_create_method_referenceText%',
+                                    'Create based on',
+                                  )}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Info
+                              className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          </div>
                         </TooltipTrigger>
                         <TooltipContent>
                           {t(
@@ -2624,6 +2618,47 @@ export function ManageBooksDialog({
                           )}
                         </TooltipContent>
                       </Tooltip>
+                    ) : (
+                      <Select
+                        value={createMethod}
+                        onValueChange={(v) => {
+                          if (isCreateMethod(v)) setCreateMethod(v);
+                        }}
+                        disabled={isSubmitting}
+                      >
+                        <SelectTrigger
+                          id="af-method"
+                          className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="empty">
+                            {t('%manageBooks_create_method_empty%', 'Create empty book')}
+                          </SelectItem>
+                          <SelectItem
+                            value="chapterVerse"
+                            disabled={!cvAllowed}
+                            aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
+                          >
+                            {t(
+                              '%manageBooks_create_method_chapterVerse%',
+                              'Create with all chapter and verse numbers',
+                            )}
+                          </SelectItem>
+                          <SelectItem value="fromTemplate">
+                            {t('%manageBooks_create_method_referenceText%', 'Create based on')}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {!cvAllowed && (
+                      <span id={cvDisabledHintId} className="tw:sr-only">
+                        {t(
+                          '%manageBooks_create_method_chapterVerse_disabledTooltip%',
+                          'Disabled because the selection contains only non-canonical books.',
+                        )}
+                      </span>
                     )}
                     {createMethod === 'fromTemplate' && (
                       // Flexible width via the wrapper (mirrors the copy source picker) so the

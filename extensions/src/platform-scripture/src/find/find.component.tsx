@@ -1203,18 +1203,23 @@ export function Find({
             )}
             <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:flex-wrap">
               <div className="tw:flex tw:items-center tw:gap-2">
-                <Checkbox
-                  id="preserve-case"
-                  checked={preserveCase}
-                  onCheckedChange={(checked) => onPreserveCaseChange(checked === true)}
-                />
-                <Label htmlFor="preserve-case" className="tw:cursor-pointer">
-                  {localizedStrings['%webView_find_preserveCase%']}
-                </Label>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground tw:cursor-default" />
+                      <div className="tw:flex tw:items-center tw:gap-2">
+                        <Checkbox
+                          id="preserve-case"
+                          checked={preserveCase}
+                          onCheckedChange={(checked) => onPreserveCaseChange(checked === true)}
+                        />
+                        <Label htmlFor="preserve-case" className="tw:cursor-pointer">
+                          {localizedStrings['%webView_find_preserveCase%']}
+                        </Label>
+                        <Info
+                          className="tw:h-3.5 tw:w-3.5 tw:shrink-0 tw:text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="tw:max-w-xs tw:whitespace-pre-line">
