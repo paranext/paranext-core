@@ -6,6 +6,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
+import { SerializedEditorState } from 'lexical';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
@@ -486,6 +487,24 @@ interface ConflictResolutionCallbacks {
 	 */
 	getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
 }
+/**
+ * A comment the user has typed but not committed — an unsent reply, an unsaved edit to an existing
+ * comment, or both at once (the reply compose box stays visible while editing an existing comment
+ * whenever it already has content). Held by the consumer rather than by the thread component, so it
+ * survives the component unmounting (a filter change does that routinely).
+ */
+export type CommentDraft = {
+	/** Serialized contents of the unsent reply, or `undefined` when nothing has been typed. */
+	editorState?: SerializedEditorState;
+	/** Pending assignee, or `undefined` when none has been chosen. */
+	assignedUser?: string;
+	/**
+	 * Unsaved edits to existing comments in this thread, keyed by comment id. A thread can hold an
+	 * unsent reply and an in-progress edit at the same time, so these are tracked separately rather
+	 * than sharing one editor state.
+	 */
+	commentEdits?: Readonly<Record<string, SerializedEditorState>>;
+};
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -626,13 +645,20 @@ export interface CommentListProps {
 	 * when this is not provided.
 	 */
 	conflictResolution?: ConflictResolutionCallbacks;
+	/** Uncommitted drafts by thread id. A thread with no entry has no draft. */
+	drafts?: Readonly<Record<string, CommentDraft>>;
+	/**
+	 * Called when a thread's draft changes. `draft` is `undefined` when the draft becomes empty, so a
+	 * consumer can drop the entry rather than keep an empty one that would read as a draft.
+	 */
+	onDraftChange?: (threadId: string, draft: CommentDraft | undefined) => void;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, drafts, onDraftChange, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Presentational card body for a verseText merge conflict. Presents the resolution as a set of
  * clickable option cards — "Keep the current text" (accept, preselected), "Use the other change"
