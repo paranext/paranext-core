@@ -272,6 +272,30 @@ describe('OverlayPopoverPresentational', () => {
       );
     });
 
+    it("combines the caller's own maxHeight with the Radix cap so a zoomed popover still stays inside the window", () => {
+      // 360 is deliberately distinct from this component's own 400 default, so the assertion below
+      // can only pass if the CALLER's value made it into the combined cap, not the default. Height
+      // has its own branch from width, so it needs its own case.
+      render(
+        <OverlayPopoverPresentational
+          content={{ type: 'text', body: 'Just a body' }}
+          position={position}
+          contentScale={1.5}
+          maxHeight={360}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-popover-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = inner as HTMLElement;
+      expect(style.maxHeight).toBe(
+        'min(360px, calc(var(--radix-popover-content-available-height) / 1.5))',
+      );
+    });
+
     it("leaves the caller's own maxWidth exactly as given at interface scale", () => {
       render(
         <OverlayPopoverPresentational

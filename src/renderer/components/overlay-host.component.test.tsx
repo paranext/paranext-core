@@ -9,12 +9,13 @@ import {
 import { OverlayHost } from './overlay-host.component';
 
 // The four overlay bodies are irrelevant here — this suite is about whether the host renders them
-// at all — and the real ones reach the PAPI hooks and the network service on import. The three with
-// anchors echo the `contentScale` prop they receive into their stub's own inline style, and the two
-// with a frame (popover, command palette) also echo `frameScale` into a `data-frame-scale`
-// attribute (a second, independently-observable channel — `style.zoom` is already spoken for), so
-// the content-zoom wiring tests below can assert on both without rendering the real (much heavier)
-// components.
+// at all — and the real ones reach the PAPI hooks and the network service on import. Every stub
+// echoes the `contentScale` prop it receives into its own inline style, and all but the context menu
+// also echo `frameScale` into a `data-frame-scale` attribute (a second, independently-observable
+// channel — `style.zoom` is already spoken for), so the content-zoom wiring tests below can assert
+// on both without rendering the real (much heavier) components. The modal-dialog stub echoes them
+// too even though it is expected to receive neither, so that its case reads the host's behaviour
+// rather than the stub's indifference.
 vi.mock('@renderer/components/overlays/overlay-command-palette.component', () => ({
   OverlayCommandPalette: ({
     contentScale,
@@ -32,7 +33,18 @@ vi.mock('@renderer/components/overlays/overlay-context-menu.component', () => ({
   ),
 }));
 vi.mock('@renderer/components/overlays/overlay-modal-dialog.component', () => ({
-  OverlayModalDialog: () => <div data-testid="overlay-body" />,
+  // Echoes both scale props on the same two channels as the anchored stubs, even though the host is
+  // expected to pass neither: a stub that ignored them could not tell "the host passed nothing" from
+  // "the stub dropped what it was given", which is the whole point of the modal-dialog case below.
+  OverlayModalDialog: ({
+    contentScale,
+    frameScale,
+  }: {
+    contentScale?: number;
+    frameScale?: number;
+  }) => (
+    <div data-testid="overlay-body" data-frame-scale={frameScale} style={{ zoom: contentScale }} />
+  ),
 }));
 vi.mock('@renderer/components/overlays/overlay-popover.component', () => ({
   OverlayPopover: ({
@@ -242,6 +254,25 @@ describe('OverlayHost', () => {
       const body = screen.getByTestId('overlay-body');
       expect(body.style.zoom).toBe('1.5');
       expect(body.dataset.frameScale).toBe('1.25');
+    });
+
+    it('gives a modal dialog no scale at all, so it stays at interface scale', () => {
+      // A modal dialog belongs to the window rather than to any pane, so it deliberately does not
+      // follow the requesting pane's zoom. The decision is made here, in which props this host
+      // hands each branch — so this is where it can be pinned. Both services return a scale below,
+      // so the values are available to pass and the assertion fails if the modalDialog branch
+      // starts passing either one.
+      mockGetContentZoomScaleForWebView.mockReturnValue(1.5);
+      mockGetWebViewIframeZoom.mockReturnValue(1.25);
+      mockGetOverlays.mockReturnValue([modalDialogEntry()]);
+
+      render(<OverlayHost />);
+
+      const body = screen.getByTestId('overlay-body');
+      // jsdom leaves an inline style property that was never assigned as `undefined` rather than
+      // the empty string a real browser reports, so check against both.
+      expect(body.style.zoom || '').toBe('');
+      expect(body.dataset.frameScale).toBeUndefined();
     });
   });
 });
