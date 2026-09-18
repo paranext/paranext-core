@@ -37,6 +37,9 @@ vi.mock('@papi/backend', () => ({
   logger: { debug: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
+// Both must stay either side of `PROJECT_REGISTRATION_GRACE_PERIOD_MS` in `main.ts`, which is not
+// exported to import from here; shortening that window without revisiting these leaves every
+// grace-period case below testing the settled path twice.
 /** Past this many milliseconds of process uptime, a missing project really is missing. */
 const AFTER_REGISTRATION_GRACE_MS = 31_000;
 /** Early enough that the project factories may still be registering. */
@@ -111,10 +114,32 @@ describe('getCachedResources installed-flag reconciliation', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns the catalog a call waited for the fetch to produce without reconciling it', async () => {
+  it('returns a catalog this call fetched itself without reconciling it', async () => {
     vi.spyOn(performance, 'now').mockReturnValue(AFTER_REGISTRATION_GRACE_MS);
-    // Hold the provider back so activation's background fetch cannot fill the cache first — the
-    // call below then deterministically waits on that fetch rather than racing it.
+    // Send activation's background fetch down its one non-retrying failure, so it stops without
+    // filling the cache and the catalog below is genuinely this call's own fetch. Served instead
+    // out of a cache someone else filled, this would take the cached path and prove nothing about
+    // a fresh fetch — which is what a plain rejection would do, since that fetch retries ten times.
+    provider.isGetDblResourcesAvailable.mockResolvedValueOnce(false);
+    await activateWithFreshModule();
+
+    const fresh = await getCachedResources();
+
+    // That catalog is C#'s live answer; checking it against a project list would be correcting
+    // the authority with its own approximation.
+    expect(fresh).toEqual({ status: 'available', resources: [REGISTERED, NOT_YET_REGISTERED] });
+    expect(mocks.getMetadataForAllProjects).not.toHaveBeenCalled();
+
+    // Positive control: the same module does reconcile once it is serving from the cache.
+    await getCachedResources({ waitForInstalledFlagsSync: true });
+    expect(mocks.getMetadataForAllProjects).toHaveBeenCalled();
+  });
+
+  it('waits for the flag sync when another fetch fills the cache first', async () => {
+    // A caller that opted into reconciled flags queues behind an in-flight fetch. What it gets back
+    // is a cached snapshot like any other, so the wait it asked for still has to happen; treating
+    // it as freshly fetched skips the wait silently, on the cold-start path this all exists for.
+    vi.spyOn(performance, 'now').mockReturnValue(AFTER_REGISTRATION_GRACE_MS);
     let releaseProvider: () => void = () => {};
     const providerReleased = new Promise<void>((resolve) => {
       releaseProvider = resolve;
@@ -125,17 +150,10 @@ describe('getCachedResources installed-flag reconciliation', () => {
     });
     await activateWithFreshModule();
 
-    const pending = getCachedResources();
+    const pending = getCachedResources({ waitForInstalledFlagsSync: true });
     releaseProvider();
-    const fresh = await pending;
+    await pending;
 
-    // That catalog is C#'s live answer; checking it against a project list would be correcting
-    // the authority with its own approximation.
-    expect(fresh).toEqual({ status: 'available', resources: [REGISTERED, NOT_YET_REGISTERED] });
-    expect(mocks.getMetadataForAllProjects).not.toHaveBeenCalled();
-
-    // Positive control: the same module does reconcile once it is serving from the cache.
-    await getCachedResources({ waitForInstalledFlagsSync: true });
     expect(mocks.getMetadataForAllProjects).toHaveBeenCalled();
   });
 
@@ -196,12 +214,53 @@ describe('getCachedResources installed-flag reconciliation', () => {
       status: 'available',
       resources: [REGISTERED, { ...NOT_YET_REGISTERED, installed: false, projectId: '' }],
     });
-    // The named uid is the only one whose absence counts: `REGISTERED` above is still installed,
-    // and a refresh naming nothing leaves a row that is merely missing exactly as it was.
-    await refreshResourceFlags?.();
     expect(persistedCatalogs().at(-1)).toContainEqual(
-      expect.objectContaining({ dblEntryUid: 'aaaa', installed: true }),
+      expect.objectContaining({ dblEntryUid: 'bbbb', installed: false }),
     );
+  });
+
+  it('registers a removal that took the last resource project with it', async () => {
+    // Removing the only installed resource empties the read-only side of the project list, which is
+    // the same thing a list that has not registered yet looks like. The sync declines to act on
+    // that list at all — except for the row whose removal the caller is reporting.
+    vi.spyOn(performance, 'now').mockReturnValue(AFTER_REGISTRATION_GRACE_MS);
+    // Editable projects only, from the first read on: this machine's one resource has just been
+    // removed, so nothing else can be reconciled against this list either way.
+    mocks.getMetadataForAllProjects.mockResolvedValue([{ id: 'EDITABLE1', isEditable: true }]);
+    await activateWithFreshModule();
+    await getCachedResources();
+    const refreshResourceFlags = mocks.registeredCommands.get(
+      'platformGetResources.refreshResourceFlags',
+    );
+
+    await refreshResourceFlags?.(REGISTERED.dblEntryUid);
+
+    // Only the removed row: the other is missing from a list that proves nothing about it.
+    expect(await getCachedResources()).toEqual({
+      status: 'available',
+      resources: [{ ...REGISTERED, installed: false, projectId: '' }, NOT_YET_REGISTERED],
+    });
+  });
+
+  it('keeps a row reconciled against the backend while its project may be registering', async () => {
+    // Holding back the `installed` downgrade must not hold back the rest of the row. The dialog
+    // corrects update badges once per mount, and pays a backend round trip to do it; discarding
+    // that answer for the unregistered rows leaves exactly the stale badge it went to fix.
+    vi.spyOn(performance, 'now').mockReturnValue(DURING_REGISTRATION_GRACE_MS);
+    provider.recomputeDblResourcesUpdateStatus.mockResolvedValueOnce({ aaaa: false, bbbb: true });
+    await activateWithFreshModule();
+    await getCachedResources();
+    const refreshResourceFlags = mocks.registeredCommands.get(
+      'platformGetResources.refreshResourceFlags',
+    );
+
+    await refreshResourceFlags?.();
+
+    expect(await getCachedResources()).toEqual({
+      status: 'available',
+      // Still installed, because absence proves nothing yet — and still told what the backend said.
+      resources: [REGISTERED, { ...NOT_YET_REGISTERED, updateAvailable: true }],
+    });
   });
 
   it('changes nothing when no resource project has registered yet, even after startup', async () => {

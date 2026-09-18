@@ -1101,11 +1101,16 @@ step, no automation. Just a record.
      host's first 30 seconds, reconciliation (`reconcileCachedResources`'s `canTrustAbsence`) can
      mark a resource installed but never uninstalled, and a freshly fetched catalog is not reconciled
      at all. Otherwise a partially registered project list rewrites installed resources as
-     uninstalled and persists it. *Amended 2026-09-18:* a caller that changed one resource itself
-     names it (`refreshResourceFlags(changedDblEntryUid)` → `trustAbsenceFor`), and that row alone
-     may be downgraded on absence. Without the exception a removal in the first 30 seconds left the
-     Get Resources row spinning on a resource already gone, because the dialog clears that spinner
-     only when the row reports itself uninstalled.
+     uninstalled and persists it. *Amended 2026-09-18:* a caller that **removed** a resource names
+     it (`refreshResourceFlags(removedDblEntryUid)` → `trustAbsenceFor`), and that row alone may be
+     downgraded on absence — including when it was the last resource project, which empties the
+     list the sync otherwise refuses to act on. Only a removal qualifies: after an install or an
+     update, absence is the registration race this rule exists for, so vouching there would rewrite
+     a resource that is on disk as uninstalled. Without the exception a removal in the first 30
+     seconds left the Get Resources row spinning on a resource already gone, because the dialog
+     clears that spinner only when the row reports itself uninstalled. Holding a row back holds back
+     `installed` and `projectId` only; the rest of it, `updateAvailable` included, still reconciles,
+     or a refresh would pay for the backend's answer and discard it.
 - **Alternatives:** *Treat the "already installed" message as success in TypeScript* — rejected: a
   cross-process string match that breaks on localization. *Never downgrade `installed`* — rejected:
   that is how an uninstall reaches the Get Resources list. *Always wait for reconciliation* —

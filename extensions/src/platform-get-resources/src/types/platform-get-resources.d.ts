@@ -170,12 +170,13 @@ declare module 'papi-shared-types' {
      * — and then re-read the catalog; otherwise an updated resource keeps its "update available"
      * flag, because nothing else about the row changes.
      *
-     * @param changedDblEntryUid Uid the caller just installed, updated or removed. Naming it lets
-     *   that resource's absence from the local project list count as removal straight away; a
-     *   caller that names nothing gets flags that can only improve on what is cached, since during
-     *   startup a missing project may just be one that has not registered yet.
+     * @param removedDblEntryUid Uid the caller just **removed**, and only that. Naming it lets the
+     *   resource's absence from the local project list count as removal straight away, rather than
+     *   as a project that may still be registering; naming one that was installed or updated
+     *   instead rewrites a resource that is on disk as uninstalled. A caller that names nothing
+     *   still gets every flag refreshed, including `updateAvailable`.
      */
-    'platformGetResources.refreshResourceFlags': (changedDblEntryUid?: string) => Promise<void>;
+    'platformGetResources.refreshResourceFlags': (removedDblEntryUid?: string) => Promise<void>;
 
     /**
      * Returns locally-installed, read-only resources that are NOT in the DBL catalog (e.g. VULGP83,

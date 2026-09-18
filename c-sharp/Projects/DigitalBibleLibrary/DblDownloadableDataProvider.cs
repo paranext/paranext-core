@@ -438,15 +438,25 @@ internal class DblResourcesDataProvider(
         // Already installed and up to date is what the caller asked for, so succeed without doing
         // anything. Throwing would strand a caller whose stale catalog says the resource is
         // missing: every retry would get the same error.
+        //
+        // `Installed` is a catalog flag rather than a look at the disk, and the two can disagree —
+        // the uninstall path below has its own error for that pair. So confirm the files are really
+        // there before claiming success; if they are not, fall through and install, because a
+        // success reported over an empty disk is one no retry can clear.
         if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
         {
-            Console.WriteLine(
-                $"DBL resource {DBLEntryUid} is already installed and up to date. Installation skipped."
-            );
-            // Nothing changed on disk, but the caller's view disagrees; a project-list notification
-            // lets it catch up.
-            paratextProjects.NotifyProjectsChanged();
-            return;
+            ScrTextCollection.RefreshScrTexts();
+            if (ScrTextCollection.IsPresent(installableResource.ExistingScrText))
+            {
+                Console.WriteLine(
+                    $"DBL resource {DBLEntryUid} is already installed and up to date. Installation skipped."
+                );
+                // Nothing changed on disk, but the caller's view disagrees; the same notifications
+                // the install path sends are what let it catch up.
+                SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
+                paratextProjects.NotifyProjectsChanged();
+                return;
+            }
         }
 
         // Note that we don't get any info telling if the installation succeeded or failed

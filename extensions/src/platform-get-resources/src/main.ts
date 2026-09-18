@@ -49,10 +49,10 @@ type FlagSyncRequest = {
   /** Whether to also refresh `updateAvailable`, which costs a backend round trip. */
   shouldRecomputeUpdateStatus: boolean;
   /**
-   * Uid the caller just installed, updated or removed, whose absence from the project list is
-   * therefore conclusive even during the registration grace period.
+   * Uid the caller just removed, whose absence from the project list is therefore conclusive even
+   * during the registration grace period. Only a removal qualifies; see `trustAbsenceFor`.
    */
-  changedDblEntryUid?: string;
+  removedDblEntryUid?: string;
 };
 
 /** What the sync in `syncInFlight` is doing, so a waiter can tell whether joining it is enough. */
@@ -129,8 +129,9 @@ const INSTALLED_FLAGS_SYNC_WAIT_MS = 5000;
 
 /**
  * Process uptime before a project missing from the metadata is taken as absent rather than not yet
- * registered. Mirrors `LOAD_TIME_GRACE_PERIOD_MS` in `project-lookup.service-model.ts`, which is
- * not exported.
+ * registered. Mirrors `LOAD_TIME_GRACE_PERIOD_MS` in `project-lookup.service-model.ts`, which the
+ * platform exposes only on `testingProjectLookupService` and marks as not for use in development —
+ * so this is a deliberate copy, and the two have to be changed together.
  */
 const PROJECT_REGISTRATION_GRACE_PERIOD_MS = 30 * 1000;
 
@@ -203,15 +204,23 @@ async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> 
  */
 async function syncFlags({
   shouldRecomputeUpdateStatus,
-  changedDblEntryUid,
+  removedDblEntryUid,
 }: FlagSyncRequest): Promise<void> {
   if (cachedResources === undefined) return;
   try {
+    // Read before the metadata call rather than after it: that call can spend seconds retrying, so
+    // a list gathered inside the grace period would otherwise be judged by a clock that ran past
+    // the end of it in the meantime.
+    const hasRegistrationSettled = performance.now() >= PROJECT_REGISTRATION_GRACE_PERIOD_MS;
+
     const localProjectMetadata = await getLocalProjectMetadata();
     // No read-only project in the list means either C# has not registered yet or the machine has
     // none. Reconciling against it would mark every installed resource not-installed and persist
-    // that, and it can never mark anything installed, so there is nothing to gain by continuing.
-    if (!hasResourceProject(localProjectMetadata)) return;
+    // that, and it can never mark anything installed, so there is nothing to gain by continuing —
+    // unless a caller removed a resource, since removing the last one is what empties this list,
+    // and that removal still has to register.
+    const hasResourceProjects = hasResourceProject(localProjectMetadata);
+    if (!hasResourceProjects && removedDblEntryUid === undefined) return;
 
     const updateStatus = shouldRecomputeUpdateStatus ? await readUpdateStatus() : undefined;
 
@@ -226,10 +235,12 @@ async function syncFlags({
         updateStatus,
         // Past the grace period a missing project really is missing, which is what lets an
         // uninstall come through; inside it, absence may only mean "not registered yet" — except
-        // for a resource this caller just changed, which is how a removal registers either way.
+        // for the resource this caller removed, which is how a removal registers either way. A
+        // list with no resource projects at all settles nothing, whatever the clock says: it reads
+        // the same whether they are gone or merely unregistered, so only the removed row counts.
         {
-          canTrustAbsence: performance.now() >= PROJECT_REGISTRATION_GRACE_PERIOD_MS,
-          trustAbsenceFor: changedDblEntryUid,
+          canTrustAbsence: hasResourceProjects && hasRegistrationSettled,
+          trustAbsenceFor: removedDblEntryUid,
         },
       );
 
@@ -278,8 +289,8 @@ function doesSyncInFlightCover(request: FlagSyncRequest): boolean {
   if (request.shouldRecomputeUpdateStatus && !syncInFlightRequest.shouldRecomputeUpdateStatus)
     return false;
   return (
-    request.changedDblEntryUid === undefined ||
-    request.changedDblEntryUid === syncInFlightRequest.changedDblEntryUid
+    request.removedDblEntryUid === undefined ||
+    request.removedDblEntryUid === syncInFlightRequest.removedDblEntryUid
   );
 }
 
@@ -301,12 +312,12 @@ async function syncAfterInFlight(request: FlagSyncRequest): Promise<void> {
  * Brings the derived flags up to date, `updateAvailable` included, and resolves once they are. A
  * caller that has just changed local state awaits this, then re-reads the catalog.
  *
- * @param changedDblEntryUid Uid the caller just installed, updated or removed. Naming it is what
- *   lets a removal register during startup, when a missing project is otherwise read as one that
- *   has not registered yet.
+ * @param removedDblEntryUid Uid the caller just removed. Naming it is what lets a removal register
+ *   during startup, when a missing project is otherwise read as one that has not registered yet.
+ *   Naming a resource that was installed or updated instead would rewrite it as uninstalled.
  */
-async function refreshResourceFlags(changedDblEntryUid?: string): Promise<void> {
-  await syncAfterInFlight({ shouldRecomputeUpdateStatus: true, changedDblEntryUid });
+async function refreshResourceFlags(removedDblEntryUid?: string): Promise<void> {
+  await syncAfterInFlight({ shouldRecomputeUpdateStatus: true, removedDblEntryUid });
 }
 
 /**
@@ -322,8 +333,15 @@ async function getCatalogFromCacheOrFetch(): Promise<{
   if (cachedResources !== undefined)
     return { catalog: { status: 'available', resources: cachedResources }, isFromCache: true };
 
+  let isFromCache = false;
   const catalog = await fetchMutex.runExclusive(async (): Promise<DblResourceCatalog> => {
-    if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
+    // A fetch we queued behind has filled the cache, so this is a cached snapshot like any other.
+    // Reporting it as freshly fetched would tell the caller its flags came from C# live, and a
+    // caller that asked to wait for reconciled flags would be handed unreconciled ones instead.
+    if (cachedResources !== undefined) {
+      isFromCache = true;
+      return { status: 'available', resources: cachedResources };
+    }
     try {
       // Awaited deliberately: returning the promise un-awaited from inside this `try` would let a
       // rejection bypass the logging below entirely.
@@ -336,7 +354,7 @@ async function getCatalogFromCacheOrFetch(): Promise<{
       throw e;
     }
   });
-  return { catalog, isFromCache: false };
+  return { catalog, isFromCache };
 }
 
 async function getCachedResources(

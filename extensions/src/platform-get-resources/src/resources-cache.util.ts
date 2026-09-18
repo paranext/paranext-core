@@ -18,9 +18,13 @@ export type ReconcileCachedResourcesOptions = {
    */
   canTrustAbsence: boolean;
   /**
-   * Uid whose absence is conclusive whatever `canTrustAbsence` says, because the caller installed
-   * or removed that resource itself and is reconciling on the strength of that. Without it a
-   * removal during the grace period leaves the row claiming to be installed.
+   * Uid whose absence is conclusive whatever `canTrustAbsence` says, because the caller removed
+   * that resource itself and is reconciling on the strength of that. Without it a removal during
+   * the grace period leaves the row claiming to be installed.
+   *
+   * Only a removal qualifies. After an install or an update, a missing project is the registration
+   * race this option overrides, so vouching for absence there rewrites a resource that is on disk
+   * as uninstalled — and persists it.
    */
   trustAbsenceFor?: string;
 };
@@ -61,17 +65,16 @@ export function reconcileCachedResources(
           localProjectId.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
     );
 
-    const installed = matchingLocalProjectId !== undefined;
-    // A project that is present proves the resource installed; one that is absent proves nothing
-    // until registration has settled, so until then an installed row is left exactly as it is —
-    // unless it is the row the caller changed, whose absence the caller can vouch for.
-    if (
-      !installed &&
-      resource.installed &&
-      !canTrustAbsence &&
-      resource.dblEntryUid !== trustAbsenceFor
-    )
-      return resource;
+    const hasLocalProject = matchingLocalProjectId !== undefined;
+    // A project that is present proves the resource installed. One that is absent proves nothing
+    // until registration has settled, or until the caller that removed it vouches for the absence;
+    // short of that, the row keeps the `installed` and `projectId` it was cached with. Only those
+    // two are held back: the rest of the row, `updateAvailable` above all, still reconciles, or a
+    // refresh would pay for the backend's answer and then discard it.
+    const isAbsenceProof = canTrustAbsence || resource.dblEntryUid === trustAbsenceFor;
+    const keepsCachedInstall = !hasLocalProject && resource.installed && !isAbsenceProof;
+
+    const installed = hasLocalProject || keepsCachedInstall;
     const installedChanged = installed !== resource.installed;
 
     // Prefer the backend's answer. Falling back to `false` when the installed state just changed
@@ -89,8 +92,10 @@ export function reconcileCachedResources(
 
     // An installed resource's id is whichever local project it matched; an uninstalled one has
     // none. This can differ without `installed` differing: a row cached as installed but with an
-    // empty `projectId` matches on the `dblEntryUid` prefix, so the id is recovered here.
-    const projectId = matchingLocalProjectId ?? '';
+    // empty `projectId` matches on the `dblEntryUid` prefix, so the id is recovered here. A row
+    // whose project has not proven itself absent keeps its cached id, since clearing it would be
+    // acting on the absence this case declines to trust.
+    const projectId = matchingLocalProjectId ?? (keepsCachedInstall ? resource.projectId : '');
 
     if (
       installedChanged ||

@@ -263,6 +263,24 @@ describe('reconcileCachedResources', () => {
     expect(isChanged).toBe(true);
   });
 
+  it('still applies the backend update status to a row whose project may be registering', () => {
+    // Holding back the `installed` downgrade holds back that flag and the project id, nothing else.
+    // Dropping the whole row would discard a backend answer the caller paid a round trip for.
+    const { resources, isChanged } = reconcileCachedResources(
+      [{ ...INSTALLED_WITH_UPDATE, updateAvailable: false }],
+      [],
+      { abc123: true },
+      STILL_REGISTERING,
+    );
+
+    expect(resources[0]).toMatchObject({
+      installed: true,
+      projectId: 'ABC123AAAA',
+      updateAvailable: true,
+    });
+    expect(isChanged).toBe(true);
+  });
+
   it('still marks a resource installed while projects may still be registering', () => {
     // Presence is proof whenever it shows up, so a poisoned flag is corrected at the first chance.
     const { resources } = reconcileCachedResources(

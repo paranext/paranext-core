@@ -63,7 +63,16 @@ function ShareLayoutDialogWrapper({
     hasSettled: hasResourcesSettled,
     refetch: onRetryResources,
   } = useRetryablePromise(
-    useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(
+      async () =>
+        // These resources feed the same picker as `resource-picker.dialog.tsx`, which sections rows
+        // by `installed` and installs from the ones that say they are missing, so this needs the
+        // reconciled flags for the same reason that one does.
+        sendCommand('platformGetResources.getCachedResources', {
+          waitForInstalledFlagsSync: true,
+        }),
+      [],
+    ),
   );
 
   const allResources = catalog?.status === 'available' ? catalog.resources : undefined;

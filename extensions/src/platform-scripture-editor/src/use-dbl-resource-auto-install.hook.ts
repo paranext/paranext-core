@@ -53,6 +53,14 @@ export type DblResourceAutoInstallState = {
  * disk succeeds as a no-op, so a uid still uninstalled afterwards would otherwise loop; it gets the
  * failed state instead, whose retry re-reads the list. See `adr-dbl-install-is-idempotent`.
  *
+ * That verdict is reached only when the caller re-resolves its list, because nothing here re-runs
+ * on a resolved install by itself. `useDblResourceCatalog` satisfies this today: its refetch
+ * empties the catalog before refilling it, so `dblEntryUidToInstall` blanks and returns. A caller
+ * whose refetch preserves the previous value instead would leave a resolved attempt reporting
+ * `isInstalling` forever — the infinite spinner this hook exists to end. TODO(PT-4518): that
+ * migration changes the catalog hook to exactly such a fetch, so it needs this hook to take a
+ * catalog generation rather than inferring re-resolution from the uid.
+ *
  * @param dblEntryUidToInstall Uid of the matched-but-uninstalled resource, or `undefined` when
  *   nothing needs installing (already installed, not a DBL resource, or nothing selected).
  * @param installResource Installs a resource by uid; rejects on failure. Must keep a stable
@@ -80,6 +88,15 @@ export function useDblResourceAutoInstall(
     { uid: string; install: (dblEntryUid: string) => Promise<void> } | undefined
   >(undefined);
 
+  // The uid currently being asked for, so an attempt that resolves late can tell whether its answer
+  // is still wanted. Deliberately not the install effect's own lifetime: the caller's list refetch
+  // blanks the uid and restores it, re-running that effect without changing what is being asked, so
+  // a per-run flag would discard the outcome of an attempt that is still perfectly current.
+  const requestedUidRef = useRef(dblEntryUidToInstall);
+  useEffect(() => {
+    requestedUidRef.current = dblEntryUidToInstall;
+  }, [dblEntryUidToInstall]);
+
   useEffect(() => {
     if (dblEntryUidToInstall === undefined) return;
     // A manual pick already installs the resource itself; don't fire a duplicate install.
@@ -95,15 +112,22 @@ export function useDblResourceAutoInstall(
       setFailedInstall({ uid: dblEntryUidToInstall, reason: 'listNotConverging' });
       return;
     }
+    // An install outlives the render that started it, and a slow one can resolve after the user has
+    // moved to another resource. Its answer then describes a question nobody is asking: recording
+    // it would clear the current uid's error view, re-arm its spinner and fire a duplicate install.
+    const isStillRequested = () => requestedUidRef.current === dblEntryUidToInstall;
+
     // An async function rather than `.then`, so a rejection skips the record and lands in the one
     // `catch` below — which is also what keeps this promise from floating.
     const runInstall = async () => {
       await installResource(dblEntryUidToInstall);
-      resolvedAttemptRef.current = { uid: dblEntryUidToInstall, install: installResource };
+      if (isStillRequested())
+        resolvedAttemptRef.current = { uid: dblEntryUidToInstall, install: installResource };
     };
-    runInstall().catch(() =>
-      setFailedInstall({ uid: dblEntryUidToInstall, reason: 'installRejected' }),
-    );
+    runInstall().catch(() => {
+      if (isStillRequested())
+        setFailedInstall({ uid: dblEntryUidToInstall, reason: 'installRejected' });
+    });
   }, [dblEntryUidToInstall, installResource, failedInstallUid, skipAutoInstall]);
 
   const installFailed =

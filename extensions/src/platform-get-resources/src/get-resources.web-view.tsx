@@ -131,9 +131,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           // offering "Update". A failure here is logged, not rethrown — the action itself succeeded,
           // and reaching the `.catch` below would report it to the user as failed.
           try {
+            // The uid goes only with a removal. It tells the sync to treat this resource's absence
+            // from the project list as conclusive — true once we have removed it, and the exact
+            // wrong answer after an install or an update, whose project may still be registering.
             await papi.commands.sendCommand(
               'platformGetResources.refreshResourceFlags',
-              dblEntryUid,
+              action === 'remove' ? dblEntryUid : undefined,
             );
           } catch (error) {
             logger.warn(

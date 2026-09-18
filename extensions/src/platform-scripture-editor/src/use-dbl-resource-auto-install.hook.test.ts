@@ -204,6 +204,35 @@ describe('useDblResourceAutoInstall', () => {
     expect(result.current.installFailed).toBe(false);
   });
 
+  it('ignores a late rejection from a superseded uid rather than acting on it', async () => {
+    // uid-a's install hangs and fails long after the user has moved on to uid-b.
+    let rejectFirstInstall: (reason: Error) => void = () => {};
+    const installResource = vi.fn((uid: string) =>
+      uid === 'uid-a'
+        ? new Promise<void>((_resolve, reject) => {
+            rejectFirstInstall = reject;
+          })
+        : Promise.resolve(),
+    );
+    const { result, rerender } = renderHook(
+      ({ uid }: { uid: string }) => useDblResourceAutoInstall(uid, installResource),
+      { initialProps: { uid: 'uid-a' } },
+    );
+    await waitFor(() => expect(installResource).toHaveBeenCalledWith('uid-a'));
+    rerender({ uid: 'uid-b' });
+    await waitFor(() => expect(installResource).toHaveBeenCalledWith('uid-b'));
+
+    await act(async () => {
+      rejectFirstInstall(new Error('install failed'));
+    });
+
+    // Recording uid-a's failure would clear uid-b's state and re-run the effect, installing uid-b
+    // a second time — so the call count is what proves the outcome was dropped.
+    expect(installResource).toHaveBeenCalledTimes(2);
+    expect(result.current.installFailed).toBe(false);
+    expect(result.current.isInstalling).toBe(true);
+  });
+
   it('attempts a newly-configured uid even while a previous uid is in the failed state', async () => {
     // Only uid-a fails; uid-b installs cleanly.
     const installResource = vi.fn(async (uid: string) => {
