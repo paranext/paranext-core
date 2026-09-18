@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect } from 'react';
+import { createContentZoomWheelReader } from 'platform-bible-utils';
 
 export type ResourceZoomInputOptions = {
   /** The grid container the listeners attach to. */
@@ -28,7 +29,10 @@ function hasZoomModifier(event: WheelEvent): boolean {
  * Wires Ctrl/Cmd+wheel zoom onto the grid container. The listener is capture-phase so it runs
  * before any inner handler; `wheel` is non-passive so it can `preventDefault()` the browser's
  * page-zoom gesture. The grid runs inside a WebView iframe, so these events never reach the
- * renderer's tab-zoom listeners (separate window).
+ * renderer's tab-zoom listeners (separate window). A wheel is read as mouse-notch steps or as
+ * trackpad-pinch travel by the shared {@link createContentZoomWheelReader}, so a pinch inside a
+ * resource cell moves that resource through its zoom range at the same rate the pane-level zoom
+ * moves a whole pane.
  *
  * NOTE: Keyboard zoom (Ctrl/Cmd +/-/0) is deferred pending PT-4143. The main-process
  * before-input-event handler in main.ts claims those chords for window zoom before the WebView
@@ -41,21 +45,26 @@ export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomI
     const container = containerRef.current;
     if (!container) return undefined;
 
+    const reader = createContentZoomWheelReader();
+
     const onWheel = (event: WheelEvent) => {
       if (!hasZoomModifier(event)) return;
-      // Prevent the OS/browser page zoom even if no cell resolves, so Ctrl+wheel never desyncs.
+      // Prevent the OS/browser page zoom even if no cell resolves, so Ctrl+wheel never desyncs, and
+      // keep the pane-level handler from also acting on a gesture aimed at one resource.
       event.preventDefault();
       event.stopPropagation();
       const resourceId = resolveResourceIdFromElement(
         event.target instanceof Element ? event.target : undefined,
       );
       if (!resourceId) return;
-      adjustZoom?.(resourceId, event.deltaY < 0 ? 1 : -1);
+      const steps = reader.read(event, resourceId);
+      if (steps !== 0) adjustZoom?.(resourceId, steps);
     };
 
     container.addEventListener('wheel', onWheel, { capture: true, passive: false });
     return () => {
       container.removeEventListener('wheel', onWheel, true);
+      reader.dispose();
     };
   }, [containerRef, adjustZoom]);
 }
