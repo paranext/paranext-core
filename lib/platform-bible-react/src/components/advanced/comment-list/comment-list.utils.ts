@@ -1,7 +1,22 @@
 import { isMacOs } from '@/utils/platform.util';
 import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
 import { KeyboardEvent } from 'react';
+import { CommentDraft } from './comment-list.types';
 import { ConflictResolutionOutcome, VERSE_TEXT_CONFLICT } from './conflict-note-card.types';
+
+/**
+ * A draft is empty only when none of its three parts carry anything: no unsent reply, no pending
+ * assignee, and no in-progress edit to an existing comment. Centralized so every writer reports
+ * emptiness the same way — get it wrong in one direction and a real draft is lost, in the other an
+ * empty entry reads as a draft forever.
+ */
+export function isCommentDraftEmpty(draft: CommentDraft): boolean {
+  return (
+    draft.editorState === undefined &&
+    draft.assignedUser === undefined &&
+    (draft.commentEdits === undefined || Object.keys(draft.commentEdits).length === 0)
+  );
+}
 
 /**
  * Tailwind classes that render note-body HTML (PT9 blockquote/prose markup) the way note contents
