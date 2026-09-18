@@ -5,8 +5,10 @@ import { deepEqual, serialize } from 'platform-bible-utils';
 import { MutableRefObject, useCallback, useEffect, useRef, useState } from 'react';
 import {
   getEditorSelectionRange,
+  isSameScrollGeometry,
+  isSameVerseRef,
   measureRangeScrollGeometry,
-  resolveScrollBehavior,
+  RangeScrollMeasurement,
   scrollToRange,
   scrollToVerse,
   SCROLL_MAX_WAIT_MS,
@@ -58,8 +60,8 @@ type RangeScrollRequest = {
 
 /**
  * Everything the settle wait for a range jump compares across animation frames: the scroll
- * container's own `scrollHeight`, the range's top within it, the container's `scrollTop`, and
- * whether any of that was measurable at all.
+ * container's own `scrollHeight`, the range's top within it, and the container's `scrollTop` — or,
+ * when none of that could be read, which of the two reasons stopped it.
  *
  * `scrollTop` is part of the comparison, not just `scrollHeight`/`rangeTop`: both of those are
  * scroll-invariant, so they can already agree while an earlier `scrollTo({ behavior: 'smooth' })` —
@@ -68,24 +70,29 @@ type RangeScrollRequest = {
  * view against a viewport that has not stopped moving. Waiting for `scrollTop` to also repeat holds
  * the wait open until that earlier scroll has genuinely finished.
  *
- * `hasGeometry` has to repeat too, exactly like a defined reading: the engine commits a selection
- * on a microtask rather than synchronously, so the very first (synchronous) sample can read
- * pre-commit DOM and see nothing measurable even though a commit is already on its way.
- * `waitForLayoutToSettle` already refuses to settle its very first sample against nothing, which is
- * what makes that transient absence harmless here rather than a sentinel this type has to carry
- * itself.
+ * An UNMEASURABLE reading can never settle, however many times it repeats — see
+ * {@link rangeSamplesMatch}. Both of its causes are transient states of a chapter that is still
+ * laying out, and neither is safe to act on: the engine commits a selection on a microtask, so an
+ * early sample reads pre-commit DOM and measures nothing (`'no-layout'`); and the scroll container
+ * is discovered by "styled scrollable AND actually overflowing", so before the content has grown
+ * past the viewport there is no container to find yet (`'no-scroll-container'`) even though the
+ * first paragraphs already have layout. Two such frames in a row are cheap to hit while Lexical
+ * reconciles a chapter, and settling on either one lands nothing on screen.
  *
- * Also carries the DOM `Range` this sample read (`selectionRange`), so the terminal path below can
- * scroll to the exact range this sample measured instead of reading the DOM selection a second
- * time. Deliberately left out of `samplesMatch` (a `Range` is not meaningful to compare by value) —
- * settling is still decided on the four measured fields alone.
+ * Also carries the DOM `Range` this sample read (`selectionRange`) and the scroll container it
+ * found (`scrollContainer`): the terminal path below scrolls to the exact range this sample
+ * measured instead of reading the DOM selection a second time, and the next frame's sample reuses
+ * the container instead of walking the ancestors again. Both are deliberately left out of
+ * `samplesMatch` — an element is not meaningful to compare by value — so settling is decided on the
+ * measured numbers alone.
  */
 type RangeSample = {
-  hasGeometry: boolean;
+  status: RangeScrollMeasurement['status'] | 'no-selection';
   scrollHeight: number;
   rangeTop: number;
   scrollTop: number;
   selectionRange: Range | undefined;
+  scrollContainer: HTMLElement | undefined;
 };
 
 /**
@@ -95,33 +102,44 @@ type RangeSample = {
  * actually scrolls (and the range's position in it) is still catching up to the fully laid-out
  * chapter, which lets a legitimate mid-chapter target get clamped as if it were a genuine
  * end-of-chapter jump.
+ *
+ * @param knownScrollContainer The container the previous sample in this run found, if any, so the
+ *   `getComputedStyle` ancestor walk runs once per run rather than once per animation frame
  */
-function sampleRangeGeometry(): RangeSample {
+function sampleRangeGeometry(knownScrollContainer?: HTMLElement): RangeSample {
   const currentSelectionRange = getEditorSelectionRange();
   const measurement = currentSelectionRange
-    ? measureRangeScrollGeometry(currentSelectionRange)
+    ? measureRangeScrollGeometry(currentSelectionRange, knownScrollContainer)
     : undefined;
   const rangeGeometry = measurement?.status === 'measured' ? measurement : undefined;
   return {
-    hasGeometry: !!rangeGeometry,
+    status: measurement?.status ?? 'no-selection',
     scrollHeight: rangeGeometry ? rangeGeometry.scrollHeight : -1,
     rangeTop: rangeGeometry ? rangeGeometry.rangeTop : -1,
     scrollTop: rangeGeometry ? rangeGeometry.scrollTop : -1,
     selectionRange: currentSelectionRange,
+    scrollContainer: rangeGeometry?.scrollContainer,
   };
 }
 
 /**
- * Whether two {@link RangeSample} readings count as unchanged, for the settle wait below. Compares
- * only the measured fields — not `selectionRange`, which is carried for reuse rather than for
- * comparison (see the field's own doc).
+ * Whether two {@link RangeSample} readings count as unchanged, for the settle wait below.
+ *
+ * Only a MEASURED reading can agree with anything: an unmeasurable one never matches, not even
+ * another identical unmeasurable one, so the wait runs on to its bound and `onTimedOut` — which
+ * logs and falls back to the verse — handles the genuinely unmeasurable case instead of the scroll
+ * path silently doing nothing. See {@link RangeSample} for why both of its causes are transient.
+ *
+ * Compares the measured numbers within `SCROLL_GEOMETRY_EPSILON_PX` rather than exactly, and
+ * ignores `selectionRange`/`scrollContainer`, which are carried for reuse rather than for
+ * comparison (see the type's own doc).
  */
 function rangeSamplesMatch(previous: RangeSample, current: RangeSample): boolean {
+  if (previous.status !== 'measured' || current.status !== 'measured') return false;
   return (
-    previous.hasGeometry === current.hasGeometry &&
-    previous.scrollHeight === current.scrollHeight &&
-    previous.rangeTop === current.rangeTop &&
-    previous.scrollTop === current.scrollTop
+    isSameScrollGeometry(previous.scrollHeight, current.scrollHeight) &&
+    isSameScrollGeometry(previous.rangeTop, current.rangeTop) &&
+    isSameScrollGeometry(previous.scrollTop, current.scrollTop)
   );
 }
 
@@ -155,6 +173,11 @@ export type UseScrollToRangeResult = {
    * with no other reference asked about in between, has its verse scroll suppressed too; any
    * intervening reference clears the claim.
    *
+   * A jump that is GIVEN UP ON rather than landed does release it, though — an abandoned jump (the
+   * user navigated elsewhere) or a timeout with no verse marker to fall back to. There is no scroll
+   * left for the claim to stand down for in either case, so holding it would suppress the ordinary
+   * verse scroll for a reference nothing ever scrolled to.
+   *
    * Asking about a different reference CLEARS the claim, so this reads state and changes it: call
    * it from an effect or an event handler, never during render.
    */
@@ -170,8 +193,10 @@ export type UseScrollToRangeResult = {
  * thing to scroll to either: its start can be on screen while the text in it is still below the
  * fold. So the jump measures the range itself, in four steps:
  *
- * 1. Wait until the engine has been handed the target chapter. Selecting any earlier would resolve the
- *    range against the previous chapter's content.
+ * 1. Wait until the engine has been handed the target chapter AND an editor is mounted to select in.
+ *    Selecting any earlier would resolve the range against the previous chapter's content. Bounded
+ *    by {@link SCROLL_MAX_WAIT_MS} of visible time, falling back to the verse, so a chapter or an
+ *    editor that never arrives cannot leave the reference with no scroll at all.
  * 2. Apply the selection. It is data, so this happens at once even while the tab is hidden.
  * 3. While visible, wait for the content's height to hold still (bounded by
  *    {@link SCROLL_MAX_WAIT_MS}): offsets measured while a chapter is still laying out land short.
@@ -223,18 +248,66 @@ export function useScrollToRange({
   );
 
   const consumeRangeScrollClaimFor = useCallback((scrRef: SerializedVerseRef) => {
-    const target = targetVerseRef.current;
-    const isTarget =
-      !!target &&
-      target.book === scrRef.book &&
-      target.chapterNum === scrRef.chapterNum &&
-      target.verseNum === scrRef.verseNum;
+    const isTarget = isSameVerseRef(targetVerseRef.current, scrRef);
     if (!isTarget) targetVerseRef.current = undefined;
     return isTarget;
   }, []);
 
   useEffect(() => {
     if (!request) return undefined;
+
+    /**
+     * Gives up on the request without scrolling anywhere. Releases the claim as well as dropping
+     * the request: the claim exists to stand down the ordinary verse scroll for this reference, and
+     * once no range scroll is going to happen there is nothing left for it to stand down for.
+     * Leaving it set would suppress that verse scroll forever, so the user would get NEITHER.
+     */
+    const abandon = () => {
+      if (isSameVerseRef(targetVerseRef.current, request.verseRef))
+        targetVerseRef.current = undefined;
+      setRequest((current) => (current?.id === request.id ? undefined : current));
+    };
+
+    /**
+     * The jump cannot start yet: either the engine has not been handed the target chapter, or no
+     * editor is mounted to select in. Both are ordinary transient states during navigation and both
+     * are waited out the same way — bounded, and only while the tab is visible — because both can
+     * also be permanent, and a jump that parks forever leaves the reference with no scroll at all.
+     *
+     * The bound tracks time actually spent waiting, not time spent hidden: a hidden tab can sit
+     * inactive for minutes with nothing wrong, so the timer is only armed while visible and is
+     * re-armed (via the `isViewVisible` dependency below) each time the view is shown again.
+     *
+     * @param reason What is being waited for, for the log if the bound elapses
+     * @returns The effect's cleanup
+     */
+    const waitForJumpToBecomePossible = (reason: string) => {
+      if (!isViewVisible) {
+        wasHiddenRef.current = true;
+        return undefined;
+      }
+
+      const timeoutId = setTimeout(() => {
+        // Never arrived within the bound even though the tab has been visible for it: `selectRange`
+        // already resolved successfully, so this is the only record that the jump could not land on
+        // the real target and fell back to the verse instead.
+        logger.warn(
+          `useScrollToRange: ${reason} within ${SCROLL_MAX_WAIT_MS}ms for the jump to ` +
+            `${serialize(request.verseRef)}; falling back to the verse.`,
+        );
+        const verseElement = scrollToVerse(
+          request.verseRef,
+          wasHiddenRef.current ? 'instant' : 'smooth',
+        );
+        // The fallback stands in for the jump, so it keeps the claim — unless there was no verse
+        // marker to scroll to, in which case nothing moved and the claim has to be released or the
+        // ordinary verse scroll is suppressed for a reference that never got scrolled to at all.
+        if (verseElement)
+          setRequest((current) => (current?.id === request.id ? undefined : current));
+        else abandon();
+      }, SCROLL_MAX_WAIT_MS);
+      return () => clearTimeout(timeoutId);
+    };
 
     if (editorChapterKey !== toBookChapterKey(request.verseRef)) {
       // Still waiting for the target chapter. Waiting is only valid while the editor shows what it
@@ -251,45 +324,24 @@ export function useScrollToRange({
           `useScrollToRange: abandoning jump to ${serialize(request.verseRef)} — the editor landed ` +
             `on ${editorChapterKey} instead of the requested chapter.`,
         );
-        setRequest(undefined);
+        abandon();
         return undefined;
       }
 
-      // Bounded only while visible: a hidden tab can sit inactive for minutes with nothing wrong, so
-      // the bound has to track time actually spent waiting for the chapter, not time spent hidden.
-      // Re-armed (via the isViewVisible dependency below) every time the view becomes visible again,
-      // so a wait that spans a hide/show cycle always gets a full window once shown.
-      if (!isViewVisible) {
-        wasHiddenRef.current = true;
-        return undefined;
-      }
-
-      const timeoutId = setTimeout(() => {
-        // The chapter never arrived within the bound even though the tab has been visible for it:
-        // `selectRange` already resolved successfully, so this is the only record that the jump
-        // could not land on the real target and fell back to the verse instead.
-        logger.warn(
-          `useScrollToRange: the editor never reached the chapter requested for the jump to ` +
-            `${serialize(request.verseRef)} within ${SCROLL_MAX_WAIT_MS}ms; falling back to the verse.`,
-        );
-        scrollToVerse(
-          request.verseRef,
-          resolveScrollBehavior(wasHiddenRef.current ? 'instant' : 'smooth'),
-        );
-        setRequest((current) => (current?.id === request.id ? undefined : current));
-      }, SCROLL_MAX_WAIT_MS);
-      return () => clearTimeout(timeoutId);
+      return waitForJumpToBecomePossible('the editor never reached the chapter requested');
     }
 
     const editor = editorRef.current;
-    // No editor mounted — a book the project lacks, or content still arriving. The request stays
-    // pending: it is dropped if the editor lands on a different chapter, and consumed if this one
-    // comes back. Nothing scrolls meanwhile, which is right; there is nothing on screen to scroll.
+    // No editor mounted — a book the project lacks, or content still arriving. Note that this is
+    // reachable WITH the chapter key already matching: `setEditorUsj` advances the key
+    // unconditionally while applying the content through an optional chain, so a key can arrive for
+    // a chapter no editor ever received. Waited out on the same bound as a missing chapter rather
+    // than parked indefinitely, so the jump cannot hang with the claim held and nothing on screen.
     if (!editor) {
       logger.debug(
         `useScrollToRange: no editor mounted yet; jump to ${serialize(request.verseRef)} stays pending.`,
       );
-      return undefined;
+      return waitForJumpToBecomePossible('no editor was ever mounted');
     }
     if (selectedRequestIdRef.current !== request.id) {
       editor.setSelection(request.range);
@@ -301,9 +353,7 @@ export function useScrollToRange({
       return undefined;
     }
 
-    const behavior: ScrollBehavior = resolveScrollBehavior(
-      wasHiddenRef.current ? 'instant' : 'smooth',
-    );
+    const behavior: ScrollBehavior = wasHiddenRef.current ? 'instant' : 'smooth';
     const finish = () =>
       setRequest((current) => (current?.id === request.id ? undefined : current));
 
@@ -342,19 +392,25 @@ export function useScrollToRange({
     let lastSample: RangeSample | undefined;
     const cancel = waitForLayoutToSettle<RangeSample>({
       sample: () => {
-        lastSample = sampleRangeGeometry();
+        // Hands on the container the previous frame found, so the ancestor walk (a `getComputedStyle`
+        // per level) runs once for the run rather than on every one of up to ~120 frames — in
+        // exactly the frames Lexical is laying the chapter out.
+        lastSample = sampleRangeGeometry(lastSample?.scrollContainer);
         return lastSample;
       },
       samplesMatch: rangeSamplesMatch,
       onSettled: (sample, isTimedOut) => finalizeJump(sample, isTimedOut),
       onTimedOut: () => {
-        // Layout never held still within the bound: whatever runs below measures a moving target,
-        // and — if there is no verse marker to fall back to either — can land nothing on screen at
-        // all. Silent otherwise: `selectRange` still resolves successfully, so this is the only
-        // record that the jump struggled.
+        // Layout never held still within the bound — either it kept moving, or it stayed
+        // unmeasurable, which `rangeSamplesMatch` deliberately refuses to settle on. Whatever runs
+        // below measures a moving or absent target, and — if there is no verse marker to fall back
+        // to either — can land nothing on screen at all. Silent otherwise: `selectRange` still
+        // resolves successfully, so this is the only record that the jump struggled. The last
+        // reading's status says which of the two happened, and for an unmeasurable one, why.
         logger.warn(
           `useScrollToRange: layout did not settle within ${SCROLL_MAX_WAIT_MS}ms for jump to ` +
-            `${serialize(request.verseRef)}; scrolling against unsettled geometry.`,
+            `${serialize(request.verseRef)} (last reading: ${lastSample?.status ?? 'none'}); ` +
+            `scrolling against unsettled geometry.`,
         );
         finalizeJump(lastSample ?? sampleRangeGeometry(), true);
       },

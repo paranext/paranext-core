@@ -2680,6 +2680,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // The round trip the in-flight guard above was waiting for has completed, regardless of what
     // caused this transition.
     if (pendingScaffoldInsertRef.current) {
+      // Not gated on `consumeRangeScrollClaimFor`, unlike the two verse scrolls above: this one
+      // fires only for an insert the user's own click in THIS editor triggered, which no cross-view
+      // range jump can be concurrent with. Gate it if that ever stops being true — the `focus()`
+      // below would also re-collapse a just-applied selection.
       scrollToVerse(scrRef);
       editorRef.current?.focus();
     }

@@ -15,6 +15,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, Mock } from 'vitest';
 import {
   BASELINE_PROBE_ATTRIBUTE,
+  clampToScrollRange,
   clampTopToVisibleArea,
   computeRangeScrollTop,
   findScrollContainer,
@@ -22,6 +23,8 @@ import {
   getVerseElement,
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
+  isSameScrollGeometry,
+  isSameVerseRef,
   measureBaselineOffset,
   measureRangeScrollGeometry,
   paraAtPoint,
@@ -393,6 +396,84 @@ describe('resolveScrollBehavior', () => {
     vi.stubGlobal('matchMedia', undefined);
     expect(resolveScrollBehavior('smooth')).toBe('smooth');
   });
+
+  describe('is applied by every scroll this module performs, not by its callers', () => {
+    // Otherwise a reduced-motion user gets an instant jump to a find match and a sweeping animation
+    // from navigating by reference in the same editor, which is worse than either done uniformly.
+    beforeEach(() => {
+      stubReducedMotionPreference(true);
+    });
+
+    it('scrollToVerse', () => {
+      const { wrapperScrollTo } = buildEditorDom();
+
+      scrollToVerse({ book: 'OBA', chapterNum: 1, verseNum: 15 }, 'smooth');
+
+      expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'instant', top: 1420 });
+    });
+
+    it('scrollToRange', () => {
+      const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
+
+      scrollToRange(rangeInEditor(editorContainer, 1500, 20), 'smooth');
+
+      expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'instant', top: 1420 });
+    });
+
+    it('scrollToAnnotation', () => {
+      const { annotation, wrapperScrollTo } = buildAnnotationDom();
+      stubRect(annotation, 1500, 20);
+
+      scrollToAnnotation('thread1');
+
+      // Bottom-aligned: annotationBottom (1520) - clientHeight (900) + offset (80). An annotation
+      // below the viewport is closer to the bottom edge, so it travels the shorter distance.
+      expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'instant', top: 700 });
+    });
+  });
+});
+
+describe('isSameScrollGeometry', () => {
+  it('treats readings a sub-pixel apart as the same', () => {
+    // A fractional devicePixelRatio can keep re-reporting a value that has stopped changing with a
+    // different fraction; exact equality would read that as "still moving".
+    expect(isSameScrollGeometry(1420, 1420.4)).toBe(true);
+  });
+
+  it('treats readings a whole pixel apart as different', () => {
+    expect(isSameScrollGeometry(1420, 1421)).toBe(false);
+  });
+});
+
+describe('isSameVerseRef', () => {
+  it('compares book, chapter and verse only', () => {
+    expect(
+      isSameVerseRef(
+        { book: 'GEN', chapterNum: 10, verseNum: 19, versificationName: 'English' },
+        { book: 'GEN', chapterNum: 10, verseNum: 19 },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects a different verse and a missing reference', () => {
+    const genesis1019 = { book: 'GEN', chapterNum: 10, verseNum: 19 };
+    expect(isSameVerseRef({ book: 'GEN', chapterNum: 10, verseNum: 18 }, genesis1019)).toBe(false);
+    expect(isSameVerseRef(undefined, genesis1019)).toBe(false);
+  });
+});
+
+describe('clampToScrollRange', () => {
+  it('clamps a target above the content to the top', () => {
+    expect(clampToScrollRange(-50, { clientHeight: 900, scrollHeight: 5000 })).toBe(0);
+  });
+
+  it('clamps a target past the end of the content to the last scrollable position', () => {
+    expect(clampToScrollRange(9000, { clientHeight: 900, scrollHeight: 5000 })).toBe(4100);
+  });
+
+  it('answers 0 when the content does not overflow at all', () => {
+    expect(clampToScrollRange(300, { clientHeight: 900, scrollHeight: 400 })).toBe(0);
+  });
 });
 
 describe('scrollToAnnotation', () => {
@@ -693,9 +774,25 @@ describe('computeRangeScrollTop', () => {
   // Content 5000 tall, a 900 px viewport currently scrolled to 1000: visible band [1000, 1900].
   const viewport = { scrollTop: 1000, clientHeight: 900, scrollHeight: 5000 };
 
+  it('lands a range 80 px below the top edge', () => {
+    // Every expectation below is a literal derived from this offset rather than an expression over
+    // the constant, so that changing the offset (or dropping it) fails them instead of moving them
+    // along with the code. This is where the 80 itself is pinned, so a deliberate change to it has
+    // exactly one place to start from.
+    expect(RANGE_SCROLL_TOP_OFFSET).toBe(80);
+  });
+
   it('leaves a range that is already fully in view where it is', () => {
     expect(
       computeRangeScrollTop({ ...viewport, rangeTop: 1200, rangeBottom: 1220 }),
+    ).toBeUndefined();
+  });
+
+  it('counts a range a sub-pixel outside the viewport as in view', () => {
+    // A fractional devicePixelRatio puts fractions on every one of these numbers, and scrolling by
+    // a fraction of a pixel for a range already flush against an edge is a move for nothing.
+    expect(
+      computeRangeScrollTop({ ...viewport, rangeTop: 999.7, rangeBottom: 1900.3 }),
     ).toBeUndefined();
   });
 
@@ -706,27 +803,19 @@ describe('computeRangeScrollTop', () => {
   });
 
   it('puts a range below the viewport just under the top edge, not against the bottom edge', () => {
-    expect(computeRangeScrollTop({ ...viewport, rangeTop: 3094, rangeBottom: 3114 })).toBe(
-      3094 - RANGE_SCROLL_TOP_OFFSET,
-    );
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 3094, rangeBottom: 3114 })).toBe(3014);
   });
 
   it('scrolls a range the bottom edge cuts off instead of accepting its visible start', () => {
-    expect(computeRangeScrollTop({ ...viewport, rangeTop: 1850, rangeBottom: 1920 })).toBe(
-      1850 - RANGE_SCROLL_TOP_OFFSET,
-    );
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 1850, rangeBottom: 1920 })).toBe(1770);
   });
 
   it('puts a range above the viewport just under the top edge', () => {
-    expect(computeRangeScrollTop({ ...viewport, rangeTop: 400, rangeBottom: 420 })).toBe(
-      400 - RANGE_SCROLL_TOP_OFFSET,
-    );
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 400, rangeBottom: 420 })).toBe(320);
   });
 
   it('keeps the start of a range taller than the viewport in view', () => {
-    expect(computeRangeScrollTop({ ...viewport, rangeTop: 3000, rangeBottom: 4500 })).toBe(
-      3000 - RANGE_SCROLL_TOP_OFFSET,
-    );
+    expect(computeRangeScrollTop({ ...viewport, rangeTop: 3000, rangeBottom: 4500 })).toBe(2920);
   });
 
   it('clamps to the top of the content for a range at the start of the chapter', () => {
@@ -743,7 +832,7 @@ describe('computeRangeScrollTop', () => {
     // value wins.
     const shortViewport = { scrollTop: 0, clientHeight: 150, scrollHeight: 1000 };
     expect(computeRangeScrollTop({ ...shortViewport, rangeTop: 500, rangeBottom: 510 })).toBe(
-      500 - 150 / 4,
+      462.5,
     );
   });
 
@@ -752,7 +841,7 @@ describe('computeRangeScrollTop', () => {
     // which the cap never engages.
     const ordinaryViewport = { scrollTop: 0, clientHeight: 320, scrollHeight: 5000 };
     expect(computeRangeScrollTop({ ...ordinaryViewport, rangeTop: 1000, rangeBottom: 1020 })).toBe(
-      1000 - RANGE_SCROLL_TOP_OFFSET,
+      920,
     );
   });
 });
@@ -854,6 +943,36 @@ describe('measureRangeScrollGeometry', () => {
     expect(measureRangeScrollGeometry(rangeInEditor(editorContainer, 2094, 20))).toEqual({
       status: 'no-scroll-container',
     });
+  });
+
+  it('reuses a container it is handed instead of walking the ancestors again', () => {
+    // The settle loop in `useScrollToRange` samples once per animation frame for up to 2 s, and the
+    // walk costs a `getComputedStyle` per level; the container cannot change within one run.
+    const { editorContainer, wrapper } = buildEditorDom({ verseNumbers: [] });
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle');
+
+    const measurement = measureRangeScrollGeometry(
+      rangeInEditor(editorContainer, 2094, 20),
+      wrapper,
+    );
+    if (measurement.status !== 'measured') throw new Error('expected a measured geometry');
+
+    expect(measurement.scrollContainer).toBe(wrapper);
+    expect(getComputedStyleSpy).not.toHaveBeenCalled();
+    getComputedStyleSpy.mockRestore();
+  });
+
+  it('walks again rather than measuring a container a chapter load has torn out of the document', () => {
+    const { editorContainer, wrapper } = buildEditorDom({ verseNumbers: [] });
+    const staleContainer = document.createElement('div');
+
+    const measurement = measureRangeScrollGeometry(
+      rangeInEditor(editorContainer, 2094, 20),
+      staleContainer,
+    );
+    if (measurement.status !== 'measured') throw new Error('expected a measured geometry');
+
+    expect(measurement.scrollContainer).toBe(wrapper);
   });
 });
 

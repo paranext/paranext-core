@@ -118,6 +118,9 @@ describe('useScrollToRange', () => {
     vi.mocked(getEditorSelectionRange).mockReturnValue(measuredRange);
     vi.mocked(measureRangeScrollGeometry).mockReturnValue(measured(stableGeometry()));
     vi.mocked(scrollToRange).mockReturnValue(true);
+    // The verse marker is present by default, so a verse fallback is a real move that the range
+    // jump's claim on the reference stands in for. Overridden where a test needs the opposite.
+    vi.mocked(scrollToVerse).mockReturnValue(document.createElement('span'));
   });
 
   afterEach(() => {
@@ -332,7 +335,7 @@ describe('useScrollToRange', () => {
     expect(scrollToVerse).toHaveBeenCalledWith(GEN_10_19, 'smooth');
   });
 
-  it('falls back to the verse when the selection has no measurable range', async () => {
+  it('waits out the bound before falling back to the verse when the selection has no measurable range', async () => {
     vi.mocked(getEditorSelectionRange).mockReturnValue(undefined);
     const fake = createFakeEditor();
     const { result } = renderScrollToRange(fake.editor, {
@@ -341,9 +344,33 @@ describe('useScrollToRange', () => {
     });
 
     act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    // An absent reading never agrees with another absent reading, so however many frames run,
+    // nothing may be acted on before the bound — the selection may still be committing.
     await runFrames();
+    expect(scrollToVerse).not.toHaveBeenCalled();
 
+    await runFrames(SCROLL_MAX_WAIT_MS);
     expect(scrollToVerse).toHaveBeenCalledWith(GEN_10_19, 'smooth');
+  });
+
+  it('does not settle on repeated no-scroll-container readings, which the container only lacks while the chapter is still growing', async () => {
+    // The steady state a chapter shorter than the viewport rests in — and also what every frame
+    // reads while a taller chapter's content has not yet grown past `clientHeight`. Acting on it
+    // reports "already in view" and scrolls nowhere, so it must not end the wait.
+    vi.mocked(measureRangeScrollGeometry).mockReturnValue({ status: 'no-scroll-container' });
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 10',
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+    expect(scrollToRange).not.toHaveBeenCalled();
+
+    // Only the bound ends it, and the jump still resolves with exactly one scroll attempt.
+    await runFrames(SCROLL_MAX_WAIT_MS);
+    expect(scrollToRange).toHaveBeenCalledTimes(1);
   });
 
   it('no editor mounted: a request stays pending until an editor is present', async () => {
@@ -376,6 +403,104 @@ describe('useScrollToRange', () => {
 
     expect(fake.setSelection).toHaveBeenCalledWith(MATCH);
     expect(scrollToRange).toHaveBeenCalledTimes(1);
+  });
+
+  it('no editor mounted with the target chapter key already reached: falls back to the verse on the bound', async () => {
+    // `setEditorUsj` stamps the chapter key unconditionally while applying content through an
+    // optional chain, so the key can reach the target while no editor ever received it. Nothing
+    // else will ever change, so an unbounded wait here would hold the reference's scroll forever.
+    const { result } = renderHook(
+      (props: HookProps) => {
+        // The real `ref` is null until the element mounts, which is the state under test.
+        // eslint-disable-next-line no-null/no-null
+        const editorRef = useRef<EditorRef | null>(null);
+        return useScrollToRange({ editorRef, ...props });
+      },
+      { initialProps: { editorChapterKey: 'GEN 10', isViewVisible: true } },
+    );
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+    expect(scrollToVerse).not.toHaveBeenCalled();
+
+    await runFrames(SCROLL_MAX_WAIT_MS);
+    expect(scrollToVerse).toHaveBeenCalledWith(GEN_10_19, 'smooth');
+  });
+
+  it('releases its claim on the reference when the jump is abandoned, so the ordinary verse scroll still runs', async () => {
+    const fake = createFakeEditor();
+    const { result, rerender } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 1',
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    // The user navigates somewhere that is neither the jump's target nor where they started.
+    rerender({ editorChapterKey: 'MAT 5', isViewVisible: true });
+    await runFrames();
+
+    // No range scroll is coming, so nothing is left for the claim to stand down for: were it still
+    // held, GEN 10:19 would get neither this jump nor its ordinary verse scroll.
+    expect(scrollToRange).not.toHaveBeenCalled();
+    act(() => {
+      expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
+    });
+  });
+
+  it('releases its claim when the bound elapses with no verse marker to fall back to', async () => {
+    // A bridged verse (`\v 18-19`) publishes no marker for 19, so the fallback finds nothing and
+    // nothing moves at all — the one timeout where keeping the claim would suppress a scroll that
+    // never happened.
+    vi.mocked(scrollToVerse).mockReturnValue(undefined);
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 1',
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames(SCROLL_MAX_WAIT_MS * 2);
+
+    expect(scrollToVerse).toHaveBeenCalledWith(GEN_10_19, 'smooth');
+    act(() => {
+      expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
+    });
+  });
+
+  it('keeps its claim when the bound elapses and the verse fallback did move the view', async () => {
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 1',
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames(SCROLL_MAX_WAIT_MS * 2);
+
+    // The fallback stands in for the jump, so the delayed verse scroll must still stand down rather
+    // than moving the view a second time.
+    act(() => {
+      expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(true);
+    });
+  });
+
+  it('jumps again when the same range is requested a second time', async () => {
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 10',
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+    expect(scrollToRange).toHaveBeenCalledTimes(1);
+
+    // Clicking the same result again is a fresh jump: the user may have scrolled away since, so
+    // deduplicating by range would leave the second click doing nothing.
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+    expect(scrollToRange).toHaveBeenCalledTimes(2);
+    expect(fake.setSelection).toHaveBeenCalledTimes(2);
   });
 
   it('gives up waiting for layout to settle after the bound and still scrolls exactly once', async () => {

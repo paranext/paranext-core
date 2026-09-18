@@ -3901,18 +3901,22 @@ step, no automation. Just a record.
   `useViewVisibility`, which only ever sees the caller's own iframe.
 - **Decision:** The scroll target is the RANGE, not the verse: `computeRangeScrollTop`
   (`editor-dom.util.ts`) leaves a range already fully inside the viewport untouched, otherwise lands
-  its first line `RANGE_SCROLL_TOP_OFFSET` (80px) below the top edge, and clamps to
-  `[0, scrollHeight - clientHeight]` so a range at a chapter's start or end still lands fully
-  visible. Ownership of bringing the target into view moves from the requesting panel to the EDITOR
-  itself: `useScrollToRange` (`use-scroll-to-range.hook.ts`) applies the selection immediately (data,
-  so it works even while hidden) and defers only the scroll until the editor's own tab is visible,
-  running it `'instant'`ly to catch up a tab that was hidden when the jump was requested and
-  `'smooth'`ly otherwise. This directly reverses the "isn't implementable here" call: the editor CAN
-  observe its own visibility, so the deferred catch-up the requesting panel could not build is
-  implemented one layer down instead. `isRangeScrollTarget` suppresses the ordinary verse-start
-  scroll for a reference a range jump owns, so the two scroll mechanisms never fight over the same
-  reference; every site in the web view that scrolls to a verse (the reference-scroll effect and the
-  first-load effect) consults it before calling `scrollToVerse`.
+  its first line `RANGE_SCROLL_TOP_OFFSET` (80px) below the top edge — capped to a quarter of the
+  viewport's own height, so a short pane (Power mode gives an editor little room) does not land the
+  match past its midpoint — and clamps to `[0, scrollHeight - clientHeight]` so a range at a
+  chapter's start or end still lands fully visible. Ownership of bringing the target into view moves
+  from the requesting panel to the EDITOR itself: `useScrollToRange` (`use-scroll-to-range.hook.ts`)
+  applies the selection immediately (data, so it works even while hidden) and defers only the scroll
+  until the editor's own tab is visible, running it `'instant'`ly to catch up a tab that was hidden
+  when the jump was requested and `'smooth'`ly otherwise. This directly reverses the "isn't
+  implementable here" call: the editor CAN observe its own visibility, so the deferred catch-up the
+  requesting panel could not build is implemented one layer down instead.
+  `consumeRangeScrollClaimFor` suppresses the ordinary verse-start scroll for a reference a range
+  jump owns, so the two scroll mechanisms never fight over the same reference; the two verse scrolls
+  that a jump can race — the reference-scroll effect and the first-load effect — consult it before
+  calling `scrollToVerse`. The blank-chapter scaffold effect's `scrollToVerse` does not: it fires
+  only for an insert that the user's own click in this editor triggered, which no cross-view jump
+  can be concurrent with.
 - **Alternatives:** **Keep the preview scroll in the requesting panel and give it cross-view
   visibility** (e.g. a new PAPI capability to observe another web view's visibility) — rejected as
   disproportionate: it would add a general-purpose capability for one caller's benefit, when the

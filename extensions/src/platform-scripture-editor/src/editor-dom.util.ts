@@ -6,11 +6,37 @@ import { Unsubscriber } from 'platform-bible-utils';
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
 
 /**
- * How far below the scroll viewport's top edge a scrolled-to range's first line lands. The same
- * breathing room `scrollToVerse` leaves above a verse number, so jumping to a match and jumping to
- * a verse look alike.
+ * How far below the scroll viewport's top edge a scrolled-to range's first line lands, before
+ * {@link computeRangeScrollTop}'s quarter-viewport cap. The same breathing room `scrollToVerse`
+ * leaves above a verse number, so on an ordinary pane — where the cap never engages — jumping to a
+ * match and jumping to a verse look alike. On a pane shorter than 4× this offset they diverge:
+ * `scrollToVerse` applies no cap.
  */
 export const RANGE_SCROLL_TOP_OFFSET = VERSE_NUMBER_SCROLL_OFFSET;
+
+/**
+ * How far apart two scroll-geometry readings may be and still count as the same reading.
+ *
+ * Every number a scroll decision reads — a range's top, a container's `scrollTop`, its
+ * `scrollHeight` — is a CSS pixel that the browser derives from device pixels, so on a display with
+ * a fractional `devicePixelRatio` a value that has genuinely stopped changing can keep arriving
+ * with a different fraction. Exact equality on those readings would report "still moving" for a
+ * layout that has come to rest (burning a settle wait's whole bound), and "not quite in view" for a
+ * range sitting flush against the viewport edge (scrolling a fraction of a pixel for nothing).
+ * Sub-pixel, so it can never mask a real move: nothing a reader could see is smaller than a pixel.
+ */
+export const SCROLL_GEOMETRY_EPSILON_PX = 0.5;
+
+/**
+ * Whether two scroll-geometry readings are the same within {@link SCROLL_GEOMETRY_EPSILON_PX}.
+ *
+ * @param a One reading
+ * @param b The other reading
+ * @returns `true` when the two are indistinguishable at sub-pixel resolution
+ */
+export function isSameScrollGeometry(a: number, b: number): boolean {
+  return Math.abs(a - b) <= SCROLL_GEOMETRY_EPSILON_PX;
+}
 
 /**
  * Interval time in ms to wait between polling the document to see if the editor has finished
@@ -259,6 +285,11 @@ export function getVerseElement(verseNum: number): HTMLElement | undefined {
  * transition, so it is invisible to this extension's `@media (prefers-reduced-motion: reduce)`
  * blocks and has to be downgraded explicitly here instead.
  *
+ * Applied inside every scroll this module performs — `scrollToVerse`, `scrollToRange`,
+ * `scrollToAnnotation` — rather than by their callers, so a reduced-motion user gets the same
+ * treatment from every kind of jump. A caller passes the behavior it WANTS and never has to know
+ * this exists.
+ *
  * @param behavior The behavior the caller would otherwise use
  * @returns `'instant'` when `behavior` is `'smooth'` and the user prefers reduced motion; otherwise
  *   `behavior` unchanged (including when `matchMedia` is unavailable)
@@ -274,7 +305,8 @@ export function resolveScrollBehavior(behavior: ScrollBehavior): ScrollBehavior 
  *
  * @param verseRef The verse ref whose matching verse marker to scroll to
  * @param behavior `'smooth'` for a move the user watches; `'instant'` to catch up a view that was
- *   hidden when the move was asked for
+ *   hidden when the move was asked for. Downgraded to `'instant'` automatically for a user who
+ *   prefers reduced motion — see {@link resolveScrollBehavior}
  * @returns The verse marker's DOM element if found; otherwise undefined
  */
 export function scrollToVerse(
@@ -305,7 +337,10 @@ export function scrollToVerse(
           ) - VERSE_NUMBER_SCROLL_OFFSET
         : 0;
 
-      scrollContainerElement.scrollTo({ behavior, top: verseOffsetTop });
+      scrollContainerElement.scrollTo({
+        behavior: resolveScrollBehavior(behavior),
+        top: verseOffsetTop,
+      });
     }
   }
 
@@ -348,10 +383,28 @@ export function computeRangeScrollTop({
   clientHeight: number;
   scrollHeight: number;
 }): number | undefined {
-  if (rangeTop >= scrollTop && rangeBottom <= scrollTop + clientHeight) return undefined;
-  const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
+  if (
+    rangeTop >= scrollTop - SCROLL_GEOMETRY_EPSILON_PX &&
+    rangeBottom <= scrollTop + clientHeight + SCROLL_GEOMETRY_EPSILON_PX
+  )
+    return undefined;
   const effectiveOffset = Math.min(RANGE_SCROLL_TOP_OFFSET, clientHeight / 4);
-  return Math.min(Math.max(rangeTop - effectiveOffset, 0), maxScrollTop);
+  return clampToScrollRange(rangeTop - effectiveOffset, { clientHeight, scrollHeight });
+}
+
+/**
+ * Clamps a would-be `scrollTop` into the range the container can actually scroll to, so a target
+ * near the start or end of the content lands wherever the content's own edge allows.
+ *
+ * @param top The `scrollTop` a scroll decision arrived at
+ * @param viewport The container's current `clientHeight` and `scrollHeight`
+ * @returns `top`, clamped to `[0, scrollHeight - clientHeight]`
+ */
+export function clampToScrollRange(
+  top: number,
+  { clientHeight, scrollHeight }: { clientHeight: number; scrollHeight: number },
+): number {
+  return Math.min(Math.max(top, 0), Math.max(0, scrollHeight - clientHeight));
 }
 
 /**
@@ -416,11 +469,18 @@ export type RangeScrollMeasurement =
  * finished growing.
  *
  * @param range The DOM range to measure; must be inside the editor content
+ * @param knownScrollContainer A container a previous call already discovered for this same range,
+ *   to skip re-walking the ancestors. Only honoured while it is still in the document, so a
+ *   container torn out by a chapter load falls back to a fresh walk rather than being measured
+ *   after the fact
  * @returns `'no-layout'` when there is no layout to measure (inside a `display: none` iframe every
  *   rect is zeros); `'no-scroll-container'` when there is layout but no scrollable ancestor;
  *   otherwise the measured geometry
  */
-export function measureRangeScrollGeometry(range: Range): RangeScrollMeasurement {
+export function measureRangeScrollGeometry(
+  range: Range,
+  knownScrollContainer?: HTMLElement,
+): RangeScrollMeasurement {
   const rect = range.getBoundingClientRect();
   if (rect.top === 0 && rect.left === 0 && rect.width === 0 && rect.height === 0)
     return { status: 'no-layout' };
@@ -429,7 +489,10 @@ export function measureRangeScrollGeometry(range: Range): RangeScrollMeasurement
     range.startContainer instanceof HTMLElement
       ? range.startContainer
       : range.startContainer.parentElement;
-  const scrollContainer = startElement ? findScrollContainer(startElement) : undefined;
+  const scrollContainer =
+    knownScrollContainer?.isConnected && startElement?.isConnected
+      ? knownScrollContainer
+      : ((startElement ? findScrollContainer(startElement) : undefined) ?? undefined);
   if (!scrollContainer) return { status: 'no-scroll-container' };
 
   return {
@@ -451,7 +514,8 @@ export function measureRangeScrollGeometry(range: Range): RangeScrollMeasurement
  *
  * @param range The DOM range to bring into view; must be inside the editor content
  * @param behavior `'smooth'` for a jump the user watches; `'instant'` to catch up a view that was
- *   hidden when the jump was asked for
+ *   hidden when the jump was asked for. Downgraded to `'instant'` automatically for a user who
+ *   prefers reduced motion — see {@link resolveScrollBehavior}
  * @returns `true` when the range was measured, whether or not it needed a scroll; `false` when it
  *   has no layout to measure (inside a `display: none` iframe every rect is zeros), so the caller
  *   can fall back
@@ -469,7 +533,11 @@ export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
     clientHeight: measurement.clientHeight,
     scrollHeight: measurement.scrollHeight,
   });
-  if (targetTop !== undefined) measurement.scrollContainer.scrollTo({ behavior, top: targetTop });
+  if (targetTop !== undefined)
+    measurement.scrollContainer.scrollTo({
+      behavior: resolveScrollBehavior(behavior),
+      top: targetTop,
+    });
   return true;
 }
 
@@ -494,42 +562,45 @@ export function scrollToAnnotation(id: string): HTMLElement | undefined {
 
   // Scroll if we find the annotation
   if (scrollContainerElement && annotationElement) {
-    const containerScrollTop = scrollContainerElement.scrollTop;
-    const containerHeight = scrollContainerElement.clientHeight;
+    const viewport = {
+      scrollTop: scrollContainerElement.scrollTop,
+      clientHeight: scrollContainerElement.clientHeight,
+      scrollHeight: scrollContainerElement.scrollHeight,
+    };
 
     // Read the annotation's rect once; both its top-within-container and its height derive from it.
     const annotationRect = annotationElement.getBoundingClientRect();
     const annotationTop = getTopWithinScrollContainer(annotationRect, scrollContainerElement);
     const annotationBottom = annotationTop + annotationRect.height;
 
-    // If the annotation is fully visible, don't scroll
-    if (
-      annotationTop >= containerScrollTop &&
-      annotationBottom <= containerScrollTop + containerHeight
-    ) {
-      return annotationElement;
-    }
+    // The top-aligned landing spot, and — by answering `undefined` — whether the annotation is
+    // already fully visible and needs no scroll at all. Shared with `scrollToRange` so the two
+    // cannot drift on where a target lands or on what counts as "already in view". An annotation is
+    // the only target that may instead be aligned to the BOTTOM edge, which is the one part of the
+    // decision below that is this function's own.
+    const topAlignedScrollTop = computeRangeScrollTop({
+      rangeTop: annotationTop,
+      rangeBottom: annotationBottom,
+      ...viewport,
+    });
+    if (topAlignedScrollTop === undefined) return annotationElement;
 
-    // Decide whether to align to top or bottom based on which edge is closer
-    const distanceToTop = Math.abs(annotationTop - containerScrollTop);
-    const distanceToBottom = Math.abs(containerScrollTop + containerHeight - annotationBottom);
-
-    let targetTop: number;
-    if (distanceToTop <= distanceToBottom) {
-      // Align the annotation at the top with the specified offset
-      targetTop = annotationTop - VERSE_NUMBER_SCROLL_OFFSET;
-    } else {
-      // Align the annotation at the bottom with the specified offset
-      targetTop = annotationBottom - containerHeight + VERSE_NUMBER_SCROLL_OFFSET;
-    }
-
-    // Clamp to valid scroll range
-    const maxScrollTop = Math.max(0, scrollContainerElement.scrollHeight - containerHeight);
-    if (targetTop < 0) targetTop = 0;
-    if (targetTop > maxScrollTop) targetTop = maxScrollTop;
+    // Align to whichever edge the annotation is already closer to, so it travels the shorter
+    // distance.
+    const distanceToTop = Math.abs(annotationTop - viewport.scrollTop);
+    const distanceToBottom = Math.abs(
+      viewport.scrollTop + viewport.clientHeight - annotationBottom,
+    );
+    const targetTop =
+      distanceToTop <= distanceToBottom
+        ? topAlignedScrollTop
+        : clampToScrollRange(
+            annotationBottom - viewport.clientHeight + VERSE_NUMBER_SCROLL_OFFSET,
+            viewport,
+          );
 
     scrollContainerElement.scrollTo({
-      behavior: 'smooth',
+      behavior: resolveScrollBehavior('smooth'),
       top: targetTop,
     });
   }
@@ -554,12 +625,20 @@ export function isEchoOfPublishedScrRef(
   lastPublishedScrRef: SerializedVerseRef | undefined,
   scrRef: SerializedVerseRef,
 ): boolean {
-  return (
-    !!lastPublishedScrRef &&
-    lastPublishedScrRef.book === scrRef.book &&
-    lastPublishedScrRef.chapterNum === scrRef.chapterNum &&
-    lastPublishedScrRef.verseNum === scrRef.verseNum
-  );
+  return isSameVerseRef(lastPublishedScrRef, scrRef);
+}
+
+/**
+ * Whether two references name the same verse, to the precision this extension's scroll decisions
+ * care about: book, chapter and verse, ignoring everything else a `SerializedVerseRef` can carry
+ * (versification, a verse string's range or segment suffix).
+ *
+ * @param a One reference, or `undefined`
+ * @param b The other reference
+ * @returns `true` when `a` is present and names the same verse as `b`
+ */
+export function isSameVerseRef(a: SerializedVerseRef | undefined, b: SerializedVerseRef): boolean {
+  return !!a && a.book === b.book && a.chapterNum === b.chapterNum && a.verseNum === b.verseNum;
 }
 
 /**
