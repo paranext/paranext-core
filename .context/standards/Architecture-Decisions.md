@@ -7300,7 +7300,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   custom property per area (`--platform-content-zoom-<areaId>`, falling back to
   `--platform-content-zoom-default`). **Zoom areas are a platform capability**: a view marks one or
   more non-nested areas and the platform owns the targeting (focus, then pointer, then last active
-  area), the per-area state, the memory and the indicator. Views do not build their own zoom stacks.
+  area, except that the chords stay on the last active area rather than trust a caret the view
+  itself just moved), the per-area state, the memory and the indicator. Views do not build their
+  own zoom stacks.
 - **Alternatives:** (a) **A font-size cascade on the content root** — rejected: it does not reach the
   editor's rendered scripture, which sets its own sizes (PT-4167), so the one view the feature exists
   for would not scale. (b) **`transform: scale`** — rejected: it breaks hit-testing, so clicks and
@@ -7321,4 +7323,4 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
   private zoom any more.
 - **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
-  recorded here by PT-4580.
+  recorded here by PT-4580; the chord-targeting exception added by PT-4711.
