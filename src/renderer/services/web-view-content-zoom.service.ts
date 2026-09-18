@@ -53,7 +53,7 @@ type ContentZoomDeps = {
     callback: (event: { webView: SavedWebViewDefinition }) => void,
   ) => Unsubscriber;
   getLastFocusedTabId: () => string | undefined;
-  isModalOverlayOpen: () => boolean;
+  isWindowInputBlocked: () => boolean;
   settings: {
     get: (key: SettingKey) => Promise<unknown>;
     set: (key: SettingKey, value: unknown) => Promise<unknown>;
@@ -67,8 +67,8 @@ type ContentZoomDeps = {
 
 /**
  * Whether {@link warnShardDepsNotConfigured} has already logged. These six functions — five from the
- * renderer's two window-scoped shards, plus `isModalOverlayOpen` from the modal-overlay util — only
- * exist once the composition root (`src/renderer/index.tsx`) calls
+ * renderer's two window-scoped shards, plus `isWindowInputBlocked` from the window-input-blocked
+ * util — only exist once the composition root (`src/renderer/index.tsx`) calls
  * {@link initializeContentZoomService} with them; a call routed through one of the stubs below
  * before that happens is worth one warning, not one per call.
  */
@@ -85,8 +85,8 @@ function warnShardDepsNotConfigured(): void {
 const productionDeps: ContentZoomDeps = {
   getIframe: getWebViewIframe,
   // The six functions below come from the renderer's web-view and window shards, plus the
-  // modal-overlay util. Importing a shard here directly would create an import cycle, since both
-  // shards import this module, and `isModalOverlayOpen` travels the same seam so this module's
+  // window-input-blocked util. Importing a shard here directly would create an import cycle, since both
+  // shards import this module, and `isWindowInputBlocked` travels the same seam so this module's
   // whole window-scoped surface is composed in one place. The renderer's composition root injects
   // its own functions through `initializeContentZoomService`; these stubs cover the window between
   // module load and that call.
@@ -110,7 +110,7 @@ const productionDeps: ContentZoomDeps = {
     warnShardDepsNotConfigured();
     return undefined;
   },
-  isModalOverlayOpen: () => {
+  isWindowInputBlocked: () => {
     warnShardDepsNotConfigured();
     return false;
   },
@@ -345,7 +345,7 @@ export function resolveContentZoomTarget(
   explicitWebViewId: string | undefined,
 ): WebViewId | undefined {
   if (explicitWebViewId) return explicitWebViewId;
-  if (deps.isModalOverlayOpen()) return undefined;
+  if (deps.isWindowInputBlocked()) return undefined;
   return deps.getLastFocusedTabId();
 }
 
@@ -1314,10 +1314,10 @@ function syncSiblingsFromMemory(memory: MemoryRecord, previousMemory: MemoryReco
  *
  * @param shardDeps The renderer's composition root supplies the web-view and window shards'
  *   `getDefinition`, `updateDefinition`, `getAllOpenDefinitions`, `onDidUpdateWebView` and
- *   `getLastFocusedTabId` here, plus `isModalOverlayOpen` from the modal-overlay util, rather than
- *   this module importing any of them directly — each would create an import cycle back through the
- *   shards. Merged into the deps in use whenever provided, even on a later call after the first
- *   initialization already ran.
+ *   `getLastFocusedTabId` here, plus `isWindowInputBlocked` from the window-input-blocked util,
+ *   rather than this module importing any of them directly — each would create an import cycle back
+ *   through the shards. Merged into the deps in use whenever provided, even on a later call after
+ *   the first initialization already ran.
  */
 export function initializeContentZoomService(
   shardDeps?: Pick<
@@ -1327,7 +1327,7 @@ export function initializeContentZoomService(
     | 'getAllOpenDefinitions'
     | 'onDidUpdateWebView'
     | 'getLastFocusedTabId'
-    | 'isModalOverlayOpen'
+    | 'isWindowInputBlocked'
   >,
 ): Promise<void> {
   if (shardDeps) deps = { ...deps, ...shardDeps };
