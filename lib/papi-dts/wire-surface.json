@@ -885,6 +885,36 @@
     },
     {
       "category": "command",
+      "docsStaticallyResolved": false,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
+      "name": "platform.webViewContentZoomIn",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": false,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
+      "name": "platform.webViewContentZoomOut",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": false,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
+      "name": "platform.webViewContentZoomReset",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
       "docsStaticallyResolved": true,
       "documented": true,
       "experimental": false,
@@ -981,6 +1011,16 @@
       "file": "extensions/src/platform-get-resources/src/main.ts",
       "language": "typescript",
       "name": "platformGetResources.openNewTab",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
+      "name": "platformGetResources.refreshResourceFlags",
       "registeredVia": "registerCommand"
     },
     {
@@ -1553,6 +1593,16 @@
       "file": "src/main/app-window-input.util.ts",
       "language": "typescript",
       "name": "platform.onDidAppWindowInput",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/window-state.service.ts",
+      "language": "typescript",
+      "name": "platform.onDidChangeFocusedWindowId",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
     {
