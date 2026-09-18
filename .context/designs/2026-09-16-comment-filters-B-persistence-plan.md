@@ -2,26 +2,75 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Frozen record** — written 2026-09-16 against `0f93dc3c34e`. File:line citations reflect the tree
-> at that commit. Follow the current files and the named symbols, not these line numbers.
+> **Revised 2026-09-18.** The first implementation of this plan stored the selection in
+> `UserProjectSettings` (`{projectDirectory}/Extensions/UserSettings-{userId}.xml`) behind a new C#
+> project-data type. That shipped and worked, but the store was wrong: `Extensions/` is not in PT9's
+> `.hgignore`, so it travels in Send/Receive, and it deliberately follows a user between machines —
+> neither of which a view preference should do. This revision moves the selection to `localStorage`
+> and removes the C# path. **The tasks below describe the work from the state that first
+> implementation left behind, not from scratch.**
 
-**Goal:** Remember each user's comment-filter selection per project, so reopening a project restores the filters they left it on.
+**Goal:** Remember each user's comment-filter selection per project on the machine they chose it on, so reopening a project restores the filters they left it on.
 
-**Architecture:** A new `UserCommentFilters` project-data type on `ParatextProjectDataProvider`, backed by the existing `UserProjectSettings` store (`{projectDirectory}/Extensions/UserSettings-{userId}.xml`). The web view reads it on mount and writes on every change, replacing today's `useState`/`useWebViewState`. Follows the `UserModelTexts` pattern end to end.
+**Architecture:** A small `localStorage`-backed module in the extension, mirroring `comment-draft-store.ts`. The web view reads it synchronously on mount and writes on every change. No backend involvement at all.
 
-**Tech Stack:** C# (.NET 8), NUnit, TypeScript, React 19, Vitest.
+**Tech Stack:** TypeScript, React 19, Vitest.
 
 **Design:** [`2026-09-16-comment-filters-revamp-design.md`](./2026-09-16-comment-filters-revamp-design.md)
 
 **Depends on:** plan A. The stored shape is `{ preset, scopeFilter }`, which only exists after A.
 
+**Sequencing:** run this after plan C. Plan C's `comment-draft-store.ts` is the module this one mirrors, and plan C's task 5 rebuilds `platform-bible-react`'s `dist/` — doing this work first would mean rebuilding twice.
+
 ---
 
-## Why this store
+## Why `localStorage`, and why not the store this plan originally used
 
-`UserProjectSettings` is per-user *and* per-project: each user gets their own `UserSettings-{userId}.xml`, so nobody reads anyone else's selection. It already holds `ModelTexts`, `StructureProtected` and `ReferencedProjectsAndResources`, and versions each setting with a `dataSchemaVersion`.
+A filter selection is a per-machine view preference. It is not project data, not shared, and not
+something another computer should inherit.
 
-**It does travel in Send/Receive.** `Extensions/` is not in the ignore list — PT9's `.hgignore` (written by `ParatextData/Repository/VersionedText.cs`) covers only `local/**`, `PA7/**`, `InDesign/**`. Accepted deliberately: the file is per-user and unread by anyone else, so it transmits without being shared.
+`UserProjectSettings` — the original choice — is per-user *and* per-project, which made it look
+right. It is wrong for two reasons:
+
+- **It travels in Send/Receive.** `Extensions/` is not in the ignore list PT9 writes
+  (`ParatextData/Repository/VersionedText.cs`), which covers only `local/**`, `PA7/**` and
+  `InDesign/**`. The file transmits. It is per-user, so nobody else *reads* it — but it still
+  crosses the wire, and a view preference has no reason to.
+- **It reaches other machines.** That is the property `UserProjectSettings` exists to provide, and
+  it is not wanted here: a filter chosen on a desktop should not follow the user to a laptop.
+
+`localStorage` is per-machine and never syncs. It is the same store `comment-draft-store.ts` uses,
+for a related reason — see that module's own doc, which explains why drafts must never reach
+`Extensions/`.
+
+**Versioning is deliberately dropped.** The C# implementation carried a `dataVersion` and validated
+downgrades, because a project-data type shared across builds needs that. A `localStorage` value does
+not: an unrecognized `preset` or `scopeFilter` already resolves to its default through
+`isCommentPreset`/`isScopeFilter` (plan A's guards), which covers every forward- and
+backward-compatibility case a version field would have. Adding one back would be ceremony with no
+reader.
+
+---
+
+## What the first implementation left behind
+
+These landed and must be removed. Verify they have no other consumer before deleting rather than
+assuming it.
+
+| Commit | What it added |
+| --- | --- |
+| `2bd5b39eb3f`, `91aadfa8a22`, `2b3294e0e13` | `c-sharp/Projects/CommentFilterSelection.cs`, its tests, `ProjectDataType.USER_COMMENT_FILTERS` |
+| `b9e9a23659b`, `4e8e623b075`, `cfe23b3cdc1`, `778a1d74b4e` | `GetUserCommentFilters`/`SetUserCommentFilters`/`ResetUserCommentFilters`, `DeserializeCommentFilterSelection`, dispatch entries, `c-sharp-tests/Projects/UserCommentFiltersSettingTests.cs` |
+| `b08c3368f83` | The `UserCommentFilters` data type and its four methods in `legacy-comment-manager.d.ts`, plus the `CommentFilterSelection` TS type |
+
+**Two commits in that range are NOT part of this and must survive:**
+
+- `0cd52bcd6c3` — a plan A fix making the component test read the shipped English strings.
+- `b362464be3e` — corrects a comment in `UserTextConnectionSettingTests.cs` that named the wrong
+  validator. Independent of where filters are stored, and still true.
+
+The web view work (`50fd859dee5`, `f841f81b3f1`, `93ca87b7d52`, `55c55450754`) is **rewired, not
+reverted.** Its behaviour is correct and hard-won; only the read/write mechanism changes. See task 2.
 
 ---
 
@@ -29,12 +78,19 @@
 
 ```bash
 cd extensions/src/legacy-comment-manager && npx vitest run
+cd extensions/src/legacy-comment-manager && npx tsc -p ./tsconfig.json --noEmit
 cd c-sharp-tests && dotnet test
-cd /home/mgetgen/repos/paranext/paranext-core && dotnet csharpier check c-sharp
+cd c-sharp && dotnet csharpier --check .
 ```
 
-- Read `UserModelTexts`'s full path before writing anything — `GetUserModelTexts`, `SetUserModelTexts`, `ResetUserModelTexts`, their dispatch-table entries, `ValidateUserSettingVersion`, `ValidateVersionNotDowngraded` and `SendDataUpdateEvent`. This plan follows it exactly; deviating from it needs a stated reason.
-- **Forward-facing comments**; no change narration.
+- The extension's tsconfig **excludes** `**/*.test.ts(x)`, so its `tsc` never checks test files. Do
+  not report a clean run as though it covered them.
+- A test needing `localStorage` must declare `// @vitest-environment jsdom` on its first line — the
+  extension has no vitest config.
+- `dotnet csharpier --check .` — `--check`, not a bare `check` subcommand, which CSharpier 0.29.2
+  reads as a path.
+- **Forward-facing comments**; no change narration. Nothing in the new code should mention the store
+  it replaced.
 - Pre-commit hook runs gitleaks and prettier. Never bypass it.
 - Do not push.
 
@@ -44,326 +100,191 @@ cd /home/mgetgen/repos/paranext/paranext-core && dotnet csharpier check c-sharp
 
 | File | Responsibility | Tasks |
 | --- | --- | --- |
-| `c-sharp/Projects/ProjectDataType.cs` | Register the data type name | 1 |
-| `c-sharp/Projects/CommentFilterSelection.cs` | **New** — the stored shape and its XML round-trip | 1 |
-| `c-sharp/Projects/ParatextProjectDataProvider.cs` | get/set/reset + dispatch entries | 2 |
-| `c-sharp-tests/Projects/CommentFilterSelectionTests.cs` | **New** — round-trip and version tests | 1 |
-| `extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts` | Data type + method declarations | 3 |
-| `extensions/src/legacy-comment-manager/src/comment-list.web-view.tsx` | Read on mount, write on change | 4 |
+| `extensions/src/legacy-comment-manager/src/comment-filter-store.ts` | **New** — load/save, localStorage-wrapped | 1 |
+| `.../src/comment-filter-store.test.ts` | **New** — store tests | 1 |
+| `.../src/comment-list.web-view.tsx` | Read on mount, write on change | 2 |
+| `.../src/comment-list.web-view.burst.test.tsx` | Rewire the persistence tests | 2 |
+| `.../src/types/legacy-comment-manager.d.ts` | Remove the data type and its methods | 3 |
+| `c-sharp/Projects/CommentFilterSelection.cs` | **Delete** | 3 |
+| `c-sharp/Projects/ProjectDataType.cs` | Remove `USER_COMMENT_FILTERS` | 3 |
+| `c-sharp/Projects/ParatextProjectDataProvider.cs` | Remove the three methods, the deserializer, the dispatch entries, the schema block | 3 |
+| `c-sharp-tests/Projects/UserCommentFiltersSettingTests.cs` | **Delete** | 3 |
+| `c-sharp-tests/Projects/CommentFilterSelectionTests.cs` | **Delete** | 3 |
 
 ---
 
-## Task 1: The stored shape and its serialization
+## Task 1: The filter store
+
+Mirror `comment-draft-store.ts` — same module shape, same try/catch discipline, same key prefix
+convention. Read it first.
 
 **Files:**
-- Create: `c-sharp/Projects/CommentFilterSelection.cs`
-- Create: `c-sharp-tests/Projects/CommentFilterSelectionTests.cs`
-- Modify: `c-sharp/Projects/ProjectDataType.cs`
+- Create: `extensions/src/legacy-comment-manager/src/comment-filter-store.ts`
+- Create: `extensions/src/legacy-comment-manager/src/comment-filter-store.test.ts`
 
-- [ ] **Step 1: Write the failing round-trip test**
-
-Create `c-sharp-tests/Projects/CommentFilterSelectionTests.cs`:
-
-```csharp
-using NUnit.Framework;
-using Paranext.DataProvider.Projects;
-
-namespace TestParanextDataProvider.Projects;
-
-[TestFixture]
-public class CommentFilterSelectionTests
-{
-    [Test]
-    public void RoundTripsThroughXml()
-    {
-        var selection = new CommentFilterSelection
-        {
-            DataVersion = "1.0.0",
-            Preset = "unread-and-unresolved",
-            ScopeFilter = "current-verse",
-        };
-
-        var restored = CommentFilterSelection.FromXml(CommentFilterSelection.ToXml(selection));
-
-        Assert.That(restored.Preset, Is.EqualTo("unread-and-unresolved"));
-        Assert.That(restored.ScopeFilter, Is.EqualTo("current-verse"));
-    }
-
-    [Test]
-    public void ReadsDefaultsWhenElementsAreAbsent()
-    {
-        // A file written by an older build, or a hand-edited one, must not throw — an absent
-        // selection is simply the default view rather than a corrupt setting.
-        var restored = CommentFilterSelection.FromXml(new System.Xml.Linq.XElement("Items"));
-
-        Assert.That(restored.Preset, Is.EqualTo("all"));
-        Assert.That(restored.ScopeFilter, Is.EqualTo("all-books"));
-    }
-}
-```
-
-- [ ] **Step 2: Run and watch it fail**
-
-```bash
-cd c-sharp-tests && dotnet test --filter CommentFilterSelectionTests
-```
-
-Expected: FAIL to compile — `CommentFilterSelection` does not exist. That compile failure *is* the RED phase for C#, per `.claude/rules/testing/tdd-discipline.md`; commit skeleton stubs alongside the failing test if you split the commit.
-
-- [ ] **Step 3: Implement the shape**
-
-Create `c-sharp/Projects/CommentFilterSelection.cs`:
-
-```csharp
-using System.Xml.Linq;
-
-namespace Paranext.DataProvider.Projects;
-
-/// <summary>
-/// One user's comment-filter selection for one project. Stored per user in
-/// <c>{projectDirectory}/Extensions/UserSettings-{userId}.xml</c>, so two people on the same
-/// project keep independent selections.
-/// </summary>
-public class CommentFilterSelection
-{
-    public string DataVersion { get; set; } = "1.0.0";
-
-    /// <summary>The named filter preset, e.g. <c>unresolved</c>. Defaults to <c>all</c>.</summary>
-    public string Preset { get; set; } = "all";
-
-    /// <summary>The Scripture scope, e.g. <c>current-chapter</c>. Defaults to <c>all-books</c>.</summary>
-    public string ScopeFilter { get; set; } = "all-books";
-
-    public static XElement ToXml(CommentFilterSelection selection) =>
-        new(
-            "Items",
-            new XElement("Preset", selection.Preset),
-            new XElement("ScopeFilter", selection.ScopeFilter)
-        );
-
-    /// <summary>
-    /// Reads a selection, falling back to the default view for any element the file does not carry.
-    /// Values are not validated against the known presets here: the set lives in TypeScript, and a
-    /// value this build does not recognize is better surfaced by the frontend resolving it to its
-    /// default than by the provider refusing to load the file.
-    /// </summary>
-    public static CommentFilterSelection FromXml(XElement? items) =>
-        new()
-        {
-            Preset = items?.Element("Preset")?.Value ?? "all",
-            ScopeFilter = items?.Element("ScopeFilter")?.Value ?? "all-books",
-        };
-}
-```
-
-Add to `c-sharp/Projects/ProjectDataType.cs`, beside the other `USER_*` entries:
-
-```csharp
-    public const string USER_COMMENT_FILTERS = "UserCommentFilters";
-```
-
-- [ ] **Step 4: Run, format, commit**
-
-```bash
-cd c-sharp-tests && dotnet test --filter CommentFilterSelectionTests
-cd /home/mgetgen/repos/paranext/paranext-core/c-sharp && dotnet csharpier .
-```
-
-```bash
-git add c-sharp/Projects/CommentFilterSelection.cs c-sharp/Projects/ProjectDataType.cs \
-        c-sharp-tests/Projects/CommentFilterSelectionTests.cs
-git commit -m "feat(comments): add the per-user comment filter selection shape
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
-
----
-
-## Task 2: Provider methods
-
-**Files:**
-- Modify: `c-sharp/Projects/ParatextProjectDataProvider.cs`
-
-- [ ] **Step 1: Add the three methods**
-
-Place them beside `GetUserModelTexts`/`SetUserModelTexts`/`ResetUserModelTexts` and mirror their structure exactly:
-
-```csharp
-    public CommentFilterSelection GetUserCommentFilters(object? param = null)
-    {
-        var (schemaVersion, content) = GetUserProjectSettings().GetSetting("CommentFilters");
-        if (content == null)
-            return new CommentFilterSelection();
-        ValidateUserSettingVersion(schemaVersion, "CommentFilters");
-        var selection = CommentFilterSelection.FromXml(content);
-        selection.DataVersion = schemaVersion!;
-        return selection;
-    }
-
-    public bool SetUserCommentFilters(object? value)
-    {
-        var selection = DeserializeCommentFilterSelection(value, "CommentFilters");
-        ValidateUserSettingVersion(selection.DataVersion, "CommentFilters");
-        var (currentVersion, _) = GetUserProjectSettings().GetSetting("CommentFilters");
-        ValidateVersionNotDowngraded(selection.DataVersion, currentVersion, "CommentFilters");
-        GetUserProjectSettings()
-            .SetSetting("CommentFilters", selection.DataVersion, CommentFilterSelection.ToXml(selection));
-        SendDataUpdateEvent(ProjectDataType.USER_COMMENT_FILTERS, "user comment filters update event");
-        return true;
-    }
-
-    public bool ResetUserCommentFilters(object? param = null)
-    {
-        GetUserProjectSettings()
-            .SetSetting(
-                "CommentFilters",
-                new CommentFilterSelection().DataVersion,
-                CommentFilterSelection.ToXml(new CommentFilterSelection())
-            );
-        SendDataUpdateEvent(ProjectDataType.USER_COMMENT_FILTERS, "user comment filters update event");
-        return true;
-    }
-```
-
-Write `DeserializeCommentFilterSelection` modelled on the existing `DeserializeResourceReferenceList` — read that method and follow its error handling rather than inventing your own.
-
-Register all three in the dispatch table beside `getUserModelTexts`:
-
-```csharp
-        retVal.Add(("getUserCommentFilters", GetUserCommentFilters));
-        retVal.Add(("setUserCommentFilters", SetUserCommentFilters));
-        retVal.Add(("resetUserCommentFilters", ResetUserCommentFilters));
-```
-
-- [ ] **Step 2: Decide the Send/Receive write gate, and record the decision**
-
-`CLAUDE.md` requires any new C# path that mutates project data to open
-`using var _ = SendReceiveWriteLock.EnterWrite(projectId);` as its entry point's first statement.
-`SetUserModelTexts` — the closest existing analogue, writing the same file — does **not** have one.
-
-Establish which is right before writing code, by reading `SendReceiveWriteLockCoverageTests` in
-`c-sharp-tests/Projects/SendReceive/` and checking whether its scan covers this write pattern. Then
-either add the gate, or add the inline `// SR-write-gate: exempt — <reason>` marker the coverage test
-accepts. **Do not leave it unmarked**: the coverage test scans for `.Save(` and related patterns and
-fails on any uncovered hit, so an unmarked new write will fail CI.
-
-Report which you chose and the evidence.
-
-- [ ] **Step 3: Verify and commit**
-
-```bash
-cd c-sharp-tests && dotnet test
-cd /home/mgetgen/repos/paranext/paranext-core/c-sharp && dotnet csharpier .
-```
-
-```bash
-git add c-sharp/Projects/ParatextProjectDataProvider.cs
-git commit -m "feat(comments): read and write the per-user comment filter selection
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
-
----
-
-## Task 3: Declare the data type to the frontend
-
-**Files:**
-- Modify: `extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts`
-
-- [ ] **Step 1: Add the data type and methods**
-
-Read how `UserModelTexts` is declared in
-`extensions/src/platform-scripture/src/types/platform-scripture.d.ts` and mirror it. On the comments
-project data provider interface add:
+- [ ] **Step 1: Write the failing tests**
 
 ```ts
-    /** This user's comment filter selection for this project. */
-    UserCommentFilters: DataProviderDataType<undefined, CommentFilterSelection, CommentFilterSelection>;
-```
+// @vitest-environment jsdom
 
-with the matching `getUserCommentFilters` / `setUserCommentFilters` / `resetUserCommentFilters` /
-`subscribeUserCommentFilters` members, and:
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { loadFilterSelection, saveFilterSelection } from './comment-filter-store';
+import { DEFAULT_COMMENT_FILTERS, DEFAULT_SCOPE_FILTER } from './comment-list-filters.model';
 
-```ts
-  /** One user's stored comment-filter selection for one project. */
-  export type CommentFilterSelection = {
-    dataVersion: string;
-    preset: CommentPreset;
-    scopeFilter: ScopeFilter;
-  };
-```
+const PROJECT = 'proj-1';
+const DEFAULTS = { preset: DEFAULT_COMMENT_FILTERS.preset, scopeFilter: DEFAULT_SCOPE_FILTER };
 
-Note the C# properties are PascalCase and the TS shape is camelCase — confirm which casing crosses
-the wire by reading how `ResourceReferenceList` is declared on the TS side, and match it.
+beforeEach(() => localStorage.clear());
 
-- [ ] **Step 2: Verify and commit**
-
-```bash
-cd extensions/src/legacy-comment-manager && npx tsc -p ./tsconfig.json --noEmit
-```
-
-```bash
-git add extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
-git commit -m "feat(comments): declare the user comment filter data type
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
-
----
-
-## Task 4: Web view reads and writes it
-
-**Files:**
-- Modify: `extensions/src/legacy-comment-manager/src/comment-list.web-view.tsx`
-
-- [ ] **Step 1: Write the failing test**
-
-Add to `src/comment-list.web-view.burst.test.tsx` (which already mocks the PAPI surface — follow its
-existing mock shape rather than inventing one):
-
-```tsx
-it('restores the stored selection on mount and writes back on change', async () => {
-  // The stored selection is the source of truth: a panel reopened on a project comes back to the
-  // filters it was left on, rather than to the default view.
-  const setUserCommentFilters = vi.fn();
-  renderWebView({
-    storedFilters: { dataVersion: '1.0.0', preset: 'unread', scopeFilter: 'current-book' },
-    setUserCommentFilters,
+describe('comment filter store', () => {
+  it('round-trips a selection for a project', () => {
+    saveFilterSelection(PROJECT, { preset: 'unread', scopeFilter: 'current-book' });
+    expect(loadFilterSelection(PROJECT)).toEqual({ preset: 'unread', scopeFilter: 'current-book' });
   });
 
-  await waitFor(() => {
-    expect(screen.getByRole('combobox', { name: 'Filter comments' })).toHaveTextContent('Unread');
+  it('keeps projects independent', () => {
+    saveFilterSelection(PROJECT, { preset: 'unread', scopeFilter: 'current-book' });
+    saveFilterSelection('proj-2', { preset: 'resolved', scopeFilter: 'current-verse' });
+    expect(loadFilterSelection(PROJECT)).toEqual({ preset: 'unread', scopeFilter: 'current-book' });
   });
 
-  await userEvent.click(screen.getByRole('combobox', { name: 'Filter comments' }));
-  await userEvent.click(screen.getByRole('option', { name: 'Resolved' }));
+  it('returns the default view when nothing has been saved', () => {
+    expect(loadFilterSelection(PROJECT)).toEqual(DEFAULTS);
+  });
 
-  expect(setUserCommentFilters).toHaveBeenCalledWith(
-    expect.objectContaining({ preset: 'resolved', scopeFilter: 'current-book' }),
-  );
+  it('returns the default view rather than throwing when storage is unavailable', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    expect(loadFilterSelection(PROJECT)).toEqual(DEFAULTS);
+  });
+
+  it('returns the default view rather than throwing on malformed stored data', () => {
+    localStorage.setItem(`legacyCommentManager.filters.${PROJECT}`, 'not json');
+    expect(loadFilterSelection(PROJECT)).toEqual(DEFAULTS);
+  });
+
+  it('resolves a stored value this build does not recognize to the default view', () => {
+    // A selection written by a newer build, or hand-edited. The panel must open on something
+    // valid rather than carrying an unknown preset into the query.
+    localStorage.setItem(
+      `legacyCommentManager.filters.${PROJECT}`,
+      JSON.stringify({ preset: 'from-a-newer-build', scopeFilter: 'also-unknown' }),
+    );
+    expect(loadFilterSelection(PROJECT)).toEqual(DEFAULTS);
+  });
+
+  it('keeps a recognized half of a partly-unrecognized selection', () => {
+    localStorage.setItem(
+      `legacyCommentManager.filters.${PROJECT}`,
+      JSON.stringify({ preset: 'unread', scopeFilter: 'nonsense' }),
+    );
+    expect(loadFilterSelection(PROJECT)).toEqual({
+      preset: 'unread',
+      scopeFilter: DEFAULT_SCOPE_FILTER,
+    });
+  });
 });
 ```
 
-- [ ] **Step 2: Run and watch it fail, then wire it up**
+- [ ] **Step 2: Run, watch it fail, implement**
 
-Replace the `useState`/`useWebViewState` filter state with the project-data hook, following how
-`inventory.web-view.tsx:253` uses `useProjectSetting` and how other web views use `useProjectData`
-for a settable type:
+```bash
+cd extensions/src/legacy-comment-manager && npx vitest run src/comment-filter-store.test.ts
+```
 
-- read `UserCommentFilters` for the current `projectId`;
-- until it resolves, render the loading state rather than querying with default filters — otherwise
-  the list visibly flips from the default view to the stored one on every open;
-- on any dropdown change, write the whole selection back;
-- keep the `setFilters` message path working: a programmatic open still overrides the stored
-  selection for that open, and **does not** write it back, so a one-shot link does not permanently
-  change what the user sees next time. Assert that in a test.
+`comment-filter-store.ts` exports `loadFilterSelection(projectId)` and
+`saveFilterSelection(projectId, selection)` over a `{ preset: CommentPreset; scopeFilter: ScopeFilter }`
+declared locally in the extension.
 
-- [ ] **Step 3: Verify the per-project claim**
+Key: `legacyCommentManager.filters.<projectId>`.
 
-Add a test that two different `projectId`s hold independent selections — this is the requirement's
-whole point and a single-project test cannot show it.
+**`loadFilterSelection` narrows at the boundary** with `isCommentPreset`/`isScopeFilter` from
+`comment-list-filters.model`, falling back per field to `DEFAULT_COMMENT_FILTERS.preset` /
+`DEFAULT_SCOPE_FILTER`. This is not optional: `buildCommentThreadSelector` ends in a
+`const unhandled: never` guard that **throws** on an unrecognized preset, and
+`scopeFieldsUsed[scopeFilter]` throws on an unrecognized scope. Narrowing here means the web view
+never has to.
 
-- [ ] **Step 4: Run everything and commit**
+Unlike the draft store, this one always returns a usable value — there is no "no selection" state,
+only the default view.
+
+- [ ] **Step 3: Prove each test bites**
+
+Break the behaviour each targets, confirm the failure, report it, revert. Two matter most: the
+unrecognized-value test (remove a guard — the partly-unrecognized case proves the two guards are
+independent rather than all-or-nothing), and the storage-unavailable test (remove the try/catch — it
+must throw rather than being caught incidentally).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add extensions/src/legacy-comment-manager/src/comment-filter-store.ts \
+        extensions/src/legacy-comment-manager/src/comment-filter-store.test.ts
+git commit -m "feat(comments): persist the filter selection per project on this machine
+
+A selection is a view preference for one person at one computer, so it
+stays there. A stored value the build does not recognize opens on the
+default view.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+## Task 2: Rewire the web view
+
+The web view's persistence behaviour is already correct and tested. **Only the mechanism changes.**
+Preserve every behaviour below; the tests asserting them should survive with their setup adapted,
+not be rewritten.
+
+**Files:**
+- Modify: `extensions/src/legacy-comment-manager/src/comment-list.web-view.tsx`
+- Modify: `extensions/src/legacy-comment-manager/src/comment-list.web-view.burst.test.tsx`
+
+### What must keep working
+
+- The stored selection is restored on mount and written on every change, **both axes together**.
+- Two projects hold independent selections.
+- A `setFilters` message overrides for this open and is **not** written back — a one-shot link must
+  not become the user's new default.
+- A mount-time `initialFilters`/`initialScopeFilter` override behaves the same way.
+- An unrecognized stored value opens on the default view rather than throwing.
+
+### What gets simpler — and this is the point
+
+The PDP read was asynchronous, and a large amount of machinery exists only because of that:
+
+- `isViewSettled` as a render gate, so the panel never mounted showing defaults;
+- the fix making the toolbar wait rather than flash default-then-stored;
+- the fix keeping a `setFilters` message from being clobbered by a late-arriving read;
+- `LOADING_USER_COMMENT_FILTERS` and the `PlatformError` fallback.
+
+**`localStorage` reads are synchronous.** The selection is available at first render, so there is no
+pending state, no flash, and no race for a message to lose. Remove that machinery rather than
+porting it — but deliberately: check each piece against the behaviours above before deleting it, and
+say in your report what you removed and why each was safe.
+
+`isViewSettled` may still be needed to express "a deliberate view was established, don't overwrite
+it" — or it may collapse entirely now that nothing arrives late. Work out which, and justify it.
+
+- [ ] **Step 1: Rewire**
+
+Seed `useState` from `loadFilterSelection(projectId)` and call `saveFilterSelection` on change. Drop
+the `useProjectData(...).UserCommentFilters` read, its setter and its loading flag.
+
+Narrowing now lives in the store, so the web view does not repeat it — confirm by grep that no
+narrowing remains there, and that nothing reaches `buildCommentThreadSelector` unnarrowed.
+
+- [ ] **Step 2: Adapt the tests**
+
+The existing persistence tests should survive. Replace the `useProjectData` mock plumbing with
+`localStorage` seeding. Keep the positive-control shape on every "did not persist" assertion.
+
+Add one test the old store could not express: a selection written for one project does not leak into
+another's key, asserted against `localStorage` directly rather than through the component.
+
+- [ ] **Step 3: Verify and commit**
 
 ```bash
 cd extensions/src/legacy-comment-manager && npx vitest run && npx tsc -p ./tsconfig.json --noEmit
@@ -372,7 +293,60 @@ cd extensions/src/legacy-comment-manager && npx vitest run && npx tsc -p ./tscon
 ```bash
 git add extensions/src/legacy-comment-manager/src/comment-list.web-view.tsx \
         extensions/src/legacy-comment-manager/src/comment-list.web-view.burst.test.tsx
-git commit -m "feat(comments): restore each user's filter selection per project
+git commit -m "feat(comments): read the filter selection from this machine's storage
+
+The selection is available at first render, so the panel opens on it
+directly rather than settling onto it.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+## Task 3: Remove the backend path
+
+Only after task 2 lands, so nothing references it.
+
+**Files:** as listed in File Structure.
+
+- [ ] **Step 1: Confirm nothing else consumes it**
+
+Before deleting anything, grep the whole repo — both languages — for `UserCommentFilters`,
+`CommentFilterSelection`, `getUserCommentFilters`, `setUserCommentFilters`,
+`resetUserCommentFilters`, `USER_COMMENT_FILTERS` and the `"CommentFilters"` settings key. Per
+`.claude/rules/grep-safety-net.md`, use patterns broader than the exact spellings and state one case
+yours would miss. Account for every hit as either "being deleted" or "unrelated".
+
+Note the C# `CommentFilterSelection` record and the extension's new local type share a name. They are
+different things; do not let the sweep conflate them.
+
+- [ ] **Step 2: Delete**
+
+Remove the two C# files, the `ProjectDataType` constant, the three provider methods, the
+deserializer, the dispatch entries, and the `OpenCommentListWebViewOptions` schema properties that
+described them. Remove the data type and its four methods from `legacy-comment-manager.d.ts`.
+
+**Leave `b362464be3e`'s comment fix in `UserTextConnectionSettingTests.cs` alone** — it is about a
+different setting's version validation and is still correct.
+
+- [ ] **Step 3: Verify**
+
+```bash
+cd c-sharp-tests && dotnet test
+cd c-sharp && dotnet csharpier --check .
+cd extensions/src/legacy-comment-manager && npx vitest run && npx tsc -p ./tsconfig.json --noEmit
+```
+
+The C# suite should drop by exactly the tests you deleted — state the expected count and confirm it.
+Nothing else may change.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "refactor(comments): drop the project-data path for filter selections
+
+The selection lives on the machine that chose it, so no project data type
+carries it.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
@@ -381,7 +355,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ## Deliberately not in this plan
 
-- **Drafts** — plan C.
-- **Sending the selection between users** — the file is per-user by design; nothing merges selections.
-- **Migrating the old `useWebViewState` scope value** — it was per-web-view and died on close, so
-  there is nothing durable to migrate from.
+- **Migrating existing stored selections.** The project-data path shipped only on this branch and has
+  never been released, so no user has a value to migrate.
+- **Drafts** — plan C, already on `localStorage` for a related but distinct reason.
+- **Sharing a selection between users or machines.** Explicitly not wanted; that is what moving off
+  `UserProjectSettings` buys.
