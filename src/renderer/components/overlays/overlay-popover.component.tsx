@@ -245,10 +245,10 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
-        // The shared PopoverContent class carries a fixed `tw:w-72` width and `tw:p-2.5` padding.
-        // Both move onto the inner div below along with the zoom (see its comment); `tw:p-0` keeps
-        // this element from doubling the padding, and `width: 'auto'` below keeps it from
-        // reasserting the fixed width over the inner div's own sizing.
+        // PopoverContent must not carry a fixed width or padding — the shared class's `tw:w-72`
+        // and `tw:p-2.5` are stripped here so the inner wrapper below owns width, padding and
+        // layout instead, keeping them inside the zoomed subtree along with the rest of the
+        // content.
         className="tw:p-0"
         side={side}
         align="start"
@@ -259,8 +259,8 @@ export function OverlayPopoverPresentational({
           // writing a raw pixel offset onto its own wrapper — a value the browser re-scales if that
           // wrapper sits inside a zoomed element, doubling the effect. So the zoom and the sizing
           // live on the inner div below instead, leaving the arrow as PopoverContent's other,
-          // unzoomed child. Omitting this line lets the fixed `tw:w-72` class reassert itself and
-          // stops the popover from growing with the pane's zoom at all.
+          // unzoomed child. PopoverContent must not carry a fixed width; the inner wrapper owns
+          // sizing.
           width: 'auto',
         }}
         onKeyDown={handleKeyDown}
@@ -269,7 +269,7 @@ export function OverlayPopoverPresentational({
       >
         <div
           data-overlay-popover-zoom
-          className="tw:overflow-y-auto tw:p-2.5"
+          className="tw:flex tw:w-72 tw:flex-col tw:gap-2.5 tw:overflow-y-auto tw:p-2.5"
           style={{
             ...zoomStyle,
             maxWidth: cappedMaxWidth ?? resolvedMaxWidth,
