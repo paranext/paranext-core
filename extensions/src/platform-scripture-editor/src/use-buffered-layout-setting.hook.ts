@@ -24,15 +24,11 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  * for the incoming project goes unreported. The held copy, arm flag, and error gate are private, so
  * a consumer cannot repair this from outside. A runtime tripwire `logger.warn`s on such a move.
  *
- * TODO(PT-4316): the Scripture Text Grid still moves between projects in place, through
- * `useTextCollectionSources`. While the grid is unbound — opened by the default layout with no
- * `projectId` and not yet re-pointed by a reload — `resolveTextCollectionProjectId` can move it to
- * another project without a remount. Its admin-shared list then stays on the outgoing project while
- * its per-user list, overlay, and saved cell order follow the incoming one, so the grid's
- * cell-order reconcile can prune the incoming project's saved order against the wrong admin list
- * and persist the result. The candidate fixes are for the grid to stop moving in place, or for this
- * hook to reset and re-arm when its project data provider changes; a reset keyed on `projectId`
- * alone would still latch the outgoing provider's value.
+ * The Scripture Text Grid depends on the binding case: opened by the default layout with no
+ * `projectId`, it is seeded once from the active editor's project and afterwards moves only by a
+ * reload (see `resolveTextCollectionProjectId`). A consumer that needs to move in place would need
+ * this hook to reset and re-arm when its project data provider changes; a reset keyed on
+ * `projectId` alone would still latch the outgoing provider's value.
  *
  * The mount arm waits for `isLoading` to be `false`: until the subscription resolves,
  * `useProjectSetting` returns the `defaultValue` placeholder, and applying it would lock the held
