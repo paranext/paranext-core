@@ -624,6 +624,7 @@
   "%settings_platform_webViewContentZoom_label%": "Zoom predeterminado del contenido de la pestaña",
   "%settings_platform_webViewContentZoom_reset%": "Restablecer el zoom predeterminado",
   "%settings_platform_webViewContentZoomMemory_label%": "Pane zoom memory (oculto - sin traducir intencionalmente)",
+  "%settings_platform_webViewContentZoomTypesWithAreas_label%": "Pane zoom area capability cache (oculto - sin traducir intencionalmente)",
   "%settings_platform_zoomFactor_description%": "Se aplica a toda la aplicación. El valor predeterminado es 1. El rango permitido es de 0,5 a 3.",
   "%settings_platform_zoomFactor_errorMessage%": "El rango permitido es de {lowerLimit} a {upperLimit}.",
   "%settings_platform_zoomFactor_label%": "Zoom",
