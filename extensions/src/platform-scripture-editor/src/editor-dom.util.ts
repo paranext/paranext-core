@@ -26,6 +26,28 @@ const EDITOR_MAX_POLL_INTERVALS = 100; // Hopefully the editor will load in 10 s
 export const EDITOR_PARA_SELECTOR = '.para[class*="usfm_"]';
 
 /**
+ * Finds the USFM paragraph element genuinely rendered at the given viewport coordinates, via the
+ * browser's own hit-test (`elementFromPoint`) rather than a specific mouse event's `target` /
+ * `relatedTarget`.
+ *
+ * The editor's own DOM churn (e.g. an active-paragraph decoration swap) can make the browser report
+ * a `mouseout`/`mouseover` boundary crossing whose `target`/`relatedTarget` disagree with what is
+ * actually under the cursor — the event fired because something in the DOM changed, not because the
+ * cursor moved. Consumers that based a hover boundary on the event's target inherited that
+ * disagreement and could show or hide a tooltip out of step with where the cursor really is.
+ * Re-deriving the hovered paragraph from the live cursor position sidesteps the question of whether
+ * a given event is "real" or churn-driven: whatever the cause, this always reports what is actually
+ * there right now, so a spurious event can no longer disagree with reality.
+ *
+ * @param x Viewport x-coordinate (e.g. a mouse event's `clientX`)
+ * @param y Viewport y-coordinate (e.g. a mouse event's `clientY`)
+ * @returns The paragraph element at that point, or `undefined` if none
+ */
+export function paraAtPoint(x: number, y: number): HTMLElement | undefined {
+  return document.elementFromPoint(x, y)?.closest<HTMLElement>(EDITOR_PARA_SELECTOR) ?? undefined;
+}
+
+/**
  * Run something on the editor's first load. This is a workaround until we can listen for the editor
  * to finish loading.
  *
