@@ -42,9 +42,25 @@ export function CommentItem({
   handleDeleteComment,
   onEditingChange,
   canEditOrDelete = false,
+  draftEditorState,
+  onDraftEditorStateChange,
 }: CommentItemProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editorState, setEditorState] = useState<SerializedEditorState>();
+  // Sometimes-controlled: a consumer that supplies `draftEditorState` owns the in-progress edit, so
+  // unmounting (a filter change) and remounting comes back showing the same edit instead of losing
+  // it. `internalEditorState` is the fallback for callers that don't manage this draft.
+  // `isEditing` is derived rather than tracked separately — the two were always set and cleared
+  // together, so a defined editor state is exactly what "editing" means.
+  const [internalEditorState, setInternalEditorState] = useState<SerializedEditorState>();
+  const editorState = draftEditorState ?? internalEditorState;
+  const isEditing = editorState !== undefined;
+
+  const setEditorState = useCallback(
+    (value: SerializedEditorState | undefined) => {
+      setInternalEditorState(value);
+      onDraftEditorStateChange?.(value);
+    },
+    [onDraftEditorStateChange],
+  );
 
   // Ref must default to null so React can attach it to the DOM element
   // eslint-disable-next-line no-null/no-null
@@ -79,11 +95,10 @@ export function CommentItem({
   const handleCancelEdit = useCallback(
     (e?: MouseEvent) => {
       if (e) e.stopPropagation();
-      setIsEditing(false);
       setEditorState(undefined);
       onEditingChange?.(false);
     },
-    [onEditingChange],
+    [onEditingChange, setEditorState],
   );
 
   const handleSaveEdit = useCallback(
@@ -95,12 +110,11 @@ export function CommentItem({
         editorStateToHtml(editorState),
       );
       if (isUpdateSuccessful) {
-        setIsEditing(false);
         setEditorState(undefined);
         onEditingChange?.(false);
       }
     },
-    [editorState, handleUpdateComment, comment.id, onEditingChange],
+    [editorState, handleUpdateComment, comment.id, onEditingChange, setEditorState],
   );
 
   const displayDate = useMemo(() => {
@@ -156,7 +170,6 @@ export function CommentItem({
         <DropdownMenuItem
           onClick={(e) => {
             e.stopPropagation();
-            setIsEditing(true);
             setEditorState(htmlToEditorState(comment.contents));
             onEditingChange?.(true);
           }}
@@ -185,6 +198,7 @@ export function CommentItem({
     comment.id,
     handleDeleteComment,
     onEditingChange,
+    setEditorState,
   ]);
 
   return (

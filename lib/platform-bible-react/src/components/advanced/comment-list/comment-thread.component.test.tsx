@@ -306,6 +306,43 @@ describe('CommentThread generic resolve check', () => {
   });
 });
 
+describe('CommentThread draft control', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the draft it is given rather than its own state', () => {
+    // The draft outlives this component, so the component must not be its owner: a thread unmounted
+    // by a filter change and remounted must come back showing the same draft.
+    const draft = { editorState: undefined, assignedUser: 'Alice' };
+    renderThread({ isSelected: true, draft });
+
+    expect(screen.getByText(/Alice/)).toBeInTheDocument();
+  });
+
+  it('reports draft changes upward instead of storing them', async () => {
+    const onDraftChange = vi.fn();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderThread({
+      isSelected: true,
+      onDraftChange,
+      canUserAssignThreadCallback: async () => true,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Assign user' })).not.toBeDisabled();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Assign user' }));
+    await user.click(await screen.findByText('Alice'));
+
+    expect(onDraftChange).toHaveBeenCalledWith(
+      defaultProps.threadId,
+      expect.objectContaining({ assignedUser: 'Alice' }),
+    );
+  });
+});
+
 describe('CommentThread DOM id', () => {
   it('sets its root element id via getCommentThreadElementId(threadId)', () => {
     render(<CommentThread {...defaultProps} />);
