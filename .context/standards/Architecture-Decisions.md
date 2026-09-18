@@ -4648,6 +4648,62 @@ step, no automation. Just a record.
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
 
+## adr-resource-panes-name-their-zoom-areas: The Text Collection grid and the Bible Texts / Commentaries / Model Text panels each name their own zoom area, because they share one project identity; Enhanced Resources retires its private zoom
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** PT-4582/PT-4583 extended `adr-zoom-composition`'s per-pane content zoom to the
+  Resources views: the Text Collection grid, the Bible Texts / Commentaries / Model Text panels, and
+  the Enhanced Resources viewer. `memoryIdentityFor`
+  (`src/renderer/services/web-view-content-zoom.service.ts`) keys a pane's remembered level on its
+  web-view definition's `projectId` (normalized) paired with a `ContentZoomKind`
+  (`'editor' | 'resource' | 'notes'`, `src/shared/models/content-zoom.model.ts`). For the Text
+  Collection grid and for the Bible Texts, Commentaries and Model Text panels, that `projectId` is
+  the *container* project — the resource actually on screen (`selectedRef.projectId` in
+  `resource-text-panel.component.tsx`) never reaches the definition — so all four resolve to the
+  same kind and the same identity; with the unnamed `main` area they would all read and remember one
+  shared zoom level, and zooming one would silently change the others. PT-4582's own ticket
+  description assumed the opposite (that the definition carried the displayed resource's project);
+  the design doc for this work corrects that assumption against the code before implementing from
+  it. Separately, the Enhanced Resources viewer already carried its own zoom control —
+  `scripturePaneZoom`, a font-size multiplier driven by a Ctrl-chord handler that never fired on
+  Windows or Linux, with its menu items living in the toolbar outside every pane — that the new
+  platform mechanism had to either absorb or retire.
+- **Decision:**
+  - The four resource views each name their own `ContentZoomRoot` area — `text-collection`
+    (`scripture-text-grid.web-view.tsx`), `bible-texts` and `commentaries` (both
+    `resource-text-panel.component.tsx`, selected by `resourceType`), and `model-text`
+    (`model-text-panel.component.tsx`) — so their remembered levels stay apart from each other
+    although kind and identity are identical for all four.
+  - Enhanced Resources marks three areas rather than one: an unnamed area around
+    `EnhancedScripturePane`, `entries` around its tab set, and `footnotes` in the footnotes pane's
+    resizable panel (`enhanced-resource.web-view.tsx`, `footnotes-pane.component.tsx`). Its body is
+    genuinely three independently resizable panes; a single area would remove the user's existing
+    ability to enlarge just the Bible text relative to the other two. Its private `scripturePaneZoom`
+    is deleted outright rather than migrated — state, prop chain, toolbar menu items, their localized
+    strings, and the keyboard-catalog entries for a handler that never worked cross-platform all go —
+    and the platform mechanism covers all three panes from a clean start.
+- **Alternatives:**
+  - Adding per-view values to `ContentZoomKind` (one kind per resource panel) instead of naming
+    areas — rejected: it reads tidier at each call site, but edits a core model file for no
+    behavioral gain over an area id, and a new kind would be needed for every future resource-panel-
+    shaped view.
+  - Carrying Enhanced Resources' stored `scripturePaneZoom` value into the scripture pane's area at
+    startup — rejected: it would require the view to write state the platform now owns and seeds,
+    against the "views do not build their own zoom stacks" rule in `adr-zoom-composition`.
+- **Consequences:** `adr-zoom-composition`'s statement that the Text Collection grid's per-resource
+  zoom "stays" holds unchanged: it nests inside the grid's own `text-collection` area and multiplies
+  with it, and this work only wraps that area — it does not touch the per-resource mechanism. The
+  grid's own wheel/pinch handling (`use-resource-zoom-input.hook.ts`) now reads notches and pinches
+  through `createContentZoomWheelReader` from `platform-bible-utils`, while the platform's injected
+  bootstrap (`web-view-content-zoom.bootstrap-script.ts`) keeps its own separate copy of the same
+  notch/pinch reading for chrome-driven chords; `web-view-content-zoom.wheel-parity.test.ts` pins
+  both copies to identical totals over the same gesture sequences so they cannot silently drift
+  apart. Enhanced Resources has no leftover zoom fallback that could fall out of step with the
+  platform mechanism.
+- **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
+  PT-4583 (Enhanced Resources viewer).
+
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
 - **Date:** 2026-09-03
