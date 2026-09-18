@@ -25,10 +25,11 @@ function wheelEvent({ deltaY, wheelDeltaY, deltaMode = 0 }: Frame): WheelEvent {
 
 /**
  * The sequences both sides must agree on: a single notch each way, a burst of notches, a burst that
- * reverses direction mid-gesture, a slow pinch, a brisk pinch whose frames would clear the size
- * window on their own, a fallback with no `wheelDeltaY`, and a line-mode wheel each way. Every
- * sequence's expected total is non-zero and direction-specific — never an equal-and-opposite pair —
- * so a side that mishandles it cannot land on the right total by cancellation.
+ * reverses direction mid-gesture, a burst of fractional ticks whose remainder carries across a
+ * rounding boundary, a slow pinch, a brisk pinch whose frames would clear the size window on their
+ * own, a fallback with no `wheelDeltaY`, and a line-mode wheel each way. Every sequence's expected
+ * total is non-zero and direction-specific — never an equal-and-opposite pair — so a side that
+ * mishandles it cannot land on the right total by cancellation.
  */
 const SEQUENCES: { name: string; frames: Frame[] }[] = [
   { name: 'one notch in', frames: [{ deltaY: -100, wheelDeltaY: 120 }] },
@@ -42,10 +43,13 @@ const SEQUENCES: { name: string; frames: Frame[] }[] = [
     ],
   },
   {
-    // Pins the sign convention and cross-direction accumulation: travel banked in one direction is
-    // not carried into a notch that reverses it, on either side. Asymmetric (three in, one out) so
-    // the expected total is non-zero and direction-specific rather than an equal-and-opposite pair
-    // that would sum to zero regardless of which side is wrong.
+    // Pins the sign convention and correct signed netting across an asymmetric reversal: three
+    // whole ticks in then one whole tick out must net to +2, not silently drop the reversed notch
+    // or misapply its sign. Asymmetric on purpose, so the expected total is non-zero and
+    // direction-specific rather than an equal-and-opposite pair that would sum to zero regardless
+    // of which side is wrong. Every frame here is exactly one whole tick, so the remainder is 0
+    // entering each one, including the reversal — the sub-tick carry has its own row below ("a
+    // burst of fractional ticks"); this one does not exercise it.
     //
     // Does not pin the bootstrap's reversal flush itself (`requestZoomSteps`'s `reverses` branch,
     // which applies whatever is pending before folding in the opposite-direction notch) as distinct
@@ -60,6 +64,22 @@ const SEQUENCES: { name: string; frames: Frame[] }[] = [
       { deltaY: -100, wheelDeltaY: 120 },
       { deltaY: -100, wheelDeltaY: 120 },
       { deltaY: 100, wheelDeltaY: -120 },
+    ],
+  },
+  {
+    // Pins the sub-tick remainder carrying across events in the same direction. Each frame is
+    // exactly half a tick (`wheelDeltaY: 60` → 60/120), which sits exactly on `wholeTicks`'s
+    // round-half-away-from-zero boundary: the first frame's accumulated -0.5 already rounds away
+    // to a whole step, leaving a +0.5 residue; the second frame's -0.5 cancels that residue back to
+    // 0, taking no step of its own; the third repeats the first. The total (2) depends on that
+    // residue surviving between calls — discard the carry every event and each of the three
+    // independently rounds -0.5 away from zero, giving 3 instead. Same direction throughout, so the
+    // total is never built from cancellation.
+    name: 'a burst of fractional ticks',
+    frames: [
+      { deltaY: -50, wheelDeltaY: 60 },
+      { deltaY: -50, wheelDeltaY: 60 },
+      { deltaY: -50, wheelDeltaY: 60 },
     ],
   },
   {
