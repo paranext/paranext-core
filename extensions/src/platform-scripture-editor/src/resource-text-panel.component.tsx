@@ -691,6 +691,13 @@ export function ResourceTextPanel({
   // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
   // (flattens .editor-container's rounded top corners — see _simple-mode.scss) is applied
   // unconditionally, unlike the Scripture Editor's conditional use of the same class.
+  //
+  // The ContentZoomRoot below is only reached once the panel has a project, is not mid-pick/install,
+  // has a configured readiness, and has not just failed an install. None of the earlier returns for
+  // those states (no project; selecting/installing; readiness not configured; install failed) mark a
+  // zoom area, so while any of them is on screen the platform scales the whole frame at the Settings
+  // default and the pane offers no per-pane zoom control. Acceptable: each of those states is
+  // transient and holds no content worth scaling to a remembered level yet.
   return (
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       <ResourceSelectorDropdown
