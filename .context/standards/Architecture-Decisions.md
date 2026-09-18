@@ -3887,6 +3887,58 @@ step, no automation. Just a record.
 - **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
   architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
 
+## adr-range-scroll-owned-by-editor: The editor, not the requesting panel, owns bringing a Find/Checks/Comments jump target into view
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Find, Checks, and the Comments list jump the Scripture editor to a result via
+  `selectRange`. Before this work, the scroll target was the match's VERSE — `scrollToVerse` — so a
+  match anywhere but the verse's first line could sit below the fold with nothing visibly indicating
+  where it was. Ownership of the follow-up scroll was also split the wrong way: the requesting panel
+  (e.g. Find's `search-result.component.tsx`) tried to do its own preview scroll and explicitly
+  recorded, in a comment, that a deferred catch-up for a HIDDEN editor tab "isn't implementable
+  here" — because a panel has no way to observe another web view's visibility via
+  `useViewVisibility`, which only ever sees the caller's own iframe.
+- **Decision:** The scroll target is the RANGE, not the verse: `computeRangeScrollTop`
+  (`editor-dom.util.ts`) leaves a range already fully inside the viewport untouched, otherwise lands
+  its first line `RANGE_SCROLL_TOP_OFFSET` (80px) below the top edge — capped to a quarter of the
+  viewport's own height, so a short pane (Power mode gives an editor little room) does not land the
+  match past its midpoint — and clamps to `[0, scrollHeight - clientHeight]` so a range at a
+  chapter's start or end still lands fully visible. Ownership of bringing the target into view moves
+  from the requesting panel to the EDITOR itself: `useScrollToRange` (`use-scroll-to-range.hook.ts`)
+  applies the selection immediately (data, so it works even while hidden) and defers only the scroll
+  until the editor's own tab is visible, running it `'instant'`ly to catch up a tab that was hidden
+  when the jump was requested and `'smooth'`ly otherwise. This directly reverses the "isn't
+  implementable here" call: the editor CAN observe its own visibility, so the deferred catch-up the
+  requesting panel could not build is implemented one layer down instead.
+  `consumeRangeScrollClaimFor` suppresses the ordinary verse-start scroll for a reference a range
+  jump owns, so the two scroll mechanisms never fight over the same reference; the two verse scrolls
+  that a jump can race — the reference-scroll effect and the first-load effect — consult it before
+  calling `scrollToVerse`. The blank-chapter scaffold effect's `scrollToVerse` does not: it fires
+  only for an insert that the user's own click in this editor triggered, which no cross-view jump
+  can be concurrent with.
+- **Alternatives:** **Keep the preview scroll in the requesting panel and give it cross-view
+  visibility** (e.g. a new PAPI capability to observe another web view's visibility) — rejected as
+  disproportionate: it would add a general-purpose capability for one caller's benefit, when the
+  editor already has its own visibility answer and is the natural owner of its own scroll geometry.
+  **Scroll to the verse but bias the offset toward the range** — rejected: a range taller than one
+  screen, or a match late in a long verse, still needs the range's own start measured, not an offset
+  guess from the verse marker. **Release `consumeRangeScrollClaimFor`'s claim as soon as the jump finishes**
+  — rejected: the verse scroll it stands down for runs on its own delay (`EDITOR_LOAD_DELAY_TIME`)
+  and can fire after a fast jump has already landed; releasing early would let it re-scroll to the
+  verse start on top of the just-finished range jump.
+- **Consequences:** `selectRange`'s cross-boundary contract changed: callers no longer need (or
+  should attempt) their own follow-up scroll or hidden-tab handling — the editor guarantees the
+  scroll happens once its tab is shown, however long that takes. `editorChapterKey` (stamped by
+  `setEditorUsj`, see `use-editor-pdp-sync.hook.ts`) gates the whole feature, so any future editor
+  code path that legitimately applies new chapter content must also call `setEditorUsj`, or a
+  pending range jump into that chapter never applies its selection: it waits out
+  `SCROLL_MAX_WAIT_MS`, logs a warning, and degrades to the verse-start scroll (or gives up if no
+  verse marker is found) — the imprecise landing this decision exists to prevent. Any future cross-view
+  jump into this editor (a new panel type) should route through `selectRange`/`useScrollToRange`
+  rather than re-deriving its own scroll, now that the editor is the established owner.
+- **Source:** PT-4541.
+
 ## adr-recent-searches-menu-semantics: RecentSearches is a menu, not a listbox
 
 - **Date:** 2026-08-31
