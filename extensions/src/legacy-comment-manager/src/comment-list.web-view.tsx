@@ -551,6 +551,15 @@ global.webViewComponent = function CommentListWebView({
           currentViewRef.current = { ...currentViewRef.current, scopeFilter: resolved.scopeFilter };
           setScopeFilter(resolved.scopeFilter);
         }
+        // A setFilters message deterministically specifies the whole view, exactly like a mount-
+        // time override — mark hydrated so a stored-selection read still pending when this message
+        // arrives (a reuse hit whose view hasn't finished loading yet) cannot later overwrite what
+        // this message just showed. Unconditional (not gated on the changed flags above) because
+        // the message still "applies" a definite view even when it happens to match the pre-
+        // hydration placeholder values. Once already hydrated this is a no-op — `setIsHydrated`
+        // bails out on an unchanged value — so an ordinary post-hydration message behaves exactly
+        // as before.
+        setIsHydrated(true);
       }
     };
 
@@ -558,8 +567,8 @@ global.webViewComponent = function CommentListWebView({
     return () => {
       window.removeEventListener('message', messageListener);
     };
-    // setFilters and setScopeFilter are stable useState setters (the linter treats them as
-    // stable, so both are omitted).
+    // setFilters, setScopeFilter, and setIsHydrated are stable useState setters (the linter treats
+    // them as stable, so all three are omitted).
   }, [trySelectThread, cancelPendingSyncScroll]);
 
   // Process any pending thread selection once data finishes loading

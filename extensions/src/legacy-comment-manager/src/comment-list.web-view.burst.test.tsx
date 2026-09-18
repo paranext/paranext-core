@@ -602,6 +602,61 @@ describe('stored comment filter selection', () => {
     expect(latestPanelProps().scopeFilter).toBe('current-book');
   });
 
+  it('keeps a setFilters message applied when the stored selection was still pending on arrival', async () => {
+    // Left unseeded: the message below genuinely races an in-flight stored-selection read, rather
+    // than one that already resolved before the message arrived (comment-list-web-view-message.util
+    // docs this as reachable -- buffered web view messages replay on load, so a reuse hit's message
+    // can land before its stored-selection read resolves).
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-race');
+
+    // Confirms the component is rendering (so the panel not yet appearing, below, means something)
+    // before the message arrives.
+    await waitFor(() => expect(mocks.commentThreadSelectorLog.length).toBeGreaterThan(0));
+    expect(latestPanelProps()).toBeUndefined();
+
+    act(() => {
+      dispatchSetFilters({ filters: { preset: 'conflict' }, scopeFilter: 'current-verse' });
+    });
+
+    // The message alone is enough to show a fully-determined view -- no need to wait on the
+    // still-pending stored read.
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    expect(latestPanelProps().filters).toEqual({ preset: 'conflict' });
+    expect(latestPanelProps().scopeFilter).toBe('current-verse');
+
+    // The stored selection resolves now, with values that would win if the message hadn't marked
+    // the view hydrated -- this is the actual race the fix targets.
+    act(() => {
+      resolveUserCommentFilters('project-race', {
+        dataVersion: '1.0.0',
+        preset: 'unread',
+        scopeFilter: 'current-book',
+      });
+    });
+
+    // Still the message's values: the late-arriving stored read did not overwrite them.
+    expect(latestPanelProps().filters).toEqual({ preset: 'conflict' });
+    expect(latestPanelProps().scopeFilter).toBe('current-verse');
+
+    // Positive control: a panel-driven change DOES reach the write log, so the absence asserted
+    // below is a real observation, not the log simply never being written to in this test.
+    act(() => {
+      latestPanelProps().onFiltersChange({ preset: 'resolved' });
+    });
+    await waitFor(() =>
+      expect(mocks.userCommentFiltersWriteLog.get('project-race')).toHaveLength(1),
+    );
+
+    // The one write is the panel change above, carrying the message's current-verse scope forward
+    // (not the stored current-book) -- neither the message nor the stored read resolving added an
+    // entry of their own.
+    expect(mocks.userCommentFiltersWriteLog.get('project-race')?.[0]).toEqual({
+      dataVersion: '1.0.0',
+      preset: 'resolved',
+      scopeFilter: 'current-verse',
+    });
+  });
+
   it('applies a mount-time override over the stored selection, without persisting the override', async () => {
     // Deliberately different from the override below, so a passing test can only be explained by
     // the override actually winning, not by coincidence.
