@@ -616,7 +616,13 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         liveRegion.setAttribute('aria-live', 'polite');
         // Visually hidden rather than display:none or visibility:hidden, either of which would take
         // the region out of the accessibility tree along with its announcement.
-        liveRegion.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;' +
+        //
+        // Pinned to the origin because an absolutely positioned element with no offsets sits at its
+        // static position — the end of the body's flow — and still counts toward scrollable overflow
+        // there. In a pane whose content already fills the viewport, that one pixel is enough to give
+        // the document a scrollbar, and a scrollbar that appears and disappears takes its width out
+        // of the viewport each time, shifting everything right-aligned.
+        liveRegion.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;overflow:hidden;' +
           'clip:rect(0,0,0,0);white-space:nowrap';
         document.body.appendChild(liveRegion);
       }

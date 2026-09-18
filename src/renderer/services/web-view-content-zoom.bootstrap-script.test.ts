@@ -1083,6 +1083,20 @@ describe('content-zoom bootstrap script', () => {
     expect(badge?.dataset.area).toBe('footnotes');
   });
 
+  // A pane's content commonly fills its viewport exactly, so a single pixel of overflow is the
+  // difference between no scrollbar and one. A scrollbar that toggles takes its own width out of the
+  // viewport as it goes, moving every right-aligned control in the pane.
+  it("keeps the live region out of the document's scrollable overflow", () => {
+    install('wv-live-offsets', TWO_AREAS);
+    const region = byId('platform-content-zoom-indicator-status');
+
+    expect(region.style.position).toBe('absolute');
+    // Without offsets an absolutely positioned element keeps its static position, at the end of the
+    // body's flow, where it still extends the document.
+    expect(region.style.top).toBe('0px');
+    expect(region.style.left).toBe('0px');
+  });
+
   it('puts the announcement in a live region that is in the accessibility tree, and empty, before any zoom', () => {
     install('wv-live', TWO_AREAS);
     const region = byId('platform-content-zoom-indicator-status');
