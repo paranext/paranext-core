@@ -326,11 +326,6 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         }
 
         /// <summary>
-        /// An uninstalled resource reports an empty string, never an absent key. The front end
-        /// reads an absent key as "the backend said nothing, keep what you have" and an empty
-        /// string as "not installed", so collapsing the two would make a removal undetectable.
-        /// </summary>
-        /// <summary>
         /// An incomplete pass cannot tell "the scan skipped a project it could not read" from
         /// "this resource is not installed", and the TypeScript persists what it is told. Omitting
         /// the uid leaves the cached row alone; an empty string would demote an installed resource
@@ -372,6 +367,11 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             Assert.That(installStatus["97196133a859179b"], Is.EqualTo("PROJ-HBKENG"));
         }
 
+        /// <summary>
+        /// An uninstalled resource reports an empty string, never an absent key. The front end
+        /// reads an absent key as "the backend said nothing, keep what you have" and an empty
+        /// string as "not installed", so collapsing the two would make a removal undetectable.
+        /// </summary>
         [Test]
         public void ProjectInstallStatus_ReportsAnEmptyStringForAnUninstalledResource()
         {

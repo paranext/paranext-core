@@ -1169,7 +1169,8 @@ step, no automation. Just a record.
   same no-network rule, same non-waiting gate, same "an empty map means no answer, keep what you
   have" contract — and the two share one `InstalledProjectIdsByDblId()` pass over the project
   collection, which also feeds the catalog projection. Post-install success is decided by asking
-  disk through the same `GetInstalledProjectId` the status map uses, after an unconditional
+  disk through `InstallableResource.ExistingScrText`, the same link `InstalledProjectIdsByDblId`
+  reads, after an unconditional
   `RefreshScrTexts()`; `Install()`'s `bool` is read only as a shortcut, because `true` is
   definitive.
 - **Alternatives:** Keep inferring from a better heuristic — rejected; every heuristic here is

@@ -443,6 +443,22 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
+    /// The result of one pass over the project collection: what was found, and whether the pass
+    /// saw everything.
+    /// </summary>
+    /// <param name="ProjectIdsByDblId">Local project id per DBL entry uid, for what was found.</param>
+    /// <param name="IsComplete">
+    /// False when a project could not be read at all. The scan cannot name which one — reading the
+    /// project is what failed — so a caller that would otherwise report "not installed" for an
+    /// absent uid has to fall back to saying nothing about it, rather than asserting an answer the
+    /// pass was not in a position to give.
+    /// </param>
+    internal readonly record struct InstalledResourceProjects(
+        Dictionary<string, string> ProjectIdsByDblId,
+        bool IsComplete
+    );
+
+    /// <summary>
     /// The local project id of every DBL resource installed locally, keyed by DBL entry uid and
     /// gathered in a single pass over the project collection.
     /// </summary>
@@ -462,21 +478,6 @@ internal class DblResourcesDataProvider(
     /// reaching here without a uid would be reported as not installed, which is what
     /// ParatextData already returns for anything uninstalled.
     /// </remarks>
-    /// <summary>
-    /// The result of one pass over the project collection: what was found, and whether the pass
-    /// saw everything.
-    /// </summary>
-    /// <remarks>
-    /// <paramref name="IsComplete"/> is false when a project could not be read at all. The scan
-    /// cannot name which one — reading the project is what failed — so a caller that would
-    /// otherwise report "not installed" for an absent uid has to fall back to saying nothing about
-    /// it, rather than asserting an answer the pass was not in a position to give.
-    /// </remarks>
-    internal readonly record struct InstalledResourceProjects(
-        Dictionary<string, string> ProjectIdsByDblId,
-        bool IsComplete
-    );
-
     internal static InstalledResourceProjects InstalledProjectIdsByDblId()
     {
         Dictionary<string, string> installedProjectIds = [];
