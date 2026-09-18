@@ -583,36 +583,6 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
     ],
   },
-  {
-    id: 'enhanced-resources-zoom-in',
-    purpose: 'Zoom the scripture pane in',
-    category: 'Zoom',
-    context: 'Enhanced resources web view',
-    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
-    locations: [
-      'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
-    ],
-  },
-  {
-    id: 'enhanced-resources-zoom-out',
-    purpose: 'Zoom the scripture pane out',
-    category: 'Zoom',
-    context: 'Enhanced resources web view',
-    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
-    locations: [
-      'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
-    ],
-  },
-  {
-    id: 'enhanced-resources-reset-zoom',
-    purpose: 'Reset the scripture pane zoom',
-    category: 'Zoom',
-    context: 'Enhanced resources web view',
-    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
-    locations: [
-      'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
-    ],
-  },
   // Shortcuts defined inside the shared platform-bible-react component library.
   {
     id: 'editor-undo',
