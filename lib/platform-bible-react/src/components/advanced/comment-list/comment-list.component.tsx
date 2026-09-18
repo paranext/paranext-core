@@ -33,6 +33,8 @@ export default function CommentList({
   onSelectedThreadChange,
   onVerseRefClick,
   conflictResolution,
+  drafts,
+  onDraftChange,
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
@@ -171,6 +173,8 @@ export default function CommentList({
           canUserEditOrDeleteCommentCallback,
           onVerseRefClick,
           initialAssignedUser: lastAssignedUser,
+          draft: drafts?.[thread.id],
+          onDraftChange,
         };
         return (
           <div

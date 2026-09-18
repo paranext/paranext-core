@@ -1,3 +1,4 @@
+import { SerializedEditorState } from 'lexical';
 import {
   CommentStatus,
   LanguageStrings,
@@ -24,6 +25,18 @@ export interface ConflictResolutionCallbacks {
    */
   getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
 }
+
+/**
+ * A comment the user has typed but not committed — an unsent reply, or an unsaved edit to an
+ * existing comment. Held by the consumer rather than by the thread component, so it survives the
+ * component unmounting (a filter change does that routinely).
+ */
+export type CommentDraft = {
+  /** Serialized editor contents, or `undefined` when only an assignee has been chosen. */
+  editorState?: SerializedEditorState;
+  /** Pending assignee, or `undefined` when none has been chosen. */
+  assignedUser?: string;
+};
 
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
@@ -172,6 +185,13 @@ export interface CommentListProps {
    * when this is not provided.
    */
   conflictResolution?: ConflictResolutionCallbacks;
+  /** Uncommitted drafts by thread id. A thread with no entry has no draft. */
+  drafts?: Readonly<Record<string, CommentDraft>>;
+  /**
+   * Called when a thread's draft changes. `draft` is `undefined` when the draft becomes empty, so a
+   * consumer can drop the entry rather than keep an empty one that would read as a draft.
+   */
+  onDraftChange?: (threadId: string, draft: CommentDraft | undefined) => void;
 }
 
 /** Props for the CommentThread component */
@@ -276,6 +296,17 @@ export interface CommentThreadProps {
    * and has visible replies, so a resolution card isn't flush against its replies.
    */
   spaceRootContentFromReplies?: boolean;
+  /**
+   * This thread's uncommitted draft — reply-box contents, a pending assignee, or both. When
+   * provided, it is rendered instead of internal state (see {@link CommentListProps.drafts}). Falls
+   * back to internal state when omitted, so callers that don't manage drafts keep working.
+   */
+  draft?: CommentDraft;
+  /**
+   * Called when this thread's draft changes. See {@link CommentListProps.onDraftChange}. Falls back
+   * to purely internal state when omitted.
+   */
+  onDraftChange?: (threadId: string, draft: CommentDraft | undefined) => void;
 }
 
 /**
@@ -318,4 +349,16 @@ export interface CommentItemProps {
   canEditOrDelete?: boolean;
   /** Whether the current user can resolve or re-open this thread. */
   canUserResolveThread?: boolean;
+  /**
+   * Controlled contents of an in-progress edit to this comment. When provided, it is rendered
+   * instead of internal state, and entering/leaving edit mode is derived from whether it is
+   * defined. Falls back to internal state when omitted.
+   */
+  draftEditorState?: SerializedEditorState;
+  /**
+   * Called when the in-progress edit's contents change. `undefined` when the edit is cancelled or
+   * saved, so a consumer can drop a stored draft rather than keep an empty one. Falls back to
+   * purely internal state when omitted.
+   */
+  onDraftEditorStateChange?: (editorState: SerializedEditorState | undefined) => void;
 }

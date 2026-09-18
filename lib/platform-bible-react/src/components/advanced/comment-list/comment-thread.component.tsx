@@ -23,6 +23,7 @@ import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/comman
 import { CommentItem } from './comment-item.component';
 import {
   AddCommentToThreadOptions,
+  CommentDraft,
   CommentThreadProps,
   getCommentThreadElementId,
 } from './comment-list.types';
@@ -97,12 +98,28 @@ export function CommentThread({
   rootContentSlot,
   resolveActionSlot,
   spaceRootContentFromReplies = false,
+  draft,
+  onDraftChange,
 }: CommentThreadProps) {
-  const [pendingCommentEditorState, setPendingCommentEditorState] =
-    useState<SerializedEditorState>(initialValue);
-  const [pendingCommentAssignedUser, setPendingCommentAssignedUser] = useState<
-    string | undefined
-  >();
+  // Sometimes-controlled: a consumer that supplies `draft` owns what is displayed here, so a
+  // thread unmounted by a filter change and remounted comes back showing the same draft instead of
+  // losing it. `internalDraft` is the fallback for callers (Storybook, most existing tests) that
+  // don't manage drafts at all.
+  const [internalDraft, setInternalDraft] = useState<CommentDraft>({});
+  const effectiveDraft = draft ?? internalDraft;
+  const pendingCommentEditorState = effectiveDraft.editorState ?? initialValue;
+  const pendingCommentAssignedUser = effectiveDraft.assignedUser;
+
+  const updateDraft = useCallback(
+    (patch: Partial<CommentDraft>) => {
+      const next: CommentDraft = { ...effectiveDraft, ...patch };
+      setInternalDraft(next);
+      const isEmpty = next.editorState === undefined && next.assignedUser === undefined;
+      onDraftChange?.(threadId, isEmpty ? undefined : next);
+    },
+    [effectiveDraft, onDraftChange, threadId],
+  );
+
   const [lastSubmittedAssignedUser, setLastSubmittedAssignedUser] = useState<string | undefined>();
   const isVerseExpanded = isSelected;
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
@@ -182,7 +199,7 @@ export function CommentThread({
   useEffect(() => {
     if (!isSelected) {
       if (assigneeSelectionStateRef.current !== 'idle') {
-        setPendingCommentAssignedUser(undefined);
+        updateDraft({ assignedUser: undefined });
         setLastSubmittedAssignedUser(undefined);
         assigneeSelectionStateRef.current = 'idle';
       }
@@ -201,17 +218,17 @@ export function CommentThread({
         // would show "Assigning to: Alice" and enable the submit button for a no-op call.
         initialAssignedUser !== assignedUser
       ) {
-        setPendingCommentAssignedUser(initialAssignedUser);
+        updateDraft({ assignedUser: initialAssignedUser });
         assigneeSelectionStateRef.current = 'auto-populated';
       }
     } else if (assigneeSelectionStateRef.current === 'auto-populated') {
       // Permission was granted long enough to pre-populate but has now been revoked (for example,
       // the async check resolved to false, or the thread-specific permission changed). Clear the
       // stale value so the submit handler doesn't send an unauthorized assignment.
-      setPendingCommentAssignedUser(undefined);
+      updateDraft({ assignedUser: undefined });
       assigneeSelectionStateRef.current = 'pending';
     }
-  }, [isSelected, initialAssignedUser, canAssign, assignedUser]);
+  }, [isSelected, initialAssignedUser, canAssign, assignedUser, updateDraft]);
 
   // Prefer the caller's pre-computed active comments (ConflictThread already derives them) over
   // re-filtering, so a conflict thread doesn't run the same non-deleted filter twice per render.
@@ -261,8 +278,8 @@ export function CommentThread({
 
   const clearEditor = useCallback(() => {
     clearEditorRef.current?.();
-    setPendingCommentEditorState(initialValue);
-  }, []);
+    updateDraft({ editorState: undefined });
+  }, [updateDraft]);
 
   const toggleRead = useCallback(() => {
     const newIsRead = !isRead;
@@ -586,7 +603,9 @@ export function CommentThread({
           {!isSelected && hasEditorContent(pendingCommentEditorState) && (
             <Editor
               editorSerializedState={pendingCommentEditorState}
-              onSerializedChange={(value) => setPendingCommentEditorState(value)}
+              onSerializedChange={(value) =>
+                updateDraft({ editorState: hasEditorContent(value) ? value : undefined })
+              }
               placeholder={localizedStrings['%comment_replyOrAssign%']}
             />
           )}
@@ -673,7 +692,9 @@ export function CommentThread({
                   >
                     <Editor
                       editorSerializedState={pendingCommentEditorState}
-                      onSerializedChange={(value) => setPendingCommentEditorState(value)}
+                      onSerializedChange={(value) =>
+                        updateDraft({ editorState: hasEditorContent(value) ? value : undefined })
+                      }
                       placeholder={
                         threadStatus === 'Resolved'
                           ? localizedStrings['%comment_reopenResolved%']
@@ -738,11 +759,9 @@ export function CommentThread({
                                     <CommandItem
                                       key={user || 'unassigned'}
                                       onSelect={() => {
-                                        if (user !== assignedUser) {
-                                          setPendingCommentAssignedUser(user);
-                                        } else {
-                                          setPendingCommentAssignedUser(undefined);
-                                        }
+                                        updateDraft({
+                                          assignedUser: user !== assignedUser ? user : undefined,
+                                        });
                                         // Manual selection supersedes the auto-populated value —
                                         // don't treat it as stale if `canAssign` later flips, and
                                         // don't overwrite it if `initialAssignedUser` later changes.
