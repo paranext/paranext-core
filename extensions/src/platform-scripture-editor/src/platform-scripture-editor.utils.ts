@@ -19,6 +19,7 @@ import {
 } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
+import type { SettingTypes } from 'papi-shared-types';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
 // only `papi`, so this package must never become a runtime import here (see the note at the top of
 // this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
@@ -1185,10 +1186,10 @@ export async function finalizeProjectSwitch(
     // The rebuilt Simple layout stamps `projectId` onto the tabs of the static layout, but the Text
     // Collection is merged in afterwards from the default-layout supplement, which carries none — so
     // this is the one Column 3 panel that arrives unbound from a mode switch and would otherwise
-    // fall back to the scroll group's (outgoing) source project. Ordered before `applyForProject`
-    // for the same reason the editor-column switch is: the re-point settles the panel's content
-    // before the shared layout picks which tab to front. It swallows its own failures, so no
-    // try/catch here.
+    // seed itself from `ActiveEditorProjectId` and keep whatever it first saw. Ordered before
+    // `applyForProject` for the same reason the editor-column switch is: the re-point settles its
+    // content before the shared layout picks which tab to front. It swallows its own failures, so
+    // no try/catch here.
     await updateRelatedTextCollectionPanel(papi, projectId);
     await applyForProject?.(projectId);
   }
@@ -1209,6 +1210,29 @@ export async function finalizeProjectSwitch(
 // #region Text Connection Panels
 
 /**
+ * Whether `projectId` is a published resource rather than a translation project.
+ *
+ * `platform.isPublished` is the project-kind classification. `platform.isEditable` is not a
+ * substitute: it is a project-wide switch on editing the Scripture text, so a translation project
+ * can have it off.
+ *
+ * A failed read counts as "not published", the setting's own default: following a project is
+ * recoverable on the next switch, while staying put would leave a panel silently on the outgoing
+ * project.
+ */
+async function isProjectPublished(papi: typeof PapiBackend, projectId: string): Promise<boolean> {
+  try {
+    const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+    return (await pdp.getSetting('platform.isPublished')) === true;
+  } catch (e) {
+    papi.logger.warn(
+      `Could not read platform.isPublished for ${projectId} (${getErrorMessage(e)}); treating it as a translation project`,
+    );
+    return false;
+  }
+}
+
+/**
  * Opens or updates the model text and the various views to be displayed in tabs in "column 3" (
  * reference texts, commentaries, comments, Text Collection, etc.) for a project.
  *
@@ -1216,17 +1240,19 @@ export async function finalizeProjectSwitch(
  * re-pointed. Find is NOT here: it needs the id of the editor web view the switch produces, so it
  * is re-pointed separately by {@link updateRelatedFindPanel} once that editor exists.
  *
+ * The Text Collection is the one panel that declines to follow a published resource (see
+ * `isProjectPublished`): a resource has no collection of its own.
+ *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
- * @param isProjectEditable Whether `projectId` names an editable translation project rather than a
- *   read-only resource opened in the editor column. Only the Scripture Text Grid honors it; the
- *   other Column 3 panels follow the editor either way.
  */
 export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
-  isProjectEditable: boolean,
 ): Promise<void> {
+  // Started first so the settings round trip overlaps the four panel commands below instead of
+  // adding to the switch's latency; it never rejects.
+  const isPublishedPromise = isProjectPublished(papi, projectId);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
   } catch (e) {
@@ -1255,10 +1281,8 @@ export async function openOrUpdateRelatedPanels(
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
   }
-  // A text collection is built from an editable project's settings, so a read-only resource opened
-  // in the editor column must not re-point it. Not wrapped like the four above: this one swallows
-  // its own failures (see its TSDoc).
-  if (isProjectEditable) await updateRelatedTextCollectionPanel(papi, projectId);
+  // Not wrapped like the four above: this one swallows its own failures (see its TSDoc).
+  if (!(await isPublishedPromise)) await updateRelatedTextCollectionPanel(papi, projectId);
 }
 
 /**
@@ -1316,10 +1340,10 @@ export function resolveGridProviderProjectId(
  * _requires_ a remount: it reads admin layout settings through `useBufferedLayoutSetting`, which
  * documents itself as built for consumers that switch projects via `reloadWebView` and NOT safe for
  * ones that change `projectId` in place (it would keep serving the previous project's held value,
- * and it `logger.warn`s if it detects that). Without any re-point the panel would fall back to
- * inferring its project from the scroll group's source project — the project that last SET the
- * group's reference, which a project switch does not change — and would keep rendering the outgoing
- * project's texts until the user next navigated.
+ * and it `logger.warn`s if it detects that). Without any re-point the panel would keep rendering
+ * the outgoing project's texts indefinitely: an unbound grid seeds itself once from the window's
+ * `ActiveEditorProjectId` and keeps that project from then on (see
+ * `resolveTextCollectionProjectId`), so only a re-point moves it.
  *
  * Three deliberate constraints:
  *
@@ -1419,18 +1443,33 @@ export async function updateRelatedTextCollectionPanel(
  * always already there; anywhere else it is a panel the user opened deliberately, and a project
  * switch is not a request to open it.
  *
+ * Deliberately has no editability or project-kind condition: Find follows the editor onto a
+ * read-only project or a published resource because searching is a read (see
+ * `adr-find-follows-editor-to-read-only`), and in Simple mode Find offers no Replace UI at all.
+ *
+ * Hidden case: in Simple mode Find's tab is usually inactive when this runs, which is fine — the
+ * re-point reloads the iframe and Find's render is data-driven, so it is correct whenever the tab
+ * is next shown. The reload does abandon any search already running and restart it (a known gap,
+ * tracked as PT-4418).
+ *
+ * Kept out of `main.ts` so this rule is covered by tests: nothing imports `main.ts`.
+ *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
  *
  * @param papi The instance of papi to send the command
+ * @param interfaceMode The current `platform.interfaceMode`. Only Simple mode re-points Find.
  * @param projectId The id of the project Find should search from now on
  * @param editorWebViewId Id of the editor web view the switch produced
  */
 export async function updateRelatedFindPanel(
   papi: typeof PapiBackend,
+  interfaceMode: SettingTypes['platform.interfaceMode'],
   projectId: string,
   editorWebViewId: string | undefined,
 ): Promise<void> {
+  if (interfaceMode !== 'simple') return;
+
   try {
     await papi.commands.sendCommand(
       'platformScripture.updateFindProject',
