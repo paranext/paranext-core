@@ -1,7 +1,11 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
+import {
+  DEFAULT_ZOOM_FACTOR,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+} from '@shared/models/content-zoom.model';
 import { adjustZoomFactor } from '@shared/utils/content-zoom.util';
 import { getContentZoomStyleElement } from './web-view-content-zoom.bootstrap-script';
 import { install } from './web-view-content-zoom.bootstrap-script.test-utils';
@@ -54,6 +58,10 @@ function modifierKey(type: 'keydown' | 'keyup', physicalKey: 'Control' | 'Meta')
  * Settles past the mutation observer's refresh, which the bootstrap runs directly off the
  * observer's own microtask callback (no `requestAnimationFrame` involved) — two frames is a
  * generous upper bound that also has margin for a slow CI worker.
+ *
+ * This helper and {@link oneFrame} await jsdom's real `requestAnimationFrame`, so a test that puts
+ * this file on full fake timers (which fake `requestAnimationFrame` too) would hang on them; the
+ * indicator-timer tests below fake only what they name and never await a frame.
  */
 async function nextFrame(): Promise<void> {
   await new Promise((resolve) => {
@@ -1222,6 +1230,67 @@ describe('content-zoom bootstrap script', () => {
 
     await oneFrame();
     expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(2);
+  });
+
+  it('hands over the notches pending in a frame before a reset chord in it acts', async () => {
+    // A stand-in for the parent: a reset writes the default outright, so whichever of the two
+    // writes lands last decides the level the pane is left at.
+    const writes: string[] = [];
+    let factor = 1.5;
+    const adjustContentZoomById = vi.fn((_webViewId: string, deltaSteps: number) => {
+      writes.push('adjust');
+      factor = adjustZoomFactor(factor, deltaSteps);
+    });
+    const resetContentZoomById = vi.fn(() => {
+      writes.push('reset');
+      factor = DEFAULT_ZOOM_FACTOR;
+    });
+    install('wv-chord-reset-order', TWO_AREAS, { adjustContentZoomById, resetContentZoomById });
+    await nextFrame();
+    byId('verse').focus();
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: -100, ctrlKey: true }, byId('verse'));
+    expect(key({ key: '0', ctrlKey: true }).defaultPrevented).toBe(true);
+    // The chord asked for the default and arrived last, so the banked notches go first and the
+    // pane is left at the default instead of two steps above it.
+    expect(writes).toEqual(['adjust', 'reset']);
+    expect(factor).toBe(DEFAULT_ZOOM_FACTOR);
+
+    await oneFrame();
+    expect(writes).toEqual(['adjust', 'reset']);
+    expect(factor).toBe(DEFAULT_ZOOM_FACTOR);
+  });
+
+  it('lands a chord after a burst at a bound where arrival order would land it', async () => {
+    // At a bound the parent's clamp absorbs the travel the area cannot take, so a step in and a
+    // step out do not commute: acting on the chord before the banked notches would hand the chord
+    // the level the notches have not yet moved away from.
+    const start = MAX_ZOOM_FACTOR;
+    let factor = start;
+    const adjustContentZoomById = vi.fn((_webViewId: string, deltaSteps: number) => {
+      factor = adjustZoomFactor(factor, deltaSteps);
+    });
+    install('wv-chord-bound-order', TWO_AREAS, { adjustContentZoomById });
+    await nextFrame();
+    const oneAtATime = [-1, -1, -1, 1].reduce(
+      (level, deltaSteps) => adjustZoomFactor(level, deltaSteps),
+      start,
+    );
+    // The chord's step in is only worth a step because the notches out moved the area off the
+    // bound first; taken at the bound it would be absorbed entirely.
+    expect(oneAtATime).toBe(adjustZoomFactor(start, -2));
+
+    byId('verse').focus();
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    wheel({ deltaY: 100, ctrlKey: true }, byId('verse'));
+    expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(adjustContentZoomById.mock.calls.map((call) => call[1])).toEqual([-3, 1]);
+    expect(factor).toBe(oneAtATime);
+
+    await oneFrame();
+    expect(adjustContentZoomById).toHaveBeenCalledTimes(2);
+    expect(factor).toBe(oneAtATime);
   });
 
   it('applies the steps pending for one area before it accumulates for another', async () => {
