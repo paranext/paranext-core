@@ -296,12 +296,13 @@ export function FootnoteList({
                   (onFootnoteSelected || onFootnoteEditRequested) && 'tw:hover:bg-muted/50',
                   'tw:w-full tw:rounded-sm tw:border-0 tw:bg-transparent tw:shadow-none',
                   'tw:focus:outline-hidden tw:focus-visible:outline-hidden',
-                  /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
-                     that looks great in Storybook. However, the left edge of the ring is clipped in
-                     P.B app. These are similar, but not identical to, the customizations made in
-                     our shadcn table component.
-                  */
-                  'tw:focus-visible:ring-offset-0.5 tw:focus-visible:relative tw:focus-visible:z-10 tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
+                  // The focus ring is drawn INSIDE the row. The list is its own scroll container,
+                  // and a scroll container clips whatever a child paints past its edges: a ring
+                  // drawn outside the row loses its sides to the list's left and right edges, and
+                  // its top or bottom whenever the row is scrolled flush with one. `ring-inset`
+                  // also holds under a host's own `:focus-visible` ring rule, which sets the
+                  // ring's width and color but leaves `--tw-ring-inset` to this class.
+                  'tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring',
                   'tw:grid tw:grid-flow-col tw:grid-cols-subgrid',
                   'tw:col-span-2',
                   layout === 'vertical' && 'tw:row-span-2',

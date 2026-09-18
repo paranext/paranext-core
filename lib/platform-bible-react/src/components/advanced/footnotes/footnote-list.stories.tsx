@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { FootnoteList } from '@/components/advanced/footnotes/footnote-list.component';
 import { getFormatCallerFunction } from 'platform-bible-utils';
@@ -109,6 +110,38 @@ export const Basic: Story = {
     listId: 'storybook-Basic',
     showMarkers: false,
     layout: 'horizontal',
+  },
+};
+
+/**
+ * A row reached from the keyboard shows its focus ring INSIDE the row. The list scrolls, and a
+ * scrolling element clips anything its rows paint past its edges, so a ring drawn outside the row
+ * would lose its sides.
+ */
+export const KeyboardFocusRing: Story = {
+  render: Template,
+  args: {
+    footnotes: usjFootnotes,
+    listId: 'storybook-KeyboardFocusRing',
+    showMarkers: false,
+    layout: 'horizontal',
+  },
+  play: async ({ canvasElement }) => {
+    const [firstRow] = within(canvasElement).getAllByRole('option');
+    await userEvent.tab();
+    expect(document.activeElement).toBe(firstRow);
+    expect(firstRow.matches(':focus-visible')).toBe(true);
+
+    // Tailwind composes a ring from several `box-shadow` layers, most of them zero-size
+    // placeholders. Split on the commas BETWEEN layers, not the ones inside a color function.
+    const paintedLayers = getComputedStyle(firstRow)
+      .boxShadow.split(/,(?![^(]*\))/)
+      .map((layer) => layer.trim())
+      .filter((layer) => !/0px 0px 0px 0px( inset)?$/.test(layer));
+    // A ring is painted at all ...
+    expect(paintedLayers.length).toBeGreaterThan(0);
+    // ... and every painted layer is inset, so none of it lies outside the row box.
+    expect(paintedLayers.filter((layer) => !/\binset\b/.test(layer))).toEqual([]);
   },
 };
 

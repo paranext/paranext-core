@@ -556,8 +556,8 @@ export function FootnotesLayout({
             {/* Floats over the list's top trailing corner (leading corner in RTL, which
                 `inset-inline-end` follows on its own) rather than taking a row of its own, so the
                 pane spends all of its height on notes. Held clear of the scrollbar so that stays
-                grabbable, carrying the pane's own background so the note text it covers does not
-                read through it, and above the z-10 a focused row raises itself to. */}
+                grabbable, and carrying the pane's own background so the note text it covers does
+                not read through it. */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
