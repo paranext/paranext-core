@@ -381,14 +381,15 @@ export function OverlayCommandPalettePresentational({
   // caps the reserved-height budget of the inner list, a different box from the one this zoom cap
   // bounds.
   const anchoredZoomStyle = contentZoomOverlayStyle(contentScale, 'popover');
-  // A caller's explicit cap must still keep the palette inside the window once zoomed — a fixed
-  // 600px cap at 2x content scale would otherwise paint 1200 device pixels wide with nothing to stop
-  // it. Combined only while a zoom cap actually applies; at scale 1 this is exactly the caller's own
-  // value, unchanged.
+  // A zoomed palette must still stay inside the window — a caller's own cap, or this component's
+  // default when the caller gave none, would otherwise paint past it at scale. Gated on the zoom cap
+  // alone (not on whether the caller passed a maxWidth): combined with the RESOLVED width so the
+  // default is covered too, not just an explicit caller value. At scale 1 (`anchoredZoomStyle.maxWidth`
+  // undefined) this is undefined and the resolved width applies unmodified.
   const cappedMaxWidth =
-    maxWidth !== undefined && anchoredZoomStyle.maxWidth !== undefined
-      ? `min(${maxWidth}px, ${anchoredZoomStyle.maxWidth})`
-      : maxWidth;
+    anchoredZoomStyle.maxWidth === undefined
+      ? undefined
+      : `min(${resolvedMaxWidth}px, ${anchoredZoomStyle.maxWidth})`;
 
   // Fuzzy matching runs INSIDE cmdk, which owns filtering and highlight for the palettes where
   // that is safe: an ordinary focused palette, whose commits go through cmdk's own selection
@@ -696,16 +697,31 @@ export function OverlayCommandPalettePresentational({
         sideOffset={4}
         style={{
           zIndex: Z_INDEX_OVERLAY,
-          // A pixel width inside a zoomed element scales with the zoom, which is what it should do —
-          // left unconditional, unlike the maxWidth cap below.
-          width: resolvedMaxWidth,
-          maxWidth: resolvedMaxWidth,
-          ...anchoredZoomStyle,
-          ...(cappedMaxWidth === undefined ? {} : { maxWidth: cappedMaxWidth }),
+          // Radix requires Popover.Arrow to be a descendant of PopoverContent, but positions it by
+          // writing a raw pixel offset onto its own wrapper — a value the browser re-scales if that
+          // wrapper sits inside a zoomed element, doubling the effect. So the zoom and the sizing
+          // live on the inner div below instead, leaving the arrow as PopoverContent's other, unzoomed
+          // child. The shared PopoverContent still carries a fixed `tw:w-72` width class; overriding
+          // it to `auto` here lets PopoverContent's own box size to that inner div rather than
+          // reasserting the fixed width over it — omitting this line stops the palette from growing
+          // with the pane's zoom at all.
+          width: 'auto',
         }}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
+        <div
+          data-overlay-command-palette-zoom
+          style={{
+            // A pixel width inside a zoomed element scales with the zoom, which is what it should
+            // do — left unconditional, unlike the maxWidth cap below.
+            width: resolvedMaxWidth,
+            ...anchoredZoomStyle,
+            maxWidth: cappedMaxWidth ?? resolvedMaxWidth,
+          }}
+        >
+          {paletteContent}
+        </div>
         <PopoverPrimitive.Arrow
           style={{
             fill: 'var(--popover)',
@@ -713,7 +729,6 @@ export function OverlayCommandPalettePresentational({
             strokeWidth: 1,
           }}
         />
-        {paletteContent}
       </PopoverContent>
     </Popover>
   );
