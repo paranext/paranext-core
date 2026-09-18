@@ -307,12 +307,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 // documentation is consulted only for functions actually registered, so a
                 // published PDP publishes no PT9 docs.
                 ["getPt9InterlinearManifest"] = ExperimentalMethodDocumentation.Create(
-                    "Get a map of project-relative PT9 interlinear file path to the SHA-256 hex of "
-                        + "the file's current bytes. Empty when the project has no interlinear data.",
+                    "Probe the project's PT9 interlinear files without transferring their content. "
+                        + "Returns { maxReadBytes, files }, where maxReadBytes is the ceiling "
+                        + "getPt9InterlinearData measures a read against and files maps each "
+                        + "project-relative path to { hash, sizeBytes, glossLanguage, bookId }. The paths are what getPt9InterlinearData's selector names, so "
+                        + "this is how a caller learns what it can read one file at a time, and "
+                        + "sizeBytes is the on-disk size that method measures a read against - "
+                        + "compare it to that method's documented ceiling to group reads and to "
+                        + "find any file too large to read at all. glossLanguage and bookId come "
+                        + "from a book file's root element and are absent for the lexicon, the "
+                        + "stored word analyses, and any file whose root cannot be read. Empty when "
+                        + "the project has no interlinear data. Never refused for size, however "
+                        + "large the project's files are.",
                     [],
                     ExperimentalMethodDocumentation.ResultOf(
                         "object",
-                        "Map of file path to SHA-256 hex"
+                        "{ maxReadBytes, files: { [path]: { hash, sizeBytes, glossLanguage, bookId } } }"
                     )
                 ),
                 ["setPt9InterlinearManifest"] = ExperimentalMethodDocumentation.Create(
@@ -327,11 +337,31 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 ["getPt9InterlinearData"] = ExperimentalMethodDocumentation.Create(
                     "Get the project's PT9 interlinear data parsed from its interlinear files: "
                         + "setups, per-book cluster data, the lexicon, and stored word analyses. "
-                        + "Empty lists when the project has no interlinear data.",
-                    [],
+                        + "Empty lists when the project has no interlinear data. A read is refused "
+                        + "when the total on-disk size of the files it selects is strictly greater "
+                        + $"than {Pt9InterlinearReader.MaxPt9InterlinearDataBytes} bytes, measured "
+                        + "on the source files rather than on the serialized response, so a "
+                        + "selection summing to exactly that is served. A caller that cannot assume "
+                        + "a small project reads getPt9InterlinearManifest first and groups its "
+                        + "reads by adding up the sizes it reports; a file whose own size exceeds "
+                        + "the ceiling cannot be read by any selection.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "selector",
+                            "Optional. { paths: string[] } limits the read to those interlinear "
+                                + "files, named by their getPt9InterlinearManifest keys; omit it "
+                                + "to read every interlinear file the project has. A path the "
+                                + "project does not have fails the read. Setups and "
+                                + "hasAssociatedLexicalProject come from project settings, so "
+                                + "every response carries them whatever the selection.",
+                            "object",
+                            false
+                        ),
+                    ],
                     ExperimentalMethodDocumentation.ResultOf(
                         "object",
-                        "The parsed interlinear data"
+                        "The parsed interlinear data for the selected files, or for the whole "
+                            + "project when no selector is given"
                     )
                 ),
                 ["setPt9InterlinearData"] = ExperimentalMethodDocumentation.Create(
@@ -2698,10 +2728,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         + "projectInterface.";
 
     /// <summary>
-    /// Request timeout for the PT9 interlinear getters. A cold read of a
-    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>-sized project from a slow disk or network share
-    /// can exceed the client's default request timeout, while a genuinely hung filesystem should
-    /// still fail rather than wait forever.
+    /// Request timeout for the PT9 interlinear getters. A cold read from a slow disk or network
+    /// share can exceed the client's default request timeout, while a genuinely hung filesystem
+    /// should still fail rather than wait forever.
+    ///
+    /// A data read is bounded by <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>, so
+    /// this budget is generous for it. A manifest read is not: it hashes every interlinear file
+    /// the project has, so its cost scales with the whole corpus and the disk it sits on rather
+    /// than with any cap. A pathologically large corpus on a slow share can therefore exhaust this
+    /// timeout, which is the manifest's effective bound.
     /// </summary>
     private const int Pt9InterlinearNetworkTimeoutMs = 120_000;
 
@@ -2724,20 +2759,31 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Gets a map of project-relative path to the SHA-256 hex of that file's current bytes: an
-    /// opaque change-detection token per file, never content, covering the interlinear book
-    /// files, the lexicon, and the stored word analyses. Only interlinear file content is
+    /// Describes every interlinear file the project has - the book files, the lexicon, and the
+    /// stored word analyses - by project-relative path: an opaque change-detection hash, the file's
+    /// size, and, for a book file, the gloss language and book id its root element declares. Never
+    /// content.
+    ///
+    /// Sizes are on-disk bytes, which a caller sums against
+    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/> to group its reads and to find
+    /// any file too large to read on its own, naming it by book before transferring anything.
+    ///
+    /// Only interlinear file content is
     /// change-detected: the setups (from the setups file or rebuilt from project settings) and
     /// <c>HasAssociatedLexicalProject</c> derive partly from project settings and can change the
     /// payload without any hash changing. Empty when the project has no interlinear data. Throws if the project directory or
     /// a file found by the scan cannot be read, so an unreadable project never poses as one with
-    /// no data and a caller never receives a partial manifest. Shares
-    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/> with the data read: files
-    /// over the cap throw the same too-large error instead of being hashed, so a probe never
-    /// reads more than a servable corpus.
+    /// no data and a caller never receives a partial manifest. A book file whose root element
+    /// cannot be read still appears, with no gloss language or book id, since a file a caller
+    /// cannot identify is one it most needs listed. Not bounded by
+    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>: one hash per file is a fixed
+    /// 64 characters however large the file is, and a project over that cap is served in
+    /// selections rather than refused, so a manifest is always worth producing. The manifest is
+    /// what a caller selects with, so a project too large to read at once must still be able to
+    /// list what it holds.
     /// </summary>
     [NetworkTimeout(Pt9InterlinearNetworkTimeoutMs)]
-    public Dictionary<string, string> GetPt9InterlinearManifest(object? param = null)
+    public Pt9InterlinearProjectManifest GetPt9InterlinearManifest(object? param = null)
     {
         return Pt9InterlinearReader.GetManifest(GetPt9InterlinearScrText());
     }
@@ -2763,11 +2809,33 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// serializes smaller than its indented on-disk XML, keeping real responses clear of the
     /// transport's message size limit; content crafted of near-empty elements can still inflate
     /// past it, an accepted residual risk.
+    ///
+    /// A project whose files exceed the cap in total is read a selection at a time:
+    /// <paramref name="selector"/> takes manifest paths and limits the read to those files, so the
+    /// cap bounds one response rather than what a project may hold. Passing no selector reads
+    /// every interlinear file the project has.
+    ///
+    /// A read is refused when the files it selects total more than
+    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>; a selection summing to
+    /// exactly that is served. The quantity compared is the source files' size on disk, which
+    /// <see cref="GetPt9InterlinearManifest"/> reports per file, not the serialized response size,
+    /// which cannot be known at this layer. A file whose own size exceeds the ceiling cannot be
+    /// read by any selection, since a selection cannot be finer than a file.
+    ///
+    /// Selecting a path
+    /// the project does not have fails the read with
+    /// <see cref="Pt9InterlinearReader.Pt9InterlinearUnknownPathMessagePrefix"/> and
+    /// <see cref="PlatformErrorCodes.InvalidArgument"/> rather than omitting it, so a caller
+    /// importing book by book never records a missing file as a book with no data. Setups and
+    /// <c>HasAssociatedLexicalProject</c> come from project settings and are served on every read
+    /// whatever the selection.
     /// </summary>
     [NetworkTimeout(Pt9InterlinearNetworkTimeoutMs)]
-    public Pt9InterlinearProjectData GetPt9InterlinearData(object? param = null)
+    public Pt9InterlinearProjectData GetPt9InterlinearData(
+        Pt9InterlinearDataSelector? selector = null
+    )
     {
-        return Pt9InterlinearReader.GetData(GetPt9InterlinearScrText());
+        return Pt9InterlinearReader.GetData(GetPt9InterlinearScrText(), selector?.Paths);
     }
 
     /// <summary>

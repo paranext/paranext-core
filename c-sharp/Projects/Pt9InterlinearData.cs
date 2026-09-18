@@ -26,6 +26,52 @@ public sealed record Pt9InterlinearProjectData(
     [property: JsonPropertyName("hasAssociatedLexicalProject")] bool HasAssociatedLexicalProject
 );
 
+/// The project's interlinear files, and the ceiling a read of them is measured against.
+///
+/// <c>MaxReadBytes</c> is <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>, in the
+/// same units as <see cref="Pt9InterlinearFileInfo.SizeBytes"/>.
+///
+/// <c>Files</c> is keyed by project-relative path - the strings a data read's selector names - and
+/// is empty when the project has no interlinear data.
+/// </summary>
+public sealed record Pt9InterlinearProjectManifest(
+    [property: JsonPropertyName("maxReadBytes")] long MaxReadBytes,
+    [property: JsonPropertyName("files")] Dictionary<string, Pt9InterlinearFileInfo> Files
+);
+
+/// <summary>
+/// One interlinear file as the manifest describes it, keyed there by project-relative path.
+/// <c>Hash</c> is the change-detection token. <c>SizeBytes</c> is the size on disk, which a caller
+/// sums against <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/> to group its reads
+/// and to spot files no selection can retrieve. <c>GlossLanguage</c> and <c>BookId</c> come from a
+/// book file's root element; both are null for the lexicon and the stored word analyses, which
+/// carry no book identity, and for a file whose root element cannot be read, which the probe
+/// reports rather than failing.
+/// </summary>
+public sealed record Pt9InterlinearFileInfo(
+    [property: JsonPropertyName("hash")] string Hash,
+    [property: JsonPropertyName("sizeBytes")] long SizeBytes,
+    [property: JsonPropertyName("glossLanguage")] string? GlossLanguage,
+    [property: JsonPropertyName("bookId")] string? BookId
+);
+
+/// <summary>
+/// Selects which of a project's interlinear files one read takes on, keeping it inside
+/// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>. <c>Paths</c> holds manifest keys;
+/// null or absent reads every interlinear file the project has, and empty is refused. A path the
+/// project does not have fails the whole read, so a caller never mistakes a missing file for a book
+/// that holds no data. <c>Setups</c> and <c>HasAssociatedLexicalProject</c> come from project
+/// settings, so every read carries them whatever the selection.
+///
+/// A member this record does not declare fails deserialization rather than being skipped. Without
+/// that, a mis-cased or misspelled key binds <c>Paths</c> to null, which reads the whole project:
+/// a caller reading file by file would assemble one copy per read and never be told.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record Pt9InterlinearDataSelector(
+    [property: JsonPropertyName("paths")] List<string>? Paths = null
+);
+
 /// <summary>
 /// One lexeme reference inside a PT9 interlinear cluster: the lexicon lexeme it selects and,
 /// when the user chose a specific sense, the id of that sense. A corrupt cluster element can

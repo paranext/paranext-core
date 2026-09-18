@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Xml;
 using Paratext.Data;
 using Paratext.Data.Interlinear;
@@ -13,9 +14,9 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// Reads a Paratext project's PT9 interlinear data for the
 /// <c>platformScripture.Pt9Interlinear</c> projectInterface: scans the interlinear files the
-/// way PT9 classifies them, serves an opaque change-detection manifest, and parses the files
-/// into typed records with PT9's own read semantics. Read-only by construction: nothing here
-/// writes to the project.
+/// way PT9 classifies them, describes them for a caller deciding what to read, and parses the
+/// files it is asked for into typed records with PT9's own read semantics. Read-only by
+/// construction: nothing here writes to the project.
 /// </summary>
 internal static class Pt9InterlinearReader
 {
@@ -29,17 +30,23 @@ internal static class Pt9InterlinearReader
 
     /// <summary>
     /// Ceiling on the total on-disk size of the interlinear files one <see cref="GetData"/>
-    /// response may carry; <see cref="GetManifest"/> shares it, so neither read ever processes
-    /// more than a servable corpus. A single WebSocket message over the transport's 100 MB limit
+    /// response may carry; <see cref="GetManifest"/> is not bounded by it. A project exceeding the
+    /// ceiling is read a selection at a time (see <see cref="Pt9InterlinearDataSelector"/>) rather
+    /// than refused. A single WebSocket message over the transport's 100 MB limit
     /// tears down the whole PAPI connection to this process rather than failing the one request -
     /// an unaddressed platform-level issue - so this guard fails the request instead. The cap
     /// bounds source bytes because the serialized size cannot be confirmed here: the transport
-    /// serializes after the provider returns. Measured on realistic dense interlinear data, the
-    /// wire JSON is smaller than the indented on-disk XML (about 0.75x), so 50 MB keeps real
-    /// responses comfortably under that cliff; a file crafted of near-empty elements can inflate
-    /// severalfold as JSON, an accepted residual risk since no tool writes such content.
+    /// serializes after the provider returns.
+    ///
+    /// Measured across a real 38-file project, the response serializes to 0.72x the on-disk XML in
+    /// aggregate and never above 0.76x for any file of consequence, because the indentation and
+    /// close tags PT9 writes outweigh the attribute keys the parsed shape emits. 80 MB therefore lands a full response near 58 MB, and would stay
+    /// 20 MB under the transport's limit even if the serialized form were as large as the source.
+    /// Content crafted of near-empty elements can exceed that - a bare cluster element is a few
+    /// bytes of XML and a whole JSON object - which no source-byte ceiling can bound; it remains
+    /// an accepted residual risk.
     /// </summary>
-    internal const long MaxPt9InterlinearDataBytes = 50L * 1024L * 1024L;
+    internal const long MaxPt9InterlinearDataBytes = 80L * 1024L * 1024L;
 
     /// <summary>
     /// Message prefix of the exception thrown when a project's interlinear files exceed
@@ -53,8 +60,23 @@ internal static class Pt9InterlinearReader
         "PT9 interlinear data is too large";
 
     /// <summary>
+    /// Message prefix of the exception thrown when a selector names a path the project does not
+    /// have. Carries <see cref="PlatformErrorCodes.InvalidArgument"/>; the prefix is the contract
+    /// for consumers that see only the message.
+    /// </summary>
+    public const string Pt9InterlinearUnknownPathMessagePrefix = "Unknown PT9 interlinear paths";
+
+    /// <summary>
+    /// Message of the exception thrown when a selector names no paths. Carries
+    /// <see cref="PlatformErrorCodes.InvalidArgument"/>.
+    /// </summary>
+    public const string Pt9InterlinearEmptySelectionMessage =
+        "Pt9InterlinearDataSelector.Paths must not be empty; omit the selector to read the whole project";
+
+    /// <summary>
     /// Accumulates the source bytes a read has taken on and fails it at the file that crosses
-    /// <see cref="MaxPt9InterlinearDataBytes"/>, before that file is hashed or parsed.
+    /// <see cref="MaxPt9InterlinearDataBytes"/>, before that file is parsed. Only
+    /// <see cref="GetData"/> reads under it; a manifest read is not capped.
     /// </summary>
     private sealed class Pt9SizeCap
     {
@@ -66,7 +88,7 @@ internal static class Pt9InterlinearReader
             if (_totalBytes > MaxPt9InterlinearDataBytes)
             {
                 var tooLarge = new InvalidDataException(
-                    $"{Pt9InterlinearDataTooLargeMessagePrefix}: the project's interlinear files "
+                    $"{Pt9InterlinearDataTooLargeMessagePrefix}: the files this read takes on "
                         + $"exceed the {MaxPt9InterlinearDataBytes} bytes one response can carry"
                 );
                 tooLarge.Data[PlatformErrorCodes.PlatformErrorCodeDataKey] =
@@ -77,36 +99,137 @@ internal static class Pt9InterlinearReader
     }
 
     /// <summary>
-    /// Builds the manifest: project-relative path to the lowercase SHA-256 hex of that file's
-    /// current bytes, covering the interlinear book files, the lexicon, and the stored word
-    /// analyses. Only interlinear file content is change-detected: the payload's settings-derived
-    /// parts (setups and the associated-lexical-project flag) can change without any hash
-    /// changing.
+    /// Builds the manifest: every interlinear book file, the lexicon, and the stored word analyses,
+    /// keyed by project-relative path, each with its change-detection hash, its size, and - for a
+    /// book file - the gloss language and book id its root element declares. Sizes are what a
+    /// caller compares against <see cref="MaxPt9InterlinearDataBytes"/> to divide its reads and to
+    /// find the files it cannot read at all, and the ceiling they are measured against travels
+    /// with them. Not bounded by that ceiling itself: one hash per file is a fixed length whatever
+    /// the file holds.
+    ///
+    /// Only interlinear file content is change-detected: the payload's settings-derived parts
+    /// (setups and the associated-lexical-project flag) can change without any hash changing.
     /// </summary>
-    public static Dictionary<string, string> GetManifest(ScrText scrText) =>
+    public static Pt9InterlinearProjectManifest GetManifest(ScrText scrText) =>
         ReadTyped(scrText, () => GetManifestCore(scrText));
 
     /// <summary>The manifest read itself; runs under <see cref="ReadTyped{T}"/>.</summary>
-    private static Dictionary<string, string> GetManifestCore(ScrText scrText)
+    private static Pt9InterlinearProjectManifest GetManifestCore(ScrText scrText)
     {
         EnsurePt9ProjectDirectoryReadable(scrText);
         var fileManager = scrText.FileManager;
-        var manifest = new Dictionary<string, string>();
-        var sizeCap = new Pt9SizeCap();
+        var files = new Dictionary<string, Pt9InterlinearFileInfo>();
         foreach (var relativePath in FindPt9InterlinearFiles(scrText))
-            manifest[relativePath] = ComputePt9FileSha256Hex(fileManager, relativePath, sizeCap);
-        return manifest;
+            files[relativePath] = DescribePt9File(fileManager, relativePath);
+        return new Pt9InterlinearProjectManifest(MaxPt9InterlinearDataBytes, files);
+    }
+
+    /// <summary>
+    /// Describes one interlinear file from a single open handle: its size, the book identity its
+    /// root element declares, and the hash of its bytes.
+    ///
+    /// One handle, so all three describe the same version of the file. Paratext replaces these
+    /// files by two renames, so a save landing between separate opens could pair one version's
+    /// size with another's hash - an entry for a file that never existed, which a caller cannot
+    /// detect because the hash it compares against is the new one.
+    /// </summary>
+    private static Pt9InterlinearFileInfo DescribePt9File(
+        ProjectFileManager fileManager,
+        string relativePath
+    )
+    {
+        using var reader = OpenPt9File(fileManager, relativePath);
+        try
+        {
+            var stream = reader.BaseStream;
+            var sizeBytes = stream.Length;
+
+            // Only book files carry a gloss language and book id; the lexicon and the stored word
+            // analyses are project-wide. Skipping them is also what keeps the probe from reading
+            // a whole lexicon looking for a root element it does not have.
+            var lowerPath = relativePath.ToLowerInvariant();
+            var identity =
+                lowerPath == Pt9LexiconFileNameLower || lowerPath == Pt9WordAnalysesFileNameLower
+                    ? (null, null)
+                    : ReadPt9BookIdentity(stream);
+
+            // Reading the root element consumed part of the stream, so hashing restarts from the
+            // beginning; the handle is opened seekable for exactly this.
+            stream.Seek(0, SeekOrigin.Begin);
+            var hash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+
+            return new Pt9InterlinearFileInfo(hash, sizeBytes, identity.Item1, identity.Item2);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            throw Pt9FileUnreadable(relativePath, e);
+        }
+    }
+
+    /// <summary>
+    /// Reads a book file's gloss language and book id from the root element of an already-open
+    /// file, stopping at that element rather than reading on, so the cost does not grow with the
+    /// file and a file too large to serve can still be named. Leaves the stream open and does not
+    /// rewind it; the caller owns both.
+    ///
+    /// The attributes are the same ones the parsed payload's <c>GlossLanguage</c> and <c>BookId</c>
+    /// come from, so a caller reading the probe and a caller reading the data name the same book
+    /// the same way. Anything that goes wrong reading them - a malformed file, an unexpected root,
+    /// an absent attribute - answers null rather than throwing: the probe's contract is the hash,
+    /// and a file whose identity cannot be established is exactly one a caller most wants listed
+    /// rather than one that should fail the whole probe.
+    /// </summary>
+    private static (string?, string?) ReadPt9BookIdentity(Stream stream)
+    {
+        try
+        {
+            // Both readers leave the stream open; the caller owns it and hashes the same handle.
+            // UTF-8 with byte-order-mark detection matches how the payload parse decodes these
+            // files, so the probe and the payload name a book from identically decoded bytes.
+            using var textReader = new StreamReader(
+                stream,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true,
+                bufferSize: 1024,
+                leaveOpen: true
+            );
+            using var xmlReader = XmlReader.Create(
+                textReader,
+                new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, CloseInput = false }
+            );
+            // The root element only: the payload parse binds the root, so matching an
+            // InterlinearData at any other depth would name a different book. MoveToContent stops
+            // at the first content node, so a file with no such root costs nothing to reject.
+            if (
+                xmlReader.MoveToContent() != XmlNodeType.Element
+                || xmlReader.Name != "InterlinearData"
+            )
+                return (null, null);
+            return (xmlReader.GetAttribute("GlossLanguage"), xmlReader.GetAttribute("BookId"));
+        }
+        catch (Exception e) when (e is XmlException or InvalidOperationException)
+        {
+            // Only a malformed document answers "no identity". An I/O failure is left to surface
+            // as the typed unreadable-file error rather than posing as a book with no book id.
+            return (null, null);
+        }
     }
 
     /// <summary>
     /// Parses the project's PT9 interlinear data into its served shape: setups, per-book
-    /// cluster data, the lexicon, and stored word analyses.
+    /// cluster data, the lexicon, and stored word analyses. <paramref name="requestedPaths"/>
+    /// limits the read to those manifest paths; null reads every interlinear file the project has.
     /// </summary>
-    public static Pt9InterlinearProjectData GetData(ScrText scrText) =>
-        ReadTyped(scrText, () => GetDataCore(scrText));
+    public static Pt9InterlinearProjectData GetData(
+        ScrText scrText,
+        IReadOnlyList<string>? requestedPaths = null
+    ) => ReadTyped(scrText, () => GetDataCore(scrText, requestedPaths));
 
     /// <summary>The data read itself; runs under <see cref="ReadTyped{T}"/>.</summary>
-    private static Pt9InterlinearProjectData GetDataCore(ScrText scrText)
+    private static Pt9InterlinearProjectData GetDataCore(
+        ScrText scrText,
+        IReadOnlyList<string>? requestedPaths
+    )
     {
         EnsurePt9ProjectDirectoryReadable(scrText);
         var fileManager = scrText.FileManager;
@@ -116,6 +239,8 @@ internal static class Pt9InterlinearReader
         // parsed payload rather than payload plus corpus bytes. The cap trips before the file
         // that crosses it is parsed, so no response over the cap can ever be produced.
         var filePaths = FindPt9InterlinearFiles(scrText);
+        if (requestedPaths is not null)
+            filePaths = SelectRequestedPt9Files(filePaths, requestedPaths);
         var sizeCap = new Pt9SizeCap();
 
         List<InterlinearSetup> fileSetups = [];
@@ -123,7 +248,9 @@ internal static class Pt9InterlinearReader
         {
             EnsurePt9PathStaysInProject(scrText.Directory, InterlinearSetups.fileName);
             using var reader = OpenPt9File(fileManager, InterlinearSetups.fileName);
-            sizeCap.Add(reader.BaseStream.Length);
+            // Not charged to the size cap: this file is served whatever the selection and is
+            // never a manifest key, so charging it would refuse a selection a caller had sized
+            // correctly from the manifest.
             fileSetups = DeserializePt9Xml<InterlinearSetupList>(
                 reader.BaseStream,
                 InterlinearSetups.fileName
@@ -266,6 +393,53 @@ internal static class Pt9InterlinearReader
     }
 
     /// <summary>
+    /// Narrows a scan's paths to the ones a selector asked for, keeping the scan's own order so a
+    /// selected read serves its books in the same order an unselected one does. Matching is
+    /// ordinal against the paths the scan found, which are the manifest's keys, so a caller
+    /// selects with exactly the strings the manifest gave it.
+    ///
+    /// A requested path the project does not have fails the whole read, and so does a selection
+    /// naming no paths at all: either one would otherwise serve a payload a caller importing file
+    /// by file records as a book that holds nothing. An empty selection is reachable by accident,
+    /// from filtering the manifest by size in a project whose every file is too large. The message
+    /// names the missing paths, which are project-relative and carry no filesystem location.
+    /// </summary>
+    private static List<string> SelectRequestedPt9Files(
+        List<string> scannedPaths,
+        IReadOnlyList<string> requestedPaths
+    )
+    {
+        if (requestedPaths.Count == 0)
+        {
+            var emptySelection = new InvalidDataException($"{Pt9InterlinearEmptySelectionMessage}");
+            emptySelection.Data[PlatformErrorCodes.PlatformErrorCodeDataKey] =
+                PlatformErrorCodes.InvalidArgument;
+            throw emptySelection;
+        }
+
+        var scanned = new HashSet<string>(scannedPaths, StringComparer.Ordinal);
+        var missing = requestedPaths.Where(path => !scanned.Contains(path)).Distinct().ToList();
+        if (missing.Count > 0)
+        {
+            // Only the first few are named. The caller supplies this list, so a stale manifest
+            // after a Send/Receive that removed a directory can make it arbitrarily long, and the
+            // message is a consumer-facing contract that reaches notifications and logs.
+            const int maxNamed = 10;
+            var named = string.Join(", ", missing.Take(maxNamed));
+            var suffix = missing.Count > maxNamed ? $" (and {missing.Count - maxNamed} more)" : "";
+            var unknownPaths = new InvalidDataException(
+                $"{Pt9InterlinearUnknownPathMessagePrefix}: {named}{suffix}"
+            );
+            unknownPaths.Data[PlatformErrorCodes.PlatformErrorCodeDataKey] =
+                PlatformErrorCodes.InvalidArgument;
+            throw unknownPaths;
+        }
+
+        var requested = new HashSet<string>(requestedPaths, StringComparer.Ordinal);
+        return scannedPaths.Where(requested.Contains).ToList();
+    }
+
+    /// <summary>
     /// Enumerates the project-relative paths of the files the PT9 interlinear data payload
     /// converts, with path separators normalized to forward slashes (a backslash inside a path is
     /// a file-name character, never a separator), through the project's file manager: the lexicon,
@@ -346,30 +520,6 @@ internal static class Pt9InterlinearReader
         try
         {
             return fileManager.OpenFileForByteRead(relativePath);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            throw Pt9FileUnreadable(relativePath, e);
-        }
-    }
-
-    /// <summary>
-    /// Hashes one PT9 interlinear file to lowercase SHA-256 hex, streaming through the project's
-    /// file manager. The file's length feeds the shared size cap before any hashing, so a probe
-    /// stops at the crossing file. Any read failure surfaces as one exception type naming the
-    /// project-relative path, never an absolute one.
-    /// </summary>
-    private static string ComputePt9FileSha256Hex(
-        ProjectFileManager fileManager,
-        string relativePath,
-        Pt9SizeCap sizeCap
-    )
-    {
-        using var reader = OpenPt9File(fileManager, relativePath);
-        try
-        {
-            sizeCap.Add(reader.BaseStream.Length);
-            return Convert.ToHexString(SHA256.HashData(reader.BaseStream)).ToLowerInvariant();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
