@@ -2448,7 +2448,7 @@ describe('web-view-content-zoom.service', () => {
       expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
     });
 
-    it('records a type as marking none when a settled pane of it has reported no area', async () => {
+    it('does not write a "marks none" record when a pane of it has reported no area', async () => {
       __setContentZoomDepsForTesting({});
       await initializeContentZoomService();
       forgetContentZoom('editor-1');
@@ -2462,7 +2462,40 @@ describe('web-view-content-zoom.service', () => {
         vi.useRealTimers();
       }
       await __flushContentZoomWritesForTesting();
-      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': false });
+      // Nothing reads a stored `false` any differently from an absent key (both resolve the next
+      // pane's expectation to "marks none"), so the write is pure risk: a sibling pane of the same
+      // type that already recorded `true` while this grace was pending would be clobbered by it.
+      expect(settings[TYPES]).toEqual({});
+    });
+
+    it('does not let an expiring grace clobber a type another pane already recorded as marking areas', async () => {
+      __setContentZoomDepsForTesting({});
+      await initializeContentZoomService();
+      forgetContentZoom('editor-1');
+      definitions.set('editor-2', {
+        id: 'editor-2',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj-A',
+        state: {},
+      });
+      // Pane B opens first, while the type is still unrecorded, and resolves its own expectation to
+      // `false`. Pane A opens too, so its own report below is evidence the service accepts.
+      await getInitialContentZoomForWebView(requireDefinition('editor-2'));
+      await getInitialContentZoomForWebView(requireDefinition('editor-1'));
+      vi.useFakeTimers();
+      try {
+        setContentZoomAreas('editor-2', []); // B starts its grace holding that resolved `false`
+        // Pane A of the same type reports an area and records the type `true` before B's grace
+        // expires.
+        setContentZoomAreas('editor-1', ['main']);
+        await __flushContentZoomWritesForTesting();
+        expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
+        vi.advanceTimersByTime(1000); // B's grace expires; B's own expectation is still `false`
+      } finally {
+        vi.useRealTimers();
+      }
+      await __flushContentZoomWritesForTesting();
+      expect(settings[TYPES]).toEqual({ 'platformScriptureEditor.react': true });
     });
 
     it('corrects a record that says a marking type marks none', async () => {
