@@ -235,5 +235,33 @@ describe('overlay-menu-converter', () => {
         ],
       });
     });
+
+    it("carries a menu item's shortcut through, and adds none to an item without one", () => {
+      const menu: Localized<SingleColumnMenu> = {
+        groups: { 'ext.group1': { order: 1 } },
+        items: [
+          {
+            command: 'ext.find',
+            group: 'ext.group1',
+            label: 'Find',
+            order: 1,
+            localizeNotes: '',
+            shortcut: 'Ctrl+F',
+          },
+          {
+            command: 'ext.other',
+            group: 'ext.group1',
+            label: 'Other',
+            order: 2,
+            localizeNotes: '',
+          },
+        ],
+      };
+
+      const [find, other] = convertContributionToContextMenuItems(menu);
+
+      expect(find).toEqual({ type: 'item', id: 'ext.find', label: 'Find', shortcut: 'Ctrl+F' });
+      expect(other).not.toHaveProperty('shortcut');
+    });
   });
 });

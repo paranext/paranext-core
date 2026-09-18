@@ -694,3 +694,112 @@ describe('Platform tab menu order reservation', () => {
     );
   });
 });
+
+describe('shortcut hints', () => {
+  const findItem = {
+    label: '%find%',
+    localizeNotes: 'test',
+    group: 'test.group',
+    order: 1,
+    command: 'platformScripture.openFind',
+  } as const;
+  const unjoinedItem = {
+    ...findItem,
+    label: '%other%',
+    order: 2,
+    command: 'test.noShortcut',
+  } as const;
+
+  const HINT_MENU_DATA: PlatformMenus = {
+    mainMenu: {
+      columns: { 'test.column': { label: '%test_column%', order: 1 } },
+      groups: { 'test.group': { column: 'test.column', order: 1 } },
+      items: [findItem],
+    },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    defaultWebViewTabMenu: { groups: { 'test.group': { order: 1 } }, items: [findItem] },
+    webViewMenus: {
+      [EXTENSION_NAME]: {
+        includeDefaults: false,
+        topMenu: {
+          columns: { 'test.column': { label: '%test_column%', order: 1 } },
+          groups: { 'test.group': { column: 'test.column', order: 1 } },
+          items: [findItem, unjoinedItem],
+        },
+        contextMenu: { groups: { 'test.group': { order: 1 } }, items: [findItem] },
+        tabMenu: undefined,
+      },
+    },
+  };
+
+  const findCommandItem = (items: object[] | undefined, command: string): object | undefined =>
+    items?.find((item) => 'command' in item && item.command === command);
+
+  async function createEngine(platform: typeof process.platform) {
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      HINT_MENU_DATA,
+      platform,
+    );
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+    return engine;
+  }
+
+  test.each([
+    ['darwin', '⌃F'],
+    ['win32', 'Ctrl+F'],
+  ] as const)(
+    "on %s, a top-menu item shows its command's shortcut as %s",
+    async (platform, expected) => {
+      const { topMenu } = await (await createEngine(platform)).getWebViewMenu(EXTENSION_NAME);
+      expect(findCommandItem(topMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+        'shortcut',
+        expected,
+      );
+    },
+  );
+
+  test('an item whose command has no catalogued shortcut has no hint', async () => {
+    const { topMenu } = await (await createEngine('win32')).getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(topMenu?.items, 'test.noShortcut')).toBeDefined();
+    expect(findCommandItem(topMenu?.items, 'test.noShortcut')).not.toHaveProperty('shortcut');
+  });
+
+  test('context menu and main menu items get hints', async () => {
+    const engine = await createEngine('win32');
+    const { contextMenu } = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(contextMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
+    );
+    const mainMenu = await engine.getMainMenu();
+    expect(findCommandItem(mainMenu.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
+    );
+  });
+
+  test('the unlocalized main menu has no hints', async () => {
+    const engine = await createEngine('darwin');
+    const unlocalized = await engine.getUnlocalizedMainMenu();
+    expect(findCommandItem(unlocalized.items, 'platformScripture.openFind')).toBeDefined();
+    expect(findCommandItem(unlocalized.items, 'platformScripture.openFind')).not.toHaveProperty(
+      'shortcut',
+    );
+  });
+
+  test('tab menu items get hints for recognized and unrecognized web views', async () => {
+    const engine = await createEngine('win32');
+    const { tabMenu: unrecognizedTabMenu } = await engine.getWebViewMenu('nothing.recognized');
+    expect(
+      findCommandItem(unrecognizedTabMenu?.items, 'platformScripture.openFind'),
+    ).toHaveProperty('shortcut', 'Ctrl+F');
+    const { tabMenu: recognizedTabMenu } = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(findCommandItem(recognizedTabMenu?.items, 'platformScripture.openFind')).toHaveProperty(
+      'shortcut',
+      'Ctrl+F',
+    );
+  });
+});

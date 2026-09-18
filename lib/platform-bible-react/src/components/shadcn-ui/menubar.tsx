@@ -268,7 +268,10 @@ function MenubarShortcut({ className, ...props }: React.ComponentProps<'span'>) 
     <span
       data-slot="menubar-shortcut"
       className={cn(
-        'tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground tw:group-focus/menubar-item:text-accent-foreground',
+        // CUSTOM: Added tw:[unicode-bidi:plaintext] so the hint takes its direction from its first
+        // letter, keeping macOS symbols in order (⌃F, not F⌃) in RTL menus. Unlike dir="ltr", it
+        // keeps the span's direction, so tw:ms-auto still puts the hint at the inline end
+        'tw:[unicode-bidi:plaintext] tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground tw:group-focus/menubar-item:text-accent-foreground',
         className,
       )}
       {...props}

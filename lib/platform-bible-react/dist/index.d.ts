@@ -1948,6 +1948,15 @@ type TabDropdownMenuProps = {
 	icon?: React$1.ReactNode;
 	/** Additional css class(es) to help with unique styling of the tab dropdown menu */
 	className?: string;
+	/**
+	 * Whether to head each section with its column label. Only takes effect when two or more sections
+	 * have items, since a lone section has nothing to be told apart from.
+	 *
+	 * Defaults to `false`, so a menu built by hand keeps its column labels hidden. Platform.Bible's
+	 * tab chrome — `TabToolbar` and `TabFloatingMenu` — turns it on for the contributed menu data it
+	 * renders.
+	 */
+	showSectionHeadings?: boolean;
 	/** Style variant for the app menubar component. */
 	variant?: "default" | "muted";
 	buttonVariant?: "default" | "ghost" | "outline" | "secondary";
@@ -1955,13 +1964,14 @@ type TabDropdownMenuProps = {
 	id?: string;
 };
 /**
- * Dropdown menu designed to be used with Platform.Bible menu data. Column headers are ignored.
- * Column data is separated by a horizontal divider, so groups are not distinguishable. Tooltips are
- * displayed on hovering over menu items, if a tooltip is defined for them.
+ * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
+ * the next by a line; columns without items are left out. Groups within a column are not
+ * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
+ * row. With `showSectionHeadings`, each section is headed by its column label.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, showSectionHeadings, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 type TabToolbarCommonProps = {
 	/**
 	 * The handler to use for toolbar item commands related to the project menu. Here is a basic
