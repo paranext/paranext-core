@@ -84,7 +84,7 @@ async function expectPopoverToBeClosed() {
   if (popoverContent) {
     await waitFor(() => expect(popoverContent).toHaveAttribute('data-state', 'closed'));
   } else {
-    expect(popoverContent).not.toBeInTheDocument();
+    await expect(popoverContent).not.toBeInTheDocument();
   }
 }
 
@@ -121,12 +121,21 @@ const MAX_DIGIT_CENTER_OFFSET_PX = 1;
  * neighboring chapter. Uses a `Range` because the digit is a bare text node with no element of its
  * own to measure.
  *
+ * Walks the cell's whole subtree rather than its direct children, so wrapping the digit — a shadcn
+ * baseline that wraps `CommandItem`'s children, or a `dir`/numeral-shaping span for a non-Latin
+ * locale — keeps being measured instead of throwing "no digit" at a layout change.
+ *
  * Only meaningful in a real browser: jsdom performs no layout and reports every rect as zero.
  */
 function measureDigitAgainstCell(cell: HTMLElement) {
-  const digitNode = Array.from(cell.childNodes).find(
-    (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
-  );
+  const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+  let digitNode: Node | undefined;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.textContent?.trim()) {
+      digitNode = node;
+      break;
+    }
+  }
   if (!digitNode) throw new Error(`No digit text node in cell "${cell.textContent}"`);
 
   const range = document.createRange();
@@ -148,16 +157,16 @@ function measureDigitAgainstCell(cell: HTMLElement) {
  * The chapter and verse grids are both rendered by `NumberedItemGrid`, so measuring the chapter
  * grid pins the layout both share; verse cells are not separately measured.
  */
-function expectDigitAlignedWithCell(cell: HTMLElement, label: string) {
+async function expectDigitAlignedWithCell(cell: HTMLElement, label: string) {
   const { digit, box, horizontalOffset } = measureDigitAgainstCell(cell);
   const offBy = `${horizontalOffset.toFixed(1)}px`;
 
-  expect(
+  await expect(
     Math.abs(horizontalOffset),
     `chapter ${label}: digit center is ${offBy} from the center of its highlight box`,
   ).toBeLessThanOrEqual(MAX_DIGIT_CENTER_OFFSET_PX);
 
-  expect(
+  await expect(
     digit.left >= box.left && digit.right <= box.right,
     `chapter ${label}: digit falls outside its own highlight box (off center by ${offBy})`,
   ).toBe(true);
@@ -840,13 +849,14 @@ export const ChapterHighlightAlignment: Story = {
     // presents: the digit sits outside a box that only becomes visible under the pointer.
     await step('Every sampled chapter digit is centered in its own highlight box', async () => {
       const dropdownContent = getDropdown();
-      // Measured one at a time: these are synchronous geometry reads, so running them concurrently
-      // buys nothing and would report whichever cell rejected first rather than the first
-      // misaligned one.
-      SAMPLED_CHAPTERS.forEach((chapter) => {
+      for (let i = 0; i < SAMPLED_CHAPTERS.length; i++) {
+        const chapter = SAMPLED_CHAPTERS[i];
         const cell = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter });
-        expectDigitAlignedWithCell(cell, chapter);
-      });
+        // Sequential on purpose: awaiting these together would report whichever cell settled first
+        // rather than the first misaligned one, and each message names the chapter it measured.
+        // eslint-disable-next-line no-await-in-loop
+        await expectDigitAlignedWithCell(cell, chapter);
+      }
     });
 
     // Keyboard focus is styled differently from pointer hover (a ring rather than a muted
@@ -857,7 +867,7 @@ export const ChapterHighlightAlignment: Story = {
       await expectChapterHighlighted('16');
 
       const focusedCell = within(getDropdown()).getByRole(CHAPTER_BUTTON_ROLE, { name: '16' });
-      expectDigitAlignedWithCell(focusedCell, '16');
+      await expectDigitAlignedWithCell(focusedCell, '16');
     });
   },
   parameters: {
@@ -936,7 +946,7 @@ export const ComprehensiveInteractionTest: Story = {
     await step('Test first Escape key press in chapter view', async () => {
       await userEvent.keyboard('{Escape}');
       const dropdownContent = getDropdown();
-      expect(dropdownContent).toBeVisible();
+      await expect(dropdownContent).toBeVisible();
     });
 
     await step('Test second Escape key press to close component', async () => {

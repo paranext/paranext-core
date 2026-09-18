@@ -76,7 +76,7 @@ describe('BookChapterControl imperative handle', () => {
     });
 
     await waitFor(() => {
-      const input = screen.getByRole('combobox', { name: 'book-chapter-trigger' });
+      const input = getTrigger();
       expect(input).toHaveAttribute('aria-expanded', 'true');
     });
   });
@@ -98,7 +98,7 @@ describe('BookChapterControl imperative handle', () => {
     // Matched by its `option` role rather than its text: the trigger renders the book name in a
     // span of its own (the shrink ladder splits the reference into book + chapter:verse), so a bare
     // text query matches both the trigger and the list entry.
-    await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
+    await user.click(getTrigger());
     await user.click(await screen.findByRole('option', { name: /Genesis/ }));
     // CommandInput only renders in books view — its absence proves we're in chapters view
     await waitFor(() => {
@@ -108,10 +108,7 @@ describe('BookChapterControl imperative handle', () => {
     // Close while chapters view is still active, leaving the stale view state behind
     await user.keyboard('{Escape}');
     await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-        'aria-expanded',
-        'false',
-      );
+      expect(getTrigger()).toHaveAttribute('aria-expanded', 'false');
     });
 
     // Imperative open() must reset to books view so the search input exists and gets focus
@@ -134,7 +131,7 @@ describe('BookChapterControl imperative handle', () => {
         disabled
       />,
     );
-    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toBeDisabled();
+    expect(getTrigger()).toBeDisabled();
   });
 
   test('open() does not open the dropdown while the control is disabled', () => {
@@ -152,10 +149,7 @@ describe('BookChapterControl imperative handle', () => {
       handleRef.current?.open();
     });
 
-    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    expect(getTrigger()).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('an open dropdown closes when the control becomes disabled', async () => {
@@ -172,10 +166,7 @@ describe('BookChapterControl imperative handle', () => {
       handleRef.current?.open();
     });
     await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      );
+      expect(getTrigger()).toHaveAttribute('aria-expanded', 'true');
     });
 
     // The control's target disappears mid-interaction (e.g. the toolbar's last editor closes)
@@ -189,10 +180,7 @@ describe('BookChapterControl imperative handle', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-        'aria-expanded',
-        'false',
-      );
+      expect(getTrigger()).toHaveAttribute('aria-expanded', 'false');
     });
   });
 
@@ -236,7 +224,7 @@ describe('BookChapterControl imperative handle', () => {
 describe('BookChapterControl — Space on the empty search input', () => {
   /** Open the picker via its trigger and hand back the books-view search input. */
   async function openBooksView(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
-    await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
+    await user.click(getTrigger());
     let input: HTMLElement | undefined;
     await waitFor(() => {
       input = document.querySelector<HTMLElement>('[cmdk-input]') ?? undefined;
@@ -1020,10 +1008,7 @@ describe('BookChapterControl grid keyboard navigation', () => {
     await user.keyboard('{ArrowLeft}');
 
     // Name the trigger: once the popover is open the search input carries the combobox role too.
-    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    expect(getTrigger()).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('option', { name: /JUD/ })).toHaveAttribute('data-selected', 'true');
   });
 });
@@ -1430,6 +1415,11 @@ describe('BookChapterControl yields keys it does not own', () => {
 
   test('Escape closes the recent-searches list before the picker behind it', async () => {
     const { user } = await openPickerWithRecentSearches();
+    // A half-typed reference is the state that makes the ordering matter: it is what the user loses
+    // if one Escape takes both layers down.
+    await user.keyboard('mat 12');
+    await waitFor(() => expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument());
+
     await user.click(screen.getByRole('button', { name: /recent/i }));
     await screen.findAllByRole('menuitem');
 
@@ -1441,8 +1431,13 @@ describe('BookChapterControl yields keys it does not own', () => {
     // inside a plain `Popover` would take both layers down on one Escape with nothing else failing.
     await user.keyboard('{Escape}');
 
-    await waitFor(() => expect(screen.queryByRole('menuitem')).not.toBeInTheDocument());
+    // `queryAllByRole` rather than `queryByRole`: the list holds more than one row, so the singular
+    // query would throw "found multiple elements" on a regression instead of reporting it as open.
+    await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
     expect(getSearchInput()).toBeInTheDocument();
+    // The picker kept the work in progress, not just its own visibility.
+    expect(getSearchInput()).toHaveValue('mat 12');
+    expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument();
 
     // And the picker still answers the next Escape, so trapping the first one costs nothing.
     await user.keyboard('{Escape}');
@@ -1656,10 +1651,7 @@ describe('BookChapterControl keeps Tab inside the picker', () => {
     // Radix dismisses it — losing the user's place with no way back.
     await user.tab();
 
-    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    expect(getTrigger()).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument();
   });
 
@@ -1679,10 +1671,7 @@ describe('BookChapterControl keeps Tab inside the picker', () => {
 
     await user.tab();
 
-    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    expect(getTrigger()).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('option', { name: '30' })).toBeInTheDocument();
   });
 
@@ -1706,10 +1695,7 @@ describe('BookChapterControl keeps Tab inside the picker', () => {
       await user.tab();
     }
 
-    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    expect(getTrigger()).toHaveAttribute('aria-expanded', 'true');
     // Staying open is not enough on its own — focus has to still be somewhere the next keystroke
     // reaches, or the picker is open with the keyboard pointed at the page behind it.
     const commandSurface = document.querySelector('[cmdk-root]');
