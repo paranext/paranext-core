@@ -24,8 +24,11 @@ function wheelEvent({ deltaY, wheelDeltaY, deltaMode = 0 }: Frame): WheelEvent {
 }
 
 /**
- * The sequences both sides must agree on: a single notch each way, a burst of notches, a slow
- * pinch, and a brisk pinch whose frames would clear the size window on their own.
+ * The sequences both sides must agree on: a single notch each way, a burst of notches, a burst that
+ * reverses direction mid-gesture, a slow pinch, a brisk pinch whose frames would clear the size
+ * window on their own, a fallback with no `wheelDeltaY`, and a line-mode wheel each way. Every
+ * sequence's expected total is non-zero and direction-specific — never an equal-and-opposite pair —
+ * so a side that mishandles it cannot land on the right total by cancellation.
  */
 const SEQUENCES: { name: string; frames: Frame[] }[] = [
   { name: 'one notch in', frames: [{ deltaY: -100, wheelDeltaY: 120 }] },
@@ -36,6 +39,19 @@ const SEQUENCES: { name: string; frames: Frame[] }[] = [
       { deltaY: -100, wheelDeltaY: 120 },
       { deltaY: -100, wheelDeltaY: 120 },
       { deltaY: -100, wheelDeltaY: 120 },
+    ],
+  },
+  {
+    // Exercises the bootstrap's reversal flush (`requestZoomSteps`'s `reverses` branch, which
+    // applies whatever is pending before a notch in the opposite direction joins the total).
+    // Asymmetric (three in, one out) on purpose: an equal-and-opposite pair would sum to zero on
+    // both sides whether or not either side flushes correctly before the reversal.
+    name: 'a burst that reverses direction',
+    frames: [
+      { deltaY: -100, wheelDeltaY: 120 },
+      { deltaY: -100, wheelDeltaY: 120 },
+      { deltaY: -100, wheelDeltaY: 120 },
+      { deltaY: 100, wheelDeltaY: -120 },
     ],
   },
   {
@@ -53,17 +69,23 @@ const SEQUENCES: { name: string; frames: Frame[] }[] = [
   // A pixel delta with no `wheelDeltaY` at all, which is the shape the Text Collection grid's own
   // existing tests produce, so the fallback path has to agree too.
   { name: 'a notch with no wheelDeltaY', frames: [{ deltaY: -100 }] },
+  // Line- and page-mode wheels take a branch of their own on both sides — one step in the event's
+  // direction, leaving the tick accumulator alone. Each direction is its own sequence: an in-then-
+  // out pair sums to zero on both sides by cancellation regardless of whether either side
+  // implements the branch at all, so it could never catch a regression here.
+  { name: 'a line-mode wheel in', frames: [{ deltaY: -3, deltaMode: 1 }] },
+  { name: 'a line-mode wheel out', frames: [{ deltaY: 3, deltaMode: 1 }] },
 ];
 
-/**
- * Line- and page-mode wheels take a branch of their own on both sides — one step in the event's
- * direction, leaving the tick accumulator alone — so they need a sequence whose events carry a
- * `deltaMode`, which the shared builder above always sets to 0.
- */
-const LINE_MODE_FRAMES = [
-  { deltaY: -3, deltaMode: 1 },
-  { deltaY: 3, deltaMode: 1 },
-];
+// Outside what this test pins: the reader clamps the step count PER EVENT (`clampSteps` inside
+// `stepWheel`), while the bootstrap clamps the COALESCED frame it applies (`applyZoomSteps`'s
+// `Math.min(Math.abs(steps), WHEEL_MAX_STEPS)`). A single frame carrying enough notches to exceed
+// the clamp would total differently on each side. That is structural, not a bug: the reader's
+// consumer applies every event's return value as it arrives, so the reader has nothing to
+// coalesce and clamps what it hands back per call; the bootstrap coalesces a burst before
+// applying it, so it clamps the coalesced total instead. Both enforce the same invariant — one
+// gesture can never ask for more than the platform's whole zoom range — and the area's own factor
+// clamp absorbs whichever total actually lands, so no sequence here reaches this divergence.
 
 describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree', () => {
   let frameQueue: FrameRequestCallback[] = [];
@@ -85,6 +107,7 @@ describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree',
     // mutation observer and window listeners outlive the test and leak into the next row's install.
     // eslint-disable-next-line no-underscore-dangle
     window.__platformContentZoom?.destroy();
+    vi.unstubAllGlobals();
   });
 
   const flushFrames = () => {
@@ -95,34 +118,32 @@ describe('content-zoom wheel reading: bootstrap and platform-bible-utils agree',
     }
   };
 
-  [...SEQUENCES, { name: 'a line-mode wheel each way', frames: LINE_MODE_FRAMES }].forEach(
-    ({ name, frames }) => {
-      it(`agrees on ${name}`, () => {
-        const { bound } = install('web-view-1', AREA_HTML);
-        const area = document.getElementById('area');
-        if (!area) throw new Error('the marked area is missing from the fixture');
-        frames.forEach((frame) => {
-          area.dispatchEvent(wheelEvent(frame));
-        });
-        flushFrames();
-        // `act()` hands the bound helper a positive count to zoom in and a negative one to zoom
-        // out, which is the reader's own convention, so the two sides are summed the same way.
-        const bootstrapSteps = bound.adjustContentZoomById.mock.calls.reduce(
-          (total: number, call: unknown[]) => total + Number(call[1]),
+  SEQUENCES.forEach(({ name, frames }) => {
+    it(`agrees on ${name}`, () => {
+      const { bound } = install('web-view-1', AREA_HTML);
+      const area = document.getElementById('area');
+      if (!area) throw new Error('the marked area is missing from the fixture');
+      frames.forEach((frame) => {
+        area.dispatchEvent(wheelEvent(frame));
+      });
+      flushFrames();
+      // `act()` hands the bound helper a positive count to zoom in and a negative one to zoom
+      // out, which is the reader's own convention, so the two sides are summed the same way.
+      const bootstrapSteps = bound.adjustContentZoomById.mock.calls.reduce(
+        (total: number, call: unknown[]) => total + Number(call[1]),
+        0,
+      );
+
+      const reader = createContentZoomWheelReader();
+      try {
+        const readerSteps = frames.reduce(
+          (total, frame) => total + reader.read(wheelEvent(frame), 'main'),
           0,
         );
-
-        const reader = createContentZoomWheelReader();
-        try {
-          const readerSteps = frames.reduce(
-            (total, frame) => total + reader.read(wheelEvent(frame), 'main'),
-            0,
-          );
-          expect(readerSteps).toBe(bootstrapSteps);
-        } finally {
-          reader.dispose();
-        }
-      });
-    },
-  );
+        expect(readerSteps).toBe(bootstrapSteps);
+      } finally {
+        reader.dispose();
+      }
+    });
+  });
 });
