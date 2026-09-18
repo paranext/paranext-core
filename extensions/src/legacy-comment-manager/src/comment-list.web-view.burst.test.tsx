@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, render, waitFor } from '@testing-library/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
@@ -18,6 +18,7 @@ import {
 const mocks = vi.hoisted(() => {
   /** Every set of props the stubbed CommentListPanel has been rendered with, in order */
   const panelPropsLog: {
+    isLoading: boolean;
     filters: CommentFilters;
     scopeFilter: ScopeFilter;
     // The panel's own change handlers, so a test can make the filter change the user makes
@@ -46,14 +47,61 @@ const mocks = vi.hoisted(() => {
   const storedUserCommentFilters = new Map<string, CommentFilterSelection>();
   /** Every value the web view wrote back to `UserCommentFilters`, per project id, in write order. */
   const userCommentFiltersWriteLog = new Map<string, CommentFilterSelection[]>();
+  /**
+   * Per-project-id subscribers registered by the mocked `UserCommentFilters` hook below. Lets
+   * `resolveUserCommentFilters` deliver a value to an already-mounted component after the fact,
+   * exercising the genuinely-pending-then-resolves path a synchronous Map read cannot.
+   */
+  const userCommentFiltersSubscribers = new Map<
+    string,
+    Set<(value: CommentFilterSelection) => void>
+  >();
   return {
     panelPropsLog,
     bcvSyncScroll,
     commentThreadSelectorLog,
     storedUserCommentFilters,
     userCommentFiltersWriteLog,
+    userCommentFiltersSubscribers,
   };
 });
+
+/**
+ * Mocked `UserCommentFilters` project-data hook: mirrors the real hook's `[data, setData,
+ * isLoading]` shape. A real `useState`/`useEffect` pair (not a plain synchronous read against the
+ * `storedUserCommentFilters` Map) so a test can resolve a pending read after mount, via
+ * `resolveUserCommentFilters`, and have this already-mounted instance observe it — the async-
+ * arrival path a mock that only ever reads a pre-populated Map synchronously cannot exercise. Named
+ * with the `use` prefix so eslint-plugin-react-hooks recognizes the hook calls inside it.
+ */
+function useMockedUserCommentFilters(
+  projectId: string,
+  defaultValue: CommentFilterSelection,
+): [CommentFilterSelection, (value: CommentFilterSelection) => Promise<boolean>, boolean] {
+  const [selection, setSelection] = useState<CommentFilterSelection | undefined>(() =>
+    mocks.storedUserCommentFilters.get(projectId),
+  );
+  useEffect(() => {
+    const subscribers =
+      mocks.userCommentFiltersSubscribers.get(projectId) ??
+      new Set<(value: CommentFilterSelection) => void>();
+    subscribers.add(setSelection);
+    mocks.userCommentFiltersSubscribers.set(projectId, subscribers);
+    return () => {
+      subscribers.delete(setSelection);
+    };
+    // A mounted instance's project id is fixed for its lifetime in these tests.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const setUserCommentFilters = (value: CommentFilterSelection) => {
+    const writes = mocks.userCommentFiltersWriteLog.get(projectId) ?? [];
+    writes.push(value);
+    mocks.userCommentFiltersWriteLog.set(projectId, writes);
+    return Promise.resolve(true);
+  };
+  if (!selection) return [defaultValue, setUserCommentFilters, true];
+  return [selection, setUserCommentFilters, false];
+}
 
 vi.mock('@papi/frontend', () => ({
   default: {
@@ -71,17 +119,8 @@ vi.mock('@papi/frontend/react', () => ({
       mocks.commentThreadSelectorLog.push(selector);
       return [[], vi.fn(), false];
     },
-    UserCommentFilters: (_selector: undefined, defaultValue: CommentFilterSelection) => {
-      const stored = mocks.storedUserCommentFilters.get(contextProjectId);
-      const setUserCommentFilters = (value: CommentFilterSelection) => {
-        const writes = mocks.userCommentFiltersWriteLog.get(contextProjectId) ?? [];
-        writes.push(value);
-        mocks.userCommentFiltersWriteLog.set(contextProjectId, writes);
-        return Promise.resolve(true);
-      };
-      if (!stored) return [defaultValue, setUserCommentFilters, true];
-      return [stored, setUserCommentFilters, false];
-    },
+    UserCommentFilters: (_selector: undefined, defaultValue: CommentFilterSelection) =>
+      useMockedUserCommentFilters(contextProjectId, defaultValue),
   })),
   useProjectDataProvider: vi.fn(() => ({})),
   useWebViewController: vi.fn(() => undefined),
@@ -110,6 +149,7 @@ vi.mock('./use-bcv-sync-scroll.hook', () => ({
 vi.mock('./comment-list.component', () => ({
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS: [],
   CommentListPanel: (props: {
+    isLoading: boolean;
     filters: CommentFilters;
     scopeFilter: ScopeFilter;
     onFiltersChange: (filters: CommentFilters) => void;
@@ -197,6 +237,7 @@ function makeControllableScrRef(initialScrRef: SerializedVerseRef): Controllable
 function renderCommentListWebView(
   useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook = useWebViewScrollGroupScrRefFake,
   projectId = 'project-1',
+  stateSeed: Record<string, unknown> = {},
 ) {
   const CommentListWebView = globalThis.webViewComponent;
   render(
@@ -204,11 +245,24 @@ function renderCommentListWebView(
       webViewType="legacyCommentManager.commentList"
       id="comment-list-1"
       projectId={projectId}
-      useWebViewState={makeUseWebViewState({ editorWebViewId: 'editor-1' })}
+      useWebViewState={makeUseWebViewState({ editorWebViewId: 'editor-1', ...stateSeed })}
       useWebViewScrollGroupScrRef={useWebViewScrollGroupScrRef}
       updateWebViewDefinition={vi.fn()}
     />,
   );
+}
+
+/**
+ * Delivers `selection` to every mounted `UserCommentFilters` read pending for `projectId` — the
+ * counterpart to leaving a project id unseeded in `storedUserCommentFilters` (which makes the mock
+ * report `isLoading: true` and never resolve on its own). Also seeds the Map so a later remount of
+ * the same project id starts already resolved, matching the real provider's behavior once the
+ * setting exists.
+ */
+function resolveUserCommentFilters(projectId: string, selection: CommentFilterSelection) {
+  mocks.storedUserCommentFilters.set(projectId, selection);
+  const subscribers = mocks.userCommentFiltersSubscribers.get(projectId);
+  subscribers?.forEach((notify) => notify(selection));
 }
 
 function dispatchSetFilters(message: {
@@ -237,6 +291,9 @@ beforeEach(() => {
   mocks.storedUserCommentFilters.clear();
   mocks.storedUserCommentFilters.set('project-1', DEFAULT_STORED_USER_COMMENT_FILTERS);
   mocks.userCommentFiltersWriteLog.clear();
+  // Each mounted instance's effect cleanup removes its own subscriber on unmount; clearing here too
+  // is just hygiene against a test that renders without unmounting through the usual `cleanup()`.
+  mocks.userCommentFiltersSubscribers.clear();
 });
 
 describe('setFilters messages replayed in a burst', () => {
@@ -427,6 +484,8 @@ describe('stored comment filter selection', () => {
   it('resolves an unrecognized stored preset to the default instead of throwing', async () => {
     mocks.storedUserCommentFilters.set('project-1', {
       dataVersion: '1.0.0',
+      // @ts-expect-error ts(2322) - C# does not validate this field; simulating a blank value the
+      // XML round trip can hand back (FromXml's own doc pins this as a real, un-rejected case).
       preset: '',
       scopeFilter: 'all-books',
     });
@@ -438,6 +497,8 @@ describe('stored comment filter selection', () => {
   it('resolves a stored preset from a newer build to the default instead of throwing', async () => {
     mocks.storedUserCommentFilters.set('project-1', {
       dataVersion: '1.0.0',
+      // @ts-expect-error ts(2322) - C# does not validate this field; simulating a value written by
+      // a build that recognizes a preset this build's CommentPreset union does not.
       preset: 'preset-from-a-newer-build',
       scopeFilter: 'all-books',
     });
@@ -450,6 +511,8 @@ describe('stored comment filter selection', () => {
     mocks.storedUserCommentFilters.set('project-1', {
       dataVersion: '1.0.0',
       preset: 'all',
+      // @ts-expect-error ts(2322) - C# does not validate this field; simulating a value written by
+      // a build that recognizes a scope this build's ScopeFilter union does not.
       scopeFilter: 'scope-from-a-newer-build',
     });
 
@@ -509,5 +572,74 @@ describe('stored comment filter selection', () => {
     renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-b');
     await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'resolved' }));
     expect(latestPanelProps().scopeFilter).toBe('current-chapter');
+  });
+
+  it('never shows the default filters before the stored selection resolves', async () => {
+    // Left unseeded: this project's UserCommentFilters read stays pending until
+    // resolveUserCommentFilters delivers it below, exercising the genuine async-arrival path a
+    // pre-populated Map read can't (the read never resolves synchronously against the mount).
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-pending');
+
+    // The component IS rendering (it queries CommentThreads unconditionally) -- confirming that
+    // is what makes the next assertion mean something, rather than nothing having rendered yet.
+    await waitFor(() => expect(mocks.commentThreadSelectorLog.length).toBeGreaterThan(0));
+    // The panel itself must not be mounted yet: mounting it now, even flagged isLoading, would
+    // still hand its toolbar dropdowns the pre-hydration default values to display.
+    expect(latestPanelProps()).toBeUndefined();
+
+    act(() => {
+      resolveUserCommentFilters('project-pending', {
+        dataVersion: '1.0.0',
+        preset: 'unread',
+        scopeFilter: 'current-book',
+      });
+    });
+
+    // Once resolved, the panel mounts directly with the stored values -- it never showed
+    // DEFAULT_COMMENT_FILTERS/DEFAULT_SCOPE_FILTER at any point along the way.
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    expect(latestPanelProps().filters).toEqual({ preset: 'unread' });
+    expect(latestPanelProps().scopeFilter).toBe('current-book');
+  });
+
+  it('applies a mount-time override over the stored selection, without persisting the override', async () => {
+    // Deliberately different from the override below, so a passing test can only be explained by
+    // the override actually winning, not by coincidence.
+    mocks.storedUserCommentFilters.set('project-1', {
+      dataVersion: '1.0.0',
+      preset: 'unread',
+      scopeFilter: 'current-book',
+    });
+
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-1', {
+      initialFilters: { preset: 'conflict' },
+      initialScopeFilter: 'current-verse',
+    });
+
+    // Wins immediately -- no waiting on the stored read, and never shows the stored preset first
+    // (an S/R conflict link opening a fresh view must show its requested preset right away).
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    expect(latestPanelProps().filters).toEqual({ preset: 'conflict' });
+    expect(latestPanelProps().scopeFilter).toBe('current-verse');
+
+    // Positive control: a panel-driven change DOES reach the write log, so the length assertion
+    // below is a real observation, not the log simply never being written to in this test.
+    act(() => {
+      latestPanelProps().onFiltersChange({ preset: 'resolved' });
+    });
+
+    // Exactly the one write from the panel change above: the override that seeded this mount never
+    // added an entry of its own, and the write's scope carries the override's current-verse (the
+    // value it was seeded with), not the stored current-book -- another sign the override, not the
+    // stored selection, was live when the change was made.
+    await waitFor(() => {
+      const writes = mocks.userCommentFiltersWriteLog.get('project-1');
+      expect(writes).toHaveLength(1);
+      expect(writes?.[0]).toEqual({
+        dataVersion: '1.0.0',
+        preset: 'resolved',
+        scopeFilter: 'current-verse',
+      });
+    });
   });
 });

@@ -287,9 +287,14 @@ global.webViewComponent = function CommentListWebView({
   /**
    * Whether `filters`/`scopeFilter` are ready to show: either a mount-time override (see
    * `initialOverrideRef`) already fixed them with no need to wait on storage, or this user's stored
-   * selection has resolved and been applied below. Read by the panel's `isLoading` prop so the list
-   * never renders the pre-hydration defaults — a stored selection reopens the panel to what it was
-   * left on, not to a flash of the default view first.
+   * selection has resolved and been applied below. Gates whether `CommentListPanel` mounts at all
+   * (see the render below) rather than folding into its `isLoading` prop: the panel deliberately
+   * keeps its filter toolbar mounted across `isLoading` transitions (a query resubscribe briefly
+   * flips it true) so a control the user is mid-interaction with never unmounts under them —
+   * folding hydration into that same flag would make the toolbar mount showing the pre-hydration
+   * defaults and then swap, exactly the flash this is meant to prevent. Not rendering the panel at
+   * all until hydrated means it only ever mounts already showing the right values, and never needs
+   * to un-flip afterward — `isHydrated` goes false→true exactly once per view and never back.
    */
   const [isHydrated, setIsHydrated] = useState(() => initialOverrideRef.current !== undefined);
 
@@ -788,34 +793,36 @@ global.webViewComponent = function CommentListWebView({
 
   return (
     <>
-      <CommentListPanel
-        localizedStrings={localizedStrings}
-        isLoading={
-          isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName || !isHydrated
-        }
-        threads={safeCommentThreads}
-        currentUser={currentUserName}
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        scopeFilter={scopeFilter}
-        onScopeFilterChange={handleScopeFilterChange}
-        // While an automatic Send/Receive is syncing this project, show a slim "editing paused"
-        // notice and disable the write affordances (via the gated capability callbacks below).
-        isSyncBlocked={isSyncBlocked}
-        handleAddCommentToThread={handleAddCommentToThread}
-        handleUpdateComment={handleUpdateComment}
-        handleDeleteComment={handleDeleteComment}
-        handleReadStatusChange={handleReadStatusChange}
-        assignableUsers={assignableUsers}
-        canUserAddCommentToThread={gatedCapabilities.canUserAddCommentToThread}
-        canUserAssignThreadCallback={gatedCapabilities.canUserAssignThreadCallback}
-        canUserResolveThreadCallback={gatedCapabilities.canUserResolveThreadCallback}
-        canUserEditOrDeleteCommentCallback={gatedCapabilities.canUserEditOrDeleteCommentCallback}
-        selectedThreadId={selectedThreadId}
-        onSelectedThreadChange={setSelectedThreadId}
-        onVerseRefClick={handleVerseRefClick}
-        conflictResolution={conflictResolution}
-      />
+      {/* Held until `isHydrated` (see its doc above) — never mounted with the pre-hydration
+          defaults, so the toolbar cannot flash them before swapping to the stored selection. */}
+      {isHydrated && (
+        <CommentListPanel
+          localizedStrings={localizedStrings}
+          isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
+          threads={safeCommentThreads}
+          currentUser={currentUserName}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          scopeFilter={scopeFilter}
+          onScopeFilterChange={handleScopeFilterChange}
+          // While an automatic Send/Receive is syncing this project, show a slim "editing paused"
+          // notice and disable the write affordances (via the gated capability callbacks below).
+          isSyncBlocked={isSyncBlocked}
+          handleAddCommentToThread={handleAddCommentToThread}
+          handleUpdateComment={handleUpdateComment}
+          handleDeleteComment={handleDeleteComment}
+          handleReadStatusChange={handleReadStatusChange}
+          assignableUsers={assignableUsers}
+          canUserAddCommentToThread={gatedCapabilities.canUserAddCommentToThread}
+          canUserAssignThreadCallback={gatedCapabilities.canUserAssignThreadCallback}
+          canUserResolveThreadCallback={gatedCapabilities.canUserResolveThreadCallback}
+          canUserEditOrDeleteCommentCallback={gatedCapabilities.canUserEditOrDeleteCommentCallback}
+          selectedThreadId={selectedThreadId}
+          onSelectedThreadChange={setSelectedThreadId}
+          onVerseRefClick={handleVerseRefClick}
+          conflictResolution={conflictResolution}
+        />
+      )}
       <Sonner />
     </>
   );
