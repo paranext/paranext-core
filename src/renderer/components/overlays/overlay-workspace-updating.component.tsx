@@ -2,12 +2,14 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useWindowBlockingOverlay } from '@renderer/hooks/use-window-blocking-overlay.hook';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
+import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
 import {
   getWorkspaceUpdating,
   subscribeToWorkspaceUpdating,
 } from '@renderer/services/workspace-updating-store';
-import { Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
+import { Dialog, DialogContent, DialogTitle, Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
+import { VisuallyHidden } from 'radix-ui';
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -18,30 +20,102 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [WORKSPACE_UPDATING_KEY];
 /** Z-index below modals so modal dialogs remain accessible during a project switch */
 const Z_INDEX_WORKSPACE_UPDATING = Z_INDEX_MODAL - 1;
 
+/**
+ * Overrides `DialogContent`'s centered rounded card into the cover itself: an opaque layer inset
+ * from the window edges by the `style` the component supplies, with its contents centered.
+ *
+ * Width and height come from those insets, so `tw:w-auto` has to displace the card's `tw:w-full` —
+ * `left` and `width` together would win over `right` and leave the cover overhanging the window.
+ * `ConnectionLostOverlay` overrides the same card the same way, for a layer that covers everything
+ * rather than one inset below the toolbar.
+ */
+const COVER_CONTENT =
+  'tw:fixed tw:top-0 tw:start-0 tw:flex tw:h-auto tw:w-auto tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:items-center tw:justify-center tw:gap-0 tw:rounded-none tw:bg-background tw:p-0 tw:text-foreground tw:ring-0';
+
+/**
+ * Neutralizes the backdrop `DialogContent` always renders. The cover is opaque over the area it
+ * covers and shows the toolbar untouched above it, so the built-in `tw:bg-black/10` + backdrop blur
+ * would dim and blur the toolbar — a wash this state never had.
+ */
+const NEUTRALIZED_BACKDROP = 'tw:bg-transparent tw:supports-backdrop-filter:backdrop-blur-none';
+
 type Props = { label: string; isPowerMode: boolean };
 
+/**
+ * The cover shown while the active project is switching: a spinner and a line of text over the dock
+ * client area.
+ *
+ * A Radix modal dialog rather than a plain positioned `div`, for the focus trap. The cover paints
+ * over the panes but takes nothing away from a web view's iframe, so without the trap the keyboard
+ * stays inside a pane nobody can see: a content-zoom chord typed there still reaches that view's
+ * bootstrap and persists a zoom level for a hidden pane, and every other in-view shortcut is
+ * likewise still live. The trap moves focus onto the cover, keeps Tab inside it, and hands focus
+ * back to whatever held it when the switch ends. Escape and interact-outside are prevented: this
+ * state is not dismissable, it ends when the switch does.
+ *
+ * Being a modal dialog also makes the app behind the cover `aria-hidden` and stops pointers
+ * reaching it — the toolbar included, though the cover leaves it visible. That is the same
+ * containment the connection-lost and first-run covers have, and the window is already registered
+ * as blocked while this is up. A modal dialog raised _during_ the switch is unaffected: it mounts
+ * later, so it takes the focus trap and the top layer, which is what
+ * {@link Z_INDEX_WORKSPACE_UPDATING} is for.
+ */
 export function WorkspaceUpdatingOverlayPresentational({ label, isPowerMode }: Props) {
+  // Captured during the first render, which is before the focus trap has moved focus anywhere, so
+  // this is whatever the keyboard was in when the switch started. A ref set from an effect would be
+  // too late: the trap's own effect is a child's, and children's effects run first.
+  const [elementFocusedBeforeCover] = useState(() =>
+    document.activeElement instanceof HTMLElement ? document.activeElement : undefined,
+  );
+
   return (
-    <div className="pr-twp">
-      <div
-        role="status"
-        className="tw:fixed tw:inset-0 tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:bg-background"
-        // For some reason, applying tw:top-12 tw:right-2 tw:bottom-2 tw:left-2 instead of tw:inset-0 did not work.
-        // The top value clears the toolbar; the other insets allow for window borders.
-        // Originally, I used 8px insets to match the window border size, but currently some content can drift into the border area,
-        // making the border look dirty, so I am now using 2px borders, but maybe we can things up and revisit this.
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent
+        data-testid="workspace-updating-cover"
+        showCloseButton={false}
+        className={COVER_CONTENT}
+        overlayClassName={NEUTRALIZED_BACKDROP}
+        // There is nothing to describe beyond the label, and Radix asks for this explicitly rather
+        // than leaving `aria-describedby` pointing at an element that does not exist.
+        aria-describedby={undefined}
+        // Inline insets rather than the `tw:top-12 tw:right-2 tw:bottom-2 tw:left-2` class form,
+        // which for some reason did not work. The top value clears the toolbar; the other three
+        // allow for the window borders. 8px insets would match the border size, but some content
+        // can drift into the border area and make the border look dirty at that inset, so these are
+        // 2px — worth revisiting once that drift is cleaned up.
         style={{
+          ...CANCEL_ENTER_ZOOM_STYLE,
           zIndex: Z_INDEX_WORKSPACE_UPDATING,
           top: getToolbarHeight(isPowerMode),
           right: 2,
           bottom: 2,
           left: 2,
         }}
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+        // `DialogContent`'s modal path answers close-autofocus by focusing the dialog's trigger,
+        // and this cover has none: it opens on a project switch, not on a click. Handing focus back
+        // is therefore this component's job. For a web view that is its iframe, so the view decides
+        // where inside itself the keyboard lands. A pane the switch closed leaves nothing to return
+        // to, so focus falls to the document, which is where a closed pane would have left it.
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          if (elementFocusedBeforeCover?.isConnected) elementFocusedBeforeCover.focus();
+        }}
       >
-        <Spinner />
-        <p className="tw:text-sm tw:font-medium">{label}</p>
-      </div>
-    </div>
+        {/* The dialog needs an accessible name, and the message is the only text there is. Hidden
+            rather than wrapping the visible copy, so the live region below stays the one thing a
+            screen reader announces as the cover appears. */}
+        <VisuallyHidden.Root asChild>
+          <DialogTitle>{label}</DialogTitle>
+        </VisuallyHidden.Root>
+        <div role="status" className="tw:flex tw:flex-col tw:items-center tw:gap-3">
+          <Spinner />
+          <p className="tw:text-sm tw:font-medium">{label}</p>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
