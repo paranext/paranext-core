@@ -197,26 +197,6 @@ describe('useStructureProtectionState — setters', () => {
     vi.clearAllMocks();
   });
 
-  it('setAdminProtection is a no-op when canAdminToggle is false', async () => {
-    setup({ adminSetting: false, userSetting: false, canWrite: false });
-    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
-    await act(async () => {});
-    act(() => {
-      result.current.setAdminProtection(true);
-    });
-    expect(mockSetAdminSetting).not.toHaveBeenCalled();
-  });
-
-  it('setAdminProtection calls setSetting when canAdminToggle is true', async () => {
-    setup({ adminSetting: false, userSetting: false, canWrite: true });
-    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
-    await act(async () => {});
-    act(() => {
-      result.current.setAdminProtection(true);
-    });
-    expect(mockSetAdminSetting).toHaveBeenCalledWith(true);
-  });
-
   it('setUserProtection calls the PDP setter regardless of role', async () => {
     // non-admin user with a locked project — still can call setUserProtection
     setup({ adminSetting: true, userSetting: true, canWrite: false });
@@ -373,16 +353,6 @@ describe('useStructureProtectionState — power mode (feature inactive)', () => 
     expect(result.current.isProtectedByAdmin).toBe(false);
     expect(result.current.canAdminToggle).toBe(false);
     expect(result.current.adminSettingError).toBeUndefined();
-  });
-
-  it('setAdminProtection is a no-op in power mode even for an admin', async () => {
-    setup({ adminSetting: false, userSetting: false, interfaceMode: 'power', canWrite: true });
-    const { result } = renderHook(() => useStructureProtectionState('proj-1'));
-    await act(async () => {});
-    act(() => {
-      result.current.setAdminProtection(true);
-    });
-    expect(mockSetAdminSetting).not.toHaveBeenCalled();
   });
 
   it('setUserProtection is a no-op in power mode', async () => {

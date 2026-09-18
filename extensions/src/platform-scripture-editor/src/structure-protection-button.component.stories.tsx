@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useMemo, useState } from 'react';
-import { Lock, LockOpen, Shield, ShieldOff } from 'lucide-react';
+import { Lock, LockOpen } from 'lucide-react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
   LockToggleButtonView,
@@ -16,7 +16,7 @@ import {
  *
  * **Try it**: click the button (or press Ctrl/Cmd+Shift+L) on the enabled stories — the icon flips
  * between `Lock` (locked) and `LockOpen` (unlocked, destructive styling) and the tooltip auto-opens
- * on the change, showing the keyboard-shortcut hint.
+ * on the change, reporting the state it is now in alongside the keyboard-shortcut hint.
  */
 const meta: Meta<typeof LockToggleButtonView> = {
   title: 'Bundled Extensions/platform-scripture-editor/StructureProtectionButton',
@@ -49,8 +49,8 @@ function PersonalLockHarness({ initialLocked }: { initialLocked: boolean }) {
       onToggle={() => setIsLocked((previous) => !previous)}
       lockedIcon={<Lock />}
       unlockedIcon={<LockOpen />}
-      lockTooltipKey="%webView_platformScriptureEditor_structureProtection_lockStructure%"
-      unlockTooltipKey="%webView_platformScriptureEditor_structureProtection_unlockStructure%"
+      unlockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateEditable%"
+      lockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateProtected%"
       disabledTooltipKey="%webView_platformScriptureEditor_structureProtection_lockedByAdmin%"
       ariaLabelKey="%webView_platformScriptureEditor_structureProtection_ariaLabel%"
       shortcut={shortcut}
@@ -59,12 +59,15 @@ function PersonalLockHarness({ initialLocked }: { initialLocked: boolean }) {
   );
 }
 
-/** Structure is locked — `Lock`, ghost, tooltip "Unlock structure". Click to unlock. */
+/** Structure is locked — `Lock`, ghost, tooltip "USFM structure protected". Click to unlock. */
 export const Locked: Story = {
   render: () => <PersonalLockHarness initialLocked />,
 };
 
-/** Structure is unlocked — `LockOpen`, destructive styling, tooltip "Lock structure". Click to lock. */
+/**
+ * Structure is unlocked — `LockOpen`, destructive styling, tooltip "USFM structure editable". Click
+ * to lock.
+ */
 export const Unlocked: Story = {
   render: () => <PersonalLockHarness initialLocked={false} />,
 };
@@ -81,60 +84,12 @@ export const LockedByAdmin: Story = {
       onToggle={() => {}}
       lockedIcon={<Lock />}
       unlockedIcon={<LockOpen />}
-      lockTooltipKey="%webView_platformScriptureEditor_structureProtection_lockStructure%"
-      unlockTooltipKey="%webView_platformScriptureEditor_structureProtection_unlockStructure%"
+      unlockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateEditable%"
+      lockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateProtected%"
       disabledTooltipKey="%webView_platformScriptureEditor_structureProtection_lockedByAdmin%"
       ariaLabelKey="%webView_platformScriptureEditor_structureProtection_ariaLabel%"
       shortcut={PERSONAL_SHORTCUT}
       localizedStrings={localizedStrings}
     />
   ),
-};
-
-const PROJECT_SHORTCUT: ShortcutSpec = {
-  matches: (event) =>
-    (event.ctrlKey || event.metaKey) &&
-    event.shiftKey &&
-    event.altKey &&
-    event.key.toLowerCase() === 'l',
-  hint: 'Ctrl+Alt+Shift+L',
-};
-
-/** Admin view: the personal lock button plus the project (Shield) button, each independent. */
-function AdminButtonsHarness() {
-  const [personalLocked, setPersonalLocked] = useState(true);
-  const [projectLocked, setProjectLocked] = useState(false);
-  return (
-    <div className="tw:flex tw:flex-row tw:items-center tw:gap-1">
-      <LockToggleButtonView
-        isLocked={personalLocked}
-        isDisabled={false}
-        onToggle={() => setPersonalLocked((previous) => !previous)}
-        lockedIcon={<Lock />}
-        unlockedIcon={<LockOpen />}
-        lockTooltipKey="%webView_platformScriptureEditor_structureProtection_lockStructure%"
-        unlockTooltipKey="%webView_platformScriptureEditor_structureProtection_unlockStructure%"
-        ariaLabelKey="%webView_platformScriptureEditor_structureProtection_ariaLabel%"
-        shortcut={PERSONAL_SHORTCUT}
-        localizedStrings={localizedStrings}
-      />
-      <LockToggleButtonView
-        isLocked={projectLocked}
-        isDisabled={false}
-        onToggle={() => setProjectLocked((previous) => !previous)}
-        lockedIcon={<Shield />}
-        unlockedIcon={<ShieldOff />}
-        lockTooltipKey="%webView_platformScriptureEditor_structureProtection_lockStructureForProject%"
-        unlockTooltipKey="%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%"
-        ariaLabelKey="%webView_platformScriptureEditor_structureProtection_projectAriaLabel%"
-        shortcut={PROJECT_SHORTCUT}
-        localizedStrings={localizedStrings}
-      />
-    </div>
-  );
-}
-
-/** Admin sees both buttons: personal (Lock/LockOpen) and project (Shield/ShieldOff), independent. */
-export const AdminBothButtons: Story = {
-  render: () => <AdminButtonsHarness />,
 };

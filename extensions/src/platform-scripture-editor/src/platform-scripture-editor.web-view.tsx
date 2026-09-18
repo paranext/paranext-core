@@ -125,10 +125,7 @@ import {
   type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
-import {
-  ShareLayoutButton,
-  SHARE_LAYOUT_BUTTON_STRING_KEYS,
-} from './share-layout-button.component';
+import { TeamLayoutButton, TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
@@ -237,7 +234,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
   ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
-  ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
+  ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
@@ -3839,7 +3836,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         endAreaChildren={
           <>
             {/* This container is flex-row-reverse, so StructureProtectionButton must come first
-            in JSX order to render visually after (to the right of) ShareLayoutButton. */}
+            in JSX order to render visually after (to the right of) TeamLayoutButton. */}
             <StructureProtectionButton
               projectId={projectId}
               localizedStrings={localizedStrings}
@@ -3847,7 +3844,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             />
             {/* Share Layout is only available in 10 Simple right now. Later it will be made available in 10 Power too. */}
             {!isPowerMode && (
-              <ShareLayoutButton
+              <TeamLayoutButton
                 projectId={projectId}
                 localizedStrings={localizedStrings}
                 className="tw:h-8"

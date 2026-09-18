@@ -6,7 +6,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { isPlatformError } from 'platform-bible-utils';
-import { Spinner, usePromise, useRetryablePromise } from 'platform-bible-react';
+import { usePromise, useRetryablePromise } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
@@ -16,23 +16,24 @@ import {
   SHARE_LAYOUT_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
 import {
-  ShareLayoutDialogContent,
-  ShareLayoutResult,
-  SHARE_LAYOUT_DIALOG_STRING_KEYS,
-  isShareLayoutActiveTab,
-} from '@renderer/components/dialogs/share-layout.component';
+  TeamLayoutDialogContent,
+  TeamLayoutDialogSkeleton,
+  TeamLayoutResult,
+  TEAM_LAYOUT_DIALOG_STRING_KEYS,
+  isTeamLayoutActiveTab,
+} from '@renderer/components/dialogs/team-layout.component';
 import {
   seedResourceList,
   seedScalar,
   splitResourcesByTab,
-} from '@renderer/components/dialogs/share-layout.utils';
+} from '@renderer/components/dialogs/team-layout.utils';
 
 const EMPTY_RESOURCE_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };
 
 // `useLocalizedStrings`'s `localizationKeys` param must be a stable reference (see its JSDoc) —
 // spreading a frozen array into a new array literal on every render breaks that contract and
 // causes an infinite update loop. Hoist to module scope so the array identity never changes.
-const SHARE_LAYOUT_STRING_KEYS = [...SHARE_LAYOUT_DIALOG_STRING_KEYS];
+const TEAM_LAYOUT_STRING_KEYS = [...TEAM_LAYOUT_DIALOG_STRING_KEYS];
 const RESOURCE_PICKER_STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
 
 /**
@@ -45,7 +46,7 @@ const RESOURCE_PICKER_STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
  * hooks below already tolerate `projectId: string | undefined`, matching their normal usage
  * elsewhere in the codebase.
  */
-function ShareLayoutDialogWrapper({
+function TeamLayoutDialogWrapper({
   projectId,
   submitDialog,
   cancelDialog,
@@ -53,7 +54,7 @@ function ShareLayoutDialogWrapper({
   Omit<ShareLayoutDialogOptions, 'projectId'> & {
     projectId?: ShareLayoutDialogOptions['projectId'];
   }) {
-  const [localizedStrings] = useLocalizedStrings(SHARE_LAYOUT_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings(TEAM_LAYOUT_STRING_KEYS);
   const [resourcePickerLocalizedStrings] = useLocalizedStrings(RESOURCE_PICKER_STRING_KEYS);
 
   const {
@@ -96,6 +97,20 @@ function ShareLayoutDialogWrapper({
     useProjectSetting(projectId, 'platformScripture.modelTexts', EMPTY_RESOURCE_LIST);
   const [projectActiveTabSetting, setProjectActiveTab, , isProjectActiveTabLoading] =
     useProjectSetting(projectId, 'platformScripture.sharedLayoutDefaultTab', '');
+  const [
+    projectStructureProtectedSetting,
+    setProjectStructureProtected,
+    ,
+    isProjectStructureProtectedLoading,
+  ] = useProjectSetting(projectId, 'platformScripture.structureProtected', false);
+
+  // Headed by the project this layout is for, in the `shortName - fullName` format whose source of
+  // truth is `ProjectSelector`'s `triggerLabelFormat="shortNameAndFullName"` branch
+  // (`lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx`).
+  // No shared formatter exists for it; the separator AND the skip-when-equal rule below must stay in
+  // agreement with that branch, or the same project reads two different ways in two places.
+  const [projectShortNameSetting] = useProjectSetting(projectId, 'platform.name', '');
+  const [projectFullNameSetting] = useProjectSetting(projectId, 'platform.fullName', '');
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -138,6 +153,19 @@ function ShareLayoutDialogWrapper({
   const projectActiveTab = isPlatformError(projectActiveTabSetting)
     ? undefined
     : projectActiveTabSetting;
+  // A failed read falls back to "not locked", matching `useStructureProtectionState`'s own fallback
+  // for this setting. The dialog is still usable for everything else it edits.
+  const isStructureProtectedForTeam = isPlatformError(projectStructureProtectedSetting)
+    ? false
+    : projectStructureProtectedSetting;
+
+  const projectName = useMemo(() => {
+    const shortName = isPlatformError(projectShortNameSetting) ? '' : projectShortNameSetting;
+    const fullName = isPlatformError(projectFullNameSetting) ? '' : projectFullNameSetting;
+    if (!shortName) return fullName || undefined;
+    if (!fullName || fullName === shortName) return shortName;
+    return `${shortName} - ${fullName}`;
+  }, [projectShortNameSetting, projectFullNameSetting]);
 
   const seededItems = useMemo(
     () => seedResourceList(projectResources, personalResources),
@@ -169,12 +197,12 @@ function ShareLayoutDialogWrapper({
   // only known tab values are trusted.
   const seededActiveTabRaw = seedScalar(projectActiveTab, undefined);
   const seededActiveTab =
-    seededActiveTabRaw && isShareLayoutActiveTab(seededActiveTabRaw)
+    seededActiveTabRaw && isTeamLayoutActiveTab(seededActiveTabRaw)
       ? seededActiveTabRaw
       : undefined;
 
   const handleConfirm = useCallback(
-    (result: ShareLayoutResult) => {
+    (result: TeamLayoutResult) => {
       setProjectResources?.({
         dataVersion: projectResources?.dataVersion ?? EMPTY_RESOURCE_LIST.dataVersion,
         items: [...result.scriptureResources, ...result.commentaryResources, ...otherResources],
@@ -184,6 +212,10 @@ function ShareLayoutDialogWrapper({
         items: result.modelText ? [result.modelText] : [],
       });
       setProjectActiveTab?.(result.activeTab ?? '');
+      // Written whatever mode the app is in. The lock is a team-wide project setting an admin is
+      // explicitly here to set, so this dialog is the one place it can be changed regardless of the
+      // admin's own mode; enforcing the lock in the editor remains Simple-mode only.
+      setProjectStructureProtected?.(result.isStructureProtectedForTeam);
       submitDialog(true);
     },
     [
@@ -193,6 +225,7 @@ function ShareLayoutDialogWrapper({
       setProjectResources,
       setProjectModelTexts,
       setProjectActiveTab,
+      setProjectStructureProtected,
       submitDialog,
     ],
   );
@@ -203,12 +236,13 @@ function ShareLayoutDialogWrapper({
   // forbids an early return between hook calls), so it sits just before the render branch — and
   // ahead of every other branch, so a user who may not write here is never handed a control that
   // acts on the project.
-  if (isCanWriteLoading) {
-    return (
-      <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-        <Spinner />
-      </div>
-    );
+  // `undefined` is "not decided yet", NOT "denied": `usePromise` reports `isLoading: false` on its
+  // first renders, before its effect has even started the call. Gating on `isCanWriteLoading` alone
+  // therefore falls through to the render-nothing branch below for the whole permission round-trip,
+  // collapsing the modal to a sliver showing only its close button. Only an explicit `false`
+  // denies.
+  if (isCanWriteLoading || canWrite === undefined) {
+    return <TeamLayoutDialogSkeleton localizedStrings={localizedStrings} />;
   }
 
   if (canWrite !== true) {
@@ -220,7 +254,7 @@ function ShareLayoutDialogWrapper({
     return <></>;
   }
 
-  // `ShareLayoutDialogContent` snapshots every list it edits into `useState` at mount, and Confirm
+  // `TeamLayoutDialogContent` snapshots every list it edits into `useState` at mount, and Confirm
   // writes that snapshot back over the project settings. So the body must not mount until each
   // input to the snapshot has actually been DELIVERED — none of them can be recognised as absent
   // once it is in hand:
@@ -229,7 +263,12 @@ function ShareLayoutDialogWrapper({
   //   genuinely empty shared list, so mounting early seeds `[]` and a Confirm erases the list;
   // - the personal lists are `undefined` in flight, and `seedResourceList` falls back to them, so
   //   mounting between the two arriving can share the personal selection to the whole team;
-  // - the catalog is what `splitResourcesByTab` classifies saved dblResource references with.
+  // - the catalog is what `splitResourcesByTab` classifies saved dblResource references with;
+  // - the team structure lock resolves to `false` while loading, indistinguishable from a project
+  //   that is genuinely unlocked, so mounting early and confirming would unlock it for everyone.
+  //
+  // The project name is deliberately NOT gated on: it is rendered straight from the setting rather
+  // than snapshotted, so a late arrival just fills the heading in.
   //
   // The window is the normal case rather than a narrow race: mounting needs only `canWrite` (one
   // method round-trip), while a project setting needs a second PDP plus a subscribe plus its first
@@ -239,22 +278,21 @@ function ShareLayoutDialogWrapper({
     isProjectResourcesLoading ||
     isProjectModelTextsLoading ||
     isProjectActiveTabLoading ||
+    isProjectStructureProtectedLoading ||
     isPersonalResourcesLoading ||
     isPersonalModelTextsLoading
   ) {
-    return (
-      <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-        <Spinner />
-      </div>
-    );
+    return <TeamLayoutDialogSkeleton localizedStrings={localizedStrings} />;
   }
 
   return (
-    <ShareLayoutDialogContent
+    <TeamLayoutDialogContent
       initialModelText={seededModelText}
       initialActiveTab={seededActiveTab}
       initialScriptureResources={scriptureResources}
       initialCommentaryResources={commentaryResources}
+      initialIsStructureProtectedForTeam={isStructureProtectedForTeam}
+      projectName={projectName}
       allResources={allResources ?? []}
       // `!hasResourcesSettled` counts as loading, as it does in the other two picker hosts. The
       // mount gate above consumed only the FIRST settle; a refetch driven from inside the mounted
@@ -273,14 +311,16 @@ function ShareLayoutDialogWrapper({
   );
 }
 
-export const SHARE_LAYOUT_DIALOG: DialogDefinition<typeof SHARE_LAYOUT_DIALOG_TYPE> = Object.freeze(
-  {
-    ...DIALOG_BASE,
-    tabType: SHARE_LAYOUT_DIALOG_TYPE,
-    defaultTitle: '%shareLayoutDialog_title%',
-    initialSize: { width: 640, height: 720 },
-    Component: ShareLayoutDialogWrapper,
-  },
-);
+export const TEAM_LAYOUT_DIALOG: DialogDefinition<typeof SHARE_LAYOUT_DIALOG_TYPE> = Object.freeze({
+  ...DIALOG_BASE,
+  tabType: SHARE_LAYOUT_DIALOG_TYPE,
+  defaultTitle: '%shareLayoutDialog_teamLayout_title%',
+  // A cap, not a fixed width: the modal host applies this as `maxWidth` over a `w-full`
+  // DialogContent, so the dialog takes the available app width and stops here. Sized so each of
+  // the three equal columns clears ~400px — the third carries tabs, a resource list, a select and
+  // a wrapping hint, and below that it truncates resource names it should be showing in full.
+  initialSize: { width: 1240, height: 720 },
+  Component: TeamLayoutDialogWrapper,
+});
 
-export default SHARE_LAYOUT_DIALOG;
+export default TEAM_LAYOUT_DIALOG;
