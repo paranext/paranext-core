@@ -69,6 +69,8 @@ export type CommentListPanelProps = Pick<
   | 'selectedThreadId'
   | 'onSelectedThreadChange'
   | 'onVerseRefClick'
+  | 'drafts'
+  | 'onDraftChange'
 > & {
   /** Localized strings for the panel toolbar/empty states and the underlying comment list. */
   localizedStrings: LanguageStrings;
@@ -186,6 +188,8 @@ export function CommentListPanel({
   selectedThreadId,
   onSelectedThreadChange,
   onVerseRefClick,
+  drafts,
+  onDraftChange,
 }: CommentListPanelProps) {
   const noFiltersActive = areCommentFiltersAtDefault(filters) && scopeFilter === 'all-books';
 
@@ -235,6 +239,8 @@ export function CommentListPanel({
         selectedThreadId={selectedThreadId}
         onSelectedThreadChange={onSelectedThreadChange}
         onVerseRefClick={onVerseRefClick}
+        drafts={drafts}
+        onDraftChange={onDraftChange}
       />
     );
   }

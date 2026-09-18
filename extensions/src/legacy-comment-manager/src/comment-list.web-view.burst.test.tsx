@@ -1,18 +1,24 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useCallback, useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { CommentFilterSelection, LegacyCommentThreadSelector } from 'legacy-comment-manager';
-import { newPlatformError, type PlatformError } from 'platform-bible-utils';
+import {
+  newPlatformError,
+  type LegacyCommentThread,
+  type PlatformError,
+} from 'platform-bible-utils';
 import {
   CommentFilters,
+  CommentPreset,
   DEFAULT_COMMENT_FILTERS,
   DEFAULT_SCOPE_FILTER,
   ScopeFilter,
 } from './comment-list-filters.model';
+import { saveDrafts } from './comment-draft-store';
 
 /**
  * What the mocked `UserCommentFilters` read can resolve to: a real selection, or a `PlatformError`
@@ -27,12 +33,26 @@ const mocks = vi.hoisted(() => {
   /** Every set of props the stubbed CommentListPanel has been rendered with, in order */
   const panelPropsLog: {
     isLoading: boolean;
+    threads: { id: string }[];
     filters: CommentFilters;
     scopeFilter: ScopeFilter;
     // The panel's own change handlers, so a test can make the filter change the user makes
     onFiltersChange: (filters: CommentFilters) => void;
     onScopeFilterChange: (scopeFilter: ScopeFilter) => void;
+    drafts?: Readonly<Record<string, { editorState?: string }>>;
+    onDraftChange?: (threadId: string, draft: { editorState?: string } | undefined) => void;
   }[] = [];
+  /**
+   * A settable stand-in for the comments PDP's server-side filtering: `useProjectData(...)
+   * .CommentThreads` (mocked below) filters `current` by the handful of selector fields these tests
+   * actually drive (`isResolved`), rather than always returning an empty list, so a test can
+   * exercise a filter change actually changing which threads render. `isLoading` lets a test hold
+   * the query in its loading state independently of the fixture's contents.
+   */
+  const commentThreadsFixture: { current: LegacyCommentThread[]; isLoading: boolean } = {
+    current: [],
+    isLoading: false,
+  };
   // Stable across renders: the message-listener effect lists these among its deps, and fresh
   // functions every render would re-subscribe it mid-test for reasons the tests are not about
   const bcvSyncScroll = {
@@ -68,6 +88,7 @@ const mocks = vi.hoisted(() => {
     panelPropsLog,
     bcvSyncScroll,
     commentThreadSelectorLog,
+    commentThreadsFixture,
     storedUserCommentFilters,
     userCommentFiltersWriteLog,
     userCommentFiltersSubscribers,
@@ -125,7 +146,13 @@ vi.mock('@papi/frontend/react', () => ({
   useProjectData: vi.fn((_projectInterface: string, contextProjectId: string) => ({
     CommentThreads: (selector: LegacyCommentThreadSelector) => {
       mocks.commentThreadSelectorLog.push(selector);
-      return [[], vi.fn(), false];
+      // A minimal stand-in for the comments PDP's server-side filtering: only `isResolved` is
+      // simulated, since that is the only axis the draft-persistence tests below drive.
+      const filtered = mocks.commentThreadsFixture.current.filter((thread) => {
+        if (selector.isResolved === undefined) return true;
+        return (thread.status === 'Resolved') === selector.isResolved;
+      });
+      return [filtered, vi.fn(), mocks.commentThreadsFixture.isLoading];
     },
     UserCommentFilters: (_selector: undefined, defaultValue: CommentFilterSelection) =>
       useMockedUserCommentFilters(contextProjectId, defaultValue),
@@ -156,15 +183,57 @@ vi.mock('./use-bcv-sync-scroll.hook', () => ({
 // filters the web view actually has applied
 vi.mock('./comment-list.component', () => ({
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS: [],
-  CommentListPanel: (props: {
+  CommentListPanel: ({
+    isLoading,
+    threads,
+    filters,
+    scopeFilter,
+    onFiltersChange,
+    onScopeFilterChange,
+    drafts,
+    onDraftChange,
+  }: {
     isLoading: boolean;
+    threads: { id: string }[];
     filters: CommentFilters;
     scopeFilter: ScopeFilter;
     onFiltersChange: (filters: CommentFilters) => void;
     onScopeFilterChange: (scopeFilter: ScopeFilter) => void;
+    drafts?: Readonly<Record<string, { editorState?: string }>>;
+    onDraftChange?: (threadId: string, draft: { editorState?: string } | undefined) => void;
   }) => {
-    mocks.panelPropsLog.push(props);
-    return undefined;
+    mocks.panelPropsLog.push({
+      isLoading,
+      threads,
+      filters,
+      scopeFilter,
+      onFiltersChange,
+      onScopeFilterChange,
+      drafts,
+      onDraftChange,
+    });
+    // A minimal stand-in for the real toolbar's reply-box editor: one text input per currently
+    // rendered thread, wired straight to `drafts`/`onDraftChange`, so a test can exercise "the web
+    // view keeps a draft across a filter-driven remount" without depending on the real Lexical
+    // editor. Only rendered for `threads` -- a thread absent from the current (filtered) list has
+    // no input, matching the real CommentThread unmounting.
+    return (
+      <>
+        {threads.map((thread) => (
+          <input
+            key={thread.id}
+            aria-label={`draft-${thread.id}`}
+            value={drafts?.[thread.id]?.editorState ?? ''}
+            onChange={(event) =>
+              onDraftChange?.(
+                thread.id,
+                event.target.value ? { editorState: event.target.value } : undefined,
+              )
+            }
+          />
+        ))}
+      </>
+    );
   },
 }));
 
@@ -284,6 +353,76 @@ function latestPanelProps() {
   return mocks.panelPropsLog[mocks.panelPropsLog.length - 1];
 }
 
+/** Minimal, valid `LegacyCommentThread` fixture builder — only the fields these tests read vary. */
+function makeCommentThread(id: string, status: 'Todo' | 'Resolved'): LegacyCommentThread {
+  return {
+    id,
+    status,
+    type: 'Normal',
+    modifiedDate: '2024-01-01T00:00:00.0000000-00:00',
+    verseRef: 'MRK 1:1',
+    isSpellingNote: false,
+    isBTNote: false,
+    isConsultantNote: false,
+    isRead: false,
+    comments: [
+      {
+        contents: `<p>${id} root comment</p>`,
+        date: '2024-01-01T00:00:00.0000000-00:00',
+        deleted: false,
+        hideInTextWindow: false,
+        id: `${id}/tester/2024-01-01`,
+        isRead: false,
+        language: 'en',
+        startPosition: 0,
+        thread: id,
+        user: 'Tester',
+        verseRef: 'MRK 1:1',
+      },
+    ],
+  };
+}
+
+/** An open (not resolved) thread — matches the default "All comments" preset but not "Resolved". */
+const threadA = makeCommentThread('thread-a', 'Todo');
+/** A resolved thread — matches the "Resolved" preset but not the default "All comments" preset. */
+const threadB = makeCommentThread('thread-b', 'Resolved');
+
+/** Maps a preset's user-facing toolbar label to its underlying value — the two this file drives. */
+const PRESET_LABEL_TO_VALUE: Partial<Record<string, CommentPreset>> = {
+  'All comments': 'all',
+  Resolved: 'resolved',
+};
+
+/**
+ * Selects a comment-filter preset by the label the real toolbar dropdown shows, driving the panel's
+ * own `onFiltersChange` handler exactly as the existing filter tests above do — the panel itself is
+ * mocked, so there is no real dropdown to click.
+ */
+function selectPreset(label: string) {
+  const preset = PRESET_LABEL_TO_VALUE[label];
+  if (!preset) throw new Error(`Unknown preset label in this test file's mock: ${label}`);
+  act(() => {
+    latestPanelProps().onFiltersChange({ preset });
+  });
+}
+
+/** Types into the mocked panel's stand-in draft input for the given thread (see the panel mock). */
+function typeDraftInto(threadId: string, text: string) {
+  act(() => {
+    fireEvent.change(screen.getByLabelText(`draft-${threadId}`), { target: { value: text } });
+  });
+}
+
+/** Reads the current value of the mocked panel's stand-in draft input for the given thread. */
+async function draftTextIn(threadId: string): Promise<string> {
+  return waitFor(() => {
+    const input = screen.getByLabelText(`draft-${threadId}`);
+    if (!(input instanceof HTMLInputElement)) throw new Error('Expected an <input> element');
+    return input.value;
+  });
+}
+
 /** This user's stored selection for 'project-1' before any test narrows it. */
 const DEFAULT_STORED_USER_COMMENT_FILTERS: CommentFilterSelection = {
   dataVersion: '1.0.0',
@@ -313,6 +452,11 @@ beforeEach(() => {
   // Each mounted instance's effect cleanup removes its own subscriber on unmount; clearing here too
   // is just hygiene against a test that renders without unmounting through the usual `cleanup()`.
   mocks.userCommentFiltersSubscribers.clear();
+  mocks.commentThreadsFixture.current = [];
+  mocks.commentThreadsFixture.isLoading = false;
+  // Drafts persist to real localStorage (comment-draft-store.ts); jsdom's storage is shared across
+  // every test in this file, so a draft written by one test must not leak into the next.
+  localStorage.clear();
 });
 
 describe('setFilters messages replayed in a burst', () => {
@@ -723,5 +867,46 @@ describe('stored comment filter selection', () => {
         scopeFilter: 'current-verse',
       });
     });
+  });
+});
+
+describe('comment draft persistence', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+    mocks.commentThreadsFixture.current = [threadA, threadB];
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('keeps a draft when a filter change unmounts its thread', async () => {
+    // The whole point of hoisting draft state to the web view: switching filters must not discard
+    // typed work just because the thread it belongs to briefly stops matching the active filter.
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    typeDraftInto(threadA.id, 'half a thought');
+    selectPreset('Resolved'); // threadA (Todo) no longer matches; its input unmounts
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'resolved' }));
+    selectPreset('All comments'); // and threadA comes back
+    await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
+
+    expect(await draftTextIn(threadA.id)).toBe('half a thought');
+  });
+
+  it('does not prune drafts while the comment-thread query is still loading', async () => {
+    // The single most destructive thing pruning could do: mistake "the query hasn't returned yet"
+    // for "this project has no threads" and wipe out every draft on mount. Seed a draft for a
+    // thread that is real but not yet reflected in the (empty, still-loading) query result.
+    saveDrafts('project-1', { [threadA.id]: { editorState: 'saved draft' } });
+    mocks.commentThreadsFixture.current = [];
+    mocks.commentThreadsFixture.isLoading = true;
+
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    expect(latestPanelProps().drafts).toEqual({ [threadA.id]: { editorState: 'saved draft' } });
   });
 });
