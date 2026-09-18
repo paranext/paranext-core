@@ -584,6 +584,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /** Monotonic allocator for {@link paletteSession} tokens. */
   const paletteSessionCounter = useRef(0);
 
+  /**
+   * How many marker palettes a note editor (the popover or a footnotes pane row) has open, counted
+   * from each show until its promise settles. {@link paletteSession} tracks only this view's own
+   * editor, so without this count a row editor's palette would not hold incoming updates back: a
+   * palette that takes focus takes it out of the pane, and an update landing then would end the row
+   * session underneath the open palette.
+   */
+  const noteEditorPalettesOpen = useRef(0);
+
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   // Set by the core auto-sync edit-block driver while an automatic (scheduled) Send/Receive is
   // syncing this project: editing is frozen (folded into isReadOnlyEffective below) and a slim
@@ -2344,8 +2353,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // three-parameter version compiled while silently dropping `keyForwarding` — the popover's
       // selection-`\` palette then opened focus-stealing with no forwarding, and the Space/`*`/
       // `\`/Backspace commit semantics never ran.
-      show: (items, anchor, passive, keyForwarding) =>
-        papi.overlays.showCommandPalette(
+      show: (items, anchor, passive, keyForwarding) => {
+        noteEditorPalettesOpen.current += 1;
+        const shown = papi.overlays.showCommandPalette(
           {
             // Resolved here for the same reason the main editor resolves its own items: an
             // unresolved LocalizeKey (the close-tag badge) sends the request down the overlay
@@ -2367,7 +2377,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             disableFuzzyMatching: true,
           },
           webViewId,
-        ),
+        );
+        const onSettled = () => {
+          noteEditorPalettesOpen.current -= 1;
+        };
+        shown.then(onSettled).catch(onSettled);
+        return shown;
+      },
       update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
       commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
       dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
@@ -3827,11 +3843,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Sync editor content with PDP data. The write-in-flight guard (`currentlyWritingUsjToPdp`) is
   // owned entirely by the save path (`withWriteInFlightGuard`), so it is not passed here.
-  // The editor owns its content while a marker-palette session or a LIVE footnote-popover editing
-  // session is open, even though DOM focus sits in the overlay/popover: a same-document echo
-  // replacing the editor mid-session regenerates every Lexical key and kills the session
-  // (live-observed: the popover's Save no-oping, the editor "jumping to the top" mid-insert).
-  // A footnotes-pane session claims less. Its row editor saves as it goes, like the Scripture
+  // The editor owns its content while a marker-palette session (this editor's, or a note editor's)
+  // or a LIVE footnote-popover editing session is open, even though DOM focus sits in the
+  // overlay/popover: a same-document echo replacing the editor mid-session regenerates every
+  // Lexical key and kills the session (live-observed: the popover's Save no-oping, the editor
+  // "jumping to the top" mid-insert). A footnotes-pane session claims less. Its row editor saves as it goes, like the Scripture
   // editor, so it holds updates back only on the Scripture editor's terms: focus in the pane and an
   // edit there within the ownership window. Past that, a differing update replaces the document and
   // ends the session (`setEditorUsj`) rather than being overwritten by this view's older copy.
@@ -3846,7 +3862,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // save debounce.
   const isEditingSessionActive = useCallback(() => {
     const activity = resolveEditingSessionActivity({
-      hasPaletteSession: paletteSession.current !== undefined,
+      hasPaletteSession: paletteSession.current !== undefined || noteEditorPalettesOpen.current > 0,
       editingNoteKey: editingNoteKey.current,
       noteSessionRefreshedAtMs: editingNoteSessionRefreshedAt.current,
       nowMs: Date.now(),
