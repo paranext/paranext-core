@@ -56,6 +56,20 @@ interface NestedRemoval {
   childIndex: number;
 }
 
+/**
+ * The caret target for a RESTORED chapter marker: the end of the document's text, rather than a
+ * position in the repaired document.
+ *
+ * A restore means the editor was holding a chapter with no marker at all — a chapter the book has
+ * not reached yet being typed into, or a chapter whose content was wiped — so the user is building
+ * the chapter up and was typing at its end. The new marker is the wrong place for the caret: keys
+ * typed there become part of the chapter number, which the next repair corrects straight back out.
+ */
+export const CARET_AT_DOCUMENT_END = 'end-of-document';
+
+/** Where the caret belongs once a repaired document is in the editor. */
+export type ChapterMarkerCaretTarget = SelectionRange | typeof CARET_AT_DOCUMENT_END;
+
 /** The outcome of a repair pass: the document to use, and whether it differs from what came in. */
 export interface ChapterMarkerRepairResult {
   /** The repaired document, or the input document unchanged when nothing needed repairing. */
@@ -68,7 +82,7 @@ export interface ChapterMarkerRepairResult {
    * regenerates every node key and leaves it with no caret at all, so the caret is placed afresh at
    * the site of the correction rather than carried across.
    */
-  caretTarget: SelectionRange | undefined;
+  caretTarget: ChapterMarkerCaretTarget | undefined;
 }
 
 /** Whether `item` is a marker node rather than a bare text string. */
@@ -189,7 +203,7 @@ function caretAtRemovalBoundary(parentIndexes: number[], childIndex: number): Se
 function toRepairResult(
   usj: Usj,
   repairedContent: MarkerContent[],
-  caretTarget: SelectionRange | undefined,
+  caretTarget: ChapterMarkerCaretTarget | undefined,
 ): ChapterMarkerRepairResult {
   // The across-iframes comparison rather than `deepEqual`: a false "these differ" here reports a
   // repair that was not made, which pushes the document back into the editor and toasts the user on
@@ -291,11 +305,12 @@ export function repairChapterMarkers(
   }
 
   // The correction the user is standing in front of is the one their caret belongs in: a renumbered
-  // or restored marker takes the caret to just past its number, as deleting the errant text by hand
-  // would have. Only when the repair left every surviving number alone does the caret go to the
-  // place a removed marker used to occupy — and a marker removed from the very end of the document
-  // has no such place, so the surviving marker takes the caret instead.
-  const didChangeNumber = anchor?.chapterObject.number !== expected;
+  // marker takes the caret to just past its number, as deleting the errant text by hand would have.
+  // A restored marker has no number the user typed, so the caret goes back to the end of the text
+  // they were typing ({@link CARET_AT_DOCUMENT_END}). Only when the repair left every surviving
+  // number alone does the caret go to the place a removed marker used to occupy — and a marker
+  // removed from the very end of the document has no such place, so the surviving marker takes the
+  // caret instead.
   const removedTopLevelEntry = chapterEntries.find((entry) => entry.index !== anchor?.index);
   const followingItemIndex =
     removedTopLevelEntry && removedTopLevelEntry.index + 1 < strippedContent.length
@@ -306,8 +321,10 @@ export function repairChapterMarkers(
     repairedChapterObject.marker ?? CHAPTER_MARKER,
     expected,
   );
-  let caretTarget: SelectionRange | undefined;
-  if (didChangeNumber) {
+  let caretTarget: ChapterMarkerCaretTarget | undefined;
+  if (!anchor) {
+    caretTarget = CARET_AT_DOCUMENT_END;
+  } else if (anchor.chapterObject.number !== expected) {
     caretTarget = caretAtChapterNumber;
   } else if (followingItemIndex !== undefined) {
     caretTarget = caretAtRemovalBoundary([mapTopLevelIndex(followingItemIndex)], 0);
@@ -335,7 +352,7 @@ export interface ChapterSavePreparation {
    * Where the caret belongs once {@link repairedUsj} is in the editor. See
    * {@link ChapterMarkerRepairResult.caretTarget}.
    */
-  caretTarget: SelectionRange | undefined;
+  caretTarget: ChapterMarkerCaretTarget | undefined;
 }
 
 /**
@@ -414,7 +431,7 @@ export function applyChapterSavePreparation({
   preparation: ChapterSavePreparation;
   savedChapterKey: string;
   currentChapterKey: string;
-  applyRepairToEditor: (usj: Usj, caretTarget: SelectionRange | undefined) => void;
+  applyRepairToEditor: (usj: Usj, caretTarget: ChapterMarkerCaretTarget | undefined) => void;
   notifyRepair: () => void;
 }): Usj | undefined {
   const { repairedUsj, usjToSave, caretTarget } = preparation;

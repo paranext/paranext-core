@@ -589,8 +589,14 @@ step, no automation. Just a record.
     that document, and only when the editor held DOM focus at push-back time — an unfocused editor
     has no claim on the shared document selection, and the editor itself skips selection
     reconciliation when it loads content unfocused.
-  - The target is just past the corrected or restored chapter number; failing that, the boundary a
-    removed marker occupied; failing that, the surviving marker.
+  - The target is just past the corrected chapter number; failing that, the boundary a removed
+    marker occupied; failing that, the surviving marker. A RESTORED marker (the document had none)
+    is the exception: its caret goes to the end of the document's text
+    (`CARET_AT_DOCUMENT_END`), applied by focusing the editor with no selection, which Lexical
+    resolves to the root's end. A restore is reached by typing into a chapter with no marker at all
+    — in Power mode, a chapter the book has not reached yet — so the user was typing at the end,
+    and keys typed into the new marker would become part of the chapter number for the next repair
+    to correct away.
   - **The target is computed from the repair, never carried across from the pre-repair selection.**
     `EditorRef.getSelection()` addresses the LIVE tree while the repair works on `getUsj()`'s
     SETTLED document, and the two differ for exactly the gesture that matters: a `\c` typed under

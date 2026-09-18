@@ -8,6 +8,7 @@ import {
 } from '@eten-tech-foundation/scripture-utilities';
 import {
   applyChapterSavePreparation,
+  CARET_AT_DOCUMENT_END,
   prepareUsjForChapterSave,
   repairChapterMarkers,
 } from './chapter-marker-repair.util';
@@ -306,35 +307,6 @@ describe('repairChapterMarkers against documents shaped like the PDP serves them
     expect(repairedChapter.number).toBe('3');
     expect(repairedChapter.sid).toBe('GEN 3');
   });
-
-  // `caretTarget` addresses the chapter marker's first CONTENT item — the on-screen glyph bytes the
-  // editor renders — which is a place no chapter node in USJ actually holds anything: the parser
-  // emits a chapter as a childless node, so the marker a repair RENUMBERS is as childless as the
-  // one it SYNTHESIZES. That equivalence is what lets the end-to-end cover of the renumber gesture
-  // (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`, which reads the web
-  // view's own DOM selection) stand for the restore path too, and it is the reason the caret target
-  // is not built from the node's own content. Pinned here because it is a property of the parser,
-  // so nothing in this repo would otherwise notice it changing.
-  it('renumbers and synthesizes markers of the same childless shape', () => {
-    const parsedChapter = chapterNodeOf(usxStringToUsj(CH3_USX));
-    expect(parsedChapter.content).toBeUndefined();
-
-    const renumbered = chapterNodeOf(
-      repairChapterMarkers(
-        (() => {
-          const usj = usxStringToUsj(CH3_USX);
-          chapterNodeOf(usj).number = '5';
-          return usj;
-        })(),
-        3,
-      ).usj,
-    );
-    const synthesized = chapterNodeOf(repairChapterMarkers(usjOf(para('p', 'body')), 3).usj);
-
-    expect(renumbered.content).toBeUndefined();
-    expect(synthesized.content).toBeUndefined();
-    expect(Object.keys(synthesized).every((key) => key in renumbered)).toBe(true);
-  });
 });
 
 describe('applyChapterSavePreparation', () => {
@@ -471,9 +443,18 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
     expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 5 } });
   });
 
-  it('puts the caret just after a restored chapter number', () => {
+  // Not in the new marker: keys typed there would become part of the chapter number.
+  it('sends the caret to the end of the text when the marker was restored', () => {
     const { caretTarget } = repairChapterMarkers(usjOf(para('p', 'body')), 2);
-    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+    expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+  });
+
+  it('sends the caret to the end of the text for a restore that also removed a nested marker', () => {
+    const { caretTarget } = repairChapterMarkers(
+      usjOf({ type: 'para', marker: 'p', content: ['body', chapter('7')] }),
+      2,
+    );
+    expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
   });
 
   it('addresses the corrected marker where the repair actually left it', () => {

@@ -139,6 +139,8 @@ import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave } from './debounced-pdp-save.util';
 import {
   applyChapterSavePreparation,
+  CARET_AT_DOCUMENT_END,
+  ChapterMarkerCaretTarget,
   prepareUsjForChapterSave,
 } from './chapter-marker-repair.util';
 import {
@@ -2844,7 +2846,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
      */
     function putRepairedUsjInEditor(
       repairedUsj: Usj,
-      caretTarget: SelectionRange | undefined,
+      caretTarget: ChapterMarkerCaretTarget | undefined,
     ): void {
       // Decided BEFORE the push-back, on whether the caret is this editor's to place at all: an
       // editor without DOM focus has no claim on the shared document selection (which is why it
@@ -2870,9 +2872,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         if (chapterKeyRef.current !== savedChapterKey) return;
         try {
           // Focus first: the load leaves the editor with no selection to reconcile, and a caret
-          // placed in an editor the load has dropped focus from would not show.
+          // placed in an editor the load has dropped focus from would not show. Focusing an editor
+          // with no selection is also what puts the caret at the end of the document (Lexical
+          // selects the root's end by default), so that target needs nothing further.
           editorRef.current?.focus();
-          editorRef.current?.setSelection(caretToRestore);
+          if (caretToRestore !== CARET_AT_DOCUMENT_END)
+            editorRef.current?.setSelection(caretToRestore);
         } catch (error) {
           logger.warn(
             `Error restoring the caret after a chapter marker correction: ${getErrorMessage(error)}`,
