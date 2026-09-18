@@ -35,8 +35,14 @@ vi.mock('@renderer/hooks/use-is-focused-window.hook', () => ({
 
 // Power mode: Simple mode marks the title's children `drag-ignore`, which rc-dock skips before
 // arming a drag, so a left press there would arm nothing and prove nothing about the middle button.
+// Both hooks: the dock layout asks `useIsPowerMode`, the tab title asks `useInterfaceMode` for the
+// settled mode, and an unmocked `useInterfaceMode` would reach the real `useSetting`.
 vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
   useIsPowerMode: vi.fn(() => true),
+}));
+
+vi.mock('@renderer/hooks/use-interface-mode.hook', () => ({
+  useInterfaceMode: vi.fn(() => ['power', vi.fn(), true]),
 }));
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
