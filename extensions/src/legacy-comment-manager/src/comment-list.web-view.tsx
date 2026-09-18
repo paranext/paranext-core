@@ -31,7 +31,11 @@ import {
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
-import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
+import {
+  CommentListPanel,
+  COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+  COMMENT_LIST_STICKY_HEADER_ELEMENT_ID,
+} from './comment-list.component';
 import {
   applyFilterOverrides,
   buildCommentThreadSelector,
@@ -322,6 +326,19 @@ global.webViewComponent = function CommentListWebView({
   // CommentList).
   const scrollToTarget = useCallback(
     (target: NonNullable<CommentListScrollTarget>, behavior: ScrollBehavior) => {
+      // The sticky header overlays the top of what scrolls here (this view's document scrolls, not
+      // the list container), so a `block: 'start'` scroll would otherwise park the card underneath
+      // it. Giving the scroll container that much top padding makes the browser stop the card below
+      // the header instead. Re-read each time: the header grows when the editing-paused notice
+      // appears. The height is in the document's own pixels — the header sits outside the
+      // content-zoom root, so neither it nor `scroll-padding-top` is scaled by the zoom level.
+      // Setting the padding on `documentElement` is correct only while the web-view document itself
+      // is the scroller; a future layout that bounds this view's height (PT-4173) would move the
+      // scroller to a bounded container instead, and this padding would need to move with it.
+      const stickyHeader = document.getElementById(COMMENT_LIST_STICKY_HEADER_ELEMENT_ID);
+      if (stickyHeader)
+        document.documentElement.style.scrollPaddingTop = `${stickyHeader.getBoundingClientRect().height}px`;
+
       if (target.type === 'thread') {
         const threadElement = document.getElementById(getCommentThreadElementId(target.threadId));
         if (threadElement) threadElement.scrollIntoView({ behavior, block: 'start' });

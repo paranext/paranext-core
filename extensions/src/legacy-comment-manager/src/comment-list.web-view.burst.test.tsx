@@ -10,6 +10,12 @@ import {
   ScopeFilter,
   UNFILTERED,
 } from './comment-list-filters.model';
+import type { CommentListScrollTarget } from './comment-list-scroll.utils';
+
+/** One call the web view made to the (mocked) `useBcvSyncScroll` hook. */
+type BcvSyncScrollCall = {
+  scrollToTarget: (target: NonNullable<CommentListScrollTarget>, behavior: ScrollBehavior) => void;
+};
 
 // vi.mock factories are hoisted above imports, so anything they close over must be created via
 // vi.hoisted to avoid a temporal-dead-zone reference.
@@ -28,7 +34,11 @@ const mocks = vi.hoisted(() => {
     recordSelfInitiatedNavigation: vi.fn(),
     cancelPendingSyncScroll: vi.fn(),
   };
-  return { panelPropsLog, bcvSyncScroll };
+  // Every call the web view made to useBcvSyncScroll, most recent last — lets a test reach the web
+  // view's real `scrollToTarget` callback directly (see the mock below) instead of driving the real
+  // hook's sync-scroll conditions just to exercise the DOM work that callback owns.
+  const bcvSyncScrollCalls: BcvSyncScrollCall[] = [];
+  return { panelPropsLog, bcvSyncScroll, bcvSyncScrollCalls };
 });
 
 vi.mock('@papi/frontend', () => ({
@@ -62,13 +72,19 @@ vi.mock('platform-bible-react', () => ({
 }));
 
 vi.mock('./use-bcv-sync-scroll.hook', () => ({
-  useBcvSyncScroll: () => mocks.bcvSyncScroll,
+  useBcvSyncScroll: (call: BcvSyncScrollCall) => {
+    mocks.bcvSyncScrollCalls.push(call);
+    return mocks.bcvSyncScroll;
+  },
 }));
 
 // The panel is presentation; recording the props it is handed is how these tests observe which
 // filters the web view actually has applied
 vi.mock('./comment-list.component', () => ({
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS: [],
+  // The real value (comment-list.component.tsx): the web view looks this id up by exact string, so
+  // the sticky-header test below needs it to match.
+  COMMENT_LIST_STICKY_HEADER_ELEMENT_ID: 'comment-list-sticky-header',
   CommentListPanel: (props: {
     filters: CommentFilters;
     scopeFilter: ScopeFilter;
@@ -149,6 +165,31 @@ function latestPanelProps() {
   return mocks.panelPropsLog[mocks.panelPropsLog.length - 1];
 }
 
+/** The web view's own `scrollToTarget` from its most recent `useBcvSyncScroll` call. */
+function latestScrollToTarget() {
+  const call = mocks.bcvSyncScrollCalls[mocks.bcvSyncScrollCalls.length - 1];
+  if (!call) throw new Error('test setup: useBcvSyncScroll was never called');
+  return call.scrollToTarget;
+}
+
+/**
+ * A `DOMRect`-shaped object reporting only the given `height`, for stubbing
+ * `getBoundingClientRect`.
+ */
+function rectOfHeight(height: number): DOMRect {
+  return {
+    height,
+    width: 0,
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: height,
+    toJSON: () => ({}),
+  };
+}
+
 describe('setFilters messages replayed in a burst', () => {
   beforeEach(() => {
     mocks.panelPropsLog.length = 0;
@@ -226,5 +267,40 @@ describe('setFilters messages replayed in a burst', () => {
     // The same object, not merely an equal one: an accepted repeat would mint a new-but-equal
     // filters object, churning the CommentThreads subscription the equal-values skip protects
     expect(latestPanelProps().filters).toBe(appliedFilters);
+  });
+});
+
+describe('sticky-header scroll padding', () => {
+  afterEach(() => {
+    cleanup();
+    document.documentElement.style.scrollPaddingTop = '';
+  });
+
+  it("re-reads the sticky header's height on every scroll and pins it as the document's scroll-padding-top", async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    const header = document.createElement('div');
+    header.id = 'comment-list-sticky-header';
+    document.body.appendChild(header);
+    try {
+      const heights = [40, 64];
+      const getBoundingClientRect = vi.spyOn(header, 'getBoundingClientRect');
+      heights.forEach((height) =>
+        getBoundingClientRect.mockImplementationOnce(() => rectOfHeight(height)),
+      );
+
+      // A target that resolves to no DOM element (the mocked getCommentThreadElementId never
+      // matches anything real here) is enough: the sticky-header read runs unconditionally before
+      // scrollToTarget branches on the target type.
+      const scrollToTarget = latestScrollToTarget();
+      scrollToTarget({ type: 'thread', threadId: 'missing-1' }, 'smooth');
+      expect(document.documentElement.style.scrollPaddingTop).toBe(`${heights[0]}px`);
+
+      scrollToTarget({ type: 'thread', threadId: 'missing-2' }, 'smooth');
+      expect(document.documentElement.style.scrollPaddingTop).toBe(`${heights[1]}px`);
+    } finally {
+      document.body.removeChild(header);
+    }
   });
 });

@@ -188,6 +188,19 @@ The platform then scales that element on Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel an
 
 First reference implementation: the Scripture editor's two areas, `main` for the text and `footnotes` for the footnotes pane (PT-4581).
 
+**Pop-ups follow their area.** Popovers, dropdown menus and tooltips from `platform-bible-react`
+that open from inside a `ContentZoomRoot` take that area's zoom level and keep themselves inside
+the pane. A pop-up your view renders outside the area element — beside the content and anchored
+to a position in it — joins the area only when wrapped in `ContentZoomAreaProvider` (pass the
+same `area` as the root; omit it for the main area). Toolbar pop-ups outside every area stay at
+interface scale. `SelectContent`, `ContextMenuContent`, `MenubarContent` and
+`DropdownMenuSubContent` do not follow an area yet either — they render at interface scale even
+when opened from inside one. `ContentZoomRoot` and `ContentZoomAreaProvider` are experimental. A
+pop-up you build without these components can opt in by putting
+`data-platform-content-zoom-root="<area>"` and `data-platform-content-zoom-popup` on its portaled
+content. Those attributes only scale it: such a pop-up gets none of the library's size caps, so it
+must keep itself inside the pane.
+
 ---
 
 ## Async Hook State Shape

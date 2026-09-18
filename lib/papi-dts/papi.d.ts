@@ -662,6 +662,12 @@ declare module 'shared/models/web-view.model' {
    * id to factor. An area with no entry follows the default from Settings. Written only by the
    * platform; web views may read it.
    *
+   * A web view whose `getWebViewDefinition` rebuilds its own definition on re-point (a
+   * `reloadWebView` pointed at another project through the same web view id) must carry its saved
+   * `state` through wholesale, by spreading it rather than copying only the keys the view itself
+   * uses: the platform stores a companion identity stamp next to this key, and a view that dropped
+   * either one while rebuilding would lose the platform's re-point re-seed silently.
+   *
    * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
    * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
    * equal to this constant.
@@ -688,6 +694,20 @@ declare module 'shared/models/web-view.model' {
    * @experimental This constant is unstable and may change or disappear without notice
    */
   export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
+  /**
+   * Attribute that marks an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} as pop-up content
+   * opened from that zoom area (a popover, menu or tooltip portaled out of the area element) rather
+   * than a pane. The platform scales such an element with its area but never reports it as an area of
+   * its own and never places the zoom indicator on it. `platform-bible-react`'s pop-up components set
+   * it automatically.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that marks its own pop-up content writes the literal `'data-platform-content-zoom-popup'` itself
+   * and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_POPUP_ATTRIBUTE = 'data-platform-content-zoom-popup';
   /**
    * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
    * zoom area, with that area's effective factor (own level, else the Settings default):

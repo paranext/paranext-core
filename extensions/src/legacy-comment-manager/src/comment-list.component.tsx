@@ -1,5 +1,6 @@
 import {
   CommentList,
+  ContentZoomRoot,
   Label,
   Select,
   SelectContent,
@@ -60,6 +61,13 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
  * edits.
  */
 const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
+
+/**
+ * `id` of the sticky header (the editing-paused notice, when shown, plus the filter toolbar). The
+ * header overlays the top of the scrolled content, so anything scrolling a card into view needs its
+ * current height — which changes with the notice — to keep the card clear of it.
+ */
+export const COMMENT_LIST_STICKY_HEADER_ELEMENT_ID = 'comment-list-sticky-header';
 
 // Reuse the underlying CommentList prop types so this panel stays in sync with platform-bible-react.
 type CommentListProps = ComponentProps<typeof CommentList>;
@@ -257,8 +265,12 @@ export function CommentListPanel({
     <div className="tw:flex tw:flex-col tw:h-full">
       {/* Sticky header: the editing-paused notice (when blocking) and the filter toolbar share one
           sticky container so both stay pinned to the top of whichever ancestor scrolls and neither
-          scrolls out of view as the comments list scrolls. */}
-      <div className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0">
+          scrolls out of view as the comments list scrolls. COMMENT_LIST_STICKY_HEADER_ELEMENT_ID
+          documents why it carries an id. */}
+      <div
+        id={COMMENT_LIST_STICKY_HEADER_ELEMENT_ID}
+        className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0"
+      >
         {/* Slim, non-covering notice shown while this project's automatic Send/Receive is blocking
             edits. Only the write affordances are disabled (by the web view's gated capability
             callbacks); filtering/reading comments stays fully usable. */}
@@ -321,8 +333,10 @@ export function CommentListPanel({
       </div>
 
       {/* Comments list (or skeletons while loading / empty state). Only this region swaps on load,
-          so the toolbar above stays mounted. */}
-      <div className="tw:flex-1 tw:overflow-auto">{listContent}</div>
+          so the toolbar above stays mounted. It is also this view's only content-zoom area: the
+          sticky header above (notice + filter toolbar) stays outside the marker so it keeps its
+          size while the cards scale. */}
+      <ContentZoomRoot className="tw:flex-1 tw:overflow-auto">{listContent}</ContentZoomRoot>
     </div>
   );
 }
