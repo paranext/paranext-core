@@ -1718,6 +1718,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked]);
 
   /**
+   * Ends an open footnotes-pane session ahead of a note insert, so the inserted note opens in the
+   * row editor (`openNoteEditorOnNewNote`) exactly as it does when no session is open. Left open,
+   * the session would take the insert as an edit of the text around its own note and the new note
+   * would land unopened. Only the top-menu command can reach this with a row editor open: the
+   * context menu and the keyboard shortcuts act from the Scripture text, and focusing it has
+   * already ended the session. A popover session is left alone.
+   */
+  const endPaneNoteEditBeforeInsert = useCallback(() => {
+    if (paneEditingIndexRef.current !== undefined) closeFootnoteEditorRef.current(false);
+  }, []);
+
+  /**
    * Inserts a footnote at the current selection. Shared by the "Insert footnote" context-menu item,
    * the Ctrl+T keyboard shortcut, and the top-menu
    * `platformScriptureEditor.insertFootnoteAtSelection` command (via the `webViewMessageListener`
@@ -1734,8 +1746,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       'inserting footnote',
     );
 
+    endPaneNoteEditBeforeInsert();
     editorRef.current?.insertMarker('f');
-  }, [projectId, localizedStrings]);
+  }, [projectId, localizedStrings, endPaneNoteEditBeforeInsert]);
 
   /**
    * Inserts a cross-reference at the current selection. Shared by the "Insert cross-reference"
@@ -1751,8 +1764,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       'inserting cross-reference',
     );
 
+    endPaneNoteEditBeforeInsert();
     editorRef.current?.insertMarker('x');
-  }, [projectId, localizedStrings]);
+  }, [projectId, localizedStrings, endPaneNoteEditBeforeInsert]);
 
   const options = useMemo<EditorOptions>(
     () => ({
