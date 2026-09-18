@@ -5,8 +5,8 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { QUIET_FOCUS_ATTRIBUTE } from '@/utils/focus.util';
+import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
 import TabDropdownMenu from './tab-dropdown-menu.component';
-import { installNoopResizeObserver } from '../../../../../../vitest.setup';
 
 // The hasPointerCapture / scrollIntoView shims this menu needs in jsdom are installed repo-wide by
 // vitest.setup.ts. ResizeObserver is opt-in there, because tests that never open an overlay depend
@@ -98,5 +98,26 @@ describe('TabDropdownMenu focus after the menu closes', () => {
     await user.keyboard('{Shift}');
 
     expect(trigger.hasAttribute(QUIET_FOCUS_ATTRIBUTE)).toBe(false);
+  });
+
+  // Without this, the mark and its inline `outline: none` would outlive the focus they were meant
+  // for, and the next *keyboard* arrival at this trigger would land with no ring — the very thing
+  // the mechanism exists to prevent.
+  it('stops suppressing the ring once focus leaves the trigger', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<TabDropdownMenu onSelectMenuItem={vi.fn()} menuData={MENU_DATA} tabLabel="Project" />);
+    const trigger = screen.getByRole('button', { name: 'Project' });
+
+    await openWith.pointer(user, trigger);
+    await screen.findByRole('menu');
+    await closeWith['pointer selection'](user);
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(trigger.hasAttribute(QUIET_FOCUS_ATTRIBUTE)).toBe(true);
+    expect(trigger.style.outline).toBe('none');
+
+    trigger.blur();
+
+    expect(trigger.hasAttribute(QUIET_FOCUS_ATTRIBUTE)).toBe(false);
+    expect(trigger.style.outline).toBe('');
   });
 });

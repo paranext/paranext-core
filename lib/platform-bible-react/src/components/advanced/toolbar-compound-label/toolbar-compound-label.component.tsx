@@ -7,7 +7,8 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
-import { getLastInteractionModality, trackInteractionModality } from '@/utils/focus.util';
+import { getLastInteractionModality } from '@/utils/focus.util';
+import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 
 export type ToolbarCompoundLabelProps = {
   /** The field that identifies the item — a book abbreviation, project short name, marker code. */
@@ -95,8 +96,9 @@ export function ToolbarCompoundLabel({
   const isSecondaryRendered = showSecondary && secondary !== undefined;
   const isShowingPartialLabel = isPartial ?? (secondary !== undefined && !showSecondary);
 
+  useInteractionModality();
+
   useEffect(() => {
-    trackInteractionModality();
     const focusable = rootRef.current?.closest('button, [role="combobox"], [tabindex]');
     if (!focusable) return undefined;
 
@@ -104,7 +106,7 @@ export function ToolbarCompoundLabel({
       !!element && element.scrollWidth > element.clientWidth;
 
     const reveal = () => {
-      // Only a keyboard arrival reveals — see `trackInteractionModality`. A pointer user who just
+      // Only a keyboard arrival reveals — see `getLastInteractionModality`. A pointer user who just
       // dismissed a menu gets focus back without asking for an explanation of a label they can see.
       if (getLastInteractionModality() === 'pointer') return;
       // Same two sources as hover: a label that is short by construction, or one CSS has clipped.

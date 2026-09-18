@@ -45,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import { installNoopResizeObserver } from '../../../../vitest.setup';
+import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
 import {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_ABOVE_POPOVER,
