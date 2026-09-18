@@ -202,7 +202,7 @@ function ProjectSelectorLabel({
 function ToolbarProjectSelector({
   projects,
   recentIds,
-  currentProject,
+  displayedProject,
   currentProjectError,
   pendingProject,
   isLoading,
@@ -212,12 +212,16 @@ function ToolbarProjectSelector({
 }: {
   projects: ProjectItem[];
   recentIds: readonly string[];
-  /** The project the editor currently reports, or `undefined` if none. */
-  currentProject: ProjectItem | undefined;
+  /**
+   * The project to name right now — `usePendingProject`'s resolution of a pending pick against
+   * whatever the editor reports. Taken from the hook rather than re-derived here, so the rule for
+   * which of the two wins lives in one place.
+   */
+  displayedProject: ProjectItem | undefined;
   currentProjectError: string | undefined;
   /**
-   * A pick the editor has not caught up with yet, which outranks both {@link currentProject} and a
-   * stale {@link currentProjectError}.
+   * A pick the editor has not caught up with yet, which outranks both {@link displayedProject}'s
+   * fallback and a stale {@link currentProjectError}.
    */
   pendingProject: ProjectItem | undefined;
   isLoading: boolean;
@@ -226,10 +230,6 @@ function ToolbarProjectSelector({
   onShowMoreProjects: () => void;
 }) {
   const shrinkStep = useShrinkStepValue();
-
-  // Derived here rather than taken as a prop: it is a function of the two above, and a caller given
-  // the chance to pass all three can pass a combination that contradicts itself.
-  const displayedProject = pendingProject ?? currentProject;
 
   // `ProjectItem` and `ProjectSelectorProject` invert the meaning of `language`: the item's is a
   // BCP-47 tag and its `languageDisplayName` is the readable name, while the selector's `language`
@@ -294,13 +294,18 @@ function ToolbarProjectSelector({
   );
 
   const renderProjectIndicator = useCallback(
-    (project: ProjectSelectorProject) =>
-      readOnlyIds.has(normalizeProjectId(project.id)) ? (
+    (project: ProjectSelectorProject) => {
+      if (!readOnlyIds.has(normalizeProjectId(project.id))) return undefined;
+      const label = localizedStrings['%projectPicker_readOnly_label%'];
+      return {
         // No native title here, unlike the dialog's rows: a selector row is itself a shadcn tooltip
         // trigger, so a `title` inside one would open the browser's default tooltip on top of the
-        // app's. The accessible name still reaches screen readers through the indicator's own role.
-        <ReadOnlyIndicator label={localizedStrings['%projectPicker_readOnly_label%']} />
-      ) : undefined,
+        // app's. The glyph still names itself for screen readers through its own role; `label`
+        // below is what puts the meaning on screen for everyone else.
+        node: <ReadOnlyIndicator label={label} />,
+        label,
+      };
+    },
     [readOnlyIds, localizedStrings],
   );
 
@@ -542,7 +547,10 @@ export function PlatformBibleToolbar() {
     await svc?.recordProjectOpened(projectId);
   }, []);
 
-  const { pendingProject, beginOpenProject } = usePendingProject(currentSimpleProject, openProject);
+  const { pendingProject, displayedProject, beginOpenProject } = usePendingProject(
+    currentSimpleProject,
+    openProject,
+  );
 
   // The union of both sections. The hook returns them disjoint (`allProjects` already excludes
   // recents), so concatenating cannot duplicate a project.
@@ -824,7 +832,7 @@ export function PlatformBibleToolbar() {
           <ToolbarProjectSelector
             projects={pickerProjects}
             recentIds={recentIds}
-            currentProject={currentSimpleProject}
+            displayedProject={displayedProject}
             currentProjectError={currentSimpleProjectError}
             pendingProject={pendingProject}
             isLoading={isProjectPickerLoading}

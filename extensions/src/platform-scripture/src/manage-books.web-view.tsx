@@ -23,9 +23,9 @@ import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
-  type ProjectSelectorLocalizedStrings,
 } from 'platform-bible-react/experimental';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
@@ -462,10 +462,7 @@ global.webViewComponent = function ManageBooksWebView({
         '%manageBooks_projectSelector_searchPlaceholder%',
         'Search projects & resources',
       ),
-      viewOptionsAriaLabel: resolve(
-        '%manageBooks_projectSelector_filterAriaLabel%',
-        'View options',
-      ),
+      viewOptionsAriaLabel: resolve('%projectSelector_groupByAriaLabel%', 'Group by'),
       groupSectionLabel: resolve('%manageBooks_projectSelector_groupSectionLabel%', 'Group'),
       filterSectionLabel: resolve('%manageBooks_projectSelector_filterSectionLabel%', 'Filter'),
       filterGroupByOpenTabs: resolve(

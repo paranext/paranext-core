@@ -10,7 +10,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
   useListbox,
-  Z_INDEX_MODAL,
 } from 'platform-bible-react';
 import { CheckIcon } from 'lucide-react';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
@@ -130,26 +129,48 @@ function ProjectSection({
           }}
           onFocus={() => onFocusOption(p.id)}
         >
-          {/* Column 1 — short name, right-aligned */}
-          <div className="tw:flex tw:items-center tw:justify-end tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
-            {p.id === currentProjectId && (
-              // Wrapped rather than labelled directly so it carries a hover label like the
-              // read-only padlock beside it — a Lucide icon takes no `title`, and without the
-              // wrapper one glyph in the row names itself on hover while its neighbour stays
-              // silent. `role="img"` hosts the accessible name, as it does there.
-              <span role="img" aria-label={currentProjectLabel} title={currentProjectLabel}>
-                <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
-              </span>
-            )}
-            {/* Rows here are plain listbox options rather than tooltip triggers, so the native
-                hover label is safe to show and matches the check mark beside it. */}
-            {p.isEditable === false && <ReadOnlyIndicator label={readOnlyLabel} showNativeTitle />}
-            {p.shortName}
+          {/* Column 1 — short name. Starts at the leading edge, as it does in the titlebar
+              `ProjectSelector` popover and in `ResourcePickerDialog`; see the picker row layout
+              entry in `.context/standards/Architecture-Decisions.md`. */}
+          <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-start tw:gap-1 tw:pe-2 tw:text-sm tw:font-medium">
+            {/* Both glyph slots are fixed-width and rendered for every row, empty or not, so every
+                short name starts at the same offset. Rendering them conditionally would ragged the
+                leading edge of the one column this list aligns on. `ProjectSelector` reserves its
+                indicator slot the same way. */}
+            <span className="tw:flex tw:h-3 tw:w-3 tw:shrink-0 tw:items-center tw:justify-center">
+              {p.id === currentProjectId && (
+                // Wrapped rather than labelled directly so it carries a hover label like the
+                // read-only padlock beside it — a Lucide icon takes no `title`, and without the
+                // wrapper one glyph in the row names itself on hover while its neighbour stays
+                // silent. `role="img"` hosts the accessible name, as it does there.
+                <span role="img" aria-label={currentProjectLabel} title={currentProjectLabel}>
+                  <CheckIcon className="tw:h-3 tw:w-3 tw:shrink-0" aria-hidden />
+                </span>
+              )}
+            </span>
+            <span className="tw:flex tw:h-3 tw:w-3 tw:shrink-0 tw:items-center tw:justify-center">
+              {/* Rows here are plain listbox options rather than tooltip triggers, so the native
+                  hover label is safe to show and matches the check mark beside it. */}
+              {p.isEditable === false && (
+                <ReadOnlyIndicator label={readOnlyLabel} showNativeTitle />
+              )}
+            </span>
+            <span className="tw:truncate" title={p.shortName}>
+              {p.shortName}
+            </span>
           </div>
-          {/* Column 2 — full name */}
-          <div className="tw:px-3 tw:text-sm">{p.fullName}</div>
-          {/* Column 3 — language tag with tooltip */}
-          <div className="tw:text-right tw:text-sm tw:text-muted-foreground">
+          {/* Column 2 — full name. Truncates rather than widening the row; the native hover label
+              keeps the clipped text reachable. */}
+          <div className="tw:min-w-0 tw:truncate tw:px-3 tw:text-sm" title={p.fullName}>
+            {p.fullName}
+          </div>
+          {/* Column 3 — language tag with tooltip. Floored and truncating like the two columns
+              before it: its min-content contribution is a whole unbreakable word, so a track that
+              could not shrink would satisfy itself by crushing the short name and full name
+              instead — and `overflow-x-hidden` on the scroll container means there is no longer a
+              scrollbar to recover them with. `language` is a BCP-47 tag by convention only, and
+              nothing enforces it. */}
+          <div className="tw:min-w-0 tw:truncate tw:text-end tw:text-sm tw:text-muted-foreground">
             {p.language &&
               (p.languageDisplayName ? (
                 <TooltipProvider>
@@ -157,9 +178,7 @@ function ProjectSection({
                     <TooltipTrigger asChild>
                       <span className="tw:cursor-default">{p.language}</span>
                     </TooltipTrigger>
-                    <TooltipContent style={{ zIndex: Z_INDEX_MODAL + 50 }}>
-                      {p.languageDisplayName}
-                    </TooltipContent>
+                    <TooltipContent>{p.languageDisplayName}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               ) : (
@@ -242,7 +261,11 @@ export default function ProjectPicker({
           isFullWidth
         />
       </div>
-      <div className="tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
+      {/* `overflow-x-hidden` is explicit: asking only for `overflow-y: auto` leaves the other axis
+          computing from `visible` to `auto`, which is what turns a long name into a horizontal
+          scrollbar. See the picker row layout entry in
+          `.context/standards/Architecture-Decisions.md`. */}
+      <div className="tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:px-4 tw:pb-4">
         {isLoading && (
           <p className="tw:py-8 tw:text-center">
             <Spinner />
@@ -262,7 +285,10 @@ export default function ProjectPicker({
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             ref={listboxRef as RefObject<HTMLDivElement>}
             onKeyDown={handleKeyDown}
-            className="tw:grid tw:grid-cols-[auto_1fr_auto]"
+            // Every text track carries a `0` minimum. A bare `auto`/`1fr` track floors at its
+            // content's minimum width, so a single long unbroken name widens the grid past the
+            // dialog instead of truncating inside it.
+            className="tw:grid tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)]"
           >
             <ProjectSection
               label={recentLabel}

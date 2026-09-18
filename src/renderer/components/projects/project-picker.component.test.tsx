@@ -169,3 +169,111 @@ describe('read-only projects', () => {
     expect(screen.queryByLabelText('Read-only')).toBeNull();
   });
 });
+
+describe('short name column', () => {
+  // Every project/resource picker — this dialog, the titlebar `ProjectSelector` popover and
+  // `ResourcePickerDialog` — starts the short name at the leading edge of its column, so the three
+  // read as one list of one kind of thing. See the picker row layout contract in
+  // `.context/standards/Architecture-Decisions.md`.
+  it('starts the short name at the leading edge of its column', () => {
+    renderDialog();
+
+    const shortNameCell = screen.getByText('WEB').closest('div');
+    expect(shortNameCell).not.toBeNull();
+    expect(shortNameCell?.className).toContain('tw:justify-start');
+    expect(shortNameCell?.className).not.toContain('tw:justify-end');
+  });
+});
+
+describe('short name offset', () => {
+  // The check mark and the read-only padlock each occupy a reserved slot whether or not they
+  // render, so a current or read-only row's short name does not start further in than its
+  // neighbours' — a ragged leading edge in the column this dialog aligns on.
+  it('starts every short name at the same offset regardless of which glyphs a row carries', () => {
+    renderDialog({
+      currentProject: { id: 'cur', fullName: 'Current Project', shortName: 'CUR' },
+      recentProjects: [{ id: 'cur', fullName: 'Current Project', shortName: 'CUR' }],
+      allProjects: [
+        { id: 'plain', fullName: 'Plain Project', shortName: 'PLN' },
+        { id: 'ro', fullName: 'Readonly Project', shortName: 'RO', isEditable: false },
+      ],
+      localizedStrings: { ...STRINGS, '%projectPicker_readOnly_label%': 'Read-only' },
+    });
+
+    // The slots have to be the same WIDTH, not merely present: an empty slot with no sizing
+    // collapses to zero and the ragged edge comes straight back, while the child index below stays
+    // 2 for every row by construction. Asserting the sizing classes is what makes this falsifiable.
+    const slotClassNames = ['CUR', 'PLN', 'RO'].map((shortName) => {
+      const nameSpan = screen.getByText(shortName);
+      const cell = nameSpan.parentElement;
+      if (!cell) return [];
+      return Array.from(cell.children)
+        .slice(0, Array.from(cell.children).indexOf(nameSpan))
+        .map((slot) => slot.className);
+    });
+
+    slotClassNames.forEach((classNames) => {
+      expect(classNames).toHaveLength(2);
+      classNames.forEach((className) => {
+        expect(className).toContain('tw:h-3');
+        expect(className).toContain('tw:w-3');
+        expect(className).toContain('tw:shrink-0');
+      });
+    });
+  });
+});
+
+describe('row width', () => {
+  // The picker row layout contract in `.context/standards/Architecture-Decisions.md`: a long name
+  // truncates inside the row, it never widens the list into a sideways scroll. jsdom does no
+  // layout, so it cannot observe the scrollbar itself (`scrollWidth` and `clientWidth` are both
+  // 0 here) — these assert the four layout properties that together produce it, which is what a
+  // future edit would have to remove to reintroduce the defect.
+  const LONG_NAME = 'Supercalifragilisticexpialidociousversionofthebibleinaveryverylonglanguage';
+  // `language` is a BCP-47 tag by convention, not by enforcement — a display name reaching this
+  // column is one mapping slip away, and it is the case that crushes the columns beside it.
+  const LONG_LANGUAGE = 'AnUnreasonablyLongLanguageDisplayNameThatIsNotATag';
+
+  it('lets a long name truncate rather than widening the list', () => {
+    renderDialog({
+      currentProject: undefined,
+      recentProjects: [],
+      allProjects: [{ id: 'long', fullName: LONG_NAME, shortName: 'LONG' }],
+    });
+
+    const fullNameCell = screen.getByText(LONG_NAME);
+    expect(fullNameCell.className).toContain('tw:truncate');
+    expect(fullNameCell.className).toContain('tw:min-w-0');
+    // The clipped text stays reachable on hover.
+    expect(fullNameCell).toHaveAttribute('title', LONG_NAME);
+
+    const shortNameText = screen.getByText('LONG');
+    expect(shortNameText.className).toContain('tw:truncate');
+  });
+
+  it('floors every text track at zero width and hides the horizontal axis', () => {
+    renderDialog({
+      currentProject: undefined,
+      recentProjects: [],
+      allProjects: [
+        { id: 'long', fullName: LONG_NAME, shortName: 'LONG', language: LONG_LANGUAGE },
+      ],
+    });
+
+    // A bare `auto`/`1fr` track floors at its content's minimum width, so truncation on the cell
+    // alone is not enough — the track has to be allowed to shrink too. All THREE tracks, not just
+    // the two carrying names: an unfloored language column satisfies its own minimum by crushing
+    // the two beside it, and `overflow-x-hidden` below means there is no scrollbar to recover them.
+    const listbox = screen.getByRole('listbox');
+    expect(listbox.className).toContain(
+      'tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)]',
+    );
+
+    const languageCell = screen.getByText(LONG_LANGUAGE);
+    expect(languageCell.className).toContain('tw:truncate');
+    expect(languageCell.className).toContain('tw:min-w-0');
+
+    const scrollContainer = listbox.parentElement;
+    expect(scrollContainer?.className).toContain('tw:overflow-x-hidden');
+  });
+});

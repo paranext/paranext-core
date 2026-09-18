@@ -92,6 +92,52 @@ describe('computeRows — case-insensitive open-tab join (I12 regression)', () =
     expect(abcRows).toHaveLength(2);
     expect(abcRows.every((r) => r.isMuted === false)).toBe(true);
   });
+
+  // Selection folds in the pair modes too, not just in `project` mode. The trigger label folds
+  // unconditionally, so a raw comparison here splits the component against itself: the trigger
+  // names the project while no row shows a check, `selectedRowRef` never attaches, and the
+  // open-popover scroll-into-view has nothing to scroll to.
+  it('marks the selected pair regardless of id casing (project-multi mode)', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { pairs: [{ projectId: 'abc123', scrollGroupId: A }] },
+    });
+    const selected = rows.filter((r) => r.isSelected);
+    expect(selected).toHaveLength(1);
+    expect(selected[0].projectId).toBe('ABC123');
+    expect(selected[0].scrollGroupId).toBe(A);
+  });
+
+  it('marks the selected pair regardless of id casing (projectScrollGroup mode)', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: upperProjects,
+      openTabs: lowerTabs,
+      selection: { projectId: 'abc123', scrollGroupId: A },
+    });
+    const selected = rows.filter((r) => r.isSelected);
+    expect(selected).toHaveLength(1);
+    expect(selected[0].projectId).toBe('ABC123');
+  });
+
+  // A selected pair whose project is open in a DIFFERENT group gets a synthetic "bound but closed"
+  // row. Resolving the project for that row folds case like every other id comparison here: a raw
+  // comparison drops the row entirely under mixed casing, losing its Open affordance rather than
+  // merely leaving it unchecked.
+  it('builds the bound-but-closed row for a selected pair whose casing differs', () => {
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: upperProjects,
+      openTabs: [{ projectId: 'abc123', scrollGroupId: A }],
+      selection: { projectId: 'abc123', scrollGroupId: B },
+    });
+    const boundButClosed = rows.filter((r) => r.isBoundButClosed);
+    expect(boundButClosed).toHaveLength(1);
+    expect(boundButClosed[0].projectId).toBe('ABC123');
+    expect(boundButClosed[0].scrollGroupId).toBe(B);
+  });
 });
 
 describe('computeRows — project mode', () => {

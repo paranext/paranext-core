@@ -3,7 +3,7 @@
 import { DblResourceData, LanguageStrings, LocalizeKey, ResourceType, ScrollGroupId } from 'platform-bible-utils';
 import { ALL_BOOK_IDS, ForwardedPaletteKeyEvent, PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import React$1 from 'react';
-import { CSSProperties, MouseEventHandler, MutableRefObject, ReactNode } from 'react';
+import { CSSProperties, MouseEventHandler, MutableRefObject, ReactNode, RefObject } from 'react';
 
 type ClassValue = ClassArray | ClassDictionary | string | number | bigint | null | boolean | undefined;
 type ClassDictionary = Record<string, any>;
@@ -173,6 +173,34 @@ export type ProjectSelectorMultiSelection = {
 export type ProjectSelectorScrollGroupSelection = {
 	projectId?: string;
 	scrollGroupId?: ScrollGroupId;
+};
+/**
+ * What {@link ProjectSelectorProps.renderProjectIndicator} returns for a row: the glyph, and
+ * optionally what it means.
+ *
+ * One value rather than a glyph prop and a label prop, so the two cannot drift: a label with no
+ * glyph would describe an icon that is not on screen, and there is nothing in a two-prop shape to
+ * stop that. Returning `undefined` for a row means no indicator, and the column stays reserved for
+ * it either way.
+ */
+export type ProjectSelectorIndicator = {
+	/** The glyph to render in the row's indicator slot. */
+	node: React$1.ReactNode;
+	/**
+	 * The glyph's meaning as text, surfaced in the row tooltip. Supply it whenever the glyph carries
+	 * meaning a sighted user cannot otherwise get from the row.
+	 *
+	 * The rows are already tooltip triggers, so a caller cannot give the glyph its own hover label
+	 * without opening a second tooltip over the row's — this is the way in. Same reasoning as
+	 * `typeName`, which the tooltip surfaces for the same reason.
+	 *
+	 * **Only supply this when {@link node} already names itself** — with `role="img"` and an
+	 * `aria-label`, or equivalent. The tooltip line is the sighted-user half and is rendered
+	 * `aria-hidden`, because Radix wires an open tooltip as the row's `aria-describedby` and a glyph
+	 * that names itself would otherwise be announced twice per row. A `node` that is itself
+	 * `aria-hidden` paired with a `label` leaves the indicator silent at both ends.
+	 */
+	label?: string;
 };
 /**
  * An action row pinned below the project list — "More projects…", "Browse the server…". Expressed
@@ -366,14 +394,6 @@ type CommonProps = {
 	 */
 	defaultGrouping?: ProjectSelectorGroupingOption | "none";
 	/**
-	 * Legacy shorthand for `defaultGrouping`. When `false`, opens with `'none'`; when `true` or
-	 * absent, uses the resolved default. Prefer `defaultGrouping` for new code. Superseded silently
-	 * if both are set.
-	 *
-	 * @deprecated Use {@link defaultGrouping} instead.
-	 */
-	defaultGroupByOpenTabs?: boolean;
-	/**
 	 * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
 	 * sidebar ~56px wide) the chevron plus its margin consumes the entire content box and the label
 	 * truncates to nothing; hiding it leaves room for a few characters of the project name. Keep the
@@ -400,9 +420,8 @@ type CommonProps = {
 	/**
 	 * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
 	 * order — a project lands in the first section whose `match` accepts it, and anything unmatched
-	 * collects into a trailing section headed by
-	 * `%webView_project_selector_custom_unmatched_section_heading%` ("Other"), which you can retitle
-	 * through `localizedStrings`. Empty sections are not rendered.
+	 * collects into a trailing section headed by `customUnmatchedSectionHeading` ("Other"), which you
+	 * can retitle through `localizedStrings`. Empty sections are not rendered.
 	 *
 	 * Must be referentially stable across renders — hoist it to a module constant or memoize it. The
 	 * selector re-partitions whenever this array's identity changes, so an inline literal
@@ -411,11 +430,11 @@ type CommonProps = {
 	 * the hoisted-constant shape.
 	 *
 	 * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-	 * override `%webView_project_selector_filter_group_by_custom%` through `localizedStrings` — its
-	 * "Custom" default names the mechanism, and the user needs the name of the axis your sections
-	 * actually express. To pin the list to these sections and nothing else, pass
-	 * `availableGroupings={['custom']}` with `defaultGrouping="custom"` and `hideFilterMenu`, since a
-	 * one-item grouping menu is an inert control.
+	 * override `filterGroupByCustom` through `localizedStrings` — its "Custom" default names the
+	 * mechanism, and the user needs the name of the axis your sections actually express. To pin the
+	 * list to these sections and nothing else, pass `availableGroupings={['custom']}` with
+	 * `defaultGrouping="custom"` and `hideFilterMenu`, since a one-item grouping menu is an inert
+	 * control.
 	 *
 	 * If `'custom'` is the active grouping and this is absent or empty, the list renders flat
 	 * (unsectioned) rather than showing an empty view.
@@ -433,7 +452,7 @@ type CommonProps = {
 	 * does not strand the distinction: the row tooltip names the project's `typeName` whenever one is
 	 * supplied, so the type stays reachable by hover and by screen reader.
 	 */
-	renderProjectIndicator?: (project: ProjectSelectorProject) => React$1.ReactNode;
+	renderProjectIndicator?: (project: ProjectSelectorProject) => ProjectSelectorIndicator | undefined;
 	/**
 	 * An action row rendered below every section, separated from the list. Use it for an affordance
 	 * that opens a different surface — the sections partition rows, so they cannot express one.
@@ -551,6 +570,7 @@ export declare function ProjectSelector(props: ProjectSelectorProps): import("re
  */
 export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_title%",
+	"%resourcePicker_description%",
 	"%resourcePicker_section_already_selected%",
 	"%resourcePicker_section_installed%",
 	"%resourcePicker_section_available_to_download%",
@@ -628,6 +648,15 @@ export interface ResourcePickerDialogProps {
 	allowDeselect?: boolean;
 	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
+	/**
+	 * Ref to the search input, for a host that decides where focus lands when the dialog opens.
+	 *
+	 * Without it a host can only order its JSX and hope: the picker disables its search box whenever
+	 * there is nothing to filter, so "render the close button last so focus lands on search" silently
+	 * lands on whatever is tabbable instead — the Retry button, or the close button itself. A host
+	 * holding this ref can state the intent directly and stay correct when the box is disabled.
+	 */
+	searchInputRef?: React$1.RefObject<HTMLInputElement | null>;
 }
 /**
  * Which of the picker body's mutually exclusive states to render.
@@ -673,7 +702,7 @@ export declare function getResourcePickerBodyState(input: {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *

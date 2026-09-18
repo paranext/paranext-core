@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi, beforeAll, afterAll } from 'vitest';
-import { Dialog } from '@/components/shadcn-ui/dialog';
+import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
@@ -47,6 +47,8 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_clear_filters%': 'Clear filters',
   '%resourcePicker_downloads_unavailable%':
     "Resource downloads aren't available on this installation.",
+  '%resourcePicker_description%':
+    "Choose a resource to add. Picking one downloads it if it isn't already installed.",
 };
 
 function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {}) {
@@ -487,6 +489,79 @@ describe('ResourcePickerDialog', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(
       'Only resources already on this computer are shown.',
+    );
+  });
+  // A long name is truncated rather than widening the table past a narrow dialog; the layout half
+  // of that contract is asserted in a real browser by the `LongNamesDoNotScrollHorizontally` story,
+  // because jsdom has no layout to measure. Truncation only stays honest if the untruncated text is
+  // still reachable, so every name cell carries it as a native hover label.
+  it('exposes each resource name in full on hover, so truncation hides nothing', () => {
+    renderDialog();
+
+    expect(screen.getByText('New International Version')).toHaveAttribute(
+      'title',
+      'New International Version',
+    );
+    expect(screen.getByText('NIV')).toHaveAttribute('title', 'NIV');
+    expect(screen.getAllByText('English')[0]).toHaveAttribute('title', 'English');
+  });
+
+  // The other half of the picker row layout contract in
+  // `.context/standards/Architecture-Decisions.md`: the short name starts at the leading edge of
+  // its column in every picker. The "Select project" dialog asserts its own side
+  // (`project-picker.component.test.tsx`, "starts the short name at the leading edge of its
+  // column"); without this one, "identical in both pickers" is only claimed in prose, and moving
+  // this column would leave that test still green.
+  it('starts the short name at the leading edge of its column', () => {
+    renderDialog();
+
+    const shortNameCell = screen.getByText('NIV').closest('td');
+    expect(shortNameCell).not.toBeNull();
+
+    // The positive control comes first: the language column is the one cell in the row that IS
+    // end-aligned, so it proves the class this assertion looks for can appear on a `td` here at
+    // all. Without it, "the short name is not end-aligned" would pass against a file that had
+    // simply stopped aligning anything.
+    const languageCell = screen.getAllByText('English')[0].closest('td');
+    expect(languageCell?.className).toContain('tw:text-end');
+
+    // The leading edge is the table default, so there is no positive class to match on the short
+    // name — the absence of the end-alignment above is what holds it. Both spellings are checked:
+    // `tw:text-end` is what this file uses today, and `tw:text-right` is the physical class a
+    // regression would most likely reintroduce, since it is what the column carried before.
+    expect(shortNameCell?.className).not.toContain('tw:text-end');
+    expect(shortNameCell?.className).not.toContain('tw:text-right');
+  });
+
+  // The description is visually hidden, so nothing on screen changes if it disappears — and Radix
+  // only warns in development. Without this, deleting it silently takes the dialog back to
+  // announcing its title and nothing else: no statement of what the list is, or that picking a row
+  // downloads. Anchored on `aria-describedby` rather than on the text, since the text is useless
+  // to a screen reader unless the dialog actually points at it.
+  //
+  // Rendered against a real `DialogContent` rather than through `renderDialog`, whose harness has
+  // no host content for Radix to wire the description onto.
+  it('describes itself to a screen reader, not merely titles itself', () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <ResourcePickerDialog
+            allResources={SAMPLE_RESOURCES}
+            selectedResourceIds={SAMPLE_SELECTED_IDS}
+            localizedStrings={STRINGS}
+            onSelect={vi.fn()}
+          />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const content = document.querySelector('[data-slot="dialog-content"]');
+    const describedById = content?.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+
+    const description = describedById ? document.getElementById(describedById) : undefined;
+    expect(description?.textContent).toBe(
+      "Choose a resource to add. Picking one downloads it if it isn't already installed.",
     );
   });
 });

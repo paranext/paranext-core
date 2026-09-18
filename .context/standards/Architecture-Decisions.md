@@ -1929,6 +1929,52 @@ step, no automation. Just a record.
   lives in the hosts.
 - **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.
 
+## adr-picker-row-truncates-never-scrolls: A picker row truncates and starts its short name at the leading edge; it never scrolls horizontally
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** Platform.Bible has several project/resource pickers that list the same three things —
+  a short name, a full name and a language — and each had made its own layout decisions. Two of Ian
+  NN-3.3's four defects were the result. `ResourcePickerDialog` laid its rows out in an `auto`
+  table whose short-name cell was `whitespace-nowrap`, inside a container asking only for
+  `overflow-y: auto`; CSS computes the unspecified axis from `visible` to `auto`, so one long
+  resource name widened the table and produced a horizontal scrollbar that pushed the language
+  column off the right edge. Measured in the running app at a 560px dialog: `scrollWidth` 782
+  against `clientWidth` 514. Separately, the "Select project" dialog right-aligned its short name
+  while `ResourcePickerDialog` and the titlebar `ProjectSelector` both left-aligned theirs, so the
+  same list of the same projects read differently depending on how the user got there. Neither is
+  interesting on its own; what makes them worth recording is that a third picker added later would
+  have picked its own answer again.
+- **Decision:** One layout contract for every picker row — **truncate, never scroll**; **truncation
+  must not hide anything**; **the short name starts at the leading edge**. Stated as invariants
+  rather than as one picker's mechanism, because the three surfaces are a table, a CSS grid and a
+  cmdk list and each reaches them a different way: `ResourcePickerDialog` fixes its columns with a
+  `colgroup` rather than per-cell widths (its section-heading rows span all columns and cannot carry
+  them), `ProjectPicker` floors its grid tracks at `minmax(0,…)`, and `ProjectSelector` inherits
+  `overflow-x: hidden` from the shared `CommandList`.
+
+  The invariants are written out, with what each one rules out and how to test it, in
+  [`.claude/rules/ux/picker-row-layout.md`](../../.claude/rules/ux/picker-row-layout.md) — that is
+  the copy to follow and to keep current. This entry keeps the reasoning and the history; restating
+  the rule in both places would guarantee that one of them eventually describes a superseded
+  version.
+- **Alternatives:** **Wrap long names onto a second line** — rejected: it makes row heights ragged
+  in a list whose whole job is fast visual scanning, and the language column still has to go
+  somewhere. **Allow horizontal scrolling with a scroll affordance** — rejected: a name being long
+  is not a reason to hide a column the user never asked to lose, and the PRD is explicit that
+  "horizontal scroll is always bad". **Express the alignment through WI-24's shared project-name
+  helper**, as PT-4551 proposed — rejected because that helper formats a name *string*
+  (short-name-first, de-duplication) and alignment is layout; it has no place to put this.
+- **Consequences:** A new picker follows this entry rather than re-deriving an answer, and the
+  guard against regression is per-surface: the layout half is pinned in a real browser by the
+  `LongNamesDoNotScrollHorizontally` story (jsdom reports `scrollWidth` and `clientWidth` as 0, so
+  it cannot see this class of defect at all), and the hover-label and alignment halves by jsdom
+  tests. Because the contract is written here and not carried by shared code, a picker that ignores
+  it fails no test until someone adds one — **revisit** and extract shared row components if a
+  fourth surface appears, at which point the duplication would outweigh the coupling.
+- **Source:** PT-4551 (Ian NN-3.3 (a) and (d)), with the overflow mechanism measured in the running
+  app rather than inferred.
+
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26

@@ -12,6 +12,13 @@
     "%webView_find_projectFilter_noProjectsFound%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_noProjectsFound%"
     },
+    "%manageBooks_projectSelector_filterAriaLabel%": {
+      "fallbackKey": "%projectSelector_groupByAriaLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "The Filter menu is now the Group by menu. Superseded by the platform-wide %projectSelector_groupByAriaLabel% key."
+      }
+    },
     "%webView_find_projectSelector_label%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },
@@ -242,7 +249,6 @@
       "%manageBooks_genericError%": "An unexpected error occurred.",
       "%manageBooks_projectSelector_boundButClosedTooltip%": "Bound to {group} · not currently open",
       "%manageBooks_projectSelector_clearAll%": "Clear all",
-      "%manageBooks_projectSelector_filterAriaLabel%": "Filter",
       "%manageBooks_projectSelector_filterGroupByOpenTabs%": "By open tabs",
       "%manageBooks_projectSelector_filterSectionLabel%": "Filter",
       "%manageBooks_projectSelector_filterShowSelectedOnly%": "Show selected only",

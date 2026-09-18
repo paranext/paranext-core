@@ -1,7 +1,43 @@
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, normalizeProjectId } from 'platform-bible-utils';
+import { notificationService } from '@shared/services/notification.service';
+import { getErrorMessage, normalizeProjectId, type LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * Message shown when a picked project fails to open. Declared here rather than inline so the key is
+ * spelled exactly once — `PlatformNotification.message` accepts any string, so a typo would not
+ * fail the build; it would ship a raw `%key%` into a toast.
+ */
+export const PROJECT_OPEN_FAILED_MESSAGE_KEY: LocalizeKey = '%toolbar_project_open_failed%';
+
+/**
+ * Shared by every "couldn't open that project" toast so a user retrying against an unavailable
+ * editor replaces the message rather than collecting one copy per attempt.
+ */
+export const PROJECT_OPEN_FAILED_NOTIFICATION_ID = 'toolbar-project-open-failed';
+
+/**
+ * Sends the "couldn't open that project" toast and swallows its own failure.
+ *
+ * A named function rather than a chain inside the open-failure handler: nesting one promise in
+ * another's rejection path is what `promise/no-nesting` is about, and pulling it out keeps the
+ * handler itself synchronous — an `async` handler there would be a promise nobody holds, so a throw
+ * outside the inner `catch` would surface as an unhandled rejection rather than a logged warning.
+ */
+function reportProjectOpenFailure() {
+  notificationService
+    .send({
+      message: PROJECT_OPEN_FAILED_MESSAGE_KEY,
+      severity: 'warning',
+      notificationId: PROJECT_OPEN_FAILED_NOTIFICATION_ID,
+    })
+    .catch((notificationError: unknown) => {
+      logger.warn(
+        `Toolbar could not notify the user that opening a project failed: ${getErrorMessage(notificationError)}`,
+      );
+    });
+}
 
 /**
  * How long the toolbar keeps naming a just-selected project before falling back to whatever the
@@ -52,6 +88,14 @@ export function usePendingProject(
 ): PendingProjectState {
   const [pendingProject, setPendingProject] = useState<ProjectItem | undefined>(undefined);
   const pendingProjectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /**
+   * The normalized id of the most recent pick, whether or not it is still pending.
+   *
+   * A ref rather than the `pendingProject` state because the failure path needs to know which pick
+   * is current at the moment a rejection lands, and a pick that succeeded has already cleared the
+   * state it would otherwise be read from.
+   */
+  const latestPickedProjectKeyRef = useRef<string | undefined>(undefined);
 
   // The one entry point every selection path takes, so the trigger names the picked project the
   // moment it is picked whether it came from the popover or from the dialog.
@@ -60,6 +104,7 @@ export function usePendingProject(
       // Already the current project: there is nothing to bridge. Arming anyway would swap the
       // trigger onto this item's spelling of an id the editor already reports, and leave a timer
       // to unwind.
+      latestPickedProjectKeyRef.current = normalizeProjectId(item.id);
       const isAlreadyCurrent =
         !!currentProject && normalizeProjectId(currentProject.id) === normalizeProjectId(item.id);
       if (!isAlreadyCurrent) {
@@ -74,6 +119,9 @@ export function usePendingProject(
         // editor never reported here would otherwise keep its name up until the bound expired.
         setPendingProject(undefined);
       }
+      // Synchronous on purpose. An `async` handler here is a promise nobody holds, so anything
+      // throwing outside the inner `catch` — `logger.warn`, `setPendingProject` — would surface as
+      // an unhandled rejection in the renderer instead of a logged warning.
       openProject(item.id).catch((e: unknown) => {
         logger.warn(
           `Toolbar caught an error while trying to open project ${item.id}: ${getErrorMessage(e)}`,
@@ -84,6 +132,14 @@ export function usePendingProject(
             ? undefined
             : current,
         );
+        // Latest-wins again, for the same reason the state update above applies it: a slow failure
+        // for a pick the user has already moved on from would otherwise toast while the project
+        // they picked afterwards is open and named in the trigger, which reads as that one failing.
+        if (latestPickedProjectKeyRef.current !== normalizeProjectId(item.id)) return;
+        // Dropping the name back to whatever is open would otherwise undo the user's pick with no
+        // account of why. Only this path reports: the timeout above is not a failure, since an
+        // editor that opens in another window never reports here and has not gone wrong.
+        reportProjectOpenFailure();
       });
     },
     [currentProject, openProject],

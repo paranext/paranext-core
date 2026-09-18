@@ -81,6 +81,35 @@ import {
 } from './project-selector.rows';
 
 /**
+ * What {@link ProjectSelectorProps.renderProjectIndicator} returns for a row: the glyph, and
+ * optionally what it means.
+ *
+ * One value rather than a glyph prop and a label prop, so the two cannot drift: a label with no
+ * glyph would describe an icon that is not on screen, and there is nothing in a two-prop shape to
+ * stop that. Returning `undefined` for a row means no indicator, and the column stays reserved for
+ * it either way.
+ */
+export type ProjectSelectorIndicator = {
+  /** The glyph to render in the row's indicator slot. */
+  node: ReactNode;
+  /**
+   * The glyph's meaning as text, surfaced in the row tooltip. Supply it whenever the glyph carries
+   * meaning a sighted user cannot otherwise get from the row.
+   *
+   * The rows are already tooltip triggers, so a caller cannot give the glyph its own hover label
+   * without opening a second tooltip over the row's — this is the way in. Same reasoning as
+   * `typeName`, which the tooltip surfaces for the same reason.
+   *
+   * **Only supply this when {@link node} already names itself** — with `role="img"` and an
+   * `aria-label`, or equivalent. The tooltip line is the sighted-user half and is rendered
+   * `aria-hidden`, because Radix wires an open tooltip as the row's `aria-describedby` and a glyph
+   * that names itself would otherwise be announced twice per row. A `node` that is itself
+   * `aria-hidden` paired with a `label` leaves the indicator silent at both ends.
+   */
+  label?: string;
+};
+
+/**
  * An action row pinned below the project list — "More projects…", "Browse the server…". Expressed
  * as data rather than a render prop on purpose: the selector owns the markup so the row stays
  * keyboard-reachable, which a caller-rendered `<button>` would not be.
@@ -367,14 +396,6 @@ type CommonProps = {
    */
   defaultGrouping?: ProjectSelectorGroupingOption | 'none';
   /**
-   * Legacy shorthand for `defaultGrouping`. When `false`, opens with `'none'`; when `true` or
-   * absent, uses the resolved default. Prefer `defaultGrouping` for new code. Superseded silently
-   * if both are set.
-   *
-   * @deprecated Use {@link defaultGrouping} instead.
-   */
-  defaultGroupByOpenTabs?: boolean;
-  /**
    * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
    * sidebar ~56px wide) the chevron plus its margin consumes the entire content box and the label
    * truncates to nothing; hiding it leaves room for a few characters of the project name. Keep the
@@ -401,9 +422,8 @@ type CommonProps = {
   /**
    * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
    * order — a project lands in the first section whose `match` accepts it, and anything unmatched
-   * collects into a trailing section headed by
-   * `%webView_project_selector_custom_unmatched_section_heading%` ("Other"), which you can retitle
-   * through `localizedStrings`. Empty sections are not rendered.
+   * collects into a trailing section headed by `customUnmatchedSectionHeading` ("Other"), which you
+   * can retitle through `localizedStrings`. Empty sections are not rendered.
    *
    * Must be referentially stable across renders — hoist it to a module constant or memoize it. The
    * selector re-partitions whenever this array's identity changes, so an inline literal
@@ -412,11 +432,11 @@ type CommonProps = {
    * the hoisted-constant shape.
    *
    * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. When you do,
-   * override `%webView_project_selector_filter_group_by_custom%` through `localizedStrings` — its
-   * "Custom" default names the mechanism, and the user needs the name of the axis your sections
-   * actually express. To pin the list to these sections and nothing else, pass
-   * `availableGroupings={['custom']}` with `defaultGrouping="custom"` and `hideFilterMenu`, since a
-   * one-item grouping menu is an inert control.
+   * override `filterGroupByCustom` through `localizedStrings` — its "Custom" default names the
+   * mechanism, and the user needs the name of the axis your sections actually express. To pin the
+   * list to these sections and nothing else, pass `availableGroupings={['custom']}` with
+   * `defaultGrouping="custom"` and `hideFilterMenu`, since a one-item grouping menu is an inert
+   * control.
    *
    * If `'custom'` is the active grouping and this is absent or empty, the list renders flat
    * (unsectioned) rather than showing an empty view.
@@ -434,7 +454,9 @@ type CommonProps = {
    * does not strand the distinction: the row tooltip names the project's `typeName` whenever one is
    * supplied, so the type stays reachable by hover and by screen reader.
    */
-  renderProjectIndicator?: (project: ProjectSelectorProject) => ReactNode;
+  renderProjectIndicator?: (
+    project: ProjectSelectorProject,
+  ) => ProjectSelectorIndicator | undefined;
   /**
    * An action row rendered below every section, separated from the list. Use it for an affordance
    * that opens a different surface — the sections partition rows, so they cannot express one.
@@ -557,7 +579,7 @@ type RowRenderProps = {
   /** Forwarded by the parent so it can scroll the selected row into view when the popover opens. */
   selectedRowRef?: RefObject<HTMLDivElement | null>;
   /** Resolved by the parent from `renderProjectIndicator`. */
-  indicator?: ReactNode;
+  indicator?: ProjectSelectorIndicator;
   /**
    * Whether to render the fixed-width indicator column at all. True whenever the caller supplied
    * `renderProjectIndicator`, even for rows it returned nothing for, so every row's label starts at
@@ -603,6 +625,7 @@ function ProjectRowView({
   const hasExtraTooltipContent =
     tooltipHasLanguage ||
     Boolean(row.typeName) ||
+    Boolean(indicator?.label) ||
     Boolean(row.scrollGroupScrRefLabel) ||
     row.isBoundButClosed ||
     (row.isDisabled && Boolean(row.disabledReason));
@@ -693,7 +716,7 @@ function ProjectRowView({
           the row handles the spacing, so this stays correct under RTL. */}
       {reserveIndicatorSlot && (
         <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
-          {indicator}
+          {indicator?.node}
         </span>
       )}
       {/* Row label uses a 2-line layout — shortName on top, fullName muted
@@ -737,7 +760,13 @@ function ProjectRowView({
         align="center"
         sideOffset={8}
         collisionPadding={16}
-        className="tw:max-w-xs tw:text-center"
+        // Wider than the popover that triggers it (`tw:w-80` below), deliberately: this tooltip
+        // stacks up to six lines — full name, language, type, indicator meaning, scroll-group
+        // reference, disabled reason — and a cap matching the popover's own width wraps every one
+        // of them. At this width only a long full name wraps, and the detail lines stay one line
+        // each. Start-aligned rather than centred because centring lines of very different lengths
+        // reads as ragged once there are more than two of them.
+        className="tw:max-w-md tw:text-start"
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
         <div className="tw:font-semibold">{row.fullName}</div>
@@ -753,6 +782,18 @@ function ProjectRowView({
             `renderProjectIndicator` glyph, which the selector treats as decorative. Surfacing
             `typeName` here keeps "project or resource?" reachable by hover and by screen reader. */}
         {row.typeName && <div className="tw:text-sm">{row.typeName}</div>}
+        {/* The indicator glyph's meaning, for the same reason as `typeName` above: the row is
+            already a tooltip trigger, so the glyph cannot carry a hover label of its own without
+            opening a second tooltip over this one.
+
+            `aria-hidden` because this is the sighted-user half only. The glyph carries the same
+            string as its own accessible name inside the row, and Radix wires an open tooltip as the
+            row's `aria-describedby`, so announcing it here too would read it out twice per row. */}
+        {indicator?.label && (
+          <div className="tw:text-sm" aria-hidden>
+            {indicator.label}
+          </div>
+        )}
         {!row.isBoundButClosed && row.scrollGroupScrRefLabel && letter && (
           <div className="tw:text-sm">
             {row.scrollGroupScrRefLabel}
@@ -782,13 +823,11 @@ type GroupingChoice = ProjectSelectorGroupingOption | 'none';
 function resolveDefaultGrouping(
   availableGroupings: readonly ProjectSelectorGroupingOption[],
   defaultGrouping: ProjectSelectorGroupingOption | 'none' | undefined,
-  defaultGroupByOpenTabs: boolean | undefined,
 ): GroupingChoice {
   if (defaultGrouping) {
     if (defaultGrouping === 'none') return 'none';
     if (availableGroupings.includes(defaultGrouping)) return defaultGrouping;
   }
-  if (defaultGroupByOpenTabs === false) return 'none';
   // Fall back to 'openTabs' when it's on the menu, otherwise 'none'. Deliberately NOT
   // availableGroupings[0] — a caller who restricts to e.g. ['language','type'] should still open
   // in flat mode, not silently pick 'language'.
@@ -950,11 +989,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const availableGroupings = props.availableGroupings ?? DEFAULT_GROUPINGS;
-  const defaultGrouping = resolveDefaultGrouping(
-    availableGroupings,
-    props.defaultGrouping,
-    props.defaultGroupByOpenTabs,
-  );
+  const defaultGrouping = resolveDefaultGrouping(availableGroupings, props.defaultGrouping);
   // Mount-time initializer only — we do NOT re-derive when props change, since that would fight a
   // user who has since picked a different grouping. Callers control the initial value; the
   // component owns the interactive one.
@@ -1040,14 +1075,30 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     [props.projects],
   );
 
+  /**
+   * The project a selection names, or `undefined`.
+   *
+   * Goes through `projectsById` rather than scanning `props.projects` so every lookup in this
+   * component answers the same question the same way: the trigger label and the rows must agree on
+   * what "selected" means, and with duplicate ids a scan and a Map disagree (`find` returns the
+   * first, the Map keeps the last). Ids reach a consumer from mixed sources — the .NET data
+   * provider hands back uppercase GUIDs while the open-tabs hook lowercases them — which is why the
+   * key is normalized; see `normalizeProjectId`'s TSDoc.
+   */
+  const lookUpProject = useCallback(
+    (projectId: string | undefined): ProjectSelectorProject | undefined =>
+      projectId === undefined ? undefined : projectsById.get(normalizeProjectId(projectId)),
+    [projectsById],
+  );
+
   const { renderProjectIndicator } = props;
   const renderIndicator = useCallback(
-    (row: ProjectRow): ReactNode => {
+    (row: ProjectRow): ProjectSelectorIndicator | undefined => {
       if (!renderProjectIndicator) return undefined;
-      const project = projectsById.get(normalizeProjectId(row.projectId));
+      const project = lookUpProject(row.projectId);
       return project ? renderProjectIndicator(project) : undefined;
     },
-    [renderProjectIndicator, projectsById],
+    [renderProjectIndicator, lookUpProject],
   );
 
   // Section partitioning dispatches on the active grouping. Versification is just another option
@@ -1154,8 +1205,12 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       }
       case 'project-multi': {
         const current = props.selection.pairs;
+        // Normalized, like `pairIsSelected` in `project-selector.rows.ts`: a pair whose id is
+        // spelled in a different case than the row's is still the same pair, and matching raw
+        // would append a duplicate instead of deselecting the row the user just unticked.
+        const rowKey = normalizeProjectId(row.projectId);
         const match = (p: ProjectSelectorProjectPair) =>
-          p.projectId === row.projectId && p.scrollGroupId === row.scrollGroupId;
+          normalizeProjectId(p.projectId) === rowKey && p.scrollGroupId === row.scrollGroupId;
         const next = current.some(match)
           ? current.filter((p) => !match(p))
           : [...current, { projectId: row.projectId, scrollGroupId: row.scrollGroupId }];
@@ -1195,10 +1250,14 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const handleSelectAll = () => {
     if (props.mode !== 'project-multi') return;
     const existing = props.selection.pairs;
-    const existingKey = new Set(existing.map((p) => `${p.projectId}:${p.scrollGroupId ?? ''}`));
+    // Keyed on the normalized id for the same reason the toggle above matches on one: an existing
+    // pair spelled in a different case is the same pair, and keying raw would add a second copy.
+    const pairKey = (p: ProjectSelectorProjectPair) =>
+      `${normalizeProjectId(p.projectId)}:${p.scrollGroupId ?? ''}`;
+    const existingKey = new Set(existing.map(pairKey));
     const merged = [...existing];
     allPairs.forEach((pair) => {
-      const key = `${pair.projectId}:${pair.scrollGroupId ?? ''}`;
+      const key = pairKey(pair);
       if (!existingKey.has(key)) {
         existingKey.add(key);
         merged.push(pair);
@@ -1218,7 +1277,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
     switch (props.mode) {
       case 'project': {
-        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        const selected = lookUpProject(props.selection.projectId);
         // An empty title suppresses the tooltip wrapper below — see `renderTriggerLabel`'s TSDoc.
         if (props.renderTriggerLabel)
           return { node: props.renderTriggerLabel(selected), title: '' };
@@ -1241,7 +1300,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         type Tuple = { project: ProjectSelectorProject; scrollGroupId?: ScrollGroupId };
         const tuples: Tuple[] = [];
         pairs.forEach((pair) => {
-          const project = props.projects.find((p) => p.id === pair.projectId);
+          const project = lookUpProject(pair.projectId);
           if (project) tuples.push({ project, scrollGroupId: pair.scrollGroupId });
         });
         if (tuples.length === 0) {
@@ -1275,7 +1334,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         };
       }
       case 'projectScrollGroup': {
-        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        const selected = lookUpProject(props.selection.projectId);
         if (!selected) {
           const text = props.buttonPlaceholder ?? '';
           return { node: text, title: text };
@@ -1290,7 +1349,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       default:
         return { node: '', title: '' };
     }
-  }, [props]);
+  }, [props, lookUpProject]);
 
   let triggerIcon;
   // While the project list is loading, show a spinner in place of the chevron (even in

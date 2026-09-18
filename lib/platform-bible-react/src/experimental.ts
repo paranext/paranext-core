@@ -25,6 +25,7 @@ export {
   type ProjectSelectorMultiSelection,
   type ProjectSelectorScrollGroupSelection,
   type ProjectSelectorFooterAction,
+  type ProjectSelectorIndicator,
 } from './components/advanced/project-selector/project-selector.component';
 export {
   default as ResourcePickerDialog,
