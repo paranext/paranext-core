@@ -47,11 +47,20 @@ const mocks = vi.hoisted(() => {
    * .CommentThreads` (mocked below) filters `current` by the handful of selector fields these tests
    * actually drive (`isResolved`), rather than always returning an empty list, so a test can
    * exercise a filter change actually changing which threads render. `isLoading` lets a test hold
-   * the query in its loading state independently of the fixture's contents.
+   * the query in its loading state independently of the fixture's contents. `error`, when set, wins
+   * over both -- the mock returns it in place of a thread list, exercising the same
+   * arrives-through-the-data-channel error path the real PDP subscription uses (loading also reads
+   * `false` in that case, matching the real hook: an error clears the loading flag same as data
+   * would).
    */
-  const commentThreadsFixture: { current: LegacyCommentThread[]; isLoading: boolean } = {
+  const commentThreadsFixture: {
+    current: LegacyCommentThread[];
+    isLoading: boolean;
+    error: PlatformError | undefined;
+  } = {
     current: [],
     isLoading: false,
+    error: undefined,
   };
   // Stable across renders: the message-listener effect lists these among its deps, and fresh
   // functions every render would re-subscribe it mid-test for reasons the tests are not about
@@ -146,6 +155,9 @@ vi.mock('@papi/frontend/react', () => ({
   useProjectData: vi.fn((_projectInterface: string, contextProjectId: string) => ({
     CommentThreads: (selector: LegacyCommentThreadSelector) => {
       mocks.commentThreadSelectorLog.push(selector);
+      if (mocks.commentThreadsFixture.error) {
+        return [mocks.commentThreadsFixture.error, vi.fn(), false];
+      }
       // A minimal stand-in for the comments PDP's server-side filtering: only `isResolved` is
       // simulated, since that is the only axis the draft-persistence tests below drive.
       const filtered = mocks.commentThreadsFixture.current.filter((thread) => {
@@ -454,6 +466,7 @@ beforeEach(() => {
   mocks.userCommentFiltersSubscribers.clear();
   mocks.commentThreadsFixture.current = [];
   mocks.commentThreadsFixture.isLoading = false;
+  mocks.commentThreadsFixture.error = undefined;
   // Drafts persist to real localStorage (comment-draft-store.ts); jsdom's storage is shared across
   // every test in this file, so a draft written by one test must not leak into the next.
   localStorage.clear();
@@ -908,5 +921,34 @@ describe('comment draft persistence', () => {
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
     expect(latestPanelProps().drafts).toEqual({ [threadA.id]: { editorState: 'saved draft' } });
+  });
+
+  it('keeps a draft when the thread-query subscription delivers an error', async () => {
+    // The same destructive shape as the loading case above, arriving a different way: an error
+    // travels through the SAME channel as data (CommentThreads' first tuple element), and clears
+    // the loading flag exactly like real data would -- so "the query failed" and "this project has
+    // no threads" both flatten to an empty, not-loading list unless the guard checks the raw query
+    // result (a PlatformError) rather than the already-normalized thread array.
+    saveDrafts('project-1', { [threadA.id]: { editorState: 'saved draft' } });
+    mocks.commentThreadsFixture.error = newPlatformError('Simulated CommentThreads failure');
+
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    expect(latestPanelProps().drafts).toEqual({ [threadA.id]: { editorState: 'saved draft' } });
+  });
+
+  it('prunes drafts when the project genuinely has no threads', async () => {
+    // The companion to the error test above: a healthy query that resolves to an empty list is NOT
+    // an error, and must still prune -- otherwise "don't prune on error" could be satisfied by the
+    // over-broad "never prune an empty list," which would silently resurrect every deleted thread's
+    // draft forever.
+    saveDrafts('project-1', { [threadA.id]: { editorState: 'stale draft' } });
+    mocks.commentThreadsFixture.current = [];
+
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    await waitFor(() => expect(latestPanelProps().drafts).toEqual({}));
   });
 });
