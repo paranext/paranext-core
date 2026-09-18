@@ -121,10 +121,10 @@ describe('Enhanced Resources has no private zoom of its own', () => {
   });
 
   it('no longer handles the zoom chords in the view', () => {
-    // The platform owns these chords; the in-view handler never fired on Windows or Linux anyway,
-    // because main claims them before the iframe sees them. Match the modifier-gate SHAPE (Ctrl or
-    // Cmd held) rather than the specific keys, so a reintroduced chord branch is caught however its
-    // keys are spelled.
+    // The platform owns these chords. An in-view handler does not merely duplicate it: both listen
+    // bubble-phase on `window` and neither stops propagation, so one keypress would drive both.
+    // Match the modifier-gate SHAPE (Ctrl or Cmd held) rather than the specific keys, so a
+    // reintroduced chord branch is caught however its keys are spelled.
     expect(webView).not.toMatch(
       /event\.ctrlKey\s*\|\|\s*event\.metaKey|event\.metaKey\s*\|\|\s*event\.ctrlKey/,
     );
