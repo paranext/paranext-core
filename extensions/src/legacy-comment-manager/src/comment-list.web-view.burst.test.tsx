@@ -5,12 +5,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
+import type {
+  SerializedEditorState,
+  SerializedElementNode,
+  SerializedParagraphNode,
+  SerializedTextNode,
+} from 'lexical';
 import type { CommentFilterSelection, LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import {
   newPlatformError,
   type LegacyCommentThread,
   type PlatformError,
 } from 'platform-bible-utils';
+import { saveDrafts } from './comment-draft-store';
 import {
   CommentFilters,
   CommentPreset,
@@ -18,6 +25,49 @@ import {
   DEFAULT_SCOPE_FILTER,
   ScopeFilter,
 } from './comment-list-filters.model';
+
+/**
+ * Builds a minimal, valid `SerializedEditorState` containing a single paragraph of `text`. Used to
+ * seed a draft directly via `comment-draft-store` (rather than through the mocked panel's
+ * compose-box stand-in) so a test can hold `CommentDraft.editorState`/`commentEdits` to their real
+ * Lexical type instead of the mocked panel's simplified string. Typed the same way
+ * `comment-thread.component.test.tsx` (in `platform-bible-react`) types its own fixture.
+ */
+function makeEditorState(
+  text: string,
+): SerializedEditorState<SerializedParagraphNode & SerializedElementNode<SerializedTextNode>> {
+  return {
+    root: {
+      children: [
+        {
+          children: [
+            {
+              detail: 0,
+              format: 0,
+              mode: 'normal',
+              style: '',
+              text,
+              type: 'text',
+              version: 1,
+            },
+          ],
+          direction: 'ltr',
+          format: '',
+          indent: 0,
+          type: 'paragraph',
+          version: 1,
+          textFormat: 0,
+          textStyle: '',
+        },
+      ],
+      direction: 'ltr',
+      format: '',
+      indent: 0,
+      type: 'root',
+      version: 1,
+    },
+  };
+}
 
 /**
  * What the mocked `UserCommentFilters` read can resolve to: a real selection, or a `PlatformError`
@@ -390,10 +440,11 @@ const threadA = makeCommentThread('thread-a', 'Todo');
 /** A resolved thread — matches the "Resolved" preset but not the default "All comments" preset. */
 const threadB = makeCommentThread('thread-b', 'Resolved');
 
-/** Maps a preset's user-facing toolbar label to its underlying value — the two this file drives. */
+/** Maps a preset's user-facing toolbar label to its underlying value — the three this file drives. */
 const PRESET_LABEL_TO_VALUE: Partial<Record<string, CommentPreset>> = {
   'All comments': 'all',
   Resolved: 'resolved',
+  'Unsaved comments': 'unsaved',
 };
 
 /**
@@ -900,5 +951,81 @@ describe('comment draft persistence', () => {
     await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
 
     expect(await draftTextIn(threadA.id)).toBe('half a thought');
+  });
+});
+
+describe('unsaved preset filtering', () => {
+  beforeEach(() => {
+    mocks.panelPropsLog.length = 0;
+    mocks.commentThreadSelectorLog.length = 0;
+    mocks.commentThreadsFixture.current = [threadA, threadB];
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows only drafted threads under the unsaved preset', async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    typeDraftInto(threadA.id, 'half a thought'); // threadA gets a draft; threadB stays undrafted
+    selectPreset('Unsaved comments');
+
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unsaved' }));
+    expect(latestPanelProps().threads.map((thread) => thread.id)).toEqual([threadA.id]);
+  });
+
+  it('counts an unsaved edit to an existing comment, not just an unsent reply', async () => {
+    // Both an unsent reply (`editorState`) and an in-progress edit to an existing comment
+    // (`commentEdits`) are "written but not committed" under this preset's definition. Seeded
+    // directly via the draft store, not through the mocked panel's compose-box stand-in (which only
+    // round-trips `editorState`), since the edit path runs through a different component and lands
+    // in `commentEdits` — testing only the compose box would leave that path free to regress
+    // unnoticed.
+    saveDrafts('project-1', {
+      [threadB.id]: {
+        commentEdits: { [`${threadB.id}-comment`]: makeEditorState('edited comment') },
+      },
+    });
+
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    selectPreset('Unsaved comments');
+
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unsaved' }));
+    expect(latestPanelProps().threads.map((thread) => thread.id)).toEqual([threadB.id]);
+  });
+
+  it('still excludes a drafted thread the scope excludes', async () => {
+    // Deliberately unlike Paratext 9, where a drafted thread survives every filter: PT10 filters in
+    // the query, so a thread the scope excludes never arrives in the query result, and the
+    // client-side unsaved filter -- which only ever narrows what the query already returned -- has
+    // no way to add it back. Pinned here so this divergence is not "fixed" back to PT9's behavior by
+    // someone who knows PT9 but not this design decision.
+    //
+    // The query mock here only simulates `isResolved` (see `commentThreadsFixture`'s doc), not scope,
+    // so a real scope exclusion is stood in for by leaving threadB out of the query result entirely
+    // while still giving it a draft -- exactly what a scope-excluded, drafted thread looks like from
+    // this web view's perspective. The scope is mounted as `current-book` (not the default
+    // `all-books`) so this is genuinely a narrowed-scope scenario -- at the default scope the query
+    // result IS the complete thread list, and useCommentDrafts' pruning would (correctly, for that
+    // case) delete threadB's "stale" draft before this test ever gets to exercise the unsaved filter.
+    mocks.commentThreadsFixture.current = [threadA]; // threadB excluded, as if by the active scope
+    saveDrafts('project-1', {
+      [threadA.id]: { editorState: makeEditorState('half a thought') },
+      [threadB.id]: { editorState: makeEditorState('also unsaved, but out of scope') },
+    });
+
+    renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-1', {
+      initialScopeFilter: 'current-book',
+    });
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    selectPreset('Unsaved comments');
+
+    await waitFor(() => expect(latestPanelProps().filters).toEqual({ preset: 'unsaved' }));
+    expect(latestPanelProps().threads.map((thread) => thread.id)).toEqual([threadA.id]);
   });
 });

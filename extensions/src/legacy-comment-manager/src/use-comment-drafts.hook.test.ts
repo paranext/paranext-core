@@ -2,10 +2,62 @@
 
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type {
+  SerializedEditorState,
+  SerializedElementNode,
+  SerializedParagraphNode,
+  SerializedTextNode,
+} from 'lexical';
 import { newPlatformError, type LegacyCommentThread } from 'platform-bible-utils';
 import type { CommentDraft } from 'platform-bible-react';
 import { saveDrafts } from './comment-draft-store';
 import { useCommentDrafts } from './use-comment-drafts.hook';
+
+/**
+ * Builds a minimal, valid `SerializedEditorState` containing a single paragraph of `text` — this
+ * hook only ever stores and compares this value as an opaque blob, so its exact shape doesn't
+ * matter, but `CommentDraft.editorState` is typed as `SerializedEditorState`, not a string, and a
+ * fixture that lies about its shape is the same problem in miniature as a type that lies about its
+ * values. Typed the same way `comment-thread.component.test.tsx` (in `platform-bible-react`) types
+ * its own fixture: the base `SerializedEditorState` widens each node to `SerializedLexicalNode`,
+ * which has no `children`, so a paragraph/text literal needs the narrower element-node type
+ * parameter to typecheck.
+ */
+function makeEditorState(
+  text: string,
+): SerializedEditorState<SerializedParagraphNode & SerializedElementNode<SerializedTextNode>> {
+  return {
+    root: {
+      children: [
+        {
+          children: [
+            {
+              detail: 0,
+              format: 0,
+              mode: 'normal',
+              style: '',
+              text,
+              type: 'text',
+              version: 1,
+            },
+          ],
+          direction: 'ltr',
+          format: '',
+          indent: 0,
+          type: 'paragraph',
+          version: 1,
+          textFormat: 0,
+          textStyle: '',
+        },
+      ],
+      direction: 'ltr',
+      format: '',
+      indent: 0,
+      type: 'root',
+      version: 1,
+    },
+  };
+}
 
 vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -78,16 +130,17 @@ describe('useCommentDrafts', () => {
     // hoisting draft state into this hook is that neither transition may lose it.
     const { result, rerenderWith } = renderCommentDrafts();
 
+    const halfAThought = makeEditorState('half a thought');
     act(() => {
-      result.current.handleDraftChange(threadA.id, { editorState: 'half a thought' });
+      result.current.handleDraftChange(threadA.id, { editorState: halfAThought });
     });
-    expect(result.current.drafts[threadA.id]).toEqual({ editorState: 'half a thought' });
+    expect(result.current.drafts[threadA.id]).toEqual({ editorState: halfAThought });
 
     rerenderWith({ commentThreads: [threadB], isShowingAllCommentThreads: false });
-    expect(result.current.drafts[threadA.id]).toEqual({ editorState: 'half a thought' });
+    expect(result.current.drafts[threadA.id]).toEqual({ editorState: halfAThought });
 
     rerenderWith({ commentThreads: [threadA, threadB], isShowingAllCommentThreads: true });
-    expect(result.current.drafts[threadA.id]).toEqual({ editorState: 'half a thought' });
+    expect(result.current.drafts[threadA.id]).toEqual({ editorState: halfAThought });
   });
 
   it('does not prune drafts while the comment-thread query is still loading', () => {
@@ -95,7 +148,7 @@ describe('useCommentDrafts', () => {
     // for "this project has no threads" and wipe out every draft on mount. Seed a draft for a
     // thread that is real but not yet reflected in the (empty, still-loading) query result.
     const seededDraft: Record<string, CommentDraft> = {
-      [threadA.id]: { editorState: 'saved draft' },
+      [threadA.id]: { editorState: makeEditorState('saved draft') },
     };
     saveDrafts('project-1', seededDraft);
 
@@ -110,7 +163,7 @@ describe('useCommentDrafts', () => {
     // empty, not-loading list unless the guard checks the raw query result (a PlatformError) rather
     // than an already-normalized thread array.
     const seededDraft: Record<string, CommentDraft> = {
-      [threadA.id]: { editorState: 'saved draft' },
+      [threadA.id]: { editorState: makeEditorState('saved draft') },
     };
     saveDrafts('project-1', seededDraft);
 
@@ -127,7 +180,7 @@ describe('useCommentDrafts', () => {
     // an error, and must still prune -- otherwise "don't prune on error" could be satisfied by the
     // over-broad "never prune an empty list," which would silently resurrect every deleted thread's
     // draft forever.
-    saveDrafts('project-1', { [threadA.id]: { editorState: 'stale draft' } });
+    saveDrafts('project-1', { [threadA.id]: { editorState: makeEditorState('stale draft') } });
 
     const { result } = renderCommentDrafts({ commentThreads: [] });
 
