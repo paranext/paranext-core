@@ -1664,11 +1664,16 @@ global.webViewComponent = function FindWebView({
     }
     requestAutoSearchWhenVisible();
   }, [
+    // Every option the search depends on belongs here even though this body reads almost none of
+    // them: these are the triggers that re-run the search, and react-hooks/exhaustive-deps cannot
+    // flag a missing one because nothing in the body references it.
     searchTerm,
     shouldMatchCase,
     wordRestriction,
     isRegexAllowed,
     searchTextType,
+    ignoreWhitespaceDifferences,
+    ignoreDiacritics,
     relevantScopeKey,
     requestAutoSearchWhenVisible,
   ]);
@@ -1783,15 +1788,11 @@ global.webViewComponent = function FindWebView({
         // Preview the match in the editor (select + highlight) without stealing focus, so the user
         // can keep navigating results. Double-click / reference-click shift focus to the editor.
         //
-        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): if the editor tab is
-        // inactive, the preview scroll no-ops (no layout in a display:none iframe) and does NOT catch
-        // up on activation. This is a deliberate no-op, not an oversight: (1) PAPI exposes no way for
-        // this panel to observe the *editor's* visibility (useViewVisibility only sees this panel's
-        // own iframe), so a deferred catch-up isn't implementable here; (2) selection + annotation
-        // are data-driven, so they persist and render when the editor is shown — only the preview
-        // scroll is geometry; and (3) the explicit "go there" path (handleOpenAtResult) calls
-        // setFocus to activate the editor and re-runs selectRange, which scrolls correctly. A silent
-        // preview while the editor is hidden has nothing to preview, so doing nothing is correct.
+        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): nothing to do here. This
+        // panel cannot observe the editor's visibility (useViewVisibility only sees this panel's own
+        // iframe), but the editor can: `selectRange` applies the selection at once and scrolls to the
+        // match when the editor's tab is next shown. Selection and annotation are data-driven, so
+        // they persist while hidden.
         try {
           editorWebViewController
             .selectRange({ start: searchResult.start, end: searchResult.end })
