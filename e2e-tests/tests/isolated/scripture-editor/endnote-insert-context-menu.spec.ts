@@ -89,7 +89,17 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     // ContextMenuPlugin suppresses the menu when the right-click target IS the content-editable
     // root, so aim at a paragraph inside it. The right-click also moves the caret there, which is
     // what puts the keyboard-driven insert below inside a verse.
+    // Closed first, and the close awaited, for two reasons. An already-open menu makes the
+    // `toBeAttached` below pass without the right-click having reached `handleContextMenu` at all,
+    // and the open menu is a `position: fixed` portal clamped into the viewport, so it can cover
+    // the very point being right-clicked — Playwright's hit-target check then resolves to the menu
+    // and the click never becomes actionable. Escape is what the plugin closes on; it reaches the
+    // plugin's `document` listener because focus is inside the editor iframe.
     const openContextMenu = async (target = nextClearVersePara()) => {
+      if (await contextMenu.count()) {
+        await mainPage.keyboard.press('Escape');
+        await expect(contextMenu).not.toBeAttached({ timeout: 15_000 });
+      }
       await target.click({ button: 'right' });
       await expect(contextMenu).toBeAttached({ timeout: 15_000 });
     };
@@ -123,6 +133,11 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       // The popover markup is shared with the marker typeahead, whose `ul` is capped at 200px and
       // scrolls. This menu is a short fixed list that must show all of itself: it has no filter to
       // narrow the list with.
+      //
+      // The item count is pinned alongside the overflow check because the overflow check alone is
+      // only falsifiable while the list is taller than that 200px cap: a shorter menu would fit
+      // under the cap and pass with the override deleted.
+      await expect(contextMenu.locator('[role="option"]')).toHaveCount(optionTexts.length);
       const listOverflow = await contextMenu.locator('ul').evaluate((ul) => ({
         scrollHeight: ul.scrollHeight,
         clientHeight: ul.clientHeight,
@@ -131,17 +146,18 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
 
       // …and when the panel IS too short for the whole list, the fold has to be visible. The rule
       // this menu inherits hides the scrollbar, which suits the filterable marker typeahead and
-      // leaves this one with nothing on screen saying there is more. Measured by forcing the
-      // overflow with an inline cap — what is under test is how a clipped list looks, not how it
-      // came to be clipped — and reading the gutter the scrollbar takes.
-      const scrollbarGutterPx = await contextMenu.locator('ul').evaluate((ul: HTMLElement) => {
-        const previousMaxHeight = ul.style.maxHeight;
-        ul.style.maxHeight = '40px';
-        const gutter = ul.offsetWidth - ul.clientWidth;
-        ul.style.maxHeight = previousMaxHeight;
-        return gutter;
+      // leaves this one with nothing on screen saying there is more.
+      //
+      // Read from the computed style rather than by measuring `offsetWidth - clientWidth`: that
+      // gutter is zero wherever Chromium draws OVERLAY scrollbars (macOS, and any headless run),
+      // so a measurement would fail there no matter what the stylesheet says. These two properties
+      // are what the override changes, and the vendored rule this menu would otherwise inherit
+      // sets both to the opposite values (`scroll` + `none`), so the pair stays falsifiable.
+      const listScrollStyle = await contextMenu.locator('ul').evaluate((ul: HTMLElement) => {
+        const style = getComputedStyle(ul);
+        return { overflowY: style.overflowY, scrollbarWidth: style.scrollbarWidth };
       });
-      expect(scrollbarGutterPx).toBeGreaterThan(0);
+      expect(listScrollStyle).toEqual({ overflowY: 'auto', scrollbarWidth: 'thin' });
     });
 
     await test.step('arrow keys then Enter invoke the highlighted item, not the Enter palette', async () => {
@@ -159,10 +175,17 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
 
       await mainPage.keyboard.press('Enter');
 
-      await expect(endnotes).toHaveCount(endnotesBefore + 1, { timeout: 15_000 });
       // The Enter-triggered paragraph marker palette must NOT have opened: while the menu holds a
-      // highlighted item, the web view stands down and the menu owns Enter.
-      await expect(mainPage.locator('[data-overlay-command-palette]')).toHaveCount(0);
+      // highlighted item, the web view stands down and the menu owns Enter. Sampled HERE, before
+      // the note-count wait below: the insert auto-opens the footnote editor, which takes focus,
+      // and a palette that opened on Enter and was then dismissed by that focus change would
+      // satisfy a check made afterwards.
+      const paletteCountAfterEnter = await mainPage
+        .locator('[data-overlay-command-palette]')
+        .count();
+
+      await expect(endnotes).toHaveCount(endnotesBefore + 1, { timeout: 15_000 });
+      expect(paletteCountAfterEnter).toBe(0);
       // The note has to have landed where an end note belongs. One anchored outside a verse still
       // saves, so a count on its own never notices a caret that never reached the text.
       await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
