@@ -201,14 +201,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   — rejected once the target became Home: the gate's only rationale was avoiding that throw, and
   applying it anyway would hide a working "all projects on disk" surface from plain Platform.Bible.
   **Route to the Send/Receive dialog** — rejected by the PRD itself, since send/receive is intended
-  to be replaced by Home. **Open a projects-only filtered view of Home** — the PRD's own preferred
-  wording. Not weighed at the time: the decision was framed as "which surface", and once Home was
-  chosen the filtered variant was not revisited. Recorded as open rather than rejected, because
-  nothing here has actually decided it — Home's search box already narrows the list, so the live
-  question is whether the resource rows are noise or the other half of "get me to the project I
-  mean". Decide it against real use before adding a second Home configuration to maintain. **Cache the server's project list for offline use** —
-  deferred: a cached list cannot be acted on, because a user who is offline cannot sync the project
-  the cache would show.
+  to be replaced by Home. **Show the unfiltered Home, resources included** — how this first shipped,
+  and rejected on the demo feedback below: the resource rows are noise on a path that starts in a
+  project picker. **Cache the server's project list for offline use** — deferred: a cached list
+  cannot be acted on, because a user who is offline cannot sync the project the cache would show.
 - **Consequences:** Home is the single surface that reconciles local and server projects, so a defect
   in that reconciliation is fixed once. The picker stays local-only by design, which is worth
   restating on any future picker ticket that reads its list as incomplete. The
@@ -218,6 +214,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Revisit if
   `getSharedProjects` moves out of the Studio patch layer into core, or if an app-wide offline signal
   lands — either would make an inline, server-aware picker cheap enough to reconsider.
+- **Amended 2026-09-18 (PT-4552, demo feedback):** the affordance opens Home **scoped to editable
+  projects**, leaving out the published resources. The open question this entry recorded — whether
+  Home's resource rows are noise on this path or the other half of "get me to the project I mean" —
+  was decided against real use at the demo: noise. The scoping is a property of the launch, not of
+  the tab, so it is carried as an optional `shouldShowProjectsOnly` argument to
+  `platformGetResources.openHome`, written into the web view's `state` by unconditional assignment
+  (`buildHomeWebViewState`) so a restored layout or a later menu open clears it, and read back with
+  `useWebViewState`. Every other entry point to Home still lists both. Reusing an already-open Home
+  raises its tab without consulting the provider, so fresh options never reach it; the command
+  reloads that web view when — and only when — the scoping differs
+  (`shouldReloadHomeForProjectsOnly`), because the rebuild is the slowest thing on this path. The
+  cost this adds is a second Home configuration to keep working, which is what the entry warned
+  about; it is accepted because the alternative is a project picker whose "more" leads to a list of
+  things that are not projects.
 
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 

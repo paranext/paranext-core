@@ -248,3 +248,31 @@ function ServerUnreachableDecorator(Story: (update?: { args: HomeProps }) => Rea
 export const ServerUnreachable: Story = {
   decorators: [ServerUnreachableDecorator],
 };
+
+/**
+ * Home as the title bar's project picker footer opens it: scoped to editable projects, with the
+ * published resources left out. Compare with `Default`, which is the same data unscoped — the
+ * resource rows (`Res1`, `Res2`, `SdDict`) are the difference.
+ */
+function ProjectsOnlyDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        sharedProjectsInfo: staticProjectsAndResources,
+        shouldShowProjectsOnly: true,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const ProjectsOnly: Story = {
+  decorators: [ProjectsOnlyDecorator],
+};

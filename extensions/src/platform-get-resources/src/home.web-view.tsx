@@ -1,3 +1,4 @@
+import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { CardTitle, useEvent, usePromise } from 'platform-bible-react';
@@ -23,7 +24,12 @@ const defaultInterfaceLanguages: string[] = ['en'];
 const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
-globalThis.webViewComponent = function HomeWebView() {
+globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
+  // Seeded by the web view provider from the caller's open options, and scrubbed back to `false` on
+  // every open that does not ask for it — so a projects-only launch cannot survive into a later
+  // menu open or a restored layout. See `buildHomeWebViewState`.
+  const [shouldShowProjectsOnly] = useWebViewState<boolean>('shouldShowProjectsOnly', false);
+
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
@@ -334,6 +340,7 @@ globalThis.webViewComponent = function HomeWebView() {
       isLoadingLocalProjects={isLoadingLocalProjects}
       isLoadingRemoteProjects={isLoadingRemoteProjects}
       didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad || didAvailabilityCheckGiveUp}
+      shouldShowProjectsOnly={shouldShowProjectsOnly}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}

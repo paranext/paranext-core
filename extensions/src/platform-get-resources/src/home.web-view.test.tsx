@@ -54,8 +54,18 @@ vi.mock('./use-local-projects.hook', () => ({
  */
 vi.mock('./home.component', () => ({
   HOME_STRING_KEYS: ['%resources_serverUnreachable_title%'],
-  Home: ({ didRemoteProjectsFailToLoad }: { didRemoteProjectsFailToLoad?: boolean }) => (
-    <div data-testid="home" data-remote-failed={String(didRemoteProjectsFailToLoad)} />
+  Home: ({
+    didRemoteProjectsFailToLoad,
+    shouldShowProjectsOnly,
+  }: {
+    didRemoteProjectsFailToLoad?: boolean;
+    shouldShowProjectsOnly?: boolean;
+  }) => (
+    <div
+      data-testid="home"
+      data-remote-failed={String(didRemoteProjectsFailToLoad)}
+      data-projects-only={String(shouldShowProjectsOnly)}
+    />
   ),
 }));
 
@@ -93,6 +103,21 @@ vi.mock('platform-bible-utils', async (importOriginal) => {
 // eslint-disable-next-line import/first
 import './home.web-view';
 
+/**
+ * Stands in for the real `useWebViewState`, which reads the key out of the web view definition's
+ * `state` and falls back to the caller's default. `state` is what the provider seeds from the open
+ * options, so this is the seam the launch path travels through.
+ */
+function makeUseWebViewState(state: Record<string, unknown>) {
+  return <T,>(stateKey: string, defaultStateValue: T): [T, (value: T) => void, () => void] => [
+    // The state bag is untyped by nature — the hook's own signature is what assigns it a type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    stateKey in state ? (state[stateKey] as T) : defaultStateValue,
+    vi.fn(),
+    vi.fn(),
+  ];
+}
+
 function getHomeWebView(): ComponentType<Record<string, unknown>> {
   // globalThis is a special interface; cast to a record to read the property the module added.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -114,7 +139,7 @@ describe('HomeWebView send/receive availability', () => {
     });
 
     const HomeWebView = getHomeWebView();
-    render(<HomeWebView />);
+    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('home')).toHaveAttribute('data-remote-failed', 'true');
@@ -128,7 +153,7 @@ describe('HomeWebView send/receive availability', () => {
     });
 
     const HomeWebView = getHomeWebView();
-    render(<HomeWebView />);
+    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
 
     // Positive control: the web view settled (it rendered), so it had every chance to raise the
     // banner — a definite "no server here" is the whole truth, not a missing half.
@@ -136,5 +161,38 @@ describe('HomeWebView send/receive availability', () => {
       expect(screen.getByTestId('home')).toBeInTheDocument();
     });
     expect(screen.getByTestId('home')).toHaveAttribute('data-remote-failed', 'false');
+  });
+});
+
+/*
+ * The title bar's "More projects…" is asking "get me to one of my projects", so the read-only
+ * resources that share Home's list are noise on that path alone. The flag rides in the web view's
+ * `state`, which the provider seeds from the open options and scrubs on every other open — so this
+ * pair is what keeps the scoping tied to the launch path rather than to Home itself.
+ */
+describe('HomeWebView projects-only launch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand.mockImplementation(async () => undefined);
+  });
+
+  it('scopes the list to projects when its state says it was launched that way', async () => {
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({ shouldShowProjectsOnly: true })} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home')).toHaveAttribute('data-projects-only', 'true');
+    });
+  });
+
+  it('lists resources too when nothing asked for a projects-only view', async () => {
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
+
+    // Positive control: the web view rendered, so it had every chance to scope the list.
+    await waitFor(() => {
+      expect(screen.getByTestId('home')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('home')).toHaveAttribute('data-projects-only', 'false');
   });
 });

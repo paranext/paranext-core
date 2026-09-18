@@ -738,7 +738,23 @@ describe('PlatformBibleToolbar — project picker footer reaches the rest of the
     });
 
     await waitFor(() => {
-      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('platformGetResources.openHome');
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'platformGetResources.openHome',
+        expect.anything(),
+      );
+    });
+  });
+
+  it('asks Home for projects only, since a read-only resource is never an answer here', async () => {
+    render(<PlatformBibleToolbar />);
+    await screen.findByTestId('project-picker-select');
+
+    act(() => {
+      getMoreProjects().click();
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('platformGetResources.openHome', true);
     });
   });
 

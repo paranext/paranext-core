@@ -16,6 +16,11 @@ import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
 import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
 import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
+import {
+  buildHomeWebViewState,
+  type HomeWebViewOptions,
+  shouldReloadHomeForProjectsOnly,
+} from './home-web-view.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -358,7 +363,10 @@ const getResourcesWebViewProvider: IWebViewProvider = {
 };
 
 const homeWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: HomeWebViewOptions,
+  ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== HOME_WEB_VIEW_TYPE)
       throw new Error(
         `${HOME_WEB_VIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
@@ -367,6 +375,7 @@ const homeWebViewProvider: IWebViewProvider = {
     return {
       title: '%home_dialog_title%',
       ...savedWebView,
+      state: buildHomeWebViewState(savedWebView, getWebViewOptions),
       content: homeDialogReact,
       styles: tailwindStyles,
     };
@@ -452,16 +461,34 @@ export async function activate(context: ExecutionActivationContext) {
 
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openHome',
-    async () => {
-      return papi.webViews.openWebView(
+    async (shouldShowProjectsOnly?: boolean) => {
+      const options: HomeWebViewOptions = {
+        shouldShowProjectsOnly,
+        // Focus existing one if one exists
+        existingId: '?',
+      };
+
+      const homeWebViewId = await papi.webViews.openWebView(
         HOME_WEB_VIEW_TYPE,
         {
           type: 'float',
           floatSize: HOME_WEB_VIEW_SIZE,
         },
-        // Focus existing one if one exists
-        { existingId: '?' },
+        options,
       );
+      if (!homeWebViewId) return homeWebViewId;
+
+      // Reusing an existing Home raises its tab without consulting the provider, so the scoping
+      // this call asked for never reaches it. Reload only when the two disagree — a rebuilt iframe
+      // is the slowest thing this command can do.
+      const existingWebView = await papi.webViews.getOpenWebViewDefinition(homeWebViewId);
+      if (
+        existingWebView &&
+        shouldReloadHomeForProjectsOnly(existingWebView, !!shouldShowProjectsOnly)
+      )
+        await papi.webViews.reloadWebView(HOME_WEB_VIEW_TYPE, homeWebViewId, options);
+
+      return homeWebViewId;
     },
   );
 

@@ -157,6 +157,13 @@ export type HomeProps = {
    * told their projects do not exist.
    */
   didRemoteProjectsFailToLoad?: boolean;
+  /**
+   * Whether to list editable projects only, leaving out the published resources that otherwise
+   * share the list. Set by entry points that are answering "get me to one of my projects" — the
+   * title bar's project picker footer — where a resource is never a valid answer. Home's own entry
+   * points leave this unset and list both.
+   */
+  shouldShowProjectsOnly?: boolean;
   /** Array of local project information, containing projects and resources. */
   localProjectsInfo?: LocalProjectInfo[];
   /** Object of shared project information, containing projects on the send/receive server. */
@@ -187,6 +194,8 @@ export type HomeProps = {
  * @param {isLoadingRemoteProjects} - Whether loading remote projects is in progress.
  * @param {didRemoteProjectsFailToLoad} - Whether loading projects from the send/receive server
  *   failed, so only local projects are listed.
+ * @param {shouldShowProjectsOnly} - Whether to list editable projects only, leaving out published
+ *   resources.
  * @param {localProjectsInfo} - Array of local project information, containing projects and
  *   resources.
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
@@ -208,6 +217,7 @@ export function Home({
   isLoadingLocalProjects = false,
   isLoadingRemoteProjects = false,
   didRemoteProjectsFailToLoad = false,
+  shouldShowProjectsOnly = false,
   localProjectsInfo = [],
   sharedProjectsInfo = {},
   activeSendReceiveProjects = [],
@@ -294,8 +304,13 @@ export function Home({
       }
     });
 
-    return newMergedProjectInfo;
-  }, [localProjectsInfo, sharedProjectsInfo]);
+    // Filtered here rather than in the sort below so the empty list reads as "you have no
+    // projects" instead of "your search matched nothing" — the no-results message quotes the
+    // query, and nobody typed one.
+    return shouldShowProjectsOnly
+      ? newMergedProjectInfo.filter((project) => !project.isPublished)
+      : newMergedProjectInfo;
+  }, [localProjectsInfo, sharedProjectsInfo, shouldShowProjectsOnly]);
 
   const [textFilter, setTextFilter] = useState<string>('');
 

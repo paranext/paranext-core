@@ -468,9 +468,9 @@ export function PlatformBibleToolbar() {
   // and no request here. See `useBackendSyncActivity`.
   const hasBackendSynced = useBackendSyncActivity();
 
-  const openHome = useCallback(async () => {
+  const openHome = useCallback(async (shouldShowProjectsOnly: boolean) => {
     try {
-      await sendCommand('platformGetResources.openHome');
+      await sendCommand('platformGetResources.openHome', shouldShowProjectsOnly);
     } catch (e) {
       logger.warn(`Toolbar caught an error while trying to open Home: ${getErrorMessage(e)}`);
     }
@@ -577,7 +577,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="tw:h-8"
-                  onClick={openHome}
+                  onClick={() => openHome(false)}
                 >
                   <HomeIcon />
                 </Button>
@@ -637,7 +637,9 @@ export function PlatformBibleToolbar() {
                   // reach, since its own list is built from local metadata only.
                   onClick={() => {
                     setIsProjectPickerOpen(false);
-                    openHome();
+                    // Projects only: this footer is the way out of a project picker, so the
+                    // read-only resources Home otherwise lists are never an answer to it.
+                    openHome(true);
                   }}
                 >
                   {localizedStrings['%projectPicker_toolbar_more_projects%']}

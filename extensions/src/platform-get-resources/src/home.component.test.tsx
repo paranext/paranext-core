@@ -53,10 +53,12 @@ function renderHomeList({
   didRemoteProjectsFailToLoad = false,
   localProjectsInfo = [],
   sharedProjectsInfoOverride = {},
+  shouldShowProjectsOnly = false,
 }: {
   didRemoteProjectsFailToLoad?: boolean;
   localProjectsInfo?: LocalProjectInfo[];
   sharedProjectsInfoOverride?: SharedProjectsInfo;
+  shouldShowProjectsOnly?: boolean;
 } = {}) {
   return render(
     <Home
@@ -64,6 +66,7 @@ function renderHomeList({
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfoOverride}
       didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad}
+      shouldShowProjectsOnly={shouldShowProjectsOnly}
       localizedStringsWithLoadingState={[
         {
           '%resources_get%': 'Get',
@@ -189,5 +192,60 @@ describe('Home empty state', () => {
 
     expect(screen.queryByText(NOTHING_FOUND)).not.toBeNull();
     expect(screen.queryByText(NOTHING_HERE)).toBeNull();
+  });
+});
+
+/*
+ * Reached from the title bar's "More projects…", Home is answering "get me to one of my projects",
+ * so the read-only resources that share the list are noise there. Every other entry point still
+ * lists both, which is why this is a prop rather than a change to what Home shows.
+ */
+describe('Home projects-only view', () => {
+  const RESOURCE: LocalProjectInfo = {
+    projectId: 'publishedResource1',
+    isPublished: true,
+    fullName: 'Published Resource',
+    name: 'PUB',
+    language: 'en',
+  };
+  const PROJECT: LocalProjectInfo = {
+    projectId: 'localProject1',
+    isPublished: false,
+    fullName: 'Local Project',
+    name: 'LCL',
+    language: 'en',
+  };
+
+  it('lists resources alongside projects by default', () => {
+    renderHomeList({ localProjectsInfo: [RESOURCE, PROJECT] });
+
+    expect(screen.queryByText('Published Resource')).not.toBeNull();
+    expect(screen.queryByText('Local Project')).not.toBeNull();
+  });
+
+  it('leaves the resources out when asked for projects only', () => {
+    renderHomeList({ localProjectsInfo: [RESOURCE, PROJECT], shouldShowProjectsOnly: true });
+
+    // Asserted as a pair with the project: dropping the whole list would satisfy the first
+    // expectation on its own.
+    expect(screen.queryByText('Published Resource')).toBeNull();
+    expect(screen.queryByText('Local Project')).not.toBeNull();
+  });
+
+  it('offers the nothing-here guidance rather than the no-results message when only resources exist', () => {
+    renderHomeList({ localProjectsInfo: [RESOURCE], shouldShowProjectsOnly: true });
+
+    // The user never searched, so the search-specific message would quote an empty query at them.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(NOTHING_FOUND)).toBeNull();
+  });
+
+  it('keeps send/receive projects, which are never published resources', () => {
+    renderHomeList({
+      sharedProjectsInfoOverride: sharedProjectsInfo,
+      shouldShowProjectsOnly: true,
+    });
+
+    expect(screen.queryByText('Shared Project')).not.toBeNull();
   });
 });
