@@ -2554,6 +2554,51 @@ step, no automation. Just a record.
   branch edits it, which is a standing source of merge conflicts; see
   `adr-decision-log-sorted-insertion` for how entry placement addresses that.
 
+## adr-localized-string-resolution-helper: One predicate decides whether a localized value can be shown, and it lives in `platform-bible-utils`
+
+- **Date:** 2026-09-17
+- **Status:** Accepted (current approach)
+- **Context:** `useLocalizedStrings` seeds its state with `defaultState[key] = key`
+  (`src/renderer/hooks/papi-hooks/use-localized-strings-hook.ts`), returns that seed for the whole
+  first render pass, and returns it permanently if the localization provider errors. An unresolved
+  lookup is therefore the literal `'%some_key%'` — a defined, non-empty string — so the common
+  `localizedStrings[key] ?? 'Default'` idiom never falls back and renders the raw key at the user.
+  The predicate that catches this existed in three divergent copies: `resolveLocalizedString` in
+  `lib/platform-bible-react/src/utils/localization.util.ts`, `localizedOrEnglish` +
+  `createCrashedViewLocalizer` in `src/renderer/components/`, and a same-named but
+  different-signature `resolveLocalizedString(map, key)` in
+  `extensions/src/platform-scripture-editor/src/scripture-text-grid/view-options-notice.utils.ts`.
+- **Decision:** One implementation in `lib/platform-bible-utils/src/localization.util.ts` —
+  `isResolvedLocalizedValue`, plus the two readers built on it: `resolveLocalizedString` (value +
+  fallback, for a caller that owns English text) and `localizedStringOrUndefined` (map + key, for a
+  caller with no fallback to offer that must pass the absence onward). Exported from the stable
+  `index.ts` and imported from there by every consumer, React and non-React alike.
+  `platform-bible-react/experimental` deliberately does NOT re-export them: a second import path for
+  the symbol whose whole purpose is one canonical home would have to be reasoned about on two
+  published surfaces at every future signature change, and would contradict the import path the lint
+  rule names. All three prior copies collapse onto these — including the `platform-scripture-editor`
+  helper whose name collided, which is deleted outright rather than renamed once its body became a
+  pass-through.
+- **Alternatives:** (a) keep it in `platform-bible-react/experimental` — rejected: the renderer and
+  any non-React consumer cannot reach it without inverting the workspace dependency
+  (`platform-bible-react` depends on `platform-bible-utils`, not the reverse). (b) Move it but leave
+  the private copies — rejected: three implementations of one rule drift, which is how the
+  signature collision arose. (c) Export from `platform-bible-utils/experimental` — rejected: the
+  lint rule names this import path in its message, and pointing contributors at a no-guarantees
+  tier is a bad trade for a one-boolean contract.
+- **Consequences:** `platform-bible-utils` is the canonical import path, named by
+  `paranext/no-nullish-localized-fallback`. The collapsed copies widen their fallback path slightly:
+  they compared `value === key` (exact self-match), while `isResolvedLocalizedValue` rejects any
+  `%…%`-shaped value and any blank-or-whitespace string. `platform-bible-utils` and
+  `platform-bible-react` ship through committed `dist/`, and the root `npm run build` does not
+  rebuild either — a source change to this helper that is not accompanied by a rebuilt, committed
+  `dist/` does not ship. `platform-bible-react`'s bundle leaves `platform-bible-utils` external
+  (`import … from "platform-bible-utils"` in the `.js` bundles, `require("platform-bible-utils")` in
+  the `.cjs` twins, and a type import in `dist/index.d.ts`), so rebuilding utils does not by itself
+  require rebuilding react. **Revisit** if a consumer ever
+  needs to distinguish "absent" from "seeded with its key", which this predicate deliberately merges.
+- **Source:** follow-up from PR #2829 review finding 16.
+
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
@@ -5765,6 +5810,67 @@ step, no automation. Just a record.
   and cannot know whether prose applies.
 - **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
   an explicit request for both modes.
+
+## adr-type-aware-lint-rules: `paranext` ESLint rules may require type information, and a rule with repo-wide teeth is registered in both `.eslintrc.js` and `extensions/.eslintrc.cjs`
+
+- **Date:** 2026-09-17
+- **Status:** Accepted (current approach)
+- **Context:** `paranext/no-nullish-localized-fallback` has to recognize a localized-strings map
+  however it is spelled. Measured across the repo (136 unique sites: 24 in `src/renderer`, 45 in
+  `lib/platform-bible-react`, 67 across 49 files in `extensions`), the identifier holding one is
+  `localizedStrings` (80 sites), `strings` (31), `stringsBag` (6), and a tail including
+  `stringsMap`, `langStrings` and `localizedStringsDefaulted` — while unrelated maps (`widths`,
+  `scrRefs`, `listeners`, `acc`) share the same syntactic shape. No rule in `lib/eslint-plugin-paranext`
+  was type-aware, and its shared `ruleTester` (`src/test.utils.ts`) configures no `project`, so it
+  could not type-check fixtures. Separately: `.eslintrc.js` (what CI's `npm run lint` runs) loads the
+  `paranext` plugin but enabled only `require-disable-comment`; every other plugin rule lived in
+  `.eslintrc.ai.js`, run by `lint:ai-strict`, which no workflow in `.github/` invokes. And
+  `extensions/.eslintrc.cjs` is its own root config for everything under `extensions/`, so a rule
+  registered only in the top-level `.eslintrc.js` never reached extension source at all — a rule
+  registered there alone reaches only 69 of the repo's 136 sites, excluding the 67 in `extensions`
+  and, with them, the most important known instance,
+  `extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.component.tsx:619`.
+- **Decision:** The rule keys on the *type* of the indexed object (assignable to `LanguageStrings`,
+  or indexed by `LocalizeKey`), making it the plugin's first type-aware rule. `src/test.utils.ts`
+  gains a `typeAwareRuleTester` alongside the existing untyped one, backed by a fixture tsconfig in
+  `src/fixtures/`. The rule is registered at `warn` in `.eslintrc.js` (not in `.eslintrc.ai.js`), and
+  additionally in `extensions/.eslintrc.cjs`, scoped to this one rule, inside that file's existing
+  `#region Overrides to rules from paranext-core` block — the region already reserved for rules that
+  don't apply to the shared extension-template baseline. Placing it there, rather than duplicating
+  the whole file's rule set, is a human decision made to limit the friction at the next template
+  merge, not one the agent implementing the rule made on its own. A type-aware rule also throws when
+  `ESLintUtils.getParserServices` is called on a file linted without type information, which ESLint
+  turns into a rule-loading failure that aborts the entire run rather than skipping the file; this
+  broke `npm run lint` once the rule was registered, because `lib/browserslist-config-detect-electron`
+  nulls `parserOptions.project` for `*.js` in its own override. The rule now stands down — registers
+  no listeners and returns — whenever type information is unavailable, which is the general shape any
+  future type-aware rule in this plugin needs, and also makes `configs.recommended` safe for a
+  downstream repo that lints without type information.
+- **Alternatives:** (a) identifier-name heuristic — rejected: needs a curated regex over ambiguous
+  names (`strings`), still misses aliases, and false-positives on the unrelated tail. (b) Register
+  in `.eslintrc.ai.js` beside the sibling localization rules — rejected: no workflow runs
+  `lint:ai-strict`, so the rule would have near-zero teeth. (c) Register at `error` immediately —
+  rejected: forces the full site sweep into the same change. (d) Leave `extensions/.eslintrc.cjs`
+  unregistered and accept partial coverage — rejected: it would miss the majority of known sites and
+  the single most important one, purely because extensions lint under their own root config; adding
+  the one rule to the existing override region costs little and is scoped narrowly enough not to
+  block a template merge outright.
+- **Consequences:** type-aware rules are now an available pattern here, at the cost of type
+  information during lint (already computed — `.eslintrc.js` sets
+  `parserOptions.project: './tsconfig.lint.json'`) and of a mandatory stand-down path for any file
+  linted without a type-checked program. `extensions/.eslintrc.cjs` is marked at its own top of file
+  as shared with `paranext-extension-template`, which has no `eslint-plugin-paranext`; adding this
+  override diverges the two files and will surface as a conflict or a no-op line at the next template
+  merge. `npm run lint`'s aggregate count for this rule (203) is inflated by the root `workspaces`
+  array (`["lib/*","extensions","extensions/src/*"]`), which lints extension source twice — a
+  distortion that affects every rule's aggregate, not just this one, and is worth remembering the
+  next time a lint count is read as a site count. The rule's warning count is the follow-up sweep's
+  work list, tracked as PT-4103 — which predates this rule, scopes itself to `lib/platform-bible-react`
+  alone, and prescribes the `?? 'English'` idiom this entry's sibling
+  (`adr-localized-string-resolution-helper`) disproves; it has been rewritten around the shared reader
+  and widened to the repo. **Revisit** to escalate the rule to `error` once that count reaches zero,
+  and to reconsider whether `lint:ai-strict` should run in CI at all given nothing invokes it.
+- **Source:** follow-up from PR #2829 review finding 16.
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
 

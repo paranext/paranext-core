@@ -23,6 +23,7 @@ import {
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,7 +37,6 @@ import {
 import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
 import {
   DOWNLOADED_NO_PROJECT_KEY,
-  resolveLocalizedString,
   resolvePickerNotice,
   VIEW_OPTIONS_NOTICE_STRING_KEYS,
 } from './scripture-text-grid/view-options-notice.utils';
@@ -586,10 +586,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               // controls. Show the "no project" prompt only when there is genuinely no project (not
               // during the brief load after one is bound).
               disabled={!sources || !textConnectionPdp}
+              // A disabled control with no explanation reads as broken, so this one keeps its
+              // English wording when the lookup has not resolved rather than going silent.
               disabledMessage={
                 effectiveProjectId
                   ? undefined
-                  : resolveLocalizedString(localizedStrings, NO_PROJECT_KEY)
+                  : resolveLocalizedString(localizedStrings[NO_PROJECT_KEY], 'No project selected.')
               }
               localizedStrings={localizedStrings}
             />

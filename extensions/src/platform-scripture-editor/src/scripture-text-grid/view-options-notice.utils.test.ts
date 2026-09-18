@@ -1,3 +1,4 @@
+import { localizedStringOrUndefined } from 'platform-bible-utils';
 import { describe, expect, it } from 'vitest';
 import { PICKER_NO_PROJECT_NOTICE_KEY, resolvePickerNotice } from './view-options-notice.utils';
 
@@ -22,5 +23,42 @@ describe('resolvePickerNotice', () => {
 
   it('says nothing when the key is missing entirely', () => {
     expect(resolvePickerNotice({}, false)).toBeUndefined();
+  });
+});
+
+describe('localizedStringOrUndefined', () => {
+  it('returns the localized text when it resolved', () => {
+    expect(localizedStringOrUndefined(STRINGS, PICKER_NO_PROJECT_NOTICE_KEY)).toBe(NOTICE);
+  });
+
+  it('returns undefined when the value is the key itself', () => {
+    expect(
+      localizedStringOrUndefined(
+        { [PICKER_NO_PROJECT_NOTICE_KEY]: PICKER_NO_PROJECT_NOTICE_KEY },
+        PICKER_NO_PROJECT_NOTICE_KEY,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined when the value is some other raw key', () => {
+    expect(
+      localizedStringOrUndefined(
+        { [PICKER_NO_PROJECT_NOTICE_KEY]: '%a_different_key%' },
+        PICKER_NO_PROJECT_NOTICE_KEY,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined when the value is whitespace only', () => {
+    expect(
+      localizedStringOrUndefined(
+        { [PICKER_NO_PROJECT_NOTICE_KEY]: '   ' },
+        PICKER_NO_PROJECT_NOTICE_KEY,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined when the key is absent', () => {
+    expect(localizedStringOrUndefined({}, PICKER_NO_PROJECT_NOTICE_KEY)).toBeUndefined();
   });
 });

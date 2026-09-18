@@ -29,6 +29,7 @@ import {
   isPlatformError,
   makeProjectSelectorCustomData,
   normalizeProjectId,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
@@ -296,34 +297,6 @@ global.webViewComponent = function ChecklistWebView({
     Record<string, 'ltr' | 'rtl' | undefined>
   >({});
 
-  // ─── Primary project short name (for the toolbar trigger label) ──────────
-
-  const [primaryProjectName, setPrimaryProjectName] = useState<string>('');
-  useEffect(() => {
-    if (!projectId) {
-      setPrimaryProjectName('');
-      return () => {};
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        const name = (await pdp.getSetting('platform.name')) ?? projectId;
-        if (!cancelled) setPrimaryProjectName(name);
-      } catch (err) {
-        if (!cancelled) {
-          logger.warn(
-            `ChecklistWebView: failed to read platform.name for ${projectId}: ${getErrorMessage(err)}`,
-          );
-          setPrimaryProjectName(projectId);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
   // ─── Books-present for ScopeSelector ──────────────────────────────────────
   const [booksPresent, setBooksPresent] = useState<string>(
     '0'.repeat(124), // 124 books per BookSet — empty default until project setting resolves
@@ -557,8 +530,10 @@ global.webViewComponent = function ChecklistWebView({
     if (!hideMatches) return undefined;
     const excluded = data?.excludedCount ?? 0;
     if (excluded <= 0) return undefined;
-    const template =
-      localizedStrings['%markersChecklist_matches_omitted%'] ?? '{count} Matches Omitted';
+    const template = resolveLocalizedString(
+      localizedStrings['%markersChecklist_matches_omitted%'],
+      '{count} Matches Omitted',
+    );
     return formatReplacementString(template, { count: String(excluded) });
   }, [hideMatches, data?.excludedCount, localizedStrings]);
 
@@ -796,6 +771,20 @@ global.webViewComponent = function ChecklistWebView({
     [primaryProjectGroupings, projectSelectorResolvedStrings],
   );
 
+  // One label per picker, used as both the trigger's visible placeholder and its accessible name so
+  // the two can never disagree on the unresolved path. The last candidate is a literal this file
+  // owns, because the picker's own English default ("Select a project") is too generic to identify
+  // which of the two toolbar pickers a screen reader has landed on. Mirrors
+  // `%markersChecklist_toolbar_*%` in contributions/localizedStrings.json.
+  const comparativeProjectsLabel = resolveLocalizedString(
+    localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
+    'Select comparative projects',
+  );
+  const primaryProjectPickerLabel = resolveLocalizedString(
+    localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+    'Select primary Scripture text',
+  );
+
   const comparativeTextsSelectorNode = useMemo(
     () => (
       <div data-testid="checklist-comparative-texts-trigger" className="tw:min-w-32">
@@ -807,10 +796,8 @@ global.webViewComponent = function ChecklistWebView({
           onChangeSelection={handleComparativeTextsChange}
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
-            buttonPlaceholder:
-              localizedStrings['%markersChecklist_toolbar_comparativeProjects%'] ??
-              'Select comparative projects',
-            ariaLabel: localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
+            buttonPlaceholder: comparativeProjectsLabel,
+            ariaLabel: comparativeProjectsLabel,
           }}
           availableGroupings={comparativeTextsGroupings}
         />
@@ -823,7 +810,7 @@ global.webViewComponent = function ChecklistWebView({
       handleComparativeTextsChange,
       projectSelectorLocalizedStrings,
       comparativeTextsGroupings,
-      localizedStrings,
+      comparativeProjectsLabel,
     ],
   );
 
@@ -917,10 +904,6 @@ global.webViewComponent = function ChecklistWebView({
     setIsSettingsOpen(false);
   }, []);
 
-  // ─── Derived label for the primary-project selector buttonPlaceholder ────
-
-  const primaryProjectLabel = primaryProjectName;
-
   // ─── Primary-project picker via real ProjectSelector (Theme 5 #2) ─────────
   //
   // Single-select picker. On change, retargets the checklist to a new project via
@@ -941,9 +924,8 @@ global.webViewComponent = function ChecklistWebView({
           availableGroupings={primaryProjectGroupings}
           localizedStrings={{
             ...projectSelectorLocalizedStrings,
-            buttonPlaceholder:
-              localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel,
-            ariaLabel: localizedStrings['%markersChecklist_toolbar_primaryProject%'],
+            buttonPlaceholder: primaryProjectPickerLabel,
+            ariaLabel: primaryProjectPickerLabel,
           }}
         />
       </div>
@@ -953,8 +935,7 @@ global.webViewComponent = function ChecklistWebView({
       comparativeOpenTabs,
       projectId,
       updateWebViewDefinition,
-      localizedStrings,
-      primaryProjectLabel,
+      primaryProjectPickerLabel,
       projectSelectorLocalizedStrings,
       primaryProjectGroupings,
     ],

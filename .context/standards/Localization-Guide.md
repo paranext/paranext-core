@@ -178,12 +178,27 @@ The established contract for a localizable library component is four parts:
    };
    ```
 
-3. **An optional `localizedStrings?` prop** typed as that mapped type (or the shared `LanguageStrings` type from `platform-bible-utils`). Inside the component, every read goes through an English-fallback lookup so the component still renders readable text when a key is absent:
+3. **An optional `localizedStrings?` prop** typed as that mapped type (or the shared `LanguageStrings` type from `platform-bible-utils`). Inside the component, every read goes through `resolveLocalizedString` so the component still renders readable text when a key is absent or has not resolved:
 
    ```tsx
-   const selectChapter =
-     localizedStrings?.['%webView_bookChapterControl_selectChapter%'] ?? 'Select Chapter';
+   const selectChapterTitle = resolveLocalizedString(
+     localizedStrings?.['%webView_bookChapterControl_selectChapter%'],
+     'Select chapter',
+   );
    ```
+
+   **Do not use `??` here.** `useLocalizedStrings` seeds its state with `{ [key]: key }`, returns
+   that seed for the whole first render pass, and returns it permanently if the localization
+   provider errors. An unresolved read therefore produces the literal
+   `'%webView_bookChapterControl_selectChapter%'` — a defined, non-empty string that `??` passes
+   straight through to the user. `resolveLocalizedString` tests the *value*, rejecting any
+   `%…%`-shaped or blank string, which is the only test that catches this.
+
+   This applies to the `Partial<Record<…>>` prop shape above too, even though an indexed read of it
+   is genuinely `string | undefined`. An absent key and a key-seeded key are both live
+   possibilities on the same prop, and `??` only sees the first. `noUncheckedIndexedAccess` is off
+   repo-wide, so TypeScript flags neither the bug nor the now-dead `??`;
+   `paranext/no-nullish-localized-fallback` is what catches it.
 
 4. **A shipped English value for every key in the tuple.** The tuple only *declares* what the
    component asks for; nothing about declaring a key produces a value. The **default** home for a
@@ -216,7 +231,7 @@ The consuming extension resolves the keys with `useLocalizedStrings(STRING_KEYS)
 - Hardcoded English text in JSX. This is enforced by the ESLint rule **`paranext/no-hardcoded-jsx-strings`** (in `lib/eslint-plugin-paranext/`).
 - Ad-hoc `localizedStrings: Record<string, string>` props with no typed `STRING_KEYS` tuple — callers lose the typed key list and the partial-map guarantee.
 
-**Why:** the `STRING_KEYS` tuple gives consumers a typed, single-source key list for the `useLocalizedStrings` lookup; the `Partial<Record>` type lets stories pass a subset and trust the fallback; the English-fallback read keeps the component usable in isolation. Established precedent: `BookChapterControl`, `BookSelector`, `MarkerMenu`, `Inventory`, `ScopeSelector`, `CommentEditor`, `CommentList`, `FootnoteEditor`, `UndoRedoButtons`, `ErrorPopover`, `ErrorDump`. See `lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.types.ts` for the `STRING_KEYS` + `…LocalizedStrings` pair and `book-chapter-control.component.tsx` for the `?? 'English'` fallback reads.
+**Why:** the `STRING_KEYS` tuple gives consumers a typed, single-source key list for the `useLocalizedStrings` lookup; the `Partial<Record>` type lets stories pass whatever subset a story cares about; and `resolveLocalizedString` turns every absent, unresolved or blank value into the component's own English text, so the component stays readable in isolation. Established precedent: `BookChapterControl`, `BookSelector`, `MarkerMenu`, `Inventory`, `ScopeSelector`, `CommentEditor`, `CommentList`, `FootnoteEditor`, `UndoRedoButtons`, `ErrorPopover`, `ErrorDump`. See `lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.types.ts` for the `STRING_KEYS` + `…LocalizedStrings` pair and `book-chapter-control.component.tsx` for the `resolveLocalizedString` reads.
 
 > Note: a few components also accept a separate data map prop such as `localizedBookNames?: Map<…>` for localized book names — that is a distinct, data-shaped prop, not the string-key mechanism described here.
 

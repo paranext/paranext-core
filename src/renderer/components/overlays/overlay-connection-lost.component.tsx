@@ -9,7 +9,7 @@ import {
   DialogTitle,
   Z_INDEX_CONNECTION_LOST,
 } from 'platform-bible-react';
-import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, LocalizeKey, resolveLocalizedString } from 'platform-bible-utils';
 import { TriangleAlert } from 'lucide-react';
 import { useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -81,18 +81,14 @@ export const ENGLISH_FALLBACKS: { [K in ConnectionLostKey]: string } = {
 /**
  * The string for `key`, or its English fallback when localization has not resolved it.
  *
- * The localization service returns the key itself when a string is unresolved, and every key is
- * `%`-wrapped, so a value that still looks like its own key has not resolved. Takes the whole map
- * rather than a single value so a call site names each key once and cannot pair one key's fallback
- * with another key's text.
+ * Takes the whole map rather than a single value so a call site names each key once and cannot pair
+ * one key's fallback with another key's text.
  */
 function localizedOrEnglish(
   strings: Partial<Record<ConnectionLostKey, string>>,
   key: ConnectionLostKey,
 ) {
-  const value = strings[key];
-  if (!value || value === key) return ENGLISH_FALLBACKS[key];
-  return value;
+  return resolveLocalizedString(strings[key], ENGLISH_FALLBACKS[key]);
 }
 
 type Props = {

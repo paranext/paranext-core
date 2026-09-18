@@ -82,5 +82,8 @@ throws anyway, from somewhere else.
 `platform-bible-utils` and `platform-bible-react` are consumed through their committed `dist/`, and
 the root `npm run build` does not rebuild them. A source change in either package that is not
 accompanied by `npm run build:pbu` / `npm run build:pbr` and a committed `dist/` **does not ship**,
-and CI cannot see the skew. `platform-bible-react`'s bundle embeds `platform-bible-utils`' `dist`,
-so rebuilding the latter requires rebuilding the former too.
+and CI cannot see the skew. The two packages are independent that way: `platform-bible-react`'s
+bundle keeps `platform-bible-utils` external — `import … from "platform-bible-utils"` in the `.js`
+bundles, `require("platform-bible-utils")` in the `.cjs` twins, and a type import in
+`dist/index.d.ts` — rather than inlining it, so rebuilding utils does not by itself require
+rebuilding react. Rebuild react when react's own source changes.

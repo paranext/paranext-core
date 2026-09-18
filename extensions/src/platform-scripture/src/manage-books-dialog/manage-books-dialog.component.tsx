@@ -52,7 +52,7 @@ import {
   ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
-import { makeProjectSelectorCustomData } from 'platform-bible-utils';
+import { makeProjectSelectorCustomData, resolveLocalizedString } from 'platform-bible-utils';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   BookGridGroupBy,
@@ -616,7 +616,7 @@ export function ManageBooksDialog({
 
   const t = useCallback(
     (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
-      localizedStrings[key] ?? fallback,
+      resolveLocalizedString(localizedStrings[key], fallback),
     [localizedStrings],
   );
 

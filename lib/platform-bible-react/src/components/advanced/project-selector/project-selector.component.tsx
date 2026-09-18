@@ -19,6 +19,7 @@ import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Group, Loader2 } from '
 import {
   getLocalizeKeyForScrollGroupId,
   normalizeProjectId,
+  resolveLocalizedString,
   type ScrollGroupId,
 } from 'platform-bible-utils';
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
@@ -111,10 +112,20 @@ const NARROW_TRIGGER_THRESHOLD_PX = 100;
 // #region Localized strings
 
 /**
- * Every user-facing string the selector can render. All keys are optional; unset values fall back
- * to English defaults. Consumers wire this from a shared platform-level localization block (see
- * `%projectSelector_*%` keys in the platform's localizedStrings JSON) so every ProjectSelector in
- * the app reads the same vocabulary.
+ * Every user-facing string the selector can render. Consumers wire this from a shared
+ * platform-level localization block (see `%projectSelector_*%` keys in the platform's
+ * localizedStrings JSON) so every ProjectSelector in the app reads the same vocabulary.
+ *
+ * All keys are optional, and each field falls back to its English default independently. A field
+ * falls back when it is unset AND when it is set to a value that cannot be shown to a user: a raw
+ * localization key (`%…%`-shaped, which is what an unresolved lookup returns), an empty string, or
+ * whitespace only. So passing a bag straight from `useLocalizedStrings` is safe — keys that have
+ * not resolved yet render English rather than their own key text.
+ *
+ * `ariaLabel` is the one exception: an explicitly empty string is honored as a deliberate opt-out,
+ * meaning "a labelling ancestor names this control, do not add a second accessible name".
+ * Whitespace is not an opt-out and still falls back, since a whitespace-only label leaves the
+ * control with no accessible name by accident rather than by intent.
  *
  * Grouping _labels_ (the radio items in the group-by menu) are NOT in this map — those live on the
  * {@link ProjectSelectorGrouping} objects the caller passes via `availableGroupings`, so custom
@@ -187,10 +198,43 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   clearAll: 'Clear all',
 };
 
+/**
+ * Every field of {@link ProjectSelectorLocalizedStrings}, derived from `DEFAULT_STRINGS` so the list
+ * cannot drift from the type: `DEFAULT_STRINGS` is annotated `Required<…>`, so a field added to the
+ * type — or a field misspelled here — is a compile error at that literal, and this list picks up
+ * the new field with no further edit.
+ */
+const PROJECT_SELECTOR_STRING_FIELDS =
+  // `Object.keys` erases the key type; the assertion restores what `DEFAULT_STRINGS`'s `Required<…>`
+  // annotation already guarantees, and is what lets the resolve loop below index both bags.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  Object.keys(DEFAULT_STRINGS) as (keyof ProjectSelectorLocalizedStrings)[];
+
 function resolveStrings(
   partial: ProjectSelectorLocalizedStrings | undefined,
 ): Required<ProjectSelectorLocalizedStrings> {
-  return { ...DEFAULT_STRINGS, ...partial };
+  const given = partial ?? {};
+  // Resolved field by field rather than by spreading `partial` over the defaults, because a spread
+  // cannot tell "the caller did not set this" from "the caller set it to something unusable":
+  // `buildProjectSelectorLocalizedStrings` emits a property for EVERY field, and a present-but-
+  // `undefined` property overwrites the default just as a real value would. What counts as usable
+  // is `resolveLocalizedString`'s to decide — see `isResolvedLocalizedValue` for the three states
+  // it rejects.
+  //
+  // The per-field guarantee lives on `DEFAULT_STRINGS` (and the `Required<…>` return type) rather
+  // than on a written-out object literal here: every field the type declares must appear there, so
+  // it is still a compile error to add a field to the type and leave it unhandled, and the loop
+  // below then covers the new field automatically.
+  const resolved = { ...DEFAULT_STRINGS };
+  PROJECT_SELECTOR_STRING_FIELDS.forEach((key) => {
+    resolved[key] = resolveLocalizedString(given[key], DEFAULT_STRINGS[key]);
+  });
+  // `ariaLabel` is the one field where an empty string is meaningful: it is a deliberate "no
+  // accessible name here; the visible text or a labelling ancestor names this control", so it passes
+  // through rather than falling back. Matches `RecentSearches`. Whitespace-only is not that opt-out,
+  // which is why this tests for `''` exactly rather than for a blank string.
+  if (given.ariaLabel === '') resolved.ariaLabel = '';
+  return resolved;
 }
 
 /**
@@ -700,7 +744,7 @@ function resolveDefaultActiveGrouping(
 export function ProjectSelector(props: ProjectSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const strings = resolveStrings(props.localizedStrings);
+  const strings = useMemo(() => resolveStrings(props.localizedStrings), [props.localizedStrings]);
   // Effective grouping list:
   //
   // - When the caller passes `availableGroupings` (even `[]`), it is taken LITERALLY. This is the
