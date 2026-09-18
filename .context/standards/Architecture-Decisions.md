@@ -7322,5 +7322,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pane's own area around it and leaves it in place; moving it onto the platform mechanism is not
   scheduled. **Revisit** if Chromium's CSS `zoom` behaviour changes, or once no view carries a
   private zoom any more.
+
+  The whole-iframe fallback applies as soon as a pane loads and is dropped the moment the view
+  reports an area, and which view types mark areas is remembered per type so the decision is right
+  before the content loads from the second open onwards. The first-ever open of a marking type on a
+  machine still shows one frame-scaled moment: only the view can say whether it marks an area, and
+  it can only say so after it has drawn. A type recorded as marking areas is not moved back by a
+  pane of that type reporting none, so a view that stops marking areas keeps its panes unscaled
+  until the record is cleared.
 - **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
-  recorded here by PT-4580; the chord-targeting exception added by PT-4711.
+  recorded here by PT-4580; the chord-targeting exception added by PT-4711; the immediate fallback
+  and the per-type expectation added by PT-4714.
