@@ -1419,6 +1419,11 @@ the editor keeps its own uncorrected document and writes it back over the correc
 - **Scope the repair to the write that knows the answer.** Only a write aimed at a single chapter
   knows which `\c` is the right one; a book-level write legitimately carries one per chapter and
   must be left alone.
+- **Check what else the refusal was catching.** A repair makes every write of that shape succeed,
+  including ones the refusal was stopping for a different reason. The chapter-number refusal also
+  stopped one chapter's content being written into another, which the editor attempts after
+  navigation while it still holds the chapter it is leaving. The editor guards that
+  separately (`isEditorContentForChapter`).
 
 **Chapter markers — the invariant both ports must hold.** A restored `\c` for any chapter after the
 first goes at **position 0**. Nothing may precede it, not even an `\id` book node typed into the

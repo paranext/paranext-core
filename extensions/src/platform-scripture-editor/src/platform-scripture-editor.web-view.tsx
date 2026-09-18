@@ -136,7 +136,7 @@ import {
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
-import { performDebouncedPdpSave } from './debounced-pdp-save.util';
+import { isEditorContentForChapter, performDebouncedPdpSave } from './debounced-pdp-save.util';
 import {
   applyChapterSavePreparation,
   CARET_AT_DOCUMENT_END,
@@ -155,7 +155,7 @@ import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
-import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import { EditorDocumentSelector, useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -2772,6 +2772,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const chapterKeyRef = useRef(chapterKey);
   chapterKeyRef.current = chapterKey;
 
+  // The chapter document the editor is actually holding, which trails the selected chapter after
+  // navigation until the new chapter's content arrives. Recorded by `useEditorPdpSync`.
+  const editorDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
+
   // A caret restore waiting on a chapter-marker repair's push-back to load (see
   // `putRepairedUsjInEditor`). Held so a second repair replaces the wait rather than stacking a
   // second one behind it, and so an editor that goes away inside the wait takes the wait with it
@@ -2808,6 +2812,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       usjFromEditor = editorRef.current?.getUsj(),
     ): Promise<boolean> {
       if (!usjFromEditor) return Promise.resolve(false);
+
+      // Read at call time, not captured: the editor's document is what the content came from.
+      const editorDocument = editorDocumentSelector.current;
+      const editorDocumentKey =
+        editorDocument &&
+        getChapterKey(
+          editorDocument.book,
+          editorDocument.chapterNum,
+          editorDocument.versificationStr,
+        );
+      if (!isEditorContentForChapter(editorDocumentKey, savedChapterKey)) {
+        logger.debug(
+          `Not saving the editor's content for ${editorDocumentKey} to ${savedChapterKey}: the editor has not loaded that chapter yet`,
+        );
+        return Promise.resolve(false);
+      }
 
       // An open command surface's in-progress input is excluded by the editor itself
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
@@ -3412,6 +3432,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     flushPendingDebouncedSave,
     isEditingSessionActive,
     lastLocalEditTimestamp,
+    editorDocumentSelector,
   });
 
   // #region Footnotes Auto-Show Decision

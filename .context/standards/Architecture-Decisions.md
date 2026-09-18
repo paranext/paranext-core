@@ -564,6 +564,15 @@ step, no automation. Just a record.
   differ only in LF-vs-CRLF line endings, which USJ does not represent). Anything that changes one
   port must change the other or explain why not. For editor traffic the C# half is expected to find
   nothing to correct, so a log line from it is a signal that the renderer repair has a gap.
+  The repair also removes a protection the refusal used to provide by accident: a save carrying one
+  chapter's content into another chapter was refused as a wrong chapter number, and once the marker
+  is renumbered to match, Paratext accepts it. The editor makes that save after navigation, because
+  it goes on holding (and letting the user type into) the chapter it is leaving until the new one
+  arrives, while its saves are already bound to the new chapter. So the web view drops any save
+  whose content is not from the chapter being written (`isEditorContentForChapter` in
+  `extensions/src/platform-scripture-editor/src/debounced-pdp-save.util.ts`, fed the editor's
+  document by `useEditorPdpSync`). The C# backstop has no such view of where its content came from,
+  and does not need one for editor traffic, which is guarded before it leaves the renderer.
   **Revisit** if the editor ever gains a way to reject a marker edit at the source, or if Paratext
   relaxes the "text before chapter marker" rule.
 - **Source:** PT-4608; Paratext 9 `UsfmEditorTextLoader.FixChapterNumbers` and its test table.
