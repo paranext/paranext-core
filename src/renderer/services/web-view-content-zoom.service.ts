@@ -436,7 +436,7 @@ export function resolveContentZoomArea(
  * corrects itself the next time the pop-up opens, and a change-event-and-re-render path through
  * three components is disproportionate to a cosmetic mismatch.
  *
- * @experimental
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function getContentZoomScaleForWebView(webViewId: WebViewId): number {
   const area = resolveContentZoomArea(webViewId, undefined);
