@@ -733,7 +733,15 @@ export function ModelTextPanel({
           project's other resource panes, which resolve to the same kind/identity pair and would
           otherwise all read one remembered level. The label row above stays outside so its pinned
           42 px height — aligned with the editor's toolbar and Column 3's tab bar — doesn't scale
-          with the content. */}
+          with the content.
+
+          This element is only reached once the panel has a project, has a configured readiness, has
+          resolved to a displayable resource, has not just failed an install, and is not mid-pick or
+          mid-install. None of the earlier returns for those states (no project; readiness not
+          configured; not found/unresolvable; install failed; selecting/installing) mark a zoom area,
+          so while any of them is on screen the platform scales the whole frame at the Settings
+          default and the pane offers no per-pane zoom control. Acceptable: each of those states is
+          transient and holds no content worth scaling to a remembered level yet. */}
       <ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
         {renderContent()}
       </ContentZoomRoot>
