@@ -1597,13 +1597,15 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
       allProjects: [],
     });
 
-    expect(
-      requireCapturedProjectSelectorProps().renderProjectIndicator?.({
-        id: 'roRecent',
-        shortName: 'RR',
-        fullName: 'Readonly Recent',
-      }),
-    ).not.toBeUndefined();
+    // Both halves, not merely a truthy return: an indicator carrying `{ node: undefined }` is not
+    // `undefined` and would satisfy a bare existence check while marking nothing.
+    const recentReadOnly = requireCapturedProjectSelectorProps().renderProjectIndicator?.({
+      id: 'roRecent',
+      shortName: 'RR',
+      fullName: 'Readonly Recent',
+    });
+    expect(recentReadOnly?.node).toBeDefined();
+    expect(recentReadOnly?.label).toBe('Test read-only');
   });
 
   it('marks a read-only project with the read-only indicator, not merely with something', async () => {
@@ -1623,7 +1625,7 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
 
     // Scoped to this container rather than `screen`: the toolbar rendered above is still mounted
     // and carries icons of its own.
-    const { container } = render(<div>{indicator}</div>);
+    const { container } = render(<div>{indicator?.node}</div>);
     expect(within(container).getByRole('img', { name: 'Test read-only' })).toBeInTheDocument();
   });
 
