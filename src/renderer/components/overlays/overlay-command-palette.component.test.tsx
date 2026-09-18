@@ -1039,17 +1039,23 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      const content = document.querySelector('[data-overlay-command-palette]');
-      expect(content).toBeInTheDocument();
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
       // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { style } = content as HTMLElement;
+      const { style } = inner as HTMLElement;
       // jsdom leaves an inline style property that was never assigned as `undefined` rather than the
       // empty string a real browser reports for an unset CSS property, so a scale of 1 (which never
       // assigns `zoom` at all) is checked against both.
       expect(style.zoom || '').toBe('');
       // The palette's own default width/cap, unrelated to content zoom, unchanged.
       expect(style.maxWidth).toBe('500px');
+
+      const content = document.querySelector('[data-overlay-command-palette]');
+      expect(content).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((content as HTMLElement).style.width).toBe('auto');
     });
 
     it('draws at the pane’s scale and caps its size by the space Radix reports, divided', () => {
@@ -1063,13 +1069,17 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      const content = document.querySelector('[data-overlay-command-palette]');
-      expect(content).toBeInTheDocument();
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
       // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { style } = content as HTMLElement;
+      const { style } = inner as HTMLElement;
       expect(style.zoom).toBe('1.5');
-      expect(style.maxWidth).toBe('calc(var(--radix-popover-content-available-width) / 1.5)');
+      // The default (no caller maxWidth) still combines with the Radix cap — this is the cap the
+      // component falls back to, not a bare, uncombined Radix value.
+      expect(style.maxWidth).toBe(
+        'min(500px, calc(var(--radix-popover-content-available-width) / 1.5))',
+      );
       expect(style.maxHeight).toBe('calc(var(--radix-popover-content-available-height) / 1.5)');
     });
 
@@ -1087,11 +1097,11 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      const content = document.querySelector('[data-overlay-command-palette]');
-      expect(content).toBeInTheDocument();
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
       // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { style } = content as HTMLElement;
+      const { style } = inner as HTMLElement;
       expect(style.maxWidth).toBe(
         'min(320px, calc(var(--radix-popover-content-available-width) / 1.5))',
       );
@@ -1109,12 +1119,41 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      const content = document.querySelector('[data-overlay-command-palette]');
-      expect(content).toBeInTheDocument();
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
       // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { style } = content as HTMLElement;
+      const { style } = inner as HTMLElement;
       expect(style.maxWidth).toBe('320px');
+    });
+
+    it('renders the arrow as a sibling of the zoomed inner div, not inside it', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          contentScale={1.5}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const content = document.querySelector('[data-overlay-command-palette]');
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(content).toBeInTheDocument();
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertions above guard null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const contentEl = content as HTMLElement;
+      // PopoverContent has exactly two direct children: the zoomed div and the arrow. Radix requires
+      // the arrow to be a child of PopoverContent, and it must be the OTHER child — a descendant of
+      // the zoomed div would have Radix's own pixel offset re-scaled by that div's `zoom`. Checked
+      // structurally rather than by finding an `svg` because cmdk's search-icon svg (rendered inside
+      // the zoomed div, ahead of the arrow's own svg in document order) would otherwise be matched
+      // first.
+      const otherChildren = Array.from(contentEl.children).filter((child) => child !== inner);
+      expect(otherChildren).toHaveLength(1);
+      expect(inner?.contains(otherChildren[0])).toBe(false);
     });
 
     it('scales the anchor the pane measured in its own pixels by the frame zoom', () => {
@@ -1229,11 +1268,11 @@ describe('OverlayCommandPalette (store-connected)', () => {
     addOverlay(entry);
     render(<OverlayCommandPalette overlay={entry} contentScale={1.5} frameScale={1.25} />);
 
-    const content = document.querySelector('[data-overlay-command-palette]');
-    expect(content).toBeInTheDocument();
+    const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+    expect(inner).toBeInTheDocument();
     // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const { style } = content as HTMLElement;
+    const { style } = inner as HTMLElement;
     expect(style.zoom).toBe('1.5');
 
     const anchor = document.querySelector('[data-overlay-command-palette-anchor]');
