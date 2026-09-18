@@ -399,6 +399,36 @@ describe('FootnotesLayout selection across USJ changes', () => {
     expect(onSelectedFootnoteChange).not.toHaveBeenCalledWith(undefined);
   });
 
+  it('leaves the list where the user scrolled it when an update re-creates the selected note', () => {
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const props = {
+      showMarkers: true,
+      useWebViewState: useWebViewStateMock,
+      localizedStrings,
+      onClose: () => {},
+      // One request object throughout: only the document changes below.
+      focusRequest: { index: 1 },
+    };
+    const { rerender } = render(
+      <FootnotesLayout {...props} usj={usjWithTwoNotes}>
+        <div />
+      </FootnotesLayout>,
+    );
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    scrollIntoView.mockClear();
+
+    const echo: Usj = JSON.parse(JSON.stringify(usjWithTwoNotes));
+    rerender(
+      <FootnotesLayout {...props} usj={echo}>
+        <div />
+      </FootnotesLayout>,
+    );
+
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    scrollIntoView.mockRestore();
+  });
+
   it('keeps the editing row selected while its content changes under live-apply', () => {
     const onSelectedFootnoteChange = vi.fn();
     const props = {

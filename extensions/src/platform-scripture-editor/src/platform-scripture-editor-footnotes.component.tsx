@@ -160,8 +160,14 @@ export function FootnotesLayout({
 
   const [footnoteListKey, setFootnoteListKey] = useState(0);
 
+  /**
+   * The selected row. `request` is minted fresh by each selection the user or the host makes, and
+   * is carried unchanged when the selection is only re-pointed at a re-parsed list: its identity is
+   * the list's "reveal the row again" signal, which must not fire for a content update the user did
+   * not ask to be taken to.
+   */
   const [selectedFootnote, setSelectedFootnote] = useState<
-    { footnote: MarkerObject; index: number } | undefined
+    { footnote: MarkerObject; index: number; request: object } | undefined
   >();
 
   /**
@@ -218,7 +224,7 @@ export function FootnotesLayout({
     // is still empty (pane-mount frame) is retried when the `footnotes` dep repopulates.
     lastAppliedFocusRequestRef.current = focusRequest;
     pendingRowFocusRef.current = focusRowOnFocusRequest === true;
-    setSelectedFootnote({ footnote: footnotes[index], index });
+    setSelectedFootnote({ footnote: footnotes[index], index, request: {} });
   }, [focusRequest, footnotes, focusRowOnFocusRequest]);
 
   // Mirrors `editingFootnoteIndex` into a ref so the USJ-processing effect below can read its
@@ -265,12 +271,11 @@ export function FootnotesLayout({
         ) {
           // Re-point at the new list's object: FootnoteList marks the selected row by identity, so
           // holding onto the old object would lose the highlight the moment a PDP echo re-parses
-          // `usj` into fresh objects, even when the note's content is unchanged. Because the
-          // returned object is minted fresh here every time, `selectionRequest` identity changes on
-          // every echo too, which re-runs `FootnoteList`'s `scrollIntoView({ block: 'nearest' })` on
-          // an already-visible row (a no-op) and re-fires `onSelectedFootnoteChange(index)` with the
-          // same index (the consumer's `highlightNote` is idempotent).
-          return { footnote: fresh, index };
+          // `usj` into fresh objects, even when the note's content is unchanged. The `request` is
+          // kept, so the list does not scroll a row the user has scrolled away from back into view.
+          // The fresh state object still re-fires `onSelectedFootnoteChange(index)` with the same
+          // index (the consumer's `highlightNote` is idempotent).
+          return { ...currentSelected, footnote: fresh };
         }
         return undefined;
       });
@@ -431,7 +436,7 @@ export function FootnotesLayout({
     (_footnote: MarkerObject, index: number, listId: string | number) => {
       if (index < 0 || index >= footnotes.length || listId !== footnoteListKey) return;
 
-      setSelectedFootnote({ footnote: footnotes[index], index });
+      setSelectedFootnote({ footnote: footnotes[index], index, request: {} });
       onFootnoteSelected?.(index);
     },
     [footnotes, footnoteListKey, onFootnoteSelected],
@@ -450,7 +455,7 @@ export function FootnotesLayout({
     ) => {
       if (index < 0 || index >= footnotes.length || listId !== footnoteListKey) return;
 
-      setSelectedFootnote({ footnote: footnotes[index], index });
+      setSelectedFootnote({ footnote: footnotes[index], index, request: {} });
       onFootnoteEditRequested?.(index, caretPosition);
     },
     [footnotes, footnoteListKey, onFootnoteEditRequested],
@@ -597,11 +602,10 @@ export function FootnotesLayout({
                 formatCaller={showMarkers ? (c) => c : undefined}
                 ariaLabel={localizedStrings['%webView_footnoteList_header%']}
                 selectedFootnote={selectedFootnote?.footnote}
-                // The wrapper state object is minted fresh on every selection application (pane
-                // click or focus request), so its identity is the "reveal the row again" signal —
-                // a repeat focusRequest for the same footnote re-scrolls even though the derived
+                // Minted fresh on every selection application (pane click or focus request), so a
+                // repeat focusRequest for the same footnote re-scrolls even though the derived
                 // footnote object and index are unchanged.
-                selectionRequest={selectedFootnote}
+                selectionRequest={selectedFootnote?.request}
                 onFootnoteSelected={handleFootnoteSelected}
                 onFootnoteEditRequested={
                   onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
