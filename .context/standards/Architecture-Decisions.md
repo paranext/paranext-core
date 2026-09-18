@@ -547,6 +547,161 @@ step, no automation. Just a record.
   **Revisit** as its own change, with `paratext-10-studio` in scope.
 - **Source:** the multi-agent review of #2654, finding 25.
 
+## adr-chapter-marker-repair-at-the-save-boundary: A chapter's `\c` marker is repaired on the way out, in both write layers
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** `ScrText.ValidateChapterNumber` (in PT9 `ParatextData/ScrText.cs:1050`) refuses a
+  chapter write whose `\c` marker disagrees with the chapter being written — a wrong number, a
+  second marker typed mid-chapter, a deleted marker, or (for any chapter after the first) any
+  content at all ahead of the marker. The refusal does not touch the editor, so the offending
+  document stays on screen and every LATER save of that chapter is refused too: editing a chapter
+  marker silently stopped the chapter saving, with nothing on screen to say so (PT-4608). Paratext 9
+  does not prevent the edit. Its editor repairs the USFM inside its own save path —
+  `UsfmEditorTextLoader.FixChapterNumbers`, in PT9
+  `ParatextBase/ScriptureEditor/UsfmEditorTextLoader.cs:355` — and reloads the editor onto the
+  repaired text with `Revert()` (same file, `:277-278`), so the typing is allowed and the document
+  is made writable on its way out. PT9 tells the user only in the mid-chapter-marker case, the one
+  shape for which `FixChapterNumbers` sets an error message (`:409`, surfaced at `:318-319`);
+  notifying on every repair is our own choice, recorded in the Decision below.
+- **Decision:** Repair at the save boundary, and do it in **both** write layers rather than picking
+  one.
+  - The renderer repairs the USJ before the PDP write
+    (`extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts`), pushes the
+    repaired document back into the editor, and notifies the user — the push-back is what stops the
+    loop, since a bad marker left on screen is repaired and reported again on every subsequent save.
+  - C# repairs the USFM inside `SetChapterUsx`/`SetChapterUsfm`
+    (`c-sharp/Projects/ChapterMarkerCorrection.cs`) as a backstop for writers that do not correct
+    their own content, silently apart from a log line.
+  - **Book-level writes are never touched.** A book legitimately carries one `\c` per chapter, so
+    only a write aimed at a single chapter knows which marker is the right one. The mechanism is
+    the call graph, not a flag: `SetBookUsfm` and `SetBookUsx` never call the corrector at all — the
+    two chapter setters are its only call sites. Both ports separately return their input untouched
+    for a non-chapter number (the opening guard of `FixChapterMarkers` in
+    `c-sharp/Projects/ChapterMarkerCorrection.cs`, and of `repairChapterMarkers` in
+    `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts`), but that is a
+    defensive guard inside the algorithm rather than what keeps book writes safe.
+  - **Placement rule:** a restored marker for a chapter after the first goes at index 0
+    *unconditionally*. Nothing may precede it — not even an `\id` book node typed into the chapter —
+    because `verseRef.ChapterNum != 1 && parts[0] != ""` is "Text present before chapter marker."
+    (in PT9 `ParatextData/ScrText.cs:1067`), so a marker placed behind such a node yields another
+    document the writer refuses. Chapter 1 is the sole exception: its marker stays where the author
+    has it, behind the introduction, and may legitimately be absent altogether (Jude). This is the
+    one point at which the two ports can plausibly drift, and Paratext 9's table does not pin it (no
+    row puts text ahead of a later chapter's marker), so it is recorded here rather than left to be
+    re-derived.
+- **Alternatives:**
+  - **Block the edit in the editor** (refuse the keystroke, or revert the marker in place) —
+    rejected. Paratext 9 deliberately allows the typing and fixes it on save, and the editor's
+    chapter transform is written for that parity; policing marker edits in the editor would be a
+    behaviour change to the typing surface in order to work around a writer constraint.
+  - **C# only** — rejected. `useEditorPdpSync`
+    (`extensions/src/platform-scripture-editor/src/use-editor-pdp-sync.hook.ts`) defers an incoming
+    PDP update for up to `EDITOR_OWNERSHIP_WINDOW_MS` (15 s) while the editor is focused and
+    recently edited, so a backend-only correction would not reach the editor; the still-poisoned
+    editor document would simply be written over it on the next save. A correction the editor never
+    sees also cannot be explained to the user.
+  - **Renderer only** — rejected. It would leave every non-editor writer of a chapter (imports,
+    commands, future extensions) able to poison a chapter exactly as before.
+- **Consequences:** two ports of one algorithm now exist, over two different representations (USJ
+  nodes and USFM text), and they must not drift. Both are pinned to Paratext 9's own 16-row
+  `[TestCase]` table (in PT9 `ParatextBase.Tests/ScriptureEditor/UsfmEditorTextLoaderTests.cs:573`):
+  the C# port keeps all 16 rows, the USJ port keeps the 10 distinct behaviours (the other 6 rows
+  differ only in LF-vs-CRLF line endings, which USJ does not represent). Anything that changes one
+  port must change the other or explain why not. For editor traffic the C# half is expected to find
+  nothing to correct, so a log line from it is a signal that the renderer repair has a gap.
+  **Revisit** if the editor ever gains a way to reject a marker edit at the source, or if Paratext
+  relaxes the "text before chapter marker" rule.
+- **Source:** PT-4608; Paratext 9 `UsfmEditorTextLoader.FixChapterNumbers` and its test table.
+
+## adr-chapter-marker-repair-replaces-the-document: The repair's push-back replaces the whole document and re-places the caret; keeping the undo stack is deferred to the editor
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** The renderer half of
+  [adr-chapter-marker-repair-at-the-save-boundary](#adr-chapter-marker-repair-at-the-save-boundary)
+  pushes the repaired document back with `EditorRef.setUsj`. The editor loads external content
+  through `LoadStatePlugin`
+  (`scripture-editors` `libs/shared-react/src/plugins/usj/LoadStatePlugin.tsx`): it parses a fresh
+  editor state, calls `editor.setEditorState`, and dispatches `CLEAR_HISTORY_COMMAND`
+  **unconditionally**. So every Lexical node key regenerates, the parsed state carries no selection,
+  and the caret the correction was made under disappears while the undo/redo stack is emptied. Hand
+  QA reported the vanished caret: the correction lands mid-typing, and the user is left with no
+  insertion point.
+- **Decision:** Keep the whole-document push-back, place a caret afresh at the correction, and
+  accept the emptied undo stack for now.
+  - The repair reports where the caret belongs in the coordinates of the document it produced
+    (`ChapterMarkerRepairResult.caretTarget`). The save path applies it once the editor has loaded
+    that document, and only when the editor held DOM focus at push-back time — an unfocused editor
+    has no claim on the shared document selection, and the editor itself skips selection
+    reconciliation when it loads content unfocused.
+  - The target is just past the corrected chapter number; failing that, the boundary a removed
+    marker occupied; failing that, the surviving marker. A RESTORED marker (the document had none)
+    is the exception: its caret goes to the end of the document's text
+    (`CARET_AT_DOCUMENT_END`), applied by focusing the editor with no selection, which Lexical
+    resolves to the root's end. A restore is reached by typing into a chapter with no marker at all
+    — in Power mode, a chapter the book has not reached yet — so the user was typing at the end,
+    and keys typed into the new marker would become part of the chapter number for the next repair
+    to correct away.
+  - **The target is computed from the repair, never carried across from the pre-repair selection.**
+    `EditorRef.getSelection()` addresses the LIVE tree while the repair works on `getUsj()`'s
+    SETTLED document, and the two differ for exactly the gesture that matters: a `\c` typed under
+    the caret is still a pending literal in the live tree while the settled document already holds a
+    chapter node. A captured path is therefore in the wrong coordinate system, whereas a target
+    computed from the repair is in the right one, because the editor is about to load precisely that
+    document.
+- **Alternatives:**
+  - **Apply the repair as OT delta ops (`EditorRef.applyUpdate`) instead of `setUsj`** — rejected
+    for now, though it would keep the history (no load, so no `CLEAR_HISTORY_COMMAND`). A chapter is
+    an opaque embed in `$applyUpdate`'s `"apply"` coordinates — every element embed is one unit and
+    its children are never descended into — so no op can edit a character out of a chapter's glyph
+    text. The wrong-number case, which is the common one, could then only be expressed as
+    replace-the-whole-embed, which regenerates the node key and loses the caret anyway. The editor
+    also records the editable-chapter coordinate divergence as accepted and unfinished ("no live flow
+    currently routes ops across an editable chapter into `$applyUpdate`", in `scripture-editors`
+    `libs/shared-react/src/plugins/usj/collab/delta-common.utils.ts`), and it exports no USJ→OT
+    position helper, so the host would compute retains itself — where a miscomputed retain splices
+    content silently rather than failing.
+  - **Repair inside the editor as node surgery, behind a new `EditorRef` method** — the right end
+    state, deferred. One `editor.update()` that rewrites the marker's glyph (the glyph is the source
+    of truth: `$chapterNodeTransform` re-derives the number from it, so `ChapterNode.setNumber`
+    alone is overwritten) or removes the offending node would keep the caret through Lexical's own
+    reconciliation and push exactly one undo entry — the shape every other structural mutation on
+    `EditorRef` already has (`removeCharacterMarker`, `insertMarker`, `splitParagraphWithMarker`).
+    Deferred because it is a `scripture-editors` change, so it carries its own PR, committed-dist
+    rebuild and `platform-yalc` move; and because it has to handle the pending, unsettled literal
+    case inside the marker-edit tiers, which is the genuinely hard part.
+- **Consequences:** after a correction the caret sits in the marker glyph, where typed characters
+  are marker bytes that the next repair corrects away again — the same fight any autocorrect has.
+  **None of this is announced.** The notice says only that the marker did not match the chapter and
+  was corrected; it does not say where the caret was put, that undo history is gone, or that
+  annotations were cleared. That is deliberate — one sentence a reader can take in beats a warning
+  nobody finishes — but it means the losses below are unmitigated, not merely explained. Undo and
+  redo history is emptied by every repair, so a user cannot undo back past a correction; that is a
+  known limitation carried on PT-4608 rather than a property anyone should rely on.
+  **Every annotation is cleared too** — a load replaces the node
+  map, and the `TypedMarkNode`s that carry annotations live only in that tree, never in USJ. That is
+  not new to the repair (it is true of every `setEditorUsj` call, including the ordinary PDP echo)
+  and the local bookkeeping already follows it: `setEditorUsj` runs `clearAnnotationInfo`. What is
+  NOT announced outward is the clearing itself: a per-annotation removal normally sends the
+  annotation's `interactionCommand` with a `TypedMarkRemovalCause`, but a wholesale clear fires no
+  `onRemove` at all, so nothing is sent, and the editor exposes no event for it either. This is
+  pre-existing and accepted, not something the repair introduced. Anyone revisiting it should know
+  that `destroyed` is the wrong value to reuse: the published contract defines it as "when the text
+  the annotation was on is completely deleted", so a consumer acting on it could discard data whose
+  text is intact. No annotation set in this repo carries an `interactionCommand` today. The caret
+  offset the util computes encodes the editor's glyph byte layout, which no unit test can check
+  from this repo, so it is pinned end to end instead
+  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts` reads the web view's own
+  DOM selection). That end-to-end cover is of a RENUMBERED marker and stands for a RESTORED one
+  because the two are the same shape: `caretTarget` addresses the marker's first content item — the
+  glyph the editor renders — and a chapter node holds no content in USJ either way, since the parser
+  emits it childless. That equivalence is pinned in
+  `chapter-marker-repair.util.test.ts` ("renumbers and synthesizes markers of the same childless
+  shape"), because it is a property of the parser that nothing else here would notice changing.
+  **Revisit** when the editor grows a chapter-repair primitive of its own.
+- **Source:** PT-4608 hand QA.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011

@@ -301,3 +301,52 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
+
+// The two notices a refused save can raise: one saying the editor's chapter marker disagreed with
+// the chapter it belongs to and was put back, one saying the backend refused the save for a reason
+// the editor cannot name. Both are ordinary user-facing toasts, so both carry the `es` parity every
+// other notification key in this file has — the `%versionHistoryCommit_*%` keys are en-only because
+// they are commit messages rather than UI text, which is not a precedent these can borrow.
+const SAVE_NOTIFICATION_KEYS = [
+  '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
+  '%webView_platformScriptureEditor_error_saveFailed_format%',
+];
+
+describe.each(SAVE_NOTIFICATION_KEYS)('save notification %s', (key) => {
+  it('has an English message', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish message', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish message differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The correction notice names the project AND the chapter through placeholders, so those slots have
+// to survive any later edit to the string in either locale. The chapter slots matter as much as the
+// project one: a repair carried by the chapter-switch flush describes the chapter the user just
+// left, so a message that dropped them would point the reader at whatever chapter is on screen
+// instead.
+describe.each(['en', 'es'])('chapter marker correction notification in %s', (locale) => {
+  const chapterMarkerCorrectedKey =
+    '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%';
+
+  it.each(['{projectName}', '{book}', '{chapter}'])('keeps the %s slot', (placeholder) => {
+    expect(localizedStrings[locale][chapterMarkerCorrectedKey]).toContain(placeholder);
+  });
+});
+
+// The generic save-failure notice has to say which project stopped saving, so the {projectName}
+// slot must survive any later edit to the string, and it must not leak the backend's own wording —
+// that stays in the log.
+describe.each(['en', 'es'])('save failed notification in %s', (locale) => {
+  it('keeps the {projectName} slot', () => {
+    expect(
+      localizedStrings[locale]['%webView_platformScriptureEditor_error_saveFailed_format%'],
+    ).toContain('{projectName}');
+  });
+});

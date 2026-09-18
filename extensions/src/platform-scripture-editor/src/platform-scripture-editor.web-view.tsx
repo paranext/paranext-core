@@ -82,6 +82,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  isLocalizeKey,
   isPlatformError,
   isString,
   isWhiteSpace,
@@ -135,7 +136,21 @@ import {
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
-import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
+import { performDebouncedPdpSave } from './debounced-pdp-save.util';
+import {
+  applyChapterSavePreparation,
+  CARET_AT_DOCUMENT_END,
+  ChapterMarkerCaretTarget,
+  prepareUsjForChapterSave,
+} from './chapter-marker-repair.util';
+import {
+  clearOutstandingSaveFailure,
+  createSaveFailureMemory,
+  planSaveFailureResponse,
+  SaveFailureMemory,
+  SaveFailureResponse,
+  SYNC_EDIT_BLOCKED_REGEX,
+} from './save-failure-report.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
@@ -258,7 +273,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%versionHistoryCommit_beforeInsertCrossReference%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
+  '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%',
   '%webView_platformScriptureEditor_error_permissions_format%',
+  '%webView_platformScriptureEditor_error_saveFailed_format%',
   // The one listing of this key. Named via the const so the sync-blocked message, its severity, and
   // its self-catching stay in one place (`editor-side-effects.utils.ts`) — the character-marker
   // bar's removal action shows the same notice through the same helper and deliberately does not
@@ -377,12 +394,23 @@ const getViewOptionsForType = (
   return paragraphStructure;
 };
 
-// This regex is connected directly to the exception message within PermissionsException.cs
-const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
-
-// Sentinel appended by the backend write-gate (SendReceiveWriteLock in paranext-core's c-sharp)
-// when a project write is rejected because an automatic Send/Receive is syncing that project.
-const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
+/**
+ * Notification ids for one editor's own save notices, so its own repeats update one toast each.
+ *
+ * Scoped to the editor rather than fixed per message, because an id is shared by everything that
+ * sends under it. Two editors open on two projects under a fixed id would each see the other's
+ * correction notice replace their own — and, worse, `papi.notifications.dismiss` is routed to every
+ * window that might be showing the id (`dismissInOwningWindows` in
+ * `src/main/services/notification.service-router.ts`), so one editor's recovered save would take
+ * down another editor's still-standing "could not be saved" notice while that editor goes on
+ * failing, with its report already spent.
+ */
+function getSaveNotificationIds(webViewId: string) {
+  return {
+    chapterMarkerCorrected: `platform-scripture-editor-chapter-marker-corrected-${webViewId}`,
+    saveFailed: `platform-scripture-editor-save-failed-${webViewId}`,
+  };
+}
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
@@ -1277,6 +1305,48 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         severity: 'warning',
       }),
     [],
+  );
+
+  /** This editor's own notification ids. See {@link getSaveNotificationIds}. */
+  const saveNotificationIds = useMemo(() => getSaveNotificationIds(webViewId), [webViewId]);
+
+  /**
+   * Tell the user the chapter marker in a document they were editing did not match the chapter it
+   * belongs to and was put back. A stable id so the repeated saves of a long edit update one toast
+   * rather than stacking.
+   *
+   * The chapter is named rather than left implicit because the notice does not always describe what
+   * is on screen: a save carried by the chapter-switch flush repairs the chapter the user just
+   * left, so an unnamed notice would point at the chapter they are now looking at.
+   *
+   * @param book Localized name of the book the repaired chapter is in.
+   * @param chapterNum The repaired chapter's number.
+   */
+  const notifyChapterMarkerCorrected = useCallback(
+    (book: string, chapterNum: number) =>
+      papi.notifications
+        .send({
+          notificationId: saveNotificationIds.chapterMarkerCorrected,
+          message: formatReplacementString(
+            localizedStrings[
+              '%webView_platformScriptureEditor_error_chapterMarkerCorrected_format%'
+            ],
+            { projectName, book, chapter: chapterNum },
+          ),
+          severity: 'warning',
+          // This is about this editor's chapter, not a generic notice, so it belongs in the window
+          // holding the editor. Routing is also what makes the reused `notificationId` coalesce: an
+          // update that lands in a different window has never seen the id and opens a SECOND toast
+          // instead of merging. The save that raises this can fire from the window-blur flush —
+          // i.e. precisely when this window is no longer the focused one.
+          webViewId,
+        })
+        .catch((error) => {
+          logger.warn(
+            `Error notifying about a corrected chapter marker: ${getErrorMessage(error)}`,
+          );
+        }),
+    [localizedStrings, projectName, saveNotificationIds, webViewId],
   );
 
   /**
@@ -2426,6 +2496,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
+  // The localized name of the book on screen (e.g. "Jonah"), for the chapter-marker correction
+  // notice. One key rather than the whole canon: the only book this web view ever has to name is
+  // the one it is editing. `%Book.<id>%` resolves for every canonical id — the localization service
+  // backfills the English names into the backup language — but a web view renders before the
+  // strings arrive, so an unresolved lookup falls back to the 3-letter id rather than putting a raw
+  // `%Book.JON%` in a toast.
+  const bookNameLocalizeKeys = useMemo<LocalizeKey[]>(
+    () => [`%Book.${scrRef.book}%`],
+    [scrRef.book],
+  );
+  const [bookNameLocalizedStrings] = useLocalizedStrings(bookNameLocalizeKeys);
+  const localizedBookName = useMemo(() => {
+    const localized = bookNameLocalizedStrings[`%Book.${scrRef.book}%`];
+    return localized && !isLocalizeKey(localized) ? localized : scrRef.book;
+  }, [bookNameLocalizedStrings, scrRef.book]);
+
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw, isUsjFromPdpLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     projectId,
@@ -2519,6 +2605,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+  // Which save rejection the user has already been told about. A chapter the backend refuses is
+  // refused again on every save for as long as the user keeps typing, so this is what turns that
+  // run of identical rejections into one report; a write that completes clears it. Both transitions
+  // belong to `save-failure-report.util.ts` rather than to this component — see `SaveFailureMemory`
+  // for why they cannot be allowed to live apart.
+  const saveFailureMemory = useRef<SaveFailureMemory>(createSaveFailureMemory());
   // Monotonic count of PDP deliveries observed — the failed-save retry gate's other half.
   // `withWriteInFlightGuard` owns the in-flight flag for exactly the write's own duration, so the
   // flag carries no information about deliveries; this counter is what lets a failed save tell
@@ -2671,6 +2763,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.selectNote(index);
   }, []);
 
+  // The chapter currently loaded, kept in a ref so the debounced save's fire (below) can compare
+  // the chapter active NOW against the chapter a pending save was scheduled for (see
+  // `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an effect —
+  // so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it already
+  // reflects the NEW chapter and the guard sees the mismatch.
+  const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum, scrRef.versificationStr);
+  const chapterKeyRef = useRef(chapterKey);
+  chapterKeyRef.current = chapterKey;
+
+  // A caret restore waiting on a chapter-marker repair's push-back to load (see
+  // `putRepairedUsjInEditor`). Held so a second repair replaces the wait rather than stacking a
+  // second one behind it, and so an editor that goes away inside the wait takes the wait with it
+  // rather than leaving it to reach for an editor that is no longer there.
+  const pendingCaretRestoreTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(pendingCaretRestoreTimeout.current);
+    },
+    [],
+  );
+
   // #region PDP Save Write Path
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP. Resolves `true`
@@ -2678,6 +2791,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * in `useEditorPdpSync` records a push only on that confirmation, so a dropped save is never
    * misremembered as content that left the editor. */
   const saveUsjToPdpIfUpdated = useMemo(() => {
+    // The chapter this closure writes through. Captured rather than read live: a pending trailing
+    // save can fire after the user has navigated away, through the closure captured at schedule
+    // time, and the repair must be computed against the chapter the content was typed in.
+    const savedChapterSelector = chapterUsjSelector;
+    const savedChapterKey = getChapterKey(
+      savedChapterSelector.book,
+      savedChapterSelector.chapterNum,
+      savedChapterSelector.versificationStr,
+    );
+    // Captured for the same reason as the selector: a save that fires after the user has navigated
+    // away must name the chapter the content was typed in, not the one now on screen.
+    const savedBookName = localizedBookName;
+
     function saveUsjToPdpIfUpdatedInternal(
       usjFromEditor = editorRef.current?.getUsj(),
     ): Promise<boolean> {
@@ -2685,9 +2811,79 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // An open command surface's in-progress input is excluded by the editor itself
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
-      const usjToSave = resolveUsjToSaveToPdp(correctEditorUsjVersion(usjFromEditor), usjFromPdp);
+      const usjToSave = applyChapterSavePreparation({
+        preparation: prepareUsjForChapterSave(
+          correctEditorUsjVersion(usjFromEditor),
+          usjFromPdp,
+          savedChapterSelector.chapterNum,
+        ),
+        savedChapterKey,
+        // Read live rather than captured, so a save that fires after a chapter switch compares the
+        // chapter it was scheduled for against the chapter actually on screen now.
+        currentChapterKey: chapterKeyRef.current,
+        applyRepairToEditor: putRepairedUsjInEditor,
+        notifyRepair: () =>
+          notifyChapterMarkerCorrected(savedBookName, savedChapterSelector.chapterNum),
+      });
+
       if (usjToSave) return saveUsjToPdpInternal(usjToSave);
       return Promise.resolve(false);
+    }
+
+    /**
+     * Puts a repaired chapter document back into the editor, moving the sent-to-PDP baseline with
+     * it so the two cannot drift apart, and puts the caret back at the correction.
+     *
+     * Swallows a refusal by the editor (after logging it) because the caller must go on to write:
+     * it is the write that un-poisons the chapter, and skipping it would leave the PDP holding the
+     * document Paratext rejects, so every later save is rejected too.
+     *
+     * The push-back replaces the whole document, so the editor regenerates every node key and the
+     * caret the user was typing with does not survive it — the correction is made under a caret
+     * that then vanishes. `caretTarget` addresses the repaired document, so it can only be applied
+     * once the editor has loaded it, and the editor reports no load signal; this waits the same
+     * span the scroll-into-view paths below do.
+     */
+    function putRepairedUsjInEditor(
+      repairedUsj: Usj,
+      caretTarget: ChapterMarkerCaretTarget | undefined,
+    ): void {
+      // Decided BEFORE the push-back, on whether the caret is this editor's to place at all: an
+      // editor without DOM focus has no claim on the shared document selection (which is why it
+      // skips selection reconciliation when it loads content unfocused), so placing a caret there
+      // would pull it out of whatever the user is actually typing in — a footnote popover, say.
+      const caretToRestore = editorRef.current?.isFocused() ? caretTarget : undefined;
+      try {
+        usjSentToPdp.current = repairedUsj;
+        setEditorUsj.current(repairedUsj);
+      } catch (error) {
+        logger.error(
+          `Error putting the repaired chapter marker back into the editor: ${getErrorMessage(error)}`,
+        );
+        return;
+      }
+
+      if (!caretToRestore) return;
+      clearTimeout(pendingCaretRestoreTimeout.current);
+      pendingCaretRestoreTimeout.current = setTimeout(() => {
+        pendingCaretRestoreTimeout.current = undefined;
+        // `caretToRestore` addresses the repaired chapter's document, so it means nothing once the
+        // user has navigated to another chapter.
+        if (chapterKeyRef.current !== savedChapterKey) return;
+        try {
+          // Focus first: the load leaves the editor with no selection to reconcile, and a caret
+          // placed in an editor the load has dropped focus from would not show. Focusing an editor
+          // with no selection is also what puts the caret at the end of the document (Lexical
+          // selects the root's end by default), so that target needs nothing further.
+          editorRef.current?.focus();
+          if (caretToRestore !== CARET_AT_DOCUMENT_END)
+            editorRef.current?.setSelection(caretToRestore);
+        } catch (error) {
+          logger.warn(
+            `Error restoring the caret after a chapter marker correction: ${getErrorMessage(error)}`,
+          );
+        }
+      }, EDITOR_LOAD_DELAY_TIME);
     }
 
     // Not wired directly to the editor's `onUsjChanged`: the editor fires `onUsjChanged` even
@@ -2695,38 +2891,54 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // straight back to the PDP. Until that is fixed, `saveUsjToPdpIfUpdated` (which compares
     // first) is used everywhere.
     /**
-     * Tells the user a save failed, for the two backend rejections that are worth surfacing: a
-     * sync-edit-block (expected and transient — editing pauses during an automatic Send/Receive, so
-     * a warning) and a permissions failure (an error). Touches no editor content, so both the live
-     * rejection path and the zombie path can report through it.
+     * Tells the user a save failed, whatever the backend's reason. A sync-edit-block is expected
+     * and transient — editing pauses during an automatic Send/Receive — so it is a warning; a
+     * permissions failure and anything else are errors. A rejection the editor cannot name gets a
+     * generic message: the backend's own wording is written for a developer, so it stays in the log
+     * and never reaches the toast.
      *
-     * @returns Whether the rejection was one of those two.
+     * Reports only when `shouldReport` says the kind of rejection has CHANGED, so a chapter the
+     * backend keeps refusing is reported once instead of on every save. Touches no editor content,
+     * so both the live rejection path and the zombie path can report through it.
      */
-    async function notifyRecoverableSaveFailure(errorMessage: string): Promise<boolean> {
-      const isSyncEditBlocked = SYNC_EDIT_BLOCKED_REGEX.test(errorMessage);
-      const isPermissionsError = PERMISSIONS_EXCEPTION_REGEX.test(errorMessage);
-      if (!isSyncEditBlocked && !isPermissionsError) return false;
+    async function reportSaveFailure({ kind, shouldReport }: SaveFailureResponse): Promise<void> {
+      if (!shouldReport) return;
 
       try {
-        if (isSyncEditBlocked) {
+        if (kind === 'syncEditBlocked') {
+          // The one transient notice of the three: `SyncBlockedBanner` holds this state in view for
+          // as long as it lasts, so the toast does not have to.
           await notifySyncEditBlocked();
         } else {
           await papi.notifications.send({
-            severity: 'error',
+            notificationId: saveNotificationIds.saveFailed,
             message: formatReplacementString(
-              localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
+              localizedStrings[
+                kind === 'permissions'
+                  ? '%webView_platformScriptureEditor_error_permissions_format%'
+                  : '%webView_platformScriptureEditor_error_saveFailed_format%'
+              ],
               { projectName },
             ),
+            severity: 'error',
+            // Stays up until a save gets through and dismisses it. An auto-closing toast would be
+            // the bug this notice exists to prevent: the kind is reported once per run of identical
+            // rejections, so once it closed itself the chapter would go on silently failing to save
+            // with nothing on screen to say so. The two kinds share one id because only one of them
+            // can be outstanding at a time — a rejection that changes kind should reword the notice
+            // already on screen, not open a second one beside it.
+            duration: 0,
+            // This is about this editor's chapter, and routing is also what makes the reused
+            // `notificationId` coalesce: an update that lands in a different window has never seen
+            // the id and opens a SECOND toast instead of merging.
+            webViewId,
           });
         }
       } catch (innerError) {
         logger.error(
-          `Error handling ${
-            isSyncEditBlocked ? 'sync-edit-block' : 'permissions'
-          } exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
+          `Error handling ${kind} exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
         );
       }
-      return true;
     }
 
     async function saveUsjToPdpInternal(newUsj: Usj): Promise<boolean> {
@@ -2755,7 +2967,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               logger.error(
                 `Error saving USJ to PDP (write rejected after the in-flight guard released, so the editor keeps its content): ${zombieMessage}`,
               );
-              await notifyRecoverableSaveFailure(zombieMessage);
+              // Only the report half of the plan is used here — `shouldRevert` is deliberately
+              // ignored, for the reason given above.
+              await reportSaveFailure(
+                planSaveFailureResponse(saveFailureMemory.current, zombieMessage),
+              );
             }
             return false;
           }
@@ -2772,6 +2988,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           return false;
         }
         const { result: saveResult } = outcome;
+
+        // This write came back with no rejection to classify — whether or not the PDP then
+        // declined the set — so the failure the user was told about is no longer outstanding.
+        // Forget it, so the next rejection is worth reporting even if it is the same kind, and
+        // take down the save-failed toast, which is the one that stays up under a stable id
+        // until something dismisses it. Dismissing an id that was never sent is a no-op.
+        if (clearOutstandingSaveFailure(saveFailureMemory.current)) {
+          papi.notifications.dismiss(saveNotificationIds.saveFailed).catch((error: unknown) => {
+            logger.warn(`Error dismissing the save-failed notification: ${getErrorMessage(error)}`);
+          });
+        }
 
         // Prompts the PDP to commit changes to the version history once a day if the save was successfully
         if (saveResult && projectId) {
@@ -2815,13 +3042,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         const errorMessage = getErrorMessage(e);
         logger.error(`Error saving USJ to PDP: ${errorMessage}`);
 
-        // The two recoverable backend rejections revert the editor to the last PDP state and
-        // notify. The revert is safe here and only here: this write still owns the guard, so
-        // `usjFromPdp` is the state the failed write started from rather than a stale snapshot.
-        if (
-          SYNC_EDIT_BLOCKED_REGEX.test(errorMessage) ||
-          PERMISSIONS_EXCEPTION_REGEX.test(errorMessage)
-        ) {
+        // Only the two recoverable backend rejections revert the editor to the last PDP state; an
+        // unrecognized one must not (see `planSaveFailureResponse`). `usjFromPdp` is the right
+        // document to restore because this write held the guard when it rejected — the guard's
+        // `finally` has since cleared it — so the snapshot is the state the failed write started
+        // from rather than a `releaseAfterMs`-stale one, which is why the zombie path above
+        // deliberately does not do this.
+        const failureResponse = planSaveFailureResponse(saveFailureMemory.current, errorMessage);
+        // Synchronously, before anything is awaited. Awaiting the notification first would yield
+        // across macrotask boundaries — long enough for `useEditorPdpSync` to apply a NEWER PDP
+        // delivery into the editor, which this revert would then overwrite with the older snapshot
+        // and record as last-sent, leaving the editor out of step until the next delivery.
+        if (failureResponse.shouldRevert) {
           try {
             if (usjFromPdp && editorRef.current) {
               usjSentToPdp.current = usjFromPdp;
@@ -2832,8 +3064,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               `Error restoring the last PDP state after a failed save: ${getErrorMessage(innerError)}`,
             );
           }
-          await notifyRecoverableSaveFailure(errorMessage);
         }
+        await reportSaveFailure(failureResponse);
         // The write RAN (and rejected); only a guard-dropped save reports false, since that is
         // the one case where the content never left the editor at all.
         return true;
@@ -2841,7 +3073,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [usjFromPdp, projectName, localizedStrings, projectId, notifySyncEditBlocked]);
+  }, [
+    usjFromPdp,
+    projectName,
+    localizedStrings,
+    projectId,
+    notifySyncEditBlocked,
+    chapterUsjSelector,
+    localizedBookName,
+    notifyChapterMarkerCorrected,
+    saveNotificationIds,
+    webViewId,
+  ]);
 
   // #endregion PDP Save Write Path
 
@@ -2912,15 +3155,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     saveUsjToPdpIfUpdatedRef.current = saveUsjToPdpIfUpdated;
   }, [saveUsjToPdpIfUpdated]);
-
-  // The chapter currently loaded, kept in a ref so the debounced save's fire (below) can compare
-  // the chapter active NOW against the chapter a pending save was scheduled for (see
-  // `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an effect —
-  // so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it already
-  // reflects the NEW chapter and the guard sees the mismatch.
-  const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum, scrRef.versificationStr);
-  const chapterKeyRef = useRef(chapterKey);
-  chapterKeyRef.current = chapterKey;
 
   /**
    * For fluent marker typing: saving on EVERY editor change round-trips a mid-marker-typing doc
