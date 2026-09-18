@@ -741,13 +741,13 @@ class WindowDataProviderEngine
     return getNavigationTargetWebView()?.definition.projectId;
   }
 
-  /**
-   * Read-only; does nothing and always resolves `false`. Provided to match
-   * `getActiveEditorProjectId`.
-   */
+  // setActiveEditorProjectId doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<WindowDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async setActiveEditorProjectId(): Promise<false> {
-    return false;
+  async setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
+    throw new Error(
+      'Cannot set the active editor project id. It follows the web view BCV navigation drives',
+    );
   }
 
   async dispose(): Promise<boolean> {

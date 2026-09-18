@@ -905,7 +905,7 @@ describe('active editor project id', () => {
     projectId: 'project-1',
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
     readDirectionMock.mockReturnValue('ltr');
@@ -917,8 +917,8 @@ describe('active editor project id', () => {
     getAllOpenWebViewDefinitionsSyncMock.mockReset();
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
     const tracked = getLastSelectedScriptureNavigableWebViewId();
-    if (tracked) emitCloseWebView(tracked);
-    emitOpenWebView();
+    if (tracked) await emitCloseWebView(tracked);
+    await emitOpenWebView();
   });
 
   test('returns undefined when there is no navigation target', async () => {
@@ -934,18 +934,20 @@ describe('active editor project id', () => {
     expect(await engine.getActiveEditorProjectId()).toBe('project-1');
   });
 
-  test('setActiveEditorProjectId is read-only and always resolves false', async () => {
+  test('rejects setActiveEditorProjectId as read-only', async () => {
     const engine = createTestEngine();
 
-    expect(await engine.setActiveEditorProjectId()).toBe(false);
+    await expect(engine.setActiveEditorProjectId()).rejects.toThrow(
+      'Cannot set the active editor project id',
+    );
   });
 
-  test('notifies ActiveEditorProjectId when the resolved target project changes', () => {
+  test('notifies ActiveEditorProjectId when the resolved target project changes', async () => {
     const engine = createTestEngine();
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
-    emitOpenWebView();
+    await emitOpenWebView();
 
     expect(notifyUpdate).toHaveBeenCalledWith('ActiveEditorProjectId');
   });
@@ -967,7 +969,7 @@ describe('active editor project id', () => {
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
-    emitOpenWebView();
+    await emitOpenWebView();
 
     expect(notifyUpdate).not.toHaveBeenCalledWith('ActiveEditorProjectId');
   });

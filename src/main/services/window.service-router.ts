@@ -213,14 +213,15 @@ class FocusedWindowDataProviderEngine
   }
 
   /**
-   * Read-only; does nothing and always resolves `false`. Unlike {@link setFocus}, this does not
-   * route through a target window — the answer is the same regardless of window availability, so
-   * routing it would only add a "no windows available" failure mode to an operation that never does
-   * anything in the first place.
+   * Always throws, like each window's own setter. Unlike {@link setFocus}, this does not route
+   * through a target window: the answer is the same regardless of window availability, so routing
+   * it would only swap in a "no windows available" error for the one every caller should see.
    */
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async setActiveEditorProjectId(): Promise<false> {
-    return false;
+  async setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
+    throw new Error(
+      'Cannot set the active editor project id. It follows the web view BCV navigation drives',
+    );
   }
 
   /** Drop both subscriptions. Called when the router's provider itself is disposed */
@@ -271,10 +272,9 @@ class FocusedWindowDataProviderEngine
     // handover still reaches subscribers. A brief overlap costs at most one redundant notify, where
     // the reverse order drops the update entirely.
     //
-    // Both data types subscribe together (`Promise.all`), and the combined unsubscriber below awaits
-    // both — every other invariant in this class (mutex-serialized re-points, disposed-mid-flight
-    // undo, etc.) operates on that combined value as an opaque `UnsubscriberAsync` and needs no
-    // change for the second data type.
+    // Both data types subscribe together, and the combined unsubscriber below releases both — every
+    // other invariant in this class (mutex-serialized re-points, disposed-mid-flight undo, etc.)
+    // operates on that combined value as an opaque `UnsubscriberAsync`.
     const subscriberOptions = {
       // The relay exists to forward later changes; a subscriber gets its initial value from its
       // own retrieval, so replaying it here would just emit a duplicate
@@ -286,30 +286,37 @@ class FocusedWindowDataProviderEngine
       // them.
       whichUpdates: '*' as const,
     };
-    const [unsubscribeFocusFromNewWindow, unsubscribeActiveEditorProjectIdFromNewWindow] =
-      windowService
-        ? await Promise.all([
-            windowService.subscribeFocus(
-              undefined,
-              () => this.notifyUpdate('Focus'),
-              subscriberOptions,
-            ),
-            windowService.subscribeActiveEditorProjectId(
-              undefined,
-              () => this.notifyUpdate('ActiveEditorProjectId'),
-              subscriberOptions,
-            ),
-          ])
-        : [undefined, undefined];
-    const unsubscribeFromNewWindow = windowService
-      ? async () => {
-          await Promise.all([
-            unsubscribeFocusFromNewWindow?.(),
-            unsubscribeActiveEditorProjectIdFromNewWindow?.(),
-          ]);
-          return true;
-        }
-      : undefined;
+    let unsubscribeFromNewWindow: UnsubscriberAsync | undefined;
+    if (windowService) {
+      const subscriptions = await Promise.allSettled([
+        windowService.subscribeFocus(
+          undefined,
+          () => this.notifyUpdate('Focus'),
+          subscriberOptions,
+        ),
+        windowService.subscribeActiveEditorProjectId(
+          undefined,
+          () => this.notifyUpdate('ActiveEditorProjectId'),
+          subscriberOptions,
+        ),
+      ]);
+      const unsubscribers = subscriptions.flatMap((subscription) =>
+        subscription.status === 'fulfilled' ? [subscription.value] : [],
+      );
+      const failedSubscription = subscriptions.find(
+        (subscription): subscription is PromiseRejectedResult => subscription.status === 'rejected',
+      );
+      // A half-attached relay would leave the subscription that did succeed notifying this engine
+      // with nothing holding its unsubscriber, so release it before failing the re-point.
+      if (failedSubscription) {
+        await Promise.allSettled(unsubscribers.map((unsubscribe) => unsubscribe()));
+        throw failedSubscription.reason;
+      }
+      unsubscribeFromNewWindow = async () => {
+        await Promise.all(unsubscribers.map((unsubscribe) => unsubscribe()));
+        return true;
+      };
+    }
 
     const unsubscribeFromPreviousWindow = this.#unsubscribeFromWindowUpdates;
     // Committed only now that the new subscription exists. If the subscribe above threw, the

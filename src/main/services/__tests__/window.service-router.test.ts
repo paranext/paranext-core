@@ -93,7 +93,6 @@ function windowShard(focusSubject: unknown, activeEditorProjectId: unknown = und
       },
     ),
     getActiveEditorProjectId: vi.fn(async () => activeEditorProjectId),
-    setActiveEditorProjectId: vi.fn(async (): Promise<false> => false),
     subscribeActiveEditorProjectId: vi.fn(
       async (
         _: undefined,
@@ -554,27 +553,43 @@ describe('window service router', () => {
     const first = windowShard('focus-in-window-1', 'project-1');
     const second = windowShard('focus-in-window-2', 'project-2');
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
 
     expect(await engine.getActiveEditorProjectId()).toBe('project-2');
   });
 
-  test('setActiveEditorProjectId is read-only and always resolves false without needing a window', async () => {
-    // Unlike setFocus, this must never fail for want of a routable window: it does nothing
-    // regardless of window availability
+  test('rejects setActiveEditorProjectId as read-only, whether or not a window is routable', async () => {
+    // The caller sees why the write failed, never a "no windows available" routing error instead
     mocks.getTargetWindowId.mockReturnValue(undefined);
     const engine = new FocusedWindowDataProviderEngine(async () => undefined);
 
-    expect(await engine.setActiveEditorProjectId()).toBe(false);
+    await expect(engine.setActiveEditorProjectId()).rejects.toThrow(
+      'Cannot set the active editor project id',
+    );
+  });
+
+  test('releases the subscription that succeeded when the other one fails', async () => {
+    // Left attached, the Focus subscription would keep notifying this engine with nothing holding
+    // its unsubscriber, and the retry that follows would attach a second one alongside it
+    const only = windowShard('a', 'project-1');
+    only.subscribeActiveEditorProjectId.mockRejectedValueOnce(
+      new Error('transient subscribe failure'),
+    );
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+
+    await expect(engine.getFocus()).rejects.toThrow('transient subscribe failure');
+
+    expect(only.subscribeFocus).toHaveBeenCalledTimes(1);
+    expect(only.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   test('tells subscribers both answers changed when the routing target moves', async () => {
     const engine = new FocusedWindowDataProviderEngine(async () => windowShard('a') as never);
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
 
     expect(notifyUpdate).toHaveBeenCalledWith('Focus');
     expect(notifyUpdate).toHaveBeenCalledWith('ActiveEditorProjectId');
@@ -596,14 +611,14 @@ describe('window service router', () => {
     const first = windowShard('a', 'project-1');
     const second = windowShard('b', 'project-2');
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
     await engine.getFocus();
 
     expect(first.subscribeFocus).toHaveBeenCalledTimes(1);
     expect(first.subscribeActiveEditorProjectId).toHaveBeenCalledTimes(1);
 
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
     await engine.getFocus();
 
     expect(first.unsubscribe).toHaveBeenCalled();

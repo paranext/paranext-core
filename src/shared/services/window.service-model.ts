@@ -269,29 +269,39 @@ export type IWindowService = {
   /**
    * JSDOC SOURCE getActiveEditorProjectId
    *
-   * Get the id of the project the active Scripture editor in this window is showing — the same
-   * project BCV navigation currently drives (the top toolbar's book/chapter/verse controls and the
-   * `platform.goTo*` commands) — or `undefined` when there is nothing to navigate. Read-only: use
-   * this to follow which project is active, not to interpret a Scripture reference's versification
-   * frame (that is what a scroll group's own source project is for).
+   * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+   * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+   * when there is nothing to navigate.
+   *
+   * Which web view that is depends on the interface mode:
+   *
+   * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+   * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+   *   resource or other reference panel rather than an editor, and whose `projectId` may be
+   *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+   *   changes as focus moves between tabs, and is not necessarily an editor's project.
+   *
+   * Use this to learn which project is active, not to interpret a Scripture reference's
+   * versification frame (that is what a scroll group's own source project is for).
    *
    * @param selector `undefined`. Does not have to be provided
-   * @returns The active project id, or `undefined`
+   * @returns The project id, or `undefined`
    * @experimental
    */
   getActiveEditorProjectId(selector: undefined): Promise<string | undefined>;
   /** JSDOC DESTINATION getActiveEditorProjectId */
   getActiveEditorProjectId(): Promise<string | undefined>;
   /**
-   * Read-only; does nothing and always resolves `false`. Provided to match
-   * `getActiveEditorProjectId`.
+   * This data cannot be changed. Trying to use this setter will always throw. The project follows
+   * whichever web view BCV navigation drives; see `getActiveEditorProjectId`.
    *
-   * @returns `false`
+   * @throws Always
    * @experimental
    */
   setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
-   * Subscribe to run a callback function when the active Scripture editor's project changes.
+   * Subscribe to run a callback function when the project `getActiveEditorProjectId` reports
+   * changes.
    *
    * @param selector `undefined`. Does not have to be provided
    * @param callback Function to run with the new active project id. If there is an error while
