@@ -102,3 +102,29 @@ describe('content zoom markers (Enhanced Resources)', () => {
     );
   });
 });
+
+describe('Enhanced Resources has no private zoom of its own', () => {
+  const webView = source('web-views/enhanced-resource.web-view.tsx');
+  const scripturePane = source('components/scripture-pane/scripture-pane.component.tsx');
+  const toolbar = source('components/toolbar/toolbar.component.tsx');
+
+  it('keeps F7 for footnotes', () => {
+    expect(webView).toContain("event.key === 'F7'");
+  });
+
+  it('no longer carries a zoom factor of its own', () => {
+    expect(webView).not.toContain('scripturePaneZoom');
+    expect(scripturePane).not.toContain('scripturePaneZoom');
+  });
+
+  it('no longer handles the zoom chords in the view', () => {
+    // The platform owns these chords; the in-view handler never fired on Windows or Linux anyway,
+    // because main claims them before the iframe sees them.
+    expect(webView).not.toMatch(/event\.key === '\+'|event\.key === '='/);
+  });
+
+  it('offers no zoom items in its toolbar menu', () => {
+    expect(toolbar).not.toContain('onZoomIn');
+    expect(toolbar).not.toContain('toolbar_menu_zoom');
+  });
+});

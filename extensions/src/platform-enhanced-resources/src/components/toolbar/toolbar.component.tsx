@@ -67,9 +67,6 @@ export const TOOLBAR_STRING_KEYS = Object.freeze([
   '%enhancedResources_toolbar_menu_copyrightInfo%',
   '%enhancedResources_toolbar_menu_find%',
   '%enhancedResources_toolbar_menu_close%',
-  '%enhancedResources_toolbar_menu_zoomIn%',
-  '%enhancedResources_toolbar_menu_zoomOut%',
-  '%enhancedResources_toolbar_menu_zoomReset%',
   // The toolbar mounts a `BookChapterControl`, which localizes its own strings from the bag it is
   // handed. Batching its keys in here is what keeps this toolbar's picker in the user's language;
   // without them every quick-nav tooltip and back-button label falls back to English while the rest
@@ -112,9 +109,6 @@ export type ViewMenuHandlers = {
   onShowCopyrightInfo?: () => void;
   onFindInResource?: () => void;
   onCloseWindow?: () => void;
-  onZoomIn?: () => void;
-  onZoomOut?: () => void;
-  onZoomReset?: () => void;
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -190,9 +184,9 @@ const DEFAULT_VIEW_MENU: ViewMenuState = {
  * Top row: TabToolbar
  *
  * Hosts the hamburger view-menu (DropdownMenu with the FN-016 menu items: Show footnotes, Show
- * translations, Hebrew/Greek display modes, Copyright info, Find, Close, Zoom in/out/reset), the
- * BCV reference button (placeholder for phase-3-ui BookChapterControl wiring — FN-015), the "all
- * research terms" highlight toggle, the info/guide icon, and the ScrollGroupSelector.
+ * translations, Hebrew/Greek display modes, Copyright info, Find, Close), the BCV reference button
+ * (placeholder for phase-3-ui BookChapterControl wiring — FN-015), the "all research terms"
+ * highlight toggle, the info/guide icon, and the ScrollGroupSelector.
  *
  * The actual `BookChapterControl` is wired in phase-3-ui because it requires
  * `useWebViewScrollGroupScrRef`. We expose `currentReferenceLabel` plus an `onReferenceClick` slot
@@ -259,9 +253,6 @@ export function EnhancedResourceTopToolbar({
   );
   const findLabel = String(getLocalizedString('%enhancedResources_toolbar_menu_find%'));
   const closeLabel = String(getLocalizedString('%enhancedResources_toolbar_menu_close%'));
-  const zoomInLabel = String(getLocalizedString('%enhancedResources_toolbar_menu_zoomIn%'));
-  const zoomOutLabel = String(getLocalizedString('%enhancedResources_toolbar_menu_zoomOut%'));
-  const zoomResetLabel = String(getLocalizedString('%enhancedResources_toolbar_menu_zoomReset%'));
 
   const {
     onToggleShowFootnotes = () => {},
@@ -271,9 +262,6 @@ export function EnhancedResourceTopToolbar({
     onShowCopyrightInfo = () => {},
     onFindInResource = () => {},
     onCloseWindow = () => {},
-    onZoomIn = () => {},
-    onZoomOut = () => {},
-    onZoomReset = () => {},
   } = viewMenuHandlers;
 
   const handleHebrewModeChange = (value: string) => {
@@ -334,10 +322,6 @@ export function EnhancedResourceTopToolbar({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onShowCopyrightInfo}>{copyrightInfoLabel}</DropdownMenuItem>
         <DropdownMenuItem onSelect={onFindInResource}>{findLabel}</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onZoomIn}>{zoomInLabel}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={onZoomOut}>{zoomOutLabel}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={onZoomReset}>{zoomResetLabel}</DropdownMenuItem>
         {/* FN-020(b): Close is intentionally the LAST entry per Sebastian's round-2 feedback. */}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onCloseWindow}>{closeLabel}</DropdownMenuItem>
