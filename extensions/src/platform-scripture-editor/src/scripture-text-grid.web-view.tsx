@@ -1,11 +1,6 @@
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import {
-  useData,
-  useDataProvider,
-  useDialogCallback,
-  useLocalizedStrings,
-} from '@papi/frontend/react';
+import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
   EmptyState,
@@ -54,8 +49,8 @@ import {
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
-import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { useTextCollectionProjectId } from './use-text-collection-project-id.hook';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
@@ -171,27 +166,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
-  // The project driving BCV navigation in this window: follow it when opened without an explicit
-  // project — e.g. from the default layout, whose tab carries no projectId. An explicit `projectId`
-  // (e.g. a direct openWebView) takes precedence. Deliberately NOT scroll group 0's source project
-  // (`useWebViewScrollGroupScrRef`'s 5th tuple member): that field's only job is tagging which
-  // versification frame the current reference is in, and it changes for reasons that have nothing to
-  // do with which project is active (Back/Forward, a resource cell's own click, a click in the
-  // Comments or Checks panel) — none of those should ever change what Text Collection displays.
-  const [activeEditorProjectIdPossiblyError] = useData(
-    papi.window.dataProviderName,
-  ).ActiveEditorProjectId(undefined, undefined);
-  const activeEditorProjectId = isPlatformError(activeEditorProjectIdPossiblyError)
-    ? undefined
-    : activeEditorProjectIdPossiblyError;
-  const candidateProjectId = projectId ?? activeEditorProjectId;
-
-  // `effectiveProjectId` is the project whose text collection the grid shows. It starts from the
-  // active editor and is refined by a latch effect (below, once `resources` is known) so that
-  // focusing one of the grid's own resource cells doesn't hijack it. See resolveTextCollectionProjectId.
-  const [effectiveProjectId, setEffectiveProjectId] = useState<string | undefined>(
-    candidateProjectId,
-  );
+  // The project whose text collection the grid shows. Opened from the default layout the tab carries
+  // no projectId, so this takes the first project the active editor reports and keeps it; only an
+  // explicit `projectId` moves it. See useTextCollectionProjectId.
+  const effectiveProjectId = useTextCollectionProjectId(projectId);
 
   const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
 
@@ -346,23 +324,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     // published list would otherwise outlive the project it was built for.
     effectiveProjectId,
   );
-
-  // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
-  // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
-  // the grid to one of its own displayed resources — that project has no text collection and would
-  // blank the grid; keep the current project instead. Still follow the active editor to a genuinely
-  // different text-collection project.
-  useEffect(() => {
-    setEffectiveProjectId((previous) =>
-      resolveTextCollectionProjectId(previous, {
-        explicitProjectId: projectId,
-        candidateProjectId,
-        candidateIsOwnResource: resources.some(
-          (resource) => resource.projectId === candidateProjectId,
-        ),
-      }),
-    );
-  }, [projectId, candidateProjectId, resources]);
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 

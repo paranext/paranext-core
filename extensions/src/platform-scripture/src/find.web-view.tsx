@@ -200,9 +200,11 @@ global.webViewComponent = function FindWebView({
   // The project to search. Normally the tab's own — `openFind` sets it from the trigger (the
   // editor's project, or the resource a reference panel is displaying), and the project selector's
   // own `handleSelectProjectScrollGroup` keeps it current after that. The simple-mode layout also
-  // seeds a Find tab that carries no projectId at all, so fall back to the project driving BCV
-  // navigation in this window until one of those sets an explicit id. Without the fallback, that
-  // seeded tab renders a search box that silently searches nothing until the user's first Ctrl+F.
+  // seeds a Find tab that carries no projectId at all, so it takes the first project BCV navigation
+  // drives in this window and keeps it until one of those sets an explicit id. Without the fallback,
+  // that seeded tab renders a search box that silently searches nothing until the user's first
+  // Ctrl+F. The fallback only seeds; after that Find is told its project (by `openFind`, the
+  // selector, or a project switch's `updateRelatedFindPanel`) rather than inferring a new one.
   // Deliberately NOT scroll group 0's source project (`useWebViewScrollGroupScrRef`'s 5th tuple
   // member): that field's only job is tagging which versification frame the current reference is
   // in, and it changes for reasons that have nothing to do with which project is active (Back/
@@ -213,7 +215,11 @@ global.webViewComponent = function FindWebView({
   const activeEditorProjectId = isPlatformError(activeEditorProjectIdPossiblyError)
     ? undefined
     : activeEditorProjectIdPossiblyError;
-  const projectId = webViewProjectId ?? activeEditorProjectId;
+  const [seededProjectId, setSeededProjectId] = useState(activeEditorProjectId);
+  useEffect(() => {
+    setSeededProjectId((previous) => previous ?? activeEditorProjectId);
+  }, [activeEditorProjectId]);
+  const projectId = webViewProjectId ?? seededProjectId;
 
   // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
   // panel to block another if two panels are open for different projects simultaneously.
