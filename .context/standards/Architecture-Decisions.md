@@ -605,7 +605,10 @@ step, no automation. Just a record.
     resolves to the root's end. A restore is reached by typing into a chapter with no marker at all
     — in Power mode, a chapter the book has not reached yet — so the user was typing at the end,
     and keys typed into the new marker would become part of the chapter number for the next repair
-    to correct away.
+    to correct away. Deleting the marker from a chapter that has text is also a restore (the
+    editor removes a chapter node whose glyph is emptied), and there the end is not where the user
+    was; the caret goes to the end all the same, because text typed there is kept while text typed
+    into the marker is not.
   - **The target is computed from the repair, never carried across from the pre-repair selection.**
     `EditorRef.getSelection()` addresses the LIVE tree while the repair works on `getUsj()`'s
     SETTLED document, and the two differ for exactly the gesture that matters: a `\c` typed under

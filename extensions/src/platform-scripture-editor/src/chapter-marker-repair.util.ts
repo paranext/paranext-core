@@ -64,6 +64,11 @@ interface NestedRemoval {
  * not reached yet being typed into, or a chapter whose content was wiped — so the user is building
  * the chapter up and was typing at its end. The new marker is the wrong place for the caret: keys
  * typed there become part of the chapter number, which the next repair corrects straight back out.
+ *
+ * Deleting the marker from a chapter that has text is a restore too (the editor removes a chapter
+ * node whose glyph is emptied), and there the end of the document is not where the user was. The
+ * caret goes there all the same: text typed at the end is kept, where text typed into the marker
+ * would be corrected away.
  */
 export const CARET_AT_DOCUMENT_END = 'end-of-document';
 
