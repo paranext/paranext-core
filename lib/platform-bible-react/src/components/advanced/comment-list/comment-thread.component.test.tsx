@@ -1,17 +1,72 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import type { SerializedEditorState } from 'lexical';
 import type { ComponentProps, ReactNode } from 'react';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { CommentThread } from './comment-thread.component';
 import { getCommentThreadElementId } from './comment-list.types';
 
+// A non-empty editor state a test can hand to `onSerializedChange` to simulate typing, since the
+// mock Editor below never generates one itself.
+const NON_EMPTY_EDITOR_STATE: SerializedEditorState = {
+  root: {
+    children: [
+      {
+        children: [
+          {
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text: 'hello',
+            type: 'text',
+            version: 1,
+          },
+        ],
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        type: 'paragraph',
+        version: 1,
+        textFormat: 0,
+        textStyle: '',
+      },
+    ],
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+  },
+};
+
 vi.mock('@/components/advanced/editor/editor', () => ({
   Editor: vi.fn(
-    ({ onClear, actions }: { onClear?: (fn: () => void) => void; actions?: ReactNode }) => {
+    ({
+      onClear,
+      actions,
+      onSerializedChange,
+      placeholder,
+    }: {
+      onClear?: (fn: () => void) => void;
+      actions?: ReactNode;
+      onSerializedChange?: (value: SerializedEditorState) => void;
+      placeholder?: string;
+    }) => {
       onClear?.(() => {});
-      return <div data-testid="mock-editor">{actions}</div>;
+      // The reply compose box is always given a placeholder; a comment's edit-mode editor
+      // (CommentItem) is not. That distinguishes which one a test is driving.
+      const typeLabel = placeholder ? 'Type reply' : 'Type comment edit';
+      return (
+        <div data-testid="mock-editor">
+          <button type="button" onClick={() => onSerializedChange?.(NON_EMPTY_EDITOR_STATE)}>
+            {typeLabel}
+          </button>
+          {actions}
+        </div>
+      );
     },
   ),
 }));
@@ -340,6 +395,114 @@ describe('CommentThread draft control', () => {
       defaultProps.threadId,
       expect.objectContaining({ assignedUser: 'Alice' }),
     );
+  });
+});
+
+describe('CommentThread comment-edit drafts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /**
+   * Opens the "Edit Comment" menu on the thread's root comment (the only comment in most fixtures
+   * here). Waits for the async edit/delete permission check to resolve, since the dropdown trigger
+   * doesn't render until `canEditOrDelete` does.
+   */
+  async function startEditingFirstComment(
+    container: HTMLElement,
+    user: ReturnType<typeof userEvent.setup>,
+  ) {
+    const trigger = await waitFor(() => {
+      const el = container.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
+      if (!el) throw new Error('dropdown trigger not rendered yet');
+      return el;
+    });
+    await user.click(trigger);
+    await user.click(await screen.findByText('Edit Comment'));
+  }
+
+  it('reports an unsent reply and a comment edit independently, without either clobbering the other', async () => {
+    const onDraftChange = vi.fn();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { container } = renderThread({
+      isSelected: true,
+      onDraftChange,
+      canUserEditOrDeleteCommentCallback: async () => true,
+    });
+
+    // Type the reply first: the compose box stays visible once editing starts only because it
+    // already has content (see the `hasEditorContent` check gating it in CommentThread) — this is
+    // the coexistence the UI deliberately allows.
+    await user.click(screen.getByText('Type reply'));
+    await startEditingFirstComment(container, user);
+    await user.click(screen.getByText('Type comment edit'));
+
+    const [, lastDraft] = onDraftChange.mock.calls.at(-1) ?? [];
+    expect(lastDraft.editorState).toBeDefined();
+    expect(lastDraft.commentEdits?.[baseComment.id]).toBeDefined();
+  });
+
+  it('a draft with only a comment edit is still a draft, not reported as undefined', async () => {
+    const onDraftChange = vi.fn();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { container } = renderThread({
+      isSelected: true,
+      onDraftChange,
+      canUserEditOrDeleteCommentCallback: async () => true,
+    });
+
+    await startEditingFirstComment(container, user);
+    await user.click(screen.getByText('Type comment edit'));
+
+    const [reportedThreadId, lastDraft] = onDraftChange.mock.calls.at(-1) ?? [];
+    expect(reportedThreadId).toBe(defaultProps.threadId);
+    expect(lastDraft).not.toBeUndefined();
+    expect(lastDraft.commentEdits?.[baseComment.id]).toBeDefined();
+  });
+
+  it('clearing a comment edit (cancel) leaves an unsent reply intact', async () => {
+    const onDraftChange = vi.fn();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { container } = renderThread({
+      isSelected: true,
+      onDraftChange,
+      canUserEditOrDeleteCommentCallback: async () => true,
+    });
+
+    await user.click(screen.getByText('Type reply'));
+    await startEditingFirstComment(container, user);
+    await user.click(screen.getByText('Type comment edit'));
+    await user.click(screen.getByRole('button', { name: 'Cancel edit' }));
+
+    const [, lastDraft] = onDraftChange.mock.calls.at(-1) ?? [];
+    expect(lastDraft.editorState).toBeDefined();
+    expect(lastDraft.commentEdits).toBeUndefined();
+  });
+
+  it('cancelling an edit clears only that comment’s entry, leaving another comment’s stored edit intact', async () => {
+    const onDraftChange = vi.fn();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const reply: LegacyComment = { ...baseComment, id: 'comment-2' };
+    const otherCommentEditorState = { ...NON_EMPTY_EDITOR_STATE };
+    // Pre-seed a stored edit for the reply (comment-2) — as a resumed draft would look after a
+    // remount. It resumes into its own edit-mode display independently of the root, which is why
+    // the root's own "Cancel edit" is picked out by index 0 (document order) rather than `getBy*`.
+    const { container } = renderThread({
+      isSelected: true,
+      comments: [baseComment, reply],
+      onDraftChange,
+      canUserEditOrDeleteCommentCallback: async () => true,
+      draft: { commentEdits: { [reply.id]: otherCommentEditorState } },
+    });
+
+    // Start editing the root comment (comment-1) too — `startEditingFirstComment` targets the
+    // first dropdown trigger in document order, which is the root's.
+    await startEditingFirstComment(container, user);
+    await user.click(screen.getAllByRole('button', { name: 'Cancel edit' })[0]);
+
+    const [, lastDraft] = onDraftChange.mock.calls.at(-1) ?? [];
+    expect(lastDraft.commentEdits?.[reply.id]).toBeDefined();
+    expect(lastDraft.commentEdits?.[baseComment.id]).toBeUndefined();
   });
 });
 

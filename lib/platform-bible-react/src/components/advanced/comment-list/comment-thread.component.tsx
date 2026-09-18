@@ -28,7 +28,11 @@ import {
   getCommentThreadElementId,
 } from './comment-list.types';
 import { ResolveCheckButton } from './resolve-check-button.component';
-import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
+import {
+  didPressCtrlOrCmdEnter,
+  getAssignedUserDisplayName,
+  isCommentDraftEmpty,
+} from './comment-list.utils';
 
 const initialValue: SerializedEditorState<
   SerializedParagraphNode & SerializedElementNode<SerializedTextNode>
@@ -114,10 +118,33 @@ export function CommentThread({
     (patch: Partial<CommentDraft>) => {
       const next: CommentDraft = { ...effectiveDraft, ...patch };
       setInternalDraft(next);
-      const isEmpty = next.editorState === undefined && next.assignedUser === undefined;
-      onDraftChange?.(threadId, isEmpty ? undefined : next);
+      onDraftChange?.(threadId, isCommentDraftEmpty(next) ? undefined : next);
     },
     [effectiveDraft, onDraftChange, threadId],
+  );
+
+  // An in-progress edit to an existing comment is tracked separately from the reply draft above
+  // (see CommentDraft.commentEdits) because the two can be live at once: the reply box stays
+  // visible with its own content while a different comment is being edited. Within one mount, only
+  // one comment can enter edit mode at a time — CommentThread gates every comment's edit affordance
+  // on the single `isAnyCommentEditing` flag below — but the map is keyed by comment id regardless,
+  // both because a boolean alone couldn't say which comment the content belongs to, and because a
+  // stored edit resumes its own CommentItem into edit mode on mount (draftEditorState below)
+  // without going through that flag, so a second, freshly-started edit can still be opened
+  // alongside it after a remount.
+  const updateCommentEditDraft = useCallback(
+    (commentId: string, value: SerializedEditorState | undefined) => {
+      const nextCommentEdits = { ...effectiveDraft.commentEdits };
+      if (value === undefined) {
+        delete nextCommentEdits[commentId];
+      } else {
+        nextCommentEdits[commentId] = value;
+      }
+      updateDraft({
+        commentEdits: Object.keys(nextCommentEdits).length > 0 ? nextCommentEdits : undefined,
+      });
+    },
+    [effectiveDraft.commentEdits, updateDraft],
   );
 
   const [lastSubmittedAssignedUser, setLastSubmittedAssignedUser] = useState<string | undefined>();
@@ -478,6 +505,8 @@ export function CommentThread({
         (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
       }
       canUserResolveThread={canResolve}
+      draftEditorState={effectiveDraft.commentEdits?.[firstComment.id]}
+      onDraftEditorStateChange={(value) => updateCommentEditDraft(firstComment.id, value)}
     />
   );
 
@@ -658,6 +687,8 @@ export function CommentThread({
                     canEditOrDelete={
                       (!isAnyCommentEditing && commentEditDeletePermissions.get(reply.id)) ?? false
                     }
+                    draftEditorState={effectiveDraft.commentEdits?.[reply.id]}
+                    onDraftEditorStateChange={(value) => updateCommentEditDraft(reply.id, value)}
                   />
                 </div>
               ))}

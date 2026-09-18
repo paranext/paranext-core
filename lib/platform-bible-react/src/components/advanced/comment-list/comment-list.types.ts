@@ -27,15 +27,22 @@ export interface ConflictResolutionCallbacks {
 }
 
 /**
- * A comment the user has typed but not committed — an unsent reply, or an unsaved edit to an
- * existing comment. Held by the consumer rather than by the thread component, so it survives the
- * component unmounting (a filter change does that routinely).
+ * A comment the user has typed but not committed — an unsent reply, an unsaved edit to an existing
+ * comment, or both at once (the reply compose box stays visible while editing an existing comment
+ * whenever it already has content). Held by the consumer rather than by the thread component, so it
+ * survives the component unmounting (a filter change does that routinely).
  */
 export type CommentDraft = {
-  /** Serialized editor contents, or `undefined` when only an assignee has been chosen. */
+  /** Serialized contents of the unsent reply, or `undefined` when nothing has been typed. */
   editorState?: SerializedEditorState;
   /** Pending assignee, or `undefined` when none has been chosen. */
   assignedUser?: string;
+  /**
+   * Unsaved edits to existing comments in this thread, keyed by comment id. A thread can hold an
+   * unsent reply and an in-progress edit at the same time, so these are tracked separately rather
+   * than sharing one editor state.
+   */
+  commentEdits?: Readonly<Record<string, SerializedEditorState>>;
 };
 
 /** Options for adding a comment to a thread */
