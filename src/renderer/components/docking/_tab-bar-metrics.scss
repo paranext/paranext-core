@@ -10,7 +10,8 @@ $tab-bar-extra-gap: vars.$space--sm;
 $panel-button-size: 30px;
 // `.dock-bar`'s inline padding, the space between the last button and the bar's end.
 $tab-bar-padding-inline: vars.$space--xs;
-// Full height of the tab bar: a button-high row plus `--tab-header-to-content-gap` above and below
-// it (`.dock-extra-content`'s block padding; the tab list matches it with its top padding and its
-// taller tabs). `--tab-header-to-content-gap` is set on `.dock-style-platform-bible` panels.
+// Full height of the tab bar: the tab row drives it. `.dock-tab`'s own height
+// (dock-layout-wrapper.component.scss) is the button height plus one `--tab-header-to-content-gap`,
+// and `.dock-nav-list` adds a second `--tab-header-to-content-gap` as its own
+// `padding-block-start`. `--tab-header-to-content-gap` is set on `.dock-style-platform-bible` panels.
 $tab-bar-height: calc($panel-button-size + 2 * var(--tab-header-to-content-gap));

@@ -115,9 +115,11 @@ function claimLastTabOverlap(zone: HTMLElement): void {
   const tabMidpoint = tabRect.left + tabRect.width / 2;
   const isRtl = getComputedStyle(zone).direction === 'rtl';
   const gapToTab = isRtl ? tabRect.left - zoneRect.right : zoneRect.left - tabRect.right;
-  // A negative gap means the last tab's trailing edge is clipped under the zone's own box, with no
-  // valid backward direction to reach from — an anomalous layout state the zone leaves alone,
-  // rather than the ordinary "narrow zone" case the widening below handles.
+  // A negative gap is the crowded-bar case: once the row is scrolled all the way to fit, the last
+  // tab's trailing edge sits at or past the zone's own start (the tab list only starts after
+  // `.dock-nav-wrap`'s inline padding) — not an anomalous layout. This branch is load-bearing for
+  // that case: without it, the widening below would draw a legible indicator over a region with no
+  // valid backward direction to reach from, letting a crowded bar accept drops it should refuse.
   const isClipped = gapToTab < 0;
   const naturalIndicatorLead = Math.max(0, gapToTab);
   // How far back the region that actually hit-tests to the zone would reach, if claimed: to the
@@ -214,9 +216,12 @@ export function TabBarDropZone({ panelData, context }: TabBarDropZoneProps) {
 
   // Claims the last-tab overlap for any drag rc-dock starts in this dock that carries tab or panel
   // data (a divider drag carries neither). This is deliberately broader than what `onDragOver`
-  // accepts: every drag the resolver rejects here is one rc-dock's own `TabCache.onDragOver` also
-  // rejects for that tab (another group, or the tab/panel being dragged itself), so covering the
-  // tab's trailing half never hides a drop rc-dock would have taken. The claim only positions
+  // accepts, but mostly coincides with it — a different group, or a drop that would be a no-op, is
+  // rejected by both. Two cases are stricter here than in rc-dock's own `TabCache.onDragOver`,
+  // which never checks `tabLocked` and accepts a tab with no `group` against a group-less target:
+  // on a group configured that way, this claim covers the tab's trailing half with a hit area that
+  // then refuses a drop rc-dock's own per-tab handler would have taken, since rc-dock hit-tests
+  // whichever registered element paints topmost under the pointer. The claim only positions
   // absolutely placed hit areas, so it cannot change the bar's layout.
   //
   // Ordering dependency: the zone's rect is measured here on the assumption that "+" has already slid

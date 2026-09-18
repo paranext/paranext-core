@@ -5149,7 +5149,11 @@ step, no automation. Just a record.
   no `panelExtra`, so no zone; the CSS that hides rc-tabs' idle overflow box applies in both modes. On
   a last tab too narrow for even the widened indicator to reach a visible width, the zone leaves that
   tab uncovered and rc-dock's own per-tab handler takes the drop there instead — the same outcome,
-  reached through a different target. Revisit if rc-dock gains a native bar-level drop target, or
+  reached through a different target. On a crowded bar the zone's own box is squeezed to zero width,
+  so the forward hit extension over the gap before "+", "+" itself, and the bar's trailing padding
+  also refuses every drop there — roughly a button's width plus a gap and the trailing padding of
+  dead space that accepts nothing, though a release past the last visible tab still appends through
+  rc-dock's own per-tab target. Revisit if rc-dock gains a native bar-level drop target, or
   when the PT-3330 follow-up reshapes tab-bar dropping.
 - **Source:** Reported defect PT-3288; implemented in PR #2767 and its review.
 

@@ -79,6 +79,9 @@ function seedRef(cache: TabCache, ref: HTMLDivElement): void {
 }
 
 describe('patched rc-dock TabCache popup check', () => {
+  // Pins the patch: the unpatched `isPopupDiv` only walks up a fixed one or two `parentElement`
+  // levels, so a hit area three levels under the dropdown's `<li>` reads as NOT a popup there and
+  // overwrites the real strip's stored ref. Fails against an unpatched install.
   it('ignores a hit area three levels under an overflow-dropdown <li>', () => {
     const cache = new TabCache(createDockContext());
     const sentinel = document.createElement('div');
@@ -89,6 +92,9 @@ describe('patched rc-dock TabCache popup check', () => {
     expect(getStoredRefs(cache).hitAreaRef).toBe(sentinel);
   });
 
+  // Pins the patch: the dropdown copy is the same three-levels-deep popup hit area above, so
+  // registering it AFTER the real hit area lets the unpatched fixed-depth check overwrite the real
+  // ref too. Fails against an unpatched install.
   it('keeps the real hit area when the dropdown copy registers after it', () => {
     const cache = new TabCache(createDockContext());
     const realHitArea = createRealHitArea();
@@ -99,6 +105,9 @@ describe('patched rc-dock TabCache popup check', () => {
     expect(getStoredRefs(cache).hitAreaRef).toBe(realHitArea);
   });
 
+  // Guards the walk's shape, not the patch: the dropdown's tab node sits exactly two
+  // `parentElement` levels under its `<li>`, which the unpatched fixed-depth check already
+  // rejects. Passes against an unpatched install too.
   it('ignores a tab node two levels under an overflow-dropdown <li>', () => {
     const cache = new TabCache(createDockContext());
     const sentinel = document.createElement('div');
@@ -109,6 +118,10 @@ describe('patched rc-dock TabCache popup check', () => {
     expect(getStoredRefs(cache).ref).toBe(sentinel);
   });
 
+  // Guards the walk's shape, not the patch: the real hit area has no `<li>` within the fixed
+  // one-or-two-level reach either check climbs, so an unrelated `<li>` further up the tree
+  // (wrapping the whole dock layout) is never mistaken for the popup. Passes against an unpatched
+  // install too.
   it('keeps a real-strip hit area even when an <li> wraps the whole dock layout', () => {
     const cache = new TabCache(createDockContext());
     const outerListItem = buildChain(document.body, 'ul', 'li');

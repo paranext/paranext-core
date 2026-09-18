@@ -328,11 +328,19 @@ test.describe('tab-bar drop zone', () => {
       expect(indicator, 'drop indicator over the last tab trailing half').toBeDefined();
       if (indicator) {
         const tabRight = box.x + box.width;
+        const tabMidpoint = box.x + box.width / 2;
         const zone = await rectOf(page, `${panelB} .platform-tab-bar-drop-zone`);
         const plus = await rectOf(page, `${panelB} .new-tab-button`);
         expect
           .soft(indicator.left, 'indicator starts at or before the tab trailing edge')
           .toBeLessThanOrEqual(tabRight + 1);
+        expect
+          .soft(
+            indicator.left,
+            "indicator does not start before the last tab's midpoint — claimLastTabOverlap's own " +
+              'backward limit',
+          )
+          .toBeGreaterThanOrEqual(tabMidpoint - 1);
         expect
           .soft(
             Math.abs(indicator.right - zone.right),
@@ -350,6 +358,9 @@ test.describe('tab-bar drop zone', () => {
       await page.mouse.up();
     }
     await expect(page.locator(DRAGGING_LAYER)).toHaveCount(0, { timeout: 5_000 });
+    // Panel A holds only the dragged Home tab (see this test's own docblock), so dragging it away
+    // destroys panel A entirely; expectAppendedTo's "gone from panelIdA" half then finds no bar to
+    // check against and can't fail here — the drop-indicator shape asserted above is the real proof.
     await expectAppendedTo(page, homeId, panelIdB, panelIdA, 'last tab trailing half');
   });
 
@@ -428,9 +439,13 @@ test.describe('tab-bar drop zone', () => {
   }) => {
     const { panelId } = await setUp(page);
     const panel = panelSelector(panelId);
-    const operations = page.locator(`${panel} .dock-nav-operations`);
 
-    /** The tab row's geometry, which tabs are fully inside the visible wrap, and the last tab. */
+    /**
+     * The tab row's geometry, which tabs are fully inside the visible wrap, the last tab, and
+     * whether the overflow "more" dropdown is showing — all from one settled reading, so the
+     * crowding loop's exit condition and the assertions that follow it never read the row at two
+     * different moments.
+     */
     const measure = async () =>
       page.locator(`${panel} .dock-nav-wrap`).evaluate((wrap) => {
         const wrapRect = wrap.getBoundingClientRect();
@@ -447,11 +462,15 @@ test.describe('tab-bar drop zone', () => {
             });
         });
         const titles = wrap.querySelectorAll('.dock-tab .platform-tab-title[data-web-view-id]');
+        const operationsElement = wrap.closest('.dock-nav')?.querySelector('.dock-nav-operations');
         return {
           wrapWidth: wrapRect.width,
           transform: list ? getComputedStyle(list).transform : '',
           visible,
           lastTabId: titles[titles.length - 1]?.getAttribute('data-web-view-id') ?? '',
+          overflowed: operationsElement
+            ? !operationsElement.classList.contains('dock-nav-operations-hidden')
+            : false,
         };
       });
 
@@ -465,14 +484,11 @@ test.describe('tab-bar drop zone', () => {
       let overflowed = false;
       let visibleCount = 0;
       for (let i = 0; i < MAX_TABS_TO_CROWD_BAR; i++) {
-        // Sequential on purpose: each tab must land before overflow and visibility are read again
+        // Sequential on purpose: the settled row measurement, overflow included, after each tab lands
         // eslint-disable-next-line no-await-in-loop
-        overflowed = !(await operations.evaluate((operationsElement) =>
-          operationsElement.classList.contains('dock-nav-operations-hidden'),
-        ));
-        // Sequential on purpose: the settled row measurement after each tab lands
-        // eslint-disable-next-line no-await-in-loop
-        visibleCount = (await readWhenSettled(page, measure)).visible.length;
+        const settled = await readWhenSettled(page, measure);
+        overflowed = settled.overflowed;
+        visibleCount = settled.visible.length;
         if (overflowed && visibleCount >= MIN_VISIBLE_TABS_TO_CROWD_BAR) return;
         // Sequential on purpose: tabs are added one at a time
         // eslint-disable-next-line no-await-in-loop
