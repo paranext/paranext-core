@@ -147,9 +147,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getUserModelTexts", GetUserModelTexts));
         retVal.Add(("setUserModelTexts", SetUserModelTexts));
         retVal.Add(("resetUserModelTexts", ResetUserModelTexts));
-        retVal.Add(("getUserCommentFilters", GetUserCommentFilters));
-        retVal.Add(("setUserCommentFilters", SetUserCommentFilters));
-        retVal.Add(("resetUserCommentFilters", ResetUserCommentFilters));
         retVal.Add(("getUserStructureProtected", GetUserStructureProtected));
         retVal.Add(("setUserStructureProtected", SetUserStructureProtected));
         retVal.Add(("resetUserStructureProtected", ResetUserStructureProtected));
@@ -2112,45 +2109,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
-    public CommentFilterSelection GetUserCommentFilters(object? param = null)
-    {
-        var (schemaVersion, content) = GetUserProjectSettings().GetSetting("CommentFilters");
-        if (content == null)
-            return new CommentFilterSelection();
-
-        ValidateUserSettingVersion(schemaVersion, "CommentFilters");
-        return CommentFilterSelection.FromXml(content, schemaVersion!);
-    }
-
-    public bool SetUserCommentFilters(object? value)
-    {
-        var selection = DeserializeCommentFilterSelection(value, "CommentFilters");
-        ValidateUserSettingVersion(selection.DataVersion, "CommentFilters");
-        var (currentVersion, _) = GetUserProjectSettings().GetSetting("CommentFilters");
-        ValidateVersionNotDowngraded(selection.DataVersion, currentVersion, "CommentFilters");
-        GetUserProjectSettings()
-            .SetSetting(
-                "CommentFilters",
-                selection.DataVersion,
-                CommentFilterSelection.ToXml(selection)
-            );
-        SendDataUpdateEvent(
-            ProjectDataType.USER_COMMENT_FILTERS,
-            "user comment filters update event"
-        );
-        return true;
-    }
-
-    public bool ResetUserCommentFilters()
-    {
-        GetUserProjectSettings().RemoveSetting("CommentFilters");
-        SendDataUpdateEvent(
-            ProjectDataType.USER_COMMENT_FILTERS,
-            "user comment filters reset event"
-        );
-        return true;
-    }
-
     public bool? GetUserStructureProtected(object? param = null)
     {
         // Schema version is intentionally ignored — a plain boolean has no versioned schema
@@ -2496,24 +2454,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Could not deserialize value for user setting '{settingName}'"
             );
         return list;
-    }
-
-    private static CommentFilterSelection DeserializeCommentFilterSelection(
-        object? value,
-        string settingName
-    )
-    {
-        string? json = value?.ToString();
-        if (string.IsNullOrEmpty(json))
-            throw new InvalidDataException(
-                $"Value for user setting '{settingName}' must not be null or empty"
-            );
-        CommentFilterSelection? selection = json.DeserializeFromJson<CommentFilterSelection>();
-        if (selection is null)
-            throw new InvalidDataException(
-                $"Could not deserialize value for user setting '{settingName}'"
-            );
-        return selection;
     }
 
     #endregion
