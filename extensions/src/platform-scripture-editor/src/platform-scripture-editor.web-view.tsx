@@ -1473,6 +1473,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // yet, exactly as it overwrites the rest of the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
     editorRef.current?.setUsj(usj);
+    // The pane now shows this document's notes, so the notes remembered as published no longer
+    // describe it. Kept, they could match a later edit that removes the notes this load added, and
+    // the pane would go on listing notes the text no longer has.
+    publishedPaneNotesRef.current = undefined;
     setLiveEditorUsj(usj);
     clearAnnotationInfo.current();
   });
