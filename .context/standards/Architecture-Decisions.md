@@ -3172,6 +3172,46 @@ step, no automation. Just a record.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-paste-inserts-only-what-was-pasted: A paste never invents or deletes a paragraph marker
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** In Standard view markers are literal text, so a whole-paragraph copy carries the
+  paragraph's own `\p ` literal. Pasting one at an existing paragraph's content start therefore puts
+  two paragraph-marker occurrences on the line. An earlier build (scripture-editors, PT-4201)
+  resolved that by dropping the HOST paragraph's glyph — `$withoutRedundantOwnPrefix` — so pasting
+  `\q1 asdf` at `\p ‖fdsa` produced a single `\q1 asdffdsa` paragraph with the `\p` gone and the
+  host's own content re-tagged. It was added to un-skip a copy→paste round-trip test whose target is
+  an empty `\p` scaffold, and the "stray empty paragraph" it removed was that scaffold; it was never
+  recorded or reviewed as a product decision. Keeping it out of TYPED input then required a paste
+  provenance apparatus (a per-commit armed flag plus a set of pended node keys, to carry "this
+  rebuild came from a paste" across a deferred settle), which in turn let the read-only settle and
+  the mutating rebuild disagree about a deferred paste's shape.
+- **Decision:** A paste inserts what was pasted and nothing else. It never deletes a marker the user
+  did not select, and it never invents one they did not paste. Two paragraph markers in a row is what
+  the bytes say, and the line splits — leaving an empty predecessor — exactly as typing the same
+  bytes does. This matches Paratext 9, whose `NormalizeTokenUsfm` (`ParatextData/UsfmToken.cs`) emits
+  a line break before every Paragraph token. The corollary is the injection half: a multi-line paste
+  replays each line break as a paragraph split, and the engine injects a marker prefix onto every
+  fresh split paragraph so it is not read as marker-deleted — that injection is now skipped when the
+  paragraph's own text already opens with a paragraph-marker literal.
+- **Alternatives:** Keep the dedup only for an EMPTY host paragraph — rejected: the shape is not
+  produced by any gesture in this app (Enter opens the marker palette rather than creating an empty
+  paragraph), P9 keeps the empty paragraph anyway, and it would have preserved the whole provenance
+  apparatus for a case nobody reaches. Keep the dedup and fix the settle divergence instead —
+  rejected: it fixes the symmetry of a rule that should not exist.
+- **Consequences:** pasting a whole-paragraph copy at a paragraph's content start now leaves an empty
+  paragraph ahead of the pasted one, which is a visible change and the P9-parity shape. Round-trip
+  tests that seeded an empty host and expected the paste to swallow it now assert the host and strip
+  it. `isPasteRebuild`, `Tier2Context.pasteRebuildArmed` and `pastePendedKeys` are gone, so the
+  read-only settle (`$settledUsj`) and the mutating rebuild call `$buildParaFragment` with identical
+  arguments and can no longer disagree — Invariant IV holds by construction rather than by
+  bookkeeping. Removing the dedup also surfaced a defect it had masked: every `\b` in a pasted
+  document gained an empty `\p` in front of it (16 in the 2sa fixture), because a blank-line marker
+  carries neither content nor a separator and so never resolved the injected prefix away.
+- **Source:** `/code-review` of scripture-editors #13 + paranext-core #2656, and the follow-up
+  triage with the epic lead.
+
 ## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
 
 - **Date:** 2026-09-14
