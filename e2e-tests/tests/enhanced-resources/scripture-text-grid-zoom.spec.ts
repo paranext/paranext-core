@@ -6,12 +6,20 @@
  * - Kebab path: hover a cell, click its "Zoom options" dropdown trigger, click "Zoom In", assert the
  *   first cell's content wrapper receives a `zoom` style > 1 while a second resource's cell remains
  *   unzoomed.
+ * - Pane vs. resource independence: Ctrl+wheel inside a resource cell changes only that resource's
+ *   stored factor and leaves the pane's own zoom area untouched; Ctrl+wheel over the View Options
+ *   row and the pane-level Ctrl+`=`/Ctrl+`0` chords change the pane's zoom area and leave every
+ *   resource's stored factor alone; a resource cell's rendered size reflects both factors
+ *   multiplied together. The pane-level chords are routed through the platform's own content-zoom
+ *   listener inside the WebView iframe — a separate path from the grid's own per-resource keyboard
+ *   shortcut noted as deferred below.
  *
  * Not covered (need an app relaunch the CDP fixture can't do, plus real resource fixtures; verify
- * manually): Ctrl+wheel zoom, context-menu path, persistence across restarts, chapter-context split
- * rendering at the zoomed factor, boundary disabled states (max/min).
+ * manually): context-menu path, persistence across restarts, chapter-context split rendering at the
+ * zoomed factor, boundary disabled states (max/min).
  *
- * - Keyboard zoom (Ctrl/Cmd +/-/0): deferred pending PT-4143 — the main-process before-input-event
+ * - Keyboard zoom of a single resource (Ctrl/Cmd +/-/0 aimed at one resource, as opposed to the
+ *   pane-level chords above): deferred pending PT-4143 — the main-process before-input-event
  *   handler claims those chords before the WebView iframe sees them.
  *
  * Honest runnability: these tests require a running Platform.Bible instance with 2+ resources
@@ -22,8 +30,11 @@
  * The zoom CSS property is applied inline (`style="zoom: 1.1"`) on the content wrapper div. In a
  * real Chromium (unlike jsdom), `locator('[style*="zoom"]')` reliably matches this element.
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { waitForAppReady, waitForOpenWebViewIdByType } from '../../fixtures/helpers';
+import { ctrlWheel } from '../../fixtures/content-zoom-helpers';
+import { getEditorFrame, readFactor } from '../../fixtures/scripture-editor-helpers';
 import {
   closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
@@ -33,6 +44,39 @@ import {
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
 } from './test-helpers';
 import type { FlaggedResourceItem } from './test-helpers';
+
+/**
+ * `scriptureTextGrid.zoomByResourceId` from the grid web view's own definition state
+ * (`use-resource-zoom.hook.ts`) — the grid's per-resource levels, kept entirely separate from the
+ * platform's own pane-level zoom (`platform.contentZoomLevels` on the same definition).
+ */
+async function readZoomByResourceId(
+  page: Page,
+  webViewId: string,
+): Promise<Record<string, number>> {
+  return page.evaluate(async (id) => {
+    // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as this file's
+    // afterEach cleanup).
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as {
+      papi: {
+        webViews: {
+          getOpenWebViewDefinition: (
+            webViewId: string,
+          ) => Promise<{ state?: Record<string, unknown> } | undefined>;
+        };
+      };
+    };
+    const definition = await win.papi.webViews.getOpenWebViewDefinition(id);
+    const raw = definition?.state?.['scriptureTextGrid.zoomByResourceId'];
+    const out: Record<string, number> = {};
+    if (typeof raw !== 'object' || !raw) return out;
+    Object.entries(raw).forEach(([resourceId, level]) => {
+      if (typeof level === 'number') out[resourceId] = level;
+    });
+    return out;
+  }, webViewId);
+}
 
 /**
  * Two synthetic resource IDs for seeding the grid. The `id` values do not need to resolve to
@@ -137,5 +181,103 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
 
     // The second resource must NOT have a zoom style — it is independent of the first.
     await expect(secondCell.locator('[style*="zoom"]')).toHaveCount(0);
+  });
+
+  test('the pane level and a resource’s own level move independently, and a cell reflects both', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
+    const stg = await openScriptureTextGrid(mainPage);
+    const webViewId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+    const frame = await getEditorFrame(mainPage, webViewId);
+
+    // The draggable wrapper (present whenever the grid renders — reordering is always wired up, see
+    // `onReorder={handleReorder}` in scripture-text-grid.web-view.tsx) carries `data-resource-id`
+    // directly, unlike the presentational cell view inside it.
+    await expect(stg.cellDraggable.first()).toBeVisible({ timeout: 15_000 });
+    await expect(stg.cellDraggable).toHaveCount(2, { timeout: 15_000 });
+    const firstCell = stg.cellDraggable.first();
+    const resourceId = await firstCell.getAttribute('data-resource-id');
+    if (!resourceId) throw new Error('First resource cell has no data-resource-id');
+
+    // Every step below reads its own "before" factor rather than assuming a fresh 1.0 pane level:
+    // this suite attaches to an already-running app rather than launching an isolated one, so a
+    // prior run's own zoom (persisted in Settings, not this webview's own state) may already have
+    // moved the pane's default away from 1.0 by the time this test starts.
+    await test.step('Ctrl+wheel inside a resource cell changes only that resource’s stored factor', async () => {
+      const cellBox = await firstCell.boundingBox();
+      if (!cellBox) throw new Error('Resource cell has no bounding box');
+      const paneFactorBefore = await readFactor(frame, 'text-collection');
+      const resourceFactorBefore = (await readZoomByResourceId(mainPage, webViewId))[resourceId];
+      await ctrlWheel(mainPage, cellBox, -120);
+      await expect
+        .poll(async () => (await readZoomByResourceId(mainPage, webViewId))[resourceId])
+        .not.toBe(resourceFactorBefore);
+      expect(await readFactor(frame, 'text-collection')).toBe(paneFactorBefore);
+    });
+
+    await test.step('Ctrl+wheel over the View Options row changes the pane level and leaves zoomByResourceId alone', async () => {
+      const beforeWheel = await readZoomByResourceId(mainPage, webViewId);
+      const paneFactorBefore = await readFactor(frame, 'text-collection');
+      const toolbarBox = await stg.viewOptionsButton.boundingBox();
+      if (!toolbarBox) throw new Error('View Options button has no bounding box');
+      await ctrlWheel(mainPage, toolbarBox, -120);
+      await expect.poll(() => readFactor(frame, 'text-collection')).not.toBe(paneFactorBefore);
+      expect(await readZoomByResourceId(mainPage, webViewId)).toEqual(beforeWheel);
+    });
+
+    await test.step('Ctrl+= with the grid focused changes the pane level', async () => {
+      const paneFactorBefore = await readFactor(frame, 'text-collection');
+      await firstCell.focus();
+      await mainPage.keyboard.press('Control+=');
+      await expect.poll(() => readFactor(frame, 'text-collection')).not.toBe(paneFactorBefore);
+    });
+
+    await test.step('a pane reset (Ctrl+0) leaves zoomByResourceId intact', async () => {
+      const beforeReset = await readZoomByResourceId(mainPage, webViewId);
+      const paneFactorBefore = await readFactor(frame, 'text-collection');
+      await firstCell.focus();
+      await mainPage.keyboard.press('Control+0');
+      await expect.poll(() => readFactor(frame, 'text-collection')).not.toBe(paneFactorBefore);
+      expect(await readZoomByResourceId(mainPage, webViewId)).toEqual(beforeReset);
+    });
+
+    await test.step('a resource cell’s bounding rect scales by pane factor × per-resource factor', async () => {
+      // Read the actual factors in play rather than assuming a 1×1 baseline: the previous steps
+      // already left this resource zoomed (from the first step above), so the expected ratio is
+      // computed from measured before/after factors, not hardcoded targets.
+      const baselineBox = await firstCell.boundingBox();
+      if (!baselineBox) throw new Error('Resource cell has no bounding box');
+      const baselinePaneFactor = await readFactor(frame, 'text-collection');
+      const baselineResourceFactor =
+        (await readZoomByResourceId(mainPage, webViewId))[resourceId] ?? 1;
+
+      await firstCell.focus();
+      await mainPage.keyboard.press('Control+=');
+      await expect.poll(() => readFactor(frame, 'text-collection')).not.toBe(baselinePaneFactor);
+      const newPaneFactor = await readFactor(frame, 'text-collection');
+
+      await firstCell.hover();
+      const zoomKebab = firstCell.getByRole('button', { name: /Zoom options/i });
+      await expect(zoomKebab).toBeVisible({ timeout: 5_000 });
+      await zoomKebab.click();
+      await stg.frame.getByRole('menuitem', { name: /^Zoom In$/i }).click();
+      await expect
+        .poll(async () => (await readZoomByResourceId(mainPage, webViewId))[resourceId])
+        .not.toBe(baselineResourceFactor);
+      const newResourceFactor = (await readZoomByResourceId(mainPage, webViewId))[resourceId];
+
+      const zoomedBox = await firstCell.boundingBox();
+      if (!zoomedBox) throw new Error('Resource cell has no bounding box after zoom');
+      const expectedRatio =
+        (newPaneFactor / baselinePaneFactor) * (newResourceFactor / baselineResourceFactor);
+      expect(zoomedBox.height / baselineBox.height).toBeCloseTo(expectedRatio, 1);
+    });
   });
 });
