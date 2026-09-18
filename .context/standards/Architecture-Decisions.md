@@ -121,6 +121,56 @@ step, no automation. Just a record.
   what makes a window "primary" and on the crash-reload-budget decision in
   `renderer-crash-reload-budget.util.ts` for when a window counts as abandoned.
 
+## adr-active-editor-project-is-a-window-data-type: An unbound Column 3 panel is seeded once from the window's `ActiveEditorProjectId`, never from the scroll group
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** `adr-column-3-panels-are-told-their-project` settles how a panel's project *changes*:
+  the switch tells it. It left one question open: what a panel shows before it has been told
+  anything. Two panels arrive without a `projectId`: the Text Collection, merged in from the
+  default-layout supplement in both interface modes, and Find, seeded by the no-project Simple
+  layout. Both answered it by reading scroll group 0's **source** project (the 5th tuple member of
+  `useWebViewScrollGroupScrRef`). That field exists to tag which project's versification frame the
+  current reference's numbers are in. It moves for reasons unrelated to which project is active
+  (Back/Forward, a resource cell's own click, a Comments or Checks panel click). It also does not
+  move on a switch that lands on the same verse. And the grid followed it in place. In Power mode,
+  where both re-point paths are Simple-gated, the grid moved `projectId` in place on every
+  navigation. `useBufferedLayoutSetting` only re-arms on `onSharedLayoutApply`, which only fires in
+  Simple mode, so the admin-shared list would stay on the first project while the per-user list and
+  overlay moved on. As of 2026-09-18 that is shown by tests against the real hook, not yet seen end
+  to end in the app.
+- **Decision:** The window service publishes a read-only data type,
+  `WindowDataTypes.ActiveEditorProjectId` (`@experimental`). It is the `projectId` of the web view
+  BCV navigation drives, which is `window.service-shard.ts`'s existing `navigationTargetWebView`. In
+  Simple mode that is the main editor. In Power mode it is the last-focused Scripture-navigable web
+  view, falling back to the first open editor with a project. Each window's shard publishes it, and
+  the main-process router relays it under the generic name the same way it relays `Focus`. The
+  setter throws, like core's other read-only setters (`setAllThemes`). The Text Collection
+  (`useTextCollectionProjectId` → `resolveTextCollectionProjectId`) and Find use it **only to seed a
+  panel that has no project**: `explicit ?? alreadyShown ?? activeEditor`. After that the panel
+  keeps its project, and only an explicit `projectId` moves it, which in practice means the switch's
+  reload. Neither panel reads the scroll group's source project for identity at all.
+- **Alternatives:** **Follow `ActiveEditorProjectId` live.** Rejected: in Power mode that is the
+  same in-place change the buffered hook forbids, so the admin-shared list goes stale exactly as it
+  did with the scroll group. Making the hook reset on a `projectId` change would fix that, but it is
+  real work for a mode where the Text Collection is not used. **Re-stamp the scroll group's source
+  project on every switch** (`claimScrollGroupSourceProject`, tried on PR #2736 and never merged).
+  Rejected: every writer of the reference is another way for the value to drift, and each fix added
+  another one. It kept asking a versification field an identity question. **Give the grid a project
+  picker.** Deferred until Power mode needs the grid.
+- **Consequences:** In Power mode, a Text Collection opened from the default layout shows the first
+  project the window reports and **cannot be re-pointed**. Nothing there tells it, and it has no
+  picker. This is accepted because the Text Collection is not used in Power mode. The grid can no
+  longer change `projectId` in place, so `useBufferedLayoutSetting`'s "projectId changed in place"
+  tripwire cannot fire from it. `use-text-collection-project-id.hook.test.ts` composes the two
+  hooks to pin that. Find in Power mode is unaffected in practice: `openFind` only creates a Find
+  panel when it has a project, and Power mode restores its own saved layout, not the Simple
+  layout's seeded tab. So a Power-mode Find always carries an explicit `projectId`. A web view reads
+  its own window's value, because `papi.window.dataProviderName` is scoped to the window in a
+  renderer (`window.service.ts`). The generic-name router, which answers for whichever window holds
+  OS focus, only serves callers with no window, such as the extension host.
+- **Source:** PT-4238; PR #2736.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -627,8 +677,9 @@ step, no automation. Just a record.
   projects via `reloadWebView` and NOT safe for ones that change `projectId` in place, with a
   `logger.warn` tripwire for exactly that. (`projectId` *is* in
   `WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS` — the constraint is the absent service-side updater
-  and the hook's remount requirement, not the property list.) The scroll-group source project survives only as the fallback for a grid opened with
-  no explicit project, and its call-site name now says what it is.
+  and the hook's remount requirement, not the property list.) A grid opened with no explicit project
+  is seeded once from the window's `ActiveEditorProjectId`, never from the scroll group; see
+  `adr-active-editor-project-is-a-window-data-type`.
 - **Alternatives:** **Fix the inferred signal instead** — track the live Scripture editor's web view
   from inside the panel and follow that rather than the scroll group. Rejected: it re-derives, inside
   a web view, something the switch already knows and can simply hand over; and because Simple mode
