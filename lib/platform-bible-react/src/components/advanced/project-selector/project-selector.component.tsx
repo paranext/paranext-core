@@ -756,7 +756,13 @@ function ProjectRowView({
         align="center"
         sideOffset={8}
         collisionPadding={16}
-        className="tw:max-w-xs tw:text-center"
+        // Wider than the popover that triggers it (`tw:w-80` below), deliberately: this tooltip
+        // stacks up to six lines — full name, language, type, indicator meaning, scroll-group
+        // reference, disabled reason — and a cap matching the popover's own width wraps every one
+        // of them. At this width only a long full name wraps, and the detail lines stay one line
+        // each. Start-aligned rather than centred because centring lines of very different lengths
+        // reads as ragged once there are more than two of them.
+        className="tw:max-w-md tw:text-start"
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
       >
         <div className="tw:font-semibold">{row.fullName}</div>
