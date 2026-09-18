@@ -542,9 +542,9 @@ internal static class Pt9InterlinearReader
 
     /// <summary>
     /// Maps one setup to its served shape. A model name that is empty or PT9's no-model sentinel
-    /// means the setup has no model text, so the name is absent; the model id passes through
-    /// whenever present, since a model-less setup mints one as its settings key. Empty strings
-    /// serve as absent fields.
+    /// means the setup has no model text, so the name is absent; the model id serves whenever
+    /// present, since a model-less setup mints one as its settings key. Every other string serves
+    /// only when non-empty, so an empty value and an omitted one are indistinguishable downstream.
     /// </summary>
     private static Pt9InterlinearSetup ConvertPt9InterlinearSetup(InterlinearSetup setup)
     {
@@ -553,20 +553,26 @@ internal static class Pt9InterlinearReader
             && setup.MdlScrTextName != InterlinearSetup.emptyModelTextName;
         return new Pt9InterlinearSetup(
             setup.Type.ToString(),
-            setup.LanguageId,
-            setup.LanguageName,
-            string.IsNullOrEmpty(setup.FontName) ? null : setup.FontName,
+            NullIfEmpty(setup.LanguageId),
+            NullIfEmpty(setup.LanguageName),
+            NullIfEmpty(setup.FontName),
             setup.FontSize,
             setup.RightToLeft,
             hasModel ? setup.MdlScrTextName : null,
-            setup.MdlScrTextId?.ToString(),
+            NullIfEmpty(setup.MdlScrTextId?.ToString()),
             setup.MdlIsResource,
             setup.RelatedLanguages,
             setup.ExportOnApprove,
-            string.IsNullOrEmpty(setup.ExportScrTextName) ? null : setup.ExportScrTextName,
-            setup.ExportScrTextId?.ToString()
+            NullIfEmpty(setup.ExportScrTextName),
+            NullIfEmpty(setup.ExportScrTextId?.ToString())
         );
     }
+
+    /// <summary>
+    /// Collapses an empty string to absent. PT9's several ways of storing "never set" carry no
+    /// distinction worth serving.
+    /// </summary>
+    private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     /// <summary>
     /// Applies the cleanup PT9 itself applies on every lexicon read: entry and analysis forms are
@@ -658,7 +664,7 @@ internal static class Pt9InterlinearReader
                         (cluster.Lexemes ?? [])
                             .Select(lexeme => new Pt9InterlinearLexemeRef(
                                 lexeme.LexemeId,
-                                string.IsNullOrEmpty(lexeme.SenseId) ? null : lexeme.SenseId
+                                NullIfEmpty(lexeme.SenseId)
                             ))
                             .ToList()
                     ))
