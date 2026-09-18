@@ -5,10 +5,13 @@ import { X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
+import { AlignedGrid } from './aligned-grid.component';
+import { ResourceColumn, type ResourceColumnReorder } from './resource-column.component';
 import { useResourceZoomInput } from './use-resource-zoom-input.hook';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { resolveDisplayVerseNum } from './verse-display.utils';
 import { moveId } from '../scripture-text-grid-order.utils';
+import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
 export type ChapterContextResource = GridResource;
 
@@ -20,13 +23,14 @@ type ScriptureTextGridProps = {
   ariaLabel?: string;
   /**
    * Selects the layout: `'verse'` → vertical column of stacked verse-cell rows (with the
-   * chapter-context split); `'chapter'` → horizontal row of side-by-side full-chapter columns.
-   * Defaults to `'verse'` (the product default); `ResourceCell` defaults to `'chapter'` because it
-   * is the generic cell reused by the chapter-context panel and the chapter columns. The two
-   * defaults intentionally differ — every caller here passes `viewMode` explicitly, so the defaults
-   * only document each component's own primary use.
+   * chapter-context split); `'chapter'` → horizontal row of side-by-side full-chapter columns;
+   * `'aligned'` → the verse-aligned grid, where verse N of every resource shares a row. Defaults to
+   * `'verse'` (the product default); `ResourceCell` defaults to `'chapter'` because it is the
+   * generic cell reused by the chapter-context panel and the chapter columns. The two defaults
+   * intentionally differ — every caller here passes `viewMode` explicitly, so the defaults only
+   * document each component's own primary use.
    */
-  viewMode?: 'chapter' | 'verse';
+  viewMode?: ResourceCollectionViewMode;
   /** When set, the chapter-context split is open for this resource. */
   chapterContext?: ChapterContextResource;
   /** Opens or switches the chapter-context panel to the given resource. */
@@ -46,8 +50,10 @@ type ScriptureTextGridProps = {
   zoomMenuLabels?: ZoomMenuLabels;
   /**
    * Fired after a drag-and-drop or keyboard move with the new visible id sequence; omit to disable
-   * reorder. Reorder applies to both views: the chapter view (side-by-side columns) and the verse
-   * view (vertical listitems).
+   * reorder. Columns move sideways in the chapter row and the aligned grid, and verse listitems
+   * move up and down. Drag works in all three; the KEYBOARD path reaches only the two column views,
+   * because the grip that carries it is rendered by `ResourceCellView`'s header-band layout and the
+   * verse view uses the inline-name layout instead.
    */
   onReorder?: (newShownIdSequence: string[]) => void;
   /** Builds the reorder grip's accessible name for a resource (e.g. "Reorder Genesis"). */
@@ -62,12 +68,12 @@ type ScriptureTextGridProps = {
 };
 
 /**
- * Renders the effective-list resources in one of two layouts (selected by `viewMode`), all synced
+ * Renders the effective-list resources in one of three layouts (selected by `viewMode`), all synced
  * to the active scrRef: `verse` → a vertical list of stacked verse listitems (described below);
- * `chapter` → a horizontal group of side-by-side full-chapter regions, one per resource, each
- * scrolling independently and with no split. The active scrRef is owned by the web-view root (via
- * `WebViewProps.useWebViewScrollGroupScrRef`) and passed in — this component is presentational and
- * calls no scroll-group hook.
+ * `chapter` → a horizontal group of side-by-side full-chapter regions, each scrolling independently
+ * and with no split; `aligned` → {@link AlignedGrid}, where verse N of every resource shares a row.
+ * The active scrRef is owned by the web-view root (via `WebViewProps.useWebViewScrollGroupScrRef`)
+ * and passed in — this component is presentational and calls no scroll-group hook.
  *
  * In verse mode, clicking (or pressing Enter/Space on) a listitem opens a resizable chapter-context
  * panel beside the list showing that resource's full chapter. When the panel closes, focus returns
@@ -198,6 +204,61 @@ export function ScriptureTextGrid({
     adjustZoom: zoom?.adjustZoom,
   });
 
+  // Reorder wiring for one column, shared by the chapter row and the aligned grid. `undefined` when
+  // the host did not enable reorder, which renders a column with no drag affordances.
+  const buildReorder = (resource: GridResource): ResourceColumnReorder | undefined =>
+    onReorder
+      ? {
+          isDropTarget:
+            dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId,
+          onDragStart: () => {
+            draggedIdRef.current = resource.resourceId;
+          },
+          onDragEnd: () => {
+            draggedIdRef.current = undefined;
+            setDragOverId(undefined);
+          },
+          onDragOver: (event) => {
+            event.preventDefault();
+            setDragOverId(resource.resourceId);
+          },
+          onDrop: () => handleReorderDrop(resource.resourceId),
+          handleLabel: getReorderHandleLabel?.(resource.label),
+          hint: reorderHint,
+          onKeyDown: (event) => handleReorderKeyDown(event, resource),
+        }
+      : undefined;
+
+  // Aligned grid: columns are resources, rows are verses. Checked before the single-resource branch
+  // below so one resource renders a degenerate single-column aligned grid rather than falling
+  // through to a chapter view. No chapter-context split and no per-cell activation — both are
+  // verse-view concerns. Reorder works as it does in the chapter row, moving a column sideways.
+  if (viewMode === 'aligned') {
+    return (
+      <div ref={gridRef} className="tw:flex tw:h-full tw:min-h-0 tw:flex-col">
+        {/* Kept outside the grid root so it never lands in a grid track. */}
+        <div role="status" aria-live="polite" className="tw:sr-only">
+          {reorderAnnouncement}
+        </div>
+        <AlignedGrid scrRef={scrRef} ariaLabel={ariaLabel}>
+          {resources.map((resource) => (
+            <ResourceColumn
+              key={resource.resourceId}
+              resource={resource}
+              scrRef={scrRef}
+              setScrRef={setScrRef}
+              cellViewMode="aligned"
+              className="tw:min-w-0"
+              reorder={buildReorder(resource)}
+              zoom={zoom}
+              zoomMenuLabels={zoomMenuLabels}
+            />
+          ))}
+        </AlignedGrid>
+      </div>
+    );
+  }
+
   // Single resource: render it as a full-width whole chapter — almost the standalone resource
   // viewer, minus its resource-selector dropdown (the web view header's View Options button covers
   // adding more texts). No verse-cell list chrome and no chapter-context split; the whole chapter is
@@ -260,63 +321,17 @@ export function ScriptureTextGrid({
           {reorderAnnouncement}
         </div>
         {resources.map((resource) => (
-          <div
+          <ResourceColumn
             key={resource.resourceId}
-            role="region"
-            aria-label={resource.label}
-            data-project-id={resource.projectId}
-            data-resource-id={resource.resourceId}
-            data-testid="scripture-text-grid-cell-draggable"
-            draggable={onReorder ? true : undefined}
-            onDragStart={
-              onReorder
-                ? () => {
-                    draggedIdRef.current = resource.resourceId;
-                  }
-                : undefined
-            }
-            onDragEnd={
-              onReorder
-                ? () => {
-                    draggedIdRef.current = undefined;
-                    setDragOverId(undefined);
-                  }
-                : undefined
-            }
-            onDragOver={
-              onReorder
-                ? (event) => {
-                    event.preventDefault();
-                    // No onDragLeave — it fires on child elements; clearing on drop/dragEnd instead
-                    // is more reliable.
-                    setDragOverId(resource.resourceId);
-                  }
-                : undefined
-            }
-            onDrop={onReorder ? () => handleReorderDrop(resource.resourceId) : undefined}
-            // `cursor-grab` on the wrapper (the drag source) so the grab affordance coincides with
-            // where the drag actually starts, not only over the grip icon.
-            className={`tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0${onReorder ? ' tw:cursor-grab' : ''}${onReorder && dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
-          >
-            <ResourceCell
-              resourceRef={resource}
-              scrRef={scrRef}
-              setScrRef={setScrRef}
-              viewMode="chapter"
-              zoom={zoom}
-              zoomMenuLabels={zoomMenuLabels}
-              showDragHandle={onReorder ? true : undefined}
-              reorderHandleLabel={
-                onReorder && getReorderHandleLabel
-                  ? getReorderHandleLabel(resource.label)
-                  : undefined
-              }
-              reorderHint={onReorder ? reorderHint : undefined}
-              onReorderKeyDown={
-                onReorder ? (event) => handleReorderKeyDown(event, resource) : undefined
-              }
-            />
-          </div>
+            resource={resource}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            cellViewMode="chapter"
+            className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
+            reorder={buildReorder(resource)}
+            zoom={zoom}
+            zoomMenuLabels={zoomMenuLabels}
+          />
         ))}
       </div>
     );
@@ -365,6 +380,9 @@ export function ScriptureTextGrid({
               onChapterContextChange(resource);
             }
           : undefined;
+        // Same reorder wiring the columns use. The listitem cannot be a `ResourceColumn` — it has
+        // its own role and activation — but it must not carry a second copy of the handlers.
+        const reorder = buildReorder(resource);
         return (
           // The listitem is an interactive resource entry. jsx-a11y flags role="listitem" with
           // tabIndex/handlers as "non-interactive", but it IS keyboard-accessible (Tab to focus,
@@ -379,7 +397,7 @@ export function ScriptureTextGrid({
             data-testid={onReorder ? 'scripture-text-grid-cell-draggable' : undefined}
             aria-label={verseItemName(resource.label)}
             tabIndex={activate ? 0 : undefined}
-            draggable={onReorder ? true : undefined}
+            draggable={reorder ? true : undefined}
             onClick={activate}
             onKeyDown={
               activate
@@ -391,33 +409,12 @@ export function ScriptureTextGrid({
                   }
                 : undefined
             }
-            onDragStart={
-              onReorder
-                ? () => {
-                    draggedIdRef.current = resource.resourceId;
-                  }
-                : undefined
-            }
-            onDragEnd={
-              onReorder
-                ? () => {
-                    draggedIdRef.current = undefined;
-                    setDragOverId(undefined);
-                  }
-                : undefined
-            }
-            onDragOver={
-              onReorder
-                ? (event) => {
-                    event.preventDefault();
-                    // No onDragLeave — it fires on child elements; clearing on drop/dragEnd instead
-                    // is more reliable.
-                    setDragOverId(resource.resourceId);
-                  }
-                : undefined
-            }
-            onDrop={onReorder ? () => handleReorderDrop(resource.resourceId) : undefined}
-            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${activate ? ' tw:cursor-pointer' : ''}${onReorder && dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
+            onDragStart={reorder?.onDragStart}
+            onDragEnd={reorder?.onDragEnd}
+            // No onDragLeave — it fires on child elements; clearing on drop/dragEnd is more reliable.
+            onDragOver={reorder?.onDragOver}
+            onDrop={reorder?.onDrop}
+            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${activate ? ' tw:cursor-pointer' : ''}${reorder?.isDropTarget ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
           >
             <ResourceCell
               resourceRef={resource}
@@ -426,16 +423,10 @@ export function ScriptureTextGrid({
               viewMode={viewMode}
               zoom={zoom}
               zoomMenuLabels={zoomMenuLabels}
-              showDragHandle={onReorder ? true : undefined}
-              reorderHandleLabel={
-                onReorder && getReorderHandleLabel
-                  ? getReorderHandleLabel(resource.label)
-                  : undefined
-              }
-              reorderHint={onReorder ? reorderHint : undefined}
-              onReorderKeyDown={
-                onReorder ? (event) => handleReorderKeyDown(event, resource) : undefined
-              }
+              showDragHandle={reorder ? true : undefined}
+              reorderHandleLabel={reorder?.handleLabel}
+              reorderHint={reorder?.hint}
+              onReorderKeyDown={reorder?.onKeyDown}
             />
           </div>
           /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */

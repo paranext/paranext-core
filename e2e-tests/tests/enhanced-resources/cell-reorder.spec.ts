@@ -26,15 +26,15 @@
 import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
+import { closeAllNonHomeDockTabs } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
   flagResourcesAndOpenScriptureTextGrid,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   ScriptureTextGrid,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
+} from './scripture-text-grid.page';
 
 // ---------------------------------------------------------------------------
 // Env-var driven resource IDs (same pattern as scripture-text-grid.spec.ts)
@@ -45,23 +45,22 @@ const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
   .filter(Boolean);
 
 // ---------------------------------------------------------------------------
-// Helper: read the ordered cell labels by reading the aria-label attribute
-// on each [role="gridcell"] element (the `aria-label` equals the resource
-// label set in ResourceCellView). Returns labels in DOM order.
+// Helper: read the ordered cell labels from the verse listitems, in DOM order.
 //
-// The draggable wrappers carry `data-testid="scripture-text-grid-cell-draggable"`.
+// The label lives on the draggable wrapper itself (`data-testid=
+// "scripture-text-grid-cell-draggable"`), which carries both the accessible name and the reorder
+// wiring. An inner `[role="gridcell"]` was the source before PT-4157 removed that role; selecting
+// it now matches nothing, so every assertion below would pass over an empty list.
 // ---------------------------------------------------------------------------
 async function getCellAriaLabels(frame: FrameLocator): Promise<string[]> {
-  const gridcells = frame.locator(
-    '[data-testid="scripture-text-grid-cell-draggable"] [role="gridcell"]',
-  );
-  const count = await gridcells.count();
+  const cells = frame.locator('[data-testid="scripture-text-grid-cell-draggable"]');
+  const count = await cells.count();
   const labels: string[] = [];
-  // Reading the gridcell attributes must happen sequentially over Playwright's locator API;
-  // there is no batch getAttribute, so awaiting inside the loop is intentional here.
+  // Reading the attributes must happen sequentially over Playwright's locator API; there is no
+  // batch getAttribute, so awaiting inside the loop is intentional here.
   /* eslint-disable no-await-in-loop */
   for (let i = 0; i < count; i++) {
-    const label = await gridcells.nth(i).getAttribute('aria-label');
+    const label = await cells.nth(i).getAttribute('aria-label');
     labels.push((label ?? '').trim());
   }
   /* eslint-enable no-await-in-loop */

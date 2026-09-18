@@ -277,7 +277,7 @@ describe('ResourceCellView name display', () => {
         textDirection="ltr"
         localizedStrings={localizedStrings}
         nameDisplay="inline"
-        isVerseEmpty
+        emptyMessage={localizedStrings[EMPTY_KEY]}
         editor={undefined}
       />,
     );
@@ -363,6 +363,28 @@ describe('ResourceCellView zoom UI', () => {
     const content = screen.getByText('verse').parentElement?.parentElement;
     expect(content).not.toBeNull();
     expect(content instanceof HTMLElement && content.style.zoom).toBe('1.4');
+  });
+
+  it('publishes the factor as a custom property instead when zoomTarget is "blocks"', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse-blocks</span>}
+        zoomFactor={1.4}
+        zoomTarget="blocks"
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    // In the aligned grid this wrapper is a `grid-template-rows: subgrid` box, so `zoom` on it
+    // would scale the shared row tracks it inherits along with the text and let one column measure
+    // its rows differently from its neighbours. The factor rides down to the verse blocks instead.
+    const content = screen.getByText('verse-blocks').parentElement?.parentElement;
+    expect(content).not.toBeNull();
+    expect(content instanceof HTMLElement && content.style.zoom).toBeFalsy();
+    expect(content?.style.getPropertyValue('--aligned-zoom')).toBe('1.4');
   });
 
   it('has no zoom style on the content wrapper when zoomFactor is 1', () => {
@@ -770,5 +792,78 @@ describe('ResourceCellView reorder grip', () => {
     // The grip still renders (no aria-label supplied); the label text is still shown in the header.
     expect(screen.getByText('Genesis')).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+});
+
+// The header band is the reorder drag source for both the chapter row and the Grid view. Asserted
+// on this component rather than only through `ScriptureTextGrid`, whose tests mock `ResourceCell`
+// and hand-roll a draggable header — so deleting `draggable` here would leave those green.
+describe('ResourceCellView header drag source', () => {
+  const headerDragProps = {
+    state: 'ready' as const,
+    label: 'Genesis',
+    textDirection: 'ltr',
+    localizedStrings,
+    editor: <span>In the beginning</span>,
+  };
+
+  it('makes the header band draggable and reports drag start and end', () => {
+    const onDragStart = vi.fn();
+    const onDragEnd = vi.fn();
+    renderCells(<ResourceCellView {...headerDragProps} headerDrag={{ onDragStart, onDragEnd }} />);
+
+    const header = screen.getByTestId('scripture-text-grid-column-drag-source');
+    expect(header).toHaveAttribute('draggable', 'true');
+
+    fireEvent.dragStart(header);
+    expect(onDragStart).toHaveBeenCalledTimes(1);
+    fireEvent.dragEnd(header);
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the cell undraggable when no reorder is wired', () => {
+    // A `draggable` ancestor makes its whole subtree draggable, which turns a click-drag across the
+    // text into a reorder instead of a selection — the capability one editor per column exists for.
+    renderCells(<ResourceCellView {...headerDragProps} />);
+
+    expect(screen.queryByTestId('scripture-text-grid-column-drag-source')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[draggable="true"]')).toHaveLength(0);
+  });
+});
+
+describe('ResourceCellView content scroll ownership', () => {
+  const baseProps = {
+    state: 'ready' as const,
+    label: 'WEB',
+    textDirection: 'ltr',
+    localizedStrings,
+    editor: <div data-testid="editor" />,
+  };
+
+  it('scrolls its own content by default', () => {
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-content]')).toHaveClass('tw:overflow-auto');
+  });
+
+  it('hands scrolling to an ancestor when asked, so an aligned grid can own the scroll port', () => {
+    // A scroll container's children cannot participate in an ancestor's grid, so leaving
+    // `overflow: auto` here would stop the verse blocks aligning across columns.
+    const { container } = renderCells(
+      <ResourceCellView {...baseProps} contentOverflow="visible" />,
+    );
+
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveClass('tw:overflow-visible');
+    expect(content).not.toHaveClass('tw:overflow-auto');
+  });
+
+  it('exposes the layout anchors the aligned grid styles hook onto', () => {
+    // These attributes are load-bearing for that view's layout, not test ids.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-root]')).toBeInTheDocument();
+    expect(container.querySelector('[data-cell-header]')).toBeInTheDocument();
+    expect(container.querySelector('[data-cell-pad]')).toBeInTheDocument();
   });
 });

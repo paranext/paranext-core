@@ -3,6 +3,8 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { expect, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
+  EMPTY_KEY,
+  NO_VERSES_TO_SHOW_KEY,
   RESET_ZOOM_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
@@ -227,7 +229,7 @@ export const VerseEmpty: Story = {
         textDirection="ltr"
         localizedStrings={localizedStrings}
         nameDisplay="inline"
-        isVerseEmpty
+        emptyMessage={localizedStrings[EMPTY_KEY]}
         editor={undefined}
       />
     </CellBox>
@@ -825,5 +827,47 @@ export const MixedDirectionRow: Story = {
         />
       </div>
     </CellRowBox>
+  ),
+};
+
+/**
+ * A resource whose chapter has no verses — some commentaries, or a chapter of front matter. The
+ * aligned grid can only show verse blocks, so the cell says why the column is empty instead of
+ * leaving the reader guessing.
+ */
+export const NoVersesToAlign: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="HBKENG"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        emptyMessage={localizedStrings[NO_VERSES_TO_SHOW_KEY]}
+        contentOverflow="visible"
+        editor={<SampleChapter />}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * `contentOverflow="visible"` hands scrolling to an ancestor instead of the cell. The aligned grid
+ * needs it: a cell that scrolls its own content cannot take part in the grid's shared rows, and
+ * would drift out of step with its neighbours. Compare with `Ready`, which scrolls its own
+ * content.
+ */
+export const ContentScrolledByAncestor: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        contentOverflow="visible"
+        editor={<SampleChapter />}
+      />
+    </CellBox>
   ),
 };

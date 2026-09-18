@@ -10,6 +10,7 @@ import { Lock, X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
   RESOURCE_COLLECTION_OPTIONS_KEYS,
+  isResourceCollectionViewMode,
   type ResourceCollectionOptionsLocalizedStrings,
   type ResourceCollectionOptionsProps,
   type ResourceCollectionOptionsStringKey,
@@ -19,6 +20,8 @@ import {
 export {
   RESOURCE_COLLECTION_OPTIONS_KEYS,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  RESOURCE_COLLECTION_VIEW_MODES,
+  isResourceCollectionViewMode,
   type ResourceCollectionOptionsStringKey,
   type ResourceCollectionOptionsLocalizedStrings,
   type ResourceCollectionOptionsProps,
@@ -79,7 +82,7 @@ export function ResourceCollectionOptions({
   const handleViewModeChange = (value: string) => {
     // Radix single-toggle emits '' when the active item is clicked again; ignore that (a view mode
     // is always selected) and any unexpected value.
-    if (value === 'verse' || value === 'chapter') onViewModeChange(value);
+    if (isResourceCollectionViewMode(value)) onViewModeChange(value);
   };
 
   const renderRow = (row: ViewOptionsTextEntry) => {
@@ -172,10 +175,15 @@ export function ResourceCollectionOptions({
             <ToggleGroupItem value="chapter" disabled={!isChapterEnabled}>
               {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.chapter)}
             </ToggleGroupItem>
+            {/* The verse-aligned grid. Labeled "Grid" for the user; the value is `aligned` because
+                the surface as a whole is the Scripture Text Grid. */}
+            <ToggleGroupItem value="aligned">
+              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.grid)}
+            </ToggleGroupItem>
           </ToggleGroup>
           {!isChapterEnabled && (
             <span className="tw:text-xs tw:text-muted-foreground tw:italic">
-              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.comingSoon)}
+              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.chapterComingSoon)}
             </span>
           )}
         </div>

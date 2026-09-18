@@ -7,6 +7,8 @@ import type { DblResourceReference } from 'platform-scripture';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  RESOURCE_COLLECTION_VIEW_MODES,
+  isResourceCollectionViewMode,
 } from './resource-collection-options.component';
 import type {
   ResourceCollectionOptionsProps,
@@ -36,7 +38,8 @@ const STRINGS: Record<string, string> = Object.fromEntries(
 STRINGS['%webView_scriptureTextGrid_viewOptions_viewHeader%'] = 'View';
 STRINGS['%webView_scriptureTextGrid_viewOptions_verse%'] = 'Verse';
 STRINGS['%webView_scriptureTextGrid_viewOptions_chapter%'] = 'Chapter';
-STRINGS['%webView_scriptureTextGrid_viewOptions_comingSoon%'] = 'Coming soon';
+STRINGS['%webView_scriptureTextGrid_viewOptions_grid%'] = 'Grid';
+STRINGS['%webView_scriptureTextGrid_viewOptions_chapterComingSoon%'] = 'Chapter view coming soon';
 STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'Texts';
 STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_adminSharedLock%'] = 'Shared by administrator';
@@ -90,13 +93,15 @@ describe('ResourceCollectionOptions — VIEW toggle', () => {
     const chapter = screen.getByRole('radio', { name: /Chapter/ });
     expect(verse).toHaveAttribute('data-state', 'on');
     expect(chapter).toBeDisabled();
-    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+    // The hint renders after the whole toggle group rather than beside the item it describes, so
+    // it has to name the mode itself — Grid sits between it and the disabled Chapter item.
+    expect(screen.getByText('Chapter view coming soon')).toBeInTheDocument();
   });
 
   it('enables Chapter and hides the "coming soon" hint when isChapterEnabled is true', () => {
     renderComponent({ isChapterEnabled: true });
     expect(screen.getByRole('radio', { name: /Chapter/ })).toBeEnabled();
-    expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chapter view coming soon')).not.toBeInTheDocument();
   });
 
   it('fires onViewModeChange when a different mode is picked', () => {
@@ -109,6 +114,32 @@ describe('ResourceCollectionOptions — VIEW toggle', () => {
     const props = renderComponent({ viewMode: 'verse', isChapterEnabled: false });
     fireEvent.click(screen.getByRole('radio', { name: /Chapter/ }));
     expect(props.onViewModeChange).not.toHaveBeenCalled();
+  });
+
+  it('offers Grid as a third mode and reports it as `aligned`', () => {
+    // The label is "Grid"; the value stays `aligned` because the whole surface is the Scripture
+    // Text Grid, so `viewMode === 'grid'` inside it would not say which grid.
+    const props = renderComponent({ viewMode: 'verse', isChapterEnabled: true });
+    fireEvent.click(screen.getByRole('radio', { name: 'Grid' }));
+    expect(props.onViewModeChange).toHaveBeenCalledWith('aligned');
+  });
+
+  it('shows Grid as the selected mode when it is active', () => {
+    renderComponent({ viewMode: 'aligned', isChapterEnabled: true });
+    expect(screen.getByRole('radio', { name: 'Grid' })).toHaveAttribute('data-state', 'on');
+  });
+});
+
+describe('isResourceCollectionViewMode', () => {
+  it.each([...RESOURCE_COLLECTION_VIEW_MODES])('accepts %s', (mode) => {
+    expect(isResourceCollectionViewMode(mode)).toBe(true);
+  });
+
+  // The chosen mode is persisted per web view, so a saved layout can outlive the build that wrote
+  // it and name a mode this one cannot render. Callers coerce through this rather than handing an
+  // unrenderable mode to the grid.
+  it.each([undefined, '', 'grid', 'parallel', 0, {}])('rejects %o', (value) => {
+    expect(isResourceCollectionViewMode(value)).toBe(false);
   });
 });
 
