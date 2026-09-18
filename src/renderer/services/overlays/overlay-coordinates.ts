@@ -27,7 +27,7 @@ export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
  *
  * @experimental This function is unstable and may change or disappear without notice
  */
-export function parseIframeZoom(iframe: HTMLIFrameElement | undefined): number {
+export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number {
   const zoom = Number(iframe?.style.zoom);
   return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
 }
@@ -45,14 +45,14 @@ export function parseIframeZoom(iframe: HTMLIFrameElement | undefined): number {
  *
  * This does not cover per-area zoom — a pane that marks zoom areas carries no whole-iframe `zoom`
  * and this always answers `1` for it. For the scale a pane's content is actually drawn at, use
- * {@link getContentZoomScaleForWebView} instead.
+ * `getContentZoomScaleForWebView` in `web-view-content-zoom.service` instead.
  *
  * @param webViewId The webViewId of the iframe
  * @returns The scale factor the iframe's contents are rendered at
  * @experimental This function is unstable and may change or disappear without notice
  */
 export function getWebViewIframeZoom(webViewId: string): number {
-  return parseIframeZoom(getWebViewIframe(webViewId) ?? undefined);
+  return parseIframeZoom(getWebViewIframe(webViewId));
 }
 
 /**
