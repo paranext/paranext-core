@@ -138,6 +138,7 @@ export type RegistrationLiveness = 'transient' | 'lazy';
 /** One entry in wire-surface.json's `registrations` array. */
 export interface WireSurfaceRegistration {
   category: string;
+  name: string;
   /**
    * Whether the registration declares the experimental marker, or `null` where the generator could
    * not statically evaluate the documentation shape and so has no declared value to report.
