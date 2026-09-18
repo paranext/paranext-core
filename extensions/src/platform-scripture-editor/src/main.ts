@@ -41,7 +41,6 @@ import {
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
   openOrUpdateRelatedPanels,
-  updateRelatedFindPanel,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
@@ -51,6 +50,7 @@ import {
   startDefaultProjectPicker,
   syncOnProjectSwitch,
   toScriptureEditorInfos,
+  updateRelatedFindPanel,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
@@ -391,15 +391,12 @@ async function open(
 
     // If in Simple interface mode, open/update the related panels (model text, Bible texts,
     // commentaries, comments, text collection) and auto-apply the admin's shared layout for the
-    // project being opened (re-arm the buffered panels, focus the desired col-3 tab). Note: A
-    // manual/later sync's held change is applied via the notification's "Apply now" rather than
-    // automatically here.
+    // project being opened (re-arm the buffered panels, focus the desired col-3 tab). They follow
+    // the editor onto any project, editable or not, except the Text Collection, which
+    // `openOrUpdateRelatedPanels` skips for a published resource. Note: A manual/later sync's
+    // held change is applied via the notification's "Apply now" rather than automatically here.
     if (interfaceMode === 'simple' && projectForWebView.projectId) {
-      await openOrUpdateRelatedPanels(
-        papi,
-        projectForWebView.projectId,
-        !!projectForWebView.isEditable,
-      );
+      await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
     }
 
@@ -447,11 +444,7 @@ async function open(
 
     // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
     // until here because it is the one panel that needs the id of the editor this call just created.
-    // Find and the Scripture Text Grid both follow the active translation project, so a read-only
-    // resource opened in the editor column must not drag them along. The other Column 3 panels
-    // follow the editor either way.
-    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
-      await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
+    await updateRelatedFindPanel(papi, interfaceMode, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;
   }

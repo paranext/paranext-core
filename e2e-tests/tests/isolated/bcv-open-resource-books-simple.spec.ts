@@ -85,9 +85,10 @@ const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 
 /**
- * `openScriptureEditor` sequentially awaits the `openOrUpdateRelatedPanels` commands — five for an
- * editable project, four for a read-only resource — each of which opens or re-points a Column 3
- * panel, so the combined response routinely exceeds the default 30 s PAPI request timeout.
+ * `openScriptureEditor` sequentially awaits every related-panel step: the Column 3 panels open, the
+ * Column 1 Model Text panel, the Text Collection re-point (skipped for a published resource) and
+ * Find's re-point once the new editor exists — so the combined response routinely exceeds the
+ * default 30 s PAPI request timeout.
  */
 const OPEN_EDITOR_TIMEOUT_MS = 150_000;
 
