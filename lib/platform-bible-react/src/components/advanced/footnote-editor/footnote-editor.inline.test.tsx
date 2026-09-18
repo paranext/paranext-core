@@ -27,6 +27,7 @@ const editorRefMock = {
   selectNote: vi.fn(),
   selectNoteTextOffset: vi.fn(),
   commitPendingMarkerEdits: vi.fn(),
+  getSelection: vi.fn(),
   undo: vi.fn(),
   redo: vi.fn(),
 };
@@ -694,6 +695,67 @@ describe('FootnoteEditor inline live-apply', () => {
       expect(editorRefMock.commitPendingMarkerEdits).toHaveBeenCalledOnce();
     });
 
+    it('settles a marker rename that the debounced apply already passed over', async () => {
+      // Typing into a marker glyph leaves the rename PENDING, and the note the debounced apply
+      // reads is unsettled - so the apply fires, finds the note unchanged, and applies nothing. A
+      // session that ends after that (the user moving to another row a moment later) still owes
+      // the rename to the parent.
+      vi.useFakeTimers();
+      const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+      // The ref needs to start out with null for it to work as a component ref
+      // eslint-disable-next-line no-null/no-null
+      const handleRef = createRef<FootnoteEditorHandle>();
+      renderEditor({
+        inline: true,
+        ref: handleRef,
+        noteOps: makeNoteOps('loaded'),
+        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        parentEditorRef: parentRef as never,
+        noteKey: 'key-handle-rename',
+      });
+      await vi.runOnlyPendingTimersAsync();
+
+      const usj: Usj = { type: 'USJ', version: '3.1', content: [{ type: 'para' }] };
+      primeCurrentOps('loaded');
+      latestEditorialProps.onUsjChange?.(usj); // snapshot call
+      // The glyph keystroke: the editor reports a change, but the unsettled note reads as loaded.
+      latestEditorialProps.onUsjChange?.(usj);
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
+
+      // Settling moves the rename into the note and reports it synchronously, as the editor's
+      // discrete settle commit does.
+      const renamed: DeltaOpInsertNoteEmbed[] = [
+        {
+          insert: {
+            note: {
+              caller: '+',
+              style: 'f',
+              contents: {
+                ops: [
+                  { insert: '1.1 ', attributes: { char: { style: 'fr' } } },
+                  { insert: 'loaded', attributes: { char: { style: 'fqa' } } },
+                ],
+              },
+            },
+          },
+        },
+      ];
+      editorRefMock.commitPendingMarkerEdits.mockImplementationOnce(() => {
+        editorRefMock.getNoteOps.mockReturnValue(renamed);
+        latestEditorialProps.onUsjChange?.(usj);
+      });
+
+      handleRef.current?.flushPendingEdits();
+
+      expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledOnce();
+      expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledWith(
+        'key-handle-rename',
+        renamed,
+      );
+    });
+
     it('does not settle when the session ends with nothing pending', async () => {
       // Ending a session that changed nothing must not dispatch into the editor at all: this
       // handle is called on every close, including ones reached from inside the PARENT editor's
@@ -851,6 +913,28 @@ describe('FootnoteEditor inline Escape dismissal', () => {
 
     pressEscapeInEditor(container);
 
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // The final settle holds back the marker the caret is in while the editor has focus, so a
+  // rename typed just before Escape would stay pending and be lost with the unmounting editor.
+  it('releases focus before the final settle, so the marker under the caret settles too', async () => {
+    vi.useFakeTimers();
+    const { container, props } = renderEditor({
+      inline: true,
+      editorOptions: { view: editableView },
+    });
+    await vi.runAllTimersAsync();
+    const editorInput = container.querySelector<HTMLElement>('.editor-input');
+    let editorHeldFocusAtSettle: boolean | undefined;
+    editorRefMock.commitPendingMarkerEdits.mockImplementationOnce(() => {
+      editorHeldFocusAtSettle = editorInput?.contains(document.activeElement);
+    });
+
+    pressEscapeInEditor(container);
+
+    expect(editorRefMock.commitPendingMarkerEdits).toHaveBeenCalledOnce();
+    expect(editorHeldFocusAtSettle).toBe(false);
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 

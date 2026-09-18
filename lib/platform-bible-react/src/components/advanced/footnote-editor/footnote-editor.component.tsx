@@ -395,6 +395,8 @@ export default function FootnoteEditor({
   const [canRedo, setCanRedo] = useState(false);
   const hasInitializedEditor = useRef(false);
   const initialNoteOpsJson = useRef('');
+  /** Whether the user has changed this note since it loaded (see `flushPendingEdits`). */
+  const hasUserEditsRef = useRef(false);
 
   /**
    * What the parent editor is known to hold for this note: the op it was loaded with, then whatever
@@ -618,6 +620,7 @@ export default function FootnoteEditor({
     let reassertFrame: ReturnType<typeof requestAnimationFrame> | undefined;
     let reassertTimeout: ReturnType<typeof setTimeout> | undefined;
     hasInitializedEditor.current = false;
+    hasUserEditsRef.current = false;
     lastFocusOutSelectionRef.current = undefined;
     setIsAtInitialState(true);
     const noteOp = noteOps?.at(0);
@@ -717,12 +720,15 @@ export default function FootnoteEditor({
   // session is open, as `closeAndSave`'s settle is - the palette's own apply must be the one to
   // consume the typed literal.
   //
-  // Gated on there actually being an apply to make. A session that changed nothing has nothing to
-  // settle into, and this handle is called on EVERY close, including ones the host reaches from
+  // Gated on the user having changed the note at all. A session that changed nothing has nothing
+  // to settle into, and this handle is called on EVERY close, including ones the host reaches from
   // inside the parent editor's update listener (where the note has usually already gone), so an
-  // unconditional settle would dispatch into this editor on paths with no edit to save.
+  // unconditional settle would dispatch into this editor on paths with no edit to save. A pending
+  // debounce is NOT that signal: the debounced apply reads the note unsettled, so when it fires
+  // with a rename still pending under the caret it finds nothing new, applies nothing, and clears
+  // itself — leaving the rename with no timer to be found by.
   const flushPendingEdits = useCallback(() => {
-    if (pendingApplyTimeoutRef.current === undefined) return;
+    if (!hasUserEditsRef.current) return;
     if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
     flushPendingApply();
   }, [flushPendingApply]);
@@ -732,12 +738,20 @@ export default function FootnoteEditor({
   const closeAndSave = useCallback(() => {
     // Abandonment window: settle pending mid-edit marker text before the final read
     // of the note ops, so a marker rename walked away from mid-edit saves as what's on screen
-    // rather than the stale pre-rename marker. Clicking Save blurs this popover's editor, so
-    // the settle covers everything; skipped while this popover's own marker-palette session is
-    // open (the palette's apply must be the one to consume the typed literal). Deliberately
-    // NOT in saveCurrentNoteOp: the auto-save path runs inside a Lexical update listener,
-    // where dispatching another (discrete) update mid-commit is unsafe.
-    if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
+    // rather than the stale pre-rename marker. Skipped while this popover's own marker-palette
+    // session is open (the palette's apply must be the one to consume the typed literal).
+    // Deliberately NOT in saveCurrentNoteOp: the auto-save path runs inside a Lexical update
+    // listener, where dispatching another (discrete) update mid-commit is unsafe.
+    //
+    // The settle leaves the marker under the caret pending while this editor holds focus, since a
+    // pause mid-typing must not settle under the user. Ending the session IS leaving that marker,
+    // so focus is released first. Clicking Save already did that; Escape in the inline editor
+    // arrives with focus still here.
+    if (!paletteSession.current) {
+      const editorInput = editorParentRef.current?.querySelector<HTMLElement>('.editor-input');
+      if (editorInput?.contains(editorInput.ownerDocument.activeElement)) editorInput.blur();
+      editorRef.current?.commitPendingMarkerEdits();
+    }
     if (inline) {
       // The inline surface has no Save: every edit has already been applied to the parent as it
       // was made, so ending the session only has to land whatever is still inside the debounce
@@ -880,6 +894,7 @@ export default function FootnoteEditor({
           return;
         }
 
+        hasUserEditsRef.current = true;
         // Track whether the user has undone all their edits back to the initial state
         setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
 

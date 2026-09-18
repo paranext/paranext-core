@@ -21,6 +21,7 @@ import {
   isEchoOfPublishedScrRef,
   measureBaselineOffset,
   focusPaneNoteEditor,
+  focusPaneSelectedRow,
   scrollToAnnotation,
   scrollToNoteCaller,
   scrollToVerse,
@@ -452,6 +453,36 @@ describe('focusPaneNoteEditor', () => {
   it('returns undefined when no row is being edited', () => {
     document.body.innerHTML = '<ul role="listbox"><li>plain row</li></ul>';
     expect(focusPaneNoteEditor()).toBeUndefined();
+  });
+});
+
+describe('focusPaneSelectedRow', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function buildRows() {
+    document.body.innerHTML = `
+      <ul role="listbox">
+        <li role="option" aria-selected="false" id="first" tabindex="0">first</li>
+        <li role="option" aria-selected="true" id="selected" tabindex="0">selected</li>
+      </ul>`;
+  }
+
+  it('focuses the selected row', () => {
+    buildRows();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    expect(focusPaneSelectedRow()?.id).toBe('selected');
+    expect(document.activeElement?.id).toBe('selected');
+  });
+
+  // A chapter change driven from the toolbar or another view also ends a row session; focusing a
+  // row then would take focus away from where the user is working.
+  it('leaves focus alone while the document does not hold it', () => {
+    buildRows();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    expect(focusPaneSelectedRow()).toBeUndefined();
+    expect(document.activeElement).toBe(document.body);
   });
 });
 

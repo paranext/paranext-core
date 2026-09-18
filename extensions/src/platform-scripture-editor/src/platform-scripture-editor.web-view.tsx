@@ -3373,8 +3373,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [footnotesPaneRendered, closeFootnoteEditor]);
 
   /**
-   * Ends a row-editing session from INSIDE the row editor (its Escape dismissal), and puts focus
-   * back on the row it was opened from.
+   * Ends a row-editing session from INSIDE the row editor (its Escape dismissal, or its own close
+   * on a chapter change), and puts focus back on the row it was opened from when this web view
+   * holds focus (see `focusPaneSelectedRow`).
    *
    * The focus move has to wait for the commit that swaps the editor out for the read-only row: the
    * row element the session was opened on does not exist until then, and the unmounting editor

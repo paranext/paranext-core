@@ -358,11 +358,17 @@ export function focusPaneNoteEditor(): HTMLElement | undefined {
  * unmounting, so without this focus falls to the document body and the next keystroke goes
  * nowhere.
  *
+ * Does nothing while this document does not hold focus. A session can also end because the chapter
+ * changed under it, driven from the toolbar or another view, and focusing a row then would pull
+ * focus out of wherever the user is working.
+ *
  * Scoped to the pane's list, like {@link focusPaneNoteEditor}.
  *
- * @returns The selected row element, or `undefined` when the pane has no selected row
+ * @returns The selected row element, or `undefined` when the pane has no selected row or the
+ *   document does not hold focus
  */
 export function focusPaneSelectedRow(): HTMLElement | undefined {
+  if (!document.hasFocus()) return undefined;
   const row =
     document.querySelector<HTMLElement>('[role="listbox"] [role="option"][aria-selected="true"]') ??
     undefined;
