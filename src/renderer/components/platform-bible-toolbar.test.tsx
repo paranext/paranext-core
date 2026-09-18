@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -1570,6 +1570,58 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
     expect(
       renderProjectIndicator?.({ id: 'un', shortName: 'UN', fullName: 'Unstated' }),
     ).toBeUndefined();
+  });
+
+  it('marks a read-only project reached through the recent section', async () => {
+    // The two sections are separate hook outputs that the toolbar unions before deriving
+    // `readOnlyIds`. Asserting only against `allProjects` would leave a recent-only regression
+    // green, so the recent path is pinned on its own.
+    await renderSimpleToolbarWith({
+      recentProjects: [{ id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent' }],
+      allProjects: [],
+    });
+
+    const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
+    expect(
+      renderProjectIndicator?.({ id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent' }),
+    ).toBeUndefined();
+
+    cleanup();
+    await renderSimpleToolbarWith({
+      recentProjects: [
+        { id: 'roRecent', shortName: 'RR', fullName: 'Readonly Recent', isEditable: false },
+      ],
+      allProjects: [],
+    });
+
+    expect(
+      requireCapturedProjectSelectorProps().renderProjectIndicator?.({
+        id: 'roRecent',
+        shortName: 'RR',
+        fullName: 'Readonly Recent',
+      }),
+    ).not.toBeUndefined();
+  });
+
+  it('marks a read-only project with the read-only indicator, not merely with something', async () => {
+    // The assertions above only separate "a node" from `undefined`, which any placeholder would
+    // satisfy. Render what the toolbar actually returns and check it carries the localized
+    // read-only accessible name — the padlock's only carrier of meaning for a screen reader.
+    await renderSimpleToolbarWith({
+      allProjects: [{ id: 'ro', shortName: 'RO', fullName: 'Readonly', isEditable: false }],
+    });
+
+    const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
+    const indicator = renderProjectIndicator?.({
+      id: 'ro',
+      shortName: 'RO',
+      fullName: 'Readonly',
+    });
+
+    // Scoped to this container rather than `screen`: the toolbar rendered above is still mounted
+    // and carries icons of its own.
+    const { container } = render(<div>{indicator}</div>);
+    expect(within(container).getByRole('img', { name: 'Test read-only' })).toBeInTheDocument();
   });
 
   it('passes a localized search placeholder rather than falling back to English defaults', async () => {
