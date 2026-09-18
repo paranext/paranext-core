@@ -171,9 +171,10 @@ describe('read-only projects', () => {
 });
 
 describe('short name column', () => {
-  // Every other project/resource picker — the titlebar `ProjectSelector` popover and
-  // `ResourcePickerDialog` — starts the short name at the leading edge of its column. This dialog
-  // was the one surface right-aligning it, which read as a different list of a different thing.
+  // Every project/resource picker — this dialog, the titlebar `ProjectSelector` popover and
+  // `ResourcePickerDialog` — starts the short name at the leading edge of its column, so the three
+  // read as one list of one kind of thing. See the picker row layout contract in
+  // `.context/standards/Architecture-Decisions.md`.
   it('starts the short name at the leading edge of its column', () => {
     renderDialog();
 
@@ -199,15 +200,26 @@ describe('short name offset', () => {
       localizedStrings: { ...STRINGS, '%projectPicker_readOnly_label%': 'Read-only' },
     });
 
-    // Each short name has the same number of preceding sibling slots in its cell, whichever
-    // glyphs that row happens to show.
-    const slotCounts = ['CUR', 'PLN', 'RO'].map((shortName) => {
+    // The slots have to be the same WIDTH, not merely present: an empty slot with no sizing
+    // collapses to zero and the ragged edge comes straight back, while the child index below stays
+    // 2 for every row by construction. Asserting the sizing classes is what makes this falsifiable.
+    const slotClassNames = ['CUR', 'PLN', 'RO'].map((shortName) => {
       const nameSpan = screen.getByText(shortName);
       const cell = nameSpan.parentElement;
-      return cell ? Array.from(cell.children).indexOf(nameSpan) : -1;
+      if (!cell) return [];
+      return Array.from(cell.children)
+        .slice(0, Array.from(cell.children).indexOf(nameSpan))
+        .map((slot) => slot.className);
     });
 
-    expect(slotCounts).toEqual([2, 2, 2]);
+    slotClassNames.forEach((classNames) => {
+      expect(classNames).toHaveLength(2);
+      classNames.forEach((className) => {
+        expect(className).toContain('tw:h-3');
+        expect(className).toContain('tw:w-3');
+        expect(className).toContain('tw:shrink-0');
+      });
+    });
   });
 });
 
@@ -218,6 +230,9 @@ describe('row width', () => {
   // 0 here) — these assert the four layout properties that together produce it, which is what a
   // future edit would have to remove to reintroduce the defect.
   const LONG_NAME = 'Supercalifragilisticexpialidociousversionofthebibleinaveryverylonglanguage';
+  // `language` is a BCP-47 tag by convention, not by enforcement — a display name reaching this
+  // column is one mapping slip away, and it is the case that crushes the columns beside it.
+  const LONG_LANGUAGE = 'AnUnreasonablyLongLanguageDisplayNameThatIsNotATag';
 
   it('lets a long name truncate rather than widening the list', () => {
     renderDialog({
@@ -236,17 +251,27 @@ describe('row width', () => {
     expect(shortNameText.className).toContain('tw:truncate');
   });
 
-  it('floors both text tracks at zero width and hides the horizontal axis', () => {
+  it('floors every text track at zero width and hides the horizontal axis', () => {
     renderDialog({
       currentProject: undefined,
       recentProjects: [],
-      allProjects: [{ id: 'long', fullName: LONG_NAME, shortName: 'LONG' }],
+      allProjects: [
+        { id: 'long', fullName: LONG_NAME, shortName: 'LONG', language: LONG_LANGUAGE },
+      ],
     });
 
     // A bare `auto`/`1fr` track floors at its content's minimum width, so truncation on the cell
-    // alone is not enough — the track has to be allowed to shrink too.
+    // alone is not enough — the track has to be allowed to shrink too. All THREE tracks, not just
+    // the two carrying names: an unfloored language column satisfies its own minimum by crushing
+    // the two beside it, and `overflow-x-hidden` below means there is no scrollbar to recover them.
     const listbox = screen.getByRole('listbox');
-    expect(listbox.className).toContain('tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_auto]');
+    expect(listbox.className).toContain(
+      'tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)]',
+    );
+
+    const languageCell = screen.getByText(LONG_LANGUAGE);
+    expect(languageCell.className).toContain('tw:truncate');
+    expect(languageCell.className).toContain('tw:min-w-0');
 
     const scrollContainer = listbox.parentElement;
     expect(scrollContainer?.className).toContain('tw:overflow-x-hidden');

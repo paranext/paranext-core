@@ -1945,12 +1945,19 @@ step, no automation. Just a record.
   same list of the same projects read differently depending on how the user got there. Neither is
   interesting on its own; what makes them worth recording is that a third picker added later would
   have picked its own answer again.
-- **Decision:** One layout contract for every picker row. **Truncate, never scroll**: the row's
-  columns are fixed (a `colgroup` on the table rather than per-cell widths, because section-heading
-  rows span all columns and cannot carry them), each name cell truncates, and the scroll container
+- **Decision:** One layout contract for every picker row, stated as invariants rather than as one
+  picker's mechanism — the three surfaces are a table, a CSS grid and a cmdk list, and each reaches
+  these a different way. **Truncate, never scroll**: no column may be widened by its content, every
+  text track is allowed to be narrower than its content so it can truncate, and the scroll container
   states `overflow-x: hidden` explicitly so the axis is a decision rather than a computed default.
-  **Truncation must not hide anything**: every truncated cell carries its untruncated text as a
-  native hover label. **The short name starts at the leading edge** of its column, in every picker.
+  (`ResourcePickerDialog` fixes its columns with a `colgroup` rather than per-cell widths, because
+  its section-heading rows span all columns and cannot carry them; `ProjectPicker` floors its grid
+  tracks at `minmax(0,…)`; `ProjectSelector` inherits `overflow-x: hidden` from the shared
+  `CommandList`.) **Truncation must not hide anything**: clipped text stays reachable on hover, by
+  whichever tooltip mechanism the surface's row already uses — a native `title` where the row is
+  plain markup, and the row's own tooltip where it is already a tooltip trigger, since a `title`
+  inside one opens the browser's tooltip on top of the app's. **The short name starts at the leading
+  edge** of its column, in every picker.
 - **Alternatives:** **Wrap long names onto a second line** — rejected: it makes row heights ragged
   in a list whose whole job is fast visual scanning, and the language column still has to go
   somewhere. **Allow horizontal scrolling with a scroll affordance** — rejected: a name being long

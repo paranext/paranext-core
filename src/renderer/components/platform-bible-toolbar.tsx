@@ -294,22 +294,18 @@ function ToolbarProjectSelector({
   );
 
   const renderProjectIndicator = useCallback(
-    (project: ProjectSelectorProject) =>
-      readOnlyIds.has(normalizeProjectId(project.id)) ? (
+    (project: ProjectSelectorProject) => {
+      if (!readOnlyIds.has(normalizeProjectId(project.id))) return undefined;
+      const label = localizedStrings['%projectPicker_readOnly_label%'];
+      return {
         // No native title here, unlike the dialog's rows: a selector row is itself a shadcn tooltip
         // trigger, so a `title` inside one would open the browser's default tooltip on top of the
-        // app's. The accessible name still reaches screen readers through the indicator's own role,
-        // and `getProjectIndicatorLabel` below puts it in the row tooltip for everyone else.
-        <ReadOnlyIndicator label={localizedStrings['%projectPicker_readOnly_label%']} />
-      ) : undefined,
-    [readOnlyIds, localizedStrings],
-  );
-
-  const getProjectIndicatorLabel = useCallback(
-    (project: ProjectSelectorProject) =>
-      readOnlyIds.has(normalizeProjectId(project.id))
-        ? localizedStrings['%projectPicker_readOnly_label%']
-        : undefined,
+        // app's. The glyph still names itself for screen readers through its own role; `label`
+        // below is what puts the meaning on screen for everyone else.
+        node: <ReadOnlyIndicator label={label} />,
+        label,
+      };
+    },
     [readOnlyIds, localizedStrings],
   );
 
@@ -393,7 +389,6 @@ function ToolbarProjectSelector({
       defaultGrouping="custom"
       hideFilterMenu
       renderProjectIndicator={renderProjectIndicator}
-      getProjectIndicatorLabel={getProjectIndicatorLabel}
       renderTriggerLabel={renderTriggerLabel}
       footerAction={footerAction}
       isLoading={isLoading}

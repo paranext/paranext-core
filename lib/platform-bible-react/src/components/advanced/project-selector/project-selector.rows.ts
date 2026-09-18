@@ -249,12 +249,23 @@ function collectOpenTabsByProject(
   return map;
 }
 
+/**
+ * Whether a (project, scroll group) pair is in the selection.
+ *
+ * Project ids are compared normalized, for the same reason `computeRows` normalizes the
+ * single-selection id: a caller whose selection came from a different source than its project list
+ * spells the same project in a different case, and comparing raw would leave every row unchecked
+ * while the trigger — which folds — named the project correctly.
+ */
 function pairIsSelected(
   pairs: readonly ProjectSelectorProjectPair[],
   projectId: string,
   scrollGroupId: ScrollGroupId | undefined,
 ): boolean {
-  return pairs.some((p) => p.projectId === projectId && p.scrollGroupId === scrollGroupId);
+  const key = normalizeProjectId(projectId);
+  return pairs.some(
+    (p) => normalizeProjectId(p.projectId) === key && p.scrollGroupId === scrollGroupId,
+  );
 }
 
 // #endregion
@@ -375,12 +386,16 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   // selected "not-open project" pair is already represented by the not-open row rendered above.
   selectedPairs.forEach((pair) => {
     if (pair.scrollGroupId === undefined) return;
+    const pairKey = normalizeProjectId(pair.projectId);
     if (
-      rows.some((r) => r.projectId === pair.projectId && r.scrollGroupId === pair.scrollGroupId)
+      rows.some(
+        (r) =>
+          normalizeProjectId(r.projectId) === pairKey && r.scrollGroupId === pair.scrollGroupId,
+      )
     ) {
       return;
     }
-    const project = args.projects.find((p) => p.id === pair.projectId);
+    const project = args.projects.find((p) => normalizeProjectId(p.id) === pairKey);
     if (!project) return;
     rows.push({
       rowKey: `closed:${project.id}:${pair.scrollGroupId}`,
@@ -677,9 +692,8 @@ const UNMATCHED_SECTION_ID = '__unmatched__';
  * for the trailing unmatched bucket, or `undefined` if none does.
  */
 function findDuplicateSectionId(sections: readonly ProjectSelectorSection[]): string | undefined {
-  // `indexOf` against the same array rather than a `Set` accumulated inside the predicate: a
-  // side-effecting `find` callback is correct here but reads as a bug at a glance. Quadratic, over
-  // a handful of caller-declared sections.
+  // Quadratic, deliberately: this runs over a handful of caller-declared sections, and a pure
+  // predicate is worth more here than the linear scan a `Set` would buy.
   const ids = sections.map((section) => section.id);
   return ids.find((id, index) => id === UNMATCHED_SECTION_ID || ids.indexOf(id) !== index);
 }

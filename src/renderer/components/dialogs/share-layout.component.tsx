@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
@@ -22,16 +22,53 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  Z_INDEX_NESTED_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
 } from 'platform-bible-react';
 import { ResourcePickerDialog } from 'platform-bible-react/experimental';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
 import { ChevronDown, X } from 'lucide-react';
 
-// Each embedded picker is a modal in its own right, layered over this dialog. Its height is capped
-// so the resource list scrolls within a bounded area instead of growing to fit every entry; the
-// width is the shared dialog maximum rather than a hand-picked pixel count.
+/**
+ * Shape of an embedded picker modal, layered over this dialog.
+ *
+ * The height cap is the same one `OverlayModalDialog` gives this dialog, so a full catalog scrolls
+ * inside `ResourcePickerDialog`'s own `flex-1 overflow-y-auto` list rather than growing the picker
+ * taller than the dialog it covers. A bare `85vh` is not a cap relative to the host: on a 1080p
+ * display it is ~918px against the host's 720px, so the picker overhangs at both ends.
+ *
+ * The width is one step wider than `DialogContent`'s default so four columns fit; expressed as a
+ * scale token rather than a pixel count.
+ */
 const RESOURCE_PICKER_DIALOG_CLASS =
-  'tw:flex tw:max-h-[85vh] tw:min-h-0 tw:flex-col tw:gap-0 tw:overflow-hidden tw:p-0 tw:sm:max-w-xl';
+  'tw:flex tw:max-h-[min(720px,85vh)] tw:min-h-0 tw:flex-col tw:gap-0 tw:overflow-hidden tw:p-0 tw:sm:max-w-xl';
+
+/**
+ * Where focus goes when an embedded picker opens.
+ *
+ * Rendering the close button after the picker gets this right only while the search box is enabled
+ * — the picker disables it whenever there is nothing to filter (an empty commentary catalog, a
+ * failed fetch), and the mount auto-focus then falls through to the Retry button or to the close
+ * button itself, starting a keyboard user on "leave". Stating the target directly also survives
+ * anyone reordering the JSX or adding a focusable control above the search box.
+ */
+function focusPickerSearchOnOpen(
+  event: Event,
+  searchInput: HTMLInputElement | null | undefined,
+  content: HTMLDivElement | null,
+) {
+  if (searchInput && !searchInput.disabled) {
+    event.preventDefault();
+    searchInput.focus();
+    return;
+  }
+  // Nothing to type into: hold focus on the dialog itself rather than on whatever happens to be
+  // tabbable. Escape and the screen-reader announcement both still work from there.
+  if (content) {
+    event.preventDefault();
+    content.focus();
+  }
+}
 
 export type ShareLayoutActiveTab =
   | 'ScriptureResource'
@@ -167,9 +204,10 @@ type TabKey = 'ScriptureResource' | 'CommentaryResource';
  * is a hardcoded English "Close" that no consumer can translate, and these dialogs already ship a
  * localized string for it.
  *
- * Render it _after_ the picker in DOM order. A dialog focuses its first tabbable element on open,
- * so leading with this button would open its tooltip over the list and start a keyboard user on
- * "leave" instead of on the search box.
+ * Rendered after the picker in DOM order so it comes last in the tab order rather than first. Where
+ * focus actually lands on open is stated by `focusPickerSearchOnOpen`, not inferred from this
+ * ordering — the picker disables its search box whenever there is nothing to filter, and DOM order
+ * alone would put a keyboard user on "leave" in exactly that state.
  *
  * This is a local workaround, not the fix: the untranslated label lives in `DialogContent` itself,
  * so every dialog in the app carries it. Giving `DialogContent` a `closeButtonLabel` prop would
@@ -218,6 +256,14 @@ export function ShareLayoutDialogContent({
   const [commentaryResources, setCommentaryResources] = useState(initialCommentaryResources);
   const [isModelTextPickerOpen, setIsModelTextPickerOpen] = useState(false);
   const [openAddPickerTab, setOpenAddPickerTab] = useState<TabKey | undefined>(undefined);
+
+  // One pair of refs, not one per picker: opening either picker requires clicking a trigger in this
+  // dialog, so only one is ever mounted at a time.
+  // React writes `null` into a detached DOM ref itself, so there is no `undefined` equivalent here.
+  /* eslint-disable no-null/no-null */
+  const pickerSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const pickerContentRef = useRef<HTMLDivElement | null>(null);
+  /* eslint-enable no-null/no-null */
 
   const handleSelectModelText = useCallback((resource: DblResourceData) => {
     setModelText(toResourceReference(resource));
@@ -284,14 +330,21 @@ export function ShareLayoutDialogContent({
             {localizeString(strings, manageLabelKey[tab])}
           </Button>
         </DialogTrigger>
-        {/* The picker renders a title but deliberately no description; saying so silences Radix's
-            missing-description warning without inventing prose for it. */}
+        {/* A modal opened from a modal needs a tier of its own: at the flat modal z-index the
+            picker's backdrop paints BELOW this dialog's content, so this dialog stays bright while
+            Radix's dismissable layer makes it inert — live-looking and unclickable. */}
         <DialogContent
+          ref={pickerContentRef}
           className={RESOURCE_PICKER_DIALOG_CLASS}
+          style={{ zIndex: Z_INDEX_NESTED_MODAL }}
+          overlayStyle={{ zIndex: Z_INDEX_NESTED_MODAL_BACKDROP }}
           showCloseButton={false}
-          aria-describedby={undefined}
+          onOpenAutoFocus={(event) =>
+            focusPickerSearchOnOpen(event, pickerSearchInputRef.current, pickerContentRef.current)
+          }
         >
           <ResourcePickerDialog
+            searchInputRef={pickerSearchInputRef}
             allResources={allResources}
             isResourcesLoading={isResourcesLoading}
             hasResourcesError={hasResourcesError}
@@ -372,11 +425,21 @@ export function ShareLayoutDialogContent({
                 </Button>
               </DialogTrigger>
               <DialogContent
+                ref={pickerContentRef}
                 className={RESOURCE_PICKER_DIALOG_CLASS}
+                style={{ zIndex: Z_INDEX_NESTED_MODAL }}
+                overlayStyle={{ zIndex: Z_INDEX_NESTED_MODAL_BACKDROP }}
                 showCloseButton={false}
-                aria-describedby={undefined}
+                onOpenAutoFocus={(event) =>
+                  focusPickerSearchOnOpen(
+                    event,
+                    pickerSearchInputRef.current,
+                    pickerContentRef.current,
+                  )
+                }
               >
                 <ResourcePickerDialog
+                  searchInputRef={pickerSearchInputRef}
                   allResources={allResources}
                   isResourcesLoading={isResourcesLoading}
                   hasResourcesError={hasResourcesError}

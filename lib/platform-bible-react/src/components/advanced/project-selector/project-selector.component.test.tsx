@@ -663,8 +663,9 @@ describe('row tooltip', () => {
         selection={{ projectId: 'p1' }}
         onChangeSelection={() => {}}
         ariaLabel="Project"
-        renderProjectIndicator={(project) => (project.id === 'p2' ? <span>🔒</span> : undefined)}
-        getProjectIndicatorLabel={(project) => (project.id === 'p2' ? 'Read-only' : undefined)}
+        renderProjectIndicator={(project) =>
+          project.id === 'p2' ? { node: <span>🔒</span>, label: 'Read-only' } : undefined
+        }
       />,
     );
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
@@ -687,8 +688,9 @@ describe('row tooltip', () => {
         selection={{ projectId: 'p1' }}
         onChangeSelection={() => {}}
         ariaLabel="Project"
-        renderProjectIndicator={(project) => (project.id === 'p2' ? <span>🔒</span> : undefined)}
-        getProjectIndicatorLabel={(project) => (project.id === 'p2' ? 'Read-only' : undefined)}
+        renderProjectIndicator={(project) =>
+          project.id === 'p2' ? { node: <span>🔒</span>, label: 'Read-only' } : undefined
+        }
       />,
     );
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
@@ -730,9 +732,9 @@ describe('renderProjectIndicator', () => {
         selection={{ projectId: 'p1' }}
         onChangeSelection={() => {}}
         ariaLabel="Project"
-        renderProjectIndicator={(project) => (
-          <span data-testid={`indicator-${project.type}`} aria-hidden />
-        )}
+        renderProjectIndicator={(project) => ({
+          node: <span data-testid={`indicator-${project.type}`} aria-hidden />,
+        })}
       />,
     );
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
