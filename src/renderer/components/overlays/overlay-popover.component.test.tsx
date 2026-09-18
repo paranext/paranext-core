@@ -216,9 +216,9 @@ describe('OverlayPopoverPresentational', () => {
       expect(style.zoom || '').toBe('');
       // The popover's own default cap, unrelated to content zoom, unchanged.
       expect(style.maxHeight).toBe('400px');
-      // The inner div is what actually sizes the popover now that PopoverContent's own width is
-      // 'auto' — it must carry the width and flex layout classes the shared PopoverContent class
-      // used to provide.
+      // PopoverContent's own width is 'auto', so the inner div is what actually sizes the popover
+      // — it must carry the width and flex layout classes for the popover to size and space its
+      // content correctly.
       expect(innerEl.className).toContain('tw:w-72');
       expect(innerEl.className).toContain('tw:flex');
       expect(innerEl.className).toContain('tw:flex-col');
