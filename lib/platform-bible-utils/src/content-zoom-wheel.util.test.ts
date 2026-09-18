@@ -72,6 +72,19 @@ describe('createContentZoomWheelReader', () => {
     expect(reader.read(huge, 'a')).toBe(25);
   });
 
+  it('derives the default max steps from the effective zoom step', () => {
+    reader = createContentZoomWheelReader({ zoomStep: 0.05 });
+    const huge = new WheelEvent('wheel', {
+      ctrlKey: true,
+      deltaY: -100000,
+      deltaX: 0,
+      deltaMode: 0,
+    });
+    Object.defineProperty(huge, 'wheelDeltaY', { value: 120000 });
+    // The 0.5–3.0 range in 0.05 steps is 50 steps, not the 25 a hardcoded 0.1 would give.
+    expect(reader.read(huge, 'a')).toBe(50);
+  });
+
   it('reads a pinch as travel through the scale, not a step per frame', () => {
     reader = createContentZoomWheelReader();
     const activeReader = reader;
@@ -83,10 +96,12 @@ describe('createContentZoomWheelReader', () => {
 
   it('keeps a running pinch on the pinch path even once its frames grow large', () => {
     reader = createContentZoomWheelReader();
-    reader.read(pinchFrame(-2), 'a'); // opens the gesture on its size
-    // A brisk frame that would clear the size window on its own stays a pinch because the gesture
-    // is still latched — otherwise the faster the gesture, the coarser it would respond.
-    expect(reader.read(pinchFrame(-6), 'a')).toBeLessThanOrEqual(1);
+    reader.read(pinchFrame(-2), 'a');
+    // Stays on the pinch path only because the gesture is still latched — this frame would fail the
+    // size test on its own.
+    reader.read(pinchFrame(-6), 'a');
+    // 2 + 6 + 2 = 10 px, past the ~9.53 px a step costs.
+    expect(reader.read(pinchFrame(-2), 'a')).toBe(1);
   });
 
   it('starts a fresh gesture when the scope changes', () => {
@@ -99,6 +114,48 @@ describe('createContentZoomWheelReader', () => {
     // step. Were the banked travel to carry across scopes it would total 12 px and step once, so
     // this assertion fails the moment the reset is removed.
     expect(reader.read(pinchFrame(-4), 'b')).toBe(0);
+  });
+
+  it('ignores a zero-delta ctrl+wheel event entirely', () => {
+    reader = createContentZoomWheelReader();
+    reader.read(pinchFrame(-4), 'a');
+    reader.read(pinchFrame(-4), 'a'); // 8 px banked, just under the ~9.53 px a step costs
+    const zeroDelta = new WheelEvent('wheel', {
+      ctrlKey: true,
+      deltaY: 0,
+      deltaX: 0,
+      deltaMode: 0,
+    });
+    // A zero-delta ctrl+wheel event is a complete no-op: it neither resets the banked pinch travel
+    // nor consumes a step of its own.
+    expect(reader.read(zeroDelta, 'a')).toBe(0);
+    expect(reader.read(pinchFrame(-4), 'a')).toBe(1);
+  });
+
+  it('reads a line- or page-mode wheel event as exactly one step, ignoring its magnitude', () => {
+    reader = createContentZoomWheelReader();
+    const line = new WheelEvent('wheel', { ctrlKey: true, deltaY: -3, deltaX: 0, deltaMode: 1 });
+    const page = new WheelEvent('wheel', { ctrlKey: true, deltaY: 2000, deltaX: 0, deltaMode: 2 });
+    expect(reader.read(line, 'a')).toBe(1);
+    expect(reader.read(page, 'a')).toBe(-1);
+  });
+
+  it('falls back to the pixel delta when wheelDeltaY is absent', () => {
+    reader = createContentZoomWheelReader();
+    const inNoWheelDeltaY = new WheelEvent('wheel', {
+      ctrlKey: true,
+      deltaY: -100,
+      deltaX: 0,
+      deltaMode: 0,
+    });
+    const outNoWheelDeltaY = new WheelEvent('wheel', {
+      ctrlKey: true,
+      deltaY: 100,
+      deltaX: 0,
+      deltaMode: 0,
+    });
+    expect(reader.read(inNoWheelDeltaY, 'a')).toBe(1);
+    expect(reader.read(outNoWheelDeltaY, 'a')).toBe(-1);
   });
 
   it('treats ctrl+wheel as a mouse notch while Ctrl is physically down', () => {
