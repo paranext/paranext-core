@@ -3899,6 +3899,23 @@ step, no automation. Just a record.
   their portaled content with the area and a pop-up flag and cap their size by the zoom factor.
   The platform bootstrap never counts flagged content as a pane or anchors the indicator on it.
   `ContentZoomAreaProvider` covers pop-ups rendered outside the area element.
+
+  A pop-up the platform itself draws outside the web view — the command palette, popover and
+  context menu requested through `papi.overlays`, portalled by `OverlayHost` into the renderer's
+  own document rather than into the requesting pane's iframe — takes the same rule by a different
+  route: it cannot see the pane's `--platform-content-zoom-<area>` custom property, since that
+  property lives on the requesting iframe's own document, so `OverlayHost` reads the requesting
+  pane's scale directly from the content-zoom service (`getContentZoomScaleForWebView`) and passes
+  it down to `OverlayCommandPalette`, `OverlayPopover` and `OverlayContextMenu` as a plain prop.
+  Each applies it as CSS `zoom` on the Radix content element, capped by the space Radix reports
+  available divided by the scale — the same shape as the library's own cap. The popover and command
+  palette combine that cap with a caller's own `maxWidth`/`maxHeight` via `min()` once zoomed, left
+  exactly as the caller supplied it when not; the context menu takes no caller size cap at all.
+  `OverlayHost` is deliberately the one place that depends on the content-zoom
+  service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
+  import of the service from there would publish it — including its test-only seams — to extension
+  authors. A command palette shown centred, with no anchor position, is not anchored to any pane's
+  content and stays at interface scale, as does a modal dialog.
 - **Alternatives:**
   - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment
     list (repeated at every site, easy to forget);
@@ -3911,8 +3928,17 @@ step, no automation. Just a record.
   - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
     (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
     when first opened from zoomed content;
-  - a pop-up portaled into a container inside another area inherits that container's zoom.
-- **Source:** PT-4634.
+  - a pop-up portaled into a container inside another area inherits that container's zoom;
+  - a command palette blocks the window's input while open, so the pane it was drawn for cannot
+    change underneath it; a popover and a context menu do not block input, so a zoom chord pressed
+    while one is open re-scales the pane behind it and the overlay keeps the level it was drawn at
+    until it closes — accepted, not a bug to be fixed later;
+  - PT-4713 (design approved 2026-09-18, planned as separate `scripture-editors` and
+    paranext-core PRs) is a third mechanism this decision does not reach: the Scripture editor's
+    right-click context menu is drawn by the editor library's own `ContextMenuPlugin`, portalled
+    outside `papi.overlays` entirely, so nothing here fixes it.
+- **Source:** PT-4634; the outside-the-web-view extension (`papi.overlays` command palette,
+  popover, context menu) by PT-4712.
 
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
