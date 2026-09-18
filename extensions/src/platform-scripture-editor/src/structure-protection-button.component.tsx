@@ -1,19 +1,14 @@
 import { ReactNode, Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
-  ButtonGroup,
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
   isMacOs,
-  isWindows,
   Kbd,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { Lock, LockOpen, Shield, ShieldOff } from 'lucide-react';
+import { Lock, LockOpen } from 'lucide-react';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
 const LOCK_STRUCTURE_KEY = '%webView_platformScriptureEditor_structureProtection_lockStructure%';
@@ -21,20 +16,9 @@ const UNLOCK_STRUCTURE_KEY =
   '%webView_platformScriptureEditor_structureProtection_unlockStructure%';
 const LOCKED_BY_ADMIN_KEY = '%webView_platformScriptureEditor_structureProtection_lockedByAdmin%';
 const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_structureProtection_ariaLabel%';
-const LOCK_STRUCTURE_FOR_PROJECT_KEY =
-  '%webView_platformScriptureEditor_structureProtection_lockStructureForProject%';
-const UNLOCK_STRUCTURE_FOR_PROJECT_KEY =
-  '%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%';
-const PROJECT_ARIA_LABEL_KEY =
-  '%webView_platformScriptureEditor_structureProtection_projectAriaLabel%';
 const ERROR_LOADING_KEY = '%webView_platformScriptureEditor_structureProtection_errorLoading%';
 const STATE_EDITABLE_KEY = '%webView_platformScriptureEditor_structureProtection_stateEditable%';
 const STATE_PROTECTED_KEY = '%webView_platformScriptureEditor_structureProtection_stateProtected%';
-const TEAM_STATE_UNLOCKED_KEY =
-  '%webView_platformScriptureEditor_structureProtection_teamStateUnlocked%';
-const TEAM_STATE_LOCKED_KEY =
-  '%webView_platformScriptureEditor_structureProtection_teamStateLocked%';
-const AFFECTS_TEAM_KEY = '%webView_platformScriptureEditor_structureProtection_affectsTeam%';
 
 /**
  * Localization keys used by {@link StructureProtectionButton}. Spread these into the editor
@@ -43,17 +27,11 @@ const AFFECTS_TEAM_KEY = '%webView_platformScriptureEditor_structureProtection_a
 export const STRUCTURE_PROTECTION_BUTTON_STRING_KEYS = Object.freeze([
   LOCK_STRUCTURE_KEY,
   UNLOCK_STRUCTURE_KEY,
-  LOCK_STRUCTURE_FOR_PROJECT_KEY,
-  UNLOCK_STRUCTURE_FOR_PROJECT_KEY,
   LOCKED_BY_ADMIN_KEY,
   ARIA_LABEL_KEY,
-  PROJECT_ARIA_LABEL_KEY,
   ERROR_LOADING_KEY,
   STATE_EDITABLE_KEY,
   STATE_PROTECTED_KEY,
-  TEAM_STATE_UNLOCKED_KEY,
-  TEAM_STATE_LOCKED_KEY,
-  AFFECTS_TEAM_KEY,
 ] as const);
 
 export type StructureProtectionStringKey = (typeof STRUCTURE_PROTECTION_BUTTON_STRING_KEYS)[number];
@@ -66,6 +44,13 @@ const localize = (
   strings: StructureProtectionButtonLocalizedStrings,
   key: StructureProtectionStringKey,
 ) => strings[key] ?? key;
+
+/**
+ * How long a tooltip opened by a state change (rather than by hovering) stays up before dismissing
+ * itself. Long enough to read a short state sentence plus its shortcut hint, short enough that a
+ * tooltip nobody is pointing at does not outstay the change it is reporting.
+ */
+const AUTO_OPEN_TOOLTIP_DURATION_MS = 3000;
 
 /** A keyboard shortcut: a predicate over keydown events plus the OS-appropriate display hint. */
 export type ShortcutSpec = {
@@ -100,7 +85,7 @@ export type LockToggleButtonViewProps = {
   localizedStrings?: StructureProtectionButtonLocalizedStrings;
   /** CSS class name for the button. */
   className?: string;
-  /** Forwarded to the underlying button, so a popover can anchor to it. */
+  /** Forwarded to the underlying button. */
   ref?: Ref<HTMLButtonElement>;
 };
 
@@ -137,7 +122,7 @@ export function LockToggleButtonView({
 
   // Auto-open the tooltip whenever the visible state changes, so the change is never silent.
   // Radix closes it again on click-away and Escape via onOpenChange; scroll dismissal is handled by
-  // the effect below.
+  // the effect below, and the auto-dismiss timer covers the case where none of those ever fire.
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const prevDisplayState = useRef(displayState);
   useEffect(() => {
@@ -146,6 +131,17 @@ export function LockToggleButtonView({
       setTooltipOpen(true);
     }
   }, [displayState]);
+
+  // The effect above opens the tooltip without a hover, so there may be no pointer on the button
+  // and no focus in it — and then NONE of Radix's dismissal paths can fire: no pointerleave, no
+  // blur, and (while a modal covers this web view's iframe) no click-away or Escape either, since
+  // the iframe stops receiving input entirely. Without this timer such a tooltip stays on screen
+  // indefinitely, over whatever opened the modal. Hovering re-opens it, so it stays reachable.
+  useEffect(() => {
+    if (!tooltipOpen) return undefined;
+    const timeoutId = setTimeout(() => setTooltipOpen(false), AUTO_OPEN_TOOLTIP_DURATION_MS);
+    return () => clearTimeout(timeoutId);
+  }, [tooltipOpen]);
 
   // Close the tooltip on scroll. Radix closes the controlled tooltip on click-away and Escape, but
   // not on scroll, and this button sits in the toolbar while content scrolls in a separate
@@ -211,16 +207,15 @@ export type StructureProtectionButtonProps = {
   projectId: string | undefined;
   /** Localized strings for the tooltips and aria-labels. Falls back to the key if not provided. */
   localizedStrings?: StructureProtectionButtonLocalizedStrings;
-  /** CSS class name applied to each button. */
+  /** CSS class name for the button. */
   className?: string;
 };
 
 /**
- * Structure-protection controls shown in the editor tab header. Renders a personal lock button
- * (toggles the user's own preference, Ctrl/Cmd+Shift+L) for all users, plus an admin-only project
- * lock button to its right (toggles the team-wide setting, Ctrl/Cmd+Alt+Shift+L) when the user can
- * write project settings. The two are independent. The personal button is disabled with a "locked
- * by admin" tooltip for non-admins when the admin has locked the project.
+ * Personal structure-protection control shown in the editor tab header: toggles the user's own
+ * preference (Ctrl/Cmd+Shift+L). Disabled with a "locked by admin" tooltip for non-admins when the
+ * admin has locked the project for the whole team — that team-wide lock is set from the Team layout
+ * dialog, not from here.
  */
 export function StructureProtectionButton({
   projectId,
@@ -233,18 +228,14 @@ export function StructureProtectionButton({
     adminSettingError,
     canAdminToggle,
     isProtectionActive,
-    setAdminProtection,
     setUserProtection,
   } = useStructureProtectionState(projectId);
 
   // OS-appropriate shortcut symbols.
   const isMac = isMacOs();
-  // Windows orders modifiers Ctrl, Shift, Alt; Linux/GNOME orders them Ctrl, Alt, Shift. This only
-  // affects the project shortcut, which is the one combo with both Shift and Alt.
-  const isWin = isWindows();
 
   // When the admin (project-level) setting failed to load, the protection values fall back to
-  // treating the admin layer as unset, so we can't trust them. Disable both toggles and surface the
+  // treating the admin layer as unset, so we can't trust them. Disable the toggle and surface the
   // error via the tooltip rather than letting the user act on a possibly-wrong state.
   const hasAdminError = adminSettingError !== undefined;
 
@@ -256,18 +247,7 @@ export function StructureProtectionButton({
     setUserProtection(!isStructureProtected);
   }, [personalDisabled, isStructureProtected, setUserProtection]);
 
-  const [isAdminPopoverOpen, setIsAdminPopoverOpen] = useState(false);
-
-  const handleProjectToggle = useCallback(() => {
-    setIsAdminPopoverOpen((isOpen) => !isOpen);
-  }, []);
-
-  const handleApplyAdminProtection = useCallback(() => {
-    setAdminProtection(!isProtectedByAdmin);
-    setIsAdminPopoverOpen(false);
-  }, [isProtectedByAdmin, setAdminProtection]);
-
-  // `!event.altKey` keeps the personal shortcut distinct from the admin combo below.
+  // `!event.altKey` so a stray Alt does not fire the personal toggle.
   const personalShortcut = useMemo<ShortcutSpec>(
     () => ({
       matches: (event) =>
@@ -280,74 +260,23 @@ export function StructureProtectionButton({
     [isMac],
   );
 
-  const projectShortcut = useMemo<ShortcutSpec>(() => {
-    let hint = 'Ctrl+Alt+Shift+L'; // Linux/GNOME modifier order
-    if (isMac) hint = '⌥⇧⌘L';
-    else if (isWin) hint = 'Ctrl+Shift+Alt+L'; // Windows modifier order
-    return {
-      matches: (event) =>
-        (event.ctrlKey || event.metaKey) &&
-        event.shiftKey &&
-        event.altKey &&
-        event.key.toLowerCase() === 'l',
-      hint,
-    };
-  }, [isMac, isWin]);
-
   // The structure-protection feature applies in simple mode only; render nothing when inactive.
   if (!isProtectionActive) return undefined;
 
   return (
-    <ButtonGroup>
-      <LockToggleButtonView
-        isLocked={isStructureProtected}
-        isDisabled={personalDisabled}
-        onToggle={handlePersonalToggle}
-        lockedIcon={<Lock />}
-        unlockedIcon={<LockOpen />}
-        unlockedTooltipKey={STATE_EDITABLE_KEY}
-        lockedTooltipKey={STATE_PROTECTED_KEY}
-        disabledTooltipKey={personalDisabledTooltipKey}
-        ariaLabelKey={ARIA_LABEL_KEY}
-        shortcut={personalShortcut}
-        localizedStrings={localizedStrings}
-        className={className}
-      />
-      {canAdminToggle && (
-        <Popover open={isAdminPopoverOpen} onOpenChange={setIsAdminPopoverOpen}>
-          {/* Anchored to the button itself rather than wrapping it: ButtonGroup styles its direct
-              children, so an extra wrapper element would break the merged-border seam. */}
-          <PopoverAnchor asChild>
-            <LockToggleButtonView
-              isLocked={isProtectedByAdmin}
-              isDisabled={hasAdminError}
-              onToggle={handleProjectToggle}
-              lockedIcon={<Shield />}
-              unlockedIcon={<ShieldOff />}
-              unlockedTooltipKey={TEAM_STATE_UNLOCKED_KEY}
-              lockedTooltipKey={TEAM_STATE_LOCKED_KEY}
-              disabledTooltipKey={ERROR_LOADING_KEY}
-              ariaLabelKey={PROJECT_ARIA_LABEL_KEY}
-              shortcut={projectShortcut}
-              localizedStrings={localizedStrings}
-              className={className}
-            />
-          </PopoverAnchor>
-          <PopoverContent className="tw:flex tw:w-auto tw:flex-col tw:gap-2 tw:p-3">
-            <Button variant="outline" size="sm" onClick={handleApplyAdminProtection}>
-              {localize(
-                localizedStrings,
-                isProtectedByAdmin
-                  ? UNLOCK_STRUCTURE_FOR_PROJECT_KEY
-                  : LOCK_STRUCTURE_FOR_PROJECT_KEY,
-              )}
-            </Button>
-            <span className="tw:text-xs tw:text-muted-foreground">
-              {localize(localizedStrings, AFFECTS_TEAM_KEY)}
-            </span>
-          </PopoverContent>
-        </Popover>
-      )}
-    </ButtonGroup>
+    <LockToggleButtonView
+      isLocked={isStructureProtected}
+      isDisabled={personalDisabled}
+      onToggle={handlePersonalToggle}
+      lockedIcon={<Lock />}
+      unlockedIcon={<LockOpen />}
+      unlockedTooltipKey={STATE_EDITABLE_KEY}
+      lockedTooltipKey={STATE_PROTECTED_KEY}
+      disabledTooltipKey={personalDisabledTooltipKey}
+      ariaLabelKey={ARIA_LABEL_KEY}
+      shortcut={personalShortcut}
+      localizedStrings={localizedStrings}
+      className={className}
+    />
   );
 }

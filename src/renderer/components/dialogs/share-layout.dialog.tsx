@@ -6,7 +6,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { isPlatformError } from 'platform-bible-utils';
-import { Spinner, usePromise, useRetryablePromise } from 'platform-bible-react';
+import { usePromise, useRetryablePromise } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
@@ -17,6 +17,7 @@ import {
 } from '@renderer/components/dialogs/dialog-definition.model';
 import {
   ShareLayoutDialogContent,
+  ShareLayoutDialogSkeleton,
   ShareLayoutResult,
   SHARE_LAYOUT_DIALOG_STRING_KEYS,
   isShareLayoutActiveTab,
@@ -96,6 +97,18 @@ function ShareLayoutDialogWrapper({
     useProjectSetting(projectId, 'platformScripture.modelTexts', EMPTY_RESOURCE_LIST);
   const [projectActiveTabSetting, setProjectActiveTab, , isProjectActiveTabLoading] =
     useProjectSetting(projectId, 'platformScripture.sharedLayoutDefaultTab', '');
+  const [
+    projectStructureProtectedSetting,
+    setProjectStructureProtected,
+    ,
+    isProjectStructureProtectedLoading,
+  ] = useProjectSetting(projectId, 'platformScripture.structureProtected', false);
+
+  // Headed by the project this layout is for. Shortname-first with the full name after it, the
+  // format `ProjectSelector` uses for the same pair, and the full name is dropped when it would
+  // only repeat the short one.
+  const [projectShortNameSetting] = useProjectSetting(projectId, 'platform.name', '');
+  const [projectFullNameSetting] = useProjectSetting(projectId, 'platform.fullName', '');
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -138,6 +151,19 @@ function ShareLayoutDialogWrapper({
   const projectActiveTab = isPlatformError(projectActiveTabSetting)
     ? undefined
     : projectActiveTabSetting;
+  // A failed read falls back to "not locked", matching `useStructureProtectionState`'s own fallback
+  // for this setting. The dialog is still usable for everything else it edits.
+  const isStructureProtectedForTeam = isPlatformError(projectStructureProtectedSetting)
+    ? false
+    : projectStructureProtectedSetting;
+
+  const projectName = useMemo(() => {
+    const shortName = isPlatformError(projectShortNameSetting) ? '' : projectShortNameSetting;
+    const fullName = isPlatformError(projectFullNameSetting) ? '' : projectFullNameSetting;
+    if (!shortName) return fullName || undefined;
+    if (!fullName || fullName === shortName) return shortName;
+    return `${shortName} - ${fullName}`;
+  }, [projectShortNameSetting, projectFullNameSetting]);
 
   const seededItems = useMemo(
     () => seedResourceList(projectResources, personalResources),
@@ -184,6 +210,7 @@ function ShareLayoutDialogWrapper({
         items: result.modelText ? [result.modelText] : [],
       });
       setProjectActiveTab?.(result.activeTab ?? '');
+      setProjectStructureProtected?.(result.isStructureProtectedForTeam);
       submitDialog(true);
     },
     [
@@ -193,6 +220,7 @@ function ShareLayoutDialogWrapper({
       setProjectResources,
       setProjectModelTexts,
       setProjectActiveTab,
+      setProjectStructureProtected,
       submitDialog,
     ],
   );
@@ -203,12 +231,13 @@ function ShareLayoutDialogWrapper({
   // forbids an early return between hook calls), so it sits just before the render branch — and
   // ahead of every other branch, so a user who may not write here is never handed a control that
   // acts on the project.
-  if (isCanWriteLoading) {
-    return (
-      <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-        <Spinner />
-      </div>
-    );
+  // `undefined` is "not decided yet", NOT "denied": `usePromise` reports `isLoading: false` on its
+  // first renders, before its effect has even started the call. Gating on `isCanWriteLoading` alone
+  // therefore falls through to the render-nothing branch below for the whole permission round-trip,
+  // collapsing the modal to a sliver showing only its close button. Only an explicit `false`
+  // denies.
+  if (isCanWriteLoading || canWrite === undefined) {
+    return <ShareLayoutDialogSkeleton localizedStrings={localizedStrings} />;
   }
 
   if (canWrite !== true) {
@@ -229,7 +258,12 @@ function ShareLayoutDialogWrapper({
   //   genuinely empty shared list, so mounting early seeds `[]` and a Confirm erases the list;
   // - the personal lists are `undefined` in flight, and `seedResourceList` falls back to them, so
   //   mounting between the two arriving can share the personal selection to the whole team;
-  // - the catalog is what `splitResourcesByTab` classifies saved dblResource references with.
+  // - the catalog is what `splitResourcesByTab` classifies saved dblResource references with;
+  // - the team structure lock resolves to `false` while loading, indistinguishable from a project
+  //   that is genuinely unlocked, so mounting early and confirming would unlock it for everyone.
+  //
+  // The project name is deliberately NOT gated on: it is rendered straight from the setting rather
+  // than snapshotted, so a late arrival just fills the heading in.
   //
   // The window is the normal case rather than a narrow race: mounting needs only `canWrite` (one
   // method round-trip), while a project setting needs a second PDP plus a subscribe plus its first
@@ -239,14 +273,11 @@ function ShareLayoutDialogWrapper({
     isProjectResourcesLoading ||
     isProjectModelTextsLoading ||
     isProjectActiveTabLoading ||
+    isProjectStructureProtectedLoading ||
     isPersonalResourcesLoading ||
     isPersonalModelTextsLoading
   ) {
-    return (
-      <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-        <Spinner />
-      </div>
-    );
+    return <ShareLayoutDialogSkeleton localizedStrings={localizedStrings} />;
   }
 
   return (
@@ -255,6 +286,8 @@ function ShareLayoutDialogWrapper({
       initialActiveTab={seededActiveTab}
       initialScriptureResources={scriptureResources}
       initialCommentaryResources={commentaryResources}
+      initialIsStructureProtectedForTeam={isStructureProtectedForTeam}
+      projectName={projectName}
       allResources={allResources ?? []}
       // `!hasResourcesSettled` counts as loading, as it does in the other two picker hosts. The
       // mount gate above consumed only the FIRST settle; a refetch driven from inside the mounted
@@ -278,7 +311,11 @@ export const SHARE_LAYOUT_DIALOG: DialogDefinition<typeof SHARE_LAYOUT_DIALOG_TY
     ...DIALOG_BASE,
     tabType: SHARE_LAYOUT_DIALOG_TYPE,
     defaultTitle: '%shareLayoutDialog_teamLayout_title%',
-    initialSize: { width: 640, height: 720 },
+    // A cap, not a fixed width: the modal host applies this as `maxWidth` over a `w-full`
+    // DialogContent, so the dialog takes the available app width and stops here. Sized so each of
+    // the three equal columns clears ~400px — the third carries tabs, a resource list, a select and
+    // a wrapping hint, and below that it truncates resource names it should be showing in full.
+    initialSize: { width: 1240, height: 720 },
     Component: ShareLayoutDialogWrapper,
   },
 );

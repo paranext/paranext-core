@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useMemo, useState } from 'react';
-import { Lock, LockOpen, Shield, ShieldOff } from 'lucide-react';
-import { Button, Popover, PopoverAnchor, PopoverContent } from 'platform-bible-react';
+import { Lock, LockOpen } from 'lucide-react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
   LockToggleButtonView,
@@ -93,82 +92,4 @@ export const LockedByAdmin: Story = {
       localizedStrings={localizedStrings}
     />
   ),
-};
-
-const PROJECT_SHORTCUT: ShortcutSpec = {
-  matches: (event) =>
-    (event.ctrlKey || event.metaKey) &&
-    event.shiftKey &&
-    event.altKey &&
-    event.key.toLowerCase() === 'l',
-  hint: 'Ctrl+Alt+Shift+L',
-};
-
-/** Admin view: the personal lock button plus the team lock, which confirms through a popover. */
-function AdminButtonsHarness() {
-  const [personalLocked, setPersonalLocked] = useState(true);
-  const [projectLocked, setProjectLocked] = useState(false);
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-  return (
-    <div className="tw:flex tw:flex-row tw:items-center tw:gap-1">
-      <LockToggleButtonView
-        isLocked={personalLocked}
-        isDisabled={false}
-        onToggle={() => setPersonalLocked((previous) => !previous)}
-        lockedIcon={<Lock />}
-        unlockedIcon={<LockOpen />}
-        unlockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateEditable%"
-        lockedTooltipKey="%webView_platformScriptureEditor_structureProtection_stateProtected%"
-        ariaLabelKey="%webView_platformScriptureEditor_structureProtection_ariaLabel%"
-        shortcut={PERSONAL_SHORTCUT}
-        localizedStrings={localizedStrings}
-      />
-      <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-        <PopoverAnchor asChild>
-          <LockToggleButtonView
-            isLocked={projectLocked}
-            isDisabled={false}
-            onToggle={() => setIsPopoverOpen((previous) => !previous)}
-            lockedIcon={<Shield />}
-            unlockedIcon={<ShieldOff />}
-            unlockedTooltipKey="%webView_platformScriptureEditor_structureProtection_teamStateUnlocked%"
-            lockedTooltipKey="%webView_platformScriptureEditor_structureProtection_teamStateLocked%"
-            ariaLabelKey="%webView_platformScriptureEditor_structureProtection_projectAriaLabel%"
-            shortcut={PROJECT_SHORTCUT}
-            localizedStrings={localizedStrings}
-          />
-        </PopoverAnchor>
-        <PopoverContent className="tw:flex tw:w-auto tw:flex-col tw:gap-2 tw:p-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setProjectLocked((previous) => !previous);
-              setIsPopoverOpen(false);
-            }}
-          >
-            {
-              localizedStrings[
-                projectLocked
-                  ? '%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%'
-                  : '%webView_platformScriptureEditor_structureProtection_lockStructureForProject%'
-              ]
-            }
-          </Button>
-          <span className="tw:text-xs tw:text-muted-foreground">
-            {localizedStrings['%webView_platformScriptureEditor_structureProtection_affectsTeam%']}
-          </span>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
-/**
- * Admin sees both controls: the personal lock (Lock/LockOpen) toggles directly, while the team lock
- * (Shield/ShieldOff) opens a popover that names the single action available in the current state
- * and says it affects everyone — a team-wide change is confirmed, not applied on the first click.
- */
-export const AdminBothButtons: Story = {
-  render: () => <AdminButtonsHarness />,
 };

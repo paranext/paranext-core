@@ -10,8 +10,8 @@ import {
 
 const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_teamLayout_title%': 'Team layout',
-  '%shareLayoutDialog_description%':
-    "Review what you're about to share with your team before confirming.",
+  '%shareLayoutDialog_descriptionWithSync%':
+    "Review what you're about to share with your team before confirming. Saving stores your changes now — they reach your team after you sync, and appear for them on their next sync.",
   '%shareLayoutDialog_modelText_label%': 'Model text',
   '%shareLayoutDialog_modelText_none%': 'None selected',
   '%shareLayoutDialog_activeTab_label%': 'Default tab',
@@ -21,15 +21,21 @@ const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_activeTab_commentaryResource%': 'Commentaries',
   '%shareLayoutDialog_activeTab_comments%': 'Comments',
   '%shareLayoutDialog_activeTab_textCollection%': 'Text collection',
-  '%shareLayoutDialog_scriptureResources_label%': 'Project Bible texts',
-  '%shareLayoutDialog_commentaryResources_label%': 'Project commentaries',
   '%shareLayoutDialog_manageScriptureResources_label%': 'Manage',
   '%shareLayoutDialog_manageCommentaryResources_label%': 'Manage',
-  '%shareLayoutDialog_textCollectionResources_label%': 'Text collection resources',
+  '%shareLayoutDialog_textCollection_hint%':
+    'Text collection includes checked resources from all tabs ({count})',
+  '%shareLayoutDialog_teamLock_label%': 'Lock USFM paragraph markers for your team',
+  '%shareLayoutDialog_teamLock_yes%': 'Yes',
+  '%shareLayoutDialog_teamLock_no%': 'No',
+  '%shareLayoutDialog_resources_empty%':
+    'Add resources to choose which appear in the text collection.',
   '%shareLayoutDialog_shownByDefault_label%': 'Show {resourceName} by default',
   '%shareLayoutDialog_closePicker_label%': 'Close',
   '%shareLayoutDialog_cancel_label%': 'Cancel',
-  '%shareLayoutDialog_confirm_label%': 'Save',
+  '%shareLayoutDialog_saveForTeam_label%': 'Save layout for team',
+  '%shareLayoutDialog_saveForTeam_tooltip%':
+    'Saves now. Your team sees this layout after you sync, then on their next sync.',
   '%shareLayoutDialog_hiddenResources_loadError%':
     "{count} shared resources can't be shown because the list of available resources couldn't be loaded. They will be kept unchanged when you save.",
   '%shareLayoutDialog_hiddenResources_unavailable%':
@@ -147,6 +153,8 @@ const meta: Meta<typeof ShareLayoutDialogContent> = {
     initialActiveTab: 'ScriptureResource',
     initialScriptureResources: [ESV, NIV],
     initialCommentaryResources: [IVP],
+    initialIsStructureProtectedForTeam: false,
+    projectName: 'HNF - Hanif Bible',
     allResources: ALL_RESOURCES,
     isResourcesLoading: false,
     hasResourcesError: false,
@@ -172,6 +180,7 @@ type Story = StoryObj<typeof ShareLayoutDialogContent>;
 export const Default: Story = {};
 export const NoModelTextSelected: Story = { args: { initialModelText: undefined } };
 export const NoActiveTabSelected: Story = { args: { initialActiveTab: undefined } };
+/** Both resource panels are empty, so each explains what to add rather than heading a blank list. */
 export const NoResourcesYet: Story = {
   args: { initialScriptureResources: [], initialCommentaryResources: [] },
 };
@@ -205,3 +214,11 @@ export const ManyResourcesScrolling: Story = {
     allResources: [...MANY_SCRIPTURE_RESOURCES, ...ALL_RESOURCES],
   },
 };
+
+/** The team's USFM structure already locked, as an admin who set it earlier sees it. */
+export const StructureLockedForTeam: Story = {
+  args: { initialIsStructureProtectedForTeam: true },
+};
+
+/** No project name available yet — the middle column drops its heading rather than inventing one. */
+export const NoProjectName: Story = { args: { projectName: undefined } };
