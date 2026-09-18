@@ -154,7 +154,10 @@ let cachedMemory: MemoryRecord = {};
 /** Whether {@link cachedMemory} has been filled by at least one successful read of the setting. */
 let memoryLoaded = false;
 
-/** Which web view types are known to mark a zoom area, and which are known to mark none. */
+/**
+ * Which web view types are known to mark a zoom area. A type absent from the record is not known to
+ * mark none — it simply has no evidence yet.
+ */
 let cachedTypesWithAreas: TypesWithAreasRecord = {};
 let typesWithAreasLoaded = false;
 
@@ -440,7 +443,7 @@ export function resolveContentZoomArea(
  */
 export function getContentZoomScaleForWebView(webViewId: WebViewId): number {
   const area = resolveContentZoomArea(webViewId, undefined);
-  if (area === undefined) return parseIframeZoom(deps.getIframe(webViewId) ?? undefined);
+  if (area === undefined) return parseIframeZoom(deps.getIframe(webViewId));
   const own = effectiveOwnLevels(deps.getDefinition(webViewId));
   return own[area] ?? cachedDefault ?? DEFAULT_ZOOM_FACTOR;
 }
@@ -501,12 +504,12 @@ function forgetAreaState(webViewId: WebViewId): void {
 }
 
 /**
- * Records what a pane's outcome says about its web view TYPE, so the next pane of that type is
- * given the right treatment before its content loads. Only a pane the platform resolved an
+ * Records that a pane's outcome marked at least one zoom area, so the next pane of that web view
+ * TYPE is given the right treatment before its content loads. Only a pane the platform resolved an
  * expectation for is evidence: a pane that could never have reported (no scripts, no record read
  * yet) says nothing about its type.
  */
-function recordTypeMarksAreas(webViewId: WebViewId, marksAreas: boolean): void {
+function recordTypeMarksAreas(webViewId: WebViewId): void {
   if (!expectAreasByWebViewId.has(webViewId)) return;
   const webViewType = deps.getDefinition(webViewId)?.webViewType;
   if (!webViewType) return;
@@ -515,7 +518,7 @@ function recordTypeMarksAreas(webViewId: WebViewId, marksAreas: boolean): void {
   // type reporting within the same tick would otherwise both enqueue an identical write instead of
   // the second one seeing the first's already-landed value and correctly doing nothing.
   enqueueTypesWithAreasTransaction((record) =>
-    record[webViewType] === marksAreas ? undefined : { ...record, [webViewType]: marksAreas },
+    record[webViewType] === true ? undefined : { ...record, [webViewType]: true },
   );
 }
 
@@ -783,7 +786,7 @@ export function setContentZoomAreas(webViewId: WebViewId, areaIds: ContentZoomAr
     clearFallbackGrace(webViewId);
     // Checked before this pane's own expectation is settled below, so a pane whose expectation was
     // never resolved cannot satisfy its own evidence requirement by settling it right here.
-    recordTypeMarksAreas(webViewId, true);
+    recordTypeMarksAreas(webViewId);
     expectAreasByWebViewId.set(webViewId, true);
   } else startFallbackGrace(webViewId);
   if ((previous === undefined || previous.length === 0) && valid.length > 0)

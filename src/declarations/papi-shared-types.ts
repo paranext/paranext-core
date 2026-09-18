@@ -460,13 +460,15 @@ declare module 'papi-shared-types' {
      */
     'platform.webViewContentZoomMemory': { [key: string]: number };
     /**
-     * Which web view types mark at least one content-zoom area, keyed by web view type. Written by
-     * the platform the first time a pane of a type reports an area, and the first time a pane of a
-     * type settles without one; read when a pane opens, before its content loads, so the platform
-     * knows whether to scale the whole view at the Settings default or to wait for the areas the
-     * view is about to mark. Without it every newly opened pane would show at the wrong scale for a
-     * moment. Local to this machine, and self-correcting: a type that changes what it marks is
-     * re-recorded on its next open.
+     * Which web view types mark at least one content-zoom area, keyed by web view type. An absent
+     * key means the platform has no evidence yet that the type marks any area. Written by the
+     * platform the first time a pane of a type reports an area (the record only ever gains `true`
+     * entries; a type recorded `true` is never downgraded); read when a pane opens, before its
+     * content loads, so the platform knows whether to scale the whole view at the Settings default
+     * or to wait for the areas the view is about to mark. Without it every newly opened pane would
+     * show at the wrong scale for a moment. Local to this machine, and self-correcting in the
+     * `false`→`true` direction: a type that starts marking an area is re-recorded on its next
+     * open.
      *
      * A hidden setting rather than a main-process store, for the same reason as
      * `platform.webViewContentZoomMemory`. Deliberately separate from that key, which holds the
