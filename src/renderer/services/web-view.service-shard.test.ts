@@ -10,6 +10,7 @@ import type {
 } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import {
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
@@ -3366,6 +3367,50 @@ describe('content zoom wiring', () => {
     );
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('Content zoom active area report failed for wv-1'),
+    );
+  });
+});
+
+describe('a layout load that drops a web view', () => {
+  test('still emits its close event', async () => {
+    const TARGET_WEB_VIEW_ID = 'target-web-view';
+    let interfaceMode = 'simple';
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    settingsSubscribeMock.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, loadedLayouts, getCurrentWebViewId } = makeDockLayoutTrackingOneWebView(
+      layoutWithTab(TARGET_WEB_VIEW_ID),
+    );
+    module.registerDockLayout(dockLayout);
+    // Simple mode's initial load is a baked default, so the target tab lands under a freshly
+    // minted id rather than the `TARGET_WEB_VIEW_ID` literal - wait for that mint to land, then
+    // read back the live id the rest of this test operates on.
+    await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+    const mintedTargetWebViewId = getCurrentWebViewId();
+    if (!mintedTargetWebViewId) throw new Error('expected the target tab to receive a minted id');
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+
+    // The mode switch loads a persisted layout that never mentions the target's minted id, so the
+    // load drops it — the same shape a real Simple/Power switch takes.
+    interfaceMode = 'power';
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('other-tab') });
+    await interfaceModeCallback('power');
+
+    const closeEmitter = mocks.bufferedEmitters.get(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
+    if (!closeEmitter) throw new Error('close emitter was never created');
+    expect(closeEmitter.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webView: expect.objectContaining({ id: mintedTargetWebViewId }),
+      }),
     );
   });
 });
