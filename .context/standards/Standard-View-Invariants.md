@@ -171,6 +171,12 @@ path that fails to resolve (or an offset past the node it lands on) is a bug or 
 expected state. Keep those host-side checks as fail-safes, log them, and do not write code that
 compensates for an expected divergence — there isn't one.
 
+That holds across Standard view's space-run collapse too. A run the user types stays on screen while
+`getUsj()` carries one space (ratified in the editor repo's invariants, §4), and the editor's
+position model drops the run's extra spaces exactly where serialization does, from one shared
+definition. The editor's position functions therefore take its view options; pass the view the
+editor is running, never a default.
+
 **`ContentJsonPath` and `PropertyJsonPath` must be widened in lock-step across both repos.**
 `platform-bible-utils` (`src/scripture/usj-reader-writer.model.ts`) and the editor's
 `@eten-tech-foundation/scripture-utilities`

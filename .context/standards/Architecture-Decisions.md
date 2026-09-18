@@ -1445,7 +1445,11 @@ step, no automation. Just a record.
   or merge paragraphs. A USFM byte with no USJ representation (the `+` of a nested marker, the second
   `/` of `//`, an attribute's `|`, `=`, `"`, or the space between attributes) snaps LEFT to the
   nearest representable location, so a position anchored to one of those bytes round-trips lossily by
-  design.
+  design. The identity fast path is only sound because the logical content model every position
+  resolves through measures text exactly as serialization writes it — including Standard view's
+  space-run collapse, whose dropped spaces the model excludes by the same shared definition the
+  serializer collapses with. Collapse is view-dependent, so the whole position layer takes the
+  editor's view options explicitly.
 - **Alternatives:** **A PT9-style debounced settle** — rejected: the settle's caret exemption already
   exempts exactly the node being resolved, so debouncing buys nothing there; transient palette input
   is a declaration, not a pend, so there is nothing to debounce; and a mutating settle would push its
@@ -1455,7 +1459,13 @@ step, no automation. Just a record.
   now, so the relative (jsonPath + offset) API has to be supported regardless. **A live-coordinate API
   with host-side translation** — rejected: hosts such as `platform-scripture-editor.web-view.tsx`
   cannot see the live Lexical tree at all, only `getUsj()`'s settled snapshot, so they would have
-  nothing to translate against.
+  nothing to translate against. **For the space-run collapse specifically:** normalizing runs when a
+  document loads does nothing, because ParatextData's USFM→USX conversion already collapses them
+  (`UsfmToken.Tokenize` with `preserveWhitespace: false`), so every run in the editor was typed;
+  collapsing a typed run on the idle settle cannot close the gap either, because the idle clock
+  re-arms on every keystroke and the 700 ms debounced save fires before it, so positions a host
+  derives from a save can arrive while the run is still on screen; and a per-editor lookup of the
+  view in place of an explicit parameter was rejected as ambient state that lags a view change.
 - **Consequences:** Hosts never see live coordinates — `getSelection`, `onSelectionChange`, and every
   other public position are guaranteed settled, so `platform-scripture-editor.web-view.tsx`'s
   unresolvable-path and offset-past-length checks are a fail-safe against a bug or a race, never an
