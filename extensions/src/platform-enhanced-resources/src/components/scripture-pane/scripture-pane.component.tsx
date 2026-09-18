@@ -79,8 +79,6 @@ export type EnhancedScripturePaneProps = {
   filteredTokenSurface?: string;
   /** When true, every word-kind annotation gets a `marble-highlight` overlay (BHV-301). */
   highlightAllResearchTerms?: boolean;
-  /** Zoom factor applied to the rendered scripture (1.0 = 100%). */
-  scripturePaneZoom?: number;
   /** Loading state - shows a Skeleton placeholder. */
   isLoading?: boolean;
   /** Error message - when set, renders an Alert. Overrides loading/empty states. */
@@ -559,7 +557,6 @@ export function EnhancedScripturePane({
   filteredTokenId,
   filteredTokenSurface,
   highlightAllResearchTerms = false,
-  scripturePaneZoom = 1,
   isLoading = false,
   errorMessage,
   scrRef,
@@ -1211,14 +1208,11 @@ export function EnhancedScripturePane({
       data-testid="er-scripture-pane"
     >
       <div
-        className="tw:flex tw:h-auto tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto"
-        // Inline style is the appropriate primitive for a continuous numeric zoom factor that the
-        // user can drive from the View menu - Tailwind classes can't express arbitrary scales.
         // `overflow-auto` + `min-h-0` + `flex-1` is the same triple the platform-scripture-editor
         // uses on its scrolling region so the editor content scrolls vertically when it exceeds
         // the available pane height; without this the outer `overflow-hidden` simply clips long
         // chapters.
-        style={{ fontSize: `${scripturePaneZoom}rem` }}
+        className="tw:flex tw:h-auto tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto"
       >
         <Editorial
           ref={editorRef}
