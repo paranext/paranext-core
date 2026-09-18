@@ -145,6 +145,12 @@
   "%settings_platform_group1_label_alternative%": {
     "fallbackKey": "%settings_platform_group1_label%"
   },
+  "%settings_platform_zoomFactor_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-15",
+      "message": "UX renamed this setting to \"Interface scaling\" to distinguish it from the per-tab content zoom setting. The new key is %settings_platform_zoomFactor_label_2%."
+    }
+  },
   "%settings_sidebar_projectsComboBoxPlaceholder%": {
     "fallbackKey": "%Paratext.WindowMenu.ShareLayoutWithProjectsForm..ctor.&quot;Select project&quot;&quot;Select project&quot;%"
   },
