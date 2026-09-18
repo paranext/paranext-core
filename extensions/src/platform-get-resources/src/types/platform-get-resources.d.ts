@@ -144,6 +144,8 @@ declare module 'papi-shared-types' {
      * updating or removing a resource — and then re-read the catalog, or the read will return the
      * flags from before the change. Without it an updated resource keeps its "update available"
      * flag until the catalog is read a second time, because nothing else about the row changes.
+     *
+     * @experimental
      */
     'platformGetResources.refreshResourceFlags': () => Promise<void>;
 
