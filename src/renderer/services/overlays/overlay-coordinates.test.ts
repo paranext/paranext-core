@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import {
   translateCoordinates,
   getWebViewIframe,
-  getWebViewContentScale,
+  getWebViewIframeZoom,
   clampToViewport,
   isWebViewVisible,
   isPositionInViewport,
@@ -117,7 +117,7 @@ describe('overlay-coordinates', () => {
     });
   });
 
-  describe('getWebViewContentScale', () => {
+  describe('getWebViewIframeZoom', () => {
     let mockIframe: HTMLIFrameElement;
 
     beforeEach(() => {
@@ -132,20 +132,20 @@ describe('overlay-coordinates', () => {
 
     it('reports the iframe zoom when one is set', () => {
       mockIframe.style.zoom = '1.5';
-      expect(getWebViewContentScale('test-webview-1')).toBe(1.5);
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1.5);
     });
 
     it('reports 1 for an iframe with no zoom set', () => {
-      expect(getWebViewContentScale('test-webview-1')).toBe(1);
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1);
     });
 
     it('reports 1 for an iframe with an empty-string zoom', () => {
       mockIframe.style.zoom = '';
-      expect(getWebViewContentScale('test-webview-1')).toBe(1);
+      expect(getWebViewIframeZoom('test-webview-1')).toBe(1);
     });
 
     it('reports 1 for an unknown web view id', () => {
-      expect(getWebViewContentScale('non-existent')).toBe(1);
+      expect(getWebViewIframeZoom('non-existent')).toBe(1);
     });
   });
 
