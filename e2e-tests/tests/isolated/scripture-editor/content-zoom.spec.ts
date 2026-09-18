@@ -678,6 +678,62 @@ test.describe('scripture editor content zoom', () => {
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
     });
 
+    await test.step("the marker palette's arrow stays centred on its trigger at every zoom factor", async () => {
+      // Radix positions the palette's Arrow by writing a raw pixel offset onto its own wrapper,
+      // which is a descendant of PopoverContent. If that wrapper sits inside the zoomed subtree,
+      // the browser re-scales the offset on top of Radix's own (already zoom-aware) number, and the
+      // arrow drifts off its trigger — collapsing to the content's own left corner at 150 % and
+      // 200 % (see overlay-command-palette.component.tsx).
+      //
+      // "Yahweh" (verse 1, used above) sits close enough to the palette content's own left edge that
+      // a collapsed-to-zero offset reads the same as a correct one, so it cannot catch this defect.
+      // "that great city" (verse 2) sits far enough from that edge (about 118px at 100 %) to
+      // discriminate a real offset from a collapsed one — do not swap in a near-edge trigger here, or
+      // this check stops testing anything.
+      const mainInput = editorFrame.locator('.editor-input').first();
+      const text = mainInput.getByText('that great city', { exact: false }).first();
+      // Same ambiguity as the width-growth step above: the anchored branch puts
+      // `data-overlay-command-palette` on both its `PopoverContent` and the nested `Command`.
+      const palette = mainPage.locator(
+        '[data-slot="popover-content"][data-overlay-command-palette]',
+      );
+      // PopoverContent's only two children are the zoomed content div and the Arrow — see
+      // overlay-command-palette.component.tsx. Selecting "not a div" finds the Arrow's own wrapper
+      // (or the arrow element itself) without depending on Radix's exact internal tag name.
+      const arrow = palette.locator('> *:not(div)');
+
+      const widthTolerancePx = 2;
+      const factors = [1, 1.5, 2];
+      // Sequential: each level's palette must be opened, measured and closed before the next.
+      /* eslint-disable no-await-in-loop */
+      for (let i = 0; i < factors.length; i += 1) {
+        const factor = factors[i];
+        await zoomAreaTo(mainPage, editorFrame, editorId, 'main', factor);
+        await text.click();
+        const trigger = await scrollTriggerNearPaneTop(
+          editorFrame,
+          await readCaretBox(editorFrame),
+        );
+        await mainPage.keyboard.press('\\');
+        await expect(palette).toBeVisible();
+        await waitForPopupAnimations(palette);
+
+        const arrowBox = await boxOf(arrow);
+        const arrowCentreX = arrowBox.x + arrowBox.width / 2;
+        expect(
+          Math.abs(arrowCentreX - trigger.x),
+          `arrow centred on its trigger at ${factor * 100}%`,
+        ).toBeLessThanOrEqual(widthTolerancePx);
+
+        await mainPage.keyboard.press('Escape');
+        await expect(palette).toBeHidden();
+      }
+      /* eslint-enable no-await-in-loop */
+
+      // Back to the default so the next step starts from its own baseline.
+      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
+    });
+
     await test.step('the inline marker menu and the comment editor follow the text zoom', async () => {
       // The inline marker menu is the non-standard views' `\` menu (the standard view opens the
       // platform's command palette instead), and the markers view is read-only, so cycle
