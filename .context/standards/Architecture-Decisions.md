@@ -3818,17 +3818,23 @@ step, no automation. Just a record.
   the doubled value trips floating-ui's arrow clamp and collapses onto the content's own corner.
   Radix's own placement of the pop-up is unaffected, because the popper wrapper it positions sits
   outside the content element entirely. CSS `zoom` on a child still grows its parent's layout box,
-  so moving the zoom inward costs nothing: the pop-up scales exactly as before.
+  so the pop-up still scales with the pane.
 
-  Two things this shape depends on. `Popover.Content` must carry `width: 'auto'`, because the shared
-  `PopoverContent` has a fixed-width base class that the sizing styles used to override from the
-  outside; without it the pop-up silently stops growing. And any padding meant to scale with the
-  content belongs on the inner wrapper, not on `Popover.Content`, or it stays at interface scale
-  around zoomed text.
+  **The inner wrapper owns sizing, and it owns all of it.** The shared `PopoverContent` supplies a
+  fixed `tw:w-72` width, `tw:flex tw:flex-col tw:gap-2.5` layout and `tw:p-2.5` padding, and a
+  pop-up's content renderers return fragments — so their children were direct flex items of that
+  element. Moving the content inward moves it out of reach of every one of those, which is a
+  behaviour change at interface scale and not only when zoomed. So the wrapper must take over the
+  width, the flex layout and the padding together, with `width: 'auto'` and `tw:p-0` on
+  `Popover.Content` so the fixed class cannot reassert itself over the wrapper. Splitting them —
+  taking the padding inward and leaving the width and gap behind — silently resizes and respaces
+  the pop-up at every scale. Taking them inward also makes them scale with the content, which is
+  what following the pane's zoom means.
 
   Anything Radix positions with an inline pixel offset inside a zoomed element has this defect. At
   the time of writing the arrow is the only such element in the platform's own overlays: the context
   menu draws no arrow, and its sub-menu content portals out of the zoomed subtree.
+
   `OverlayHost` is deliberately the one place that depends on the content-zoom
   service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
   import of the service from there would publish it — including its test-only seams — to extension
