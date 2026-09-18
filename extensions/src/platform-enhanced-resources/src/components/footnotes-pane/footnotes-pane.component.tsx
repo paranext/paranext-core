@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  ContentZoomRoot,
   FootnoteList,
   ResizableHandle,
   ResizablePanel,
@@ -136,15 +137,17 @@ export function EnhancedResourceFootnotesPane({
           maxSize={Math.max(maxPercent, paneSizePercent)}
           className="tw:bg-sidebar tw:pl-2 tw:pt-2 tw:pb-0 tw:pr-0 tw:flex tw:flex-col tw:min-h-0"
         >
-          <FootnoteList
-            classNameForItems="scripture-font"
-            listId={footnoteListKey}
-            layout="horizontal"
-            footnotes={footnotes}
-            showMarkers={false}
-            selectedFootnote={selectedFootnote}
-            onFootnoteSelected={handleFootnoteSelected}
-          />
+          <ContentZoomRoot area="footnotes" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+            <FootnoteList
+              classNameForItems="scripture-font"
+              listId={footnoteListKey}
+              layout="horizontal"
+              footnotes={footnotes}
+              showMarkers={false}
+              selectedFootnote={selectedFootnote}
+              onFootnoteSelected={handleFootnoteSelected}
+            />
+          </ContentZoomRoot>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
