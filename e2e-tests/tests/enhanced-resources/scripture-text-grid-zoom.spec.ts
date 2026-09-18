@@ -218,8 +218,10 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     // therefore reliable in this environment (unlike jsdom which does not support `zoom`).
     const zoomedWrapper = firstCell.locator('[style*="zoom"]');
     await expect(zoomedWrapper).toBeVisible({ timeout: 5_000 });
-    // The factor after one "Zoom In" step is 1.1 (DEFAULT_ZOOM_FACTOR + ZOOM_STEP).
-    await expect(zoomedWrapper).toHaveAttribute('style', /zoom:\s*1\.1/);
+    // The factor after one "Zoom In" step is 1.1 (DEFAULT_ZOOM_FACTOR + ZOOM_STEP). The trailing
+    // `(?!\d)` matters: `toHaveAttribute` tests for a substring match, so without it the pattern
+    // would also accept `zoom: 1.15` or `zoom: 1.12`.
+    await expect(zoomedWrapper).toHaveAttribute('style', /zoom:\s*1\.1(?!\d)/);
 
     // The second resource must NOT have a zoom style — it is independent of the first.
     await expect(secondCell.locator('[style*="zoom"]')).toHaveCount(0);
@@ -318,11 +320,13 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
       const newResourceFactor = (await readZoomByResourceId(mainPage, webViewId))[resourceId];
 
       // The factor is interpolated into the pattern, so its decimal point is escaped — an
-      // unescaped `.` would match any character, letting e.g. `1x1` false-pass for `1.1`.
+      // unescaped `.` would match any character, letting e.g. `1x1` false-pass for `1.1`. The
+      // trailing `(?!\d)` closes the other end: `toHaveAttribute` tests for a substring match, so
+      // a pattern built for `1.2` would otherwise also accept `zoom: 1.25`.
       const escapedFactor = String(newResourceFactor).replace(/\./g, '\\.');
       await expect(firstCell.locator('[style*="zoom"]')).toHaveAttribute(
         'style',
-        new RegExp(`zoom:\\s*${escapedFactor}`),
+        new RegExp(`zoom:\\s*${escapedFactor}(?!\\d)`),
       );
       expect(await readFactor(frame, 'text-collection')).toBe(settingsDefault);
     });
