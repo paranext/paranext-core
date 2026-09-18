@@ -291,7 +291,11 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var installedProjectIds = DblResourcesDataProvider.InstalledProjectIdsByDblId();
 
-            Assert.That(installedProjectIds.ProjectIdsByDblId.Keys, Is.EquivalentTo(new[] { "97196133a859179b" }));
+            Assert.That(
+                installedProjectIds.ProjectIdsByDblId.Keys,
+                Is.EquivalentTo(new[] { "97196133a859179b" })
+            );
+            Assert.That(installedProjectIds.IsComplete, Is.True);
             Assert.That(
                 installedProjectIds.ProjectIdsByDblId["97196133a859179b"],
                 Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
@@ -401,7 +405,14 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
 
             var installedProjectIds = DblResourcesDataProvider.InstalledProjectIdsByDblId();
 
-            Assert.That(installedProjectIds.ProjectIdsByDblId.Keys, Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" }));
+            Assert.That(
+                installedProjectIds.ProjectIdsByDblId.Keys,
+                Is.EquivalentTo(new[] { "6c21e835eb8ca3b2" })
+            );
+            // The flag the whole "a skipped project no longer demotes a resource" behaviour hangs
+            // on. Without this the single `isComplete = false` in the catch could be deleted and
+            // the suite would stay green, because every consumer test constructs the record itself.
+            Assert.That(installedProjectIds.IsComplete, Is.False);
         }
     }
 }

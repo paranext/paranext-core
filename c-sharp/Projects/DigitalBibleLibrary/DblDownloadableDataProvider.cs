@@ -362,7 +362,32 @@ internal class DblResourcesDataProvider(
         // front end leaves a row absent from the map exactly as it is. What it cannot report while
         // offline is a removal, since a removed resource is simply absent.
         if (!_hasFetchedResources)
-            return Task.Run(() => InstalledProjectIdsByDblId().ProjectIdsByDblId);
+            return Task.Run(() =>
+            {
+                bool gateTaken = false;
+                try
+                {
+                    // Non-waiting, as in the branch below. The scan reads ScrTextCollection, which
+                    // install and uninstall mutate through RefreshScrTexts and DeleteProject, so it
+                    // is shared state this gate exists to guard. A contended gate costs this
+                    // refresh its answer, not its responsiveness: the empty map means "no answer"
+                    // and the front end keeps the flags it has.
+                    //
+                    // `_hasFetchedResources` is deliberately not re-checked under the lock. Unlike
+                    // the catalog branch this reads no `_resources`, so a catalog that arrived
+                    // while we waited makes the scan a narrower answer, not a wrong one.
+                    Monitor.TryEnter(_providerGate, ref gateTaken);
+                    if (!gateTaken)
+                        return [];
+
+                    return InstalledProjectIdsByDblId().ProjectIdsByDblId;
+                }
+                finally
+                {
+                    if (gateTaken)
+                        Monitor.Exit(_providerGate);
+                }
+            });
 
         return Task.Run(() =>
         {
@@ -456,32 +481,44 @@ internal class DblResourcesDataProvider(
     {
         Dictionary<string, string> installedProjectIds = [];
         var isComplete = true;
-        foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
+        try
         {
-            try
+            foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
             {
-                if (!scrText.IsResourceProject)
-                    continue;
-                var dblId = scrText.Settings.DBLId;
-                if (dblId != null)
-                    installedProjectIds.TryAdd(
-                        dblId.Id,
-                        scrText.Guid.ToString().ToUpperInvariant()
+                try
+                {
+                    if (!scrText.IsResourceProject)
+                        continue;
+                    var dblId = scrText.Settings.DBLId;
+                    if (dblId != null)
+                        installedProjectIds.TryAdd(
+                            dblId.Id,
+                            scrText.Guid.ToString().ToUpperInvariant()
+                        );
+                }
+                catch (Exception e)
+                {
+                    isComplete = false;
+                    // Both reads above touch project settings, which fault on a corrupt
+                    // Settings.xml. Skipping the project costs at most one row an accurate flag;
+                    // letting the exception escape would leave every row stale for the session.
+                    // The project is deliberately not named here: reading anything off it is what
+                    // just failed, so doing it again in the handler could throw out of the catch.
+                    Console.WriteLine(
+                        $"Could not read a project's DBL id while rechecking updates: {e}"
                     );
+                }
             }
-            catch (Exception e)
-            {
-                isComplete = false;
-                // Both reads above touch project settings, which fault on a corrupt Settings.xml.
-                // Skipping the project costs at most one row an accurate flag; letting the
-                // exception escape would fault the whole recheck and leave every row stale for the
-                // session — the outcome the per-entry guard in ProjectUpdateStatus also prevents.
-                // The project is deliberately not named here: reading anything off it is what
-                // just failed, so doing it again in the handler could throw out of the catch.
-                Console.WriteLine(
-                    $"Could not read a project's DBL id while rechecking updates: {e}"
-                );
-            }
+        }
+        catch (Exception e)
+        {
+            isComplete = false;
+            // The inner guard covers a project that has already been yielded; advancing the
+            // enumerator happens between iterations, outside it. A collection mutated mid-scan
+            // therefore faults here, and without this would fault the whole recompute. Reporting
+            // what was gathered and flagging the pass incomplete degrades it the same way a single
+            // unreadable project does — callers omit rather than assert for the uids not named.
+            Console.WriteLine($"Could not finish scanning projects for DBL ids: {e}");
         }
         return new InstalledResourceProjects(installedProjectIds, isComplete);
     }
