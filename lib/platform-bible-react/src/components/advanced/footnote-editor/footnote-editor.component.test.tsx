@@ -21,6 +21,7 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditorLocalizedStrings,
 } from './footnote-editor.types';
+import { editableView } from './footnote-editor.fixtures';
 
 // cmdk (Command/CommandInput, used by the inline MarkerMenu popover) instantiates a
 // ResizeObserver on mount and schedules scrollTo/scrollIntoView; jsdom ships none of these.
@@ -61,6 +62,7 @@ beforeAll(() => {
 const {
   mockEditorRefHolder,
   mockGetMarkerMenuItems,
+  mockRegisterOptions,
   mockRegisterOnUsjChange,
   mockRegisterOnStateChange,
 } = vi.hoisted(() => ({
@@ -71,6 +73,9 @@ const {
     current: {} as EditorRef,
   },
   mockGetMarkerMenuItems: vi.fn(),
+  // Records the `options` the stubbed `Editorial` was handed, so a test can assert what this
+  // component decided to pass down rather than what its caller supplied.
+  mockRegisterOptions: vi.fn(),
   // Records the `onUsjChange` the stubbed `Editorial` was handed, so a test can fire the editor
   // change the real editor would have: that is what evaluates note-type switchability, and so what
   // enables the note-type dropdown.
@@ -92,8 +97,13 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
     getMarkerMenuItems: mockGetMarkerMenuItems,
     Editorial: forwardRef<
       EditorRef,
-      { onUsjChange?: (usj: unknown) => void; onStateChange?: (state: unknown) => void }
-    >(({ onUsjChange, onStateChange }, ref) => {
+      {
+        options?: unknown;
+        onUsjChange?: (usj: unknown) => void;
+        onStateChange?: (state: unknown) => void;
+      }
+    >(({ options, onUsjChange, onStateChange }, ref) => {
+      mockRegisterOptions(options);
       mockRegisterOnUsjChange(onUsjChange);
       mockRegisterOnStateChange(onStateChange);
       useImperativeHandle(ref, () => mockEditorRefHolder.current);
@@ -278,6 +288,28 @@ describe('FootnoteEditor width lock', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('FootnoteEditor context-menu container', () => {
+  it('passes its own root as the context-menu container, not the caller one', () => {
+    const decoy = document.createElement('div');
+    document.body.append(decoy);
+
+    const { container } = renderFootnoteEditor({
+      view: editableView,
+      contextMenuContainer: () => decoy,
+    });
+
+    const ownRoot = container.querySelector('.footnote-editor');
+    expect(ownRoot).not.toBeNull();
+
+    // The stub records `options` as `unknown` (see the `vi.mock` factory above); this component
+    // always builds a real `EditorOptions` object to pass down, so narrowing it back here is safe.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const passedOptions = mockRegisterOptions.mock.calls.at(-1)?.[0] as EditorOptions;
+    expect(passedOptions.contextMenuContainer?.()).toBe(ownRoot);
+    expect(passedOptions.contextMenuContainer?.()).not.toBe(decoy);
   });
 });
 
