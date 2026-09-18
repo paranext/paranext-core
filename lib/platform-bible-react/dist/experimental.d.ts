@@ -308,9 +308,9 @@ export declare function buildSelectionGroupingStrings(strings: ProjectSelectorSt
  * not resolved yet render English rather than their own key text.
  *
  * `ariaLabel` is the one exception: an explicitly empty string is honored as a deliberate opt-out,
- * meaning "a labelling ancestor names this control, do not add a second accessible name". Whitespace
- * is not an opt-out and still falls back, since a whitespace-only label leaves the control with no
- * accessible name by accident rather than by intent.
+ * meaning "a labelling ancestor names this control, do not add a second accessible name".
+ * Whitespace is not an opt-out and still falls back, since a whitespace-only label leaves the
+ * control with no accessible name by accident rather than by intent.
  *
  * Grouping _labels_ (the radio items in the group-by menu) are NOT in this map — those live on the
  * {@link ProjectSelectorGrouping} objects the caller passes via `availableGroupings`, so custom

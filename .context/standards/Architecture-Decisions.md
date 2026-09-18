@@ -121,6 +121,56 @@ step, no automation. Just a record.
   what makes a window "primary" and on the crash-reload-budget decision in
   `renderer-crash-reload-budget.util.ts` for when a window counts as abandoned.
 
+## adr-active-editor-project-is-a-window-data-type: An unbound Column 3 panel is seeded once from the window's `ActiveEditorProjectId`, never from the scroll group
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** `adr-column-3-panels-are-told-their-project` settles how a panel's project *changes*:
+  the switch tells it. It left one question open: what a panel shows before it has been told
+  anything. Two panels arrive without a `projectId`: the Text Collection, merged in from the
+  default-layout supplement in both interface modes, and Find, seeded by the no-project Simple
+  layout. Both answered it by reading scroll group 0's **source** project (the 5th tuple member of
+  `useWebViewScrollGroupScrRef`). That field exists to tag which project's versification frame the
+  current reference's numbers are in. It moves for reasons unrelated to which project is active
+  (Back/Forward, a resource cell's own click, a Comments or Checks panel click). It also does not
+  move on a switch that lands on the same verse. And the grid followed it in place. In Power mode,
+  where both re-point paths are Simple-gated, the grid moved `projectId` in place on every
+  navigation. `useBufferedLayoutSetting` only re-arms on `onSharedLayoutApply`, which only fires in
+  Simple mode, so the admin-shared list would stay on the first project while the per-user list and
+  overlay moved on. As of 2026-09-18 that is shown by tests against the real hook, not yet seen end
+  to end in the app.
+- **Decision:** The window service publishes a read-only data type,
+  `WindowDataTypes.ActiveEditorProjectId` (`@experimental`). It is the `projectId` of the web view
+  BCV navigation drives, which is `window.service-shard.ts`'s existing `navigationTargetWebView`. In
+  Simple mode that is the main editor. In Power mode it is the last-focused Scripture-navigable web
+  view, falling back to the first open editor with a project. Each window's shard publishes it, and
+  the main-process router relays it under the generic name the same way it relays `Focus`. The
+  setter throws, like core's other read-only setters (`setAllThemes`). The Text Collection
+  (`useTextCollectionProjectId` → `resolveTextCollectionProjectId`) and Find use it **only to seed a
+  panel that has no project**: `explicit ?? alreadyShown ?? activeEditor`. After that the panel
+  keeps its project, and only an explicit `projectId` moves it, which in practice means the switch's
+  reload. Neither panel reads the scroll group's source project for identity at all.
+- **Alternatives:** **Follow `ActiveEditorProjectId` live.** Rejected: in Power mode that is the
+  same in-place change the buffered hook forbids, so the admin-shared list goes stale exactly as it
+  did with the scroll group. Making the hook reset on a `projectId` change would fix that, but it is
+  real work for a mode where the Text Collection is not used. **Re-stamp the scroll group's source
+  project on every switch** (`claimScrollGroupSourceProject`, tried on PR #2736 and never merged).
+  Rejected: every writer of the reference is another way for the value to drift, and each fix added
+  another one. It kept asking a versification field an identity question. **Give the grid a project
+  picker.** Deferred until Power mode needs the grid.
+- **Consequences:** In Power mode, a Text Collection opened from the default layout shows the first
+  project the window reports and **cannot be re-pointed**. Nothing there tells it, and it has no
+  picker. This is accepted because the Text Collection is not used in Power mode. The grid can no
+  longer change `projectId` in place, so `useBufferedLayoutSetting`'s "projectId changed in place"
+  tripwire cannot fire from it. `use-text-collection-project-id.hook.test.ts` composes the two
+  hooks to pin that. Find in Power mode is unaffected in practice: `openFind` only creates a Find
+  panel when it has a project, and Power mode restores its own saved layout, not the Simple
+  layout's seeded tab. So a Power-mode Find always carries an explicit `projectId`. A web view reads
+  its own window's value, because `papi.window.dataProviderName` is scoped to the window in a
+  renderer (`window.service.ts`). The generic-name router, which answers for whichever window holds
+  OS focus, only serves callers with no window, such as the extension host.
+- **Source:** PT-4238; PR #2736.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -627,8 +677,9 @@ step, no automation. Just a record.
   projects via `reloadWebView` and NOT safe for ones that change `projectId` in place, with a
   `logger.warn` tripwire for exactly that. (`projectId` *is* in
   `WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS` — the constraint is the absent service-side updater
-  and the hook's remount requirement, not the property list.) The scroll-group source project survives only as the fallback for a grid opened with
-  no explicit project, and its call-site name now says what it is.
+  and the hook's remount requirement, not the property list.) A grid opened with no explicit project
+  is seeded once from the window's `ActiveEditorProjectId`, never from the scroll group; see
+  `adr-active-editor-project-is-a-window-data-type`.
 - **Alternatives:** **Fix the inferred signal instead** — track the live Scripture editor's web view
   from inside the panel and follow that rather than the scroll group. Rejected: it re-derives, inside
   a web view, something the switch already knows and can simply hand over; and because Simple mode
@@ -1147,6 +1198,59 @@ step, no automation. Just a record.
   describes nothing. That keeps the cached flag meaning what the list renders it as: "the copy on
   disk is out of date".
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
+
+## adr-dbl-install-status-from-backend: The backend is the authority on which DBL resources are installed, and on which project id
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** The cache's read-path reconciliation matched a catalog row to a local project by its
+  `projectId`, falling back to `localProjectId.startsWith(dblEntryUid)`. That premise is false. A
+  resource project's id is unrelated to the DBL entry it was installed from — ParatextData records
+  the entry uid in the project's settings (`InstallableResource.ExistingScrText` matches on
+  `scr.Settings.DBLId`) — so the ids coincide for some resources and share nothing for others. TNCV
+  is the second kind (entry `07ff1d5c6a53cb05`, project `9D60FD8F4A6E03BE…ABCDEFFF`, both observed
+  from a live install), and for it the inference could never succeed: Get Resources spun forever
+  after a successful install and still offered "Get" on reopen. The same false premise had reached
+  the C# post-install verification, which read a successful install as a failure and suppressed the
+  events that tell the rest of the app a project appeared.
+- **Decision:** Only the backend can answer, so it does. `recomputeDblResourcesInstallStatus`
+  returns the local project id per DBL entry uid (empty string for not-installed), and
+  `reconcileCachedResources` takes that map in place of the local project list. It is a sibling of
+  `recomputeDblResourcesUpdateStatus` from `adr-dbl-cache-recompute-on-read` in every respect —
+  same no-network rule, same non-waiting gate, same "an empty map means no answer, keep what you
+  have" contract — and the two share one `InstalledProjectIdsByDblId()` pass over the project
+  collection, which also feeds the catalog projection. Post-install success is decided by asking
+  disk through `InstallableResource.ExistingScrText`, the same link `InstalledProjectIdsByDblId`
+  reads, after an unconditional
+  `RefreshScrTexts()`; `Install()`'s `bool` is read only as a shortcut, because `true` is
+  definitive.
+- **Alternatives:** Keep inferring from a better heuristic — rejected; every heuristic here is
+  guessing at a link only the project's settings record. Add a second pull command for callers to
+  invoke after installing — rejected once `refreshResourceFlags` already existed; one refresh entry
+  point covers both flags. Verify the install with
+  `ScrTextCollection.IsPresent(InstalledScrText)` — rejected; `RefreshScrTexts()` can replace the
+  collection's entries, so the captured instance is absent after a perfectly good install, which is
+  the false failure this decision removes. Treat `Install()`'s `bool` as the verdict — rejected
+  after decompiling `InternalInstall`: its only `true` assignment is inside the loop over the
+  bundle's `*.font` entries, so a fontless bundle installs correctly and returns `false`. That loop
+  runs after validation and migration, so `true` is trustworthy and `false` is merely unknown,
+  which is how it is used. **No mechanism here detects a failed *update***: the previous revision
+  remains on disk and still resolves, so an update that achieved nothing reports success. That gap
+  predates this decision and is not closed by it. Deriving
+  `installed` from ParatextData's `Installed` property rather than from the project id — rejected
+  on "one flag, one expression" grounds; the two are provably equivalent in ParatextData 9.5.0.24
+  (`InstallAsDictionary` is never assigned and `ExistingDictionary` is `ldnull; ret`), so the
+  argument is that deriving one flag from two expressions invites drift, not that they disagree.
+- **Consequences:** The prefix convention survives only as a documented best-effort fallback in
+  `doesCatalogRowCoverProject`, behind an exact `projectId` match; the sites that stated it as fact
+  now say otherwise. `matchesDownloaded` and `resolveReferenced` both resolve a reference through
+  the catalog rather than by prefix, and through one shared index, so the picker cannot list a
+  resource twice — or drop it entirely, which is what two differing uid comparisons in one file
+  produced. The commentary marker-style lookup still matches by prefix and degrades to missing
+  styles; it was judged below the bar for its own work and is not reproduced. Folding the install lookup into the existing single
+  pass removed the per-row `ExistingScrText` scans from the catalog projection as well, so the
+  projection now costs one collection pass rather than one per catalogued row.
+- **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
@@ -3932,6 +4036,58 @@ step, no automation. Just a record.
 - **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
   architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
 
+## adr-range-scroll-owned-by-editor: The editor, not the requesting panel, owns bringing a Find/Checks/Comments jump target into view
+
+- **Date:** 2026-09-15
+- **Status:** Accepted
+- **Context:** Find, Checks, and the Comments list jump the Scripture editor to a result via
+  `selectRange`. Before this work, the scroll target was the match's VERSE — `scrollToVerse` — so a
+  match anywhere but the verse's first line could sit below the fold with nothing visibly indicating
+  where it was. Ownership of the follow-up scroll was also split the wrong way: the requesting panel
+  (e.g. Find's `search-result.component.tsx`) tried to do its own preview scroll and explicitly
+  recorded, in a comment, that a deferred catch-up for a HIDDEN editor tab "isn't implementable
+  here" — because a panel has no way to observe another web view's visibility via
+  `useViewVisibility`, which only ever sees the caller's own iframe.
+- **Decision:** The scroll target is the RANGE, not the verse: `computeRangeScrollTop`
+  (`editor-dom.util.ts`) leaves a range already fully inside the viewport untouched, otherwise lands
+  its first line `RANGE_SCROLL_TOP_OFFSET` (80px) below the top edge — capped to a quarter of the
+  viewport's own height, so a short pane (Power mode gives an editor little room) does not land the
+  match past its midpoint — and clamps to `[0, scrollHeight - clientHeight]` so a range at a
+  chapter's start or end still lands fully visible. Ownership of bringing the target into view moves
+  from the requesting panel to the EDITOR itself: `useScrollToRange` (`use-scroll-to-range.hook.ts`)
+  applies the selection immediately (data, so it works even while hidden) and defers only the scroll
+  until the editor's own tab is visible, running it `'instant'`ly to catch up a tab that was hidden
+  when the jump was requested and `'smooth'`ly otherwise. This directly reverses the "isn't
+  implementable here" call: the editor CAN observe its own visibility, so the deferred catch-up the
+  requesting panel could not build is implemented one layer down instead.
+  `consumeRangeScrollClaimFor` suppresses the ordinary verse-start scroll for a reference a range
+  jump owns, so the two scroll mechanisms never fight over the same reference; the two verse scrolls
+  that a jump can race — the reference-scroll effect and the first-load effect — consult it before
+  calling `scrollToVerse`. The blank-chapter scaffold effect's `scrollToVerse` does not: it fires
+  only for an insert that the user's own click in this editor triggered, which no cross-view jump
+  can be concurrent with.
+- **Alternatives:** **Keep the preview scroll in the requesting panel and give it cross-view
+  visibility** (e.g. a new PAPI capability to observe another web view's visibility) — rejected as
+  disproportionate: it would add a general-purpose capability for one caller's benefit, when the
+  editor already has its own visibility answer and is the natural owner of its own scroll geometry.
+  **Scroll to the verse but bias the offset toward the range** — rejected: a range taller than one
+  screen, or a match late in a long verse, still needs the range's own start measured, not an offset
+  guess from the verse marker. **Release `consumeRangeScrollClaimFor`'s claim as soon as the jump finishes**
+  — rejected: the verse scroll it stands down for runs on its own delay (`EDITOR_LOAD_DELAY_TIME`)
+  and can fire after a fast jump has already landed; releasing early would let it re-scroll to the
+  verse start on top of the just-finished range jump.
+- **Consequences:** `selectRange`'s cross-boundary contract changed: callers no longer need (or
+  should attempt) their own follow-up scroll or hidden-tab handling — the editor guarantees the
+  scroll happens once its tab is shown, however long that takes. `editorChapterKey` (stamped by
+  `setEditorUsj`, see `use-editor-pdp-sync.hook.ts`) gates the whole feature, so any future editor
+  code path that legitimately applies new chapter content must also call `setEditorUsj`, or a
+  pending range jump into that chapter never applies its selection: it waits out
+  `SCROLL_MAX_WAIT_MS`, logs a warning, and degrades to the verse-start scroll (or gives up if no
+  verse marker is found) — the imprecise landing this decision exists to prevent. Any future cross-view
+  jump into this editor (a new panel type) should route through `selectRange`/`useScrollToRange`
+  rather than re-deriving its own scroll, now that the editor is the established owner.
+- **Source:** PT-4541.
+
 ## adr-recent-searches-menu-semantics: RecentSearches is a menu, not a listbox
 
 - **Date:** 2026-08-31
@@ -4181,6 +4337,41 @@ step, no automation. Just a record.
   are marked on both surfaces regardless.
 - **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
   `pt-4275-commands-to-main`.
+
+## adr-renderer-service-composed-at-entry-point: A renderer service both window shards call is composed from the renderer entry point
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** The web-view content zoom service (`src/renderer/services/web-view-content-zoom.service.ts`)
+  is called from both of the renderer's window-scoped shards — the web-view shard bakes a pane's
+  initial levels into its head, binds the in-frame helpers and forwards the three zoom commands,
+  and the window shard supplies the focused tab — and it needs functions from both of them in
+  return: `getSavedWebViewDefinitionSync`, `updateWebViewDefinitionSync`,
+  `getAllOpenWebViewDefinitionsSync` and `onDidUpdateWebView` from the web-view shard, and
+  `getLastFocusedTabId` from the window shard. Importing either shard from the service closes an
+  import cycle: the web-view shard already imports the service directly, and the window shard
+  reaches it only through the web-view shard.
+- **Decision:** The service imports neither shard. It declares the functions it needs as a `deps`
+  object and exposes `initializeContentZoomService({ … })`; the renderer's composition root
+  (`src/renderer/index.tsx`) fills that object with each shard's own function before it starts the
+  web-view service shard, which is the first thing that can open a pane needing them. Until then the
+  production defaults are stubs that warn once and answer with nothing, so a call arriving early
+  degrades instead of throwing.
+- **Alternatives:** Suppress `import/no-cycle` on the direct import — rejected: it would be the only
+  such suppression in the repo, and the cycle is real at module-evaluation time, not a false
+  positive. Wire the service from inside one of the shards — rejected: whichever shard did it would
+  still have to import the other one's function, re-creating the cycle one hop further out. Move the
+  shard functions into a lower module both the service and the shards could import — rejected: the
+  functions are the shards' own per-window state (the dock layout, the focused tab), so the "lower"
+  module would be the shard with a different name.
+- **Consequences:** The composition root is the single place that knows both shards and the service,
+  which is where a reader looks for renderer startup order anyway. The same seam is the test seam:
+  `__setContentZoomDepsForTesting` replaces the identical object, so the service's tests need no
+  module mocking of either shard. The cost is that the service's own module can be loaded without
+  ever being composed — hence the warn-once stubs, and hence `initializeContentZoomService` merging
+  `shardDeps` on every call rather than only the first. Any future renderer service that both shards
+  need should take the same shape rather than reaching for a cycle suppression.
+- **Source:** PT-4576 (web-view content zoom, epic PT-4575); design §1 and §2.4.
 
 ## adr-renderer-websocket-suspend-disconnect: Diagnose the renderer's Chromium WebSocket as the PT-1641 suspend failure, instrument before reconnecting
 

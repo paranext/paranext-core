@@ -284,6 +284,22 @@ Apply these regardless of target language:
 - Not every string maps neatly to an "interactive control" (button/menu/command) or an "alert/message" — tooltips, status bar text, placeholder text, and progress labels are common ambiguous cases. Classify by function first: an ongoing process (e.g. "Saving…", "Loading…") reads differently from a completed/current state (e.g. "Saved", "Connected") or a static description (a control's purpose, a tooltip). Apply your language's convention for each case; when it's still unclear, default to the same tone as static interactive-control labels.
 - Placeholder text depends on what it's a placeholder for — it is not one category. A field expecting a specific value (e.g. a name or email field) is typically a noun phrase naming the expected content, with no verb at all. A field that suggests an action (e.g. a search box) should match the register/tone used for other interactive-control action labels in your language.
 
+### Terminology: the two zoom settings
+
+The application has two distinct zoom concepts, and calling either one plain "Zoom" in any
+language is what keeps getting them confused (they were, for a while, each other's names in
+English and Spanish). Agreed with UX on PT-4579:
+
+| Concept | Setting key | English | Spanish |
+|---|---|---|---|
+| Whole application, menus and toolbars included | `platform.zoomFactor` | Interface scaling | Escalado de la interfaz |
+| Per-pane default for tab content | `platform.webViewContentZoom` | Tab content default zoom | Zoom predeterminado del contenido de la pestaña |
+
+Use these names wherever either concept is referred to — labels, descriptions, menu items,
+tooltips, documentation — and never the bare word "Zoom" for either. The UI vocabulary page
+(`lib/platform-bible-react/src/stories/guidelines/terms.mdx`, `Pane`) carries the same rule for
+anyone writing UI copy.
+
 ### Revising an Existing Localization Decision
 
 If a later localizer disagrees with a documented style decision (here or in a per-language section below), see [Exception: Fixing Errors or Applying a Revised Style Rule](#exception-fixing-errors-or-applying-a-revised-style-rule) under Existing Strings Are Immutable for how to update it without breaking the immutability rule.
