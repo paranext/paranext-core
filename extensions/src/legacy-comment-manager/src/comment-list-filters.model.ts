@@ -3,10 +3,12 @@ import type {
   CommentPreset,
   CommentFilters,
   ScopeFilter,
+  LegacyCommentFilters,
+  LegacyScopeFilter,
 } from 'legacy-comment-manager';
 import type { LocalizeKey } from 'platform-bible-utils';
 
-export type { CommentPreset, CommentFilters, ScopeFilter };
+export type { CommentPreset, CommentFilters, ScopeFilter, LegacyCommentFilters, LegacyScopeFilter };
 
 // Filter constants, types, and the selector mapping — shared between the presentational panel (which
 // renders the filter toolbar) and the web view (which uses the values to build its comment-thread
@@ -53,6 +55,25 @@ export function isScopeFilter(value: string): value is ScopeFilter {
   return Object.hasOwn(scopeFilterToLabelKey, value);
 }
 
+/**
+ * Resolves a scope value arriving at any filter boundary (the `openCommentList` command's
+ * `scopeFilterToSet`, the web view's `initialScopeFilter` seed, or a `setFilters` message) onto a
+ * valid {@link ScopeFilter}. This is the one place all three boundaries route through, so the
+ * mapping/validation lives here rather than being repeated at each call site.
+ *
+ * Maps the deprecated {@link LegacyScopeFilter} `'unfiltered'` onto its exact replacement,
+ * `'all-books'` — both mean "no Scripture-range restriction". Anything else this build doesn't
+ * recognize — a scope from a newer build, or a malformed value crossing the command/message bus —
+ * resolves to the default rather than reaching `scopeFieldsUsed`, which throws on an unrecognized
+ * key.
+ */
+export function resolveScopeFilter(candidate?: ScopeFilter | LegacyScopeFilter): ScopeFilter {
+  if (candidate === 'unfiltered') return DEFAULT_SCOPE_FILTER;
+  return typeof candidate === 'string' && isScopeFilter(candidate)
+    ? candidate
+    : DEFAULT_SCOPE_FILTER;
+}
+
 /** The Scripture-range granularity each scope queries at; `all-books` queries no range at all. */
 const scopeToGranularity = {
   'current-book': 'book',
@@ -83,15 +104,108 @@ export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
 }
 
 /**
+ * True when neither filter axis is narrowing the view: the preset is at its default AND the scope
+ * covers every book. Shared by two readers that must never disagree:
+ *
+ * - The web view uses it to decide which comment-thread drafts are safe to prune (see
+ *   `useCommentDrafts`'s `isShowingAllCommentThreads` parameter). Only the complete, unfiltered
+ *   thread list can be trusted for pruning -- a narrowed preset or scope would otherwise make every
+ *   thread it merely hides look deleted, permanently discarding that thread's draft.
+ * - The panel uses the identical fact to choose the empty-state copy (an empty project vs. a filter
+ *   that matched nothing).
+ *
+ * Two independently written copies of this expression could drift; keeping one definition here
+ * means a change to either axis is reflected at both call sites at once.
+ */
+export function isShowingAllThreads({
+  filters,
+  scopeFilter,
+}: {
+  filters: CommentFilters;
+  scopeFilter: ScopeFilter;
+}): boolean {
+  return areCommentFiltersAtDefault(filters) && scopeFilter === DEFAULT_SCOPE_FILTER;
+}
+
+/**
+ * Legacy four-axis combinations that have an exact counterpart among the current presets, keyed by
+ * `${resolved}|${read}|${type}|${assignment}` with each axis defaulted to `'all'` when absent from
+ * the input. A combination not listed here — including any combination of active (non-`'all'`) axes
+ * that is a superset of one listed below, e.g. `resolved: 'unresolved'` together with `type:
+ * 'conflicts'` — has no matching preset; {@link presetFromLegacyAxes} falls back to `'all'` rather
+ * than guess which axis to drop to force a fit. See {@link LegacyCommentFilters}'s TSDoc for the
+ * same table with the reasoning per row.
+ */
+const LEGACY_AXES_TO_PRESET: Partial<Record<string, CommentPreset>> = {
+  'all|all|all|all': 'all',
+  'all|all|conflicts|all': 'conflict',
+  'unresolved|all|all|all': 'unresolved',
+  'all|unread|all|all': 'unread',
+  'unresolved|unread|all|all': 'unread-and-unresolved',
+  'resolved|all|all|all': 'resolved',
+  'unresolved|all|all|assigned-to-me': 'unresolved-assigned-to-me',
+  'all|unread|all|assigned-to-me': 'unread-assigned-to-me',
+};
+
+/**
+ * Maps a legacy four-axis filter selection onto the {@link CommentPreset} with matching meaning, via
+ * an exact match against {@link LEGACY_AXES_TO_PRESET}. A combination with no counterpart — e.g.
+ * `assignment: 'team'`/`'unassigned'` (dropped entirely by the new model), `type: 'comments'` (no
+ * preset excludes conflicts), or any combination of active axes not in the table — falls back to
+ * `'all'` rather than throw or guess.
+ */
+function presetFromLegacyAxes(legacy: LegacyCommentFilters): CommentPreset {
+  const key = [
+    legacy.resolved ?? 'all',
+    legacy.read ?? 'all',
+    legacy.type ?? 'all',
+    legacy.assignment ?? 'all',
+  ].join('|');
+  return LEGACY_AXES_TO_PRESET[key] ?? DEFAULT_COMMENT_FILTERS.preset;
+}
+
+/**
+ * Distinguishes the two shapes {@link applyFilterOverrides} accepts. A plain `in` check on the union
+ * would leave `Partial<CommentFilters>` in both branches after narrowing — every field on both
+ * shapes is optional, so TS can't prove `{}` couldn't be either — so this is written as an explicit
+ * type predicate to force the negative branch to `LegacyCommentFilters`.
+ */
+function isNewCommentFiltersShape(
+  overrides: Partial<CommentFilters> | LegacyCommentFilters,
+): overrides is Partial<CommentFilters> {
+  return 'preset' in overrides;
+}
+
+/**
  * Applies a partial filter override onto {@link DEFAULT_COMMENT_FILTERS}. An axis absent from
  * `overrides` is reset to its default rather than merged with a prior selection, so a programmatic
  * open shows exactly the requested view.
+ *
+ * This is the one place all three filter boundaries (the `openCommentList` command's
+ * `filtersToSet`, the web view's `initialFilters` seed, and a `setFilters` message) route through,
+ * so both kinds of untrusted input are handled here rather than repeated at each call site:
+ *
+ * - The deprecated {@link LegacyCommentFilters} four-axis shape (detected by the absence of a `preset`
+ *   key) is mapped onto its matching preset via {@link presetFromLegacyAxes}.
+ * - A `preset` this build doesn't recognize — from a newer build, or a malformed value crossing the
+ *   command/message bus — resolves to the default rather than reaching
+ *   {@link buildCommentThreadSelector}, whose exhaustiveness guard throws on an unhandled preset.
  */
-export function applyFilterOverrides(overrides?: Partial<CommentFilters>): CommentFilters {
-  // Built from the known axes rather than spread, so a present-but-nullish axis surviving the JSON
-  // bus resets to its default instead of leaking a null. A new axis is a compile error here, which
-  // is the intended safety net.
-  return { preset: overrides?.preset ?? DEFAULT_COMMENT_FILTERS.preset };
+export function applyFilterOverrides(
+  overrides?: Partial<CommentFilters> | LegacyCommentFilters,
+): CommentFilters {
+  if (!overrides) return { ...DEFAULT_COMMENT_FILTERS };
+
+  if (isNewCommentFiltersShape(overrides)) {
+    const { preset } = overrides;
+    const resolvedPreset =
+      typeof preset === 'string' && isCommentPreset(preset)
+        ? preset
+        : DEFAULT_COMMENT_FILTERS.preset;
+    return { preset: resolvedPreset };
+  }
+
+  return { preset: presetFromLegacyAxes(overrides) };
 }
 
 /**

@@ -17,19 +17,33 @@ function getStorageKey(projectId: string): string {
 }
 
 /**
+ * Whether a parsed value can stand in for a map of drafts.
+ *
+ * Only the container is checked, not the drafts themselves: this store round-trips whatever it was
+ * handed, and a draft written by another build is still that build's business. `typeof null` is
+ * `'object'`, so the truthiness check carries the null case; an array would otherwise pass and hand
+ * every caller numeric keys.
+ */
+function isDraftMap<T>(value: unknown): value is Readonly<Record<string, T>> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
  * Loads the persisted drafts for a project.
  *
  * @param projectId Id of the project whose drafts to load.
  * @returns The project's drafts, keyed by thread id. Returns an empty object when nothing has been
  *   saved, when storage is unavailable (`localStorage` throws outright in sandboxed contexts), or
- *   when the stored value is not valid JSON — a caller must be able to render with no drafts rather
- *   than crash.
+ *   when the stored value cannot be a map of drafts — a caller must be able to render with no
+ *   drafts rather than crash. That covers text which is not JSON at all and JSON which parses to
+ *   something other than an object, such as `null`, which every caller would otherwise iterate.
  */
 export function loadDrafts<T>(projectId: string): Readonly<Record<string, T>> {
   try {
     const stored = localStorage.getItem(getStorageKey(projectId));
     if (!stored) return {};
-    return JSON.parse(stored);
+    const parsed: unknown = JSON.parse(stored);
+    return isDraftMap<T>(parsed) ? parsed : {};
   } catch {
     // Storage may be unavailable, or a previous build may have written something this build
     // can't parse. Either way, drafts are best-effort: losing them must never block rendering.

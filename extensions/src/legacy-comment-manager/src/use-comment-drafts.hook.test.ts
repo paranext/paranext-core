@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { newPlatformError, type LegacyCommentThread } from 'platform-bible-utils';
 import type { CommentDraft } from 'platform-bible-react';
-import { saveDrafts } from './comment-draft-store';
+import { loadDrafts, saveDrafts } from './comment-draft-store';
 import { makeEditorState } from './comment-draft.fixtures';
 import { useCommentDrafts } from './use-comment-drafts.hook';
 
@@ -55,11 +55,12 @@ function renderCommentDrafts(initialOverrides: Partial<CommentDraftsProps> = {})
     isLoadingCommentThreads: false,
     isShowingAllCommentThreads: true,
   };
-  const { result, rerender } = renderHook((props) => useCommentDrafts(props), {
+  const { result, rerender, unmount } = renderHook((props) => useCommentDrafts(props), {
     initialProps: { ...defaultProps, ...initialOverrides },
   });
   return {
     result,
+    unmount,
     rerenderWith: (overrides: Partial<CommentDraftsProps>) =>
       rerender({ ...defaultProps, ...overrides }),
   };
@@ -122,6 +123,22 @@ describe('useCommentDrafts', () => {
     });
 
     expect(result.current.drafts).toEqual(seededDraft);
+  });
+
+  it('flushes a pending debounced save on unmount so it is not lost', () => {
+    // Writes are debounced 500ms; closing the panel mid-burst must not lose the last keystrokes.
+    // Unmounting well before the debounce would fire on its own means only the cleanup's
+    // `debouncedSaveDrafts.flush()` call can be responsible for this write reaching storage.
+    const { result, unmount } = renderCommentDrafts();
+
+    const lastKeystroke = makeEditorState('typed just before closing');
+    act(() => {
+      result.current.handleDraftChange(threadA.id, { editorState: lastKeystroke });
+    });
+
+    unmount();
+
+    expect(loadDrafts('project-1')).toEqual({ [threadA.id]: { editorState: lastKeystroke } });
   });
 
   it('prunes drafts when the project genuinely has no threads', () => {

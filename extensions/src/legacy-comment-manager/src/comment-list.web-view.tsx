@@ -29,17 +29,22 @@ import {
   serialize,
 } from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
-import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
+import type {
+  LegacyCommentFilters,
+  LegacyCommentThreadSelector,
+  LegacyScopeFilter,
+} from 'legacy-comment-manager';
 import { loadFilterSelection, saveFilterSelection } from './comment-filter-store';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
 import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
   applyFilterOverrides,
-  areCommentFiltersAtDefault,
   buildCommentThreadSelector,
   CommentFilters,
   DEFAULT_COMMENT_FILTERS,
   DEFAULT_SCOPE_FILTER,
+  isShowingAllThreads,
+  resolveScopeFilter,
   ScopeFilter,
   scopeFieldsUsed,
 } from './comment-list-filters.model';
@@ -184,14 +189,15 @@ global.webViewComponent = function CommentListWebView({
   // S/R conflict link). Read from web view state so a new view mounts already-filtered — avoiding the
   // race where a setFilters message could arrive before this view's message listener attaches. An
   // already-open (reused) view keeps its state and is updated via the setFilters message instead.
-  const [initialFilters, setInitialFilters] = useWebViewState<Partial<CommentFilters> | undefined>(
-    'initialFilters',
-    undefined,
-  );
-  const [initialScopeFilter, setInitialScopeFilter] = useWebViewState<ScopeFilter | undefined>(
-    'initialScopeFilter',
-    undefined,
-  );
+  // Also accepts the deprecated legacy shapes (LegacyCommentFilters, LegacyScopeFilter) for
+  // out-of-repo callers of openCommentList's filtersToSet/scopeFilterToSet — applyFilterOverrides and
+  // resolveScopeFilter below map both onto the current model.
+  const [initialFilters, setInitialFilters] = useWebViewState<
+    Partial<CommentFilters> | LegacyCommentFilters | undefined
+  >('initialFilters', undefined);
+  const [initialScopeFilter, setInitialScopeFilter] = useWebViewState<
+    ScopeFilter | LegacyScopeFilter | undefined
+  >('initialScopeFilter', undefined);
 
   // A brand-new view's requested override (e.g. the S/R conflict link), captured once on mount so
   // the filters/scopeFilter initializers below take it over this project's stored selection.
@@ -201,23 +207,29 @@ global.webViewComponent = function CommentListWebView({
     initialFilters !== undefined || initialScopeFilter !== undefined
       ? {
           filters: applyFilterOverrides(initialFilters),
-          scopeFilter: initialScopeFilter ?? DEFAULT_SCOPE_FILTER,
+          scopeFilter: resolveScopeFilter(initialScopeFilter),
         }
       : undefined,
   );
 
-  // Plain useState, seeded once from either the mount-time override above or this user's stored
-  // selection for this project — never from useWebViewState, since a filter selection is a
-  // per-user, per-project preference kept on this machine, not per-view UI state. Holding it in
-  // local state (rather than deriving it every render from storage) is what lets a `setFilters`
-  // message or a panel change show immediately, and what lets a `setFilters` message override the
-  // display without that override ever reaching the stored selection.
-  const [filters, setFilters] = useState<CommentFilters>(
-    () => initialOverrideRef.current?.filters ?? loadInitialSelection(projectId).filters,
-  );
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(
-    () => initialOverrideRef.current?.scopeFilter ?? loadInitialSelection(projectId).scopeFilter,
-  );
+  // Resolved exactly once, from either the mount-time override above or this project's stored
+  // selection — never both, and never a second time. Feeding a single snapshot to both `useState`
+  // initializers below (rather than each calling `loadInitialSelection` separately) guarantees the
+  // preset and the scope come from the same read of storage, and avoids a second redundant
+  // `localStorage` read + `JSON.parse` on every mount.
+  const initialSelectionRef = useRef<CurrentCommentListView | undefined>(undefined);
+  if (!initialSelectionRef.current) {
+    initialSelectionRef.current = initialOverrideRef.current ?? loadInitialSelection(projectId);
+  }
+  const initialSelection = initialSelectionRef.current;
+
+  // Plain useState, seeded once from `initialSelection` above — never from useWebViewState, since a
+  // filter selection is a per-user, per-project preference kept on this machine, not per-view UI
+  // state. Holding it in local state (rather than deriving it every render from storage) is what
+  // lets a `setFilters` message or a panel change show immediately, and what lets a `setFilters`
+  // message override the display without that override ever reaching the stored selection.
+  const [filters, setFilters] = useState<CommentFilters>(() => initialSelection.filters);
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(() => initialSelection.scopeFilter);
 
   /**
    * Latest applied filters/scope, readable from the stable message listener without re-subscribing
@@ -313,13 +325,13 @@ global.webViewComponent = function CommentListWebView({
 
   // Whether the current query is the complete, unfiltered thread list -- the only list pruning can
   // safely trust. A narrowed preset or scope would otherwise make every thread it excludes look
-  // deleted, discarding drafts a filter change is merely hiding rather than destroying. Computed
-  // here (not inside useCommentDrafts) because it's a general "no filtering is active" fact about
-  // THIS view's own filters/scopeFilter state -- the same expression already backs the empty-state
-  // copy in comment-list.component.tsx's `noFiltersActive` -- not something specific to drafts; see
-  // useCommentDrafts' `isShowingAllCommentThreads` parameter doc for the full reasoning.
-  const isShowingAllCommentThreads =
-    areCommentFiltersAtDefault(filters) && scopeFilter === 'all-books';
+  // deleted, discarding drafts a filter change is merely hiding rather than destroying. Computed via
+  // the shared `isShowingAllThreads` predicate (not inside useCommentDrafts) because it's a general
+  // "no filtering is active" fact about THIS view's own filters/scopeFilter state -- the same
+  // predicate backs the empty-state copy in comment-list.component.tsx's `noFiltersActive` -- not
+  // something specific to drafts; see useCommentDrafts' `isShowingAllCommentThreads` parameter doc
+  // for the full reasoning.
+  const isShowingAllCommentThreads = isShowingAllThreads({ filters, scopeFilter });
 
   const { drafts, handleDraftChange } = useCommentDrafts({
     projectId,

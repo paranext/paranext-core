@@ -8,10 +8,12 @@ import type {
   SerializedTextNode,
 } from 'lexical';
 import type { ComponentProps, ReactNode } from 'react';
+import { useState } from 'react';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
+import { TooltipProvider } from '@/components/shadcn-ui/tooltip';
 import { CommentThread } from './comment-thread.component';
-import { getCommentThreadElementId } from './comment-list.types';
+import { CommentDraft, getCommentThreadElementId } from './comment-list.types';
 
 // A non-empty editor state a test can hand to `onSerializedChange` to simulate typing, since the
 // mock Editor below never generates one itself. Typed the same way `comment-thread.component.tsx`
@@ -74,7 +76,10 @@ vi.mock('@/components/advanced/editor/editor', () => ({
           <button type="button" onClick={() => onSerializedChange?.(NON_EMPTY_EDITOR_STATE)}>
             {typeLabel}
           </button>
-          {actions}
+          {/* The real Editor wraps its actions slot in a TooltipProvider (see editor.tsx) — the
+              icon-only cancel/save/assign/submit buttons rely on that ancestor for their
+              tooltips, so the stub must provide it too. */}
+          <TooltipProvider>{actions}</TooltipProvider>
         </div>
       );
     },
@@ -446,37 +451,65 @@ describe('CommentThread draft control', () => {
   });
 });
 
+/**
+ * Opens the "Edit Comment" menu on the thread's root comment (the only comment in most fixtures
+ * here). Waits for the async edit/delete permission check to resolve, since the dropdown trigger
+ * doesn't render until `canEditOrDelete` does.
+ */
+async function startEditingFirstComment(
+  container: HTMLElement,
+  user: ReturnType<typeof userEvent.setup>,
+) {
+  const trigger = await waitFor(() => {
+    const el = container.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
+    if (!el) throw new Error('dropdown trigger not rendered yet');
+    return el;
+  });
+  await user.click(trigger);
+  await user.click(await screen.findByText('Edit Comment'));
+}
+
+/**
+ * A controlled consumer that actually behaves like one: it mirrors `CommentThread`'s reported draft
+ * back through its own state on every `onDraftChange` call, the way a real caller with durable
+ * draft storage does, while still forwarding each call to an optional spy for assertions. Once a
+ * consumer owns this state exclusively (by supplying `onDraftChange` at all), the component never
+ * renders anything but what it is given — a test driving multiple UI steps in sequence needs this
+ * round trip to see its own prior step reflected, the same as any real consumer would.
+ */
+function ControlledDraftThread({
+  onDraftChange,
+  ...props
+}: Partial<ComponentProps<typeof CommentThread>>) {
+  const [draftState, setDraftState] = useState<CommentDraft | undefined>(undefined);
+  return (
+    <CommentThread
+      {...baseThreadProps}
+      {...props}
+      draft={draftState}
+      onDraftChange={(threadId, next) => {
+        setDraftState(next);
+        onDraftChange?.(threadId, next);
+      }}
+    />
+  );
+}
+
 describe('CommentThread comment-edit drafts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  /**
-   * Opens the "Edit Comment" menu on the thread's root comment (the only comment in most fixtures
-   * here). Waits for the async edit/delete permission check to resolve, since the dropdown trigger
-   * doesn't render until `canEditOrDelete` does.
-   */
-  async function startEditingFirstComment(
-    container: HTMLElement,
-    user: ReturnType<typeof userEvent.setup>,
-  ) {
-    const trigger = await waitFor(() => {
-      const el = container.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]');
-      if (!el) throw new Error('dropdown trigger not rendered yet');
-      return el;
-    });
-    await user.click(trigger);
-    await user.click(await screen.findByText('Edit Comment'));
-  }
-
   it('reports an unsent reply and a comment edit independently, without either clobbering the other', async () => {
     const onDraftChange = vi.fn();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const { container } = renderThread({
-      isSelected: true,
-      onDraftChange,
-      canUserEditOrDeleteCommentCallback: async () => true,
-    });
+    const { container } = render(
+      <ControlledDraftThread
+        isSelected
+        onDraftChange={onDraftChange}
+        canUserEditOrDeleteCommentCallback={async () => true}
+      />,
+    );
 
     // Type the reply first: the compose box stays visible once editing starts only because it
     // already has content (see the `hasEditorContent` check gating it in CommentThread) — this is
@@ -493,11 +526,13 @@ describe('CommentThread comment-edit drafts', () => {
   it('a draft with only a comment edit is still a draft, not reported as undefined', async () => {
     const onDraftChange = vi.fn();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const { container } = renderThread({
-      isSelected: true,
-      onDraftChange,
-      canUserEditOrDeleteCommentCallback: async () => true,
-    });
+    const { container } = render(
+      <ControlledDraftThread
+        isSelected
+        onDraftChange={onDraftChange}
+        canUserEditOrDeleteCommentCallback={async () => true}
+      />,
+    );
 
     await startEditingFirstComment(container, user);
     await user.click(screen.getByText('Type comment edit'));
@@ -511,11 +546,13 @@ describe('CommentThread comment-edit drafts', () => {
   it('clearing a comment edit (cancel) leaves an unsent reply intact', async () => {
     const onDraftChange = vi.fn();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const { container } = renderThread({
-      isSelected: true,
-      onDraftChange,
-      canUserEditOrDeleteCommentCallback: async () => true,
-    });
+    const { container } = render(
+      <ControlledDraftThread
+        isSelected
+        onDraftChange={onDraftChange}
+        canUserEditOrDeleteCommentCallback={async () => true}
+      />,
+    );
 
     await user.click(screen.getByText('Type reply'));
     await startEditingFirstComment(container, user);
@@ -612,12 +649,68 @@ describe('CommentThread comment-edit drafts', () => {
   });
 });
 
+describe('CommentThread draft write-guard on a real round trip', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('leaves edit mode after cancelling an edit that was seeded from an undefined draft', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { container } = render(
+      <ControlledDraftThread canUserEditOrDeleteCommentCallback={async () => true} />,
+    );
+
+    await startEditingFirstComment(container, user);
+    expect(screen.getByText('Type comment edit')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel edit' }));
+
+    // Cancelling must leave edit mode: the editor stub disappears and the comment's own body
+    // text (only rendered while not editing) comes back.
+    expect(screen.queryByText('Type comment edit')).not.toBeInTheDocument();
+    expect(await screen.findByText('Test comment')).toBeInTheDocument();
+  });
+
+  it('does not resubmit stale reply content after a successful submit clears it', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<ControlledDraftThread />);
+
+    // Type once (seeds the draft from an undefined starting point), then submit successfully.
+    await user.click(screen.getByText('Type reply'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Submit comment' })).not.toBeDisabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Submit comment' }));
+
+    // The submitted content is gone, so nothing should remain to submit again.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Submit comment' })).toBeDisabled();
+    });
+  });
+});
+
 describe('CommentThread DOM id', () => {
   it('sets its root element id via getCommentThreadElementId(threadId)', () => {
     render(<CommentThread {...defaultProps} />);
 
     const threadOption = screen.getByRole('option');
     expect(threadOption).toHaveAttribute('id', getCommentThreadElementId(defaultProps.threadId));
+  });
+});
+
+describe('CommentThread icon-button tooltips', () => {
+  it('shows a hover tooltip for the cancel-edit button, distinct from its aria-label', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { container } = renderThread({ canUserEditOrDeleteCommentCallback: async () => true });
+
+    await startEditingFirstComment(container, user);
+    const cancelButton = screen.getByRole('button', { name: 'Cancel edit' });
+
+    // Guards against a regression that keeps the aria-label (so the accessible name still passes)
+    // but drops the visible Tooltip a sighted user actually reads.
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    await user.hover(cancelButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Cancel edit');
   });
 });
 
@@ -651,10 +744,10 @@ describe('CommentThread selection styling', () => {
     expect(bgClasses(selected)).toEqual(bgClasses(unselected));
   });
 
-  // The two combinations below are the ones that showed no selection indicator at all, because the
-  // status classes used to be gated on `!isSelected`: an unread selected card matched no background
-  // rule and a resolved one had no bar to fall back on. The read/unresolved case above never broke,
-  // so it cannot stand in for them — gating the status classes again leaves it green.
+  // Status must be expressible independently of selection, so each status needs its own selected and
+  // unselected class pair: an unread selected card needs its own background rule, and a resolved card
+  // needs its own bar, rather than either falling back to a rule gated on `!isSelected`. The
+  // read/unresolved case above never exercises a status class, so it cannot stand in for these two.
   it('keeps the unread background and adds the bar when an unread thread is selected', () => {
     const { rerender } = renderThread({ isRead: false, isSelected: false });
     const unselected = screen.getByRole('option');

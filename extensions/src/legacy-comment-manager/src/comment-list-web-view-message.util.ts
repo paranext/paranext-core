@@ -1,6 +1,11 @@
-import type { CommentFilters, ScopeFilter } from 'legacy-comment-manager';
+import type {
+  CommentFilters,
+  LegacyCommentFilters,
+  LegacyScopeFilter,
+  ScopeFilter,
+} from 'legacy-comment-manager';
 import { deepEqual } from 'platform-bible-utils';
-import { applyFilterOverrides, DEFAULT_SCOPE_FILTER } from './comment-list-filters.model';
+import { applyFilterOverrides, resolveScopeFilter } from './comment-list-filters.model';
 
 /** The filters/scope a comment list web view currently has applied. */
 export type CurrentCommentListView = {
@@ -22,9 +27,18 @@ export type CurrentCommentListView = {
  * re-query, and skeleton flash. Reporting `filtersChanged`/`scopeFilterChanged` lets the caller
  * skip the `useState`/`useWebViewState` setter entirely when nothing changed, so no new object is
  * ever created.
+ *
+ * `message.filters`/`message.scopeFilter` also accept the deprecated legacy shapes
+ * ({@link LegacyCommentFilters}, {@link LegacyScopeFilter}) for backward compatibility with
+ * out-of-repo senders; `applyFilterOverrides`/`resolveScopeFilter` map both onto the current model
+ * and normalize anything unrecognized to its default, so this function never passes an invalid
+ * preset or scope through to the caller.
  */
 export function resolveSetFiltersMessage(
-  message: { filters?: Partial<CommentFilters>; scopeFilter?: ScopeFilter },
+  message: {
+    filters?: Partial<CommentFilters> | LegacyCommentFilters;
+    scopeFilter?: ScopeFilter | LegacyScopeFilter;
+  },
   current: CurrentCommentListView,
 ): {
   filters: CommentFilters;
@@ -33,7 +47,7 @@ export function resolveSetFiltersMessage(
   scopeFilterChanged: boolean;
 } {
   const filters = applyFilterOverrides(message.filters);
-  const scopeFilter = message.scopeFilter ?? DEFAULT_SCOPE_FILTER;
+  const scopeFilter = resolveScopeFilter(message.scopeFilter);
   return {
     filters,
     filtersChanged: !deepEqual(filters, current.filters),
