@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDrafts, pruneDrafts, saveDrafts } from './comment-draft-store';
 
 const PROJECT = 'proj-1';
 
 beforeEach(() => localStorage.clear());
+// The "storage is unavailable" case below mocks Storage.prototype.getItem; without this, that mock
+// would leak into every later test in the file and make them exercise the error path instead of
+// their own.
+afterEach(() => vi.restoreAllMocks());
 
 describe('comment draft store', () => {
   it('round-trips drafts for a project', () => {
