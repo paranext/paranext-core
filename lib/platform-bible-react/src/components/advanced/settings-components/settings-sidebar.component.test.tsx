@@ -49,11 +49,15 @@ const PROJECTS: ProjectInfo[] = [
 
 const PROJECTS_GROUP_LABEL = 'Projects';
 
+// Distinct from the picker's own English `buttonPlaceholder` default ('Select a project'), so a
+// trigger assertion goes red if the sidebar ever stops supplying its own copy.
+const TRIGGER_PLACEHOLDER = 'Choose a project';
+
 /** Radix popovers and cmdk need pointer-event sequences jsdom does not synthesize on its own. */
 const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
 
 /** The sidebar with the minimum wiring it needs; it must live inside a SidebarProvider. */
-function sidebar() {
+function sidebar(popoverStrings?: { searchPlaceholderText?: string; noResultsText?: string }) {
   return (
     <SidebarProvider>
       <SettingsSidebar
@@ -63,7 +67,9 @@ function sidebar() {
         selectedSidebarItem={{ label: 'platform.settings' }}
         extensionsSidebarGroupLabel="Extensions"
         projectsSidebarGroupLabel={PROJECTS_GROUP_LABEL}
-        buttonPlaceholderText="Select a project"
+        buttonPlaceholderText={TRIGGER_PLACEHOLDER}
+        searchPlaceholderText={popoverStrings?.searchPlaceholderText}
+        noResultsText={popoverStrings?.noResultsText}
       />
     </SidebarProvider>
   );
@@ -83,5 +89,50 @@ describe('SettingsSidebar project picker', () => {
     expect(await screen.findByText('World English Bible')).toBeInTheDocument();
     expect(screen.queryByLabelText('Group by')).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
+  });
+
+  it('leaves the popover on its English defaults when no strings are supplied', async () => {
+    const user = setupUser();
+    render(sidebar());
+
+    await user.click(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL }));
+
+    const search = await screen.findByPlaceholderText('Search projects & resources');
+    await user.type(search, 'zzzz');
+
+    expect(await screen.findByText('No projects found')).toBeInTheDocument();
+  });
+
+  it('localizes the popover from the supplied strings', async () => {
+    const user = setupUser();
+    render(
+      sidebar({
+        searchPlaceholderText: 'Buscar proyectos y recursos',
+        noResultsText: 'No se encontraron proyectos',
+      }),
+    );
+
+    await user.click(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL }));
+
+    const search = await screen.findByPlaceholderText('Buscar proyectos y recursos');
+    expect(screen.queryByPlaceholderText('Search projects & resources')).not.toBeInTheDocument();
+
+    await user.type(search, 'zzzz');
+    expect(await screen.findByText('No se encontraron proyectos')).toBeInTheDocument();
+  });
+
+  it("keeps the trigger on the sidebar's own placeholder and accessible name", async () => {
+    render(
+      sidebar({
+        searchPlaceholderText: 'Buscar proyectos y recursos',
+        noResultsText: 'No se encontraron proyectos',
+      }),
+    );
+
+    // The popover strings and the trigger's copy are separate channels; supplying the former must
+    // not displace the latter.
+    expect(screen.getByRole('combobox', { name: PROJECTS_GROUP_LABEL })).toHaveTextContent(
+      TRIGGER_PLACEHOLDER,
+    );
   });
 });
