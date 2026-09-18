@@ -312,7 +312,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope } from './components/utils/scripture.util';
+export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
@@ -361,6 +361,7 @@ export {
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
+  Z_INDEX_CONNECTION_LOST,
   Z_INDEX_FIRST_RUN,
   Z_INDEX_ABOVE_POPOVER,
   Z_INDEX_ONBOARDING_TOUR,

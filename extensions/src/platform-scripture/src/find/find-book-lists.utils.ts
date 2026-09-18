@@ -1,13 +1,16 @@
 import { Canon } from '@sillsdev/scripture';
 import { getAvailableBookIds } from 'platform-bible-react/experimental';
 import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
+import { isExtraMaterialBookId } from './extra-material.utils';
 
 /**
- * Book numbers the canon classifies as extra material (GLO, FRT, INT, XXA, etc.). Precomputed
- * because the set is fixed for a given canon.
+ * Book numbers {@link isExtraMaterialBookId} accepts — the extra material. Precomputed because the
+ * set is fixed for a given canon, and derived from that predicate rather than from a second canon
+ * API so the flag string {@link excludeExtraMaterialBooks} clears and the scope gate cannot disagree
+ * about what counts as extra material.
  */
 const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
-  Canon.nonCanonicalIds.map((bookId) => Canon.bookIdToNumber(bookId)),
+  Canon.allBookIds.filter(isExtraMaterialBookId).map((bookId) => Canon.bookIdToNumber(bookId)),
 );
 
 /**
@@ -24,7 +27,7 @@ const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
  *
  * This narrows what Find _searches_ and what its book picker _offers_. It does not reach the
  * `book`/`chapter` scopes, which resolve from the current scripture reference rather than from this
- * flag string; PT-4415 covers gating those.
+ * flag string; {@link isExtraMaterialBookId} gates those.
  *
  * TODO(PT-4414): Drop this exclusion once extra material can be opened and addressed.
  *

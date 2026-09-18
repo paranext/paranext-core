@@ -19,7 +19,6 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  Z_INDEX_MODAL,
   cn,
 } from 'platform-bible-react';
 import { type IndexedListItem, type SemanticDomain } from 'platform-bible-react/experimental';
@@ -525,8 +524,10 @@ function SegmentDropdown({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
+        // No `zIndex` override: `DropdownMenuContent` sets its own tier, which already clears the
+        // drawer this list lives in. Arithmetic on a scale constant lands the element between named
+        // tiers, where nothing orders it and no test can pin it.
         className="tw:max-h-[500px] tw:w-[300px] tw:overflow-y-auto tw:p-1"
-        style={{ zIndex: Z_INDEX_MODAL + 10 }}
         onEscapeKeyDown={(e) => {
           e.stopPropagation();
           e.preventDefault();

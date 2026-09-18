@@ -1,4 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useIsFocusedWindow } from '@renderer/hooks/use-is-focused-window.hook';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
@@ -206,7 +207,15 @@ const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeK
   'reopened-in-source-window': '%tab_contextMenu_moveTab_failed%',
   'reopened-in-focused-window': '%tab_contextMenu_moveTab_failedReopenedElsewhere%',
   'not-reopened': '%tab_contextMenu_moveTab_failedNotReopened%',
+  // Only the move-to-new-window path can leave this disposition — a window created for the move is
+  // the only thing that can be "standing unconfirmed"; move-to-an-existing-window never sets it.
+  'reached-new-window-unconfirmed': '%tab_contextMenu_moveTabToNewWindow_failedUnconfirmed%',
   'possibly-closed': '%tab_contextMenu_moveTab_failedMayHaveClosed%',
+  // Destination-neutral on purpose. `moveWebView` raises this refusal before it looks at `target`,
+  // so what it reports is that *some* move of this tab is already running — and the destination
+  // that matters is the in-flight move's, which neither handler knows. Naming a new window here
+  // would be wrong whenever the first move targeted an existing one.
+  'already-moving': '%tab_contextMenu_moveTab_failedAlreadyMoving%',
 };
 
 /**
@@ -240,7 +249,10 @@ const reportMoveFailure = async (webViewIdToMove: WebViewId, error: unknown) => 
 
 const handleMoveTabToWindow = async (webViewIdToMove: WebViewId, targetWindowId: string) => {
   try {
-    await sendCommand('platform.moveWebViewToWindow', webViewIdToMove, targetWindowId);
+    // A person picked this window by name from the tab's own menu, so it is the user asking to go
+    // there — even if the platform is withholding that window from activation because it opened it
+    // in the background, this call raises it.
+    await sendCommand('platform.moveWebViewToWindow', webViewIdToMove, targetWindowId, true);
   } catch (error) {
     logger.error(
       `Failed to move web view ${webViewIdToMove} to window ${targetWindowId}: ${getErrorMessage(error)}`,
@@ -251,7 +263,10 @@ const handleMoveTabToWindow = async (webViewIdToMove: WebViewId, targetWindowId:
 
 const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
   try {
-    await sendCommand('platform.moveWebViewToNewWindow', webViewIdToMove);
+    // A person picked this from the tab's own menu, so the window it creates is one they asked for
+    // and comes to the front. An extension calling the same command does not say so, and its window
+    // appears without taking the foreground.
+    await sendCommand('platform.moveWebViewToNewWindow', webViewIdToMove, true);
   } catch (error) {
     logger.error(
       `Failed to move web view ${webViewIdToMove} to a new window: ${getErrorMessage(error)}`,
@@ -550,10 +565,23 @@ export function PlatformTabTitle({
     };
   }, [setFocusSubject, id]);
 
-  // Handle applying and removing the CSS styles for this tab being the window's focus
+  const isFocusedWindow = useIsFocusedWindow();
+
+  // Handle applying and removing the CSS styles for this tab being the window's focus. Gated on
+  // this window also being the one the main process considers focused (`isFocusedWindow`), not just
+  // on this tab being the focus subject: in a multi-window layout every window keeps its own
+  // `Focus` state independently, so without this gate the ring would show in every window at once
+  // instead of only the one the user is actually in. Re-runs (and so re-applies) whenever
+  // `isFocusedWindow` flips back to true, e.g. alt-tabbing back into this window — it only ever
+  // toggles CSS classes here, never DOM/document focus, so re-applying cannot steal keyboard input.
+  //
+  // Hidden case: this only toggles CSS classes on elements this window's own DOM already contains;
+  // a hidden window still runs this effect exactly the same, there is no layout/geometry dependency
+  // to break while backgrounded.
   useEffect(() => {
-    // do nothing if this tab is not focused
+    // do nothing if this tab is not focused, or this window is not the one the user is in
     if (
+      !isFocusedWindow ||
       !focusSubject ||
       (focusSubject.focusType !== 'tab' && focusSubject.focusType !== 'webView') ||
       id !== focusSubject.id
@@ -578,7 +606,7 @@ export function PlatformTabTitle({
       if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderWindowFocus);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentWindowFocus);
     };
-  }, [focusSubject, id]);
+  }, [focusSubject, id, isFocusedWindow]);
 
   // Handle applying and removing the CSS style that tints this tab's header when it is the
   // last-selected scripture-navigable web view, it was also the tab the user was most recently in,

@@ -10,8 +10,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
   useListbox,
-  Z_INDEX_MODAL,
 } from 'platform-bible-react';
+import { Z_INDEX_TOOLTIP } from 'platform-bible-react/experimental';
 import { CheckIcon } from 'lucide-react';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
 import { RefObject, useMemo, useState } from 'react';
@@ -157,7 +157,7 @@ function ProjectSection({
                     <TooltipTrigger asChild>
                       <span className="tw:cursor-default">{p.language}</span>
                     </TooltipTrigger>
-                    <TooltipContent style={{ zIndex: Z_INDEX_MODAL + 50 }}>
+                    <TooltipContent style={{ zIndex: Z_INDEX_TOOLTIP }}>
                       {p.languageDisplayName}
                     </TooltipContent>
                   </Tooltip>

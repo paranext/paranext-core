@@ -267,7 +267,7 @@ describe('shipped Simple-mode Column 3 order', () => {
     // new entry whose tab the bake cannot reach (no `data` payload) fails here rather than in the
     // app. The bake itself is covered by `simple-layout.builder.test.ts`.
     const merged = mergeDefaultLayoutSupplement(
-      buildSimpleLayoutForProject('proj-1'),
+      buildSimpleLayoutForProject('proj-1').layout,
       supplementEntries,
       'simple',
     );

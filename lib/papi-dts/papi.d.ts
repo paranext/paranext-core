@@ -1124,6 +1124,18 @@ declare module 'shared/global-this.model' {
      */
     var windowId: string | undefined;
     /**
+     * Whether this window was created without being activated, as of the moment it was created. Set
+     * in the renderer process from the URL search params; no other process assigns it, so it reads
+     * `undefined` there.
+     *
+     * This is the window's state at creation, not now: what content should do about it also depends
+     * on whether the user has since done anything in the window, which the renderer tracks
+     * separately.
+     *
+     * @experimental
+     */
+    var wasWindowCreatedWithoutActivation: boolean | undefined;
+    /**
      * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
      * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
      * lives in the OS-level menu bar rather than in-window, so this flag does not remove it there —
@@ -2164,6 +2176,30 @@ declare module 'shared/models/rpc.interface' {
      * @experimental
      */
     onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Event that fires when this process's own connection to the network is lost unexpectedly — the
+     * websocket closed without the app having asked it to.
+     *
+     * This is platform-internal core plumbing between the process that holds a client connection and
+     * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+     * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+     *
+     * This is a local, in-process event. Only a process that holds a client connection can lose one,
+     * so it fires exclusively on clients; in the process that owns the websocket server it is a real
+     * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the
+     * close code, and a close the app asked for is not a loss.
+     *
+     * Nor does a connection that was never established. A socket that dies during the opening
+     * handshake is a failed connection ATTEMPT, which `connect` reports through its own return value;
+     * surfacing a startup that never reached the network is separate work (PT-4494 / PT-4495). This
+     * event is only for losing a connection that was up.
+     *
+     * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
+     * to react to the loss rather than to classify it.
+     *
+     * @experimental
+     */
+    onDidLoseConnection: PlatformEvent<void>;
   }
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
@@ -2286,6 +2322,14 @@ declare module 'client/services/rpc-client' {
      */
     readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
     /**
+     * Fires when this client's established websocket closes without the app having asked it to. A
+     * socket that dies before it ever opened is a failed connection attempt rather than a loss, and
+     * is silent here. See {@link IRpcMethodRegistrar.onDidLoseConnection}.
+     *
+     * @experimental
+     */
+    readonly onDidLoseConnection: PlatformEvent<void>;
+    /**
      * Whether {@link onWebSocketClose} has already run for the current socket.
      *
      * A closed socket's listener is already removed, but a caller holding a stale reference to the
@@ -2307,6 +2351,7 @@ declare module 'client/services/rpc-client' {
     private readonly registrationMutexMap;
     private readonly connectionComplete;
     private readonly clientDisconnectEmitter;
+    private readonly connectionLostEmitter;
     /**
      * Label identifying this process in connection log lines, so multi-window logs stay readable.
      *
@@ -2606,6 +2651,13 @@ declare module 'main/services/rpc-websocket-listener' {
      * @experimental
      */
     readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Never fires here. Only a process holding a client connection can lose one; this end of the seam
+     * exists so shared code can subscribe in any process without asking which one it is running in.
+     *
+     * @experimental
+     */
+    readonly onDidLoseConnection: PlatformEvent<void>;
     private localEventHandler;
     private webSocketServer;
     private nextSocketNumber;
@@ -2626,6 +2678,7 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private readonly warnedForeignAnnouncements;
     private readonly clientDisconnectEmitter;
+    private readonly connectionLostEmitter;
     /**
      * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
      *   overridden only by tests that need to bind a real socket without colliding with a running
@@ -2733,6 +2786,26 @@ declare module 'shared/services/network.service' {
    * @experimental
    */
   export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Fires when this process's own connection to the network is lost unexpectedly — the websocket
+   * closed without the app having asked it to.
+   *
+   * This is platform-internal core plumbing between the process that holds a client connection and
+   * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+   * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+   *
+   * This is a local, in-process event. Only a process that holds a client connection can lose one, so
+   * it fires exclusively on clients; in the process that owns the websocket server it is a real event
+   * that simply never fires. A deliberate disconnect does not fire it: intent travels in the close
+   * code, and a close the app asked for is not a loss. Neither does a connection that never opened —
+   * only an established connection can be lost, so a failed startup attempt is silent here.
+   *
+   * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
+   * handler to subscribe to. Carries no payload; the close detail is logged where it is observed.
+   *
+   * @experimental
+   */
+  export const onDidLoseConnection: PlatformEvent<void>;
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -4231,13 +4304,23 @@ declare module 'shared/models/docking-framework.model' {
      * @param layout Information about where to put a new webview
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `true`
+     * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+     *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
+     *   window that does not hold OS focus sets that document's active element without activating the
+     *   window — latently, until the window is next activated — so a window opened deliberately in
+     *   the background docks its content without taking that latent focus, leaving who owns the caret
+     *   to be decided when the window is actually raised. Left unspecified, this defaults to whether
+     *   this window is still awaiting its first activation.
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
     addWebViewToDock: (
       webView: WebViewTabProps,
       layout: Layout,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => Layout | undefined;
     /**
      * Remove a tab in the layout
@@ -4309,12 +4392,22 @@ declare module 'shared/models/docking-framework.model' {
      *   doesn't always work well) or merged (so we can remove properties from `state`).
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `false`
+     * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
+     *   being given document focus. For content arriving in a window the user has not activated:
+     *   focusing the tab focuses its iframe, and a `focus()` call inside a window that does not hold
+     *   OS focus sets that document's active element without raising the window — so without this,
+     *   whichever tab's content focuses last would claim the caret the moment the window is finally
+     *   raised, rather than the tab the raise is actually showing. Left unspecified, this defaults to
+     *   whether this window is still awaiting its first activation.
      * @returns True if successfully found the WebView to update; false otherwise
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
     updateWebViewDefinition: (
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => boolean;
     /**
      * Gets info for a tab in a direction from the source tab.
@@ -4362,9 +4455,18 @@ declare module 'shared/models/docking-framework.model' {
      * tabs, and sets the document focus in that tab
      *
      * @param tabId ID of the tab to set active and focused
+     * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+     *   taking document focus. Every mounted panel and every loaded web view asks to be focused, and
+     *   a `focus()` call inside a window that does not hold OS focus only sets that document's active
+     *   element — it does not raise the window — so without this, whichever tab's content focuses
+     *   last would claim the caret the moment a window still awaiting its first activation is finally
+     *   raised. Left unspecified, this defaults to whether this window is still awaiting its first
+     *   activation.
      * @returns `true` if successfully found tab to update, `false` otherwise
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
-    focusTab: (tabId: string) => boolean;
+    focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) => boolean;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
@@ -4523,7 +4625,35 @@ declare module 'shared/services/window.service-model' {
    * surveil user input. Do not broaden what is announced here without a security review.
    */
   export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
-  /** Specific item that is intended to be focused at the top level of a window */
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID} network event.
+   *
+   * @experimental
+   */
+  export type FocusedWindowIdEvent = {
+    /**
+     * The window the main process considers focused, or `undefined` if no window of this application
+     * currently does. Survives the whole application losing OS focus (e.g. the user alt-tabbing to
+     * another application) — it names the window the user was last working in, not whether any window
+     * currently holds OS focus. See `getFocusedWindowId`.
+     */
+    focusedWindowId: string | undefined;
+  };
+  /**
+   * Name of the network event the main process emits when the window it considers focused changes.
+   *
+   * Fires when a window takes focus (including the first window at startup) and when the focused
+   * window closes, leaving none. Deliberately does NOT fire when the application loses OS focus
+   * without a new window taking it (e.g. alt-tabbing away) — the payload keeps naming the window the
+   * user was last in, matching `getFocusedWindowId`'s survive-blur semantic, so a renderer that shows
+   * per-window UI (e.g. an active-tab focus ring) based on this event keeps showing it on the window
+   * the user will land back in rather than clearing it everywhere the moment the app is
+   * backgrounded.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID = 'platform.onDidChangeFocusedWindowId';
+  /** Specific item that is intended to be focused in the top-level app window */
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
   /** Instructions that indicate how to change the focus within a window */
   export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
@@ -4642,6 +4772,11 @@ declare module 'shared/services/window.service-model' {
      * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
      * no open window holds the marked entry the role falls to one of the windows that are open while
      * the flag stays where it is, and this reports the window that actually answers.
+     *
+     * At most one window carries it, and possibly none — the window holding the role may be absent
+     * from the list it appears in, because a window whose close has begun and one whose renderer has
+     * been given up on are both left out. So a caller must not read "no window is flagged" as "then
+     * it must be me".
      */
     isMain: boolean;
   };
@@ -4823,10 +4958,15 @@ declare module 'shared/services/web-view.service-model' {
      * view definitions themselves. Changing properties on returned definitions does not affect the
      * actual WebView definitions.
      *
-     * @returns Saved properties of every open WebView. Empty array if no WebViews are open. A WebView
-     *   being moved between windows is included even though it is docked in neither of them for the
-     *   length of the move, so that a caller selecting from this list cannot silently miss it; treat
-     *   the result as what is open in the app, not as what is docked in some window right now.
+     * @returns Saved properties of every open WebView, each listed once under the id it was minted
+     *   with — a web view keeps that id for its whole life, across any number of moves. Empty array
+     *   if no WebViews are open. A WebView being moved between windows is included even though it is
+     *   docked in neither of them for the length of the move, so it is not left out of the result
+     *   while a move is open; treat the result as what is open in the app, not as what is docked in
+     *   some window right now.
+     *
+     *   Do not deduplicate this list by web view type plus project: two open WebViews can genuinely
+     *   share both, and collapsing them would lose one.
      * @throws If any window could not be asked what it has open. Callers read this as the complete
      *   picture, and a window that could not answer is indistinguishable in the result from one with
      *   nothing open, so a short list is refused rather than passed off as the whole landscape.
@@ -5258,7 +5398,11 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
-  import type { AppWindowInputEvent, WindowSummary } from 'shared/services/window.service-model';
+  import type {
+    AppWindowInputEvent,
+    FocusedWindowIdEvent,
+    WindowSummary,
+  } from 'shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
@@ -5302,7 +5446,10 @@ declare module 'papi-shared-types' {
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /**
-     * Create a new application window
+     * Create a new application window.
+     *
+     * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
+     * second window. The first window of a launch is never refused.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -5317,6 +5464,11 @@ declare module 'papi-shared-types' {
      * List every open window with the title it is currently showing, for offering the user a choice
      * of window. Titles follow each window's own content, so two windows showing the same thing
      * carry the same label and nothing distinguishes them.
+     *
+     * Only windows that can still take the work are listed: a window whose close has begun, and one
+     * whose renderer has been given up on, are both left out. Either can be the window holding the
+     * primary role, so the list can carry no `isMain` at all — absence is not evidence that some
+     * other window holds it.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -5342,6 +5494,21 @@ declare module 'papi-shared-types' {
      * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+    /**
+     * Open the Terms of Service document that ships beside the application - the terms the
+     * distributed application is licensed to the user under, rather than this repository's AGPL
+     * source (see LICENSING.md).
+     *
+     * The document is a self-contained HTML file, shown in a window the application owns rather
+     * than handed to the operating system. One window at a time: a second request focuses the one
+     * already open. Every link in the document leaves through the browser, so the window only ever
+     * shows the document.
+     *
+     * @throws If the document could not be loaded. A caller that offers this as a link needs to be
+     *   able to tell the user the document did not open, so the failure is reported rather than
+     *   only logged.
+     */
+    'platform.openTermsOfService': () => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -5354,28 +5521,40 @@ declare module 'papi-shared-types' {
      * `useWebViewState` state — in the target window. Consumers see a close event in the source and
      * an open event in the target, and the web view controller is disposed and re-created: a held
      * controller reference must be re-acquired after a move. The returned id is the authoritative
-     * id of the web view after the move, and it can differ from the id passed in: a web view
-     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
-     * scope along — so use the returned id for anything after the move. In Simple mode —
-     * single-window by design — there is no other window to move to, and this does nothing.
+     * id of the web view after the move — the same id as `webViewId`, since a web view keeps the id
+     * it was minted with for its whole life, across any number of moves — so use the returned id
+     * for anything after the move. In Simple mode — single-window by design — there is no other
+     * window to move to, and this does nothing.
      *
-     * A move that fails once it has taken the web view out of its window says where it left it, as
-     * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
-     * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
+     * A failed move says where it left the web view, as a machine-readable marker at the front of
+     * the error message: `[webViewMoveFailure:<where>]`, where `<where>` is
+     * `reopened-in-source-window` (nothing about where it lives changed),
      * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
-     * `not-reopened` (it is open in no window, and only the log holds what it was), or
-     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
-     * told). The marker rides in the message because a rejection that crosses processes reaches its
-     * caller as a code and a message and nothing else. A failure decided before the move touches
-     * the web view carries no marker. Strip the marker before showing the message to a user — it is
-     * there to be classified on, not read.
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the move
+     * could not get that confirmed), `possibly-closed` (taking it out of its window is what failed,
+     * so where it is cannot be told), or `already-moving` (this call was refused before it started,
+     * because another move of the same web view was already running — the web view is wherever that
+     * other move leaves it). The marker rides in the message because a rejection that crosses
+     * processes reaches its caller as a code and a message and nothing else. A failure decided
+     * before the move touches the web view for any other reason — an unknown target window, a
+     * target on its way out, an interface mode that could not be read — carries no marker. Strip
+     * the marker before showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see above
-     * @experimental
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   above
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
-    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its window id (see
      * `papi.window.getWindowId()` for the id of the window the caller is in, or
@@ -5389,13 +5568,20 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see `platform.moveWebViewToNewWindow`
-     * @experimental
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own. A target window the platform opened without activation and the user has not yet
+     *   been in stays backgrounded unless this is `true`: naming it is the user asking to go there,
+     *   which is what raises it. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   `platform.moveWebViewToNewWindow`
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
     'platform.moveWebViewToWindow': (
       webViewId: WebViewId,
       targetWindowId: string,
+      isUserRequested?: boolean,
     ) => Promise<WebViewId>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
@@ -6226,6 +6412,14 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidAppWindowInput': AppWindowInputEvent;
+    /**
+     * Emitted by the main process when the window it considers focused changes. Survives the whole
+     * application losing OS focus (alt-tabbing to another application) — the payload keeps naming
+     * the window the user was last working in.
+     *
+     * @experimental
+     */
+    'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;
@@ -9445,6 +9639,23 @@ declare module 'shared/data/platform.data' {
    */
   export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
   /**
+   * Query parameter passed to the renderer. Present when the window was created without being
+   * activated. Written once, at creation, and never removed — whether the user has been in the window
+   * since is the renderer's own to track.
+   *
+   * A window told to stay in the background still has its own content calling `focus()` as it lands:
+   * every mounted panel and every loaded web view asks this window's service to focus it, and
+   * focusing a tab focuses its web view's iframe. A `focus()` inside a window that does not hold OS
+   * focus sets that document's active element without activating the window, latently, until the
+   * window is next activated — so left unchecked, whichever call lands last would decide who owns the
+   * caret once the window is finally raised. Those calls resolve this window's own service shard by
+   * name and never reach the main process, so this is how the fact gets to them. The renderer stops
+   * honouring it the first time the window is activated.
+   *
+   * @experimental
+   */
+  export const WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER = 'awaitingFirstActivation';
+  /**
    * Query parameter key used to pass the serialized scroll group state main holds at the moment a
    * window is created, so that window's synchronous readers are right on its first render instead of
    * showing the default reference until a round trip returns.
@@ -12053,6 +12264,7 @@ declare module '@papi/core' {
   export type {
     AppWindowInputEvent,
     AppWindowInputKind,
+    FocusedWindowIdEvent,
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,

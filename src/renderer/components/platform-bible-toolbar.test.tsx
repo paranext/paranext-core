@@ -295,7 +295,8 @@ vi.mock('platform-bible-react/experimental', async (importOriginal) => {
     ...actual,
     ProjectSelector: (props: ProjectSelectorProps) => {
       capturedProjectSelectorProps.current = props;
-      const { buttonClassName, buttonPlaceholder, isDisabled } = props;
+      const { buttonClassName, isDisabled, localizedStrings } = props;
+      const buttonPlaceholder = localizedStrings?.buttonPlaceholder;
       const selected = getSelectedProject(props);
       const renderTriggerLabel = getRenderTriggerLabel(props);
       // Mirrors the real trigger: a caller-supplied `renderTriggerLabel` owns the whole label,
@@ -1487,28 +1488,35 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
       allProjects: NINE_PROJECTS.filter((p) => p.id !== 'p3' && p.id !== 'p1'),
     });
 
-    const { projects, customSections } = requireCapturedProjectSelectorProps();
-    const sections = customSections ?? [];
+    const { projects, availableGroupings } = requireCapturedProjectSelectorProps();
+    const grouping = (availableGroupings ?? [])[0];
 
-    expect(sections.map((s) => s.id)).toEqual(['recent', 'yours']);
-    // Every project must land in some section — a project matching none would vanish from the list.
-    expect(projects.every((p) => sections.some((s) => s.match(p)))).toBe(true);
+    // One grouping, which locks the selector into it and suppresses the group-by menu.
+    expect(availableGroupings).toHaveLength(1);
+    // Every project must land in a bucket — one keyed `undefined` would fall into the unknown
+    // bucket, which this grouping does not emit, and vanish from the list.
+    expect(projects.every((p) => grouping.getGroupKey?.(p) !== undefined)).toBe(true);
     expect(projects).toHaveLength(9);
 
-    // First-match-wins: exactly the recent ids match the 'recent' descriptor.
+    const bucketed = (key: string) => projects.filter((p) => grouping.getGroupKey?.(p) === key);
+
     expect(
-      projects
-        .filter((p) => sections[0].match(p))
+      bucketed('recent')
         .map((p) => p.id)
         .sort(),
     ).toEqual(['p1', 'p3']);
-    // ...and its compare orders them by recency, not alphabetically.
+    // Recent sits above local projects.
+    expect(grouping.priorityKey).toBe('recent');
+    // ...and `compareProjects` orders that bucket by recency, not alphabetically.
     expect(
-      projects
-        .filter((p) => sections[0].match(p))
-        .sort(sections[0].compare)
+      bucketed('recent')
+        .sort(grouping.compareProjects)
         .map((p) => p.id),
     ).toEqual(['p3', 'p1']);
+    // The two buckets are headed by the two localized section labels.
+    expect(grouping.getSectionHeading?.('recent', [])).not.toEqual(
+      grouping.getSectionHeading?.('yours', []),
+    );
   });
 
   it('offers the footer action and disables nothing with zero local projects', async () => {

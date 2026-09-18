@@ -68,6 +68,7 @@ import {
   shouldClearResultsForInvalidQuery,
 } from './find/find.utils';
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
+import { isExtraMaterialBookId } from './find/extra-material.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -80,6 +81,7 @@ import {
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import {
   FIND_SEARCHABLE_WEB_VIEW_TYPES,
   REFERENCE_PANEL_WEB_VIEW_TYPES,
@@ -114,20 +116,34 @@ const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
 
-/** Short and full names for every scripture project/resource, keyed by canonical project id. */
-type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
+/** Display names and language for every scripture project/resource, keyed by canonical project id. */
+type ProjectNamesById = {
+  [id: string]: Pick<FindProject, 'shortName' | 'fullName' | 'language'>;
+};
 
 /**
- * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
- * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
+ * Gets the short name, full name, and language of a project from its ID. Kept in the webview (not
+ * the shared, `@papi`-free utils) so the utils stay importable by the presentational component and
+ * its story.
+ *
+ * `platform.language` feeds the picker's Language grouping; it degrades to `undefined` (an "unknown
+ * language" bucket) rather than failing the whole lookup, since a project without it is still
+ * perfectly searchable.
  */
 async function getProjectNames(
   projectId: string,
-): Promise<Pick<FindProject, 'shortName' | 'fullName'>> {
+): Promise<Pick<FindProject, 'shortName' | 'fullName' | 'language'>> {
   const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const projectShortName = await pdp.getSetting('platform.name');
-  const projectFullName = await pdp.getSetting('platform.fullName');
-  return { shortName: projectShortName, fullName: projectFullName };
+  const [projectShortName, projectFullName, projectLanguage] = await Promise.all([
+    pdp.getSetting('platform.name'),
+    pdp.getSetting('platform.fullName'),
+    pdp.getSetting('platform.language').catch(() => undefined),
+  ]);
+  return {
+    shortName: projectShortName,
+    fullName: projectFullName,
+    language: typeof projectLanguage === 'string' ? projectLanguage : undefined,
+  };
 }
 
 /**
@@ -449,12 +465,19 @@ global.webViewComponent = function FindWebView({
     return ids;
   }, [allOpenProjectTabs]);
 
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('FindWebView');
+
   const projects = useMemo<FindProject[]>(
     () =>
       Object.entries(projectIdsAndNames)
         .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
-        .map(([id, names]) => ({ id, ...names })),
-    [projectIdsAndNames, openProjectIds],
+        .map(([id, names]) => ({
+          id,
+          ...names,
+          lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+        })),
+    [projectIdsAndNames, openProjectIds, recencyMap],
   );
 
   // An open editor tab whose project the metadata fetch never returned means the fetch predates the
@@ -721,12 +744,12 @@ global.webViewComponent = function FindWebView({
   // the scope selector builds its book picker from. Filtering one but not the other would let a user
   // pick a book the search never covers.
   //
-  // This does NOT cover the `book`/`chapter` scopes, which build `findScope` from
-  // `verseRefSetting.book` rather than from these lists. The navigation control offers every book the
-  // project has (`getActiveBookIds` in the toolbar is unfiltered), so with the current reference in
-  // a book of extra material those two scopes still search it and still report the useless
-  // reference this exclusion exists to hide. Closing that path means gating the scopes themselves
-  // on the current book being searchable; PT-4415 tracks it.
+  // These lists do NOT reach the `book`/`chapter` scopes, which build `findScope` from
+  // `verseRefSetting.book` rather than from them, so the current reference can sit in a book of
+  // extra material and `isFindQueryValid` gates those two scopes on it separately. The reference
+  // gets there by several routes: `BookChapterControl` offers XXA–XXG directly, and FRT, BAK, OTH,
+  // INT, CNC, GLO, TDX and NDX arrive through a scroll-group navigation command, a persisted
+  // scroll-group reference, or a click on a resource.
   //
   // A book list is "not known" while the setting is still resolving AND when the read fails.
   // `useProjectSetting` reports a delivered `PlatformError` as loaded, so the error branch has to be
@@ -1064,8 +1087,9 @@ global.webViewComponent = function FindWebView({
   // moved into `gateStartSearch`'s `hasPdp` argument below, which is the input that actually governs
   // whether a job may start.
   const isSearchQueryValid = useMemo(
-    () => isFindQueryValid({ searchTerm, scope, selectedBookIds }),
-    [scope, searchTerm, selectedBookIds],
+    () =>
+      isFindQueryValid({ searchTerm, scope, selectedBookIds, currentBookId: verseRefSetting.book }),
+    [scope, searchTerm, selectedBookIds, verseRefSetting.book],
   );
 
   // Surface an unresolvable provider through the existing error path instead of leaving the panel
@@ -1093,7 +1117,12 @@ global.webViewComponent = function FindWebView({
       case 'book':
         return [{ bookId: verseRefSetting.book }];
       case 'selectedBooks':
-        return selectedBookIds.map((bookId) => ({ bookId }));
+        // Extra material is dropped here too, not only from the book picker. A selection restored
+        // from a persisted tab is pruned against the project's book list, and that list arrives
+        // asynchronously — this is the point the search cannot be built before.
+        return selectedBookIds
+          .filter((bookId) => !isExtraMaterialBookId(bookId))
+          .map((bookId) => ({ bookId }));
       default:
         throw new Error(`Unsupported scope: ${scope}`);
     }

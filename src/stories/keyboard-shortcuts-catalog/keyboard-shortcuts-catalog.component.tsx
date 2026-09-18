@@ -31,7 +31,12 @@ export type KeyboardShortcutEntry = {
   context: string;
   /** Per-OS key combinations. */
   keys: KeyboardShortcutKeys;
-  /** Repo-relative file paths where the shortcut is handled. */
+  /**
+   * Repo-relative file paths that determine the shortcut's behavior — the handler itself, and any
+   * file that supplies or withdraws it. A shortcut provided by a shared primitive
+   * (`shadcn-ui/dialog.tsx`'s focus containment) or gated by a component that mounts the handler
+   * lists those too, so an edit to any of them is reachable by grepping this catalog for the file.
+   */
   locations: string[];
 };
 

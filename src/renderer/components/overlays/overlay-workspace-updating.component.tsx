@@ -1,5 +1,6 @@
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
 import {
   getWorkspaceUpdating,
   subscribeToWorkspaceUpdating,
@@ -25,14 +26,12 @@ export function WorkspaceUpdatingOverlayPresentational({ label, isPowerMode }: P
         role="status"
         className="tw:fixed tw:inset-0 tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:bg-background"
         // For some reason, applying tw:top-12 tw:right-2 tw:bottom-2 tw:left-2 instead of tw:inset-0 did not work.
-        // The top value corresponds to the height of the toolbar — tw:h-12 (48px) in Power mode,
-        // tw:h-14 (56px) in Simple mode (see platform-bible-toolbar.tsx and
-        // getDockLayoutOuterInset) — and the other insets allow for window borders.
+        // The top value clears the toolbar; the other insets allow for window borders.
         // Originally, I used 8px insets to match the window border size, but currently some content can drift into the border area,
         // making the border look dirty, so I am now using 2px borders, but maybe we can things up and revisit this.
         style={{
           zIndex: Z_INDEX_WORKSPACE_UPDATING,
-          top: isPowerMode ? 48 : 56,
+          top: getToolbarHeight(isPowerMode),
           right: 2,
           bottom: 2,
           left: 2,
@@ -45,6 +44,12 @@ export function WorkspaceUpdatingOverlayPresentational({ label, isPowerMode }: P
   );
 }
 
+// TODO(gating-surface-latch-audit): the other full-area gating surfaces in the same `Main` block
+// (`FirstRunOverlay`, `OverlayHost`, `OnboardingTour`) stand down once the connection-lost state
+// latches; this one does not, and has never been examined against that rule. It is a bounded
+// (30 s local leash) `role="status"` spinner rather than a focus-trapping dialog, so it is not an
+// obvious instance of the same problem — but it is not an established exception either. See
+// `adr-connection-lost-is-renderer-local` in `.context/standards/Architecture-Decisions.md`.
 export function WorkspaceUpdatingOverlay() {
   const [isUpdating, setIsUpdating] = useState(getWorkspaceUpdating);
 
