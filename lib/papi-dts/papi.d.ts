@@ -14077,6 +14077,17 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    */
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
   /**
+   * Parses the CSS `zoom` inline on an iframe element. Anything that is not a positive finite number
+   * — including the empty string written to clear the zoom, or no iframe at all — means unscaled.
+   *
+   * Exported so {@link getWebViewIframeZoom} and the content zoom service's own iframe-zoom fallback
+   * (which reads its iframe through its own test-only seam, not {@link getWebViewIframe}) share one
+   * parse instead of drifting apart.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function parseIframeZoom(iframe: HTMLIFrameElement | undefined): number;
+  /**
    * Reads the CSS `zoom` the content zoom service has set on a WebView's host `<iframe>` element.
    *
    * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
@@ -14085,14 +14096,17 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    *
    * The platform is the only writer of this property, so the inline value is authoritative (and,
    * unlike computed style, is defined for this non-standard property in every environment the
-   * renderer runs in). Anything that is not a positive finite number — including the empty string
-   * written to clear the zoom, or a web view id with no matching iframe — means unscaled.
+   * renderer runs in).
+   *
+   * This does not cover per-area zoom — a pane that marks zoom areas carries no whole-iframe `zoom`
+   * and this always answers `1` for it. For the scale a pane's content is actually drawn at, use
+   * {@link getContentZoomScaleForWebView} instead.
    *
    * @param webViewId The webViewId of the iframe
    * @returns The scale factor the iframe's contents are rendered at
    * @experimental This function is unstable and may change or disappear without notice
    */
-  export function getWebViewContentScale(webViewId: string): number;
+  export function getWebViewIframeZoom(webViewId: string): number;
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
    * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.
