@@ -1,3 +1,4 @@
+import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { CardTitle, useEvent, usePromise } from 'platform-bible-react';
@@ -23,7 +24,12 @@ const defaultInterfaceLanguages: string[] = ['en'];
 const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
-globalThis.webViewComponent = function HomeWebView() {
+globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
+  // Seeded by the web view provider from the caller's open options, and scrubbed back to `false` on
+  // every open that does not ask for it — so a projects-only launch cannot survive into a later
+  // menu open or a restored layout. See `buildHomeWebViewState`.
+  const [shouldShowProjectsOnly] = useWebViewState<boolean>('shouldShowProjectsOnly', false);
+
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
@@ -82,6 +88,12 @@ globalThis.webViewComponent = function HomeWebView() {
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
   );
+  /**
+   * Whether the availability check ran out of attempts without an answer, as opposed to not having
+   * answered yet. Separate from `isSendReceiveAvailable` because `undefined` there is both states
+   * at once, and only the settled one should reach the user.
+   */
+  const [didAvailabilityCheckGiveUp, setDidAvailabilityCheckGiveUp] = useState<boolean>(false);
 
   const getStarted = useCallback(() => {
     papi.commands.sendCommand(
@@ -110,7 +122,17 @@ globalThis.webViewComponent = function HomeWebView() {
       { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
     );
 
-    if (isAvailable !== undefined && isMounted.current) setIsSendReceiveAvailable(isAvailable);
+    if (!isMounted.current) return;
+    if (isAvailable === undefined) {
+      // Still unknown after every attempt. This is a third state, distinct from both "send/receive
+      // is absent from this build" (a definite `false`, where a local-only list is the whole truth)
+      // and "the server was reached" — and without saying so it renders exactly like the latter.
+      logger.warn('Home web view gave up determining send/receive availability');
+      setDidAvailabilityCheckGiveUp(true);
+      return;
+    }
+    setDidAvailabilityCheckGiveUp(false);
+    setIsSendReceiveAvailable(isAvailable);
   }, []);
 
   useEffect(() => {
@@ -201,6 +223,7 @@ globalThis.webViewComponent = function HomeWebView() {
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
   const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+  const [didRemoteProjectsFailToLoad, setDidRemoteProjectsFailToLoad] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isSendReceiveAvailable) {
@@ -221,6 +244,7 @@ globalThis.webViewComponent = function HomeWebView() {
 
         if (promiseIsCurrent && isMounted.current) {
           setIsLoadingRemoteProjects(false);
+          setDidRemoteProjectsFailToLoad(false);
           setSharedProjectsInfo(projectsInfo);
         }
       } catch (e) {
@@ -254,17 +278,18 @@ globalThis.webViewComponent = function HomeWebView() {
           logger.warn(`Home web view failed to get shared projects: ${errorMessage}`);
         }
 
+        // Every branch that reaches here has given up on the server for this run — the two
+        // notified ones as well as the retries-exhausted one. The notifications name a cause and
+        // offer a fix, but they are dismissible and live outside the list, so Home still has to say
+        // for itself that what it is showing is only the local half.
         if (promiseIsCurrent && isMounted.current) {
           setIsLoadingRemoteProjects(false);
+          setDidRemoteProjectsFailToLoad(true);
         }
       }
     };
 
     if (isSendReceiveInProgress) {
-      return;
-    }
-    if (!isSendReceiveAvailable) {
-      setIsLoadingRemoteProjects(false);
       return;
     }
     getSharedProjects();
@@ -314,6 +339,8 @@ globalThis.webViewComponent = function HomeWebView() {
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
       isLoadingRemoteProjects={isLoadingRemoteProjects}
+      didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad || didAvailabilityCheckGiveUp}
+      shouldShowProjectsOnly={shouldShowProjectsOnly}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}

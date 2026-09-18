@@ -3,7 +3,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import { Home } from './home.component';
+import { Home, type LocalProjectInfo } from './home.component';
 
 /*
  * `onSendReceiveProject`'s contract is that a rejection surfaces to the user: the prop's TSDoc says
@@ -35,6 +35,47 @@ function renderHome(onSendReceiveProject: (projectId: string) => Promise<void>) 
       onSendReceiveProject={onSendReceiveProject}
       localizedStringsWithLoadingState={[
         { '%resources_get%': 'Get', '%resources_syncFailed_title%': 'Sync failed' },
+        false,
+      ]}
+    />,
+  );
+}
+
+const SERVER_UNREACHABLE_TITLE = "Can't reach the sync server";
+const NOTHING_HERE = 'Nothing here.';
+const NOTHING_FOUND = 'Nothing found.';
+
+/**
+ * Renders Home with the localized strings these tests assert on. Defaults to the state the
+ * distinction under test is about: a reachable server that simply has nothing on it.
+ */
+function renderHomeList({
+  didRemoteProjectsFailToLoad = false,
+  localProjectsInfo = [],
+  sharedProjectsInfoOverride = {},
+  shouldShowProjectsOnly = false,
+}: {
+  didRemoteProjectsFailToLoad?: boolean;
+  localProjectsInfo?: LocalProjectInfo[];
+  sharedProjectsInfoOverride?: SharedProjectsInfo;
+  shouldShowProjectsOnly?: boolean;
+} = {}) {
+  return render(
+    <Home
+      headerContent={undefined}
+      localProjectsInfo={localProjectsInfo}
+      sharedProjectsInfo={sharedProjectsInfoOverride}
+      didRemoteProjectsFailToLoad={didRemoteProjectsFailToLoad}
+      shouldShowProjectsOnly={shouldShowProjectsOnly}
+      localizedStringsWithLoadingState={[
+        {
+          '%resources_get%': 'Get',
+          '%resources_noProjects%': NOTHING_HERE,
+          '%resources_noSearchResults%': NOTHING_FOUND,
+          '%resources_serverUnreachable_title%': SERVER_UNREACHABLE_TITLE,
+          '%resources_serverUnreachable_description%':
+            'Showing only the projects already on your computer.',
+        },
         false,
       ]}
     />,
@@ -76,5 +117,135 @@ describe('Home send/receive failures', () => {
       expect(onSendReceiveProject).toHaveBeenCalledWith(PROJECT_ID);
     });
     expect(screen.queryByText('Sync failed')).toBeNull();
+  });
+});
+
+/*
+ * Without this distinction "no projects on the server" and "we never reached the server" render
+ * identically, so a user who is offline is told, in effect, that the projects they can see on
+ * another machine do not exist. The two cases are asserted as a pair on purpose: the cheap way to
+ * satisfy either one alone is to make the banner unconditional, or to drop it entirely.
+ */
+describe('Home shared project list availability', () => {
+  it('reports an unreachable server rather than leaving the list looking complete', () => {
+    renderHomeList({ didRemoteProjectsFailToLoad: true });
+
+    expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).not.toBeNull();
+  });
+
+  it('reports nothing when the server was reached and has no projects', () => {
+    renderHomeList();
+
+    // Positive control: the empty state rendered, so the corpus could have carried the banner.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).toBeNull();
+  });
+
+  it('reports an unreachable server even when local projects fill the list', () => {
+    renderHomeList({
+      didRemoteProjectsFailToLoad: true,
+      localProjectsInfo: [
+        {
+          projectId: 'localProject1',
+          isPublished: false,
+          fullName: 'Local Project',
+          name: 'LCL',
+          language: 'en',
+        },
+      ],
+    });
+
+    // The list is populated, so nothing about it hints that the server half is missing.
+    expect(screen.queryByText('Local Project')).not.toBeNull();
+    expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).not.toBeNull();
+  });
+});
+
+/*
+ * An empty Home and a search that matched nothing are different situations with different advice,
+ * and the search-specific message quotes the query — so showing it for an empty Home renders
+ * `Searched for ""` to a user who never searched.
+ */
+describe('Home empty state', () => {
+  it('offers the getting-started guidance when there are no projects at all', () => {
+    renderHomeList();
+
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(NOTHING_FOUND)).toBeNull();
+  });
+
+  it('offers the no-results message when a search excludes every project', () => {
+    renderHomeList({
+      localProjectsInfo: [
+        {
+          projectId: 'localProject1',
+          isPublished: false,
+          fullName: 'Local Project',
+          name: 'LCL',
+          language: 'en',
+        },
+      ],
+    });
+
+    // SearchBar renders a plain text input, so this is the only textbox on the card.
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'no such project' } });
+
+    expect(screen.queryByText(NOTHING_FOUND)).not.toBeNull();
+    expect(screen.queryByText(NOTHING_HERE)).toBeNull();
+  });
+});
+
+/*
+ * Reached from the title bar's "More projects…", Home is answering "get me to one of my projects",
+ * so the read-only resources that share the list are noise there. Every other entry point still
+ * lists both, which is why this is a prop rather than a change to what Home shows.
+ */
+describe('Home projects-only view', () => {
+  const RESOURCE: LocalProjectInfo = {
+    projectId: 'publishedResource1',
+    isPublished: true,
+    fullName: 'Published Resource',
+    name: 'PUB',
+    language: 'en',
+  };
+  const PROJECT: LocalProjectInfo = {
+    projectId: 'localProject1',
+    isPublished: false,
+    fullName: 'Local Project',
+    name: 'LCL',
+    language: 'en',
+  };
+
+  it('lists resources alongside projects by default', () => {
+    renderHomeList({ localProjectsInfo: [RESOURCE, PROJECT] });
+
+    expect(screen.queryByText('Published Resource')).not.toBeNull();
+    expect(screen.queryByText('Local Project')).not.toBeNull();
+  });
+
+  it('leaves the resources out when asked for projects only', () => {
+    renderHomeList({ localProjectsInfo: [RESOURCE, PROJECT], shouldShowProjectsOnly: true });
+
+    // Asserted as a pair with the project: dropping the whole list would satisfy the first
+    // expectation on its own.
+    expect(screen.queryByText('Published Resource')).toBeNull();
+    expect(screen.queryByText('Local Project')).not.toBeNull();
+  });
+
+  it('offers the nothing-here guidance rather than the no-results message when only resources exist', () => {
+    renderHomeList({ localProjectsInfo: [RESOURCE], shouldShowProjectsOnly: true });
+
+    // The user never searched, so the search-specific message would quote an empty query at them.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(NOTHING_FOUND)).toBeNull();
+  });
+
+  it('keeps send/receive projects, which are never published resources', () => {
+    renderHomeList({
+      sharedProjectsInfoOverride: sharedProjectsInfo,
+      shouldShowProjectsOnly: true,
+    });
+
+    expect(screen.queryByText('Shared Project')).not.toBeNull();
   });
 });
