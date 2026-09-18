@@ -4,14 +4,10 @@ import { it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import type { DblResourceData } from 'platform-bible-utils';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { fetchDownloadedResources } from './downloaded-resources.utils';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
 
-vi.mock('./use-effective-resource-reference-list.hook', () => ({
-  useEffectiveResourceReferenceList: vi.fn(),
-}));
 vi.mock('./downloaded-resources.utils', async (orig) => ({
   ...(await orig<typeof import('./downloaded-resources.utils')>()),
   fetchDownloadedResources: vi.fn(),
@@ -58,51 +54,45 @@ beforeEach(() => {
 });
 
 it('returns referenced-only rows when includeDownloaded is false', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
-    readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
-  );
+  const state = readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]);
   vi.mocked(fetchDownloadedResources).mockResolvedValue([]);
 
   const { result } = renderHook(() =>
-    useResourcePickerResources('p1', { includeDownloaded: false }, [dblEntry('proj-web')], true),
+    useResourcePickerResources(state, { includeDownloaded: false }, [dblEntry('proj-web')], true),
   );
   await waitFor(() => expect(result.current[0]).toHaveLength(1));
   expect(fetchDownloadedResources).not.toHaveBeenCalled();
 });
 
 it('unions downloaded rows when includeDownloaded is true', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
-    readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
-  );
+  const state = readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]);
   vi.mocked(fetchDownloadedResources).mockResolvedValue([
     { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
   ]);
 
   const { result } = renderHook(() =>
-    useResourcePickerResources('p1', { includeDownloaded: true }, [dblEntry('proj-web')], true),
+    useResourcePickerResources(state, { includeDownloaded: true }, [dblEntry('proj-web')], true),
   );
   await waitFor(() => expect(result.current[0]).toHaveLength(2));
   expect(result.current[0]?.[1]).toMatchObject({ source: 'downloaded', projectId: 'proj-kjn' });
 });
 
 it('orders admin-locked rows first when adminLockedFirst is set', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
-    readyState([
-      { type: 'project', name: 'User', id: 'p-user', source: 'user' },
-      {
-        type: 'project',
-        name: 'Admin',
-        id: 'p-admin',
-        source: 'admin',
-        isInTextCollection: true,
-      },
-    ]),
-  );
+  const state = readyState([
+    { type: 'project', name: 'User', id: 'p-user', source: 'user' },
+    {
+      type: 'project',
+      name: 'Admin',
+      id: 'p-admin',
+      source: 'admin',
+      isInTextCollection: true,
+    },
+  ]);
   vi.mocked(fetchDownloadedResources).mockResolvedValue([]);
 
   const { result } = renderHook(() =>
     useResourcePickerResources(
-      'p1',
+      state,
       { includeDownloaded: false, adminLockedFirst: true },
       [dblEntry('p-user'), dblEntry('p-admin')],
       true,
@@ -113,9 +103,7 @@ it('orders admin-locked rows first when adminLockedFirst is set', async () => {
 });
 
 it('exposes isLoading=true while the downloaded resource fetch is in flight', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
-    readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
-  );
+  const state = readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]);
   let resolveDownloaded!: (v: Awaited<ReturnType<typeof fetchDownloadedResources>>) => void;
   vi.mocked(fetchDownloadedResources).mockReturnValue(
     new Promise((resolve) => {
@@ -124,7 +112,7 @@ it('exposes isLoading=true while the downloaded resource fetch is in flight', as
   );
 
   const { result } = renderHook(() =>
-    useResourcePickerResources('p1', { includeDownloaded: true }, [], true),
+    useResourcePickerResources(state, { includeDownloaded: true }, [], true),
   );
 
   await waitFor(() => expect(result.current[1]).toBe(true));
@@ -133,15 +121,13 @@ it('exposes isLoading=true while the downloaded resource fetch is in flight', as
 });
 
 it('withholds rows until the catalog has settled, since a row type comes from the catalog', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
-    readyState([{ type: 'project', name: 'Comm', id: 'p-comm', source: 'user' }]),
-  );
+  const state = readyState([{ type: 'project', name: 'Comm', id: 'p-comm', source: 'user' }]);
   vi.mocked(fetchDownloadedResources).mockResolvedValue([]);
 
   const emptyCatalog: DblResourceData[] = [];
   const { result, rerender } = renderHook(
     ({ isSettled, catalog }: { isSettled: boolean; catalog: DblResourceData[] }) =>
-      useResourcePickerResources('p1', { includeDownloaded: false }, catalog, isSettled),
+      useResourcePickerResources(state, { includeDownloaded: false }, catalog, isSettled),
     { initialProps: { isSettled: false, catalog: emptyCatalog } },
   );
 
@@ -154,11 +140,11 @@ it('withholds rows until the catalog has settled, since a row type comes from th
 });
 
 it('re-reads the downloaded list when the project set changes', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(readyState([]));
+  const state = readyState([]);
   vi.mocked(fetchDownloadedResources).mockResolvedValue([]);
 
   const { result } = renderHook(() =>
-    useResourcePickerResources('p1', { includeDownloaded: true }, [], true),
+    useResourcePickerResources(state, { includeDownloaded: true }, [], true),
   );
   await waitFor(() => expect(result.current[0]).toHaveLength(0));
   expect(fetchDownloadedResources).toHaveBeenCalledTimes(1);

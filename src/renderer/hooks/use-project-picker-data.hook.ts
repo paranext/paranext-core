@@ -333,17 +333,37 @@ export function useProjectPickerData(): ProjectPickerData {
         setCurrentSimpleProjectError(undefined);
         return undefined;
       }
+      // Read in its own try: whether this call succeeded is what separates the two failure modes
+      // below. If the snapshot itself could not be fetched, nothing here can be trusted to say a
+      // project is absent, and the error card is the honest answer.
+      let metadata: ProjectMetadata[];
       try {
         // Fast path: the active editor's project is already in the picker's (USJ-filtered)
         // snapshot, so reuse it - no extra fetch.
-        const metadata = await getAllMetadata();
-        const key = normalizeProjectId(currentProjectId);
-        const m = metadata.find((md) => normalizeProjectId(md.id) === key);
-        if (m) {
-          setCurrentSimpleProjectError(undefined);
-          currentProjectRetryCountRef.current = 0;
-          return metadataToProjectItem(m);
-        }
+        metadata = await getAllMetadata();
+      } catch (e) {
+        // No current-project retry is armed here: a failed fan-out already arms the shared retry in
+        // `getAllMetadata`'s own rejection handler, against its own budget.
+        logger.error(
+          `ProjectPicker: could not fetch project metadata while naming current project ${currentProjectId}: ${getErrorMessage(e)}`,
+        );
+        setCurrentSimpleProjectError('Unable to load current project details');
+        return {
+          id: currentProjectId,
+          fullName: 'Unable to load current project details',
+          shortName: '???',
+        };
+      }
+
+      const key = normalizeProjectId(currentProjectId);
+      const m = metadata.find((md) => normalizeProjectId(md.id) === key);
+      if (m) {
+        setCurrentSimpleProjectError(undefined);
+        currentProjectRetryCountRef.current = 0;
+        return metadataToProjectItem(m);
+      }
+
+      try {
         // Miss: the active editor references a project not in the USJ-filtered snapshot yet - e.g.
         // its USJ-providing layering PDPF has not registered. Resolve it directly by id
         // (unfiltered), which merges every registered PDPF's metadata for this id and waits for a
@@ -355,27 +375,33 @@ export function useProjectPickerData(): ProjectPickerData {
         currentProjectRetryCountRef.current = 0;
         return metadataToProjectItem(single);
       } catch (e) {
-        logger.error(
-          `ProjectPicker: could not fetch details for current project ${currentProjectId}: ${getErrorMessage(e)}`,
+        // Absent from the filtered snapshot AND unresolvable by id, after that call's own factory
+        // wait and startup-grace retries: the project this editor names is not on this machine —
+        // deleted, moved, or not yet cloned. That is a state the app has an answer for, so report
+        // no current project rather than an error the user cannot act on. The editor beside this
+        // picker resolves the same id the same way and renders its no-project empty state, so the
+        // two agree on what is open.
+        //
+        // Warn, not error: this is a handled outcome, and it repeats on each retry below.
+        logger.warn(
+          `ProjectPicker: current project ${currentProjectId} could not be found; reporting no current project: ${getErrorMessage(e)}`,
         );
-        setCurrentSimpleProjectError('Unable to load current project details');
-        // Arm the same bounded retry timer the shared metadata fetch uses. `usePromise` re-runs
-        // only when its callback identity changes, and neither of this callback's inputs changes
-        // while the same editor stays open — so without arming it here, a lookup that failed once
-        // leaves the error card up for the life of the window. The retry bumps the metadata
-        // generation, which is what changes the identity and re-runs this. Bounded by this lookup's
-        // OWN budget, spent here, so a project that cannot be resolved at all stops after
-        // MAX_METADATA_FETCH_RETRIES attempts; the budget is restored above whenever the project
-        // does resolve, so a transient failure that heals does not permanently spend it.
+        setCurrentSimpleProjectError(undefined);
+        // Still retried, because "absent" can be wrong: a project whose factory registers after
+        // the lookup's own waits would otherwise stay unnamed. Arm the same bounded retry timer the
+        // shared metadata fetch uses. `usePromise` re-runs only when its callback identity changes,
+        // and neither of this callback's inputs changes while the same editor stays open — so
+        // without arming it here, one failed lookup would be the answer for the life of the window.
+        // The retry bumps the metadata generation, which is what changes the identity and re-runs
+        // this. Bounded by this lookup's OWN budget, spent here, so a project that cannot be
+        // resolved at all stops after MAX_METADATA_FETCH_RETRIES attempts; the budget is restored
+        // above whenever the project does resolve, so a transient failure that heals does not
+        // permanently spend it.
         if (currentProjectRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) {
           currentProjectRetryCountRef.current += 1;
           setIsRetryPending(true);
         }
-        return {
-          id: currentProjectId,
-          fullName: 'Unable to load current project details',
-          shortName: '???',
-        };
+        return undefined;
       }
     }, [getAllMetadata, activeEditorProjectId]),
     undefined,

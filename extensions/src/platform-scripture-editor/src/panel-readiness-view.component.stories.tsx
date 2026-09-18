@@ -53,6 +53,9 @@ const meta: Meta<typeof PanelReadinessView> = {
     emptyPrompt: localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_prompt%'],
     pickLabel: localizedStrings['%webView_resourcePanel_bibleTexts_pick%'],
     retryLabel: localizedStrings['%webView_resourcePanel_retry%'],
+    registrationRequiredMessage:
+      localizedStrings['%webView_resourcePanel_noProject_registrationRequired%'],
+    registerLabel: localizedStrings['%webView_resourcePanel_noProject_register%'],
   },
 };
 export default meta;
@@ -70,6 +73,13 @@ export const SettingsError: Story = { args: { readiness: 'error' } };
 
 /** The resource catalog could not be loaded. Recoverable, so this one does offer a retry. */
 export const CatalogError: Story = { args: { readiness: 'catalogError' } };
+
+/**
+ * The catalog is unreachable because the Paratext registration is missing or invalid. Unlike the
+ * catalog error above this offers no retry — re-running the fetch cannot succeed until the
+ * registration changes — so it offers the one action that can.
+ */
+export const RegistrationRequired: Story = { args: { readiness: 'registrationRequired' } };
 
 /** Nothing is configured — now known rather than assumed, so the pick prompt is correct. */
 export const Empty: Story = { args: { readiness: 'empty' } };
