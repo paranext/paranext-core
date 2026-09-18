@@ -806,7 +806,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
 
 - **Date:** 2026-08-27
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
+  project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
+  is removed, so Find follows every editor-column switch.
 - **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
   Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
@@ -861,9 +863,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   hidden coupling with a forgot-to-clear failure mode. **Register a public command** like the other
   four — rejected as surface area for nobody: the Text Collection has no menu entry and no external
   caller.
-- **Consequences:** The scroll group's source project is now documented at its call site as *not* an
-  active-editor signal, which is the trap that produced this bug; any future panel that reaches for
-  it should be re-pointed explicitly instead. `adr-find-follows-editor-to-read-only` records Find as "the only
+- **Consequences:** No Column 3 panel reads the scroll group's source project for its identity:
+  that field tags which project's versification frame a reference is in, and reading it as the
+  active editor's project is the trap that produced this bug. Any future panel that needs a
+  project should be told it explicitly instead. `adr-find-follows-editor-to-read-only` records Find as "the only
   Column 3 panel that command re-points without also being able to open it"; that stays true, since
   the Text Collection is re-pointed by a direct call rather than a command. What changed is the
   narrower fact that Find is no longer the only panel re-pointed *without being openable*. Reloading the grid drops its in-memory React state (for example an
@@ -885,13 +888,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
   rather than giving it a signal to infer from. Five limits of this decision are recorded
   deliberately rather than left to be re-derived:
-  - **Read-only resources are not followed.** `openOrUpdateRelatedPanels` takes
-    `isProjectEditable` and skips the Text Collection re-point when it is false, so a published
-    resource opened in the editor column does not re-point the grid at itself — a project with no
-    collection of its own. Everything else the function drives (Bible Texts, Commentaries and
-    Comments in Column 3, plus Model Text in Column 1) follows the editor either way. This upholds
-    `adr-find-follows-editor-to-read-only`'s Context rather than changing it; the gate lives one
-    level in from the call site that entry describes, which is the only detail that has shifted.
+  - **Published resources are not followed; read-only projects are.** `openOrUpdateRelatedPanels`
+    reads `platform.isPublished` for the incoming project and skips the Text Collection re-point
+    only when it is `true`: a published resource has no collection of its own, so following it would
+    cost a reload, and the in-memory state it drops, for an empty panel. A translation project the
+    user cannot edit is followed like any other. `platform.isEditable` is the wrong discriminator
+    for this: it is the project-wide `Editable` flag (`GetIsEditable` in
+    `c-sharp/Projects/ScrTextExtensions.cs`, forced false for resources), not a per-user permission
+    — that is `canUserEditScripture` — so gating on it stranded the Text Collection and Find on the
+    outgoing project whenever an `Editable=F` translation project was opened. A failed `isPublished`
+    read counts as not published — the setting's default, and what `resolveProjectIsPublished` in
+    `web-view.service-shard.ts` does — so the grid follows. The class newly followed is a plain
+    folder project carrying `<Editable>F</Editable>`, such as the bundled WEB sample; locally
+    installed `.p8z` resources load as resource projects (`GetAllResourceScrTexts` in
+    `LocalParatextProjects.cs` filters on `IsResourceProject`, which is exactly what
+    `platform.isPublished` reports), so they are published and stay skipped. As of 2026-09-18 it is
+    unchecked whether the grid offers controls that write to an `Editable=F` project — tracked on
+    PT-4724, which should first settle where to run that check: the shipped
+    `default-layout-supplement.json` lists the Scripture Text Grid behind
+    `platformScriptureEditor.enableScriptureTextGrid` (contributed default `true`), while
+    `default-layout-supplement.model.ts` and `filterEnabledSupplementEntries` describe the supplement
+    as empty in vanilla builds. Find follows every editor-column switch, resources included, and
+    withholds Replace itself per `adr-find-follows-editor-to-read-only`. Everything else
+    `openOrUpdateRelatedPanels` drives (Bible Texts, Commentaries and Comments in Column 3, plus
+    Model Text in Column 1) follows the editor either way. The Power→Simple path
+    (`finalizeProjectSwitch`) applies no gate of its own: a published resource cannot normally reach
+    it, because `getMostRecentUsableProjectId` walks past published candidates and
+    `cacheLastOpenedSimpleProject` declines to cache them, but the fails-open default above leaves a
+    transient lookup error as the one hole. Following costs a reload the old gate avoided: a round
+    trip through a resource reloads Find twice, clearing its results, and an `Editable=F` project now
+    reloads the grid. How an unbound grid gets its first project, and what following costs
+    in Power mode, is recorded in `adr-active-editor-project-is-a-window-data-type`.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a
@@ -900,8 +927,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     probe noted in the Decision.
   - **A failed re-point no longer self-corrects.** `projectId` is not in
     `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any re-point succeeds the panel's saved
-    definition carries a project and `explicitProjectId` wins from then on — the scroll-group
-    fallback that used to fix a stale panel on the next navigation stops running. Because of that,
+    definition carries a project and `explicitProjectId` wins from then on, and nothing but
+    another re-point moves the panel. Because of that,
     `updateRelatedTextCollectionPanel` checks `reloadWebView`'s return (it resolves `undefined`
     rather than throwing when the definition has gone or the provider declines) and logs failures at
     **error**, naming the project left on screen. It still does not recover; it just stops failing
@@ -917,12 +944,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     which issues an `existingId: '?'` probe — so this adds a second enumeration and a reload to a
     path that had one probe. If both run for one switch the case-normalized skip guard makes the
     second a no-op.
-  - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
-    continues to change `projectId` in place through its latch effect, which is exactly the usage
-    `useBufferedLayoutSetting` warns about: `shouldApply` is already `false` after the first apply,
-    so the held admin list can stay on the outgoing project while the per-user list and overlay
-    resubscribe to the incoming one.
-- **Source:** PT-4423, which fixes PT-4238.
+  - **The stale-held-setting path is closed for the grid.** `useBufferedLayoutSetting` is not safe
+    for a consumer that changes `projectId` in place: `shouldApply` is already `false` after the
+    first apply, so the held admin list would stay on the outgoing project while the per-user list
+    and overlay resubscribe to the incoming one. The grid never changes `projectId` in place, in
+    either interface mode: an unbound grid is seeded once and keeps its project, and only the
+    switch's reload moves it. The Power-mode consequence — a grid there cannot be re-pointed — and
+    the alternatives rejected for it are recorded in `adr-active-editor-project-is-a-window-data-type`.
+- **Source:** PT-4423, which hardens the Simple-mode re-point. PT-4238 (PR #2736) replaced the
+  unbound grid's scroll-group fallback; see `adr-active-editor-project-is-a-window-data-type`.
+  Amended by PT-4716: the `isPublished` follow rule.
 
 ## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
 
@@ -2004,7 +2035,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0020
 - **Date:** 2026-08-17
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-18 — the `isEditable` gate this entry's Context describes was
+  removed wholesale by #2425 and reintroduced by PT-4059 as a Text-Collection-only parameter, which
+  PT-4716 replaced with a `platform.isPublished` check while dropping the editor's gate on Find's
+  re-point; Find now follows every editor-column switch, via `updateRelatedFindPanel` in `open()`
+  rather than from `openOrUpdateRelatedPanels`. Code assuming all Column 3 panels share one project
+  must still account for Find — Ctrl+F inside Bible Texts, Commentaries or Model Text rebinds it to
+  that panel's project (`useOpenFindShortcut`, `resolveFindInvocation`) — and now also for the Text
+  Collection, which stays put for a published resource. The Decision itself stands.
 - **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
   `openOrUpdateRelatedPanels` on `projectForWebView.isEditable` precisely so that opening a published
   resource in the editor column does not switch the related panels over to the resource. Making Find a
