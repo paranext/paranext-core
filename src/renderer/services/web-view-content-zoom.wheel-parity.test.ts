@@ -42,10 +42,18 @@ const SEQUENCES: { name: string; frames: Frame[] }[] = [
     ],
   },
   {
-    // Exercises the bootstrap's reversal flush (`requestZoomSteps`'s `reverses` branch, which
-    // applies whatever is pending before a notch in the opposite direction joins the total).
-    // Asymmetric (three in, one out) on purpose: an equal-and-opposite pair would sum to zero on
-    // both sides whether or not either side flushes correctly before the reversal.
+    // Pins the sign convention and cross-direction accumulation: travel banked in one direction is
+    // not carried into a notch that reverses it, on either side. Asymmetric (three in, one out) so
+    // the expected total is non-zero and direction-specific rather than an equal-and-opposite pair
+    // that would sum to zero regardless of which side is wrong.
+    //
+    // Does not pin the bootstrap's reversal flush itself (`requestZoomSteps`'s `reverses` branch,
+    // which applies whatever is pending before folding in the opposite-direction notch) as distinct
+    // from netting the whole burst and applying it once — the two give the same result everywhere
+    // except at the ends of the zoom range, which is exactly the per-event-vs-coalesced-frame clamp
+    // split documented below this array as outside what this test pins. A burst large enough to
+    // reach that boundary would fail for the clamp-split reason, not the reversal-flush one, so no
+    // sequence here can isolate that branch.
     name: 'a burst that reverses direction',
     frames: [
       { deltaY: -100, wheelDeltaY: 120 },
