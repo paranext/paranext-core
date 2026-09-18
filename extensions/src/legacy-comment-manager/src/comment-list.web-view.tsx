@@ -13,6 +13,7 @@ import {
   usePromise,
   useTabIconSelection,
   useViewVisibility,
+  type CommentDraft,
   type TabIconUrls,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -23,10 +24,13 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import {
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
+  debounce,
   getErrorMessage,
   isPlatformError,
   LegacyCommentThread,
   serialize,
+  type DebouncedFunction,
 } from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
 import type { CommentFilterSelection, LegacyCommentThreadSelector } from 'legacy-comment-manager';
@@ -34,6 +38,7 @@ import { CommentListWebViewMessage } from './comment-list-messages.model';
 import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
   applyFilterOverrides,
+  areCommentFiltersAtDefault,
   buildCommentThreadSelector,
   CommentFilters,
   DEFAULT_COMMENT_FILTERS,
@@ -52,8 +57,19 @@ import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
+import { loadDrafts, pruneDrafts, saveDrafts } from './comment-draft-store';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
+
+/**
+ * How long a draft change waits with no further typing before it is written to storage.
+ * `onDraftChange` fires on every serialized editor change — effectively every keystroke — and a
+ * write re-serializes every draft in the project via `JSON.stringify` plus a synchronous
+ * `localStorage.setItem`; debouncing collapses a typing burst into one write instead of one per
+ * keystroke. The in-memory `drafts` state (and the `drafts` prop threads render from) updates
+ * synchronously regardless, so typing itself is never delayed — only the persistence write is.
+ */
+const DRAFT_SAVE_DEBOUNCE_MS = 500;
 
 /**
  * Placeholder returned by the `UserCommentFilters` hook before the stored selection has loaded.
@@ -400,6 +416,98 @@ global.webViewComponent = function CommentListWebView({
   useEffect(() => {
     commentThreadsRef.current = safeCommentThreads;
   }, [safeCommentThreads]);
+
+  // #region Comment drafts (unsent replies, pending assignees, in-progress comment edits)
+  //
+  // Held here rather than inside CommentThread/CommentItem's own state (platform-bible-react's
+  // CommentList `drafts`/`onDraftChange` props) so a draft survives the routine remount a filter
+  // or scope change causes when its thread stops matching the active query. Persisted to
+  // `localStorage` via comment-draft-store.ts so a draft also survives a panel close or restart.
+
+  // `projectId` is `undefined` only for a brand-new Comment List Panel that has no project yet
+  // (see `openCommentListPanel`'s doc); there is no project to scope a draft to, and no comments
+  // PDP either, so there is nothing to load or persist until a project is assigned.
+  const [drafts, setDrafts] = useState<Record<string, CommentDraft>>(() =>
+    projectId ? loadDrafts<CommentDraft>(projectId) : {},
+  );
+
+  const handleDraftChange = useCallback((threadId: string, draft: CommentDraft | undefined) => {
+    setDrafts((prevDrafts) => {
+      if (draft === undefined) {
+        if (!(threadId in prevDrafts)) return prevDrafts;
+        return Object.fromEntries(Object.entries(prevDrafts).filter(([id]) => id !== threadId));
+      }
+      return { ...prevDrafts, [threadId]: draft };
+    });
+  }, []);
+
+  /**
+   * Every caller that reassigns this web view's project calls `reloadWebView` (see
+   * `openCommentListPanel`), which remounts the React root entirely rather than changing the
+   * `projectId` prop on a live instance — so `projectId` is invariant for this component's lifetime
+   * and the lazy initializer above is enough to load the right project's drafts. Still read through
+   * a ref (rather than closed over once) so the debounced save below targets whatever project is
+   * CURRENT if that invariant ever changes, instead of silently writing under a stale id.
+   */
+  const projectIdRef = useRef(projectId);
+  projectIdRef.current = projectId;
+
+  // A ref, not `useMemo`: this object owns a live timer, and React documents a memo value as a
+  // discardable hint (see useAutoSearchDebounce for the same reasoning). A ref guarantees exactly
+  // one instance, so the flush-on-unmount effect below is always flushing the one timer that
+  // could actually be pending.
+  const debouncedSaveDraftsRef = useRef<
+    DebouncedFunction<(d: Record<string, CommentDraft>) => void> | undefined
+  >(undefined);
+  if (!debouncedSaveDraftsRef.current) {
+    debouncedSaveDraftsRef.current = debounce((draftsToSave: Record<string, CommentDraft>) => {
+      // No project to scope this write to (see the `drafts` initializer above) -- nothing to save.
+      if (projectIdRef.current) saveDrafts(projectIdRef.current, draftsToSave);
+    }, DRAFT_SAVE_DEBOUNCE_MS);
+  }
+  const debouncedSaveDrafts = debouncedSaveDraftsRef.current;
+
+  useEffect(() => {
+    // Never cancelled (only flushed, below), so this only rejects if saveDrafts itself throws --
+    // it doesn't, it's try/catch-wrapped -- but the rejection is still handled defensively rather
+    // than left as an unhandled promise, matching this codebase's other debounce consumers.
+    debouncedSaveDrafts(drafts).catch((error) => {
+      const message = getErrorMessage(error);
+      if (message !== DEBOUNCE_CANCELED_ERROR_MESSAGE)
+        logger.error(`Failed to save comment drafts: ${message}`);
+    });
+  }, [drafts, debouncedSaveDrafts]);
+
+  // Flush (not cancel) on unmount, so a debounced write that hasn't fired yet -- e.g. the user
+  // typed and then immediately closed this panel or the app -- is never lost.
+  useEffect(() => {
+    return () => {
+      debouncedSaveDrafts.flush();
+    };
+  }, [debouncedSaveDrafts]);
+
+  // Whether the current query is the complete, unfiltered thread list -- the only list pruning can
+  // safely trust. A narrowed preset or scope would otherwise make every thread it excludes look
+  // deleted, discarding drafts a filter change is merely hiding rather than destroying.
+  const isShowingAllCommentThreads =
+    areCommentFiltersAtDefault(filters) && scopeFilter === 'all-books';
+
+  useEffect(() => {
+    // Also wait for the query to finish loading: an in-flight or placeholder empty list must never
+    // read as "this project has no threads," which would prune every draft the user has.
+    if (!isShowingAllCommentThreads || isLoadingCommentThreads) return;
+    setDrafts((prevDrafts) => {
+      const existingThreadIds = safeCommentThreads.map((thread) => thread.id);
+      const pruned = pruneDrafts(prevDrafts, existingThreadIds);
+      // pruneDrafts only ever removes entries, so an unchanged count means nothing was pruned --
+      // keep the same reference rather than mint an equal one, avoiding a no-op render (and, in
+      // turn, a needless re-save).
+      if (Object.keys(pruned).length === Object.keys(prevDrafts).length) return prevDrafts;
+      return pruned;
+    });
+  }, [isShowingAllCommentThreads, isLoadingCommentThreads, safeCommentThreads]);
+
+  // #endregion
 
   /**
    * Writes the whole selection to this user's stored preference for this project, preserving
@@ -842,6 +950,8 @@ global.webViewComponent = function CommentListWebView({
           onSelectedThreadChange={setSelectedThreadId}
           onVerseRefClick={handleVerseRefClick}
           conflictResolution={conflictResolution}
+          drafts={drafts}
+          onDraftChange={handleDraftChange}
         />
       )}
       <Sonner />
