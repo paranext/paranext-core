@@ -248,7 +248,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
           syncWheelListener();
         }
       }
-      if (!activeArea || areas.indexOf(activeArea) === -1) setActive(areas[0]);
+      if (!activeArea || areas.indexOf(activeArea) === -1) {
+        const focused = areaOf(document.activeElement);
+        setActive(focused !== undefined && areas.indexOf(focused) !== -1 ? focused : areas[0]);
+      }
     };
     // The badge and live region live in this document, so writing their text is itself a
     // childList mutation; a zoom step would otherwise pay for a second full-document scan.
@@ -312,6 +315,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // zoom chord pressed inside the window is exactly what the protection is for.
     let pointerArea;
     let pointerTime = 0;
+    // Whether the element holding focus is one the VIEW focused rather than one the user chose.
+    // Set when a pointer gesture's answering focus change is suppressed below - the view moving the
+    // caret out of the area the user just clicked, which is what selecting a footnote row does.
+    // Cleared by a focus change the platform accepts, or by Tab - never by a pointer down: a click
+    // is not itself a focus move, and a click that moves no caret (a non-focusable element) must
+    // leave the caret exactly where the view put it rather than hand the chords back to it. The
+    // chords consult this flag; the wheel does not, since it reads the pointer and never the caret.
+    let viewMovedFocus = false;
     const onPointerDown = (e) => {
       const areaId = areaOf(e.target);
       // Recorded only when the id is one setActive would actually accept, and only for the primary
@@ -335,12 +346,14 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
         performance.now() - pointerTime < ${GESTURE_FOCUS_MS};
       if (suppress) {
         pointerArea = undefined;
+        viewMovedFocus = true;
         return;
       }
+      viewMovedFocus = false;
       setActive(areaId);
     };
     const onGestureKeyDown = (e) => {
-      if (e.key === 'Tab') pointerArea = undefined;
+      if (e.key === 'Tab') { pointerArea = undefined; viewMovedFocus = false; }
     };
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('focusin', onFocusIn, true);
@@ -415,7 +428,10 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       if (!hasModifier(e)) return;
       const chord = chordFor(e);
       if (!chord) return;
-      const areaId = targetFor(document.activeElement);
+      const areaId =
+        viewMovedFocus && activeArea && areas.indexOf(activeArea) !== -1
+          ? activeArea
+          : targetFor(document.activeElement);
       if (!areaId) return;
       e.preventDefault();
       // Whatever the tick path has pending goes over first, so the parent is asked to step in the
