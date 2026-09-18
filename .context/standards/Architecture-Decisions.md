@@ -1460,6 +1460,56 @@ step, no automation. Just a record.
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** The Scripture editor's right-click menu is drawn by `ContextMenuPlugin` in
+  `paranext/scripture-editors`, not by our `ContextMenuContent`. It portalled hand-built markup to
+  `document.body`, outside every zoom area, so at 200 % it stayed at interface scale beside text
+  twice its size — at the text pane and inside the footnote editor pop-up alike.
+- **Decision:** the library takes an optional `EditorOptions.contextMenuContainer?: () =>
+  HTMLElement | undefined` getter. It calls that getter once, inside its own `contextmenu`
+  handler, and stores the returned element in state — never during render. Inside that element the
+  menu inherits the area's CSS `zoom`; it divides its viewport coordinates by
+  `Element.currentCSSZoom`, clamps to the container's rect narrowed by every clipping ancestor and
+  the viewport, and caps its height to that box. Both call sites are in place: the editor web view
+  supplies the text pane's `ContentZoomRoot`; `FootnoteEditor` overrides it with its own root,
+  because the web view's value would otherwise flow through `FootnoteEditor`'s own
+  `...editorOptions` spread and bind the pop-up's menu against the text pane's box instead of the
+  pop-up's own.
+- **Alternatives:**
+  - stamping `data-platform-content-zoom-root` + `data-platform-content-zoom-popup` on the
+    portalled element, as our own pop-ups do — rejected: it puts our attribute names and
+    `--platform-content-zoom-*` variable names inside a library that also serves Scribe and the
+    PERF demos, where `currentCSSZoom` is a standard property that needs no convention;
+  - a generic attribute bag the host fills in — the positioning still lives in the library, keyed
+    off an attribute it does not understand;
+  - positioning the menu from here — the plugin owns the `contextmenu` event and the clamp, and
+    the host cannot see the menu's measured size;
+  - dropping the menu's hard-coded 14px font and 200px width — measured irrelevant: CSS `zoom`
+    scales `px` lengths, so those already scale; changing them would restyle the menu at 100 %.
+- **Consequences:**
+  - the library gains no knowledge of this platform; the only shared vocabulary is a standard DOM
+    property;
+  - a fixed-position menu is not clipped by a scrolling ancestor, so staying inside the pane is
+    computed rather than inherited — the clipping-ancestor walk is load-bearing in split layouts;
+  - resolving the container lazily, inside the `contextmenu` handler, rather than reading it during
+    render is load-bearing, not incidental: an earlier shape that called the host's getter during
+    render made React Compiler abandon optimizing the whole component
+    (`react-hooks/preserve-manual-memoization`). The getter shape also lets both hosts pass a
+    stable `useCallback`, or a plain ref read, with no `useState` and no memo churn of their own;
+  - the capped menu's outer element gets `overflowY: auto` while the inner `<ul>` still carries
+    `editor.css`'s own `max-height: 200px; overflow-y: scroll`; a short pane at zoom 200 % or more
+    with a full menu can bind both constraints at once, producing two nested scroll regions with
+    only one visible scrollbar (`scrollbar-width: none` hides the inner one) — this is being
+    checked by hand at 200 % before deciding whether to change it;
+  - the fix reaches core through the `platform-yalc` pin, so core's own diff shows only the two
+    call sites and a reviewer cannot see the behaviour change in it;
+  - `model-text-panel` mounts the same editor and will need a container the moment PT-4582 gives
+    its view a zoom area.
+- **Source:** PT-4713.
+
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
 - **Formerly:** ADR-0012
@@ -3805,7 +3855,9 @@ step, no automation. Just a record.
   - three shadcn files carry `CUSTOM` changes;
   - the library's `Select`, `ContextMenu`, `Menubar` and dropdown sub-menu
     (`DropdownMenuSubContent`) content do not follow an area yet; each needs the same small change
-    when first opened from zoomed content;
+    when first opened from zoomed content. The Scripture editor's right-click menu is not one of
+    these — it is drawn by the editor library and follows its area by a different route; see
+    `adr-editor-context-menu-follows-its-area-via-a-container`.
   - a pop-up portaled into a container inside another area inherits that container's zoom.
 - **Source:** PT-4634.
 
