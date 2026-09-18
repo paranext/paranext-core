@@ -188,12 +188,18 @@ test.describe('Bible Texts panel content zoom', () => {
     const editorContainer = bibleTextsFrame.getByTestId(RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID);
     await editorContainer.waitFor({ timeout: 60_000 });
 
-    // The rendered verse text itself, not the container above or its own internal
-    // `.editor-container` wrapper: both of those are `tw:flex-1` flex items (the container is also
-    // `tw:overflow-auto`), so their own outer box is whatever the flex layout allots them and stays
-    // that size at any zoom level — a height ratio measured on either would read 1.0 even with the
-    // zoom rule broken. A verse span's height is intrinsic, set by its own rendered text at the
-    // pane's current zoom, so it is what actually moves when the zoom rule applies.
+    // Measure the rendered verse text itself, never a wrapper. The container above is
+    // `tw:flex-1 tw:overflow-auto`, so the flex layout fixes its outer box and a height ratio taken
+    // on it reads 1.0 even with the zoom rule broken. A verse span's height is intrinsic to its own
+    // rendered text at the pane's current zoom, so it is what actually moves when the rule applies —
+    // and that is demonstrated rather than assumed: with the `zoom` declaration in
+    // `CONTENT_ZOOM_NAMED_AREA_RULE_TEMPLATE` disabled, this ratio reads 1.0 while every
+    // custom-property assertion in this spec still passes.
+    //
+    // The same element is the established measurement target in the Scripture editor's own
+    // `content-zoom.spec.ts`. Don't reason about the editor's internal `.editor-container` box here:
+    // `_editor-overrides.scss` documents its `flex-grow`/`height` as currently inert, so it is
+    // content-driven in some contexts and flex-sized in others.
     const verse1 = editorContainer
       .locator('.editor-container span[data-marker="v"][data-number="1"]')
       .first();
