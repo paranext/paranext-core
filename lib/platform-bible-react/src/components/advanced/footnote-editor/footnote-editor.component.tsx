@@ -278,6 +278,9 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
 /** Debounce interval for inline-mode live application of note edits to the parent editor. */
 export const INLINE_APPLY_DEBOUNCE_MS = 300;
 
+/** The custom caller offered for a note that does not have one of its own yet. */
+const DEFAULT_CUSTOM_CALLER = '*';
+
 // TODO: Remove this once the new marker menu is implemented with correct logic
 /**
  * This is for a temporary fix to get the markers menu to work by having the default usj include a
@@ -383,8 +386,8 @@ export default function FootnoteEditor({
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
   const [originalCallerType, setOriginalCallerType] = useState<FootnoteCallerType>('generated');
-  const [customCaller, setCustomCaller] = useState<string>('*');
-  const [originalCustomCaller, setOriginalCustomCaller] = useState<string>('*');
+  const [customCaller, setCustomCaller] = useState<string>(DEFAULT_CUSTOM_CALLER);
+  const [originalCustomCaller, setOriginalCustomCaller] = useState<string>(DEFAULT_CUSTOM_CALLER);
 
   const [noteType, setNoteType] = useState<string>('f');
 
@@ -634,10 +637,13 @@ export default function FootnoteEditor({
         parsedCallerType = 'generated';
       } else if (rawCaller === HIDDEN_NOTE_CALLER) {
         parsedCallerType = 'hidden';
-      } else if (rawCaller) {
-        setCustomCaller(rawCaller);
-        setOriginalCustomCaller(rawCaller);
       }
+      // Set for every load, not only a custom one: an inline editor stays mounted from one note to
+      // the next, and would otherwise offer the previous note's custom caller for this one.
+      const loadedCustomCaller =
+        parsedCallerType === 'custom' && rawCaller ? rawCaller : DEFAULT_CUSTOM_CALLER;
+      setCustomCaller(loadedCustomCaller);
+      setOriginalCustomCaller(loadedCustomCaller);
       setCallerType(parsedCallerType);
       setOriginalCallerType(parsedCallerType);
       // Assigns note type

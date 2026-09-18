@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { createRef, forwardRef, useImperativeHandle } from 'react';
 import type { DeltaOpInsertNoteEmbed, EditorRef } from '@eten-tech-foundation/platform-editor';
@@ -11,7 +12,10 @@ import FootnoteEditor, {
   type FootnoteEditorHandle,
 } from '@/components/advanced/footnote-editor/footnote-editor.component';
 import type { FootnoteEditorLocalizedStrings } from '@/components/advanced/footnote-editor/footnote-editor.types';
-import { editableView } from '@/components/advanced/footnote-editor/footnote-editor.fixtures';
+import {
+  buildLocalizedStrings,
+  editableView,
+} from '@/components/advanced/footnote-editor/footnote-editor.fixtures';
 
 // ---- Editorial stub harness ------------------------------------------------
 // No test in this package renders the real Lexical `Editorial` (heavy, flaky in
@@ -199,6 +203,24 @@ describe('FootnoteEditor note loading', () => {
 
     expect(editorRefMock.applyUpdate).toHaveBeenCalledTimes(1);
     expect(editorRefMock.applyUpdate).toHaveBeenCalledWith([reloaded[0], { delete: 1 }]);
+  });
+
+  it("offers the default custom caller for the next note, not the previous note's own", async () => {
+    const withCustomCaller = makeNoteOps('first');
+    if (withCustomCaller[0].insert.note) withCustomCaller[0].insert.note.caller = 'a';
+    const { rerender, props } = renderEditor({
+      inline: true,
+      noteOps: withCustomCaller,
+      localizedStrings: buildLocalizedStrings(),
+    });
+    // The next note has a generated caller, so it has no custom caller of its own to offer.
+    rerender(<FootnoteEditor {...props} noteOps={makeNoteOps('second')} noteKey="key-2" />);
+
+    await userEvent
+      .setup({ pointerEventsCheck: 0 })
+      .click(screen.getByRole('button', { name: /callerDropdown/i }));
+
+    expect(screen.getByRole('textbox')).toHaveValue('*');
   });
 });
 
