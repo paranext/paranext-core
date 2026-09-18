@@ -31,6 +31,7 @@ export type {
   CommentListProps,
   CommentListLocalizedStrings,
   AddCommentToThreadOptions,
+  CommentDraft,
 } from './components/advanced/comment-list/comment-list.types';
 export {
   COMMENT_LIST_STRING_KEYS,
