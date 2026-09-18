@@ -304,7 +304,8 @@ export type UsjFlatTextChapterLocation = {
  * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
  * document.
  *
- * This could actually have more content clauses at the end, but TS types are limited
+ * Eight clauses cover every shape the editors render (table cell → char → nested char → text is
+ * seven). Deeper paths are valid at runtime; the type is a bound, not a rule.
  */
 export type ContentJsonPath =
   | ''
@@ -312,14 +313,23 @@ export type ContentJsonPath =
   | `$.content[${number}]`
   | `$.content[${number}].content[${number}]`
   | `$.content[${number}].content[${number}].content[${number}]`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}]`;
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`;
 
 /**
  * JSON path to the `marker` or an attribute on a {@link MarkerObject} or {@link Usj} in the current
  * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
  * if there are symbols other than underscore in the property name
  *
- * This could actually have more content clauses at the end, but TS types are limited
+ * The catch-all template-literal member that matches anything starting `$.` subsumes every depth
+ * member below it — a depth path starts `$.content[` in both notations — so any such path
+ * type-checks, and the per-depth members document the shapes this type is expected to carry rather
+ * than enforcing a bound. (`$['property']`, a property directly on the document root, and the empty
+ * string `''` are the two members the catch-all does not cover, because neither starts `$.`.) Eight
+ * depths cover every shape the editors render (table cell → char → nested char → text is seven).
  */
 export type PropertyJsonPath =
   | ''
@@ -332,7 +342,15 @@ export type PropertyJsonPath =
   | `$.content[${number}].content[${number}].content[${number}].${string}`
   | `$.content[${number}].content[${number}].content[${number}]['${string}']`
   | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
 
 /**
  * A JSONPath query to a {@link MarkerContent}, {@link Usj}, or property within a USJ document and

@@ -81,6 +81,45 @@ const SAMPLE_USFM_CHAPTER = String.raw`\id GEN GEN - Genesis
 \v 2 Now the earth was formless and empty.
 \v 3 And God said, "Let there be light," and there was light.`;
 
+// Sample USJ chapter data for Genesis chapter 2. Chapter USJ only carries the book `id` marker
+// when the chapter is 1 (the intro content before chapter 1 belongs to chapter 1's USJ); a
+// chapter-2 (or later) document has no `id` marker to derive a book ID from.
+const SAMPLE_USJ_CHAPTER_2 = Object.freeze({
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'chapter', marker: 'c', number: '2', sid: 'GEN 2' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 2:1' },
+        'Thus the heavens and the earth were finished.',
+      ],
+    },
+  ],
+});
+
+// Sample USJ chapter data for Genesis chapter 1 with a `nd` char span nested in verse 1's text
+const SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN = Object.freeze({
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: ['GEN - Genesis'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+        'In the beginning ',
+        { type: 'char', marker: 'nd', content: ['GOD'] },
+        ' created the heavens and the earth.',
+      ],
+    },
+  ],
+});
+
 // Special object to pass into `createMockPapi` to make the USJ chapter return nothing
 const USJ_NOTHING = {};
 
@@ -344,6 +383,57 @@ describe('convertScriptureRangeToEditorRange', () => {
       // USFM offset 10 - verse marker '\v 2 ' (5 chars) = USJ offset 5
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[3]');
       expect(getOffset(result.editorRange.end)).toBe(5);
+    });
+  });
+
+  describe('Book ID fallback for USJ document locations outside chapter 1', () => {
+    it("derives the verse from a chapter-2 USJ using the range's own book id", async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_2);
+      // UsjFlatChapterLocation format (book + chapterNum + documentLocation); chapter 2's USJ has
+      // no `id` marker to derive a book ID from
+      const range: ScriptureRange = {
+        start: {
+          book: 'GEN',
+          chapterNum: 2,
+          documentLocation: { jsonPath: '$.content[1].content[0]' },
+        },
+        end: {
+          book: 'GEN',
+          chapterNum: 2,
+          documentLocation: { jsonPath: '$.content[1].content[1]', offset: 5 },
+        },
+      };
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.verseRef.book).toBe('GEN');
+      expect(result.verseRef.chapterNum).toBe(2);
+      expect(result.verseRef.verseNum).toBe(1);
+      expect(result.editorRange.start.jsonPath).toBe('$.content[1].content[0]');
+      expect(result.editorRange.end.jsonPath).toBe('$.content[1].content[1]');
+      expect(getOffset(result.editorRange.end)).toBe(5);
+    });
+  });
+
+  describe('Collapsed ranges', () => {
+    // USFM offset 26 in verse 1 is the settled position right at the start of the `nd` char
+    // span's text ("GOD"), after the marker's own backslash+code: content[2] is the `p`
+    // paragraph, content[2] within that is the `nd` char node, and content[0] within that is its
+    // text
+    const expectedCollapsedLocation = { jsonPath: '$.content[2].content[2].content[0]', offset: 0 };
+
+    it('resolves both ends to the same location when `range.end` equals `range.start`, at settled offset 0 of a char span text', async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN);
+      const point: ScriptureRange['start'] = {
+        scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+        offset: 26,
+      };
+      const range: ScriptureRange = { start: point, end: point };
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.editorRange.start).toEqual(expectedCollapsedLocation);
+      expect(result.editorRange.end).toEqual(result.editorRange.start);
     });
   });
 

@@ -1336,14 +1336,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
 
     // Validate that the selection doesn't contain markers, and that there is meaningful content.
-    // `selection`'s jsonPaths address the LIVE tree (EditorRef.getSelection's contract), while
-    // `getUsj()` returns the SETTLED document — identical when nothing is pending, but while a
-    // command surface has in-progress input elsewhere in the document, settled indices can shift
-    // out from under a jsonPath captured earlier. `jsonPathToUsjNodeAndDocumentLocation` throws
-    // outright when a path no longer resolves at all, and can otherwise resolve to a
-    // still-valid-but-DIFFERENT node whose string is a different length than the live one the
-    // offsets below were computed against — both guarded here rather than trusted, since neither
-    // is distinguishable from a genuine marker-boundary case by the caller.
+    // `selection`'s jsonPaths address the SETTLED document per EditorRef.getSelection's contract
+    // — the same document `getUsj()` returns — so they should always resolve here and
+    // land on a node whose string is the length the offsets below were computed against. A path
+    // that `jsonPathToUsjNodeAndDocumentLocation` cannot resolve at all, or that resolves to a node
+    // shorter than an offset expects, is not a legitimate state; it's a bug or a race. This guard,
+    // and the offset check below, are the fail-safe that turns either case into a warning instead
+    // of a mis-anchored comment or a crash.
     const editorUsj = editorRef.current?.getUsj();
     const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
     if (editorUsjCorrected) {
@@ -1360,9 +1359,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         endNodeAndDocumentLocation = selection.end
           ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
           : startNodeAndDocumentLocation;
-      } catch {
+      } catch (e) {
         // A path that no longer resolves at all against the settled tree: same fail-safe response
-        // as an unresolvable selection below, not a crash.
+        // as an unresolvable selection below, not a crash. Log it — the settled contract says this
+        // cannot happen, so a hit here is a defect worth chasing, not a user mistake.
+        logger.warn(
+          `Comment insertion: selection jsonPath start=${selection.start.jsonPath} end=${selection.end?.jsonPath ?? selection.start.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
+        );
         papi.notifications.send({
           message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
           severity: 'warning',
@@ -1395,15 +1398,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         UsjReaderWriter.isUsjDocumentLocationForTextContent(endTextDocumentLocation) &&
         startTextDocumentLocation.jsonPath === endTextDocumentLocation.jsonPath &&
         startTextDocumentLocation.offset === endTextDocumentLocation.offset;
-      // A live-tree offset that no longer fits the settled string it resolved to: concrete
-      // evidence the two snapshots disagree about this node's content, not just a stale offset —
-      // proceeding would either mis-anchor the comment or (for offset > length) walk off the end
-      // of `startNode` below. Bail out the same way an unresolvable path already does.
+      // The offset is expected to always fit within `startNode`, since both come from the same
+      // settled document by contract. An offset past the end of `startNode` means that contract
+      // was violated by a bug or a race, not an expected state — proceeding would walk off the end
+      // of `startNode` below, so bail out the same way an unresolvable path already does.
       if (
         isCollapsed &&
         'offset' in startTextDocumentLocation &&
         startTextDocumentLocation.offset > startNode.length
       ) {
+        logger.warn(
+          `Comment insertion: selection offset ${startTextDocumentLocation.offset} at ${startTextDocumentLocation.jsonPath} is past the end of the settled node (length ${startNode.length})!`,
+        );
         papi.notifications.send({
           message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
           severity: 'warning',

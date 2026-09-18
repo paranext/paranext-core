@@ -473,10 +473,15 @@ export async function convertScriptureRangeToEditorRange(
     endVerseOffset === undefined ? endVerseRef : { verseRef: endVerseRef, offset: endVerseOffset },
   );
 
-  // If we don't have which verse we're setting the scroll group to, get it
+  // If we don't have which verse we're setting the scroll group to, get it. A USJ document
+  // location range only carries a chapter's own USJ, which has a book `id` marker for chapter 1
+  // and lacks one otherwise (see UsjChapterLocation), so fall back to the book already resolved
+  // above for this range.
   if (startVerseRef.verseNum === -1) {
-    const startUsfmLocation =
-      usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(startDocumentLocation);
+    const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
+      startDocumentLocation,
+      startVerseRef.book,
+    );
     startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
   }
 

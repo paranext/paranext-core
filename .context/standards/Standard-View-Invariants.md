@@ -160,3 +160,26 @@ each after a bug. **Do not add another private exclusion; extend the shared one.
 
 The caret/selection half is unified in the editor repo. The collab half is not yet — the ops stream
 and the delta-doc length side still keep separate predicates.
+
+Two rules follow from that one language, both of which a host has to get right:
+
+**Every public editor position is a SETTLED coordinate.** `getSelection`, `onSelectionChange`,
+`setSelection`, `setAnnotation` and `insertNote` all address the document `getUsj()` returns, never
+the live Lexical tree — the editor does the live↔settled translation once, at its own API boundary.
+So a host may resolve a jsonPath it received from the editor against the USJ it already holds, and a
+path that fails to resolve (or an offset past the node it lands on) is a bug or a race, not an
+expected state. Keep those host-side checks as fail-safes, log them, and do not write code that
+compensates for an expected divergence — there isn't one.
+
+**`ContentJsonPath` and `PropertyJsonPath` must be widened in lock-step across both repos.**
+`platform-bible-utils` (`src/scripture/usj-reader-writer.model.ts`) and the editor's
+`@eten-tech-foundation/scripture-utilities`
+(`packages/utilities/src/converters/usj/usj-document-location.model.ts` in the `scripture-editors`
+repo) each declare their own copy, and core assigns its copy into the editor's typed `EditorRef`
+API. Widen
+one alone and the cross-repo assignment stops type-checking — in the core→editor direction only, so
+the break surfaces as red CI in core after an editor bump, with nothing in either repo's own tests to
+catch it. Both repos carry a compile-time depth test; keep them mirrored.
+
+Rationale and history: `adr-editor-positions-are-settled-coordinates` in
+[`Architecture-Decisions.md`](Architecture-Decisions.md).
