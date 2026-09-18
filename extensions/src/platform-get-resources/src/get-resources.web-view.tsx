@@ -131,7 +131,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           // offering "Update". A failure here is logged, not rethrown — the action itself succeeded,
           // and reaching the `.catch` below would report it to the user as failed.
           try {
-            await papi.commands.sendCommand('platformGetResources.refreshResourceFlags');
+            await papi.commands.sendCommand(
+              'platformGetResources.refreshResourceFlags',
+              dblEntryUid,
+            );
           } catch (error) {
             logger.warn(
               `Could not refresh resource flags after ${action}: ${getErrorMessage(error)}`,

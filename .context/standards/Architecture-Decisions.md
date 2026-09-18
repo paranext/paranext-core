@@ -1097,10 +1097,15 @@ step, no automation. Just a record.
   3. **A resolved install is not re-fired for the same uid.** An idempotent install plus a catalog
      that never converges would otherwise loop. The panel offers a retry instead, and says the
      resource is installed but could not be opened rather than that the install failed.
-  4. **Absence is not evidence during startup.** For the extension host's first 30 seconds,
-     reconciliation (`reconcileCachedResources`'s `canTrustAbsence`) can mark a resource installed
-     but never uninstalled, and a freshly fetched catalog is not reconciled at all. Otherwise a
-     partially registered project list rewrites installed resources as uninstalled and persists it.
+  4. **Absence is not evidence during startup, unless a caller vouches for it.** For the extension
+     host's first 30 seconds, reconciliation (`reconcileCachedResources`'s `canTrustAbsence`) can
+     mark a resource installed but never uninstalled, and a freshly fetched catalog is not reconciled
+     at all. Otherwise a partially registered project list rewrites installed resources as
+     uninstalled and persists it. *Amended 2026-09-18:* a caller that changed one resource itself
+     names it (`refreshResourceFlags(changedDblEntryUid)` → `trustAbsenceFor`), and that row alone
+     may be downgraded on absence. Without the exception a removal in the first 30 seconds left the
+     Get Resources row spinning on a resource already gone, because the dialog clears that spinner
+     only when the row reports itself uninstalled.
 - **Alternatives:** *Treat the "already installed" message as success in TypeScript* — rejected: a
   cross-process string match that breaks on localization. *Never downgrade `installed`* — rejected:
   that is how an uninstall reaches the Get Resources list. *Always wait for reconciliation* —
@@ -1109,9 +1114,10 @@ step, no automation. Just a record.
   fails, and a panel shows a catalog-load error over a usable catalog.
 - **Consequences:** A stale catalog corrects itself without a remount. Callers cannot tell "installed
   now" from "already there", and none needs to. The startup window mirrors `LOAD_TIME_GRACE_PERIOD_MS`
-  in `project-lookup.service-model.ts`, so a resource removed during startup is reflected only once
-  it ends. **Revisit** if a caller needs the install outcome, or if project registration gains a way
-  to report that it has settled.
+  in `project-lookup.service-model.ts`; inside it, a change registers only if its caller names the
+  resource, since nothing re-reads the catalog on a schedule. **Revisit** if a caller needs the
+  install outcome, or if project registration gains a way to report that it has settled — which
+  would retire both the window and the exception.
 - **Source:** PT-4588.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended

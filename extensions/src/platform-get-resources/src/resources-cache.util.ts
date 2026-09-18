@@ -17,6 +17,12 @@ export type ReconcileCachedResourcesOptions = {
    * `adr-dbl-install-is-idempotent`.
    */
   canTrustAbsence: boolean;
+  /**
+   * Uid whose absence is conclusive whatever `canTrustAbsence` says, because the caller installed
+   * or removed that resource itself and is reconciling on the strength of that. Without it a
+   * removal during the grace period leaves the row claiming to be installed.
+   */
+  trustAbsenceFor?: string;
 };
 
 /**
@@ -33,7 +39,7 @@ export function reconcileCachedResources(
   cachedResources: DblResourceData[],
   localProjectIds: string[],
   updateStatus: DblResourceUpdateStatus | undefined,
-  { canTrustAbsence }: ReconcileCachedResourcesOptions,
+  { canTrustAbsence, trustAbsenceFor }: ReconcileCachedResourcesOptions,
 ): ReconciledCachedResources {
   let isChanged = false;
 
@@ -57,8 +63,15 @@ export function reconcileCachedResources(
 
     const installed = matchingLocalProjectId !== undefined;
     // A project that is present proves the resource installed; one that is absent proves nothing
-    // until registration has settled, so until then an installed row is left exactly as it is.
-    if (!installed && resource.installed && !canTrustAbsence) return resource;
+    // until registration has settled, so until then an installed row is left exactly as it is —
+    // unless it is the row the caller changed, whose absence the caller can vouch for.
+    if (
+      !installed &&
+      resource.installed &&
+      !canTrustAbsence &&
+      resource.dblEntryUid !== trustAbsenceFor
+    )
+      return resource;
     const installedChanged = installed !== resource.installed;
 
     // Prefer the backend's answer. Falling back to `false` when the installed state just changed

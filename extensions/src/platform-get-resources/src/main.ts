@@ -43,8 +43,20 @@ let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
 let syncInFlight: Promise<void> | undefined;
-/** Whether the sync in `syncInFlight` also recomputes `updateAvailable`. */
-let isSyncInFlightRecomputing = false;
+
+/** What a flag sync has been asked to do. */
+type FlagSyncRequest = {
+  /** Whether to also refresh `updateAvailable`, which costs a backend round trip. */
+  shouldRecomputeUpdateStatus: boolean;
+  /**
+   * Uid the caller just installed, updated or removed, whose absence from the project list is
+   * therefore conclusive even during the registration grace period.
+   */
+  changedDblEntryUid?: string;
+};
+
+/** What the sync in `syncInFlight` is doing, so a waiter can tell whether joining it is enough. */
+let syncInFlightRequest: FlagSyncRequest | undefined;
 
 async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
@@ -187,9 +199,12 @@ async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> 
  * `updateAvailable` is opt-in, because only the Get Resources list renders that flag: every other
  * consumer of the catalog would otherwise wait on a value it discards.
  *
- * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`
+ * @param request See {@link FlagSyncRequest}.
  */
-async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
+async function syncFlags({
+  shouldRecomputeUpdateStatus,
+  changedDblEntryUid,
+}: FlagSyncRequest): Promise<void> {
   if (cachedResources === undefined) return;
   try {
     const localProjectMetadata = await getLocalProjectMetadata();
@@ -210,8 +225,12 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
         localProjectMetadata.map((localProject) => localProject.id),
         updateStatus,
         // Past the grace period a missing project really is missing, which is what lets an
-        // uninstall come through; inside it, absence may only mean "not registered yet".
-        { canTrustAbsence: performance.now() >= PROJECT_REGISTRATION_GRACE_PERIOD_MS },
+        // uninstall come through; inside it, absence may only mean "not registered yet" — except
+        // for a resource this caller just changed, which is how a removal registers either way.
+        {
+          canTrustAbsence: performance.now() >= PROJECT_REGISTRATION_GRACE_PERIOD_MS,
+          trustAbsenceFor: changedDblEntryUid,
+        },
       );
 
       if (isChanged) {
@@ -234,43 +253,60 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
  * only need the catalog let it run in the background; callers whose answer depends on the flags
  * being current await it and re-read `cachedResources` afterwards.
  *
- * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`. A
- *   caller that needs it joins an in-flight sync that does not refresh it, so ask for it through
- *   {@link refreshResourceFlags}, which starts a sync of its own rather than joining.
+ * @param request See {@link FlagSyncRequest}. A caller whose request an in-flight sync does not
+ *   cover joins it anyway, so ask through {@link refreshResourceFlags}, which starts a sync of its
+ *   own rather than joining.
  */
-function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
+function ensureInstalledFlagsSynced(
+  request: FlagSyncRequest = { shouldRecomputeUpdateStatus: false },
+): Promise<void> {
   if (!syncInFlight) {
-    isSyncInFlightRecomputing = shouldRecomputeUpdateStatus;
-    syncInFlight = syncFlags(shouldRecomputeUpdateStatus)
+    syncInFlightRequest = request;
+    syncInFlight = syncFlags(request)
       .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
         syncInFlight = undefined;
+        syncInFlightRequest = undefined;
       });
   }
   return syncInFlight;
+}
+
+/** Whether the sync already in flight does everything `request` asks for, so joining it suffices. */
+function doesSyncInFlightCover(request: FlagSyncRequest): boolean {
+  if (!syncInFlightRequest) return false;
+  if (request.shouldRecomputeUpdateStatus && !syncInFlightRequest.shouldRecomputeUpdateStatus)
+    return false;
+  return (
+    request.changedDblEntryUid === undefined ||
+    request.changedDblEntryUid === syncInFlightRequest.changedDblEntryUid
+  );
 }
 
 /**
  * Runs a flag sync that starts after this call rather than joining one already in flight, which may
  * have read its project metadata before the caller's change. Never rejects.
  *
- * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`
+ * @param request See {@link FlagSyncRequest}.
  */
-async function syncAfterInFlight(shouldRecomputeUpdateStatus: boolean): Promise<void> {
+async function syncAfterInFlight(request: FlagSyncRequest): Promise<void> {
   if (syncInFlight) await syncInFlight;
-  // Another waiter may have started the next sync first. Joining it is fine unless this caller
-  // needs the recompute and that sync is not doing one; then wait that one out too.
-  if (syncInFlight && shouldRecomputeUpdateStatus && !isSyncInFlightRecomputing)
-    return syncAfterInFlight(shouldRecomputeUpdateStatus);
-  return ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus);
+  // Another waiter may have started the next sync first. Joining that one is fine only while it
+  // covers this request; otherwise wait it out too.
+  if (syncInFlight && !doesSyncInFlightCover(request)) return syncAfterInFlight(request);
+  return ensureInstalledFlagsSynced(request);
 }
 
 /**
  * Brings the derived flags up to date, `updateAvailable` included, and resolves once they are. A
  * caller that has just changed local state awaits this, then re-reads the catalog.
+ *
+ * @param changedDblEntryUid Uid the caller just installed, updated or removed. Naming it is what
+ *   lets a removal register during startup, when a missing project is otherwise read as one that
+ *   has not registered yet.
  */
-async function refreshResourceFlags(): Promise<void> {
-  await syncAfterInFlight(true);
+async function refreshResourceFlags(changedDblEntryUid?: string): Promise<void> {
+  await syncAfterInFlight({ shouldRecomputeUpdateStatus: true, changedDblEntryUid });
 }
 
 /**
@@ -322,7 +358,10 @@ async function getCachedResources(
   // Wait for a sync that starts after this request, so a just-completed install is observed. Timing
   // out returns the snapshot instead of failing; `syncAfterInFlight` never rejects, which
   // `waitForDuration` needs in order to time out promptly.
-  await waitForDuration(() => syncAfterInFlight(false), INSTALLED_FLAGS_SYNC_WAIT_MS);
+  await waitForDuration(
+    () => syncAfterInFlight({ shouldRecomputeUpdateStatus: false }),
+    INSTALLED_FLAGS_SYNC_WAIT_MS,
+  );
   // Re-read: the sync reassigns `cachedResources` rather than mutating it, so the catalog captured
   // above is the pre-sync array.
   return { status: 'available', resources: cachedResources ?? catalog.resources };

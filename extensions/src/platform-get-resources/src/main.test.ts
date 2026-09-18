@@ -179,6 +179,31 @@ describe('getCachedResources installed-flag reconciliation', () => {
     );
   });
 
+  it('registers a removal named by its caller during the registration grace period', async () => {
+    // The Get Resources dialog clears a row's "removing" spinner when the row reports itself
+    // uninstalled. Left to the grace period, a removal in the first seconds after startup reads as
+    // a project that has not registered yet, and the row spins on against a resource already gone.
+    vi.spyOn(performance, 'now').mockReturnValue(DURING_REGISTRATION_GRACE_MS);
+    await activateWithFreshModule();
+    await getCachedResources();
+    const refreshResourceFlags = mocks.registeredCommands.get(
+      'platformGetResources.refreshResourceFlags',
+    );
+
+    await refreshResourceFlags?.(NOT_YET_REGISTERED.dblEntryUid);
+
+    expect(await getCachedResources()).toEqual({
+      status: 'available',
+      resources: [REGISTERED, { ...NOT_YET_REGISTERED, installed: false, projectId: '' }],
+    });
+    // The named uid is the only one whose absence counts: `REGISTERED` above is still installed,
+    // and a refresh naming nothing leaves a row that is merely missing exactly as it was.
+    await refreshResourceFlags?.();
+    expect(persistedCatalogs().at(-1)).toContainEqual(
+      expect.objectContaining({ dblEntryUid: 'aaaa', installed: true }),
+    );
+  });
+
   it('changes nothing when no resource project has registered yet, even after startup', async () => {
     // An early read returns only editable projects, indistinguishable from a machine with no
     // resources; reconciling against it would mark every installed resource uninstalled.

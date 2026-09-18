@@ -237,6 +237,32 @@ describe('reconcileCachedResources', () => {
     expect(settled.resources[1]).toMatchObject({ installed: false, projectId: '' });
   });
 
+  it('downgrades the resource the caller changed even while projects may be registering', () => {
+    // A resource the user just removed is missing because it is gone, not because it is late, and
+    // the caller that removed it says so. Every other row keeps the benefit of the doubt.
+    const justRemoved = {
+      ...INSTALLED_WITH_UPDATE,
+      dblEntryUid: 'def456',
+      projectId: 'DEF456BBBB',
+    };
+    const stillRegistering = {
+      ...INSTALLED_WITH_UPDATE,
+      dblEntryUid: 'ghi789',
+      projectId: 'GHI789CCCC',
+    };
+
+    const { resources, isChanged } = reconcileCachedResources(
+      [justRemoved, stillRegistering],
+      [],
+      undefined,
+      { ...STILL_REGISTERING, trustAbsenceFor: 'def456' },
+    );
+
+    expect(resources[0]).toMatchObject({ installed: false, projectId: '' });
+    expect(resources[1]).toBe(stillRegistering);
+    expect(isChanged).toBe(true);
+  });
+
   it('still marks a resource installed while projects may still be registering', () => {
     // Presence is proof whenever it shows up, so a poisoned flag is corrected at the first chance.
     const { resources } = reconcileCachedResources(
