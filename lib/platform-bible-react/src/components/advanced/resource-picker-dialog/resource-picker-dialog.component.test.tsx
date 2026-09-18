@@ -515,14 +515,16 @@ describe('ResourcePickerDialog', () => {
 
     const shortNameCell = screen.getByText('NIV').closest('td');
     expect(shortNameCell).not.toBeNull();
-    // Asserting the absence of an end-alignment is the load-bearing half — the leading edge is the
-    // table default, so there is no positive class to match. The language column two cells over
-    // does carry `tw:text-right`, which is what this column must not acquire.
-    expect(shortNameCell?.className).not.toContain('tw:text-right');
-    expect(shortNameCell?.className).not.toContain('tw:text-end');
-    expect(shortNameCell?.className).not.toContain('tw:text-center');
 
+    // The positive control comes first: the language column is the one cell in the row that IS
+    // end-aligned, so it proves the class this assertion looks for can appear on a `td` here at
+    // all. Without it, "the short name is not end-aligned" would pass against a file that had
+    // simply stopped aligning anything.
     const languageCell = screen.getAllByText('English')[0].closest('td');
-    expect(languageCell?.className).toContain('tw:text-right');
+    expect(languageCell?.className).toContain('tw:text-end');
+
+    // The leading edge is the table default, so there is no positive class to match on the short
+    // name — the absence of the end-alignment above is what holds it.
+    expect(shortNameCell?.className).not.toContain('tw:text-end');
   });
 });

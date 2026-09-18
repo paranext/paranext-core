@@ -819,11 +819,13 @@ export const ProjectAndResourceIndicators: Story = {
           // The glyph is the only visual carrier of "project or resource", so give it an
           // accessible name of its own instead of hiding it from assistive tech. `title` also
           // gives the icon a native hover label for sighted users who don't recognize it.
-          return (
-            <span role="img" aria-label={typeLabel} title={typeLabel}>
-              <Icon className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
-            </span>
-          );
+          return {
+            node: (
+              <span role="img" aria-label={typeLabel} title={typeLabel}>
+                <Icon className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
+              </span>
+            ),
+          };
         }}
       />
     );

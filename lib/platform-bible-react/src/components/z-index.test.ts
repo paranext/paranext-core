@@ -5,7 +5,10 @@ import {
   Z_INDEX_FIRST_RUN,
   Z_INDEX_MODAL,
   Z_INDEX_MODAL_BACKDROP,
+  Z_INDEX_NESTED_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
   Z_INDEX_OVERLAY,
+  Z_INDEX_TOOLTIP,
 } from '@/components/z-index';
 
 describe('z-index scale', () => {
@@ -17,6 +20,20 @@ describe('z-index scale', () => {
   // nothing pinned relative to it followed.
   it('keeps content portalled out of a popover above the popover layer', () => {
     expect(Z_INDEX_ABOVE_POPOVER).toBeGreaterThan(Z_INDEX_ABOVE_DOCK);
+  });
+
+  // A modal opened from another modal has to cover the one that launched it, backdrop included.
+  // Reusing the flat modal tier puts the inner backdrop BELOW the host's content, so the host stays
+  // bright while Radix makes it inert — a panel that looks live and swallows every click.
+  it('keeps a nested modal and its backdrop above the modal that hosts them', () => {
+    expect(Z_INDEX_NESTED_MODAL_BACKDROP).toBeGreaterThan(Z_INDEX_MODAL);
+    expect(Z_INDEX_NESTED_MODAL).toBeGreaterThan(Z_INDEX_NESTED_MODAL_BACKDROP);
+  });
+
+  // ...but not above tooltips: controls inside a nested modal carry them (the embedded pickers'
+  // close button does), and a tooltip rendering behind the surface that triggered it is invisible.
+  it('keeps tooltips above the nested modal tier', () => {
+    expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_NESTED_MODAL);
   });
 
   // The first-run wizard gates the entire app at startup; nothing may cover it.

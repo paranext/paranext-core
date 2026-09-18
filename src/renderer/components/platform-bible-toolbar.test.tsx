@@ -1550,9 +1550,12 @@ describe('PlatformBibleToolbar — project selector wiring', () => {
 
     const { renderProjectIndicator } = requireCapturedProjectSelectorProps();
     expect(renderProjectIndicator).toBeDefined();
-    expect(
-      renderProjectIndicator?.({ id: 'ro', shortName: 'RO', fullName: 'Readonly' }),
-    ).not.toBeUndefined();
+    // The glyph and the text explaining it travel together. A read-only row that returned a node
+    // with no label would put an unexplained padlock in the popover, which is the defect the
+    // tooltip line exists to close; a label with no node would describe an icon that is not there.
+    const readOnly = renderProjectIndicator?.({ id: 'ro', shortName: 'RO', fullName: 'Readonly' });
+    expect(readOnly?.node).toBeDefined();
+    expect(readOnly?.label).toBe('Test read-only');
     expect(
       renderProjectIndicator?.({ id: 'ed', shortName: 'ED', fullName: 'Editable' }),
     ).toBeUndefined();

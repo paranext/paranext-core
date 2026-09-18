@@ -133,7 +133,7 @@ function ProjectSection({
           {/* Column 1 — short name. Starts at the leading edge, as it does in the titlebar
               `ProjectSelector` popover and in `ResourcePickerDialog`; see the picker row layout
               entry in `.context/standards/Architecture-Decisions.md`. */}
-          <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-start tw:gap-1 tw:pr-2 tw:text-sm tw:font-medium">
+          <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-start tw:gap-1 tw:pe-2 tw:text-sm tw:font-medium">
             {/* Both glyph slots are fixed-width and rendered for every row, empty or not, so every
                 short name starts at the same offset. Rendering them conditionally would ragged the
                 leading edge of the one column this list aligns on. `ProjectSelector` reserves its
@@ -165,8 +165,13 @@ function ProjectSection({
           <div className="tw:min-w-0 tw:truncate tw:px-3 tw:text-sm" title={p.fullName}>
             {p.fullName}
           </div>
-          {/* Column 3 — language tag with tooltip */}
-          <div className="tw:text-right tw:text-sm tw:text-muted-foreground">
+          {/* Column 3 — language tag with tooltip. Floored and truncating like the two columns
+              before it: its min-content contribution is a whole unbreakable word, so a track that
+              could not shrink would satisfy itself by crushing the short name and full name
+              instead — and `overflow-x-hidden` on the scroll container means there is no longer a
+              scrollbar to recover them with. `language` is a BCP-47 tag by convention only, and
+              nothing enforces it. */}
+          <div className="tw:min-w-0 tw:truncate tw:text-end tw:text-sm tw:text-muted-foreground">
             {p.language &&
               (p.languageDisplayName ? (
                 <TooltipProvider>
@@ -286,7 +291,7 @@ export default function ProjectPicker({
             // Both text tracks carry a `0` minimum. A bare `auto`/`1fr` track floors at its
             // content's minimum width, so a single long unbroken name widens the grid past the
             // dialog instead of truncating inside it.
-            className="tw:grid tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_auto]"
+            className="tw:grid tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)]"
           >
             <ProjectSection
               label={recentLabel}

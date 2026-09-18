@@ -2968,6 +2968,11 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
 	 * overlay styling than the default.
 	 */
 	overlayClassName?: string;
+	/**
+	 * Inline styles for the backdrop (`DialogOverlay`). Needed for anything the overlay sets inline —
+	 * notably `zIndex`, which an `overlayClassName` cannot override.
+	 */
+	overlayStyle?: React$1.CSSProperties;
 	showCloseButton?: boolean;
 };
 /**
@@ -2977,7 +2982,7 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function DialogContent({ className, children, showCloseButton, overlayClassName, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DialogContent({ className, children, showCloseButton, overlayClassName, overlayStyle, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Container for the dialog's header area. Stacks title and description vertically.
  *
@@ -4157,6 +4162,28 @@ export declare const Z_INDEX_OVERLAY = 400;
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
+/**
+ * Z-index for the backdrop behind a modal opened FROM another modal — a picker that takes the
+ * screen over the dialog that launched it.
+ *
+ * A nested modal cannot reuse {@link Z_INDEX_MODAL_BACKDROP}: at 450 the inner backdrop paints below
+ * the host dialog's own content at {@link Z_INDEX_MODAL}, so it dims the app behind the host but not
+ * the host itself — while Radix's dismissable layer still makes the host inert. The host then looks
+ * live and swallows every click, which is the opposite of what a backdrop is for.
+ *
+ * Must stay above {@link Z_INDEX_MODAL} and below {@link Z_INDEX_NESTED_MODAL}. Pinned by
+ * `z-index.test.ts`.
+ */
+export declare const Z_INDEX_NESTED_MODAL_BACKDROP = 510;
+/**
+ * Z-index for the content of a modal opened FROM another modal. See
+ * {@link Z_INDEX_NESTED_MODAL_BACKDROP} for why the nested case needs a tier of its own.
+ *
+ * Must stay above {@link Z_INDEX_NESTED_MODAL_BACKDROP} and below `Z_INDEX_TOOLTIP`, so a tooltip
+ * triggered from inside the nested modal — its close button carries one — still renders over it.
+ * Pinned by `z-index.test.ts`.
+ */
+export declare const Z_INDEX_NESTED_MODAL = 520;
 /**
  * Z-index for the one-shot onboarding tour spotlight. Sits above Z_INDEX_ABOVE_DOCK and
  * Z_INDEX_TOOLTIP so it can spotlight toolbar buttons and columns, but below Z_INDEX_FIRST_RUN so

@@ -1,11 +1,12 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 import { readFileSync } from 'fs';
 import path from 'path';
 import {
   PENDING_PROJECT_TIMEOUT_MS,
   PROJECT_OPEN_FAILED_MESSAGE_KEY,
+  PROJECT_OPEN_FAILED_NOTIFICATION_ID,
   usePendingProject,
 } from './use-pending-project.hook';
 
@@ -34,8 +35,21 @@ const NEW_PROJECT: ProjectItem = {
   fullName: 'New Project',
   isEditable: true,
 };
+const THIRD_PROJECT: ProjectItem = {
+  id: 'third',
+  shortName: 'THIRD',
+  fullName: 'Third Project',
+  isEditable: true,
+};
 
 function doNothing() {}
+
+// Spy isolation as a property of the file rather than of each author: tests outside the reporting
+// block reject an open too, which now flows into the notification path, so a later assertion that
+// forgets its own `mockClear()` would otherwise see calls from earlier tests.
+afterEach(() => {
+  mockSendNotification.mockClear();
+});
 
 /**
  * Mounts the hook over a caller-supplied `openProject`, and records the project it names on every
@@ -277,8 +291,40 @@ describe('usePendingProject — reporting a failed open', () => {
     });
 
     expect(mockSendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ message: PROJECT_OPEN_FAILED_MESSAGE_KEY, severity: 'warning' }),
+      // The id is what makes a retry replace the toast instead of stacking one per attempt, which
+      // is the entire reason the constant exists.
+      expect.objectContaining({
+        message: PROJECT_OPEN_FAILED_MESSAGE_KEY,
+        severity: 'warning',
+        notificationId: PROJECT_OPEN_FAILED_NOTIFICATION_ID,
+      }),
     );
+  });
+
+  // The toast names no project, so one fired for an abandoned pick reads as the pick the user is
+  // now looking at having failed. Latest-wins, matching the state update beside it.
+  it('stays quiet when a superseded pick fails after a newer one succeeded', async () => {
+    let rejectOld: ((reason: Error) => void) | undefined;
+    const openProject = vi.fn(async (projectId: string) => {
+      if (projectId === NEW_PROJECT.id)
+        await new Promise<void>((_resolve, reject) => {
+          rejectOld = reject;
+        });
+    });
+    const { result } = renderPendingProject(OLD_PROJECT, openProject);
+
+    // Pick the slow-to-fail project, then pick another one that opens.
+    act(() => {
+      result.current.beginOpenProject(NEW_PROJECT);
+    });
+    await act(async () => {
+      result.current.beginOpenProject(THIRD_PROJECT);
+    });
+    await act(async () => {
+      rejectOld?.(new Error('boom'));
+    });
+
+    expect(mockSendNotification).not.toHaveBeenCalled();
   });
 
   // An editor can legitimately open in another window and never report here, which is the whole
@@ -313,5 +359,19 @@ describe('usePendingProject — localization', () => {
     );
 
     expect(englishStrings).toHaveProperty(PROJECT_OPEN_FAILED_MESSAGE_KEY);
+  });
+
+  // en and es are both maintained in this repo, and nothing in the build enforces parity — so a key
+  // added to English only ships a Spanish user an English toast while every neighbouring toolbar
+  // failure message is translated.
+  it('has a Spanish translation too', () => {
+    const spanishStrings: Record<string, string> = JSON.parse(
+      readFileSync(path.join(__dirname, '../../../assets/localization/es.json'), 'utf8'),
+    );
+
+    expect(spanishStrings[PROJECT_OPEN_FAILED_MESSAGE_KEY]).toBeTruthy();
+    expect(spanishStrings[PROJECT_OPEN_FAILED_MESSAGE_KEY]).not.toBe(
+      PROJECT_OPEN_FAILED_MESSAGE_KEY,
+    );
   });
 });

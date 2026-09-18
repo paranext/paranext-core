@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from '@/components/shadcn-ui/alert';
 import { EmptyState } from '@/components/basics/empty-state.component';
 import { RetryableErrorView } from '@/components/basics/retryable-error-view.component';
-import { DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
+import { DialogDescription, DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
 import { Label } from '@/components/shadcn-ui/label';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
 import {
@@ -11,7 +11,7 @@ import {
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 import { Check, CloudOff, SearchX } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import { useProgressiveList } from './resource-picker-dialog.utils';
 
@@ -21,6 +21,7 @@ import { useProgressiveList } from './resource-picker-dialog.utils';
  */
 export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_title%',
+  '%resourcePicker_description%',
   '%resourcePicker_section_already_selected%',
   '%resourcePicker_section_installed%',
   '%resourcePicker_section_available_to_download%',
@@ -105,6 +106,15 @@ export interface ResourcePickerDialogProps {
   allowDeselect?: boolean;
   /** Called when the user clicks a resource row to select it */
   onSelect: (resource: DblResourceData) => void;
+  /**
+   * Ref to the search input, for a host that decides where focus lands when the dialog opens.
+   *
+   * Without it a host can only order its JSX and hope: the picker disables its search box whenever
+   * there is nothing to filter, so "render the close button last so focus lands on search" silently
+   * lands on whatever is tabbable instead — the Retry button, or the close button itself. A host
+   * holding this ref can state the intent directly and stay correct when the box is disabled.
+   */
+  searchInputRef?: RefObject<HTMLInputElement | null>;
 }
 
 /**
@@ -153,7 +163,10 @@ function ResourceSection({
               : undefined
           }
         >
-          <TableCell className="tw:border-0 tw:py-1 tw:pr-1">
+          {/* `px-1` rather than `TableCell`'s default `p-2`: under `table-fixed` the `<col>` below
+              is a hard width the column cannot grow past, and the base 8px start padding leaves the
+              14px glyph too little room to sit in. The two have to be read together. */}
+          <TableCell className="tw:border-0 tw:px-1 tw:py-1">
             {showCheckmark && (
               <>
                 <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
@@ -162,16 +175,22 @@ function ResourceSection({
             )}
           </TableCell>
           {/* Every name cell truncates instead of widening the table, and carries its untruncated
-              text as a native hover label so nothing becomes unreadable. A cell in a table only
-              truncates once it is allowed to be narrower than its content, which `max-w-0` plus the
-              column widths on the table do. */}
-          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pr-2 tw:font-normal">
+              text as a native hover label so nothing becomes unreadable.
+
+              What allows a cell to be narrower than its content is `table-fixed` plus the
+              `<colgroup>` below — under fixed layout the `<col>` widths are the column widths, and
+              per-cell `max-width` is not consulted at all. `max-w-0` is belt-and-braces for anyone
+              who renders these rows under the default auto layout; removing `table-fixed` or the
+              colgroup is what brings the horizontal scrollbar back. */}
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pe-2 tw:font-normal">
             <span title={r.displayName}>{r.displayName}</span>
           </TableCell>
-          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pl-2">
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-2">
             <span title={r.fullName}>{r.fullName}</span>
           </TableCell>
-          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:pl-4 tw:text-right tw:text-muted-foreground">
+          {/* `text-end`, not `text-right`: the language sits on the trailing edge of the row, which
+              is the left one in an RTL layout. */}
+          <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-4 tw:text-end tw:text-muted-foreground">
             <span title={r.bestLanguageName}>{r.bestLanguageName}</span>
           </TableCell>
         </TableRow>
@@ -270,13 +289,18 @@ export default function ResourcePickerDialog({
   localizedStrings,
   allowDeselect,
   onSelect,
+  searchInputRef: externalSearchInputRef,
 }: ResourcePickerDialogProps) {
   const [searchText, setSearchText] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
 
   // React writes `null` into a detached DOM ref itself, so there is no `undefined` equivalent here.
   // eslint-disable-next-line no-null/no-null
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const ownSearchInputRef = useRef<HTMLInputElement | null>(null);
+  // A host that owns where focus lands on open needs to reach this input; see `searchInputRef`'s
+  // TSDoc. Its ref replaces the internal one outright rather than being merged with it, so there is
+  // only ever one answer to "where is the search box".
+  const searchInputRef = externalSearchInputRef ?? ownSearchInputRef;
 
   // Resets BOTH filters: clearing only the one the user is looking at leaves the list still
   // filtered by the other, which reads as the control having done nothing.
@@ -288,7 +312,7 @@ export default function ResourcePickerDialog({
     setSearchText('');
     setSelectedLanguages([]);
     searchInputRef.current?.focus();
-  }, []);
+  }, [searchInputRef]);
 
   // The `resourceType` narrowing is separated from the user's own filters because only the latter
   // are clearable. Counting or offering to clear against `allResources` would describe a set this
@@ -347,6 +371,7 @@ export default function ResourcePickerDialog({
     alreadySelected.length === 0 && installed.length === 0 && toDownload.length === 0;
 
   const titleText = localizeString(localizedStrings, '%resourcePicker_title%');
+  const descriptionText = localizeString(localizedStrings, '%resourcePicker_description%');
   const searchPlaceholder = localizeString(localizedStrings, '%resourcePicker_search_placeholder%');
   const anyLanguageText = localizeString(localizedStrings, '%resourcePicker_language_filter_any%');
   const alreadySelectedLabel = localizeString(
@@ -426,6 +451,12 @@ export default function ResourcePickerDialog({
     <>
       <DialogHeader className="tw:px-4 tw:pt-4">
         <DialogTitle>{titleText}</DialogTitle>
+        {/* Visually hidden rather than absent: Radix warns when dialog content has no description,
+            and a screen-reader user opening this needs to be told what the list is and that picking
+            a row downloads. Living here rather than at each host means every host gets it — and
+            gets it localized, which a host silencing the warning with `aria-describedby={undefined}`
+            does not. */}
+        <DialogDescription className="tw:sr-only">{descriptionText}</DialogDescription>
       </DialogHeader>
       <div className="tw:flex tw:gap-2 tw:p-4">
         <SearchBar
@@ -467,7 +498,7 @@ export default function ResourcePickerDialog({
           reporting entries this picker filters out anyway implies candidates the user could reach by
           clearing something. */}
       {isFiltered && (bodyState === 'list' || bodyState === 'filteredEmpty') && (
-        <p className="tw:px-4 tw:pb-1 tw:text-right tw:text-xs tw:text-muted-foreground">
+        <p className="tw:px-4 tw:pb-1 tw:text-end tw:text-xs tw:text-muted-foreground">
           {formatReplacementString(showingCountTemplate, {
             filtered: filteredResources.length,
             total: typeScopedResources.length,
@@ -516,11 +547,17 @@ export default function ResourcePickerDialog({
             because the section-heading rows span all four columns and so cannot carry them. */}
         {bodyState === 'list' && (
           <Table className="tw:table-fixed">
+            {/* Proportions, not pixels, so the same table reads correctly in the 640px Share
+                Layout host and at full dialog width. The language column gets a sixth rather than
+                a quarter: it holds one short word, while the full name beside it is the column a
+                user actually reads and is the one that has to truncate last. The checkmark column
+                is a fixed width because its content is one fixed-size glyph — see the padding note
+                on that cell. */}
             <colgroup>
-              <col className="tw:w-5" />
+              <col className="tw:w-7" />
               <col className="tw:w-1/4" />
               <col />
-              <col className="tw:w-1/4" />
+              <col className="tw:w-1/6" />
             </colgroup>
             <TableBody>
               <ResourceSection

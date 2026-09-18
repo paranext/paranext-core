@@ -390,6 +390,7 @@
   "%redoButton_tooltip%": "Redo",
   "%resourcePicker_button_use%": "Include",
   "%resourcePicker_clear_filters%": "Clear filters",
+  "%resourcePicker_description%": "Choose a resource to add. Picking one downloads it if it isn't already installed.",
   "%resourcePicker_downloads_unavailable%": "Resource downloads aren't available on this installation.",
   "%resourcePicker_language_filter_any%": "Any language",
   "%resourcePicker_language_filter_multipleSelected%": "{selectCount} languages",

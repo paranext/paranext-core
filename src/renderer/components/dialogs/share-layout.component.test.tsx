@@ -229,6 +229,11 @@ describe('ShareLayoutDialogContent', () => {
 
   // Dismissing the inner modal has to leave the outer one usable. A nested dialog that takes the
   // outer dialog's focus trap or backdrop down with it still passes "the picker is gone".
+  //
+  // The body-level assertion is the load-bearing half. `fireEvent.click` dispatches straight at the
+  // node and goes through `pointer-events: none`, so a share dialog left inert by the dismissed
+  // picker would still satisfy the confirm click below; what Radix actually leaves behind on a
+  // botched teardown is `pointer-events: none` on `<body>`.
   it('leaves the share dialog usable after the manage picker is dismissed', () => {
     const { onConfirm } = renderContent();
 
@@ -237,6 +242,9 @@ describe('ShareLayoutDialogContent', () => {
     );
     fireEvent.click(manageButton);
     fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
+
+    // Nothing is holding the page inert any more.
+    expect(document.body.style.pointerEvents).not.toBe('none');
 
     // The outer dialog's own controls still respond, and its state survived the round trip.
     fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
@@ -262,6 +270,23 @@ describe('ShareLayoutDialogContent', () => {
     expect(pickerTitle.closest('[data-slot="dialog-content"]')).not.toBeNull();
     expect(pickerTitle.closest('[data-slot="popover-content"]')).toBeNull();
     expect(document.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull();
+  });
+
+  // `DialogContent` builds in a close button whose screen-reader label is a hardcoded English
+  // "Close" no consumer can translate, so every picker here opts out of it. Without this, dropping
+  // `showCloseButton={false}` on the Manage pickers ships two stacked close buttons and that
+  // untranslated label, and every other test in this file still passes. The model-text picker has
+  // the same assertion in its own test.
+  it('gives the manage pickers the localized close button rather than the built-in one', () => {
+    renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+
+    expect(screen.getByLabelText('%shareLayoutDialog_closePicker_label%')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
   });
 
   // Every embedded picker replaces `DialogContent`'s built-in close button, whose screen-reader
