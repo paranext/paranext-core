@@ -185,18 +185,20 @@ export function OverlayPopoverPresentational({
   // `{}` at scale 1 (or an unusable scale), so `zoomStyle.maxWidth`/`maxHeight` being present is the
   // same test as "a zoom cap actually applies here".
   const zoomStyle = contentZoomOverlayStyle(contentScale, 'popover');
-  // A caller's explicit cap must still keep the popover inside the window once zoomed — a fixed
-  // 600px cap at 2x content scale would otherwise paint 1200 device pixels wide with nothing to stop
-  // it. Combined only while a zoom cap actually applies; at scale 1 (zoomStyle.maxWidth undefined)
-  // this is exactly the caller's own value, unchanged.
+  // A zoomed popover must still stay inside the window — a caller's own cap, or this component's
+  // default when the caller gave none, would otherwise paint past it at scale. Gated on the zoom cap
+  // alone (not on whether the caller passed a maxWidth/maxHeight): combined with the RESOLVED
+  // width/height so the default is covered too, not just an explicit caller value. At scale 1
+  // (zoomStyle.maxWidth/maxHeight undefined) this is undefined and the resolved value applies
+  // unmodified.
   const cappedMaxWidth =
-    maxWidth !== undefined && zoomStyle.maxWidth !== undefined
-      ? `min(${maxWidth}px, ${zoomStyle.maxWidth})`
-      : maxWidth;
+    zoomStyle.maxWidth === undefined
+      ? undefined
+      : `min(${resolvedMaxWidth}px, ${zoomStyle.maxWidth})`;
   const cappedMaxHeight =
-    maxHeight !== undefined && zoomStyle.maxHeight !== undefined
-      ? `min(${maxHeight}px, ${zoomStyle.maxHeight})`
-      : maxHeight;
+    zoomStyle.maxHeight === undefined
+      ? undefined
+      : `min(${resolvedMaxHeight}px, ${zoomStyle.maxHeight})`;
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -239,22 +241,39 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
-        className="tw:overflow-y-auto"
+        // The shared PopoverContent class carries a fixed `tw:w-72` width and `tw:p-2.5` padding.
+        // Both move onto the inner div below along with the zoom (see its comment); `tw:p-0` keeps
+        // this element from doubling the padding, and `width: 'auto'` below keeps it from
+        // reasserting the fixed width over the inner div's own sizing.
+        className="tw:p-0"
         side={side}
         align="start"
         sideOffset={showArrow ? 8 : 4}
         style={{
           zIndex: Z_INDEX_OVERLAY,
-          maxWidth: resolvedMaxWidth,
-          maxHeight: resolvedMaxHeight,
-          ...zoomStyle,
-          ...(cappedMaxWidth === undefined ? {} : { maxWidth: cappedMaxWidth }),
-          ...(cappedMaxHeight === undefined ? {} : { maxHeight: cappedMaxHeight }),
+          // Radix requires Popover.Arrow to be a descendant of PopoverContent, but positions it by
+          // writing a raw pixel offset onto its own wrapper — a value the browser re-scales if that
+          // wrapper sits inside a zoomed element, doubling the effect. So the zoom and the sizing
+          // live on the inner div below instead, leaving the arrow as PopoverContent's other,
+          // unzoomed child. Omitting this line lets the fixed `tw:w-72` class reassert itself and
+          // stops the popover from growing with the pane's zoom at all.
+          width: 'auto',
         }}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
+        <div
+          data-overlay-popover-zoom
+          className="tw:overflow-y-auto tw:p-2.5"
+          style={{
+            ...zoomStyle,
+            maxWidth: cappedMaxWidth ?? resolvedMaxWidth,
+            maxHeight: cappedMaxHeight ?? resolvedMaxHeight,
+          }}
+        >
+          <PopoverBody content={content} onAction={handleAction} />
+        </div>
         {showArrow && (
           <PopoverPrimitive.Arrow
             style={{
@@ -264,7 +283,6 @@ export function OverlayPopoverPresentational({
             }}
           />
         )}
-        <PopoverBody content={content} onAction={handleAction} />
       </PopoverContent>
     </Popover>
   );
