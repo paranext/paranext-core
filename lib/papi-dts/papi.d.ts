@@ -6048,13 +6048,15 @@ declare module 'papi-shared-types' {
       [key: string]: number;
     };
     /**
-     * Which web view types mark at least one content-zoom area, keyed by web view type. Written by
-     * the platform the first time a pane of a type reports an area, and the first time a pane of a
-     * type settles without one; read when a pane opens, before its content loads, so the platform
-     * knows whether to scale the whole view at the Settings default or to wait for the areas the
-     * view is about to mark. Without it every newly opened pane would show at the wrong scale for a
-     * moment. Local to this machine, and self-correcting: a type that changes what it marks is
-     * re-recorded on its next open.
+     * Which web view types mark at least one content-zoom area, keyed by web view type. An absent
+     * key means the platform has no evidence yet that the type marks any area. Written by the
+     * platform the first time a pane of a type reports an area (the record only ever gains `true`
+     * entries; a type recorded `true` is never downgraded); read when a pane opens, before its
+     * content loads, so the platform knows whether to scale the whole view at the Settings default
+     * or to wait for the areas the view is about to mark. Without it every newly opened pane would
+     * show at the wrong scale for a moment. Local to this machine, and self-correcting in the
+     * `false`→`true` direction: a type that starts marking an area is re-recorded on its next
+     * open.
      *
      * A hidden setting rather than a main-process store, for the same reason as
      * `platform.webViewContentZoomMemory`. Deliberately separate from that key, which holds the
@@ -14086,7 +14088,7 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    *
    * @experimental This function is unstable and may change or disappear without notice
    */
-  export function parseIframeZoom(iframe: HTMLIFrameElement | undefined): number;
+  export function parseIframeZoom(iframe: HTMLIFrameElement | null | undefined): number;
   /**
    * Reads the CSS `zoom` the content zoom service has set on a WebView's host `<iframe>` element.
    *
@@ -14100,7 +14102,7 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    *
    * This does not cover per-area zoom — a pane that marks zoom areas carries no whole-iframe `zoom`
    * and this always answers `1` for it. For the scale a pane's content is actually drawn at, use
-   * {@link getContentZoomScaleForWebView} instead.
+   * `getContentZoomScaleForWebView` in `web-view-content-zoom.service` instead.
    *
    * @param webViewId The webViewId of the iframe
    * @returns The scale factor the iframe's contents are rendered at
