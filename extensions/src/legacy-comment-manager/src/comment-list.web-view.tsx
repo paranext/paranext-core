@@ -285,36 +285,48 @@ global.webViewComponent = function CommentListWebView({
   }, [userCommentFiltersPossiblyError]);
 
   /**
-   * Whether `filters`/`scopeFilter` are ready to show: either a mount-time override (see
-   * `initialOverrideRef`) already fixed them with no need to wait on storage, or this user's stored
-   * selection has resolved and been applied below. Gates whether `CommentListPanel` mounts at all
-   * (see the render below) rather than folding into its `isLoading` prop: the panel deliberately
-   * keeps its filter toolbar mounted across `isLoading` transitions (a query resubscribe briefly
-   * flips it true) so a control the user is mid-interaction with never unmounts under them —
-   * folding hydration into that same flag would make the toolbar mount showing the pre-hydration
-   * defaults and then swap, exactly the flash this is meant to prevent. Not rendering the panel at
-   * all until hydrated means it only ever mounts already showing the right values, and never needs
-   * to un-flip afterward — `isHydrated` goes false→true exactly once per view and never back.
+   * Whether this view has a definite, deliberately-chosen selection to show — from a mount-time
+   * override, this user's stored selection, or an applied `setFilters` message — as opposed to the
+   * placeholder `filters`/`scopeFilter` start out holding before any of those apply. Read at two
+   * sites, both load-bearing, and both wanting the exact same value at the exact same time:
+   *
+   * - The render below: `CommentListPanel` does not mount until this is `true`, so its filter toolbar
+   *   never shows the placeholder values and then swaps to the real ones. This is why it's a
+   *   separate flag from the panel's own `isLoading` prop: the panel deliberately keeps that
+   *   toolbar mounted across `isLoading` transitions (a query resubscribe briefly flips it true) so
+   *   a control the user is mid-interaction with never unmounts under them — folding this into
+   *   `isLoading` would make the toolbar mount showing the placeholder values and then swap,
+   *   exactly the flash this flag exists to prevent.
+   * - The hydration effect just below: once `true`, it never re-applies the stored selection, so a
+   *   view already showing a deliberately-chosen selection (an override, or a message) is never
+   *   clobbered by a stored-selection read that resolves late.
+   *
+   * ONE flag, not two, by design: every site that establishes a selection — the lazy initializer
+   * here (a mount-time override), the hydration effect below (the stored selection), and the
+   * `setFilters` message handler further down — sets this the same way, in the same moment it sets
+   * `filters`/`scopeFilter`. Every such site was audited for whether the render gate and the
+   * overwrite guard could ever legitimately want different answers here; none does. If a future
+   * change ever needs them to disagree, that need is the signal to split this into two booleans —
+   * not to special-case one flag into meaning two things.
    */
-  const [isHydrated, setIsHydrated] = useState(() => initialOverrideRef.current !== undefined);
+  const [isViewSettled, setIsViewSettled] = useState(
+    () => initialOverrideRef.current !== undefined,
+  );
 
   /**
    * Hydrates `filters`/`scopeFilter` from this user's stored selection the first time it resolves.
-   * Skipped entirely when a mount-time override already seeded them (`isHydrated` starts `true` in
-   * that case) — matching how a later `setFilters` message overrides the display without
-   * persisting, a programmatic open's initial values win over the stored selection too. Runs once:
-   * after hydration, `filters`/`scopeFilter` are driven only by the panel's own changes and by
-   * messages, never passively re-synced from a later provider update, so a change this view just
-   * made or was told to show is never clobbered by a stale read racing behind it.
+   * Skipped entirely once the view is already settled (see `isViewSettled`'s doc) — a mount-time
+   * override, or an applied message, already established what to show, and this must never re-apply
+   * the stored selection over either one.
    */
   useEffect(() => {
-    if (isHydrated || isLoadingUserCommentFilters) return;
+    if (isViewSettled || isLoadingUserCommentFilters) return;
     const restored = narrowStoredSelection(storedUserCommentFilters);
     setFilters(restored.filters);
     setScopeFilter(restored.scopeFilter);
     currentViewRef.current = restored;
-    setIsHydrated(true);
-  }, [isHydrated, isLoadingUserCommentFilters, storedUserCommentFilters]);
+    setIsViewSettled(true);
+  }, [isViewSettled, isLoadingUserCommentFilters, storedUserCommentFilters]);
 
   // Fetch current user's registration data on mount
   useEffect(() => {
@@ -551,15 +563,10 @@ global.webViewComponent = function CommentListWebView({
           currentViewRef.current = { ...currentViewRef.current, scopeFilter: resolved.scopeFilter };
           setScopeFilter(resolved.scopeFilter);
         }
-        // A setFilters message deterministically specifies the whole view, exactly like a mount-
-        // time override — mark hydrated so a stored-selection read still pending when this message
-        // arrives (a reuse hit whose view hasn't finished loading yet) cannot later overwrite what
-        // this message just showed. Unconditional (not gated on the changed flags above) because
-        // the message still "applies" a definite view even when it happens to match the pre-
-        // hydration placeholder values. Once already hydrated this is a no-op — `setIsHydrated`
-        // bails out on an unchanged value — so an ordinary post-hydration message behaves exactly
-        // as before.
-        setIsHydrated(true);
+        // An applied setFilters message establishes a definite selection just like a mount-time
+        // override — see `isViewSettled`'s doc for why this is the same flag rather than a second
+        // one, and why it's set unconditionally here rather than gated on the changed flags above.
+        setIsViewSettled(true);
       }
     };
 
@@ -567,8 +574,8 @@ global.webViewComponent = function CommentListWebView({
     return () => {
       window.removeEventListener('message', messageListener);
     };
-    // setFilters, setScopeFilter, and setIsHydrated are stable useState setters (the linter treats
-    // them as stable, so all three are omitted).
+    // setFilters, setScopeFilter, and setIsViewSettled are stable useState setters (the linter
+    // treats them as stable, so all three are omitted).
   }, [trySelectThread, cancelPendingSyncScroll]);
 
   // Process any pending thread selection once data finishes loading
@@ -802,9 +809,14 @@ global.webViewComponent = function CommentListWebView({
 
   return (
     <>
-      {/* Held until `isHydrated` (see its doc above) — never mounted with the pre-hydration
-          defaults, so the toolbar cannot flash them before swapping to the stored selection. */}
-      {isHydrated && (
+      {/* Held until `isViewSettled` (see its doc above) — never mounted with the placeholder
+          values, so the toolbar cannot flash them before swapping to the real selection. One
+          consequence: `isSyncBlocked`'s "editing paused" notice below is rendered inside this
+          panel too, so a project already mid-sync when its view mounts shows nothing at all — not
+          even that notice — for this same brief window. Accepted deliberately: it's the same
+          window that already gates the rest of the panel, and the alternative is briefly showing
+          filter values that are about to change. */}
+      {isViewSettled && (
         <CommentListPanel
           localizedStrings={localizedStrings}
           isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
