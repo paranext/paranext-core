@@ -204,10 +204,13 @@ export function resolveCallerHighlight({
 }
 
 /**
- * Decides whether selecting a footnotes pane row without opening it (Space on a row) ends the open
- * row-editing session. Selecting moves the caller highlight to the newly selected note, so an
- * editor left open on a different note would read as editing the wrong one. The session ends,
- * keeping its edits, whenever the selection lands anywhere but the row being edited.
+ * Decides whether selecting a footnotes pane row ends the open row-editing session. Selecting moves
+ * the caller highlight to the newly selected note, so an editor left open on a different note would
+ * read as editing the wrong one. The session ends, keeping its edits, whenever the selection lands
+ * anywhere but the row being edited.
+ *
+ * Applies to opening a row as well (a click or Enter on it): the new session starts only after the
+ * old one has ended through the normal close path.
  *
  * @param options.paneEditingIndex The row the row editor is open on, or `undefined` when none is
  *   open

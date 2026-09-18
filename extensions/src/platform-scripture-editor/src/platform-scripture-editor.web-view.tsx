@@ -2995,6 +2995,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const handleFootnoteEditRequested = useCallback(
     (index: number, caretPosition: FootnoteCaretPosition) => {
+      // A row editor open on another note is ended through the normal close path BEFORE this note
+      // is read, as Space on another row does. The row editor stays mounted and simply loads the
+      // next note, and a load flushes the outgoing note unsettled: a marker rename still pending
+      // under its caret would be lost. The close also lands that flush while its session still
+      // owns it, and the key and op read below then come from the document it produced.
+      if (
+        shouldEndPaneNoteEditOnRowSelect({
+          paneEditingIndex: paneEditingIndexRef.current,
+          selectedIndex: index,
+        })
+      )
+        closeFootnoteEditorRef.current(false);
       navigateToNote(index);
       const noteKey = editorRef.current?.getNoteKey(index);
       const noteOp = editorRef.current?.getNoteOps(index)?.at(0);
