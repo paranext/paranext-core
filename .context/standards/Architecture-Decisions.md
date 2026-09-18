@@ -3907,10 +3907,32 @@ step, no automation. Just a record.
   property lives on the requesting iframe's own document, so `OverlayHost` reads the requesting
   pane's scale directly from the content-zoom service (`getContentZoomScaleForWebView`) and passes
   it down to `OverlayCommandPalette`, `OverlayPopover` and `OverlayContextMenu` as a plain prop.
-  Each applies it as CSS `zoom` on the Radix content element, capped by the space Radix reports
-  available divided by the scale — the same shape as the library's own cap. The popover and command
-  palette combine that cap with a caller's own `maxWidth`/`maxHeight` via `min()` once zoomed, left
-  exactly as the caller supplied it when not; the context menu takes no caller size cap at all.
+  Each applies it as CSS `zoom`, capped by the space Radix reports available divided by the scale —
+  the same shape as the library's own cap. The popover and command palette combine that cap with the
+  size cap actually in force via `min()` once zoomed — the caller's `maxWidth`/`maxHeight` when one
+  was supplied, the component's own default otherwise, so a zoomed pop-up keeps its default bound
+  rather than losing it; the context menu takes no caller size cap at all.
+
+  **Where the `zoom` goes, and why it is not on the Radix content element.** For a pop-up that draws
+  an arrow, the zoom and all the sizing go on a wrapper div *inside* `Popover.Content`, with
+  `Popover.Arrow` left outside that wrapper as a direct child of the content. Radix requires the
+  arrow to be a content descendant and positions it by writing an inline pixel offset on it; inside
+  a zoomed element the browser reads that offset as a pre-zoom length and scales it a second time,
+  so the arrow lands at `offset × scale` instead of `offset` — and where the true offset is small,
+  the doubled value trips floating-ui's arrow clamp and collapses onto the content's own corner.
+  Radix's own placement of the pop-up is unaffected, because the popper wrapper it positions sits
+  outside the content element entirely. CSS `zoom` on a child still grows its parent's layout box,
+  so moving the zoom inward costs nothing: the pop-up scales exactly as before.
+
+  Two things this shape depends on. `Popover.Content` must carry `width: 'auto'`, because the shared
+  `PopoverContent` has a fixed-width base class that the sizing styles used to override from the
+  outside; without it the pop-up silently stops growing. And any padding meant to scale with the
+  content belongs on the inner wrapper, not on `Popover.Content`, or it stays at interface scale
+  around zoomed text.
+
+  Anything Radix positions with an inline pixel offset inside a zoomed element has this defect. At
+  the time of writing the arrow is the only such element in the platform's own overlays: the context
+  menu draws no arrow, and its sub-menu content portals out of the zoomed subtree.
   `OverlayHost` is deliberately the one place that depends on the content-zoom
   service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
   import of the service from there would publish it — including its test-only seams — to extension
