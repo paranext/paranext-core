@@ -557,13 +557,23 @@ describe('createInsertContextMenuItems', () => {
   const menusJson = JSON.parse(
     readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'),
   );
-  const insertMenuItems: { label: string; order: number }[] = menusJson.webViewMenus[
-    'platformScriptureEditor.react'
-  ].topMenu.items
-    .filter(
-      (item: { group: string }) => item.group === 'platformScriptureEditor.insertTextualNotes',
-    )
-    .sort((a: { order: number }, b: { order: number }) => a.order - b.order);
+  const { groups, items: topMenuItems } =
+    menusJson.webViewMenus['platformScriptureEditor.react'].topMenu;
+  // Taken from the Insert COLUMN rather than the one group in it today: keyed on the group name, a
+  // second group added to that column would put an item in the Insert menu with no context-menu
+  // twin and leave this guard green.
+  const insertGroupOrders = new Map<string, number>(
+    Object.entries(groups)
+      .filter(([, group]) => group.column === 'platformScriptureEditor.insert')
+      .map(([name, group]): [string, number] => [name, group.order]),
+  );
+  const insertMenuItems: { label: string; group: string; order: number }[] = topMenuItems
+    .filter((item: { group: string }) => insertGroupOrders.has(item.group))
+    .sort(
+      (a: { group: string; order: number }, b: { group: string; order: number }) =>
+        (insertGroupOrders.get(a.group) ?? 0) - (insertGroupOrders.get(b.group) ?? 0) ||
+        a.order - b.order,
+    );
 
   const makeActions = () => ({
     insertFootnote: vi.fn(),
