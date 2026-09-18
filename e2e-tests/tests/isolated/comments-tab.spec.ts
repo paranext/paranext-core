@@ -61,10 +61,10 @@ import {
 const DEFAULT_WEBSOCKET_PORT = 8876;
 const SETTINGS_TIMEOUT_MS = 60_000;
 /**
- * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits five PAPI
- * commands (four for a read-only resource). Each command opens a panel and can take several
- * seconds; the combined response can exceed the default 30 s PAPI request timeout. Use a generous
- * timeout.
+ * `openScriptureEditor` sequentially awaits every related-panel step: the Column 3 panels open, the
+ * Column 1 Model Text panel, the Text Collection re-point (skipped for a published resource) and
+ * Find's re-point once the new editor exists. Each can take seconds, so the combined response can
+ * exceed the default 30 s PAPI request timeout. Use a generous timeout.
  */
 const OPEN_EDITOR_TIMEOUT_MS = 150_000;
 

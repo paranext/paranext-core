@@ -186,11 +186,10 @@ export async function createCommentTestProject(
   //    projects, and mark it editable.
   //
   //    The bundled WEB assets ship `<Editable>F</Editable>`, which `platform.isEditable` reports
-  //    verbatim (see GetIsEditable in c-sharp/Projects/ScrTextExtensions.cs). A non-editable
-  //    project is a published resource as far as the app is concerned, and the Simple-mode Column 3
-  //    panels — the comment list among them — deliberately do NOT follow the editor onto one
-  //    (`openOrUpdateRelatedPanels` is gated on isEditable in platform-scripture-editor/src/main.ts).
-  //    Comments belong to a translation project the user works in, so these copies model one.
+  //    verbatim (see GetIsEditable in c-sharp/Projects/ScrTextExtensions.cs). Setting it to `T`
+  //    makes `open()` treat the copy as a writable editor; whether comment writes are allowed is a
+  //    separate question, decided by the user's project role (see ProjectUserAccess.xml below and
+  //    VerifyUserCanCreateComments in c-sharp/Projects/ParatextProjectDataProvider.cs).
   const settingsXml = fs.readFileSync(path.join(projectDir, 'Settings.xml'), 'utf8');
   const updatedSettings = settingsXml
     .replace(/<Name>[^<]*<\/Name>/, `<Name>${shortName}</Name>`)

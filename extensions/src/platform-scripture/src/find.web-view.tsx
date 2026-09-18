@@ -60,7 +60,6 @@ import {
   isFindQueryValid,
   isSimpleInterfaceMode,
   POLL_INTERVAL_MS,
-  prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
@@ -89,6 +88,7 @@ import {
 } from './resource-panel-web-view-types.const';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
+import { useFindBookScope } from './find/use-find-book-scope.hook';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -275,10 +275,7 @@ global.webViewComponent = function FindWebView({
     ? ''
     : lastSearchTermPossiblyError;
 
-  const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
-    'findSelectedBookIds',
-    [],
-  );
+  const [savedBookIds, setSavedBookIds] = useWebViewState<string[]>('findSelectedBookIds', []);
   const [monitoredBookIds, setMonitoredBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useWebViewState<boolean>(
     'findShouldMatchCase',
@@ -817,27 +814,15 @@ global.webViewComponent = function FindWebView({
   const isEditable: boolean =
     isEditableLoading || isPlatformError(isEditablePossiblyError) ? false : isEditablePossiblyError;
 
-  // `selectedBookIds` is persisted per web view, so a project switch can leave it naming books the
-  // NEW project doesn't have. The finder engine skips absent books gracefully (see
-  // `isScriptureNotFoundError` in the finder PDPE), so this is not a crash — but with
-  // `scope === 'selectedBooks'` the search would silently cover fewer books than the checkbox list
-  // shows. Prune the selection to what the newly selected project actually has.
-  //
-  // "Don't know the books yet" must not read as "the project has no books", so `availableBooksIds`
-  // is `undefined` until the setting resolves rather than inferred from an empty list, and the
-  // selection is then left untouched. `useProjectSetting` re-enters loading whenever the project
-  // changes, and holds the previous project's value in the meantime — so emptiness alone can't tell
-  // an unread list from a project that genuinely has nothing to search, which is a real case here
-  // because extra material is excluded above.
-  //
-  // Depends on `selectedBookIds` because `useWebViewState`'s setter takes a value, not an updater.
-  // That is safe: `prunePresentBookIds` returns the original array reference when nothing needs
-  // removing, so the identity check makes the write conditional and the effect converges after a
-  // single prune instead of re-triggering itself.
-  useEffect(() => {
-    const prunedBookIds = prunePresentBookIds(availableBooksIds, selectedBookIds);
-    if (prunedBookIds !== selectedBookIds) setSelectedBookIds(prunedBookIds);
-  }, [availableBooksIds, selectedBookIds, setSelectedBookIds]);
+  // The saved selection is persisted per web view and shared across every project Find points at,
+  // so it can name books the CURRENT project doesn't have. `searchableBookIds` is that selection
+  // narrowed to this project for display and search, while the saved list keeps the user's books —
+  // see `use-find-book-scope.hook.ts` for why the narrowing is never persisted.
+  const { searchableBookIds: selectedBookIds, selectBookIds } = useFindBookScope({
+    savedBookIds,
+    setSavedBookIds,
+    availableBookIds: availableBooksIds,
+  });
 
   const availableBooksLocalizationKeys = useMemo(() => {
     const keys: `%${string}%`[] = [];
@@ -2323,7 +2308,7 @@ global.webViewComponent = function FindWebView({
       onStartSearch={handleStartSearch}
       onStopSearch={handleStopSearch}
       setScope={setScope}
-      onSelectedBookIdsChange={setSelectedBookIds}
+      onSelectedBookIdsChange={selectBookIds}
       setSearchTextType={setSearchTextType}
       setWordRestriction={setWordRestriction}
       setShouldMatchCase={setShouldMatchCase}
