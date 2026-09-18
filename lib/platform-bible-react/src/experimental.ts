@@ -32,15 +32,6 @@ export {
   makeSelectionGrouping,
   defaultGroupings,
 } from './components/advanced/project-selector/project-selector.component';
-// One predicate for "can this localized value be shown to a user?", shared with consumers so a web
-// view merging its own `%webView_…%` lookups onto a component's string bag judges them the same way
-// the component does. A nullish chain cannot: an unresolved lookup arrives as the raw key, which is
-// a defined string.
-export {
-  isResolvedLocalizedValue,
-  resolveLocalizedString,
-  firstResolvedLocalizedString,
-} from 'platform-bible-utils';
 export {
   default as ResourcePickerDialog,
   type ResourcePickerDialogProps,

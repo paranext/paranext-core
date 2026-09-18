@@ -4932,6 +4932,23 @@ export declare const localizedStringsDocumentSchema: {
  */
 export declare function isResolvedLocalizedValue(value: string | undefined): value is string;
 /**
+ * Reads one entry out of a localized-strings map, or `undefined` when that entry carries nothing
+ * showable yet.
+ *
+ * The map-and-key companion to {@link resolveLocalizedString}, for the callers that have no fallback
+ * of their own to offer and need to pass the absence onward — a notice that should not render at
+ * all rather than render in English, say. Values are read as `unknown` so a map whose entries are
+ * not statically known to be strings (a grouping-label lookup, for instance) can use the same
+ * reader instead of growing its own `typeof` guard.
+ *
+ * @param strings A localized-strings map.
+ * @param key The key to read.
+ * @returns The entry when it carries real localized text, `undefined` otherwise.
+ */
+export declare function localizedStringOrUndefined(strings: {
+	readonly [key: LocalizeKey]: unknown;
+}, key: LocalizeKey): string | undefined;
+/**
  * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
  *
  * @param value The value read out of a localized-strings map, if any.
@@ -4939,18 +4956,6 @@ export declare function isResolvedLocalizedValue(value: string | undefined): val
  * @returns `value` when {@link isResolvedLocalizedValue} accepts it, `fallback` otherwise.
  */
 export declare function resolveLocalizedString(value: string | undefined, fallback: string): string;
-/**
- * The first candidate that can actually be shown to a user, or `undefined` if none can.
- *
- * For call sites that have more than one source to try before reaching a literal they own — a
- * consumer's own localized override, then a value read from a setting, then English. Each candidate
- * is judged by {@link isResolvedLocalizedValue}, so an unresolved lookup is skipped rather than
- * rendered, which a nullish chain (`a ?? b ?? c`) cannot do.
- *
- * @param candidates Values to try, best first.
- * @returns The first candidate carrying real text, or `undefined` when none does.
- */
-export declare function firstResolvedLocalizedString(...candidates: (string | undefined)[]): string | undefined;
 /**
  * One selectable item in a command/marker palette. The dependency-free shared shape consumed by
  * every layer that handles palette items — the renderer overlay service's `CommandPaletteItem`

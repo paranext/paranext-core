@@ -15,7 +15,6 @@ import {
   buildSelectionGroupingStrings,
   makeBuiltInGroupings,
   makeSelectionGrouping,
-  firstResolvedLocalizedString,
   type ProjectSelectorGrouping,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
@@ -30,6 +29,7 @@ import {
   isPlatformError,
   makeProjectSelectorCustomData,
   normalizeProjectId,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
@@ -530,8 +530,10 @@ global.webViewComponent = function ChecklistWebView({
     if (!hideMatches) return undefined;
     const excluded = data?.excludedCount ?? 0;
     if (excluded <= 0) return undefined;
-    const template =
-      localizedStrings['%markersChecklist_matches_omitted%'] ?? '{count} Matches Omitted';
+    const template = resolveLocalizedString(
+      localizedStrings['%markersChecklist_matches_omitted%'],
+      '{count} Matches Omitted',
+    );
     return formatReplacementString(template, { count: String(excluded) });
   }, [hideMatches, data?.excludedCount, localizedStrings]);
 
@@ -774,11 +776,11 @@ global.webViewComponent = function ChecklistWebView({
   // owns, because the picker's own English default ("Select a project") is too generic to identify
   // which of the two toolbar pickers a screen reader has landed on. Mirrors
   // `%markersChecklist_toolbar_*%` in contributions/localizedStrings.json.
-  const comparativeProjectsLabel = firstResolvedLocalizedString(
+  const comparativeProjectsLabel = resolveLocalizedString(
     localizedStrings['%markersChecklist_toolbar_comparativeProjects%'],
     'Select comparative projects',
   );
-  const primaryProjectPickerLabel = firstResolvedLocalizedString(
+  const primaryProjectPickerLabel = resolveLocalizedString(
     localizedStrings['%markersChecklist_toolbar_primaryProject%'],
     'Select primary Scripture text',
   );

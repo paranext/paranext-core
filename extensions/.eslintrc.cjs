@@ -196,7 +196,8 @@ module.exports = {
         'no-alert': 'off', // alert is fine here
         'jsx-a11y/control-has-associated-label': 'off', // no need for a11y
         // Stories stand in fake localized strings, so a fallback there is scaffolding rather than
-        // a lookup that reaches a user
+        // a lookup that reaches a user. The exemption stops at the story file itself: a shared
+        // helper such as `*.test-utils.ts` mirrors production shape, so the rule stays on there.
         'paranext/no-nullish-localized-fallback': 'off',
       },
     },
@@ -204,7 +205,9 @@ module.exports = {
       files: ['*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx'],
       rules: {
         // Tests construct localized-string maps directly, so a fallback there is scaffolding
-        // rather than a lookup that reaches a user
+        // rather than a lookup that reaches a user. The exemption stops at the test file itself:
+        // a shared helper such as `*.test-utils.ts` mirrors production shape, so the rule stays
+        // on there.
         'paranext/no-nullish-localized-fallback': 'off',
       },
     },

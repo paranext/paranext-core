@@ -182,8 +182,8 @@ export type {
 } from './extension-contributions/localized-strings.model';
 export { localizedStringsDocumentSchema } from './extension-contributions/localized-strings.model';
 export {
-  firstResolvedLocalizedString,
   isResolvedLocalizedValue,
+  localizedStringOrUndefined,
   resolveLocalizedString,
 } from './localization.util';
 export type {

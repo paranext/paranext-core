@@ -1,9 +1,6 @@
+import { localizedStringOrUndefined } from 'platform-bible-utils';
 import { describe, expect, it } from 'vitest';
-import {
-  localizedStringOrUndefined,
-  PICKER_NO_PROJECT_NOTICE_KEY,
-  resolvePickerNotice,
-} from './view-options-notice.utils';
+import { PICKER_NO_PROJECT_NOTICE_KEY, resolvePickerNotice } from './view-options-notice.utils';
 
 const NOTICE = 'No project is selected, so a resource you choose here will be downloaded.';
 const STRINGS = { [PICKER_NO_PROJECT_NOTICE_KEY]: NOTICE };

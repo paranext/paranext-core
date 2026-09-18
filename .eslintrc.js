@@ -170,7 +170,8 @@ module.exports = {
         // Stories use console.log for Storybook action logging
         'no-console': 'off',
         // Stories stand in fake localized strings, so a fallback there is scaffolding rather than
-        // a lookup that reaches a user
+        // a lookup that reaches a user. The exemption stops at the story file itself: a shared
+        // helper such as `*.test-utils.ts` mirrors production shape, so the rule stays on there.
         'paranext/no-nullish-localized-fallback': 'off',
         '@typescript-eslint/naming-convention': [
           'error',
@@ -220,7 +221,9 @@ module.exports = {
       },
       rules: {
         // Tests construct localized-string maps directly, so a fallback there is scaffolding
-        // rather than a lookup that reaches a user
+        // rather than a lookup that reaches a user. The exemption stops at the test file itself:
+        // a shared helper such as `*.test-utils.ts` mirrors production shape, so the rule stays
+        // on there.
         'paranext/no-nullish-localized-fallback': 'off',
         // `vitest/expect-expect` is already enabled by legacy-recommended; this only customizes
         // `assertFunctionNames` so `expectTypeOf()` counts as an assertion.

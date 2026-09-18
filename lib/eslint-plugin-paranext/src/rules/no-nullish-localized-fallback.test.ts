@@ -1,5 +1,6 @@
 import path from 'path';
-import rule from './no-nullish-localized-fallback';
+import { describe, expect, it } from 'vitest';
+import rule, { LOCALIZATION_KEY_PATTERN } from './no-nullish-localized-fallback';
 import { typeAwareRuleTester, typelessRuleTester } from '../test.utils';
 
 const filename = path.resolve(__dirname, '../fixtures/case.ts');
@@ -100,6 +101,54 @@ typeAwareRuleTester.run('no-nullish-localized-fallback', rule, {
       errors: [{ messageId: 'nullishLocalizedFallback' }],
     },
     {
+      // The wrap suggestion has to leave the file compiling, so it brings the helper into scope.
+      code: `${imports}\nconst t = localizedStrings['%a%'] ?? 'A';`,
+      filename,
+      errors: [
+        {
+          messageId: 'nullishLocalizedFallback',
+          suggestions: [
+            {
+              messageId: 'useResolveLocalizedString',
+              output: `import { resolveLocalizedString } from 'platform-bible-utils';\n${imports}\nconst t = resolveLocalizedString(localizedStrings['%a%'], 'A');`,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      // An existing value import of the module is extended rather than duplicated.
+      code: `${imports}\nimport { isResolvedLocalizedValue } from 'platform-bible-utils';\nconst t = localizedStrings['%a%'] ?? 'A';`,
+      filename,
+      errors: [
+        {
+          messageId: 'nullishLocalizedFallback',
+          suggestions: [
+            {
+              messageId: 'useResolveLocalizedString',
+              output: `${imports}\nimport { isResolvedLocalizedValue, resolveLocalizedString } from 'platform-bible-utils';\nconst t = resolveLocalizedString(localizedStrings['%a%'], 'A');`,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      // The helper is already in scope, so the suggestion only rewrites the expression.
+      code: `${imports}\nimport { resolveLocalizedString } from 'platform-bible-utils';\nconst t = localizedStrings['%a%'] ?? 'A';`,
+      filename,
+      errors: [
+        {
+          messageId: 'nullishLocalizedFallback',
+          suggestions: [
+            {
+              messageId: 'useResolveLocalizedString',
+              output: `${imports}\nimport { resolveLocalizedString } from 'platform-bible-utils';\nconst t = resolveLocalizedString(localizedStrings['%a%'], 'A');`,
+            },
+          ],
+        },
+      ],
+    },
+    {
       // Falling back to the key itself is dead code rather than user-visible breakage. The only
       // suggestion offered deletes the fallback: wrapping it would keep the key as the fallback
       // text, which is the raw `%…%` the rule exists to stop.
@@ -133,4 +182,36 @@ typelessRuleTester.run('no-nullish-localized-fallback (no type information)', ru
     { code: `const t = localizedStrings[key] ?? key;` },
   ],
   invalid: [],
+});
+
+/**
+ * The plugin cannot depend on `platform-bible-utils`, so its `LOCALIZATION_KEY_PATTERN` is a
+ * deliberate second copy of the one behind `isResolvedLocalizedValue` in
+ * `lib/platform-bible-utils/src/localization.util.ts`. These cases are the table both copies must
+ * classify alike, restated here in full so that a change to either copy that is not mirrored in the
+ * other shows up as a failure.
+ */
+const sharedResolutionCases: { value: string | undefined; isResolved: boolean }[] = [
+  // A localization key is not resolved text.
+  { value: '%some_key%', isResolved: false },
+  // Real copy that happens to contain a percent sign is text, not a key.
+  { value: '%s of 50% total%', isResolved: true },
+  { value: '', isResolved: false },
+  { value: '   ', isResolved: false },
+  { value: 'Select Chapter', isResolved: true },
+  { value: undefined, isResolved: false },
+];
+
+/** The canonical predicate's composition, evaluated against the plugin's copy of the pattern. */
+function isResolvedByPluginPattern(value: string | undefined): boolean {
+  return value !== undefined && !LOCALIZATION_KEY_PATTERN.test(value) && value.trim() !== '';
+}
+
+describe("LOCALIZATION_KEY_PATTERN agrees with platform-bible-utils' canonical copy", () => {
+  it.each(sharedResolutionCases)(
+    'classifies $value as resolved: $isResolved',
+    ({ value, isResolved }) => {
+      expect(isResolvedByPluginPattern(value)).toBe(isResolved);
+    },
+  );
 });

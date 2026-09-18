@@ -1,3 +1,5 @@
+import { LocalizeKey } from './extension-contributions/menus.model';
+
 /**
  * Matches a localization key — the `%some_key%` spelling used throughout Platform.Bible — with
  * nothing else around it.
@@ -10,6 +12,16 @@
  * `isLocalizeKey` answers a different question — whether an identifier the caller already believes
  * to be a key is shaped like one — and widening either to match the other would break the other's
  * callers, so they stay separate.
+ *
+ * The residual trade-off: a genuinely translated string that both begins and ends with `%` and has
+ * no interior `%` — `'%100%'`, say — reads as a key and is replaced by its English fallback. No
+ * shipped string has that shape, and the alternative (trusting any value that is not exactly the
+ * requested key) fails the much more common case of one key's text arriving under another key.
+ *
+ * `lib/eslint-plugin-paranext/src/rules/no-nullish-localized-fallback.ts` carries a deliberate
+ * second copy of this pattern — the plugin does not depend on this workspace — and the two must
+ * agree. That rule's test suite pins the agreement against a shared table of values; change both
+ * together.
  */
 const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
 
@@ -36,6 +48,28 @@ export function isResolvedLocalizedValue(value: string | undefined): value is st
 }
 
 /**
+ * Reads one entry out of a localized-strings map, or `undefined` when that entry carries nothing
+ * showable yet.
+ *
+ * The map-and-key companion to {@link resolveLocalizedString}, for the callers that have no fallback
+ * of their own to offer and need to pass the absence onward — a notice that should not render at
+ * all rather than render in English, say. Values are read as `unknown` so a map whose entries are
+ * not statically known to be strings (a grouping-label lookup, for instance) can use the same
+ * reader instead of growing its own `typeof` guard.
+ *
+ * @param strings A localized-strings map.
+ * @param key The key to read.
+ * @returns The entry when it carries real localized text, `undefined` otherwise.
+ */
+export function localizedStringOrUndefined(
+  strings: { readonly [key: LocalizeKey]: unknown },
+  key: LocalizeKey,
+): string | undefined {
+  const value = strings[key];
+  return typeof value === 'string' && isResolvedLocalizedValue(value) ? value : undefined;
+}
+
+/**
  * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
  *
  * @param value The value read out of a localized-strings map, if any.
@@ -44,21 +78,4 @@ export function isResolvedLocalizedValue(value: string | undefined): value is st
  */
 export function resolveLocalizedString(value: string | undefined, fallback: string): string {
   return isResolvedLocalizedValue(value) ? value : fallback;
-}
-
-/**
- * The first candidate that can actually be shown to a user, or `undefined` if none can.
- *
- * For call sites that have more than one source to try before reaching a literal they own — a
- * consumer's own localized override, then a value read from a setting, then English. Each candidate
- * is judged by {@link isResolvedLocalizedValue}, so an unresolved lookup is skipped rather than
- * rendered, which a nullish chain (`a ?? b ?? c`) cannot do.
- *
- * @param candidates Values to try, best first.
- * @returns The first candidate carrying real text, or `undefined` when none does.
- */
-export function firstResolvedLocalizedString(
-  ...candidates: (string | undefined)[]
-): string | undefined {
-  return candidates.find(isResolvedLocalizedValue);
 }

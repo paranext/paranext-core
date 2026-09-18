@@ -46,7 +46,6 @@ import {
   ScopeWithRange,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
-  firstResolvedLocalizedString,
   makeBuiltInGroupings,
   summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
@@ -55,6 +54,7 @@ import {
   LanguageStrings,
   LocalizedStringValue,
   makeProjectSelectorCustomData,
+  resolveLocalizedString,
   ScrollGroupId,
   Section,
 } from 'platform-bible-utils';
@@ -871,16 +871,18 @@ export function Find({
   // Supplied only while something is blocked: an always-present explanation would disable scopes
   // everywhere.
   //
-  // Falls back to the key itself, as the library's own `localizeString` does. `localizedStrings` is
-  // an open index signature, so a key that went unrequested reads as `undefined` with no compile
-  // error — and an `undefined` explanation here would leave both scopes ENABLED while the query
-  // gate still rejects them, which is the one outcome worse than showing a raw key.
+  // Always resolves to text: `localizedStrings` is an open index signature, so a key that went
+  // unrequested reads as `undefined` with no compile error, and an `undefined` explanation would
+  // leave both scopes ENABLED while the query gate still rejects them.
   const disabledScopeExplanations = useMemo(() => {
     const blockedScopes = FIND_AVAILABLE_SCOPES.filter((availableScope) =>
       isScopeBlockedByExtraMaterial(availableScope, verseRef.book),
     );
     if (blockedScopes.length === 0) return undefined;
-    const explanation = localizedStrings[EXTRA_MATERIAL_SCOPE_KEY] ?? EXTRA_MATERIAL_SCOPE_KEY;
+    const explanation = resolveLocalizedString(
+      localizedStrings[EXTRA_MATERIAL_SCOPE_KEY],
+      "Find doesn't search extra material.",
+    );
     return Object.fromEntries(blockedScopes.map((blockedScope) => [blockedScope, explanation]));
   }, [verseRef.book, localizedStrings]);
 
@@ -976,15 +978,15 @@ export function Find({
       // Each override falls back to Find's own English, not the picker's. The picker's generic
       // "Select a project" would be actively wrong here: this placeholder reports that there is
       // nothing to pick, so instructing the user to pick something contradicts it.
-      buttonPlaceholder: firstResolvedLocalizedString(
+      buttonPlaceholder: resolveLocalizedString(
         localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
         'No open projects or resources',
       ),
-      commandEmptyMessage: firstResolvedLocalizedString(
+      commandEmptyMessage: resolveLocalizedString(
         localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
         'No projects found',
       ),
-      ariaLabel: firstResolvedLocalizedString(
+      ariaLabel: resolveLocalizedString(
         localizedStrings['%webView_find_projectSelector_label%'],
         'Project',
       ),
@@ -1458,9 +1460,10 @@ export function Find({
           <ResultsPlaceholder
             domId={extraMaterialPlaceholderDomId}
             testId={EXTRA_MATERIAL_PLACEHOLDER_TEST_ID}
-            message={
-              localizedStrings[EXTRA_MATERIAL_SCOPE_RESULTS_KEY] ?? EXTRA_MATERIAL_SCOPE_RESULTS_KEY
-            }
+            message={resolveLocalizedString(
+              localizedStrings[EXTRA_MATERIAL_SCOPE_RESULTS_KEY],
+              "Find doesn't search extra material, such as glossaries and front matter. Choose books to search, or go to a Scripture book.",
+            )}
           />
         )}
         {(() => {

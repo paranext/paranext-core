@@ -18,13 +18,13 @@ import {
   ProjectSelectorLocalizedStrings,
   buildBuiltInGroupingStrings,
   buildProjectSelectorLocalizedStrings,
-  firstResolvedLocalizedString,
   makeBuiltInGroupings,
 } from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
   LanguageStrings,
   makeProjectSelectorCustomData,
+  resolveLocalizedString,
 } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
@@ -226,15 +226,15 @@ export function ChecksSidePanel({
       ...buildProjectSelectorLocalizedStrings(localizedStrings),
       // Each override falls back to this panel's own English, not the picker's. "No project"
       // reports a state; the picker's generic "Select a project" would read as an instruction.
-      buttonPlaceholder: firstResolvedLocalizedString(
+      buttonPlaceholder: resolveLocalizedString(
         localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%'],
         'No project',
       ),
-      commandEmptyMessage: firstResolvedLocalizedString(
+      commandEmptyMessage: resolveLocalizedString(
         localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%'],
         'No projects found',
       ),
-      ariaLabel: firstResolvedLocalizedString(
+      ariaLabel: resolveLocalizedString(
         localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
         'Your projects & resources',
       ),

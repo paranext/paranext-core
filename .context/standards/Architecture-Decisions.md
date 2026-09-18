@@ -2464,11 +2464,17 @@ step, no automation. Just a record.
   `createCrashedViewLocalizer` in `src/renderer/components/`, and a same-named but
   different-signature `resolveLocalizedString(map, key)` in
   `extensions/src/platform-scripture-editor/src/scripture-text-grid/view-options-notice.utils.ts`.
-- **Decision:** One implementation — `isResolvedLocalizedValue` / `resolveLocalizedString` /
-  `firstResolvedLocalizedString` — in `lib/platform-bible-utils/src/localization.util.ts`, exported
-  from the stable `index.ts`, and re-exported from `platform-bible-react/experimental` so existing
-  importers keep compiling. All three copies are rebuilt on it; the colliding
-  `platform-scripture-editor` export is renamed `localizedStringOrUndefined`.
+- **Decision:** One implementation in `lib/platform-bible-utils/src/localization.util.ts` —
+  `isResolvedLocalizedValue`, plus the two readers built on it: `resolveLocalizedString` (value +
+  fallback, for a caller that owns English text) and `localizedStringOrUndefined` (map + key, for a
+  caller with no fallback to offer that must pass the absence onward). Exported from the stable
+  `index.ts` and imported from there by every consumer, React and non-React alike.
+  `platform-bible-react/experimental` deliberately does NOT re-export them: a second import path for
+  the symbol whose whole purpose is one canonical home would have to be reasoned about on two
+  published surfaces at every future signature change, and would contradict the import path the lint
+  rule names. All three prior copies collapse onto these — including the `platform-scripture-editor`
+  helper whose name collided, which is deleted outright rather than renamed once its body became a
+  pass-through.
 - **Alternatives:** (a) keep it in `platform-bible-react/experimental` — rejected: the renderer and
   any non-React consumer cannot reach it without inverting the workspace dependency
   (`platform-bible-react` depends on `platform-bible-utils`, not the reverse). (b) Move it but leave
@@ -5668,8 +5674,11 @@ step, no automation. Just a record.
   array (`["lib/*","extensions","extensions/src/*"]`), which lints extension source twice — a
   distortion that affects every rule's aggregate, not just this one, and is worth remembering the
   next time a lint count is read as a site count. The rule's warning count is the follow-up sweep's
-  work list. **Revisit** to escalate the rule to `error` once that count reaches zero, and to
-  reconsider whether `lint:ai-strict` should run in CI at all given nothing invokes it.
+  work list, tracked as PT-4103 — which predates this rule, scopes itself to `lib/platform-bible-react`
+  alone, and prescribes the `?? 'English'` idiom this entry's sibling
+  (`adr-localized-string-resolution-helper`) disproves; it has been rewritten around the shared reader
+  and widened to the repo. **Revisit** to escalate the rule to `error` once that count reaches zero,
+  and to reconsider whether `lint:ai-strict` should run in CI at all given nothing invokes it.
 - **Source:** follow-up from PR #2829 review finding 16.
 
 ## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency

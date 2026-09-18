@@ -1,4 +1,4 @@
-import { isResolvedLocalizedValue, LocalizeKey } from 'platform-bible-utils';
+import { localizedStringOrUndefined, LocalizeKey } from 'platform-bible-utils';
 
 /**
  * The shape `useLocalizedStrings` returns. Declared structurally rather than imported as
@@ -20,21 +20,6 @@ export const VIEW_OPTIONS_NOTICE_STRING_KEYS: LocalizeKey[] = [
   PICKER_NO_PROJECT_NOTICE_KEY,
   DOWNLOADED_NO_PROJECT_KEY,
 ];
-
-/**
- * A localized string, or `undefined` when there is nothing usable to show yet.
- *
- * Named for what it returns rather than `resolveLocalizedString`, which is the canonical `(value,
- * fallback) => string` helper in `platform-bible-utils`. This one takes the whole map and has no
- * fallback to offer, so sharing the name would put two different signatures behind it.
- */
-export function localizedStringOrUndefined(
-  localizedStrings: LocalizedStrings,
-  key: LocalizeKey,
-): string | undefined {
-  const value = localizedStrings[key];
-  return isResolvedLocalizedValue(value) ? value : undefined;
-}
 
 /**
  * The notice shown above the resource picker's list, or `undefined` when there is nothing to say.

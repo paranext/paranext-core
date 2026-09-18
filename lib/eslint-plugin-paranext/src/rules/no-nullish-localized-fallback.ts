@@ -1,10 +1,23 @@
-import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
+import { ESLintUtils, ParserServices, TSESLint, TSESTree } from '@typescript-eslint/utils';
 import type { Type, TypeChecker } from 'typescript';
 
 const createRule = ESLintUtils.RuleCreator(() => '');
 
-/** A localization key — `%some_key%` with nothing else around it. */
-const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
+/**
+ * A localization key — `%some_key%` with nothing else around it.
+ *
+ * A deliberate second copy of the canonical pattern behind `isResolvedLocalizedValue` in
+ * `lib/platform-bible-utils/src/localization.util.ts`: this plugin does not depend on the
+ * workspace, so the two must be kept in agreement by hand. `no-nullish-localized-fallback.test.ts`
+ * pins that agreement against a shared table of values.
+ */
+export const LOCALIZATION_KEY_PATTERN = /^%[^%]*%$/;
+
+/** Module that exports the helper this rule steers unresolved-string handling toward. */
+const UTILS_MODULE_NAME = 'platform-bible-utils';
+
+/** Helper that replaces a nullish/logical fallback on a localized-string lookup. */
+const RESOLVE_HELPER_NAME = 'resolveLocalizedString';
 
 /** Name of the interface that models a map of localized strings. */
 const LOCALIZED_STRINGS_TYPE_NAME = 'LanguageStrings';
@@ -73,6 +86,66 @@ function asComputedMemberExpression(node: TSESTree.Node): TSESTree.MemberExpress
 }
 
 /**
+ * The source code, including the parser services accessor ESLint exposes on it from 8.40 on and
+ * keeps in 9. `@typescript-eslint/utils` v5 types only the deprecated `context.parserServices`
+ * twin, so the modern accessor is declared here and read defensively.
+ */
+type SourceCodeWithParserServices = Readonly<TSESLint.SourceCode> & {
+  parserServices?: ParserServices;
+};
+
+/** Reads the source code through the accessor ESLint 9 keeps, falling back to the removed one. */
+function getSourceCode(context: {
+  sourceCode?: SourceCodeWithParserServices;
+  getSourceCode(): Readonly<TSESLint.SourceCode>;
+}): SourceCodeWithParserServices {
+  return context.sourceCode ?? context.getSourceCode();
+}
+
+/**
+ * Fixes that bring {@link RESOLVE_HELPER_NAME} into scope, so applying the wrap suggestion leaves a
+ * file that still compiles. Merges into an existing value import of `platform-bible-utils` when
+ * there is one, adds an import statement otherwise, and contributes nothing when the name is
+ * already bound.
+ */
+function importResolveHelperFixes(
+  fixer: TSESLint.RuleFixer,
+  sourceCode: Readonly<TSESLint.SourceCode>,
+): TSESLint.RuleFix[] {
+  const importDeclarations = sourceCode.ast.body.filter(
+    (statement): statement is TSESTree.ImportDeclaration => statement.type === 'ImportDeclaration',
+  );
+
+  const isBound = importDeclarations.some((declaration) =>
+    declaration.specifiers.some((specifier) => specifier.local.name === RESOLVE_HELPER_NAME),
+  );
+  if (isBound) return [];
+
+  // A type-only import or specifier cannot carry a value, so neither is a merge target.
+  const mergeTarget = importDeclarations
+    .filter(
+      (declaration) =>
+        declaration.source.value === UTILS_MODULE_NAME && declaration.importKind !== 'type',
+    )
+    .flatMap((declaration) => declaration.specifiers)
+    .filter(
+      (specifier): specifier is TSESTree.ImportSpecifier =>
+        specifier.type === 'ImportSpecifier' && specifier.importKind !== 'type',
+    )
+    .pop();
+  if (mergeTarget) return [fixer.insertTextAfter(mergeTarget, `, ${RESOLVE_HELPER_NAME}`)];
+
+  const firstStatement = importDeclarations[0] ?? sourceCode.ast.body[0];
+  if (!firstStatement) return [];
+  return [
+    fixer.insertTextBefore(
+      firstStatement,
+      `import { ${RESOLVE_HELPER_NAME} } from '${UTILS_MODULE_NAME}';\n`,
+    ),
+  ];
+}
+
+/**
  * ESLint rule: paranext/no-nullish-localized-fallback
  *
  * Disallows `localizedStrings[key] ?? 'Default'`. `useLocalizedStrings` seeds its state with `{
@@ -108,14 +181,17 @@ export default createRule({
   defaultOptions: [],
 
   create(context) {
+    // `sourceCode.parserServices` is the accessor ESLint 9 keeps; `context.parserServices` behind
+    // it is what ESLint hosts older than 8.40 provide.
+    const sourceCode = getSourceCode(context);
+    const services = sourceCode.parserServices ?? context.parserServices;
+
     // A type-aware rule has nothing to say about a file linted without type information, so it
     // registers no listeners rather than aborting the run. Configurations that lint plain
     // JavaScript alongside TypeScript, and any downstream repo that enables the recommended config
     // without `parserOptions.project`, reach this path.
-    const { parserServices } = context;
-    if (!parserServices?.program || !parserServices.esTreeNodeToTSNodeMap) return {};
+    if (!services?.program || !services.esTreeNodeToTSNodeMap) return {};
 
-    const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 
     /** Whether `node` is a `%…%` string literal or typed as `LocalizeKey`. */
@@ -146,7 +222,6 @@ export default createRule({
 
       // A fallback that is the same key being read cannot differ from the unresolved value, so
       // the operator is dead rather than user-visible.
-      const sourceCode = context.getSourceCode();
       const isDeadKeyFallback =
         sourceCode.getText(node.right) === sourceCode.getText(left.property);
 
@@ -167,11 +242,13 @@ export default createRule({
           : [
               {
                 messageId: 'useResolveLocalizedString',
-                fix: (fixer) =>
+                fix: (fixer) => [
+                  ...importResolveHelperFixes(fixer, sourceCode),
                   fixer.replaceText(
                     node,
-                    `resolveLocalizedString(${sourceCode.getText(node.left)}, ${sourceCode.getText(node.right)})`,
+                    `${RESOLVE_HELPER_NAME}(${sourceCode.getText(node.left)}, ${sourceCode.getText(node.right)})`,
                   ),
+                ],
               },
             ],
       });

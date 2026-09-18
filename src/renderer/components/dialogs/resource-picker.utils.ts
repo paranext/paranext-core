@@ -1,6 +1,6 @@
 import { LocalizationData } from '@shared/services/localization.service-model';
 import type { DblResourceCatalog } from 'platform-get-resources';
-import { DblResourceData, isResolvedLocalizedValue, LocalizeKey } from 'platform-bible-utils';
+import { DblResourceData, localizedStringOrUndefined, LocalizeKey } from 'platform-bible-utils';
 
 /**
  * Localization keys for the notices the resource picker dialog adds around `ResourcePickerDialog`'s
@@ -70,11 +70,10 @@ export function collectFetchedResources(
  * Reads a localized string, or `undefined` when there is nothing usable to show. The localization
  * service echoes a key back when it has no translation for it, so a missing translation has to be
  * recognized by value as well as by absence — otherwise a notice renders as literal `%key%` text.
- * {@link isResolvedLocalizedValue} is the one predicate that makes that judgment.
+ * {@link localizedStringOrUndefined} is the one reader that makes that judgment.
  */
 function localizeString(strings: LocalizationData, key: LocalizeKey): string | undefined {
-  const value = strings[key];
-  return isResolvedLocalizedValue(value) ? value : undefined;
+  return localizedStringOrUndefined(strings, key);
 }
 
 /**

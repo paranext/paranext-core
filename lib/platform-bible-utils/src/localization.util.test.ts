@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
-  firstResolvedLocalizedString,
   isResolvedLocalizedValue,
+  localizedStringOrUndefined,
   resolveLocalizedString,
 } from './localization.util';
 
@@ -66,17 +66,21 @@ describe('isResolvedLocalizedValue', () => {
   });
 });
 
-describe('firstResolvedLocalizedString', () => {
-  test('takes the first candidate carrying real text', () => {
-    expect(firstResolvedLocalizedString('Primero', 'Second')).toBe('Primero');
+describe('localizedStringOrUndefined', () => {
+  test('reads an entry carrying real text', () => {
+    expect(localizedStringOrUndefined({ '%a_key%': 'Clear all' }, '%a_key%')).toBe('Clear all');
   });
 
-  test('skips past unresolved candidates rather than stopping at them', () => {
-    // The whole point: `??` would stop at the raw key, because a key is a defined string.
-    expect(firstResolvedLocalizedString('%a_key%', undefined, '  ', 'English')).toBe('English');
+  test('returns undefined for each unresolved state, so the absence can be passed onward', () => {
+    expect(localizedStringOrUndefined({}, '%a_key%')).toBeUndefined();
+    expect(localizedStringOrUndefined({ '%a_key%': '%a_key%' }, '%a_key%')).toBeUndefined();
+    expect(localizedStringOrUndefined({ '%a_key%': '%other_key%' }, '%a_key%')).toBeUndefined();
+    expect(localizedStringOrUndefined({ '%a_key%': '   ' }, '%a_key%')).toBeUndefined();
   });
 
-  test('returns undefined when no candidate can be shown', () => {
-    expect(firstResolvedLocalizedString('%a_key%', undefined, '')).toBeUndefined();
+  test('returns undefined for a non-string entry rather than handing it to a caller typed for text', () => {
+    // Callers reading a lookup whose values are `unknown` — a grouping-label map, say — rely on
+    // this instead of each growing its own `typeof` guard.
+    expect(localizedStringOrUndefined({ '%a_key%': 42 }, '%a_key%')).toBeUndefined();
   });
 });
