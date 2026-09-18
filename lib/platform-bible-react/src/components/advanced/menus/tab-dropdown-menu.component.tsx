@@ -34,8 +34,8 @@ import {
   hideFocusRing,
   QUIET_FOCUS_RING_SUPPRESSION,
   showFocusRing,
-  trackInteractionModality,
 } from '@/utils/focus.util';
+import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 import {
   getMenuSectionsWithItems,
   getSubMenuGroupKeyForMenuItemId,
@@ -170,7 +170,7 @@ export default function TabDropdownMenu({
   // ring does not belong there after a pointer close, though — it would sit on a button the pointer
   // has long left. Mark the trigger so CSS hides the ring, and clear the mark on the next keydown so
   // keyboard users get it back.
-  trackInteractionModality();
+  useInteractionModality();
   // `null` is React's canonical "not yet attached" ref value; there's no undefined equivalent in the
   // DOM/ref API (same pattern as navigation-history-buttons' button refs)
   // eslint-disable-next-line no-null/no-null

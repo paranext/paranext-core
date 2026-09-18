@@ -83,8 +83,11 @@ let lastInteractionModality: 'keyboard' | 'pointer' = 'keyboard';
 let isModalityTrackerRegistered = false;
 
 /**
- * Starts tracking {@link getLastInteractionModality}. Safe to call from every consumer on every
- * render — it registers one pair of document listeners the first time and does nothing afterwards.
+ * Starts tracking {@link getLastInteractionModality}. Registers one pair of document listeners the
+ * first time and does nothing afterwards, so any number of consumers may call it.
+ *
+ * React components should call `useInteractionModality` rather than this directly, which keeps the
+ * registration out of render.
  */
 export function trackInteractionModality() {
   if (isModalityTrackerRegistered || typeof document === 'undefined') return;
@@ -111,7 +114,14 @@ export function getLastInteractionModality() {
   return lastInteractionModality;
 }
 
-/** Marks a trigger whose focus was restored by a pointer close, so its focus ring stays hidden. */
+/**
+ * Marks a trigger whose focus was restored by a pointer close, so its focus ring stays hidden.
+ *
+ * The name is spelled out a second time inside {@link QUIET_FOCUS_RING_SUPPRESSION}'s
+ * `tw:data-quiet-focus:*` variants, because Tailwind scans class strings statically and cannot read
+ * one from a constant. Change one and you must change the other;
+ * `tab-dropdown-menu-focus.stories.tsx` is what catches it if you don't.
+ */
 export const QUIET_FOCUS_ATTRIBUTE = 'data-quiet-focus';
 
 /**

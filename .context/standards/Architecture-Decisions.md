@@ -2847,7 +2847,8 @@ step, no automation. Just a record.
   triggers keep Radix's default, so the app has two close-focus behaviors until someone unifies them.
   Between a pointer close and the user's next keystroke, focus sits on the trigger with nothing to
   show where it is — a brief, deliberate gap in WCAG 2.4.7. The keydown that ends it clears the mark
-  before it acts, so pressing Enter paints the ring on the trigger it is about to reopen. Because the suppression is ordinary CSS rather than a browser capability, it
+  before it acts, so pressing Enter paints the ring on the trigger it is about to reopen. Because
+  the suppression is ordinary CSS and an inline style rather than a browser capability, it
   behaves the same in the shipped Electron as in a newer Chromium. Automated coverage stops at the
   signal rather than the paint: the jsdom test pins that focus returns and that the attribute tracks
   the closing input, and `tab-dropdown-menu-focus.stories.tsx` adds the `:focus-visible` half that
