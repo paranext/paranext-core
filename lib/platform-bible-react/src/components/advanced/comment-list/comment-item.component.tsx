@@ -56,10 +56,13 @@ export function CommentItem({
 
   const setEditorState = useCallback(
     (value: SerializedEditorState | undefined) => {
-      setInternalEditorState(value);
+      // Only write the fallback while it is actually the source of truth — see the matching guard
+      // in CommentThread's `updateDraft` for why writing it while controlled would let stale
+      // content resurface after the consumer drops `draftEditorState` for a reason of its own.
+      if (draftEditorState === undefined) setInternalEditorState(value);
       onDraftEditorStateChange?.(value);
     },
-    [onDraftEditorStateChange],
+    [draftEditorState, onDraftEditorStateChange],
   );
 
   // Ref must default to null so React can attach it to the DOM element

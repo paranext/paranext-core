@@ -31,6 +31,7 @@ import { ResolveCheckButton } from './resolve-check-button.component';
 import {
   didPressCtrlOrCmdEnter,
   getAssignedUserDisplayName,
+  hasCommentEdits,
   isCommentDraftEmpty,
 } from './comment-list.utils';
 
@@ -117,10 +118,15 @@ export function CommentThread({
   const updateDraft = useCallback(
     (patch: Partial<CommentDraft>) => {
       const next: CommentDraft = { ...effectiveDraft, ...patch };
-      setInternalDraft(next);
+      // Only write the fallback while it is actually the source of truth. While controlled,
+      // writing it anyway would let stale content resurface later: if the consumer drops the
+      // `draft` prop to `undefined` for a reason that did not go through `onDraftChange` (e.g.
+      // pruning an entry against threads that no longer exist), `effectiveDraft` would fall back to
+      // this shadow copy instead of the harmless empty default.
+      if (draft === undefined) setInternalDraft(next);
       onDraftChange?.(threadId, isCommentDraftEmpty(next) ? undefined : next);
     },
-    [effectiveDraft, onDraftChange, threadId],
+    [draft, effectiveDraft, onDraftChange, threadId],
   );
 
   // An in-progress edit to an existing comment is tracked separately from the reply draft above
@@ -139,7 +145,7 @@ export function CommentThread({
         nextCommentEdits[commentId] = value;
       }
       updateDraft({
-        commentEdits: Object.keys(nextCommentEdits).length > 0 ? nextCommentEdits : undefined,
+        commentEdits: hasCommentEdits(nextCommentEdits) ? nextCommentEdits : undefined,
       });
     },
     [effectiveDraft.commentEdits, updateDraft],
@@ -156,7 +162,7 @@ export function CommentThread({
   // after one.
   const [isAnyCommentEditingLocal, setIsAnyCommentEditingLocal] = useState<boolean>(false);
   const isAnyCommentEditing =
-    isAnyCommentEditingLocal || Object.keys(effectiveDraft.commentEdits ?? {}).length > 0;
+    isAnyCommentEditingLocal || hasCommentEdits(effectiveDraft.commentEdits);
   const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
   const [canAssign, setCanAssign] = useState<boolean>(false);
   const [canResolve, setCanResolve] = useState<boolean>(false);

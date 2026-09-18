@@ -307,6 +307,10 @@ export interface CommentThreadProps {
    * This thread's uncommitted draft — reply-box contents, a pending assignee, or both. When
    * provided, it is rendered instead of internal state (see {@link CommentListProps.drafts}). Falls
    * back to internal state when omitted, so callers that don't manage drafts keep working.
+   *
+   * Read-only without its matching `onDraftChange`: passing `draft` alone renders it, but every
+   * subsequent keystroke keeps re-rendering that same unchanging value, so typing appears to do
+   * nothing. Pass both together, or neither.
    */
   draft?: CommentDraft;
   /**
@@ -360,6 +364,10 @@ export interface CommentItemProps {
    * Controlled contents of an in-progress edit to this comment. When provided, it is rendered
    * instead of internal state, and entering/leaving edit mode is derived from whether it is
    * defined. Falls back to internal state when omitted.
+   *
+   * Read-only without its matching `onDraftEditorStateChange`: passing `draftEditorState` alone
+   * renders it, but every keystroke keeps re-rendering that same unchanging value, so typing
+   * appears to do nothing. Pass both together, or neither.
    */
   draftEditorState?: SerializedEditorState;
   /**

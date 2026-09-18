@@ -406,6 +406,44 @@ describe('CommentThread draft control', () => {
       expect.objectContaining({ assignedUser: 'Alice' }),
     );
   });
+
+  it('does not resurrect a discarded draft when the consumer drops it for a reason of its own', async () => {
+    // The internal fallback must stay inert while controlled. If it isn't, a consumer that clears
+    // its own map entry for a reason unrelated to this component's own onDraftChange call (e.g.
+    // pruning against threads that no longer exist) gets back a draft it believed it had discarded.
+    const onDraftChange = vi.fn();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const canUserAssignThreadCallback = async () => true;
+    const { rerender } = renderThread({
+      isSelected: true,
+      draft: { assignedUser: 'Alice' },
+      onDraftChange,
+      canUserAssignThreadCallback,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Assign user' })).not.toBeDisabled();
+    });
+
+    // Change the assignee while controlled. The update reaches `onDraftChange`, but — unlike a
+    // real round trip — this test does not feed the new value back through `draft`, standing in for
+    // a consumer that received the call and, for its own reasons, did not apply it.
+    await user.click(screen.getByRole('button', { name: 'Assign user' }));
+    await user.click(await screen.findByText('Bob'));
+
+    // The consumer now discards the draft for a reason of its own — not by acting on the call above.
+    rerender(
+      threadElement({
+        isSelected: true,
+        draft: undefined,
+        onDraftChange,
+        canUserAssignThreadCallback,
+      }),
+    );
+
+    expect(screen.queryByText(/Assigning to:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Bob/)).not.toBeInTheDocument();
+  });
 });
 
 describe('CommentThread comment-edit drafts', () => {

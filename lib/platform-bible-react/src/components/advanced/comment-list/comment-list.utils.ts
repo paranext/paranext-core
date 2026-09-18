@@ -1,8 +1,20 @@
 import { isMacOs } from '@/utils/platform.util';
 import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
 import { KeyboardEvent } from 'react';
+import { SerializedEditorState } from 'lexical';
 import { CommentDraft } from './comment-list.types';
 import { ConflictResolutionOutcome, VERSE_TEXT_CONFLICT } from './conflict-note-card.types';
+
+/**
+ * Whether a thread's in-progress comment edits map has any entries. Centralized because the
+ * question — is there at least one edit in progress — is asked both while updating the map and
+ * while deciding whether the containing draft is empty.
+ */
+export function hasCommentEdits(
+  commentEdits: Readonly<Record<string, SerializedEditorState>> | undefined,
+): boolean {
+  return commentEdits !== undefined && Object.keys(commentEdits).length > 0;
+}
 
 /**
  * A draft is empty only when none of its three parts carry anything: no unsent reply, no pending
@@ -14,7 +26,7 @@ export function isCommentDraftEmpty(draft: CommentDraft): boolean {
   return (
     draft.editorState === undefined &&
     draft.assignedUser === undefined &&
-    (draft.commentEdits === undefined || Object.keys(draft.commentEdits).length === 0)
+    !hasCommentEdits(draft.commentEdits)
   );
 }
 
