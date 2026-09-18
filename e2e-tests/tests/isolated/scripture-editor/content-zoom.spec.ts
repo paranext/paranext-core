@@ -713,7 +713,10 @@ test.describe('scripture editor content zoom', () => {
       // (or the arrow element itself) without depending on Radix's exact internal tag name.
       const arrow = palette.locator('> *:not(div)');
 
-      const widthTolerancePx = 2;
+      // Sub-pixel in practice: Radix's own offset puts the arrow's centre on the trigger exactly,
+      // so this absorbs rounding only. Keep it tight — the defect this guards displaced the arrow
+      // by tens of pixels, growing with the zoom, so a wide band would pass against it.
+      const arrowCentreTolerancePx = 2;
       const factors = [1, 1.5, 2];
       // Sequential: each level's palette must be opened, measured and closed before the next.
       /* eslint-disable no-await-in-loop */
@@ -734,7 +737,7 @@ test.describe('scripture editor content zoom', () => {
         expect(
           Math.abs(arrowCentreX - trigger.x),
           `arrow centred on its trigger at ${factor * 100}%`,
-        ).toBeLessThanOrEqual(widthTolerancePx);
+        ).toBeLessThanOrEqual(arrowCentreTolerancePx);
 
         await mainPage.keyboard.press('Escape');
         await expect(palette).toBeHidden();
