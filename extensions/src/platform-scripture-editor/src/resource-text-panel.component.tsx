@@ -3,6 +3,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  ContentZoomRoot,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -498,6 +499,10 @@ export function ResourceTextPanel({
   const { emptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
     resolveResourcePanelStringKeys(resourceType);
 
+  // Both web-view types share this component and resolve to the same content-zoom memory identity
+  // (their container project), so each names its own area to keep its remembered level separate.
+  const contentZoomArea = resourceType === 'ScriptureResource' ? 'bible-texts' : 'commentaries';
+
   if (!hasProject) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
@@ -704,7 +709,9 @@ export function ResourceTextPanel({
         )}
       />
 
-      {renderContent()}
+      <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+        {renderContent()}
+      </ContentZoomRoot>
     </div>
   );
 
