@@ -466,6 +466,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // eslint-disable-next-line no-null/no-null
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
+  // The Scripture text zoom area's element, handed to the editor so its context menu portals
+  // inside the area: the menu then takes the area's zoom and is bounded by the pane.
+  // The refs needs to start out with null for it to work as a element ref
+  // eslint-disable-next-line no-null/no-null
+  const editorZoomRootRef = useRef<HTMLDivElement>(null);
+  const getEditorZoomRoot = useCallback(() => editorZoomRootRef.current ?? undefined, []);
+
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
@@ -1625,6 +1632,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           isDisabled: !canUserCreateComments || isSyncBlocked,
         },
       ],
+      contextMenuContainer: getEditorZoomRoot,
     }),
     [
       isReadOnlyEffective,
@@ -1640,6 +1648,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       insertCommentAtCurrentSelection,
       insertFootnoteAtCurrentSelection,
       insertCrossReferenceAtCurrentSelection,
+      getEditorZoomRoot,
     ],
   );
 
@@ -3903,10 +3912,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
           in the surrounding layout; the editor and everything it renders inline (including the
           Simple-mode character-marker bar) scale with the text. Content that portals out of it
-          (menus, pop-ups) is not inside the area. */}
+          (menus, pop-ups) is not inside the area, except the editor's own right-click context
+          menu: it is told to portal into this element (`getEditorZoomRoot`) so it takes the
+          area's zoom and stays bounded by it. */}
       <InPortal node={editorPortalNode}>
         <PortalContents>
-          <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+          <ContentZoomRoot
+            ref={editorZoomRootRef}
+            className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+          >
             {renderEditor()}
           </ContentZoomRoot>
         </PortalContents>
