@@ -499,6 +499,7 @@
   "%projectPicker_toolbar_more_projects%": "Más proyectos…",
   "%projectPicker_toolbar_no_projects%": "No hay proyectos disponibles",
   "%projectPicker_toolbar_select_project%": "Seleccionar proyecto",
+  "%projectSelector_groupByAriaLabel%": "Agrupar por",
   "%redoButton_tooltip%": "Rehacer",
   "%resourcePicker_button_use%": "Usar",
   "%resourcePicker_clear_filters%": "Borrar filtros",

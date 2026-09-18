@@ -189,7 +189,15 @@ function ResourceSection({
             <span title={r.fullName}>{r.fullName}</span>
           </TableCell>
           {/* `text-end`, not `text-right`: the language sits on the trailing edge of the row, which
-              is the left one in an RTL layout. */}
+              is the left one in an RTL layout.
+
+              End alignment does not strand the ellipsis. Once the text overflows, the line is
+              wider than the box and `text-align` has nothing left to position, so the ellipsis
+              renders at the inline-end edge either way — measured in Chromium against a
+              `table-fixed` + `colgroup` reproduction, where an end-aligned and a start-aligned
+              `max-width:0` truncating cell render identically. The `title` below is the
+              belt-and-braces half: whatever the ellipsis does, the untruncated language stays
+              reachable on hover. */}
           <TableCell className="tw:max-w-0 tw:truncate tw:border-0 tw:py-1 tw:ps-4 tw:text-end tw:text-muted-foreground">
             <span title={r.bestLanguageName}>{r.bestLanguageName}</span>
           </TableCell>
@@ -507,7 +515,10 @@ export default function ResourcePickerDialog({
       )}
       {/* `overflow-x-hidden` is load-bearing, not tidying: asking only for `overflow-y: auto` leaves
           the other axis computing from `visible` to `auto`, so any row wider than the dialog earns a
-          horizontal scrollbar nobody chose. The columns below truncate instead. */}
+          horizontal scrollbar nobody chose. The columns below truncate instead.
+
+          This is one surface's half of the shared picker-row contract; the invariants and the other
+          two surfaces are in `.claude/rules/ux/picker-row-layout.md`. */}
       <div className="tw:min-h-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:px-4 tw:pb-4">
         {bodyState === 'loading' && (
           <p className="tw:py-8 tw:text-center">

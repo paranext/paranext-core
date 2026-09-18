@@ -173,6 +173,9 @@ const expectNoHorizontalScroll = async (canvasElement: HTMLElement) => {
   const scroller = row.closest('.tw\\:overflow-y-auto');
   if (!scroller) throw new Error('resource list scroll container not found');
 
+  // `0 <= 0` would satisfy the comparison below without measuring anything — which is precisely
+  // what happens under jsdom. Proving the container has a width first makes this self-validating.
+  expect(scroller.clientWidth).toBeGreaterThan(0);
   expect(scroller.scrollWidth).toBeLessThanOrEqual(scroller.clientWidth);
 };
 

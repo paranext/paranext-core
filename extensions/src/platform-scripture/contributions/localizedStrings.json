@@ -12,6 +12,13 @@
     "%webView_find_projectFilter_noProjectsFound%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_noProjectsFound%"
     },
+    "%manageBooks_projectSelector_filterAriaLabel%": {
+      "fallbackKey": "%projectSelector_groupByAriaLabel%",
+      "deprecationInfo": {
+        "date": "2026-09-11",
+        "message": "The Filter menu is now the Group by menu. Superseded by the platform-wide %projectSelector_groupByAriaLabel% key."
+      }
+    },
     "%webView_find_projectSelector_label%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },
@@ -253,7 +260,6 @@
       "%manageBooks_projectSelector_selectAll%": "Select all",
       "%manageBooks_projectSelector_versificationSectionHeading%": "{0} versification",
       "%manageBooks_projectSelector_versificationUnknownSectionHeading%": "Unknown versification",
-      "%manageBooks_projectSelector_viewOptionsAriaLabel%": "View options",
       "%manageBooks_filter_buttonAriaLabel%": "Filter",
       "%manageBooks_filter_clearButton%": "Clear filter",
       "%manageBooks_filter_menuLabel%": "Show",

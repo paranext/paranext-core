@@ -4182,6 +4182,10 @@ export declare const Z_INDEX_NESTED_MODAL_BACKDROP = 510;
  * Must stay above {@link Z_INDEX_NESTED_MODAL_BACKDROP} and below `Z_INDEX_TOOLTIP`, so a tooltip
  * triggered from inside the nested modal — its close button carries one — still renders over it.
  * Pinned by `z-index.test.ts`.
+ *
+ * Deliberately absent from the SCSS twin in `src/renderer/styles/_vars.scss`, which stops at
+ * `$z-index--modal`: no SCSS-styled surface renders a nested modal, and a constant nothing consumes
+ * is one more thing to drift. Add it there if one ever does.
  */
 export declare const Z_INDEX_NESTED_MODAL = 520;
 /**

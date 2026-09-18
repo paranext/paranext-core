@@ -320,6 +320,9 @@ describe('usePendingProject — reporting a failed open', () => {
     await act(async () => {
       result.current.beginOpenProject(THIRD_PROJECT);
     });
+    // Without this the optional call below is a no-op when the mock never captured a rejecter, and
+    // "no notification" would hold for the wrong reason.
+    expect(rejectOld).toBeDefined();
     await act(async () => {
       rejectOld?.(new Error('boom'));
     });

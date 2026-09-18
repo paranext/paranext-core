@@ -18,6 +18,28 @@ export const PROJECT_OPEN_FAILED_MESSAGE_KEY: LocalizeKey = '%toolbar_project_op
 export const PROJECT_OPEN_FAILED_NOTIFICATION_ID = 'toolbar-project-open-failed';
 
 /**
+ * Sends the "couldn't open that project" toast and swallows its own failure.
+ *
+ * A named function rather than a chain inside the open-failure handler: nesting one promise in
+ * another's rejection path is what `promise/no-nesting` is about, and pulling it out keeps the
+ * handler itself synchronous — an `async` handler there would be a promise nobody holds, so a throw
+ * outside the inner `catch` would surface as an unhandled rejection rather than a logged warning.
+ */
+function reportProjectOpenFailure() {
+  notificationService
+    .send({
+      message: PROJECT_OPEN_FAILED_MESSAGE_KEY,
+      severity: 'warning',
+      notificationId: PROJECT_OPEN_FAILED_NOTIFICATION_ID,
+    })
+    .catch((notificationError: unknown) => {
+      logger.warn(
+        `Toolbar could not notify the user that opening a project failed: ${getErrorMessage(notificationError)}`,
+      );
+    });
+}
+
+/**
  * How long the toolbar keeps naming a just-selected project before falling back to whatever the
  * open editor reports. The bound exists because a successful open has no guaranteed completion
  * signal here: `useProjectPickerData` resolves the current project from THIS window's editor web
@@ -117,17 +139,7 @@ export function usePendingProject(
         // Dropping the name back to whatever is open would otherwise undo the user's pick with no
         // account of why. Only this path reports: the timeout above is not a failure, since an
         // editor that opens in another window never reports here and has not gone wrong.
-        notificationService
-          .send({
-            message: PROJECT_OPEN_FAILED_MESSAGE_KEY,
-            severity: 'warning',
-            notificationId: PROJECT_OPEN_FAILED_NOTIFICATION_ID,
-          })
-          .catch((notificationError: unknown) => {
-            logger.warn(
-              `Toolbar could not notify the user that opening a project failed: ${getErrorMessage(notificationError)}`,
-            );
-          });
+        reportProjectOpenFailure();
       });
     },
     [currentProject, openProject],

@@ -387,6 +387,7 @@
   "%projectPicker_toolbar_more_projects%": "More projects…",
   "%projectPicker_toolbar_no_projects%": "No projects",
   "%projectPicker_toolbar_select_project%": "Select project",
+  "%projectSelector_groupByAriaLabel%": "Group by",
   "%redoButton_tooltip%": "Redo",
   "%resourcePicker_button_use%": "Include",
   "%resourcePicker_clear_filters%": "Clear filters",

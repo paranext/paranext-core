@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 import { vi, describe, it, expect, beforeAll } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
-import { Dialog } from 'platform-bible-react';
+import { Dialog, Z_INDEX_NESTED_MODAL, Z_INDEX_NESTED_MODAL_BACKDROP } from 'platform-bible-react';
 import { ShareLayoutDialogContent } from './share-layout.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
@@ -241,6 +241,11 @@ describe('ShareLayoutDialogContent', () => {
       '%shareLayoutDialog_manageScriptureResources_label%',
     );
     fireEvent.click(manageButton);
+
+    // The positive control: while the picker is open Radix holds the page inert, so the assertion
+    // after dismissal can tell "correctly restored" apart from "never set in the first place".
+    expect(document.body.style.pointerEvents).toBe('none');
+
     fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
 
     // Nothing is holding the page inert any more.
@@ -286,7 +291,10 @@ describe('ShareLayoutDialogContent', () => {
     fireEvent.click(manageButton);
 
     expect(screen.getByLabelText('%shareLayoutDialog_closePicker_label%')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    // Matched on the slot rather than on the name 'Close': that name is the untranslatable string
+    // this assertion exists to keep out, so localizing it would turn the name lookup green against
+    // a dialog still shipping two stacked close buttons.
+    expect(document.querySelector('[data-slot="dialog-close"]')).toBeNull();
   });
 
   // Every embedded picker replaces `DialogContent`'s built-in close button, whose screen-reader
@@ -299,7 +307,8 @@ describe('ShareLayoutDialogContent', () => {
     fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
 
     expect(screen.getByLabelText('%shareLayoutDialog_closePicker_label%')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    // See the manage-picker test above on why this matches the slot rather than the name 'Close'.
+    expect(document.querySelector('[data-slot="dialog-close"]')).toBeNull();
 
     fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
     expect(screen.queryByText('%resourcePicker_search_placeholder%')).not.toBeInTheDocument();
@@ -325,9 +334,35 @@ describe('ShareLayoutDialogContent', () => {
     expect(document.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull();
   });
 
-  // A dialog focuses its first tabbable element on open. With the close button first in DOM order
-  // that is the close button, which pops its own tooltip over the picker the instant it opens and
-  // puts the keyboard user on "leave" rather than on the search they came to do.
+  // The backdrop above is only half the claim: an overlay that renders at the shared modal tier
+  // paints *behind* the Share Layout dialog it is meant to cover, so the host stays bright while
+  // Radix makes it inert — a panel that looks live and swallows every click. The nested tiers are
+  // what put both layers over the host, and nothing else in this file can see them: every
+  // assertion about the overlay is satisfied by any z-index at all.
+  //
+  // Compared as declared strings rather than through `Number(...)`, since `Number('')` is `0` and
+  // would make a missing z-index look like a deliberate one.
+  it('stacks the nested picker and its backdrop above the dialog hosting them', () => {
+    renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+
+    const pickerContent = screen
+      .getByRole('button', { name: 'NLT' })
+      .closest<HTMLElement>('[data-slot="dialog-content"]');
+    const overlay = document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]');
+
+    expect(pickerContent?.style.zIndex).toBe(String(Z_INDEX_NESTED_MODAL));
+    expect(overlay?.style.zIndex).toBe(String(Z_INDEX_NESTED_MODAL_BACKDROP));
+  });
+
+  // A dialog focuses its first tabbable element on open, which would be the close button: it pops
+  // its own tooltip over the picker the instant it opens and starts the keyboard user on "leave"
+  // rather than on the search they came to do. The picker names its target in `onOpenAutoFocus`
+  // rather than relying on DOM order, so reordering the JSX for layout cannot move opening focus.
   it('puts opening focus on the search box, not on the close button', () => {
     renderContent();
 
@@ -337,6 +372,32 @@ describe('ShareLayoutDialogContent', () => {
     fireEvent.click(manageButton);
 
     expect(screen.getByPlaceholderText('%resourcePicker_search_placeholder%')).toHaveFocus();
+  });
+
+  // The case the ordering alone never covered: an empty picker disables its own search box, so
+  // Radix's default auto-focus falls through to the next tabbable element — the close button. This
+  // fixture's resources are all ScriptureResource, so the commentary picker opens empty and the
+  // search box is disabled, which is exactly the Manage Commentaries state the defect was reported
+  // against. Focus holds on the dialog itself instead, where Escape and the title announcement
+  // both still work.
+  it('holds focus on the dialog rather than the close button when the search box is disabled', () => {
+    renderContent();
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageCommentaryResources_label%',
+    );
+    fireEvent.click(manageButton);
+
+    const searchBox = screen.getByPlaceholderText('%resourcePicker_search_placeholder%');
+    // A positive control for the premise: without a disabled search box this test would be
+    // asserting the fallback branch against a state that never reaches it.
+    expect(searchBox).toBeDisabled();
+
+    const closeButton = screen.getByLabelText('%shareLayoutDialog_closePicker_label%');
+    expect(closeButton).not.toHaveFocus();
+    expect(
+      screen.getByText('%resourcePicker_title%').closest('[data-slot="dialog-content"]'),
+    ).toHaveFocus();
   });
 
   it('renders the Text Collection Resources section with a checkbox per scripture and commentary resource', () => {

@@ -817,14 +817,18 @@ export const ProjectAndResourceIndicators: Story = {
           // uncategorized entry exercises that path.
           const typeLabel = project.typeName ?? project.type ?? 'Uncategorized';
           // The glyph is the only visual carrier of "project or resource", so give it an
-          // accessible name of its own instead of hiding it from assistive tech. `title` also
-          // gives the icon a native hover label for sighted users who don't recognize it.
+          // accessible name of its own instead of hiding it from assistive tech.
+          //
+          // No native `title`: a selector row is itself a tooltip trigger, so a `title` inside one
+          // opens the browser's default tooltip on top of the app's. `label` is the way in — the
+          // selector puts it in the row tooltip, which is the sighted-user half of the same job.
           return {
             node: (
-              <span role="img" aria-label={typeLabel} title={typeLabel}>
+              <span role="img" aria-label={typeLabel}>
                 <Icon className="tw:h-3 tw:w-3 tw:opacity-60" aria-hidden />
               </span>
             ),
+            label: typeLabel,
           };
         }}
       />
@@ -834,7 +838,7 @@ export const ProjectAndResourceIndicators: Story = {
     docs: {
       description: {
         story:
-          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and cannot know what a glyph means, so naming it is the caller's job: each icon here sits in a `role=\"img\"` wrapper labelled with the project's `typeName`, which is what a screen reader announces, plus a `title` for hover. The selector also lists `typeName` in the row tooltip, so the distinction never rests on the glyph alone.",
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and cannot know what a glyph means, so naming it is the caller's job: each icon here sits in a `role=\"img\"` wrapper labelled with the project's `typeName`, which is what a screen reader announces. The hover half goes through the returned `label` rather than a native `title`, because the row is already a tooltip trigger and a `title` inside one opens a second tooltip over the first. The selector also lists `typeName` in the row tooltip, so the distinction never rests on the glyph alone.",
       },
     },
   },

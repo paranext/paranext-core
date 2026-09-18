@@ -1945,19 +1945,19 @@ step, no automation. Just a record.
   same list of the same projects read differently depending on how the user got there. Neither is
   interesting on its own; what makes them worth recording is that a third picker added later would
   have picked its own answer again.
-- **Decision:** One layout contract for every picker row, stated as invariants rather than as one
-  picker's mechanism — the three surfaces are a table, a CSS grid and a cmdk list, and each reaches
-  these a different way. **Truncate, never scroll**: no column may be widened by its content, every
-  text track is allowed to be narrower than its content so it can truncate, and the scroll container
-  states `overflow-x: hidden` explicitly so the axis is a decision rather than a computed default.
-  (`ResourcePickerDialog` fixes its columns with a `colgroup` rather than per-cell widths, because
-  its section-heading rows span all columns and cannot carry them; `ProjectPicker` floors its grid
-  tracks at `minmax(0,…)`; `ProjectSelector` inherits `overflow-x: hidden` from the shared
-  `CommandList`.) **Truncation must not hide anything**: clipped text stays reachable on hover, by
-  whichever tooltip mechanism the surface's row already uses — a native `title` where the row is
-  plain markup, and the row's own tooltip where it is already a tooltip trigger, since a `title`
-  inside one opens the browser's tooltip on top of the app's. **The short name starts at the leading
-  edge** of its column, in every picker.
+- **Decision:** One layout contract for every picker row — **truncate, never scroll**; **truncation
+  must not hide anything**; **the short name starts at the leading edge**. Stated as invariants
+  rather than as one picker's mechanism, because the three surfaces are a table, a CSS grid and a
+  cmdk list and each reaches them a different way: `ResourcePickerDialog` fixes its columns with a
+  `colgroup` rather than per-cell widths (its section-heading rows span all columns and cannot carry
+  them), `ProjectPicker` floors its grid tracks at `minmax(0,…)`, and `ProjectSelector` inherits
+  `overflow-x: hidden` from the shared `CommandList`.
+
+  The invariants are written out, with what each one rules out and how to test it, in
+  [`.claude/rules/ux/picker-row-layout.md`](../../.claude/rules/ux/picker-row-layout.md) — that is
+  the copy to follow and to keep current. This entry keeps the reasoning and the history; restating
+  the rule in both places would guarantee that one of them eventually describes a superseded
+  version.
 - **Alternatives:** **Wrap long names onto a second line** — rejected: it makes row heights ragged
   in a list whose whole job is fast visual scanning, and the language column still has to go
   somewhere. **Allow horizontal scrolling with a scroll affordance** — rejected: a name being long

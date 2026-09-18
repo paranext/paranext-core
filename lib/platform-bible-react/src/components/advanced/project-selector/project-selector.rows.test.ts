@@ -123,8 +123,9 @@ describe('computeRows — case-insensitive open-tab join (I12 regression)', () =
   });
 
   // A selected pair whose project is open in a DIFFERENT group gets a synthetic "bound but closed"
-  // row. Resolving the project for it compared ids raw, so a mixed-case pair dropped the row
-  // entirely — losing its Open affordance rather than merely leaving it unchecked.
+  // row. Resolving the project for that row folds case like every other id comparison here: a raw
+  // comparison drops the row entirely under mixed casing, losing its Open affordance rather than
+  // merely leaving it unchecked.
   it('builds the bound-but-closed row for a selected pair whose casing differs', () => {
     const rows = computeRows({
       mode: 'projectScrollGroup',

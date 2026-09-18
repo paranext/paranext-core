@@ -10,7 +10,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
   useListbox,
-  Z_INDEX_MODAL,
 } from 'platform-bible-react';
 import { CheckIcon } from 'lucide-react';
 import ReadOnlyIndicator from '@renderer/components/projects/read-only-indicator.component';
@@ -179,9 +178,7 @@ function ProjectSection({
                     <TooltipTrigger asChild>
                       <span className="tw:cursor-default">{p.language}</span>
                     </TooltipTrigger>
-                    <TooltipContent style={{ zIndex: Z_INDEX_MODAL + 50 }}>
-                      {p.languageDisplayName}
-                    </TooltipContent>
+                    <TooltipContent>{p.languageDisplayName}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               ) : (
@@ -288,7 +285,7 @@ export default function ProjectPicker({
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             ref={listboxRef as RefObject<HTMLDivElement>}
             onKeyDown={handleKeyDown}
-            // Both text tracks carry a `0` minimum. A bare `auto`/`1fr` track floors at its
+            // Every text track carries a `0` minimum. A bare `auto`/`1fr` track floors at its
             // content's minimum width, so a single long unbroken name widens the grid past the
             // dialog instead of truncating inside it.
             className="tw:grid tw:grid-cols-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)]"

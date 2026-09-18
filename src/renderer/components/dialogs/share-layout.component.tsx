@@ -32,13 +32,15 @@ import { ChevronDown, X } from 'lucide-react';
 /**
  * Shape of an embedded picker modal, layered over this dialog.
  *
- * The height cap is the same one `OverlayModalDialog` gives this dialog, so a full catalog scrolls
- * inside `ResourcePickerDialog`'s own `flex-1 overflow-y-auto` list rather than growing the picker
- * taller than the dialog it covers. A bare `85vh` is not a cap relative to the host: on a 1080p
- * display it is ~918px against the host's 720px, so the picker overhangs at both ends.
+ * The height cap restates the one `OverlayModalDialog` computes from `SHARE_LAYOUT_DIALOG`'s
+ * `initialSize.height` in `share-layout.dialog.tsx` — a hand-kept copy, since a class name cannot
+ * read it. Change one and change the other. It exists so a full catalog scrolls inside
+ * `ResourcePickerDialog`'s own `flex-1 overflow-y-auto` list rather than growing the picker taller
+ * than the dialog it covers. A bare `85vh` is not a cap relative to the host: on a 1080p display it
+ * is ~918px against the host's 720px, so the picker overhangs at both ends.
  *
- * The width is one step wider than `DialogContent`'s default so four columns fit; expressed as a
- * scale token rather than a pixel count.
+ * The width is `sm:max-w-xl` (36rem) against `DialogContent`'s `sm:max-w-sm` default (24rem) — 50%
+ * wider — so four columns fit; expressed as a scale token rather than a pixel count.
  */
 const RESOURCE_PICKER_DIALOG_CLASS =
   'tw:flex tw:max-h-[min(720px,85vh)] tw:min-h-0 tw:flex-col tw:gap-0 tw:overflow-hidden tw:p-0 tw:sm:max-w-xl';
@@ -211,7 +213,8 @@ type TabKey = 'ScriptureResource' | 'CommentaryResource';
  *
  * This is a local workaround, not the fix: the untranslated label lives in `DialogContent` itself,
  * so every dialog in the app carries it. Giving `DialogContent` a `closeButtonLabel` prop would
- * retire this component — tracked with the rest of the picker long tail.
+ * retire this component. TODO(PT-4675): drop `PickerCloseButton` once `DialogContent` takes a
+ * `closeButtonLabel`.
  */
 function PickerCloseButton({ label, onClose }: { label: string; onClose: () => void }) {
   return (
@@ -228,6 +231,11 @@ function PickerCloseButton({ label, onClose }: { label: string; onClose: () => v
             <X className="tw:size-4" aria-hidden />
           </Button>
         </TooltipTrigger>
+        {/* The same string as the button's `aria-label`, so a screen reader hears it as the name
+            and again as the description. That duplication is Radix's own wiring for a tooltip on an
+            icon button — Tooltip renders a visually-hidden copy of its content as the trigger's
+            description, which `aria-hidden` here cannot reach — and an icon button needs both the
+            name and the sighted-user hover label. Left as-is rather than fought. */}
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -257,8 +265,9 @@ export function ShareLayoutDialogContent({
   const [isModelTextPickerOpen, setIsModelTextPickerOpen] = useState(false);
   const [openAddPickerTab, setOpenAddPickerTab] = useState<TabKey | undefined>(undefined);
 
-  // One pair of refs, not one per picker: opening either picker requires clicking a trigger in this
-  // dialog, so only one is ever mounted at a time.
+  // One pair of refs shared by all three `DialogContent`s here — the manage picker renders once per
+  // TabKey, plus the model-text picker. Opening any of them requires clicking a trigger in this
+  // dialog, and Radix unmounts closed content, so only one is ever mounted at a time.
   // React writes `null` into a detached DOM ref itself, so there is no `undefined` equivalent here.
   /* eslint-disable no-null/no-null */
   const pickerSearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -304,6 +313,10 @@ export function ShareLayoutDialogContent({
   const handleConfirm = useCallback(() => {
     onConfirm({ modelText, activeTab, scriptureResources, commentaryResources });
   }, [modelText, activeTab, scriptureResources, commentaryResources, onConfirm]);
+
+  const modelTextLabel = modelText
+    ? formatResourceDisplayName(modelText, allResources)
+    : localizeString(strings, '%shareLayoutDialog_modelText_none%');
 
   const manageLabelKey: Record<TabKey, keyof ShareLayoutDialogLocalizedStrings> = {
     ScriptureResource: '%shareLayoutDialog_manageScriptureResources_label%',
@@ -413,10 +426,11 @@ export function ShareLayoutDialogContent({
                   variant="outline"
                   className="tw:w-fit tw:justify-between tw:gap-2 tw:font-normal"
                 >
-                  <span className="tw:truncate">
-                    {modelText
-                      ? formatResourceDisplayName(modelText, allResources)
-                      : localizeString(strings, '%shareLayoutDialog_modelText_none%')}
+                  {/* Native `title`, not a shadcn tooltip: this button is not itself a tooltip
+                      trigger, so there is no second tooltip to collide with, and
+                      "FULL NAME (SHORT)" is the longest string on this screen. */}
+                  <span className="tw:truncate" title={modelTextLabel}>
+                    {modelTextLabel}
                   </span>
                   <ChevronDown
                     className="tw:size-4 tw:shrink-0 tw:text-muted-foreground"
@@ -523,26 +537,30 @@ export function ShareLayoutDialogContent({
             {[
               ...scriptureResources.map((ref) => ({ tab: 'ScriptureResource' as const, ref })),
               ...commentaryResources.map((ref) => ({ tab: 'CommentaryResource' as const, ref })),
-            ].map(({ tab, ref }) => (
-              <div
-                key={referenceKey(ref)}
-                className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2"
-              >
-                <span className="tw:flex-1 tw:truncate tw:text-sm">
-                  {formatResourceDisplayName(ref, allResources)}
-                </span>
-                <Checkbox
-                  checked={!!ref.isInTextCollection}
-                  onCheckedChange={(checked: boolean) =>
-                    handleToggleShownByDefault(tab, ref, checked)
-                  }
-                  aria-label={formatReplacementString(
-                    localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
-                    { resourceName: formatResourceDisplayName(ref, allResources) },
-                  )}
-                />
-              </div>
-            ))}
+            ].map(({ tab, ref }) => {
+              const displayName = formatResourceDisplayName(ref, allResources);
+              return (
+                <div
+                  key={referenceKey(ref)}
+                  className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2"
+                >
+                  {/* See the model-text trigger above on why this is a native `title`. */}
+                  <span className="tw:flex-1 tw:truncate tw:text-sm" title={displayName}>
+                    {displayName}
+                  </span>
+                  <Checkbox
+                    checked={!!ref.isInTextCollection}
+                    onCheckedChange={(checked: boolean) =>
+                      handleToggleShownByDefault(tab, ref, checked)
+                    }
+                    aria-label={formatReplacementString(
+                      localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
+                      { resourceName: displayName },
+                    )}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

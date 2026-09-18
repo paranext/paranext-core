@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi, beforeAll, afterAll } from 'vitest';
-import { Dialog } from '@/components/shadcn-ui/dialog';
+import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
@@ -47,6 +47,8 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_clear_filters%': 'Clear filters',
   '%resourcePicker_downloads_unavailable%':
     "Resource downloads aren't available on this installation.",
+  '%resourcePicker_description%':
+    "Choose a resource to add. Picking one downloads it if it isn't already installed.",
 };
 
 function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {}) {
@@ -524,7 +526,42 @@ describe('ResourcePickerDialog', () => {
     expect(languageCell?.className).toContain('tw:text-end');
 
     // The leading edge is the table default, so there is no positive class to match on the short
-    // name — the absence of the end-alignment above is what holds it.
+    // name — the absence of the end-alignment above is what holds it. Both spellings are checked:
+    // `tw:text-end` is what this file uses today, and `tw:text-right` is the physical class a
+    // regression would most likely reintroduce, since it is what the column carried before.
     expect(shortNameCell?.className).not.toContain('tw:text-end');
+    expect(shortNameCell?.className).not.toContain('tw:text-right');
+  });
+
+  // The description is visually hidden, so nothing on screen changes if it disappears — and Radix
+  // only warns in development. Without this, deleting it silently takes the dialog back to
+  // announcing its title and nothing else: no statement of what the list is, or that picking a row
+  // downloads. Anchored on `aria-describedby` rather than on the text, since the text is useless
+  // to a screen reader unless the dialog actually points at it.
+  //
+  // Rendered against a real `DialogContent` rather than through `renderDialog`, whose harness has
+  // no host content for Radix to wire the description onto.
+  it('describes itself to a screen reader, not merely titles itself', () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <ResourcePickerDialog
+            allResources={SAMPLE_RESOURCES}
+            selectedResourceIds={SAMPLE_SELECTED_IDS}
+            localizedStrings={STRINGS}
+            onSelect={vi.fn()}
+          />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const content = document.querySelector('[data-slot="dialog-content"]');
+    const describedById = content?.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+
+    const description = describedById ? document.getElementById(describedById) : undefined;
+    expect(description?.textContent).toBe(
+      "Choose a resource to add. Picking one downloads it if it isn't already installed.",
+    );
   });
 });

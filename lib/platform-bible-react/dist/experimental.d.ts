@@ -192,9 +192,13 @@ export type ProjectSelectorIndicator = {
 	 *
 	 * The rows are already tooltip triggers, so a caller cannot give the glyph its own hover label
 	 * without opening a second tooltip over the row's — this is the way in. Same reasoning as
-	 * `typeName`, which the tooltip surfaces for the same reason. Screen readers get the meaning from
-	 * the glyph's own accessible name, so the tooltip line is marked `aria-hidden` rather than
-	 * announcing it a second time.
+	 * `typeName`, which the tooltip surfaces for the same reason.
+	 *
+	 * **Only supply this when {@link node} already names itself** — with `role="img"` and an
+	 * `aria-label`, or equivalent. The tooltip line is the sighted-user half and is rendered
+	 * `aria-hidden`, because Radix wires an open tooltip as the row's `aria-describedby` and a glyph
+	 * that names itself would otherwise be announced twice per row. A `node` that is itself
+	 * `aria-hidden` paired with a `label` leaves the indicator silent at both ends.
 	 */
 	label?: string;
 };
