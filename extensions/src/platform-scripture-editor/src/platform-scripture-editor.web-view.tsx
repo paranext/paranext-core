@@ -1718,14 +1718,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked]);
 
   /**
-   * Ends an open footnotes-pane session ahead of a note insert, so the inserted note opens in the
-   * row editor (`openNoteEditorOnNewNote`) exactly as it does when no session is open. Left open,
-   * the session would take the insert as an edit of the text around its own note and the new note
-   * would land unopened. Only the top-menu command can reach this with a row editor open: the
-   * context menu and the keyboard shortcuts act from the Scripture text, and focusing it has
-   * already ended the session. A popover session is left alone.
+   * Ends an open footnotes-pane session ahead of a top-menu command that would otherwise leave it
+   * open or tear it down from underneath. A popover session is left alone. Only the top menu needs
+   * this: the context menu and the keyboard shortcuts act from the Scripture text, and focusing it
+   * has already ended the session.
+   *
+   * - A note insert: the inserted note then opens in the row editor (`openNoteEditorOnNewNote`)
+   *   exactly as it does when no session is open. Left open, the session would take the insert as
+   *   an edit of the text around its own note and the new note would land unopened.
+   * - Hiding the pane or leaving Standard view: either unmounts the row editor before the session's
+   *   own close runs, and an unmounting editor flushes its note unsettled, so a marker rename still
+   *   pending under its caret would be lost. Ending the session first settles it.
    */
-  const endPaneNoteEditBeforeInsert = useCallback(() => {
+  const endPaneNoteEdit = useCallback(() => {
     if (paneEditingIndexRef.current !== undefined) closeFootnoteEditorRef.current(false);
   }, []);
 
@@ -1746,9 +1751,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       'inserting footnote',
     );
 
-    endPaneNoteEditBeforeInsert();
+    endPaneNoteEdit();
     editorRef.current?.insertMarker('f');
-  }, [projectId, localizedStrings, endPaneNoteEditBeforeInsert]);
+  }, [projectId, localizedStrings, endPaneNoteEdit]);
 
   /**
    * Inserts a cross-reference at the current selection. Shared by the "Insert cross-reference"
@@ -1764,9 +1769,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       'inserting cross-reference',
     );
 
-    endPaneNoteEditBeforeInsert();
+    endPaneNoteEdit();
     editorRef.current?.insertMarker('x');
-  }, [projectId, localizedStrings, endPaneNoteEditBeforeInsert]);
+  }, [projectId, localizedStrings, endPaneNoteEdit]);
 
   const options = useMemo<EditorOptions>(
     () => ({
@@ -1855,11 +1860,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // power-mode-only, so in simple mode the cycle skips it (see `getNextViewTypeInCycle`
           // for the full cycle semantics and why it switches on `viewType` rather than
           // `viewOptions.markerMode`).
+          endPaneNoteEdit();
           setViewType(getNextViewTypeInCycle(viewType, isPowerMode));
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
           const { current } = footnotesPaneVisibleRef;
+          if (current) endPaneNoteEdit();
           setFootnotesPaneVisible(!current);
           break;
         }
@@ -2047,6 +2054,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     insertCommentAtCurrentSelection,
     insertFootnoteAtCurrentSelection,
     insertCrossReferenceAtCurrentSelection,
+    endPaneNoteEdit,
     scrRef,
     setScrRefWithScroll,
     decorations,
