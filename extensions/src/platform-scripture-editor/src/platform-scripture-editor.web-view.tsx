@@ -472,6 +472,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * branch of `handleEditorialUsjChange`), so a live long edit never trips the bound.
    */
   const editingNoteSessionRefreshedAt = useRef<number | undefined>(undefined);
+  /**
+   * `Date.now()` of the last user edit inside the footnotes pane's row editor. The pane applies its
+   * edits to the text as they are made, so it claims the text against incoming PDP updates the way
+   * the Scripture editor does — for a window after an edit, not for the life of the session (see
+   * `resolveEditingSessionActivity`).
+   */
+  const lastPaneNoteEditAt = useRef<number | undefined>(undefined);
 
   // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
@@ -3295,6 +3302,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const onFootnoteEditorNoteEdit = useCallback(() => {
     editingNoteSessionRefreshedAt.current = Date.now();
+    if (paneEditingIndexRef.current !== undefined) lastPaneNoteEditAt.current = Date.now();
   }, []);
 
   // A note-editing session belongs to the chapter it was opened in: the note's editor key does not
@@ -3785,6 +3793,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // session is open, even though DOM focus sits in the overlay/popover: a same-document echo
   // replacing the editor mid-session regenerates every Lexical key and kills the session
   // (live-observed: the popover's Save no-oping, the editor "jumping to the top" mid-insert).
+  // A footnotes-pane session claims less. Its row editor saves as it goes, like the Scripture
+  // editor, so it holds updates back only on the Scripture editor's terms: focus in the pane and an
+  // edit there within the ownership window. Past that, a differing update replaces the document and
+  // ends the session (`setEditorUsj`) rather than being overwritten by this view's older copy.
   // A note session past its staleness bound is the exception — that key is orphaned bookkeeping
   // from a popover that died without cleanup, and until the time bound existed it wedged sync
   // until the user happened to click another note caller. `resolveEditingSessionActivity` makes
@@ -3800,6 +3812,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       editingNoteKey: editingNoteKey.current,
       noteSessionRefreshedAtMs: editingNoteSessionRefreshedAt.current,
       nowMs: Date.now(),
+      paneSession:
+        paneEditingIndexRef.current !== undefined
+          ? { hasFocus: paneHasFocusRef.current, lastEditAtMs: lastPaneNoteEditAt.current }
+          : undefined,
     });
     if (activity.isNoteSessionStale) {
       logger.warn(

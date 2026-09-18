@@ -30,6 +30,7 @@ import type {
 } from '@eten-tech-foundation/platform-editor';
 import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
 import { stripMarkerNestingPrefix } from 'platform-bible-react/experimental';
+import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -175,12 +176,25 @@ export interface EditingSessionActivityInput {
   noteSessionRefreshedAtMs: number | undefined;
   /** `Date.now()` at the moment of the decision. */
   nowMs: number;
+  /**
+   * Set when the open note session is the footnotes pane's row editor; `undefined` for the popover.
+   * The row editor applies each edit to the text as it is made, as the Scripture editor itself
+   * does, so it holds incoming updates back on the Scripture editor's terms: only while focus is in
+   * the pane and a note was edited there within {@link EDITOR_OWNERSHIP_WINDOW_MS}. The popover
+   * applies nothing until Save, so its session holds them back until it closes or goes stale.
+   */
+  paneSession?: {
+    /** Whether DOM focus is inside the footnotes pane. */
+    hasFocus: boolean;
+    /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
+    lastEditAtMs: number | undefined;
+  };
 }
 
 /**
- * Decides whether an editing SESSION (marker palette or footnote-popover note edit) should keep the
- * PDP-sync deferral open, applying the {@link STALE_NOTE_EDITING_SESSION_MS} time bound to the note
- * session.
+ * Decides whether an editing SESSION (marker palette, or a note edit in the popover or the
+ * footnotes pane) should keep the PDP-sync deferral open, applying the
+ * {@link STALE_NOTE_EDITING_SESSION_MS} time bound to a popover note session.
  *
  * The note-session bound exists because the session key alone is not proof of a live session: if
  * the popover dies without cleanup, the orphaned key would otherwise defer every incoming PDP
@@ -193,6 +207,10 @@ export interface EditingSessionActivityInput {
  * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
  * show promise, which always settles (select, dismiss, or replacement rejection).
  *
+ * A pane session is never reported stale: it stops holding updates back once the user stops editing
+ * in it (see {@link EditingSessionActivityInput.paneSession}), and the update it then lets through
+ * ends the session itself.
+ *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear
  *   it even when a palette session keeps `isActive` true)
@@ -202,8 +220,18 @@ export function resolveEditingSessionActivity({
   editingNoteKey,
   noteSessionRefreshedAtMs,
   nowMs,
+  paneSession,
 }: EditingSessionActivityInput): { isActive: boolean; isNoteSessionStale: boolean } {
   const isNoteSessionOpen = editingNoteKey !== undefined;
+  if (isNoteSessionOpen && paneSession) {
+    const ownsContent =
+      paneSession.lastEditAtMs !== undefined &&
+      nowMs - paneSession.lastEditAtMs < EDITOR_OWNERSHIP_WINDOW_MS;
+    return {
+      isActive: hasPaletteSession || (paneSession.hasFocus && ownsContent),
+      isNoteSessionStale: false,
+    };
+  }
   const isNoteSessionStale =
     isNoteSessionOpen &&
     (noteSessionRefreshedAtMs === undefined ||

@@ -17,6 +17,7 @@ import {
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
+import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
 
 /** Build a mock editor ref exposing a spy for the method the generator calls. */
 function makeMockEditorRef() {
@@ -377,6 +378,71 @@ describe('resolveEditingSessionActivity', () => {
       nowMs: NOW,
     });
     expect(activity).toEqual({ isActive: true, isNoteSessionStale: true });
+  });
+
+  // The pane's row editor saves as it goes, so it claims the text on the Scripture editor's terms:
+  // focus in the pane plus an edit there within the ownership window. Holding updates back any
+  // longer makes this view push its older copy of the chapter over another view's edit or a
+  // Send/Receive merge.
+  describe('a footnotes-pane session', () => {
+    const paneSessionInput = {
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW,
+      nowMs: NOW,
+    };
+
+    it('holds updates back while the pane has focus and was edited within the window', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, lastEditAtMs: NOW - (EDITOR_OWNERSHIP_WINDOW_MS - 1) },
+      });
+      expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+    });
+
+    it('lets updates through once the last edit is as old as the window', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, lastEditAtMs: NOW - EDITOR_OWNERSHIP_WINDOW_MS },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('lets updates through while focus is outside the pane, however recent the edit', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: false, lastEditAtMs: NOW },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('lets updates through for a row that was opened but never edited', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    // The update a quiet pane session lets through ends the session itself, so there is nothing
+    // for the popover's staleness reaper to clean up.
+    it('is never reported stale, whatever the popover clock says', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        noteSessionRefreshedAtMs: NOW - STALE_NOTE_EDITING_SESSION_MS - 1,
+        paneSession: { hasFocus: false, lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('still defers to an open palette session', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        hasPaletteSession: true,
+        paneSession: { hasFocus: false, lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+    });
   });
 });
 
