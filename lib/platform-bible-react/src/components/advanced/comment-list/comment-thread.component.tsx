@@ -125,13 +125,11 @@ export function CommentThread({
 
   // An in-progress edit to an existing comment is tracked separately from the reply draft above
   // (see CommentDraft.commentEdits) because the two can be live at once: the reply box stays
-  // visible with its own content while a different comment is being edited. Within one mount, only
-  // one comment can enter edit mode at a time — CommentThread gates every comment's edit affordance
-  // on the single `isAnyCommentEditing` flag below — but the map is keyed by comment id regardless,
-  // both because a boolean alone couldn't say which comment the content belongs to, and because a
-  // stored edit resumes its own CommentItem into edit mode on mount (draftEditorState below)
-  // without going through that flag, so a second, freshly-started edit can still be opened
-  // alongside it after a remount.
+  // visible with its own content while a different comment is being edited. Only one comment can
+  // enter edit mode at a time — CommentThread gates every comment's edit affordance on the
+  // `isAnyCommentEditing` flag below (which also accounts for a resumed edit, not just one started
+  // during this mount) — but the map is still keyed by comment id, since a boolean alone couldn't
+  // say which comment the content belongs to.
   const updateCommentEditDraft = useCallback(
     (commentId: string, value: SerializedEditorState | undefined) => {
       const nextCommentEdits = { ...effectiveDraft.commentEdits };
@@ -150,7 +148,15 @@ export function CommentThread({
   const [lastSubmittedAssignedUser, setLastSubmittedAssignedUser] = useState<string | undefined>();
   const isVerseExpanded = isSelected;
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
-  const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
+  // `isAnyCommentEditingLocal` only reflects edits started during this mount — a filter change
+  // unmounts and remounts the thread without it. `commentEdits` (in `effectiveDraft`) survives that
+  // remount, and a non-empty entry resumes its own CommentItem into edit mode on mount (see
+  // `draftEditorState` below) without ever calling `onEditingChange`. So the thread-wide gate has to
+  // read both, or the one-edit-at-a-time rule holds before a remount and silently stops holding
+  // after one.
+  const [isAnyCommentEditingLocal, setIsAnyCommentEditingLocal] = useState<boolean>(false);
+  const isAnyCommentEditing =
+    isAnyCommentEditingLocal || Object.keys(effectiveDraft.commentEdits ?? {}).length > 0;
   const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
   const [canAssign, setCanAssign] = useState<boolean>(false);
   const [canResolve, setCanResolve] = useState<boolean>(false);
@@ -395,14 +401,15 @@ export function CommentThread({
     [hiddenReplyCount, localizedReplies],
   );
 
-  // If the thread gets unselected and a comment other than the first is being edited, the comment
-  // being edited was removed from the screen, so note that no comment is being edited
-  // Note: this means we will lose some editor content. May need to be fixed with https://paratextstudio.atlassian.net/browse/PT-3725
+  // If the thread gets unselected while a reply (never the first comment, which stays mounted
+  // regardless of selection) is being edited, that reply's CommentItem unmounts. Its content
+  // survives via the persisted `commentEdits` entry above and resumes when the thread re-expands,
+  // so only the local "something is being edited" flag needs resetting here.
   useEffect(() => {
     // If there are replies and a comment is being edited, the edited comment is not the first
     // comment, so reset editing state when thread is unselected
     if (!isSelected && isAnyCommentEditing && hasReplies) {
-      setIsAnyCommentEditing(false);
+      setIsAnyCommentEditingLocal(false);
     }
   }, [isSelected, isAnyCommentEditing, hasReplies]);
 
@@ -500,7 +507,7 @@ export function CommentThread({
       handleAddCommentToThread={handleAddCommentToThreadWithContents}
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}
-      onEditingChange={setIsAnyCommentEditing}
+      onEditingChange={setIsAnyCommentEditingLocal}
       canEditOrDelete={
         (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
       }
@@ -683,7 +690,7 @@ export function CommentThread({
                     isThreadExpanded={isSelected}
                     handleUpdateComment={handleUpdateComment}
                     handleDeleteComment={handleDeleteComment}
-                    onEditingChange={setIsAnyCommentEditing}
+                    onEditingChange={setIsAnyCommentEditingLocal}
                     canEditOrDelete={
                       (!isAnyCommentEditing && commentEditDeletePermissions.get(reply.id)) ?? false
                     }
