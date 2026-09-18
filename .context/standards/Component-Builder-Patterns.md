@@ -1,10 +1,10 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.7.0
+version: 1.7.1
 status: active
 created: 2026-03-04
-last_updated: 2026-09-15
+last_updated: 2026-09-18
 toc: true
 ---
 
@@ -203,6 +203,14 @@ pop-up you build without these components can opt in by putting
 `data-platform-content-zoom-root="<area>"` and `data-platform-content-zoom-popup` on its portaled
 content. Those attributes only scale it: such a pop-up gets none of the library's size caps, so it
 must keep itself inside the pane.
+
+**Pop-ups requested through `papi.overlays` follow the requesting pane too.** A command palette,
+popover or context menu shown with `papi.overlays.showCommandPalette`/`showPopover`/
+`showContextMenu` renders outside your WebView, in the platform's own document — the platform
+resolves your pane's content scale for you and draws the pop-up at it, capped to stay inside the
+window. There is nothing for you to opt in: call the `papi.overlays` methods as you already do. A
+command palette shown centred (no anchor position) is not anchored to any pane's content and stays
+at interface scale, like a modal dialog.
 
 ---
 
@@ -833,3 +841,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.5.0   | 2026-06-18 | Add "Presentational Components and Their Stories" section (keep demo/mock scaffolding out of the component, cover every wireframe state variant, `Default` story wires callbacks to `useState`). Add "Web View UI-State Persistence Caveat" (`useWebViewState` is per-`webViewId`; `existingId`/`createNewIfNotFound: false` dedupes currently-open instances only — for state that survives close/reopen use `papi.settings`). |
 | 1.6.0   | 2026-09-12 | Add "Explaining Why a Control Is Disabled" section — a disabled control is out of the tab order, so a focusable tooltip wrapper is wrong inside a `radiogroup`/menu/listbox; render the explanation inline with `aria-describedby`, and watch the half-opacity contrast and `tw:min-w-0` in a `DropdownMenuItem`. |
 | 1.7.0 | 2026-09-15 | Add "Content Zoom Opt-In (experimental)" (the `ContentZoomRoot` / `data-platform-content-zoom-root` marker, one root per zoom area, no nesting, the unmarked-view whole-iframe fallback) and "Content Zoom and Measurement (experimental)" (never imitate content zoom with font-size or `transform: scale`; zoomed `getBoundingClientRect` vs unzoomed `fontSize`; read `--platform-content-zoom-<area>`; capture-phase `stopPropagation` for a view owning Ctrl+wheel). Front-matter version also caught up with the 1.6.0 log row. |
+| 1.7.1 | 2026-09-18 | Note that a command palette, popover or context menu requested through `papi.overlays` follows the requesting pane's content scale automatically — nothing for the extension author to opt in. |
