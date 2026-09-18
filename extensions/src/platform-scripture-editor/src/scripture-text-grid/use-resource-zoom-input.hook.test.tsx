@@ -118,4 +118,18 @@ describe('useResourceZoomInput', () => {
     expect(totalSteps).toBeGreaterThan(0);
     expect(totalSteps).toBeLessThanOrEqual(3);
   });
+
+  it('removes every listener it installed when the component unmounts', () => {
+    // The reader tracks physically-held modifier keys via window listeners, in addition to the
+    // container's own wheel listener; both must come off on unmount or they leak, and a mismatched
+    // capture flag on either removal leaks it just as silently as a missing call would.
+    const { getByTestId, unmount } = render(<Harness handlers={handlers} />);
+    const container = getByTestId('grid');
+    const containerRemoveSpy = vi.spyOn(container, 'removeEventListener');
+    const windowRemoveSpy = vi.spyOn(window, 'removeEventListener');
+    unmount();
+    expect(containerRemoveSpy).toHaveBeenCalledWith('wheel', expect.any(Function), true);
+    expect(windowRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    expect(windowRemoveSpy).toHaveBeenCalledWith('keyup', expect.any(Function), true);
+  });
 });
