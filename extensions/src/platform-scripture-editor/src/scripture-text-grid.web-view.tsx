@@ -3,6 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
+  ContentZoomRoot,
   EmptyState,
   Popover,
   PopoverContent,
@@ -614,8 +615,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
           empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`. */}
-      <div className="tw:flex-1 tw:overflow-hidden">
+          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
+
+          Named as its own zoom area ("text-collection") so its remembered level is kept apart from
+          this project's other resource panes, which resolve to the same kind/identity pair and
+          would otherwise all read one remembered level. The View Options row above stays outside so
+          it keeps its size while the grid scales. */}
+      <ContentZoomRoot area="text-collection" className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
             <RetryableErrorView
@@ -659,7 +665,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
-      </div>
+      </ContentZoomRoot>
     </div>
   );
 };
