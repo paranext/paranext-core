@@ -27,6 +27,18 @@ function Harness({ handlers }: { handlers: Handlers }) {
   );
 }
 
+/** A wheel event carrying Chromium's non-standard `wheelDeltaY`, which jsdom does not populate. */
+function wheelEvent(deltaY: number, wheelDeltaY: number): WheelEvent {
+  const event = new WheelEvent('wheel', {
+    deltaY,
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  Object.defineProperty(event, 'wheelDeltaY', { value: wheelDeltaY });
+  return event;
+}
+
 let handlers: Handlers;
 beforeEach(() => {
   handlers = { adjustZoom: vi.fn() };
@@ -80,5 +92,30 @@ describe('useResourceZoomInput', () => {
     container.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     expect(handlers.adjustZoom).not.toHaveBeenCalled();
+  });
+
+  it('steps one resource once per wheel notch', () => {
+    // One notch is 120 units of `wheelDeltaY` on every platform, while the PIXELS it carries are a
+    // system setting — so the pixel delta alone cannot decide how far to step.
+    const { getByTestId } = render(<Harness handlers={handlers} />);
+    getByTestId('cell-r1').dispatchEvent(wheelEvent(-100, 120));
+    expect(handlers.adjustZoom).toHaveBeenCalledTimes(1);
+    expect(handlers.adjustZoom).toHaveBeenCalledWith('r1', 1);
+  });
+
+  it('does not run a resource across its range on one trackpad pinch', () => {
+    // Chromium synthesizes a pinch as ctrl+wheel at the display's refresh rate with a tiny deltaY.
+    // Twelve frames of 2 px is about 24 px of travel — two steps, not twelve.
+    const { getByTestId } = render(<Harness handlers={handlers} />);
+    const cell = getByTestId('cell-r1');
+    Array.from({ length: 12 }).forEach(() => {
+      cell.dispatchEvent(wheelEvent(-2, 2));
+    });
+    const totalSteps = handlers.adjustZoom.mock.calls.reduce(
+      (sum: number, call: unknown[]) => sum + Number(call[1]),
+      0,
+    );
+    expect(totalSteps).toBeGreaterThan(0);
+    expect(totalSteps).toBeLessThanOrEqual(3);
   });
 });
