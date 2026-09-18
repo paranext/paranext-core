@@ -26,7 +26,12 @@ export type KeyboardShortcutEntry = {
    * first the alternative a menu should teach.
    */
   keys: KeyboardShortcutKeys;
-  /** Repo-relative file paths where the shortcut is handled. */
+  /**
+   * Repo-relative file paths that determine the shortcut's behavior — the handler itself, and any
+   * file that supplies or withdraws it. A shortcut provided by a shared primitive
+   * (`shadcn-ui/dialog.tsx`'s focus containment) or gated by a component that mounts the handler
+   * lists those too, so an edit to any of them is reachable by grepping this catalog for the file.
+   */
   locations: string[];
   /**
    * The PAPI command the chord runs. Menu items that run it show the shortcut as a hint. Set it

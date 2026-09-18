@@ -75,6 +75,52 @@ step, no automation. Just a record.
 
 ---
 
+## adr-abandoned-window-notice-offers-manual-close: A window whose renderer crash-loops past its reload budget gets a native "close it?" notice, not a silent leave-open or an automatic close
+
+- **Date:** 2026-09-07
+- **Status:** Accepted
+- **Context:** `decideRendererCrashReload`'s reload budget (`renderer-crash-reload-budget.util.ts`,
+  seeded from `NO_RENDERER_CRASH_RELOADS_YET`) already leaves a window whose renderer keeps dying
+  open rather than closing it out from under the user — closing it costs nothing once
+  `keepsItsEntryOnClose` (`window-entry-disposition.util.ts`) keeps its entry, but taking a window
+  away unasked is not this handler's to decide. Left alone and merely marked (`markWindowAbandoned`),
+  that window is a dead page with no explanation, excluded from `platform.getWindows`, and the only
+  trace is a log line nobody reads.
+- **Decision:** `offerToCloseAbandonedWindow` (in `main.ts`) puts a native message box to the user,
+  mirroring `confirmCloseAllWindows`'s shape (bounded localization race, `AbortSignal` dismissal on
+  quit, English fallback on a failed localization lookup) so the application's native yes/no
+  questions about closing windows look and behave alike. Whether to ask at all, and which window
+  carries the question when the abandoned one is off screen, are decided through pure, unit-tested
+  functions — `decideAbandonedWindowNotice`, `chooseNoticeParentWindowId`, and
+  `eligibleNoticeParentCandidates` (`abandoned-window-notice.util.ts`) — rather than inline in the
+  handler. Offering the close is safe specifically because `keepsItsEntryOnClose` already keeps an
+  abandoned window's entry, so closing it only brings the window back later rather than costing the
+  user its tabs.
+- **Alternatives:** Automatically close the window once its crash budget is spent — rejected: closing
+  a window unasked is not the crash handler's to decide, and a user working around a misbehaving
+  extension might disagree. Leave it open with no further signal — rejected: that is exactly the
+  confusing dead page this notice exists to explain. A different UI shape (a toast, a persistent
+  banner) — rejected: the application's other one-shot question about closing windows already uses a
+  native message box (`confirmCloseAllWindows`), and a second idiom for the same kind of question
+  would itself be an inconsistency.
+- **Consequences:** The notice's own text promises only that the window comes back, not that closing
+  it is free of side effects — an abandoned window that still holds the primary role reaches the same
+  `decideWindowClose`/`confirmCloseAllWindows` path an ordinary primary-window close does when the
+  user answers "close it", so closing what looks like one dead window can still surface the
+  whole-application close-all prompt. That escalation is a known gap this decision does not
+  resolve; it is accepted as-is, since reaching it needs a primary window whose renderer has already
+  exhausted its crash-reload budget, and the prompt it surfaces defaults to cancelling. Keeping the
+  entry has its own cost, and it is what the notice's text promises: a layout that reliably kills its
+  renderer is rebuilt on every launch and on every switch back to power mode, so a window that dies
+  because of what it holds crash-loops again each time it comes back, with nothing in the application
+  that lets the user break the cycle. What recovery to offer in that case — dropping or emptying the
+  entry after repeated abandonment, or a way to reopen the window without its tabs — is deferred to
+  PT-4636.
+- **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
+  (`2026-09-02-pt-4286-mode-switch-spec.md`); depends on `adr-primary-window-owns-app-lifetime` for
+  what makes a window "primary" and on the crash-reload-budget decision in
+  `renderer-crash-reload-budget.util.ts` for when a window counts as abandoned.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -924,6 +970,36 @@ step, no automation. Just a record.
     filed, all three sites carry the literal marker `TODO(main-renderer-shutdown-relay)` — a slug rather than
     a `PT-XXXX`, because inventing an id that resolves to nothing is worse than admitting there
     is not one yet. Grep the marker to find every site; replace it with the real id once it exists.
+- **Amended 2026-09-14 (PT-4435, branch `pt-4435-tour-stand-down-connection-lost`):** two more
+  surfaces stand down on the latch. The arbitration bullet above — two Radix modal `Dialog`s, with
+  `FocusScope` and `DismissableLayer` arbitrating by mount order and z-index deciding only what is
+  visible — covers `OverlayHost` as well as `FirstRunOverlay`. It is not the reason for
+  `OnboardingTour`.
+  - `OverlayHost` stood down in the same commit as this entry (#2742) without being recorded here.
+    Its reason is the arbitration argument above: `OverlayModalDialog` is a Radix modal `Dialog`, so
+    a `showDialog` still in flight when the socket drops would mount second, take the focus trap,
+    and leave Reload unreachable (`overlay-host.component.tsx`).
+  - `OnboardingTour` stands down for a different reason entirely. `Tour` is a hand-written overlay
+    (`adr-hand-written-tour-spotlight`), not a Radix layer: a plain `div[role="dialog"]` with a
+    capture-phase `keydown` listener on `window` and a capture-phase focus trap on `document`. Those
+    beat any Radix layer regardless of mount order, and `Z_INDEX_ONBOARDING_TOUR` is below both
+    `Z_INDEX_FIRST_RUN` and `Z_INDEX_CONNECTION_LOST`, so neither half of the argument above would
+    have saved it. What makes standing it down necessary rather than tidy: the tour's Escape routes
+    through `onSkip`, which persists a permanent `localStorage` "tour done" flag shared across
+    same-origin windows — so Escape at a banner whose only action is a reload would spend a tour the
+    user never saw, and the reload would come back to an app that believed the tour had been given.
+    Muting the key would have been available — the listener could consult the latch and return —
+    but it treats one key at a time. Withdrawing the component withdraws the Escape handler and the
+    `document`-level focus trap in a single move, which is why the gate is a mount gate rather than
+    a check inside each handler.
+  - A fourth full-area gating sibling in the same `Main` block, `WorkspaceUpdatingOverlay`, does NOT
+    consult the latch, and that has not been examined against this entry. It is a bounded
+    (30 s local leash) `role="status"` spinner rather than a focus-trapping dialog, so it is not an
+    obvious instance of the same problem — but it is not an established exception either. It carries
+    the literal marker `TODO(gating-surface-latch-audit)` at its own definition, so the open question
+    is greppable rather than living only in this log — a slug rather than a `PT-XXXX` for the same
+    reason `TODO(main-renderer-shutdown-relay)` above is one.
+
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
@@ -2025,6 +2101,80 @@ step, no automation. Just a record.
 - **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
   was not used.
 
+## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** Simple mode is single-window and power mode is not, but nothing in the main process
+  reacted to the mode changing: its only settings subscription was `platform.zoomFactor`, and every
+  `platform.interfaceMode` read there was one-shot. A live switch therefore reloaded each open
+  window's own dock independently and did nothing to the set of windows — so switching to simple
+  left secondary windows open in a mode whose chrome cannot reach them, and switching back brought
+  nothing back. The requirement is that switching to simple saves the power layout including
+  secondaries, closes them, and loads simple in one window, and that switching back reopens them.
+- **Decision:** The mode owns the window set, and the set needs no new record. `window-layouts.json`
+  already holds one entry per window, `handleWindowRemoved` can keep an entry while dropping its
+  runtime id, and a write emits every entry whether or not a window lives in it — so a preserved
+  entry IS a saved window with nothing on screen, and "the windows the power session had open" is
+  exactly the entries with no live window. Main subscribes to the mode once for the session and, on
+  a switch to simple, closes every window but the primary with its entry kept; on a switch back to
+  power, creates a window from each entry left behind. The survivor is whoever the runtime primary
+  lookup names — the window holding the marked entry when one is live, and otherwise the oldest live
+  window. The persisted flag does not move; the role can. Usually they are the same window, so the
+  survivor is also the entry simple mode restores next launch; in the fallback state they are not,
+  and the survivor's layout is then not the one that comes back, because the restore opens the
+  marked entry. When no live window is fit to be the survivor — every one is either abandoned or
+  already closing — nothing closes at all: the switch aborts, the cached mode rolls back to what it
+  was, and the setting is written back to match, so a switch that could not be carried out does not
+  leave the cache and the setting disagreeing with a window set that never changed. Once the switch
+  is known to be to simple, refusing to create a further window keeps that mode from *gaining* a
+  window beyond the survivor — but a delivery of "simple" arriving while the cache is still unknown
+  is adopted outright with nothing closed, so the mode can briefly read simple while every window
+  from before remains open, until the next delivery gives the switch a known "from" to act on. Only
+  the primary window runs the renderer-side switch at all:
+  that switch starts a send/receive, applies the administrator's shared layout, records a
+  recently-opened project and writes an application-wide browser-storage cache, all of which a
+  window being closed by the same switch would duplicate — and could resolve to a different project
+  than the survivor when the cache is cold.
+- **Alternatives:** A new session-scoped record of "the power window set" — rejected: the entry list
+  already is it, and a second account of which windows exist is the thing that goes stale. Reusing
+  the quit latch to make the secondaries keep their entries, as the window-close rule does —
+  rejected: the application is not quitting, and setting that latch would both make window creation
+  refuse (breaking the switch back) and run the application's shutdown tasks. Having a renderer ask
+  main to close the other windows — rejected: which renderer, and what if two ask. Having the
+  renderer decide for itself which window it is — rejected: only the main process knows which window
+  holds the role, and it is the process that acts on the answer. Making
+  the renderer switch idempotent in the extension host instead of gating it — rejected as a second
+  mechanism for one problem, and it would not have covered the cold-cache case.
+- **Consequences:** Closing secondaries on a switch to simple makes the colliding-web-view-id
+  precondition true rather than assumed: the simple-mode fast path loads a static layout whose tab
+  ids are identical in every window and are never window-scoped, and only single-window simple mode
+  keeps two windows from holding them at once. It also depends on how a window decides whether it is
+  the one to run the switch, and that decision fails CLOSED. The window list leaves out windows that
+  can no longer take work — one whose close has begun, and one whose renderer has been given up on —
+  and either can be the window holding the role, so the list can name no primary at all. A window
+  therefore runs the switch only when the list says it is the primary, and stands down on silence.
+  Reading silence as "then it must be me" was what let every secondary run the switch at once. Closing the secondaries narrows the
+  colliding-id window rather than closing it outright: the ids are still unscoped, and two windows
+  can still hold them if a window runs the switch when it should not. Two residuals are deliberate.
+  A question that cannot be answered still runs the switch, because nothing was learned and leaving
+  the mode changed with the dock never reloaded is worse; on that path the duplicate side effects
+  above are unchanged. And the renderer stands down expecting the main process to close it, with no
+  fallback if that half never runs — reachable four ways, all tolerated: the subscription failing
+  at startup, the reaction returning early because it is unwired or the application is shutting
+  down, the mode arriving in the main process as an error while the renderer got a good value, and a
+  window that stood down and was then rescued by `undoModeSwitchClose` rather than actually closed —
+  it is shown again on its power-mode dock while the cached mode already reads simple, with nothing
+  left to re-trigger the renderer-side switch since the mode is not changing again.
+  A window stranded that way keeps its power layout while the application reads simple, and its
+  layout pushes are refused, until the mode changes again. And the layout-push refusal is scoped to windows closing for
+  a mode switch rather than to any closing window: a window is recorded as closing before it flushes
+  its layout, so the wider guard would lose a layout change made just before a quit. The
+  simple-to-power overwrite defect in the renderer's own save guards is out of scope and unchanged.
+- **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
+  (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
+  `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
+
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
 - **Formerly:** ADR-0018
@@ -2447,6 +2597,36 @@ step, no automation. Just a record.
 - **Source:** manage-books port (menu-availability deferred); keyboard-switching port (OS-keyboard
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
+
+## adr-mode-switch-sends-one-send-receive-for-all-closing-windows: A mode switch starts ONE send/receive covering every window it closes, not one per window
+
+- **Date:** 2026-09-17
+- **Status:** Accepted
+- **Context:** The backend handler for `paratextBibleSendReceive.sendReceiveProjects` (the Paratext
+  10 Studio overlay, outside this repository) runs one send/receive at a time and rejects a
+  concurrent call with a `FAILED_PRECONDITION` platform error before doing any work. A window's
+  close syncs the projects of the writable editors open in it, because nothing else can report them
+  once it is gone; a switch to simple mode closes N−1 windows at once. One request per window meant
+  the first ran and every sibling's was refused — each of those windows already closed and unable to
+  be asked again.
+- **Decision:** `closeSecondaryWindows` hands every window it is about to close to a single
+  `startWindowCloseTasksWithoutWaiting` call, made before any of them is closed and while all can
+  still be asked. That call reads each window's open definitions, unions the writable projects, and
+  makes one request. A mode-switch close starts no sync of its own in the per-window close handler.
+- **Alternatives:** one request per closing window — rejected, it is the failure above. A
+  cross-window de-duplication registry (makes the siblings' requests smaller) — rejected: under an
+  exclusive gate a smaller request is refused exactly as a larger one is. A queue serializing every
+  window-close sync — rejected here: it holds a hand-closed window on screen behind another
+  window's sync and compounds the quit drain; deferred to PT-4640 for the overlaps that remain.
+- **Consequences:** the one request waits for the slowest window's read, and a quit arriving
+  meanwhile waits with it (both bounded by `platform.requestTimeout`, 30 s by default). A window
+  whose close is undone has still been synced. Syncs from separate batches, or a hand close during a
+  batch, still overlap and the second is refused — PT-4640. The exclusivity is a cross-repo
+  dependency, stated on purpose in the TSDoc of `startWindowCloseTasksWithoutWaiting`
+  (`src/main/shutdown-tasks.ts`) and in `src/@types/paratext-bible-send-receive/index.d.ts`;
+  **revisit** this entry if that handler ever accepts concurrent calls, which would make batching an
+  optimization rather than the thing that makes every closing window's work go out.
+- **Source:** PT-4286 / PR #2752 review.
 
 ## adr-move-destination-lifetime: `WebViewMoveInFlight.destinationWindowId` is scoped to the readopt actually running, not to a recovery rung
 
@@ -4023,6 +4203,41 @@ step, no automation. Just a record.
   are marked on both surfaces regardless.
 - **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
   `pt-4275-commands-to-main`.
+
+## adr-renderer-service-composed-at-entry-point: A renderer service both window shards call is composed from the renderer entry point
+
+- **Date:** 2026-09-11
+- **Status:** Accepted
+- **Context:** The web-view content zoom service (`src/renderer/services/web-view-content-zoom.service.ts`)
+  is called from both of the renderer's window-scoped shards — the web-view shard bakes a pane's
+  initial levels into its head, binds the in-frame helpers and forwards the three zoom commands,
+  and the window shard supplies the focused tab — and it needs functions from both of them in
+  return: `getSavedWebViewDefinitionSync`, `updateWebViewDefinitionSync`,
+  `getAllOpenWebViewDefinitionsSync` and `onDidUpdateWebView` from the web-view shard, and
+  `getLastFocusedTabId` from the window shard. Importing either shard from the service closes an
+  import cycle: the web-view shard already imports the service directly, and the window shard
+  reaches it only through the web-view shard.
+- **Decision:** The service imports neither shard. It declares the functions it needs as a `deps`
+  object and exposes `initializeContentZoomService({ … })`; the renderer's composition root
+  (`src/renderer/index.tsx`) fills that object with each shard's own function before it starts the
+  web-view service shard, which is the first thing that can open a pane needing them. Until then the
+  production defaults are stubs that warn once and answer with nothing, so a call arriving early
+  degrades instead of throwing.
+- **Alternatives:** Suppress `import/no-cycle` on the direct import — rejected: it would be the only
+  such suppression in the repo, and the cycle is real at module-evaluation time, not a false
+  positive. Wire the service from inside one of the shards — rejected: whichever shard did it would
+  still have to import the other one's function, re-creating the cycle one hop further out. Move the
+  shard functions into a lower module both the service and the shards could import — rejected: the
+  functions are the shards' own per-window state (the dock layout, the focused tab), so the "lower"
+  module would be the shard with a different name.
+- **Consequences:** The composition root is the single place that knows both shards and the service,
+  which is where a reader looks for renderer startup order anyway. The same seam is the test seam:
+  `__setContentZoomDepsForTesting` replaces the identical object, so the service's tests need no
+  module mocking of either shard. The cost is that the service's own module can be loaded without
+  ever being composed — hence the warn-once stubs, and hence `initializeContentZoomService` merging
+  `shardDeps` on every call rather than only the first. Any future renderer service that both shards
+  need should take the same shape rather than reaching for a cycle suppression.
+- **Source:** PT-4576 (web-view content zoom, epic PT-4575); design §1 and §2.4.
 
 ## adr-renderer-websocket-suspend-disconnect: Diagnose the renderer's Chromium WebSocket as the PT-1641 suspend failure, instrument before reconnecting
 

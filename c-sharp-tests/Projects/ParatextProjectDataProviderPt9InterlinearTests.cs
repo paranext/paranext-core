@@ -443,7 +443,8 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     [Description(
         "A setup's model and export fields are served as written; PT9's __EMPTY__ sentinel "
             + "means no model text, so the model name is absent while the id PT9 minted for the "
-            + "setup still serves, and empty strings serve as absent."
+            + "setup still serves. Emptiness is the separate trigger, shown here by an empty "
+            + "export text name serving as absent."
     )]
     public void GetPt9InterlinearData_ServesSetupModelTextAndTreatsTheEmptySentinelAsNone()
     {
@@ -485,6 +486,148 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
             Assert.That(data.Setups[1].ModelScrTextName, Is.Null);
             Assert.That(data.Setups[1].ModelScrTextId, Is.EqualTo("fedcba0987654321"));
             Assert.That(data.Setups[1].ExportScrTextName, Is.Null);
+        });
+    }
+
+    [Test]
+    [Description(
+        "Every setup string the project wrote empty serves as absent, matching the setup that "
+            + "omits the field entirely."
+    )]
+    public void GetPt9InterlinearData_ServesEmptyAndOmittedSetupStringsAlikeAsAbsent()
+    {
+        WriteProjectFile(
+            "InterlinearSetup.xml",
+            """
+            <InterlinearSetupList>
+              <InterlinearSetup type="Glossing" language="">
+                <LanguageName></LanguageName>
+                <FontName></FontName>
+                <MdlScrTextName></MdlScrTextName>
+                <MdlScrTextId></MdlScrTextId>
+                <ExportScrTextName></ExportScrTextName>
+                <ExportScrTextId></ExportScrTextId>
+              </InterlinearSetup>
+              <InterlinearSetup type="Glossing">
+              </InterlinearSetup>
+            </InterlinearSetupList>
+            """
+        );
+
+        var data = _provider.GetPt9InterlinearData();
+
+        Assert.That(data.Setups, Has.Count.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            // Written empty.
+            Assert.That(data.Setups[0].FontName, Is.Null);
+            Assert.That(data.Setups[0].ModelScrTextName, Is.Null);
+            Assert.That(data.Setups[0].ExportScrTextName, Is.Null);
+            Assert.That(data.Setups[0].LanguageId, Is.Null);
+            Assert.That(data.Setups[0].LanguageName, Is.Null);
+            Assert.That(data.Setups[0].ModelScrTextId, Is.Null);
+            Assert.That(data.Setups[0].ExportScrTextId, Is.Null);
+
+            // Omitted entirely. The type is asserted so the nulls cannot pass on a setup that
+            // never parsed.
+            Assert.That(data.Setups[1].Type, Is.EqualTo("Glossing"));
+            Assert.That(data.Setups[1].FontName, Is.Null);
+            Assert.That(data.Setups[1].ModelScrTextName, Is.Null);
+            Assert.That(data.Setups[1].ExportScrTextName, Is.Null);
+            Assert.That(data.Setups[1].LanguageId, Is.Null);
+            Assert.That(data.Setups[1].LanguageName, Is.Null);
+            Assert.That(data.Setups[1].ModelScrTextId, Is.Null);
+            Assert.That(data.Setups[1].ExportScrTextId, Is.Null);
+        });
+    }
+
+    [Test]
+    [Description(
+        "The two id fields serve PT9's re-formatting of the id rather than the characters the "
+            + "project stored: hex digits fold to lowercase and a legacy resource id is re-encoded."
+    )]
+    public void GetPt9InterlinearData_ServesSetupIdsReformattedRatherThanAsStored()
+    {
+        WriteProjectFile(
+            "InterlinearSetup.xml",
+            """
+            <InterlinearSetupList>
+              <InterlinearSetup type="Glossing" language="en">
+                <MdlScrTextName>MDL</MdlScrTextName>
+                <MdlScrTextId>ABCDEF1234567890</MdlScrTextId>
+                <ExportScrTextId>1234567890abcdefres</ExportScrTextId>
+              </InterlinearSetup>
+            </InterlinearSetupList>
+            """
+        );
+
+        var data = _provider.GetPt9InterlinearData();
+
+        Assert.That(data.Setups, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(data.Setups[0].ModelScrTextId, Is.EqualTo("abcdef1234567890"));
+            Assert.That(data.Setups[0].ExportScrTextId, Is.EqualTo("1234567890abcdefabcdefff"));
+        });
+    }
+
+    [Test]
+    [Description(
+        "An id in the setups file that is neither empty nor valid hex is not degraded to absent: "
+            + "it fails the whole read with the file named, so no interlinear data serves at all."
+    )]
+    public void GetPt9InterlinearData_FailsTheReadForAMalformedSetupId()
+    {
+        WriteProjectFile(
+            "InterlinearSetup.xml",
+            """
+            <InterlinearSetupList>
+              <InterlinearSetup type="Glossing" language="en">
+                <MdlScrTextId>not hex</MdlScrTextId>
+              </InterlinearSetup>
+            </InterlinearSetupList>
+            """
+        );
+        // A readable lexicon, so the throw shows the whole read failing rather than just setups.
+        WriteProjectFile("Lexicon.xml", LexiconXml);
+
+        var exception = Assert.Throws<InvalidDataException>(
+            () => _provider.GetPt9InterlinearData()
+        );
+
+        Assert.That(exception!.Message, Does.Contain("InterlinearSetup.xml"));
+    }
+
+    [Test]
+    [Description(
+        "A setup rebuilt from legacy settings serves no display fields at all, since that path "
+            + "never assigns them, and an empty export text setting serves as absent - the same "
+            + "answer the setups-file path gives for an empty value."
+    )]
+    public void GetPt9InterlinearData_ServesLegacySetupsWithoutDisplayFieldsOrAnEmptyExportId()
+    {
+        using var modelScrText = new DummyScrText(
+            CreateProjectDetails(HexId.CreateNew().ToString(), "MDL")
+        );
+        ParatextProjects.FakeAddProject(CreateProjectDetails(modelScrText), modelScrText);
+        _scrText.Settings.SetSetting("InterlinearRelatedLanguages." + modelScrText.Name, "True");
+        _scrText.Settings.SetSetting("InterlinearExportText." + modelScrText.Name, "");
+        _scrText.Settings.SetSetting("InterlinearExportTextId." + modelScrText.Name, "");
+
+        var data = _provider.GetPt9InterlinearData();
+
+        Assert.That(data.Setups, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            // Never assigned on this path, so these are absent whatever the project stores.
+            Assert.That(data.Setups[0].LanguageName, Is.Null);
+            Assert.That(data.Setups[0].FontName, Is.Null);
+            Assert.That(data.Setups[0].FontSize, Is.Zero);
+            Assert.That(data.Setups[0].RightToLeft, Is.False);
+
+            // Already absent before the conversion sees them: an empty id setting reads as no id.
+            Assert.That(data.Setups[0].ExportScrTextId, Is.Null);
+            Assert.That(data.Setups[0].ExportScrTextName, Is.Null);
         });
     }
 

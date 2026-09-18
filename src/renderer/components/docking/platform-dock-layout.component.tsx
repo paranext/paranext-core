@@ -22,11 +22,13 @@ import { DialogData } from '@shared/models/dialog-options.model';
 import { testLayout } from '@renderer/testing/test-layout.data';
 import { simpleLayout } from '@renderer/components/docking/simple-layout.data';
 import {
+  closeTab,
   handleDockEmptiedByRemoval,
   registerDockLayout,
 } from '@renderer/services/web-view.service-shard';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-shard';
 import { logger } from '@shared/services/logger.service';
+import { getErrorMessage } from 'platform-bible-utils';
 
 import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrapper.component';
 import {
@@ -55,6 +57,17 @@ import {
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { getDockLayoutOuterInset } from '@renderer/components/docking/platform-dock-layout-positioning.util';
 import { updateWindowTitle } from '@renderer/components/docking/window-label.util';
+import { installMiddleClickTabBarHandlers } from '@renderer/components/docking/platform-dock-layout-middle-click-handlers.util';
+
+/** Closes a tab, logging instead of rejecting if `closeTab` fails or finds no such tab */
+async function handleCloseTab(tabId: string) {
+  try {
+    const didClose = await closeTab(tabId);
+    if (!didClose) logger.warn(`Failed to close tab ${tabId}: tab not found in the dock layout`);
+  } catch (error) {
+    logger.error(`Failed to close tab ${tabId}: ${getErrorMessage(error)}`);
+  }
+}
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -187,6 +200,15 @@ export function PlatformDockLayout() {
     };
     // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
   }, [refreshWindowTitle]);
+
+  useEffect(
+    () =>
+      installMiddleClickTabBarHandlers(document, {
+        findTab: (tabId) => dockLayoutRef.current.find(tabId),
+        onCloseTab: handleCloseTab,
+      }),
+    [],
+  );
 
   return (
     <DockLayoutWrapper

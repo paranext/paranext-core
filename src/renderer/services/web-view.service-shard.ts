@@ -20,6 +20,17 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
+import {
+  getContentZoomBootstrapScript,
+  getContentZoomStyleElement,
+} from '@renderer/services/web-view-content-zoom.bootstrap-script';
+import {
+  adjustContentZoom,
+  getInitialContentZoomForWebView,
+  resetContentZoom,
+  setContentZoomActiveArea,
+  setContentZoomAreas,
+} from '@renderer/services/web-view-content-zoom.service';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
 import { localThemeService } from '@renderer/services/theme.service';
 import {
@@ -1339,6 +1350,10 @@ async function getPersistedLayout(
     return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false, isBakedDefault: false };
   }
   isRunningOnFallbackLayout = false;
+  // Cleared with the flag it guards, so a LATER fallback episode says so too. Left latched, a window
+  // that fell back, recovered, and fell back again would hold every push with nothing logged — and
+  // the warning is the only sign the user's layout changes are being dropped.
+  hasLoggedHeldLayoutPushes = false;
   if (response.kind === 'entry')
     return { layout: response.layout, isPendingContent: false, isBakedDefault: false };
   if (response.kind === 'empty')
@@ -1663,6 +1678,68 @@ async function withTimeout<T>(
 }
 
 /**
+ * How long to wait for the main process to say which window holds the primary role before going
+ * ahead. Short: the answer is a read of state main already holds, and the switch is waiting on it.
+ */
+const PRIMARY_WINDOW_QUESTION_TIMEOUT_MS = 5_000;
+
+/**
+ * Whether this window is the one that should carry out a switch to simple mode.
+ *
+ * Simple mode is single-window, so the main process closes every other window as part of the same
+ * switch. A window on its way out must not run the switch, because the switch writes state shared
+ * by every window — it starts a send/receive, applies the administrator's shared layout, records
+ * the project as recently opened, and caches it under a browser-storage key that is one key for the
+ * whole application. Running all of that in a window nobody will see duplicates each of them, and
+ * can settle on a different project than the surviving window when the cache is cold.
+ *
+ * Asked of the main process, which is the only place that knows which window holds the role.
+ *
+ * Decided from THIS window's own entry and nothing else. A window runs the switch when the list
+ * says it is the primary, and stands down otherwise — including when the list names no primary at
+ * all, which happens when the primary is absent from it: a window whose renderer has been given up
+ * on is deliberately left open but omitted, as is one already recorded as closing. Silence is not
+ * evidence that this window holds the role: reading it that way has every secondary run the switch
+ * at once, duplicating the shared writes above and putting the fixed simple-mode tab ids in several
+ * windows together — the collision single-window simple mode is supposed to make unreachable.
+ *
+ * A question that could not be asked is the one case that still answers `true`: nothing was
+ * learned, and leaving the mode changed with the dock never reloaded is the worse outcome. On that
+ * path the duplication above is unchanged.
+ */
+async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
+  // Read outside the try below: a missing window id is this window's own precondition failing, not
+  // a case where the primary-window question could not be asked, so it must not be swallowed into
+  // the same fail-open answer as a rejected or timed-out question.
+  const thisWindowId = getWindowIdOrThrow();
+  try {
+    // Bounded like every other wait in this switch. It is served by a main process that is
+    // concurrently closing windows, and an unbounded wait here would hold the switch behind the
+    // network default with the overlay up and the mode already flipped.
+    const windows = await withTimeout(
+      async () => sendCommand('platform.getWindows'),
+      PRIMARY_WINDOW_QUESTION_TIMEOUT_MS,
+    );
+    if (windows === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `The main process did not say which window holds the primary role within ${PRIMARY_WINDOW_QUESTION_TIMEOUT_MS}ms; running the switch to Simple mode here`,
+      );
+      return true;
+    }
+    // Absent from the list means already recorded as closing — which is what the main process does
+    // to a window just before it closes it for this very switch — or given up on
+    const thisWindow = windows.find((summary) => summary.windowId === thisWindowId);
+    if (!thisWindow) return false;
+    return thisWindow.isMain;
+  } catch (e) {
+    logger.warn(
+      `Could not establish whether this window should run the switch to Simple mode; running it: ${getErrorMessage(e)}`,
+    );
+    return true;
+  }
+}
+
+/**
  * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares multiple
  * tabs with empty state (no `projectId`); restoring it would mount those empty webviews, fire
  * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all those
@@ -1715,6 +1792,13 @@ export async function handleSwitchToSimpleMode(
     // batch with later state changes and the overlay never actually appears on screen. Bounded: see
     // waitForNextPaint's doc comment for the hidden/occluded-window case this guards against.
     await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
+
+    // Behind the overlay, so the round trip below is covered by it like every other lookup here:
+    // by this point the mode has already flipped, so anything the user rearranges in the Power
+    // layout still on screen would be silently refused by `saveLayout`. Ahead of the layout build,
+    // the project cache and the finalize, all of which write state the whole application shares.
+    // The `finally` releases the overlay on this return like any other.
+    if (!(await isThisWindowRunningTheSwitchToSimple())) return;
 
     const cached = getLastOpenedProject();
     if (cached) {
@@ -2472,6 +2556,37 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 globalThis.getWebViewStateById = getWebViewStateSync;
 globalThis.setWebViewStateById = setWebViewStateSync;
 globalThis.resetWebViewStateById = resetWebViewStateSync;
+globalThis.adjustContentZoomById = (webViewId, deltaSteps, areaId) => {
+  adjustContentZoom(webViewId, deltaSteps, areaId).catch((e) =>
+    logger.warn(`Content zoom adjust failed for ${webViewId}: ${getErrorMessage(e)}`),
+  );
+};
+globalThis.resetContentZoomById = (webViewId, areaId) => {
+  resetContentZoom(webViewId, areaId).catch((e) =>
+    logger.warn(`Content zoom reset failed for ${webViewId}: ${getErrorMessage(e)}`),
+  );
+};
+// The bootstrap calls these two synchronously while it is still setting itself up, so anything they
+// throw crosses back into the web view's realm and can abort the bootstrap before its wheel and key
+// listeners are installed. This boundary warns and continues, exactly as the asynchronous pair above
+// does, so a parent-side failure can never take a pane's zoom handling down with it.
+globalThis.reportContentZoomAreasById = (webViewId, areaIds) => {
+  try {
+    setContentZoomAreas(
+      webViewId,
+      Array.isArray(areaIds) ? areaIds.filter((areaId) => typeof areaId === 'string') : [],
+    );
+  } catch (e) {
+    logger.warn(`Content zoom areas report failed for ${webViewId}: ${getErrorMessage(e)}`);
+  }
+};
+globalThis.reportContentZoomActiveAreaById = (webViewId, areaId) => {
+  try {
+    if (typeof areaId === 'string') setContentZoomActiveArea(webViewId, areaId);
+  } catch (e) {
+    logger.warn(`Content zoom active area report failed for ${webViewId}: ${getErrorMessage(e)}`);
+  }
+};
 
 // #endregion Set up global variables to use in `openWebView`'s `imports` below
 
@@ -2747,6 +2862,10 @@ export async function openOrReloadWebView(
   window.getSavedWebViewDefinition = () => { return getSavedWebViewDefinitionById('${webView.id}')};
   var updateWebViewDefinitionById = window.parent.updateWebViewDefinitionById;
   window.updateWebViewDefinition = (webViewDefinitionUpdateInfo, shouldBringToFront = false) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo, shouldBringToFront)};
+  var adjustContentZoomById = window.parent.adjustContentZoomById;
+  var resetContentZoomById = window.parent.resetContentZoomById;
+  var reportContentZoomAreasById = window.parent.reportContentZoomAreasById;
+  var reportContentZoomActiveAreaById = window.parent.reportContentZoomActiveAreaById;
   window.fetch = papi.fetch;
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
@@ -2786,6 +2905,7 @@ export async function openOrReloadWebView(
       document.addEventListener('DOMContentLoaded', setUpThemeStylesheet);
     else setUpThemeStylesheet();
   })();
+  ${getContentZoomBootstrapScript(webView.id)}
   `;
 
   /** Nonce used to allow scripts and styles to run */
@@ -3024,6 +3144,19 @@ export async function openOrReloadWebView(
   // not a URL iframe
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
+    // A view that runs no scripts cannot run the zoom bootstrap, so it can never report the areas it
+    // marks and the platform scales its whole iframe at the default instead; baking the area rules
+    // as well would scale a marked element a second time, and CSS `zoom` compounds across the iframe
+    // boundary. Skipping the read with them also spares such a view a settings round trip.
+    let contentZoomStyles = '';
+    if (allowScripts) {
+      const initialContentZoom = await getInitialContentZoomForWebView(webView);
+      contentZoomStyles = getContentZoomStyleElement(
+        srcNonce,
+        initialContentZoom.defaultZoom,
+        initialContentZoom.levels,
+      );
+    }
 
     webViewContent = spliceIntoWebViewHead(
       webViewContent,
@@ -3038,7 +3171,8 @@ export async function openOrReloadWebView(
     <style nonce="${srcNonce}">
       ${SCROLLBAR_STYLES_RAW}
     </style>
-    ${themeStylesheet}`,
+    ${themeStylesheet}
+    ${contentZoomStyles}`,
     );
   }
 
@@ -3898,6 +4032,8 @@ const webViewServiceShard: WebViewServiceShard = {
   setDetachedScrRef,
   captureAndCloseWebView,
   adoptWebView,
+  adjustContentZoom,
+  resetContentZoom,
 };
 
 /**

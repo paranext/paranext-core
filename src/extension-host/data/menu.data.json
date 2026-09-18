@@ -169,7 +169,8 @@
         "localizeNotes": "Tab context menu > Move tab to new window",
         "group": "platform.tabWindow",
         "order": 200,
-        "command": "platform.moveWebViewToNewWindow"
+        "command": "platform.moveWebViewToNewWindow",
+        "hiddenInterfaceModes": ["simple"]
       },
       {
         "id": "platform.moveTabToWindow",

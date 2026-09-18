@@ -562,9 +562,9 @@ declare module 'shared/models/web-view.model' {
      */
     shouldShowToolbar?: boolean;
     /**
-     * Whether this WebView's tab can be closed by the user (shows the tab's close button). Set to
-     * `false` for tabs that must always remain open, such as views that are part of the default
-     * layout.
+     * Whether this WebView's tab can be closed by the user (shows the tab's close button and allows
+     * closing the tab with a middle click anywhere on its header). Set to `false` for tabs that must
+     * always remain open, such as views that are part of the default layout.
      *
      * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
      * true`), not enforced by the type.
@@ -628,6 +628,89 @@ declare module 'shared/models/web-view.model' {
     | Partial<Omit<WebViewDefinitionURL, SavedWebViewDefinitionOmittedKeys>>
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+  /**
+   * Id of one zoom area — a named part of a web view's content that zooms as one and keeps its own
+   * content zoom level. Ids are lower-case letters, digits and hyphens, starting with a letter
+   * (`[a-z][a-z0-9-]*`), and are stable strings a web view chooses once (for example `main` for a
+   * view's primary content; a view that has several independently zoomable parts gives each its own
+   * id).
+   *
+   * `default` is reserved: its CSS custom property is the pane-wide default every other area falls
+   * back to, so an area of that name would set the default for the whole pane. The platform ignores
+   * an area marked with it — pick any other id.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ContentZoomAreaId = string;
+  /**
+   * Id of the zoom area a web view marks without naming one. Every web view that opts into content
+   * zoom has at least this area.
+   *
+   * Three attribute values name it: an empty value (`data-platform-content-zoom-root=""`), the id
+   * itself (`="main"`), and `="true"` — the value React serializes a bare JSX prop (`<div
+   * data-platform-content-zoom-root />`) to. Because `"true"` names this area, an area genuinely
+   * called `true` is not available.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'main'` itself and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const MAIN_CONTENT_ZOOM_AREA = 'main';
+  /**
+   * Web-view definition `state` key holding the pane's own content zoom levels: a map from zoom area
+   * id to factor. An area with no entry follows the default from Settings. Written only by the
+   * platform; web views may read it.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
+   * equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
+  /**
+   * Attribute a web view puts on each element that wraps one zoom area's content (below its own
+   * toolbar, outside dividers and headers). The attribute value is the area id. Three values name the
+   * {@link MAIN_CONTENT_ZOOM_AREA} area instead: an empty value
+   * (`data-platform-content-zoom-root=""`), `="main"`, and the `="true"` React serializes a bare JSX
+   * prop (`<div data-platform-content-zoom-root />`) to. Write the empty value in static markup and
+   * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
+   * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
+   * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
+   * never compounds one area's zoom into another's. Web views without this attribute ignore per-area
+   * zoom input and are scaled whole at the Settings default.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
+   * constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
+  /**
+   * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
+   * zoom area, with that area's effective factor (own level, else the Settings default):
+   * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads its own zoom variable writes the literal `'--platform-content-zoom-'` itself and keeps
+   * it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = '--platform-content-zoom-';
+  /**
+   * CSS custom property holding the Settings default, the fallback for any zoom area without its own
+   * variable.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads the default zoom variable writes the literal `'--platform-content-zoom-default'`
+   * itself and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-default';
   /**
    * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
    * extension. Must match `SCRIPTURE_EDITOR_WEBVIEW_TYPE` in `platform-scripture-editor.utils.ts` —
@@ -956,6 +1039,7 @@ declare module 'shared/global-this.model' {
   import type { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
   import {
+    ContentZoomAreaId,
     GetSavedWebViewDefinition,
     SavedWebViewDefinition,
     UpdateWebViewDefinition,
@@ -1102,6 +1186,36 @@ declare module 'shared/global-this.model' {
      * ```
      */
     var updateWebViewDefinition: UpdateWebViewDefinition;
+    /**
+     * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out). Omit `areaId` to zoom the web
+     * view's active area.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var adjustContentZoomById: (
+      webViewId: string,
+      deltaSteps: number,
+      areaId?: ContentZoomAreaId,
+    ) => void;
+    /**
+     * Return one area of a web view to the Settings default. Omit `areaId` to reset the web view's
+     * active area.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var resetContentZoomById: (webViewId: string, areaId?: ContentZoomAreaId) => void;
+    /**
+     * Report the zoom areas a web view's bootstrap discovered, in document order.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var reportContentZoomAreasById: (webViewId: string, areaIds: ContentZoomAreaId[]) => void;
+    /**
+     * Report the zoom area a web view's bootstrap last saw clicked or focused.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var reportContentZoomActiveAreaById: (webViewId: string, areaId: ContentZoomAreaId) => void;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
     /**
@@ -4031,8 +4145,9 @@ declare module 'shared/models/docking-framework.model' {
     /** Last known focused element. Used for restoring focus in the tab */
     lastFocusedElement?: HTMLElement;
     /**
-     * Whether this tab can be closed by the user (shows the tab's close button). Set to `false` for
-     * tabs that must always remain open, such as views that are part of the default layout.
+     * Whether this tab can be closed by the user (shows the tab's close button and allows closing it
+     * with a middle click anywhere on its header). Set to `false` for tabs that must always remain
+     * open, such as views that are part of the default layout.
      *
      * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
      * true`), not enforced by the type.
@@ -4772,6 +4887,11 @@ declare module 'shared/services/window.service-model' {
      * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
      * no open window holds the marked entry the role falls to one of the windows that are open while
      * the flag stays where it is, and this reports the window that actually answers.
+     *
+     * At most one window carries it, and possibly none — the window holding the role may be absent
+     * from the list it appears in, because a window whose close has begun and one whose renderer has
+     * been given up on are both left out. So a caller must not read "no window is flagged" as "then
+     * it must be me".
      */
     isMain: boolean;
   };
@@ -5403,7 +5523,7 @@ declare module 'papi-shared-types' {
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
-  import { WebViewId } from 'shared/models/web-view.model';
+  import { ContentZoomAreaId, WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -5441,7 +5561,10 @@ declare module 'papi-shared-types' {
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /**
-     * Create a new application window
+     * Create a new application window.
+     *
+     * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
+     * second window. The first window of a launch is never refused.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -5457,13 +5580,58 @@ declare module 'papi-shared-types' {
      * of window. Titles follow each window's own content, so two windows showing the same thing
      * carry the same label and nothing distinguishes them.
      *
+     * Only windows that can still take the work are listed: a window whose close has begun, and one
+     * whose renderer has been given up on, are both left out. Either can be the window holding the
+     * primary role, so the list can carry no `isMain` at all — absence is not evidence that some
+     * other window holds it.
+     *
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
-    /** Increase the zoom level of the entire UI */
+    /**
+     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
+     * and Linux, Ctrl+`=` / Ctrl+`+` invoke this until PT-4577 hands those chords to per-pane
+     * content zoom (`platform.webViewContentZoomIn`).
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
+     * and Linux, Ctrl+`-` invokes this until PT-4577 hands that chord to per-pane content zoom
+     * (`platform.webViewContentZoomOut`).
+     */
     'platform.zoomOut': () => Promise<void>;
+    /**
+     * Zoom one area of a web view's content in by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area (the one
+     * last clicked or focused). Only web views that mark at least one zoom area respond.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomIn': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Zoom one area of a web view's content out by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomOut': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
+     * area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomReset': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -5728,8 +5896,39 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Default content zoom applied to every zoom area of a web view pane that has no level of its
+     * own (shown in Settings as "Tab content default zoom"). A factor: 1.0 = 100 %. Allowed range
+     * is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area its own level; Ctrl+`0` returns that area to
+     * this default. This factor multiplies with any font size a view sets for itself (for example a
+     * project's font size) and never replaces it; resetting a pane returns it to this default, not
+     * to that font size.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoom': number;
+    /**
+     * Per-project memory of content zoom levels, keyed `<kind>:<identity>:<area>` (kind is
+     * `editor`, `resource` or `notes`; identity is the project id, or the resource id for views
+     * without a project; area is the zoom area id, `main` for a view with one area). Written by the
+     * platform when an area's own level changes; read when a pane for that project opens. Local to
+     * this machine.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.ptxUtilsMementoData`: settings already give cross-window persistence and change
+     * notification for free. Writes are best-effort last-write-wins across windows, and a direct
+     * `papi.settings.set` on this key is tolerated rather than guarded against.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomMemory': {
+      [key: string]: number;
+    };
+    /**
+     * The zoom factor that applies to the entire application, including menus and toolbars (shown
+     * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
+     * from Settings, by the `platform.zoomIn` / `platform.zoomOut` commands, and by the
+     * application's own zoom keyboard shortcuts; per-pane content zoom is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
@@ -12203,6 +12402,7 @@ declare module '@papi/core' {
     ProjectMetadataWithoutFactoryInfo,
   } from 'shared/models/project-metadata.model';
   export type {
+    ContentZoomAreaId,
     GetWebViewOptions,
     OpenWebViewOptions,
     SavedWebViewDefinition,
@@ -13682,7 +13882,7 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
-   * getBoundingClientRect of the WebView iframe.
+   * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.
    *
    * @param webViewId The webViewId of the iframe
    * @param position The iframe-relative position

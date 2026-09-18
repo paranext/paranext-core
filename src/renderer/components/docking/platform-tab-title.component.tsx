@@ -859,6 +859,9 @@ export function PlatformTabTitle({
             // a screen reader announces every icon-only tab in this column identically.
             aria-label={isIconOnly ? title : tabLabel}
             data-web-view-id={webViewId}
+            // Resolves a middle click on this header to its tab; see
+            // `platform-dock-layout-middle-click-handlers.util.ts`
+            data-tab-header-id={id}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>
             <span className={`platform-tab-title-text ${dragIgnoreClass.trim()}`.trim()}>
