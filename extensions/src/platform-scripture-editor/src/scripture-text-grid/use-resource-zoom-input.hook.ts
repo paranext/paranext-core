@@ -34,11 +34,12 @@ function hasZoomModifier(event: WheelEvent): boolean {
  * resource cell moves that resource through its zoom range at the same rate the pane-level zoom
  * moves a whole pane.
  *
- * NOTE: Keyboard zoom (Ctrl/Cmd +/-/0) is deferred pending PT-4143. The main-process
- * before-input-event handler in main.ts claims those chords for window zoom before the WebView
- * iframe sees them, so the keyboard path cannot function correctly until PT-4143 makes that handler
- * focus-aware. Zoom ships three working paths: right-click context menu, hover/touch kebab, and
- * Ctrl/Cmd+wheel.
+ * NOTE: Keyboard zoom (Ctrl/Cmd +/-/0) aimed at a single resource is deferred pending PT-4143.
+ * These chords reach the WebView iframe — `main.ts`'s `before-input-event` handlers do not claim
+ * them — where they are claimed by the platform's own pane-level content-zoom handler
+ * (`web-view-content-zoom.bootstrap-script.ts`), which has no notion of a resource cell. So today
+ * they zoom the whole pane rather than the focused resource. Zoom ships three working paths:
+ * right-click context menu, hover/touch kebab, and Ctrl/Cmd+wheel.
  */
 export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomInputOptions): void {
   useEffect(() => {

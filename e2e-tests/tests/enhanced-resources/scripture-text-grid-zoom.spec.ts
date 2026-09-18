@@ -3,34 +3,43 @@
  *
  * Covered:
  *
- * - Kebab path: hover a cell, click its "Zoom options" dropdown trigger, click "Zoom In", assert the
- *   first cell's content wrapper receives a `zoom` style > 1 while a second resource's cell remains
- *   unzoomed.
+ * - Right-click context-menu path: right-click a cell, click "Zoom In" in the menu it opens, assert
+ *   the first cell's content wrapper receives a `zoom` style > 1 while a second resource's cell
+ *   remains unzoomed. (The kebab dropdown trigger renders only in the chapter-context header —
+ *   `nameDisplay !== 'inline'` — which the grid's default verse view never uses; the right-click
+ *   menu is available in both modes.)
  * - Pane vs. resource independence: Ctrl+wheel inside a resource cell changes only that resource's
  *   stored factor and leaves the pane's own zoom area untouched; Ctrl+wheel over the View Options
  *   row and the pane-level Ctrl+`=`/Ctrl+`0` chords change the pane's zoom area and leave every
- *   resource's stored factor alone; a resource cell's rendered size reflects both factors
- *   multiplied together. The pane-level chords are routed through the platform's own content-zoom
- *   listener inside the WebView iframe — a separate path from the grid's own per-resource keyboard
- *   shortcut noted as deferred below.
+ *   resource's stored factor alone; a resource cell's own inline `zoom` style reflects its stored
+ *   per-resource factor exactly, independently of the pane's own level (asserted as two separate,
+ *   independently falsifiable signals rather than a combined bounding-rect ratio — the wrapper each
+ *   factor scales is a stretched, overflow-auto flex item, so its OUTER box is fixed by the flex
+ *   parent and does not itself scale with either factor). The pane-level chords are routed through
+ *   the platform's own content-zoom listener inside the WebView iframe — a separate path from the
+ *   grid's own per-resource keyboard shortcut noted as deferred below.
  *
  * Not covered (need an app relaunch the CDP fixture can't do, plus real resource fixtures; verify
- * manually): context-menu path, persistence across restarts, chapter-context split rendering at the
- * zoomed factor, boundary disabled states (max/min).
+ * manually): persistence across restarts, chapter-context split rendering at the zoomed factor,
+ * boundary disabled states (max/min).
  *
  * - Keyboard zoom of a single resource (Ctrl/Cmd +/-/0 aimed at one resource, as opposed to the
- *   pane-level chords above): deferred pending PT-4143 — the main-process before-input-event
- *   handler claims those chords before the WebView iframe sees them.
+ *   pane-level chords above): deferred pending PT-4143. These chords DO reach the WebView iframe —
+ *   `main.ts`'s `before-input-event` handlers claim F12, Ctrl+Tab, the PT9 navigation set and the
+ *   reference-history chords, but no Ctrl/Cmd+`=`/`-`/`0` — where they are claimed by the
+ *   platform's own pane-level content-zoom handler (`web-view-content-zoom.bootstrap-script.ts`),
+ *   which has no notion of a resource cell. So today they zoom the whole pane rather than the
+ *   focused resource.
  *
  * Honest runnability: these tests require a running Platform.Bible instance with 2+ resources
  * flagged and visible in the Scripture Text Grid. They are skipped in CI (no real resource
  * fixtures) and must be run locally after opening the app with --remote-debugging-port=9223 and
- * configuring at least two resources via View Options.
+ * configuring at least two resources via View Options. Written and typechecked here; NOT run.
  *
  * The zoom CSS property is applied inline (`style="zoom: 1.1"`) on the content wrapper div. In a
  * real Chromium (unlike jsdom), `locator('[style*="zoom"]')` reliably matches this element.
  */
-import type { Page } from '@playwright/test';
+import type { Frame, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../fixtures/helpers';
 import { ctrlWheel } from '../../fixtures/content-zoom-helpers';
@@ -76,6 +85,38 @@ async function readZoomByResourceId(
     });
     return out;
   }, webViewId);
+}
+
+/**
+ * The app-wide default zoom level (`platform.webViewContentZoom`) a pane with no remembered level
+ * starts at — read directly rather than assumed to be 1, since this suite attaches to an
+ * already-running app whose Settings may not hold the factory default. Same shape as
+ * `readSettingsDefaultZoom` in `enhanced-resource-content-zoom.spec.ts`.
+ */
+async function readSettingsDefaultZoom(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    // The renderer exposes `papi` on `globalThis`, untyped here (same pattern as this file's
+    // afterEach cleanup).
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as {
+      papi: { settings: { get: (key: string) => Promise<number> } };
+    };
+    return win.papi.settings.get('platform.webViewContentZoom');
+  });
+}
+
+/**
+ * The zoom area the pane's focused element sits in — the same `closest()` lookup the in-iframe
+ * chord handler runs on `document.activeElement` (`targetFor` in
+ * `web-view-content-zoom.bootstrap-script.ts`). Same shape as `readFocusedAreaId` in
+ * `content-zoom-chords.spec.ts`.
+ */
+async function readFocusedAreaId(frame: Frame): Promise<string | undefined> {
+  return frame.evaluate(() => {
+    const root = document.activeElement?.closest('[data-platform-content-zoom-root]');
+    if (!root) return undefined;
+    return root.getAttribute('data-platform-content-zoom-root') || 'main';
+  });
 }
 
 /**
@@ -141,7 +182,9 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     await closeAllNonHomeDockTabs(mainPage);
   });
 
-  test('kebab menu zooms first resource without affecting the second', async ({ mainPage }) => {
+  test('right-click zoom menu zooms first resource without affecting the second', async ({
+    mainPage,
+  }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
 
@@ -151,26 +194,25 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
     const stg = await openScriptureTextGrid(mainPage);
 
-    // Wait for the grid row (two cells) to be present.
-    await expect(stg.frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
-    await expect(stg.frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
+    // Wait for the grid row (two cells) to be present. `stg.cellDraggable`
+    // (`data-testid="scripture-text-grid-cell-draggable"`), not `[role="gridcell"]`: the role moved
+    // to the parent verse `listitem`, and `ResourceCellView` is now purely presentational.
+    await expect(stg.cellDraggable.first()).toBeVisible({ timeout: 15_000 });
+    await expect(stg.cellDraggable).toHaveCount(2, { timeout: 15_000 });
 
-    const firstCell = stg.frame.locator('[role="gridcell"]').first();
-    const secondCell = stg.frame.locator('[role="gridcell"]').nth(1);
+    const firstCell = stg.cellDraggable.first();
+    const secondCell = stg.cellDraggable.nth(1);
 
-    // Hover the first cell so the kebab button becomes visible (it uses opacity-0 / group-hover).
-    await firstCell.hover();
-
-    // The dropdown trigger button carries aria-label="Zoom options" (English locale).
-    // Matching case-insensitively with a regex guards against minor casing variations.
-    const zoomKebab = firstCell.getByRole('button', { name: /Zoom options/i });
-    await expect(zoomKebab).toBeVisible({ timeout: 5_000 });
-    await zoomKebab.click();
-
-    // The dropdown menu item "Zoom In" appears in the Radix DropdownMenuContent.
+    // Drive the per-resource zoom through the cell's right-click menu, not the kebab: the kebab
+    // dropdown trigger renders only in `ResourceCellView`'s chapter-context header
+    // (`nameDisplay !== 'inline'`), and the grid's default view mode is verse
+    // (`nameDisplay: 'inline'`), where the kebab is never rendered. The right-click menu sits on the
+    // cell's outer wrapper and opens in both modes with the same "Zoom In"/"Zoom Out"/"Reset Zoom"
+    // items.
+    await firstCell.click({ button: 'right' });
     await stg.frame.getByRole('menuitem', { name: /^Zoom In$/i }).click();
 
-    // The content wrapper div inside the first gridcell receives `style="zoom: 1.1"` once the
+    // The content wrapper div inside the first cell receives `style="zoom: 1.1"` once the
     // factor moves above the default (1). The actual browser (Chromium inside Electron) serialises
     // the inline `zoom` property into the `style` attribute — `locator('[style*="zoom"]')` is
     // therefore reliable in this environment (unlike jsdom which does not support `zoom`).
@@ -206,78 +248,83 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     const resourceId = await firstCell.getAttribute('data-resource-id');
     if (!resourceId) throw new Error('First resource cell has no data-resource-id');
 
-    // Every step below reads its own "before" factor rather than assuming a fresh 1.0 pane level:
-    // this suite attaches to an already-running app rather than launching an isolated one, so a
-    // prior run's own zoom (persisted in Settings, not this webview's own state) may already have
-    // moved the pane's default away from 1.0 by the time this test starts.
+    // Establish a known pane baseline before any gesture below, rather than reading whatever level
+    // a prior run against this already-running app happened to leave behind: every step asserts an
+    // EXACT resulting value, which needs a known starting point to compute against, and — unlike
+    // "did it change" — cannot pass on a level that has already ratcheted toward the 3.0 clamp.
+    // Ending back at this same value (step 4's reset, with nothing after it moving the pane again)
+    // is what keeps this run from ratcheting the shared `platform.webViewContentZoomMemory` setting
+    // upward for the next one.
+    const settingsDefault = await readSettingsDefaultZoom(mainPage);
+    await firstCell.focus();
+    await expect.poll(() => readFocusedAreaId(frame)).toBe('text-collection');
+    await mainPage.keyboard.press('Control+0');
+    await expect.poll(() => readFactor(frame, 'text-collection')).toBe(settingsDefault);
+
     await test.step('Ctrl+wheel inside a resource cell changes only that resource’s stored factor', async () => {
       const cellBox = await firstCell.boundingBox();
       if (!cellBox) throw new Error('Resource cell has no bounding box');
-      const paneFactorBefore = await readFactor(frame, 'text-collection');
-      const resourceFactorBefore = (await readZoomByResourceId(mainPage, webViewId))[resourceId];
+      const resourceFactorBefore =
+        (await readZoomByResourceId(mainPage, webViewId))[resourceId] ?? 1;
       await ctrlWheel(mainPage, cellBox, -120);
       await expect
         .poll(async () => (await readZoomByResourceId(mainPage, webViewId))[resourceId])
-        .not.toBe(resourceFactorBefore);
-      expect(await readFactor(frame, 'text-collection')).toBe(paneFactorBefore);
+        .toBeCloseTo(resourceFactorBefore + 0.1, 5);
+      expect(await readFactor(frame, 'text-collection')).toBe(settingsDefault);
     });
 
     await test.step('Ctrl+wheel over the View Options row changes the pane level and leaves zoomByResourceId alone', async () => {
       const beforeWheel = await readZoomByResourceId(mainPage, webViewId);
-      const paneFactorBefore = await readFactor(frame, 'text-collection');
       const toolbarBox = await stg.viewOptionsButton.boundingBox();
       if (!toolbarBox) throw new Error('View Options button has no bounding box');
       await ctrlWheel(mainPage, toolbarBox, -120);
-      await expect.poll(() => readFactor(frame, 'text-collection')).not.toBe(paneFactorBefore);
+      await expect
+        .poll(() => readFactor(frame, 'text-collection'))
+        .toBeCloseTo(settingsDefault + 0.1, 5);
       expect(await readZoomByResourceId(mainPage, webViewId)).toEqual(beforeWheel);
     });
 
     await test.step('Ctrl+= with the grid focused changes the pane level', async () => {
-      const paneFactorBefore = await readFactor(frame, 'text-collection');
       await firstCell.focus();
+      await expect.poll(() => readFocusedAreaId(frame)).toBe('text-collection');
       await mainPage.keyboard.press('Control+=');
-      await expect.poll(() => readFactor(frame, 'text-collection')).not.toBe(paneFactorBefore);
+      await expect
+        .poll(() => readFactor(frame, 'text-collection'))
+        .toBeCloseTo(settingsDefault + 0.2, 5);
     });
 
     await test.step('a pane reset (Ctrl+0) leaves zoomByResourceId intact', async () => {
       const beforeReset = await readZoomByResourceId(mainPage, webViewId);
-      const paneFactorBefore = await readFactor(frame, 'text-collection');
       await firstCell.focus();
+      await expect.poll(() => readFocusedAreaId(frame)).toBe('text-collection');
       await mainPage.keyboard.press('Control+0');
-      await expect.poll(() => readFactor(frame, 'text-collection')).not.toBe(paneFactorBefore);
+      await expect.poll(() => readFactor(frame, 'text-collection')).toBe(settingsDefault);
       expect(await readZoomByResourceId(mainPage, webViewId)).toEqual(beforeReset);
     });
 
-    await test.step('a resource cell’s bounding rect scales by pane factor × per-resource factor', async () => {
-      // Read the actual factors in play rather than assuming a 1×1 baseline: the previous steps
-      // already left this resource zoomed (from the first step above), so the expected ratio is
-      // computed from measured before/after factors, not hardcoded targets.
-      const baselineBox = await firstCell.boundingBox();
-      if (!baselineBox) throw new Error('Resource cell has no bounding box');
-      const baselinePaneFactor = await readFactor(frame, 'text-collection');
-      const baselineResourceFactor =
+    await test.step('a resource cell’s own zoom style reflects its stored per-resource factor, independently of the pane', async () => {
+      // Two independently falsifiable signals in place of a combined bounding-rect ratio: the pane
+      // factor and the per-resource factor both scale a stretched, overflow-auto flex item
+      // (`resource-cell-view.component.tsx`'s content wrapper), whose OUTER box the flex parent
+      // fixes — zooming its content scrolls it inside that box rather than growing the box itself.
+      const resourceFactorBefore =
         (await readZoomByResourceId(mainPage, webViewId))[resourceId] ?? 1;
 
-      await firstCell.focus();
-      await mainPage.keyboard.press('Control+=');
-      await expect.poll(() => readFactor(frame, 'text-collection')).not.toBe(baselinePaneFactor);
-      const newPaneFactor = await readFactor(frame, 'text-collection');
-
-      await firstCell.hover();
-      const zoomKebab = firstCell.getByRole('button', { name: /Zoom options/i });
-      await expect(zoomKebab).toBeVisible({ timeout: 5_000 });
-      await zoomKebab.click();
+      await firstCell.click({ button: 'right' });
       await stg.frame.getByRole('menuitem', { name: /^Zoom In$/i }).click();
       await expect
         .poll(async () => (await readZoomByResourceId(mainPage, webViewId))[resourceId])
-        .not.toBe(baselineResourceFactor);
+        .toBeCloseTo(resourceFactorBefore + 0.1, 5);
       const newResourceFactor = (await readZoomByResourceId(mainPage, webViewId))[resourceId];
 
-      const zoomedBox = await firstCell.boundingBox();
-      if (!zoomedBox) throw new Error('Resource cell has no bounding box after zoom');
-      const expectedRatio =
-        (newPaneFactor / baselinePaneFactor) * (newResourceFactor / baselineResourceFactor);
-      expect(zoomedBox.height / baselineBox.height).toBeCloseTo(expectedRatio, 1);
+      // The factor is interpolated into the pattern, so its decimal point is escaped — an
+      // unescaped `.` would match any character, letting e.g. `1x1` false-pass for `1.1`.
+      const escapedFactor = String(newResourceFactor).replace(/\./g, '\\.');
+      await expect(firstCell.locator('[style*="zoom"]')).toHaveAttribute(
+        'style',
+        new RegExp(`zoom:\\s*${escapedFactor}`),
+      );
+      expect(await readFactor(frame, 'text-collection')).toBe(settingsDefault);
     });
   });
 });
