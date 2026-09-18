@@ -1634,7 +1634,7 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.reportContentZoomAreasById.mock.calls.length).toBe(reportsBefore);
   });
 
-  it('keeps the indicator on the pane while a pop-up of the same area is open', () => {
+  it('keeps the indicator on the pane while a pop-up of the same area is open', async () => {
     install('wv-popup-corner', TWO_AREAS);
     const popup = document.createElement('div');
     popup.setAttribute('data-platform-content-zoom-root', '');
@@ -1650,6 +1650,9 @@ describe('content-zoom bootstrap script', () => {
     const api = window.__platformContentZoom;
     if (!api) throw new Error('indicator api missing');
     api.showIndicator('main', '200 %');
+    // A show asks for a placement rather than performing one, so the area's corner is measured in
+    // the frame that follows it.
+    await oneFrame();
     const badge = byId('platform-content-zoom-indicator');
     // Pane only: top 100 + 12, right edge 500 → innerWidth - 500 + 16. Including the pop-up would
     // give top 22 and a right offset from 900.
@@ -1677,6 +1680,8 @@ describe('content-zoom bootstrap script', () => {
     expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
     const event = wheel({ ctrlKey: true, deltaY: -120 }, byId('popup-item'));
     expect(event.defaultPrevented).toBe(true);
+    // A notch adds its step to a pending total that one adjustment per frame carries over.
+    await oneFrame();
     expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-popup-target', 1, 'footnotes');
   });
 
