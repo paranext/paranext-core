@@ -5991,7 +5991,10 @@ step, no automation. Just a record.
   target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once. The
   window-chrome listener also stands down behind the three full-screen overlays that bypass
   `OverlayHost` (connection lost, workspace updating, first run), not only behind a modal dialog:
-  the level is persisted, so a zoom made behind one of those would outlive it.
+  the level is persisted, so a zoom made behind one of those would outlive it. The in-view bootstrap
+  needs no gate of its own, because all three of those covers are Radix modal dialogs: each takes
+  keyboard focus out of the web views while it is up and hands it back when it goes, so no chord
+  reaches a view from behind a cover.
   **Revisit** if a second platform-injected shortcut appears
   — two bootstraps competing for one key would want a shared dispatcher rather than two listeners.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
