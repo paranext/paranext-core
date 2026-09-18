@@ -8,8 +8,10 @@ import { OverlayContextMenu } from '@renderer/components/overlays/overlay-contex
 import { OverlayModalDialog } from '@renderer/components/overlays/overlay-modal-dialog.component';
 import { OverlayPopover } from '@renderer/components/overlays/overlay-popover.component';
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
+import { getWebViewContentScale } from '@renderer/services/overlays/overlay-coordinates';
 import { getOverlays, subscribe } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
+import { getContentZoomScaleForWebView } from '@renderer/services/web-view-content-zoom.service';
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -41,17 +43,43 @@ export function OverlayHost() {
   return createPortal(
     <div className="pr-twp" data-overlay-host="">
       {overlays.map((overlay) => {
+        // The requesting pane's drawing scale is read here, at the host, rather than inside each
+        // overlay component: OverlayContextMenu is reachable from the extension-facing declaration
+        // bundle (papi.d.ts), and an import of the content-zoom service from there would drag the
+        // whole service — including its test-only seams — onto that surface. OverlayHost is not
+        // reachable from there, so this is the one place that may depend on it; the three overlay
+        // components below take the resulting scale as a plain prop instead.
         if (overlay.type === 'contextMenu') {
-          return <OverlayContextMenu key={overlay.id} overlay={overlay} />;
+          return (
+            <OverlayContextMenu
+              key={overlay.id}
+              overlay={overlay}
+              contentScale={getContentZoomScaleForWebView(overlay.webViewId)}
+            />
+          );
         }
         if (overlay.type === 'modalDialog') {
           return <OverlayModalDialog key={overlay.id} overlay={overlay} />;
         }
         if (overlay.type === 'popover') {
-          return <OverlayPopover key={overlay.id} overlay={overlay} />;
+          return (
+            <OverlayPopover
+              key={overlay.id}
+              overlay={overlay}
+              contentScale={getContentZoomScaleForWebView(overlay.webViewId)}
+              frameScale={getWebViewContentScale(overlay.webViewId)}
+            />
+          );
         }
         if (overlay.type === 'commandPalette') {
-          return <OverlayCommandPalette key={overlay.id} overlay={overlay} />;
+          return (
+            <OverlayCommandPalette
+              key={overlay.id}
+              overlay={overlay}
+              contentScale={getContentZoomScaleForWebView(overlay.webViewId)}
+              frameScale={getWebViewContentScale(overlay.webViewId)}
+            />
+          );
         }
         return undefined;
       })}
