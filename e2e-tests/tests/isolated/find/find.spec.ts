@@ -436,11 +436,25 @@ async function waitForCounterToChangeFrom(frame: FrameLocator, previous: string 
   return current;
 }
 
-/** Open the filters dropdown (the SlidersHorizontal / Toggle filters button). */
+/**
+ * Open the filters panel (the SlidersHorizontal / Toggle filters button), converging on "open" from
+ * either starting point.
+ *
+ * The button toggles a Radix popover, so a bare click closes an already-open panel as readily as it
+ * opens a closed one, and the caller rarely knows which state it is in — focus leaving the panel
+ * dismisses it, so merely filling a field elsewhere closes it. The decision reads the trigger's
+ * `aria-expanded`, which flips synchronously with Radix's open state, rather than the content's
+ * visibility, which stays true through the exit animation. `resetFindPanel` uses the same
+ * sequence.
+ */
 async function openFiltersPanel(frame: FrameLocator): Promise<void> {
   const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
-  await expect(filtersBtn).toBeVisible({ timeout: 5_000 });
-  await filtersBtn.click();
+  const matchCase = frame.locator('#matchCase');
+  await expect(async () => {
+    if (!isPopoverTriggerExpanded(await filtersBtn.getAttribute('aria-expanded')))
+      await filtersBtn.click();
+    await expect(matchCase).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 5_000 });
 }
 
 /**
@@ -1077,6 +1091,9 @@ test.describe('Search History', () => {
     // from what is already recorded, so a write reaching history here can only be explained by the
     // options-change effect itself.
     await searchInput.fill(secondTerm);
+    // Filling the search box dismisses the filters panel — it is a non-modal popover, so focus
+    // landing outside it closes it. Reopen for the second option change.
+    await openFiltersPanel(frame);
     const matchCaseCheckbox = frame.locator('#matchCase');
     await matchCaseCheckbox.click();
     await expect(matchCaseCheckbox).toBeChecked();
@@ -1168,6 +1185,78 @@ test.describe('Search Filters', () => {
 
     await matchCaseCheckbox.press('Escape');
     await expect(wholeWordRadio).not.toBeVisible({ timeout: 5_000 });
+  });
+
+  test('should keep the filters button still while a filter change re-runs the search', async ({
+    mainPage,
+  }) => {
+    // The filters button ends a right-aligned toolbar, so anything that narrows the Find panel — a
+    // scrollbar appearing, for one — slides it sideways, and the open panel anchored to it jumps.
+    // Changing a filter re-runs the search and resizes the results, which is exactly when that
+    // would happen. The shift can settle back once the search finishes, so a single before/after
+    // reading would miss it: the position is sampled on every frame from the click until a second
+    // after the new count appears.
+    const frame = await openFindPanel(mainPage);
+    await fillSearchAndWaitForResults(frame, FILTER_SENSITIVE_TERM);
+    const counterBefore = await frame.locator('.tw\\:tabular-nums').textContent();
+
+    await openFiltersPanel(frame);
+    const filtersButton = frame.getByRole('button', { name: /toggle filters/i });
+    const positionsDuringReRun = filtersButton
+      .evaluate(
+        (button, { previousCount, settleMs, timeoutMs }) =>
+          new Promise<number[]>((resolve) => {
+            const positions: number[] = [];
+            const startedAt = performance.now();
+            let countChangedAt: number | undefined;
+            const sample = () => {
+              positions.push(button.getBoundingClientRect().x);
+              const now = performance.now();
+              const count = button.ownerDocument.querySelector('.tw\\:tabular-nums')?.textContent;
+              if (
+                countChangedAt === undefined &&
+                typeof count === 'string' &&
+                count !== previousCount
+              )
+                countChangedAt = now;
+              const isDone =
+                countChangedAt === undefined
+                  ? now - startedAt >= timeoutMs
+                  : now - countChangedAt >= settleMs;
+              if (isDone) resolve(positions);
+              else requestAnimationFrame(sample);
+            };
+            requestAnimationFrame(sample);
+          }),
+        // Below Playwright's per-test timeout, so a re-run that never reports a new count still
+        // resolves with the positions it sampled instead of dying with no assertion output.
+        { previousCount: counterBefore, settleMs: 1_000, timeoutMs: 35_000 },
+      )
+      // Only awaited on the success path below, so a throw before that would leave this pending:
+      // the sampling loop runs its full timeout into the tests that follow, and if the worker tears
+      // the app down first the rejection surfaces unattached, as a second error on a run that
+      // already has a real failure to report.
+      .catch((): number[] => []);
+
+    let positions: number[];
+    try {
+      // Whole word moves this term's count (52 -> 51), so the counter proves the search re-ran.
+      await frame.locator('#wordRestriction-wholeWord').click();
+      await waitForCounterToChangeFrom(frame, counterBefore);
+      positions = await positionsDuringReRun;
+    } finally {
+      // Closed however this ends. A panel left open by a failure here is state the afterEach reset
+      // has to undo before it can attribute the failure to this test. Bounded and swallowed: when
+      // the failure above was the control going missing, an unbounded press waits on that same
+      // missing control for the whole 120s per-test budget and buries the real assertion error
+      // behind a timeout. `resetFindPanel` converges from either state anyway, so this is tidying.
+      await frame
+        .locator('#wordRestriction-wholeWord')
+        .press('Escape', { timeout: 2_000 })
+        .catch(() => {});
+    }
+
+    expect(new Set(positions).size).toBe(1);
   });
 });
 
