@@ -45,6 +45,7 @@ import {
   resolveResourceContentState,
   resolveCallerHighlight,
   resolveNoteEditingSurface,
+  shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
 } from './platform-scripture-editor.utils';
 
@@ -3143,6 +3144,24 @@ describe('resolveNoteEditingSurface', () => {
   it('has no editing surface when read-only, in any view', () => {
     expect(resolveNoteEditingSurface({ viewType: 'standard', isReadOnly: true })).toBe('none');
     expect(resolveNoteEditingSurface({ viewType: 'formatted', isReadOnly: true })).toBe('none');
+  });
+});
+
+describe('shouldEndPaneNoteEditOnRowSelect', () => {
+  it('ends the row session when a different row is selected', () => {
+    // Tab from the row editor onto another note, then Space: that note is selected and its caller
+    // highlighted, so an editor left open on the first note reads as editing the wrong one.
+    expect(shouldEndPaneNoteEditOnRowSelect({ paneEditingIndex: 1, selectedIndex: 3 })).toBe(true);
+  });
+
+  it('has nothing to end when no row is being edited', () => {
+    expect(
+      shouldEndPaneNoteEditOnRowSelect({ paneEditingIndex: undefined, selectedIndex: 3 }),
+    ).toBe(false);
+  });
+
+  it('keeps the session when the row selected is the one being edited', () => {
+    expect(shouldEndPaneNoteEditOnRowSelect({ paneEditingIndex: 3, selectedIndex: 3 })).toBe(false);
   });
 });
 

@@ -203,6 +203,27 @@ export function resolveCallerHighlight({
   return selectedIndex;
 }
 
+/**
+ * Decides whether selecting a footnotes pane row without opening it (Space on a row) ends the open
+ * row-editing session. Selecting moves the caller highlight to the newly selected note, so an
+ * editor left open on a different note would read as editing the wrong one. The session ends,
+ * keeping its edits, whenever the selection lands anywhere but the row being edited.
+ *
+ * @param options.paneEditingIndex The row the row editor is open on, or `undefined` when none is
+ *   open
+ * @param options.selectedIndex The row just selected
+ * @returns Whether to end the row-editing session
+ */
+export function shouldEndPaneNoteEditOnRowSelect({
+  paneEditingIndex,
+  selectedIndex,
+}: {
+  paneEditingIndex: number | undefined;
+  selectedIndex: number;
+}): boolean {
+  return paneEditingIndex !== undefined && paneEditingIndex !== selectedIndex;
+}
+
 /** Snapshot of the state a collapsed-note caller click decides against. */
 export type NoteCallerClickState = {
   /**

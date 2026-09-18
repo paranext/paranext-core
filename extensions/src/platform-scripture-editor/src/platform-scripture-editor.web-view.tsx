@@ -182,6 +182,7 @@ import {
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
+  shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
@@ -2934,14 +2935,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * A footnotes pane row was selected without an edit request: Space in any view, or a row click in
-   * a view that opens no row editor (a read-only Standard view). Standard view navigates the text
-   * to the note (see {@link navigateToNote}) and leaves DOM focus in the pane, where the caller
+   * a view that opens no row editor (a read-only Standard view). Standard view ends a row editor
+   * open on a different note (see {@link shouldEndPaneNoteEditOnRowSelect}), navigates the text to
+   * the note (see {@link navigateToNote}), and leaves DOM focus in the pane, where the caller
    * highlight (see {@link handleSelectedFootnoteChange}) marks the note. Every other view moves the
    * text caret into the note.
    */
   const handleFootnoteSelected = useCallback(
     (index: number) => {
       if (viewTypeRef.current === 'standard') {
+        if (
+          shouldEndPaneNoteEditOnRowSelect({
+            paneEditingIndex: paneEditingIndexRef.current,
+            selectedIndex: index,
+          })
+        )
+          closeFootnoteEditorRef.current(false);
         navigateToNote(index);
         return;
       }

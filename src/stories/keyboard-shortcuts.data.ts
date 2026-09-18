@@ -662,12 +662,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'footnote-pane-select-note',
-    purpose: 'Select the focused note in the footnotes pane without opening it',
+    purpose:
+      'Select the focused note in the footnotes pane without opening it, closing a note open for editing in another row',
     category: 'Selection',
     context: 'Footnotes pane, on a note row',
     keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {
