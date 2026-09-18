@@ -138,15 +138,18 @@ export type RegistrationLiveness = 'transient' | 'lazy';
 /** One entry in wire-surface.json's `registrations` array. */
 export interface WireSurfaceRegistration {
   category: string;
-  name: string;
-  experimental: boolean;
+  /**
+   * Whether the registration declares the experimental marker, or `null` where the generator could
+   * not statically evaluate the documentation shape and so has no declared value to report.
+   */
+  experimental: boolean | null;
   documented: boolean;
   /**
    * Whether `experimental`/`documented` were resolved from a real static analysis of the
-   * registration's documentation argument, as opposed to a "could not tell, defaulted" guess (e.g.
+   * registration's documentation argument, as opposed to the generator being unable to tell (e.g.
    * the documentation came from a variable rather than an inline object literal). Marker-agreement
-   * checks skip an entry where this is `false` — its declared `experimental` value is not
-   * trustworthy ground truth.
+   * checks skip an entry where this is `false`; such an entry reports `experimental: null`, since
+   * there is no trustworthy ground truth to compare against.
    */
   docsStaticallyResolved: boolean;
   language: string;
@@ -725,6 +728,10 @@ export function checkMarkerAgreement(
   const compare = (reg: WireSurfaceRegistration, liveMethodName: string): void => {
     const method = liveByName.get(liveMethodName);
     if (!method) return; // absence is direction 1's finding, not a marker disagreement
+    // No declared value to disagree with: the generator could not read this registration's
+    // documentation shape, so the live marker is the only thing anyone knows about it.
+    // eslint-disable-next-line no-null/no-null
+    if (reg.experimental === null) return;
     const liveExperimental = method['x-experimental'] ?? false;
     if (liveExperimental !== reg.experimental) {
       disagreements.push({

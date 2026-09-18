@@ -295,7 +295,7 @@ describe('generateWireSurfaceDocument: documentation and the x-experimental flag
     });
   });
 
-  it('reports docsStaticallyResolved: false, not a guessed experimental value, when a spread could be hiding the flag', () => {
+  it('reports experimental: null, not a guessed false, when a spread could be hiding the flag', () => {
     const files: VirtualFile[] = [
       {
         path: 'src/fixture-docs-uncertain.ts',
@@ -310,7 +310,9 @@ describe('generateWireSurfaceDocument: documentation and the x-experimental flag
     expect(findRegistration(document.registrations, 'platform.uncertainDocs')).toMatchObject({
       documented: true,
       docsStaticallyResolved: false,
-      experimental: false,
+      // The point of the test: null is the reported value, distinct from a resolved false.
+      // eslint-disable-next-line no-null/no-null
+      experimental: null,
     });
   });
 

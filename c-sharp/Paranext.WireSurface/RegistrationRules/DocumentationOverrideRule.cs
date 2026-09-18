@@ -27,7 +27,7 @@ public sealed class DocumentationOverrideRule : IRegistrationRule
 
             var returnedExpression = FindSingleReturnedExpression(methodDeclaration);
             var documentation = returnedExpression is null
-                ? new DocumentationResolution(true, false, false)
+                ? new DocumentationResolution(true, false, null)
                 : context.Docs.Resolve(returnedExpression, model);
             var file = context.RepoRelativePath(tree);
 

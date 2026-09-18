@@ -246,7 +246,7 @@ public class DocumentationResolverTests
             """
         );
 
-        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, false, false)));
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, false, null)));
     }
 
     [Test]
@@ -482,6 +482,6 @@ public class DocumentationResolverTests
             """
         );
 
-        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, false, false)));
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, false, null)));
     }
 }

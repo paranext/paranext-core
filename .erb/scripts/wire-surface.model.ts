@@ -34,11 +34,16 @@ export interface CSharpStaticRegistration {
   documented: boolean;
   /**
    * Whether the documentation (when `documented`) resolved to a shape the scanner could inspect for
-   * `Experimental`. `false` means the experimental status below is not authoritative.
+   * `Experimental`. `false` means the shape was built in a way the scanner does not statically
+   * evaluate, and `experimental` below is `null` rather than a value.
    */
   docsStaticallyResolved: boolean;
-  /** Whether the object-level `Experimental` flag was statically proven true. */
-  experimental: boolean;
+  /**
+   * Whether the object-level `Experimental` flag was statically proven true, or `null` when the
+   * documentation shape could not be resolved statically, so that a `false` here always means the
+   * flag is genuinely absent.
+   */
+  experimental: boolean | null;
   language: 'csharp';
 }
 
@@ -113,7 +118,10 @@ function isCSharpStaticRegistration(value: unknown): value is CSharpStaticRegist
     typeof value.registeredVia === 'string' &&
     typeof value.documented === 'boolean' &&
     typeof value.docsStaticallyResolved === 'boolean' &&
-    typeof value.experimental === 'boolean' &&
+    // `null` is a real value of this field, not an absence: it is how an unresolvable
+    // documentation shape is reported.
+    // eslint-disable-next-line no-null/no-null
+    (typeof value.experimental === 'boolean' || value.experimental === null) &&
     value.language === 'csharp'
   );
 }

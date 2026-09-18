@@ -12,7 +12,7 @@ public sealed record StaticRegistration(
     [property: JsonPropertyOrder(3)] string RegisteredVia,
     [property: JsonPropertyOrder(4)] bool Documented,
     [property: JsonPropertyOrder(5)] bool DocsStaticallyResolved,
-    [property: JsonPropertyOrder(6)] bool Experimental
+    [property: JsonPropertyOrder(6)] bool? Experimental
 )
 {
     [JsonPropertyOrder(7)]

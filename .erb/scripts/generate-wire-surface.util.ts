@@ -74,12 +74,21 @@ export interface StaticRegistration {
   documented: boolean;
   /**
    * Whether the documentation argument (when `documented`) resolved to a concrete object literal
-   * this scanner could inspect for `'x-experimental'`. `false` means the experimental status below
-   * is not authoritative — the shape was built in a way the scanner does not statically evaluate.
+   * this scanner could inspect for `'x-experimental'`. `false` means the shape was built in a way
+   * the scanner does not statically evaluate, and `experimental` below is `null` rather than a
+   * value.
    */
   docsStaticallyResolved: boolean;
-  /** Whether `'x-experimental': true` was statically proven on the documentation. */
-  experimental: boolean;
+  /**
+   * Whether `'x-experimental': true` was statically proven on the documentation, or `null` when the
+   * documentation shape could not be resolved statically.
+   *
+   * `null` rather than `false` so the snapshot never asserts an absence it cannot prove. A reader
+   * diffing this file reads `false` as "no marker on this registration"; spending that word on
+   * entries the scanner simply could not read would send them chasing registrations that do carry a
+   * marker, and teach them to discount the field everywhere else.
+   */
+  experimental: boolean | null;
   /** Which half of the codebase this entry came from — see `StaticRegistration`'s doc comment. */
   language: WireSurfaceLanguage;
   /**
@@ -255,7 +264,10 @@ function buildHeader(): WireSurfaceHeader {
       '*ought* to be experimental, or ought to exist at all — plenty of wire registrations ' +
       'legitimately live off papi.d.ts without being experimental. It only records what is ' +
       'declared; a human reviewing the PR diff decides whether a change here is intended, and ' +
-      'this generator never fails a build over a missing marker.',
+      'this generator never fails a build over a missing marker. An entry whose documentation ' +
+      'shape this generator cannot statically evaluate carries experimental: null (and ' +
+      'docsStaticallyResolved: false) rather than a guessed false, so a false in this file always ' +
+      'means the marker is genuinely absent.',
     scope:
       'TypeScript: core src/** and the bundled extensions/src/** (excluding __tests__ ' +
       'directories, *.test.ts(x) files, node_modules, dist, and temp-build), walked with the ' +
@@ -780,14 +792,26 @@ function resolveDocsInfo(
   category: RegistrationCategory,
   entry: FileEntry,
   checker: ts.TypeChecker,
-): { documented: boolean; docsStaticallyResolved: boolean; experimental: boolean } {
+): { documented: boolean; docsStaticallyResolved: boolean; experimental: boolean | null } {
+  // No documentation argument at all - the marker's absence is proven, not unknown.
   if (!argExpr) return { documented: false, docsStaticallyResolved: true, experimental: false };
 
   const objectRef = resolveObjectLiteral(argExpr, entry, checker, new Set());
-  if (!objectRef) return { documented: true, docsStaticallyResolved: false, experimental: false };
+  // `null`, not `undefined`: this value is serialized straight into the snapshot, and
+  // JSON.stringify drops an undefined-valued key entirely. Every entry carrying the same set of
+  // keys is what keeps the file legible as a diff, so "unknown" has to be a written value rather
+  // than an absence.
+  // eslint-disable-next-line no-null/no-null
+  if (!objectRef) return { documented: true, docsStaticallyResolved: false, experimental: null };
 
   const flag = resolveExperimentalFlag(objectRef, DOCS_EXPERIMENTAL_PATH[category], checker);
-  return { documented: true, docsStaticallyResolved: flag.resolved, experimental: flag.value };
+  return {
+    documented: true,
+    docsStaticallyResolved: flag.resolved,
+    // See above: an unreadable documentation shape is written as null rather than dropped.
+    // eslint-disable-next-line no-null/no-null
+    experimental: flag.resolved ? flag.value : null,
+  };
 }
 
 // #endregion

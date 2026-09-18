@@ -26,7 +26,7 @@ public class DocumentationOverrideRuleTests
         string name,
         bool documented,
         bool docsStaticallyResolved,
-        bool experimental
+        bool? experimental
     ) =>
         new(
             RegistrationCategory.DataProvider,
@@ -273,7 +273,7 @@ public class DocumentationOverrideRuleTests
                             "FixtureReturnViaMethodCall",
                             documented: true,
                             docsStaticallyResolved: false,
-                            experimental: false
+                            experimental: null
                         )
                     ),
                 }
@@ -313,7 +313,7 @@ public class DocumentationOverrideRuleTests
                             "FixtureMultipleReturns",
                             documented: true,
                             docsStaticallyResolved: false,
-                            experimental: false
+                            experimental: null
                         )
                     ),
                 }

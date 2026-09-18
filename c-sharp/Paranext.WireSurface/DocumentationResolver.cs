@@ -16,7 +16,7 @@ public sealed class DocumentationResolver(
 )
 {
     private static readonly DocumentationResolution Undocumented = new(false, true, false);
-    private static readonly DocumentationResolution Unresolved = new(true, false, false);
+    private static readonly DocumentationResolution Unresolved = new(true, false, null);
 
     private readonly IPropertySymbol _methodWrapperProperty = symbols
         .OpenRpcSingleMethodDocumentation.GetMembers("Method")

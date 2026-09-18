@@ -24,7 +24,7 @@ public class NetworkEventRuleTests
         string name,
         bool documented = false,
         bool docsStaticallyResolved = true,
-        bool experimental = false
+        bool? experimental = false
     ) =>
         new(
             RegistrationCategory.NetworkEvent,
@@ -256,7 +256,7 @@ public class NetworkEventRuleTests
                             "fixture.event.a",
                             documented: true,
                             docsStaticallyResolved: false,
-                            experimental: false
+                            experimental: null
                         )
                     ),
                     new ScanEntry.Static(
@@ -264,7 +264,7 @@ public class NetworkEventRuleTests
                             "fixture.event.b",
                             documented: true,
                             docsStaticallyResolved: false,
-                            experimental: false
+                            experimental: null
                         )
                     ),
                 }

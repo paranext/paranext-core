@@ -24,7 +24,7 @@ public class StandaloneRequestHandlerRuleTests
         string name,
         bool documented = false,
         bool docsStaticallyResolved = true,
-        bool experimental = false
+        bool? experimental = false
     ) =>
         new(
             RegistrationCategory.StandaloneMethod,
@@ -274,7 +274,7 @@ public class StandaloneRequestHandlerRuleTests
                             "command:notifier.a",
                             documented: true,
                             docsStaticallyResolved: false,
-                            experimental: false
+                            experimental: null
                         )
                     ),
                     new ScanEntry.Static(
@@ -282,7 +282,7 @@ public class StandaloneRequestHandlerRuleTests
                             "command:notifier.b",
                             documented: true,
                             docsStaticallyResolved: false,
-                            experimental: false
+                            experimental: null
                         )
                     ),
                 }
