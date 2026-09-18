@@ -554,11 +554,11 @@ function recordTypeMarksAreas(webViewId: WebViewId, marksAreas: boolean): void {
  * ({@link isContentZoomBootstrapAlive}) has them dropped, since nothing will ever report over them.
  * A pane the platform still expects to mark an area, whose bootstrap is alive, is left alone
  * entirely — it is simply slower to mount than this wait, not a pane whose type marks nothing.
- * Every other pane has its own expectation settled to "marks none" — which only changes anything
- * for a pane whose bootstrap turned out to be dead, since an unresolved or already-settled pane
- * already reads that way — and, only when its bootstrap is alive and it has reported at least once,
- * its type is recorded the same way ({@link recordTypeMarksAreas}): a dead bootstrap is evidence
- * about the pane, not about its type.
+ * Every other pane has its own expectation settled to "marks none", which only changes anything for
+ * a pane whose bootstrap turned out to be dead, since an unresolved or already-settled pane already
+ * reads that way. This never touches the type record ({@link recordTypeMarksAreas}): a grace expiry
+ * is evidence about this one pane, not about its type, since a sibling pane of the same type may
+ * already have reported an area.
  */
 function startFallbackGrace(webViewId: WebViewId): void {
   if (fallbackGraceTimers.has(webViewId)) return;
@@ -579,10 +579,6 @@ function startFallbackGrace(webViewId: WebViewId): void {
         // them, so they are dropped rather than left to shadow the whole-iframe fallback below.
         forgetAreaState(webViewId);
       }
-      // Checked before this pane's own expectation is (re)settled below, so a pane whose expectation
-      // was never resolved cannot satisfy its own evidence requirement by settling it right here.
-      // A pane whose document is gone is evidence about that pane, not about what its type marks.
-      if (alive && areasByWebViewId.has(webViewId)) recordTypeMarksAreas(webViewId, false);
       expectAreasByWebViewId.set(webViewId, false);
       // A timer callback has no caller to catch it, and a pane can be torn down inside this second.
       // The expectation was just settled to `false` above, so mayScaleWholeIframe short-circuits on
