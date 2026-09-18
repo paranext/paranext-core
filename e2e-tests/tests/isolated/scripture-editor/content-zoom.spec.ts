@@ -163,6 +163,16 @@ async function scrollTextKeepingVisible(
 const TRIGGER_TOP_MARGIN_PX = 40;
 
 /**
+ * How far the marker palette's box may sit from its trigger and still count as "beside" it, in
+ * {@link expectBesideTriggerAndInsideWindow}. Covers the anchored palette's own `sideOffset` (4px,
+ * `overlay-command-palette.component.tsx`) plus the slack Radix's collision avoidance can add to
+ * keep the palette inside the window rather than the narrower, shorter pane — a fixed,
+ * zoom-independent gap, not something a different trigger position avoids, so this is a constant
+ * rather than a value derived from the zoom factor.
+ */
+const MAX_PALETTE_TRIGGER_GAP_PX = 24;
+
+/**
  * Scrolls the main text as near as it goes to putting `trigger`'s box {@link TRIGGER_TOP_MARGIN_PX}
  * below the top of the text's scroll container, and returns the box it has there. The room a pop-up
  * opened on that trigger then has is the pane's, rather than whatever the preceding steps left the
@@ -587,7 +597,10 @@ test.describe('scripture editor content zoom', () => {
       // markers views this step must run before.
       await expect(mainInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
       // Verse 1's own text, near the chapter's start rather than "that great city" (verse 2, used
-      // by the sibling in-iframe step below): that trigger sits near the pane's right edge.
+      // by the sibling in-iframe step below): that trigger sits near the pane's right edge. This
+      // text can span more than one line, so the trigger's box deliberately moves between zoom
+      // levels as the text reflows — `openPalette` below re-reads the caret box on every open
+      // rather than reusing a position captured once.
       const text = mainInput.getByText('Yahweh', { exact: false }).first();
       // The anchored branch puts `data-overlay-command-palette` on both its `PopoverContent` (the
       // sized, zoomed box) and, nested inside it, the `Command` that fills that box — so the bare
@@ -615,12 +628,8 @@ test.describe('scripture editor content zoom', () => {
        * {@link expectPopupBesideTriggerAndInsideFrame}, this palette is portalled to the MAIN
        * document (`OverlayHost`, `createPortal(..., document.body)`), so Radix collision-avoids it
        * against the app window's own viewport, not the narrower, shorter pane — it can paint a few
-       * pixels outside the pane while staying inside the window. With the trigger parked as near
-       * the pane's top as `scrollTriggerNearPaneTop` allows, the palette's own content height at
-       * 150% (≈560px) already exceeds the room left below the trigger inside the pane (≈553px)
-       * while still fitting inside the window (≈569px) — a fixed, zoom-independent gap (about the
-       * same 16px on every side of the pane), not something a different trigger position avoids. So
-       * this checks the weaker, but real, guarantee: beside its trigger and inside the WINDOW.
+       * pixels outside the pane while staying inside the window. So this checks the weaker, but
+       * real, guarantee: beside its trigger and inside the WINDOW.
        */
       const expectBesideTriggerAndInsideWindow = async (trigger: PageBox) => {
         await waitForPopupAnimations(palette);
@@ -642,7 +651,9 @@ test.describe('scripture editor content zoom', () => {
           0,
         );
         expect(Math.max(gapX, gapY), 'not covering the trigger').toBeGreaterThanOrEqual(-tolerance);
-        expect(Math.max(gapX, gapY), 'close to the trigger').toBeLessThanOrEqual(24);
+        expect(Math.max(gapX, gapY), 'close to the trigger').toBeLessThanOrEqual(
+          MAX_PALETTE_TRIGGER_GAP_PX,
+        );
         expect(popupBox.x, 'inside the window').toBeGreaterThanOrEqual(-tolerance);
         expect(popupBox.y, 'inside the window').toBeGreaterThanOrEqual(-tolerance);
         expect(popupBox.x + popupBox.width, 'inside the window').toBeLessThanOrEqual(
