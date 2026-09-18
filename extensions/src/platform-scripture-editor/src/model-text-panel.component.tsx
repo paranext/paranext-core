@@ -8,6 +8,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  ContentZoomRoot,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -728,7 +729,14 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
-      {renderContent()}
+      {/* Named as its own zoom area ("model-text") so its remembered level is kept apart from this
+          project's other resource panes, which resolve to the same kind/identity pair and would
+          otherwise all read one remembered level. The label row above stays outside so its pinned
+          42 px height — aligned with the editor's toolbar and Column 3's tab bar — doesn't scale
+          with the content. */}
+      <ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+        {renderContent()}
+      </ContentZoomRoot>
     </div>
   );
 }
