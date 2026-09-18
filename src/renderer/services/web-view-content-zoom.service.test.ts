@@ -13,9 +13,10 @@ import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 // The mocked logger, so a test can assert on a warning it produced.
 // eslint-disable-next-line import/first
 import { logger } from '@shared/services/logger.service';
-// The percent formatter, so an indicator assertion spells the number exactly as the code does.
+// The percent formatter and zoom-step arithmetic, so an assertion spells the number exactly as the
+// code does rather than hard-coding a rounding of its own.
 // eslint-disable-next-line import/first
-import { formatZoomPercent } from '@shared/utils/content-zoom.util';
+import { adjustZoomFactor, formatZoomPercent } from '@shared/utils/content-zoom.util';
 // The service itself, for the same reason as the type import above.
 // eslint-disable-next-line import/first
 import {
@@ -25,6 +26,7 @@ import {
   applyContentZoomForWebView,
   canContentZoomActOnActiveTarget,
   forgetContentZoom,
+  getContentZoomScaleForWebView,
   getInitialContentZoomForWebView,
   initializeContentZoomService,
   pushContentZoom,
@@ -1727,6 +1729,29 @@ describe('web-view-content-zoom.service', () => {
     forgetContentZoom('editor-1'); // no area report at all, as for a bootstrap that never runs
     applyContentZoomForWebView('editor-1');
     expect(iframe.style.zoom).toBe('1.3');
+  });
+
+  it('reports the content scale a pane draws at: its resolved area level, else its frame zoom', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    setContentZoomAreas('editor-1', ['main', 'footnotes']);
+    await adjustContentZoom('editor-1', 1, 'footnotes');
+    // No area asked for, so the pane's active area answers - the first area until one is set.
+    expect(getContentZoomScaleForWebView('editor-1')).toBe(1.3);
+    setContentZoomActiveArea('editor-1', 'footnotes');
+    expect(getContentZoomScaleForWebView('editor-1')).toBeCloseTo(adjustZoomFactor(1.3, 1), 5);
+  });
+
+  it('reports the frame zoom for a pane that marks no area, and 1 for an iframe with no zoom applied (the harness fabricates one for any id, known or not)', async () => {
+    settings['platform.webViewContentZoom'] = 1.3;
+    __setContentZoomDepsForTesting({});
+    await initializeContentZoomService();
+    forgetContentZoom('editor-1');
+    applyContentZoomForWebView('editor-1');
+    expect(iframe.style.zoom).toBe('1.3');
+    expect(getContentZoomScaleForWebView('editor-1')).toBe(1.3);
+    expect(getContentZoomScaleForWebView('no-such-pane')).toBe(1);
   });
 
   it('cancels the grace armed by the iframe load hook once the pane reports an area within it', async () => {
