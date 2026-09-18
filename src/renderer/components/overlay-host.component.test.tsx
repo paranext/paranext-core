@@ -68,9 +68,9 @@ const mockGetContentZoomScaleForWebView = vi.fn<() => number>(() => 1);
 vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
   getContentZoomScaleForWebView: () => mockGetContentZoomScaleForWebView(),
 }));
-const mockGetWebViewContentScale = vi.fn<() => number>(() => 1);
+const mockGetWebViewIframeZoom = vi.fn<() => number>(() => 1);
 vi.mock('@renderer/services/overlays/overlay-coordinates', () => ({
-  getWebViewContentScale: () => mockGetWebViewContentScale(),
+  getWebViewIframeZoom: () => mockGetWebViewIframeZoom(),
 }));
 
 function modalDialogEntry(): OverlayEntry {
@@ -127,7 +127,7 @@ afterEach(() => {
   vi.clearAllMocks();
   mockGetOverlays.mockReturnValue([]);
   mockGetContentZoomScaleForWebView.mockReturnValue(1);
-  mockGetWebViewContentScale.mockReturnValue(1);
+  mockGetWebViewIframeZoom.mockReturnValue(1);
   // The connection-lost store is a module-level singleton that never clears itself, so a test that
   // latches it would leave every later test permanently stood down.
   resetConnectionLost();
@@ -221,7 +221,7 @@ describe('OverlayHost', () => {
 
     it("passes the requesting pane's frame scale to a popover overlay, distinct from its content scale", () => {
       mockGetContentZoomScaleForWebView.mockReturnValue(1.5);
-      mockGetWebViewContentScale.mockReturnValue(1.25);
+      mockGetWebViewIframeZoom.mockReturnValue(1.25);
       mockGetOverlays.mockReturnValue([popoverEntry()]);
 
       render(<OverlayHost />);
@@ -233,7 +233,7 @@ describe('OverlayHost', () => {
 
     it("passes the requesting pane's frame scale to a command palette overlay, distinct from its content scale", () => {
       mockGetContentZoomScaleForWebView.mockReturnValue(1.5);
-      mockGetWebViewContentScale.mockReturnValue(1.25);
+      mockGetWebViewIframeZoom.mockReturnValue(1.25);
       mockGetOverlays.mockReturnValue([commandPaletteEntry()]);
 
       render(<OverlayHost />);

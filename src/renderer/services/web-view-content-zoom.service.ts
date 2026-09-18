@@ -1,4 +1,4 @@
-import { getWebViewIframe } from '@renderer/services/overlays/overlay-coordinates';
+import { getWebViewIframe, parseIframeZoom } from '@renderer/services/overlays/overlay-coordinates';
 import {
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
   CONTENT_ZOOM_IDENTITY_STATE_KEY,
@@ -440,11 +440,7 @@ export function resolveContentZoomArea(
  */
 export function getContentZoomScaleForWebView(webViewId: WebViewId): number {
   const area = resolveContentZoomArea(webViewId, undefined);
-  if (area === undefined) {
-    const iframe = deps.getIframe(webViewId);
-    const zoom = Number(iframe?.style.zoom);
-    return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-  }
+  if (area === undefined) return parseIframeZoom(deps.getIframe(webViewId) ?? undefined);
   const own = effectiveOwnLevels(deps.getDefinition(webViewId));
   return own[area] ?? cachedDefault ?? DEFAULT_ZOOM_FACTOR;
 }

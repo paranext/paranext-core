@@ -8,7 +8,7 @@ import { OverlayContextMenu } from '@renderer/components/overlays/overlay-contex
 import { OverlayModalDialog } from '@renderer/components/overlays/overlay-modal-dialog.component';
 import { OverlayPopover } from '@renderer/components/overlays/overlay-popover.component';
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
-import { getWebViewContentScale } from '@renderer/services/overlays/overlay-coordinates';
+import { getWebViewIframeZoom } from '@renderer/services/overlays/overlay-coordinates';
 import { getOverlays, subscribe } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import { getContentZoomScaleForWebView } from '@renderer/services/web-view-content-zoom.service';
@@ -67,7 +67,7 @@ export function OverlayHost() {
               key={overlay.id}
               overlay={overlay}
               contentScale={getContentZoomScaleForWebView(overlay.webViewId)}
-              frameScale={getWebViewContentScale(overlay.webViewId)}
+              frameScale={getWebViewIframeZoom(overlay.webViewId)}
             />
           );
         }
@@ -77,7 +77,7 @@ export function OverlayHost() {
               key={overlay.id}
               overlay={overlay}
               contentScale={getContentZoomScaleForWebView(overlay.webViewId)}
-              frameScale={getWebViewContentScale(overlay.webViewId)}
+              frameScale={getWebViewIframeZoom(overlay.webViewId)}
             />
           );
         }
