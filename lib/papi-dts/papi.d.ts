@@ -5589,15 +5589,15 @@ declare module 'papi-shared-types' {
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
     /**
-     * Increase the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
-     * and Linux, Ctrl+`=` / Ctrl+`+` invoke this until PT-4577 hands those chords to per-pane
-     * content zoom (`platform.webViewContentZoomIn`).
+     * Increase the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomIn`.
      */
     'platform.zoomIn': () => Promise<void>;
     /**
-     * Decrease the zoom level of the entire UI, including menus and toolbars, by 10 %. On Windows
-     * and Linux, Ctrl+`-` invokes this until PT-4577 hands that chord to per-pane content zoom
-     * (`platform.webViewContentZoomOut`).
+     * Decrease the app-wide interface scaling — menus, toolbars and content — by 10 %, stepping
+     * from the nearest 10 %. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomOut`.
      */
     'platform.zoomOut': () => Promise<void>;
     /**
@@ -5926,8 +5926,8 @@ declare module 'papi-shared-types' {
     /**
      * The zoom factor that applies to the entire application, including menus and toolbars (shown
      * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
-     * from Settings, by the `platform.zoomIn` / `platform.zoomOut` commands, and by the
-     * application's own zoom keyboard shortcuts; per-pane content zoom is
+     * from Settings and by the `platform.zoomIn` and `platform.zoomOut` commands; no keyboard
+     * shortcut changes it — the zoom chords drive per-pane content zoom, which is
      * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
@@ -11002,6 +11002,13 @@ declare module 'renderer/services/overlays/overlay-store' {
   export function subscribe(listener: () => void): () => void;
   /** Get a specific overlay by id, or undefined if not found */
   export function getOverlayById(id: string): OverlayEntry | undefined;
+  /**
+   * Determine whether at least one active overlay has the given type
+   *
+   * @param type The overlay type to check for (e.g. 'modalDialog')
+   * @returns True if an overlay of that type is currently active; false otherwise
+   */
+  export function hasOverlayOfType(type: OverlayEntry['type']): boolean;
   /**
    * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
    * accepts, since a newer overlay always renders over an older one.

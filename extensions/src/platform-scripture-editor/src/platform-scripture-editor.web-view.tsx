@@ -50,6 +50,7 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
+  ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
@@ -3818,9 +3819,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
-      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
+      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
+          The Scripture text zoom area: the toolbar and the footnotes-pane divider live outside it,
+          in the surrounding layout; the editor and everything it renders inline (including the
+          Simple-mode character-marker bar) scale with the text. Content that portals out of it
+          (menus, pop-ups) is not inside the area. */}
       <InPortal node={editorPortalNode}>
-        <PortalContents>{renderEditor()}</PortalContents>
+        <PortalContents>
+          <ContentZoomRoot className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
+            {renderEditor()}
+          </ContentZoomRoot>
+        </PortalContents>
       </InPortal>
       <div
         ref={editorContainerRef}
@@ -3939,19 +3948,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }}
         />
         <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
-          <FootnoteEditor
-            classNameForEditor="scripture-font"
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
-            onClose={onFootnoteEditorClose}
-            onNoteEdit={onFootnoteEditorNoteEdit}
-            scrRef={scrRef}
-            editorOptions={options}
-            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
-            localizedStrings={localizedStrings}
-            parentEditorRef={editorRef}
-            markerPalette={footnoteMarkerPalette}
-          />
+          {/* This popover is portaled to document.body, a separate subtree from the text area, so
+              this second `main`-area marker is not nested under the editor's: a note edited in
+              place follows the text's zoom level. */}
+          <ContentZoomRoot>
+            <FootnoteEditor
+              classNameForEditor="scripture-font"
+              noteOps={editingNoteOps.current}
+              noteKey={editingNoteKey.current}
+              onClose={onFootnoteEditorClose}
+              onNoteEdit={onFootnoteEditorNoteEdit}
+              scrRef={scrRef}
+              editorOptions={options}
+              defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+              localizedStrings={localizedStrings}
+              parentEditorRef={editorRef}
+              markerPalette={footnoteMarkerPalette}
+            />
+          </ContentZoomRoot>
         </PopoverContent>
       </Popover>
       {/** Comment editor for creating new comment threads */}
