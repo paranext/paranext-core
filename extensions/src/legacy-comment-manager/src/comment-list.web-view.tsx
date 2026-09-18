@@ -393,11 +393,6 @@ global.webViewComponent = function CommentListWebView({
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
-  const safeCommentThreads = useMemo<LegacyCommentThread[]>(() => {
-    if (!commentThreads || isPlatformError(commentThreads)) return [];
-    return commentThreads;
-  }, [commentThreads]);
-
   // Whether the current query is the complete, unfiltered thread list -- the only list pruning can
   // safely trust. A narrowed preset or scope would otherwise make every thread it excludes look
   // deleted, discarding drafts a filter change is merely hiding rather than destroying. Computed
@@ -415,18 +410,22 @@ global.webViewComponent = function CommentListWebView({
     isShowingAllCommentThreads,
   });
 
-  // The 'unsaved' preset contributes no clause to the query (see buildCommentThreadSelector) --
-  // a draft is client-side state the provider has never heard of, so the query for this preset is
-  // scope-only and returns every thread the scope allows. Narrowing to drafted threads happens here
-  // instead: the hook above owns the drafts map, this web view owns the query result and the active
-  // filters, and only the web view has both at once. Because this filter only ever removes entries
-  // already present in `safeCommentThreads`, a thread the scope excluded (and which therefore never
-  // reached `safeCommentThreads`) can never be added back by having a draft -- unlike Paratext 9,
-  // where a drafted thread survives every filter.
+  // The single UI-facing thread list: the raw query result, normalized (never a `PlatformError` or
+  // `undefined`) and, under the 'unsaved' preset, narrowed to drafted threads. Both steps happen here
+  // together rather than as a separate normalized-but-unfiltered intermediate, so there is no
+  // half-ready list left lying around for a future change to reach for by mistake. The 'unsaved'
+  // preset contributes no clause to the query (see buildCommentThreadSelector) -- a draft is
+  // client-side state the provider has never heard of, so the query for this preset is scope-only and
+  // returns every thread the scope allows; narrowing to drafted threads happens here instead, since
+  // the hook above owns the drafts map and this web view owns the query result and the active
+  // filters. Because this filter only ever removes entries already present in the normalized query
+  // result, a thread the scope excluded (and which therefore never reached that result) can never be
+  // added back by having a draft -- unlike Paratext 9, where a drafted thread survives every filter.
   const visibleCommentThreads = useMemo<LegacyCommentThread[]>(() => {
-    if (filters.preset !== 'unsaved') return safeCommentThreads;
-    return safeCommentThreads.filter((thread) => thread.id in drafts);
-  }, [filters.preset, safeCommentThreads, drafts]);
+    const queriedThreads = !commentThreads || isPlatformError(commentThreads) ? [] : commentThreads;
+    if (filters.preset !== 'unsaved') return queriedThreads;
+    return queriedThreads.filter((thread) => thread.id in drafts);
+  }, [commentThreads, filters.preset, drafts]);
 
   // Mirror the currently visible threads into the ref the stable message listener reads.
   useEffect(() => {

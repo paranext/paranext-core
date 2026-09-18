@@ -5,12 +5,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import type {
-  SerializedEditorState,
-  SerializedElementNode,
-  SerializedParagraphNode,
-  SerializedTextNode,
-} from 'lexical';
 import type { CommentFilterSelection, LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import {
   newPlatformError,
@@ -18,6 +12,7 @@ import {
   type PlatformError,
 } from 'platform-bible-utils';
 import { saveDrafts } from './comment-draft-store';
+import { makeEditorState } from './comment-draft.fixtures';
 import {
   CommentFilters,
   CommentPreset,
@@ -25,49 +20,6 @@ import {
   DEFAULT_SCOPE_FILTER,
   ScopeFilter,
 } from './comment-list-filters.model';
-
-/**
- * Builds a minimal, valid `SerializedEditorState` containing a single paragraph of `text`. Used to
- * seed a draft directly via `comment-draft-store` (rather than through the mocked panel's
- * compose-box stand-in) so a test can hold `CommentDraft.editorState`/`commentEdits` to their real
- * Lexical type instead of the mocked panel's simplified string. Typed the same way
- * `comment-thread.component.test.tsx` (in `platform-bible-react`) types its own fixture.
- */
-function makeEditorState(
-  text: string,
-): SerializedEditorState<SerializedParagraphNode & SerializedElementNode<SerializedTextNode>> {
-  return {
-    root: {
-      children: [
-        {
-          children: [
-            {
-              detail: 0,
-              format: 0,
-              mode: 'normal',
-              style: '',
-              text,
-              type: 'text',
-              version: 1,
-            },
-          ],
-          direction: 'ltr',
-          format: '',
-          indent: 0,
-          type: 'paragraph',
-          version: 1,
-          textFormat: 0,
-          textStyle: '',
-        },
-      ],
-      direction: 'ltr',
-      format: '',
-      indent: 0,
-      type: 'root',
-      version: 1,
-    },
-  };
-}
 
 /**
  * What the mocked `UserCommentFilters` read can resolve to: a real selection, or a `PlatformError`
@@ -439,6 +391,13 @@ function makeCommentThread(id: string, status: 'Todo' | 'Resolved'): LegacyComme
 const threadA = makeCommentThread('thread-a', 'Todo');
 /** A resolved thread — matches the "Resolved" preset but not the default "All comments" preset. */
 const threadB = makeCommentThread('thread-b', 'Resolved');
+/**
+ * A third thread, in scope but never drafted — used only by the scope-exclusion test below, so that
+ * test fails for its own reason (a never-drafted, in-scope thread leaking through) rather than only
+ * incidentally passing against a no-op unsaved filter that a broken scope-only query would already
+ * make pass.
+ */
+const threadC = makeCommentThread('thread-c', 'Todo');
 
 /** Maps a preset's user-facing toolbar label to its underlying value — the three this file drives. */
 const PRESET_LABEL_TO_VALUE: Partial<Record<string, CommentPreset>> = {
@@ -1012,7 +971,13 @@ describe('unsaved preset filtering', () => {
     // `all-books`) so this is genuinely a narrowed-scope scenario -- at the default scope the query
     // result IS the complete thread list, and useCommentDrafts' pruning would (correctly, for that
     // case) delete threadB's "stale" draft before this test ever gets to exercise the unsaved filter.
-    mocks.commentThreadsFixture.current = [threadA]; // threadB excluded, as if by the active scope
+    //
+    // threadC is in scope (it's part of the query result) but never drafted. Without it, this
+    // assertion would also pass against a no-op unsaved filter, since the mocked query already
+    // excludes threadB regardless of drafts -- threadC is what makes the assertion fail for the
+    // reason this test claims to check (the unsaved filter narrowing an in-scope result), not just
+    // because the query happens to already be narrow.
+    mocks.commentThreadsFixture.current = [threadA, threadC]; // threadB excluded, as if by scope
     saveDrafts('project-1', {
       [threadA.id]: { editorState: makeEditorState('half a thought') },
       [threadB.id]: { editorState: makeEditorState('also unsaved, but out of scope') },

@@ -107,6 +107,24 @@ describe('CommentListPanel sync-blocked notice', () => {
   });
 });
 
+describe('CommentListPanel empty state', () => {
+  it('shows the generic empty message when no filters are active', () => {
+    renderPanel(); // default filters: preset 'all', scope 'all-books'
+    expect(screen.getByText(EN_STRINGS['%no_comments%'])).toBeInTheDocument();
+    expect(screen.queryByText(EN_STRINGS['%no_comments_match_filter%'])).not.toBeInTheDocument();
+  });
+
+  it('shows the filtered-empty message when the unsaved preset has nothing drafted', () => {
+    // Selectable for the first time as of this preset's enablement, so an empty result under it is a
+    // newly reachable case: nothing was ever typed, so `threads` (already narrowed to drafted threads
+    // by the web view) is empty. It must read as "nothing matches the filter", not as "no comments at
+    // all" -- the two carry different implications for what the user should do next.
+    renderPanel({ filters: { preset: 'unsaved' } });
+    expect(screen.getByText(EN_STRINGS['%no_comments_match_filter%'])).toBeInTheDocument();
+    expect(screen.queryByText(EN_STRINGS['%no_comments%'])).not.toBeInTheDocument();
+  });
+});
+
 describe('CommentListPanel filter toolbar', () => {
   it('renders the preset and scope dropdowns directly in the toolbar', () => {
     renderPanel();
