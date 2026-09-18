@@ -2906,16 +2906,17 @@ span.read img {
   unicode-bidi: isolate;
 }
 
-/* Indent compensation — mirrors the inline-start margin values above.
-   Only active when .text-spacing is present (same condition as the source rules).
-   pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
-   respectively), so no direction restriction is needed here.
-   Invariant for THIS stylesheet: every marker its text-spacing rules give a margin-left needs
-   an entry here with the same value, or the gutter glyph lands inside the text. The
-   platform-scripture-editor extension's usj-nodes-scss-coverage.test.ts derives that
-   requirement from this copy's base rules and asserts the block matches the shipping copy.
-   Table rows (tr, tr1, tr2) deliberately have no entry: a real table row is a <tr>, not a
-   .para, so the glyph rule never matches it. */
+/* Indent compensation: each marker's --para-indent must equal its text-spacing margin-left above,
+   or the gutter glyph lands in the text. The same value serves RTL margin-right, so a marker needs
+   the same margin in both directions. The platform-scripture-editor extension's
+   usj-nodes-scss-coverage.test.ts enforces this for margins set in THIS file and asserts the block
+   matches the shipping copy.
+   \tr needs no entry: a real row is a <tr>, not a .para. The obsolete \tr1 and \tr2 still convert
+   to plain paragraphs, so they do.
+   Out of scope: an "auto" text direction. The editor sets no dir attribute for it, so the
+   [dir]-qualified margins above never apply while this compensation still does, and the
+   [dir]-qualified gutter rules never match, so RTL content keeps the LTR gutter; see the KNOWN GAP
+   note in the editor's ArrowNavigationPlugin. */
 .psc-gutter-markers.text-spacing .usfm_p2 {
   --para-indent: 2.5vw;
 }
@@ -2927,7 +2928,8 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_li1,
 .psc-gutter-markers.text-spacing .usfm_ph,
 .psc-gutter-markers.text-spacing .usfm_ph1,
-.psc-gutter-markers.text-spacing .usfm_pi2 {
+.psc-gutter-markers.text-spacing .usfm_pi2,
+.psc-gutter-markers.text-spacing .usfm_tr1 {
   --para-indent: 10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -2941,7 +2943,8 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_lim,
 .psc-gutter-markers.text-spacing .usfm_lim1,
 .psc-gutter-markers.text-spacing .usfm_ph2,
-.psc-gutter-markers.text-spacing .usfm_pi3 {
+.psc-gutter-markers.text-spacing .usfm_pi3,
+.psc-gutter-markers.text-spacing .usfm_tr2 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
@@ -2983,10 +2986,11 @@ span.read img {
   --para-indent: 5vw;
 }
 
-/* --verse-text-start mirrors the text-indent values for paragraphs with a
-   negative text-indent (hanging indent). These paragraphs render their first
-   line to the inline-start of the element's border edge, so the active focus box
-   ::after must start at text-indent to align with the text. */
+/* --verse-text-start mirrors the negative text-indent (hanging indent) of poetry-style
+   paragraphs. The active focus box ::after reads it through min() against the glyph column,
+   so it only wins when a hanging indent reaches further into the gutter than
+   -(gutter width) - --para-indent. No marker in this file does, so today it is a fallback;
+   usj-nodes-scss-coverage.test.ts keeps it in step with text-indent regardless. */
 .psc-gutter-markers.text-spacing .usfm_q,
 .psc-gutter-markers.text-spacing .usfm_q1 {
   --verse-text-start: -10vw;
@@ -3038,7 +3042,9 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_ph,
 .psc-gutter-markers.text-spacing .usfm_ph1,
 .psc-gutter-markers.text-spacing .usfm_ph2,
-.psc-gutter-markers.text-spacing .usfm_ph3 {
+.psc-gutter-markers.text-spacing .usfm_ph3,
+.psc-gutter-markers.text-spacing .usfm_tr1,
+.psc-gutter-markers.text-spacing .usfm_tr2 {
   --verse-text-start: -5vw;
 }
 
@@ -3081,6 +3087,6 @@ span.read img {
 .psc-active-focus.psc-gutter-markers .psc-active-text::after {
   inset-inline-start: min(
     var(--verse-text-start, 0px),
-    calc(-1 * var(--psc-gutter-width) - var(--para-indent))
+    calc(-1 * var(--psc-gutter-width) - var(--para-indent, 0px))
   );
 }
