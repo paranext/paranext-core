@@ -369,6 +369,9 @@ export default function FootnoteEditor({
       // let a right-click here silently mutate the main document. The popover keeps only the
       // built-in Cut/Copy/Paste context-menu items.
       contextMenu: undefined,
+      // The menu belongs to this popover, not to the document behind it: portalling it into this
+      // component's own root gives it the popover's zoom and bounds it by the popover's box.
+      contextMenuContainer: () => containerRef.current ?? undefined,
       markerMenuTrigger: defaultMarkerMenuTrigger,
       hasExternalUI: true,
       view: {
