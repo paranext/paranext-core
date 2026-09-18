@@ -202,22 +202,32 @@ global.webViewComponent = function FindWebView({
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
 }: WebViewProps) {
-  const [
-    verseRefSetting,
-    setVerseRefSetting,
-    findScrollGroupId,
-    setFindScrollGroupId,
-    scrollGroupSourceProjectId,
-  ] = useWebViewScrollGroupScrRef();
+  const [verseRefSetting, setVerseRefSetting, findScrollGroupId, setFindScrollGroupId] =
+    useWebViewScrollGroupScrRef();
 
   // The project to search. Normally the tab's own — `openFind` sets it from the trigger (the
-  // editor's project, or the resource a reference panel is displaying). The simple-mode layout also
-  // seeds a Find tab that carries no projectId at all, so fall back to whichever project is driving
-  // this web view's scroll group reference (the Scripture editor, since the provider puts Find in
-  // group 0 in simple mode). Without the fallback that seeded tab renders a search box that silently
-  // searches nothing until the user's first Ctrl+F. Mirrors the Text Collection tab, which resolves
-  // its own default-layout tab the same way.
-  const projectId = webViewProjectId ?? scrollGroupSourceProjectId;
+  // editor's project, or the resource a reference panel is displaying), and the project selector's
+  // own `handleSelectProjectScrollGroup` keeps it current after that. The simple-mode layout also
+  // seeds a Find tab that carries no projectId at all, so it takes the first project BCV navigation
+  // drives in this window and keeps it until one of those sets an explicit id. Without the fallback,
+  // that seeded tab renders a search box that silently searches nothing until the user's first
+  // Ctrl+F. The fallback only seeds; after that Find is told its project (by `openFind`, the
+  // selector, or a project switch's `updateRelatedFindPanel`) rather than inferring a new one.
+  // Deliberately NOT scroll group 0's source project (`useWebViewScrollGroupScrRef`'s 5th tuple
+  // member): that field's only job is tagging which versification frame the current reference is
+  // in, and it changes for reasons that have nothing to do with which project is active (Back/
+  // Forward, a resource cell's own click, a click in the Comments or Checks panel).
+  const [activeEditorProjectIdPossiblyError] = useData(
+    papi.window.dataProviderName,
+  ).ActiveEditorProjectId(undefined, undefined);
+  const activeEditorProjectId = isPlatformError(activeEditorProjectIdPossiblyError)
+    ? undefined
+    : activeEditorProjectIdPossiblyError;
+  const [seededProjectId, setSeededProjectId] = useState(activeEditorProjectId);
+  useEffect(() => {
+    setSeededProjectId((previous) => previous ?? activeEditorProjectId);
+  }, [activeEditorProjectId]);
+  const projectId = webViewProjectId ?? seededProjectId;
 
   // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
   // panel to block another if two panels are open for different projects simultaneously.
@@ -1672,11 +1682,16 @@ global.webViewComponent = function FindWebView({
     }
     requestAutoSearchWhenVisible();
   }, [
+    // Every option the search depends on belongs here even though this body reads almost none of
+    // them: these are the triggers that re-run the search, and react-hooks/exhaustive-deps cannot
+    // flag a missing one because nothing in the body references it.
     searchTerm,
     shouldMatchCase,
     wordRestriction,
     isRegexAllowed,
     searchTextType,
+    ignoreWhitespaceDifferences,
+    ignoreDiacritics,
     relevantScopeKey,
     requestAutoSearchWhenVisible,
   ]);
@@ -1791,15 +1806,11 @@ global.webViewComponent = function FindWebView({
         // Preview the match in the editor (select + highlight) without stealing focus, so the user
         // can keep navigating results. Double-click / reference-click shift focus to the editor.
         //
-        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): if the editor tab is
-        // inactive, the preview scroll no-ops (no layout in a display:none iframe) and does NOT catch
-        // up on activation. This is a deliberate no-op, not an oversight: (1) PAPI exposes no way for
-        // this panel to observe the *editor's* visibility (useViewVisibility only sees this panel's
-        // own iframe), so a deferred catch-up isn't implementable here; (2) selection + annotation
-        // are data-driven, so they persist and render when the editor is shown — only the preview
-        // scroll is geometry; and (3) the explicit "go there" path (handleOpenAtResult) calls
-        // setFocus to activate the editor and re-runs selectRange, which scrolls correctly. A silent
-        // preview while the editor is hidden has nothing to preview, so doing nothing is correct.
+        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): nothing to do here. This
+        // panel cannot observe the editor's visibility (useViewVisibility only sees this panel's own
+        // iframe), but the editor can: `selectRange` applies the selection at once and scrolls to the
+        // match when the editor's tab is next shown. Selection and annotation are data-driven, so
+        // they persist while hidden.
         try {
           editorWebViewController
             .selectRange({ start: searchResult.start, end: searchResult.end })

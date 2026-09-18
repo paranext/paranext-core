@@ -251,6 +251,63 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
   },
   {
+    id: 'content-zoom-in',
+    purpose: 'Zoom the content of the pane in by one step (10 %)',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts `=` (the unshifted key sharing the `+` cap), the numpad `+` key, and
+    // Ctrl+Shift+`=` — the `+` key itself on US/UK layouts — so the published `Ctrl++` is literally the working chord.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
+    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+  },
+  {
+    id: 'content-zoom-out',
+    purpose: 'Zoom the content of the pane out by one step (10 %)',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts the numpad `-` key.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
+    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+  },
+  {
+    id: 'content-zoom-reset',
+    purpose: 'Return the content of the pane to the default zoom from Settings',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of one zoom area (the area with keyboard focus, else the pane’s active area)',
+    // The handler also accepts the numpad `0` key.
+    // TODO(PT-4577): unreachable on Windows/Linux until the main-process before-input-event zoom
+    // branches that claim this chord are removed.
+    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
+    locations: [
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+  },
+  {
+    id: 'content-zoom-wheel',
+    purpose: 'Zoom the content of the pane in or out one step per wheel notch',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area)',
+    // The handler accepts Ctrl or ⌘ as the modifier on every platform, and ignores the gesture when
+    // Shift or Alt is held as well.
+    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+  },
+  {
     id: 'dismiss-overlays',
     purpose:
       'Dismiss the topmost open overlay — a context menu, command palette, or popover (works in every frame, including web views)',
@@ -513,6 +570,20 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-zoom-wheel',
+    purpose:
+      'Zoom one resource column of the Text Collection grid in or out one step per wheel notch',
+    category: 'Zoom',
+    context:
+      'Inside the Text Collection grid — the resource column under the pointer. Registered capture-phase on the grid container and stops propagation, so it takes precedence over the pane-level content zoom (see content-zoom-wheel)',
+    // Accepts Ctrl or ⌘ and still acts when Shift or Alt is held as well, unlike the pane-level
+    // handler. Keyboard zoom for this grid is deferred pending PT-4143.
+    keys: { macOS: '⌘ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts',
     ],
   },
   {
