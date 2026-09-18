@@ -14,6 +14,7 @@ import {
   OverlayEntry,
   PopoverContent as PopoverContentModel,
 } from '@renderer/services/overlays/overlay.service-model';
+import { contentZoomOverlayStyle } from '@renderer/components/overlays/overlay-content-zoom.util';
 import {
   Button,
   MarkdownRenderer,
@@ -47,6 +48,18 @@ export type OverlayPopoverPresentationalProps = {
   maxHeight?: number;
   /** Whether to display an arrow pointing toward the anchor. Defaults to true. */
   showArrow?: boolean;
+  /**
+   * The scale the requesting pane draws its content at. The pop-up is drawn at the same scale, so
+   * it matches the text it belongs to. 1 leaves the rendered output exactly as it is.
+   */
+  contentScale?: number;
+  /**
+   * The CSS `zoom` on the requesting pane's iframe. The anchor's size arrives in the pane's own
+   * pixels while its position has already been translated by this factor, so the size needs the
+   * same multiplication to describe the trigger as it is painted. Only a pane scaled as a whole
+   * frame has a factor here; one that marks zoom areas reports its trigger already translated.
+   */
+  frameScale?: number;
   /** Called when the user clicks an action button (card content) */
   onAction?: (actionId: string) => void;
   /** Called when the popover is dismissed */
@@ -156,12 +169,35 @@ export function OverlayPopoverPresentational({
   position,
   anchor,
   side = 'bottom',
-  maxWidth = DEFAULT_MAX_WIDTH,
-  maxHeight = DEFAULT_MAX_HEIGHT,
+  maxWidth,
+  maxHeight,
   showArrow = true,
+  contentScale = 1,
+  frameScale = 1,
   onAction,
   onDismiss,
 }: OverlayPopoverPresentationalProps) {
+  // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied,
+  // exactly as before content zoom existed.
+  const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
+  const resolvedMaxHeight = maxHeight ?? DEFAULT_MAX_HEIGHT;
+
+  // `{}` at scale 1 (or an unusable scale), so `zoomStyle.maxWidth`/`maxHeight` being present is the
+  // same test as "a zoom cap actually applies here".
+  const zoomStyle = contentZoomOverlayStyle(contentScale, 'popover');
+  // A caller's explicit cap must still keep the popover inside the window once zoomed — a fixed
+  // 600px cap at 2x content scale would otherwise paint 1200 device pixels wide with nothing to stop
+  // it. Combined only while a zoom cap actually applies; at scale 1 (zoomStyle.maxWidth undefined)
+  // this is exactly the caller's own value, unchanged.
+  const cappedMaxWidth =
+    maxWidth !== undefined && zoomStyle.maxWidth !== undefined
+      ? `min(${maxWidth}px, ${zoomStyle.maxWidth})`
+      : maxWidth;
+  const cappedMaxHeight =
+    maxHeight !== undefined && zoomStyle.maxHeight !== undefined
+      ? `min(${maxHeight}px, ${zoomStyle.maxHeight})`
+      : maxHeight;
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) onDismiss();
@@ -195,8 +231,8 @@ export function OverlayPopoverPresentational({
             position: 'fixed',
             left: position.x,
             top: position.y,
-            width: anchor?.width ?? 0,
-            height: anchor?.height ?? 0,
+            width: (anchor?.width ?? 0) * frameScale,
+            height: (anchor?.height ?? 0) * frameScale,
             pointerEvents: 'none',
           }}
         />
@@ -209,8 +245,11 @@ export function OverlayPopoverPresentational({
         sideOffset={showArrow ? 8 : 4}
         style={{
           zIndex: Z_INDEX_OVERLAY,
-          maxWidth,
-          maxHeight,
+          maxWidth: resolvedMaxWidth,
+          maxHeight: resolvedMaxHeight,
+          ...zoomStyle,
+          ...(cappedMaxWidth === undefined ? {} : { maxWidth: cappedMaxWidth }),
+          ...(cappedMaxHeight === undefined ? {} : { maxHeight: cappedMaxHeight }),
         }}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -305,6 +344,14 @@ function localizePopoverContent(
 
 type OverlayPopoverProps = {
   overlay: Extract<OverlayEntry, { type: 'popover' }>;
+  /**
+   * The requesting pane's content and frame scale, read and supplied by `OverlayHost` — see
+   * {@link OverlayPopoverPresentationalProps.contentScale} and
+   * {@link OverlayPopoverPresentationalProps.frameScale}. Undefined draws at interface scale,
+   * matching the presentational component's own default.
+   */
+  contentScale?: number;
+  frameScale?: number;
 };
 
 /**
@@ -316,7 +363,7 @@ type OverlayPopoverProps = {
  * use {@link OverlayPopoverPresentational} instead, which accepts plain props without requiring an
  * `OverlayEntry`.
  */
-export function OverlayPopover({ overlay }: OverlayPopoverProps) {
+export function OverlayPopover({ overlay, contentScale, frameScale }: OverlayPopoverProps) {
   const hasResolved = useRef(false);
 
   const localizeKeys = useMemo(() => collectPopoverKeys(overlay.content), [overlay.content]);
@@ -354,6 +401,8 @@ export function OverlayPopover({ overlay }: OverlayPopoverProps) {
       maxWidth={overlay.request.maxWidth}
       maxHeight={overlay.request.maxHeight}
       showArrow={overlay.request.showArrow}
+      contentScale={contentScale}
+      frameScale={frameScale}
       onAction={handleAction}
       onDismiss={handleDismiss}
     />

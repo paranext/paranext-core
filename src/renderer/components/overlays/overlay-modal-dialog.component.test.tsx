@@ -38,4 +38,14 @@ describe('OverlayModalDialog', () => {
     render(<OverlayModalDialog overlay={overlay} />);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  it('renders identically whatever the requesting pane’s zoom — a full-window dialog is not anchored to content and never scales with it', () => {
+    // The shell reads no content-zoom scale for the requesting webViewId at all — this pins that
+    // absence, so a dialog drawn at 200% because the pane behind it happens to be zoomed is not the
+    // intent this shell falls into by accident.
+    const overlay = createMockOverlay('Content');
+    render(<OverlayModalDialog overlay={overlay} />);
+
+    expect(screen.getByRole('dialog').style.zoom || '').toBe('');
+  });
 });

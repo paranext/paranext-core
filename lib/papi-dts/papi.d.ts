@@ -11191,6 +11191,29 @@ declare module 'renderer/services/overlays/overlay-store' {
     },
   ): boolean;
 }
+declare module 'renderer/components/overlays/overlay-content-zoom.util' {
+  import { CSSProperties } from 'react';
+  /** The Radix primitives whose content the platform draws for a web view. */
+  type ZoomablePrimitive = 'popover' | 'dropdown-menu';
+  /**
+   * The style that draws a platform overlay at the scale of the pane that asked for it.
+   *
+   * `zoom` goes on the Radix `Content` element, never the popper wrapper Radix positions: the wrapper
+   * stays in unzoomed viewport pixels, so Radix keeps measuring the drawn size and placing it
+   * correctly. The available-space variables Radix publishes are in those same unzoomed pixels, so
+   * dividing them by the scale is what keeps a zoomed pop-up inside the window rather than letting it
+   * grow past the edge.
+   *
+   * A scale of 1 - or anything that is not a usable positive number - contributes nothing at all, so
+   * an overlay from an unzoomed pane renders exactly as it did before.
+   *
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function contentZoomOverlayStyle(
+    scale: number,
+    primitive: ZoomablePrimitive,
+  ): CSSProperties;
+}
 declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
   import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
@@ -11274,6 +11297,13 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
       x: number;
       y: number;
     };
+    /**
+     * The scale the requesting pane draws its content at. The menu is drawn at the same scale, so it
+     * matches the text it belongs to. 1 leaves the rendered output exactly as it is.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    contentScale?: number;
     /** Called when the user selects a menu item */
     onSelect: (result: OverlayContextMenuResult) => void;
     /** Called when the menu is dismissed without a selection */
@@ -11290,6 +11320,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
   export function OverlayContextMenuPresentational({
     items,
     position,
+    contentScale,
     onSelect,
     onDismiss,
   }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
@@ -11300,6 +11331,14 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
         type: 'contextMenu';
       }
     >;
+    /**
+     * The requesting pane's content scale, read and supplied by `OverlayHost` — see
+     * {@link OverlayContextMenuPresentationalProps.contentScale}. Undefined draws at interface scale,
+     * matching the presentational component's own default.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    contentScale?: number;
   };
   /**
    * Production context menu component. Resolves LocalizeKey values in menu items via
@@ -11312,6 +11351,7 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
    */
   export function OverlayContextMenu({
     overlay,
+    contentScale,
   }: OverlayContextMenuProps): import('react/jsx-runtime').JSX.Element;
 }
 declare module 'renderer/services/overlays/overlay.service-model' {
@@ -14014,6 +14054,23 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
    * @returns The iframe element, or null if not found
    */
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
+  /**
+   * Reads the CSS `zoom` the content zoom service has set on a WebView's host `<iframe>` element.
+   *
+   * A zoomed iframe's own `getBoundingClientRect()` is unchanged — only its inner viewport shrinks or
+   * grows — and the inner document measures itself in unscaled inner pixels, so an inner point at `x`
+   * renders `zoom * x` from the iframe's left edge.
+   *
+   * The platform is the only writer of this property, so the inline value is authoritative (and,
+   * unlike computed style, is defined for this non-standard property in every environment the
+   * renderer runs in). Anything that is not a positive finite number — including the empty string
+   * written to clear the zoom, or a web view id with no matching iframe — means unscaled.
+   *
+   * @param webViewId The webViewId of the iframe
+   * @returns The scale factor the iframe's contents are rendered at
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function getWebViewContentScale(webViewId: string): number;
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
    * getBoundingClientRect of the WebView iframe and the CSS `zoom` applied to it.
