@@ -358,9 +358,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
     // The steps argument is how many steps of this command to take; only the coalesced wheel burst
     // below passes it, and every other caller means one. The bound helper takes a step count, so a
     // burst is one call; the commands take none, so that path repeats the command per step rather
-    // than dropping the notches it cannot express.
+    // than dropping the notches it cannot express. A count is always at least one - an action worth
+    // sending is worth a step - so a zero can never reach the parent as a no-op adjustment or make
+    // the command loop below send nothing at all.
     const act = (command, areaId, steps) => {
-      const count = steps === undefined ? 1 : steps;
+      const count = steps === undefined ? 1 : Math.max(1, steps);
       try {
         if (command === '${CONTENT_ZOOM_COMMANDS.reset}' && boundReset) { boundReset(webViewId, areaId); return; }
         if (command === '${CONTENT_ZOOM_COMMANDS.in}' && boundAdjust) { boundAdjust(webViewId, count, areaId); return; }
@@ -407,6 +409,11 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       const areaId = targetFor(document.activeElement);
       if (!areaId) return;
       e.preventDefault();
+      // Whatever the tick path has pending goes over first, so the parent is asked to step in the
+      // order the events arrived: its clamp is not commutative, and a reset writes the default
+      // outright, so at either end of the range - and for every reset - the order IS the level the
+      // pane is left at.
+      applyZoomSteps();
       act(chord.command, areaId);
     };
     window.addEventListener('keydown', onKeyDown);
@@ -629,7 +636,7 @@ export function getContentZoomBootstrapScript(webViewId: string): string {
       // in the middle of the range - at either end the parent's clamp ABSORBS the travel an area
       // cannot take, so notches back the other way start from the bound, while a net would hand the
       // reversal the absorbed travel back.
-      const reverses = zoomSteps !== 0 && steps < 0 !== zoomSteps < 0;
+      const reverses = zoomSteps !== 0 && (steps < 0) !== (zoomSteps < 0);
       if (zoomArea !== undefined && (zoomArea !== areaId || reverses)) applyZoomSteps();
       zoomArea = areaId;
       zoomSteps += steps;
