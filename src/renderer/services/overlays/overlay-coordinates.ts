@@ -31,6 +31,7 @@ export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
  *
  * @param webViewId The webViewId of the iframe
  * @returns The scale factor the iframe's contents are rendered at
+ * @experimental This function is unstable and may change or disappear without notice
  */
 export function getWebViewContentScale(webViewId: string): number {
   const iframe = getWebViewIframe(webViewId);

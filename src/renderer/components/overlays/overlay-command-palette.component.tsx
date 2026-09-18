@@ -20,6 +20,7 @@ import {
   PaletteSearchField,
 } from '@renderer/services/overlays/overlay.service-model';
 import { filterPaletteItems } from '@renderer/services/overlays/overlay-palette-filter.util';
+import { contentZoomOverlayStyle } from '@renderer/components/overlays/overlay-content-zoom.util';
 import {
   cn,
   Command,
@@ -71,6 +72,19 @@ export type OverlayCommandPalettePresentationalProps = {
   maxWidth?: number;
   /** Maximum height in pixels. Defaults to 400. */
   maxHeight?: number;
+  /**
+   * The scale the requesting pane draws its content at. The anchored palette is drawn at the same
+   * scale, so it matches the text it belongs to. 1 leaves the rendered output exactly as it is. Has
+   * no effect on the centered palette, which is not anchored to content.
+   */
+  contentScale?: number;
+  /**
+   * The CSS `zoom` on the requesting pane's iframe. The anchor's size arrives in the pane's own
+   * pixels while its position has already been translated by this factor, so the size needs the
+   * same multiplication to describe the trigger as it is painted. Only a pane scaled as a whole
+   * frame has a factor here; one that marks zoom areas reports its trigger already translated.
+   */
+  frameScale?: number;
   /**
    * When true, renders without stealing focus on mount, and its search input is a read-only DISPLAY
    * of the externally-driven `filterText` rather than an editable field. Items are filtered via
@@ -341,8 +355,10 @@ export function OverlayCommandPalettePresentational({
   placeholder = 'Search...',
   noResultsText = 'No results found',
   listAriaLabel = 'Command palette results',
-  maxWidth = DEFAULT_MAX_WIDTH,
-  maxHeight = DEFAULT_MAX_HEIGHT,
+  maxWidth,
+  maxHeight,
+  contentScale = 1,
+  frameScale = 1,
   passive = false,
   filterText,
   selectedIndex = 0,
@@ -354,6 +370,26 @@ export function OverlayCommandPalettePresentational({
   searchFields,
   disableFuzzyMatching = false,
 }: OverlayCommandPalettePresentationalProps) {
+  // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied,
+  // exactly as before content zoom existed.
+  const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
+  const resolvedMaxHeight = maxHeight ?? DEFAULT_MAX_HEIGHT;
+
+  // `{}` at scale 1 (or an unusable scale), so `zoomStyle.maxWidth` being present is the same test
+  // as "a zoom cap actually applies here". Only the anchored branch's outer box has a caller-facing
+  // maxWidth cap to combine with — the centred branch never applies this style, and `maxHeight` here
+  // caps the reserved-height budget of the inner list, a different box from the one this zoom cap
+  // bounds.
+  const anchoredZoomStyle = contentZoomOverlayStyle(contentScale, 'popover');
+  // A caller's explicit cap must still keep the palette inside the window once zoomed — a fixed
+  // 600px cap at 2x content scale would otherwise paint 1200 device pixels wide with nothing to stop
+  // it. Combined only while a zoom cap actually applies; at scale 1 this is exactly the caller's own
+  // value, unchanged.
+  const cappedMaxWidth =
+    maxWidth !== undefined && anchoredZoomStyle.maxWidth !== undefined
+      ? `min(${maxWidth}px, ${anchoredZoomStyle.maxWidth})`
+      : maxWidth;
+
   // Fuzzy matching runs INSIDE cmdk, which owns filtering and highlight for the palettes where
   // that is safe: an ordinary focused palette, whose commits go through cmdk's own selection
   // (click/Enter/Space on the highlighted DOM item), so nothing host-side ever needs to agree
@@ -559,7 +595,7 @@ export function OverlayCommandPalettePresentational({
           highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined
         }
         className="pr-twp tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none"
-        style={{ maxHeight: maxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}
+        style={{ maxHeight: resolvedMaxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}
       >
         {filteredItems.length === 0 ? (
           <div data-slot="command-empty" className="tw:py-6 tw:text-center tw:text-sm">
@@ -596,7 +632,7 @@ export function OverlayCommandPalettePresentational({
       onValueChange={cmdkFuzzyEnabled ? undefined : handleCmdkValueChange}
     >
       {searchInput}
-      <CommandList style={{ maxHeight: maxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}>
+      <CommandList style={{ maxHeight: resolvedMaxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}>
         <CommandEmpty>{noResultsText}</CommandEmpty>
         <GroupedItems
           items={filteredItems}
@@ -627,7 +663,7 @@ export function OverlayCommandPalettePresentational({
           if (e.target === e.currentTarget) onDismiss();
         }}
       >
-        <div style={{ width: maxWidth, maxWidth }}>{paletteContent}</div>
+        <div style={{ width: resolvedMaxWidth, maxWidth: resolvedMaxWidth }}>{paletteContent}</div>
       </div>
     );
   }
@@ -646,8 +682,8 @@ export function OverlayCommandPalettePresentational({
             position: 'fixed',
             left: position.x,
             top: position.y,
-            width: anchor?.width ?? 0,
-            height: anchor?.height ?? 0,
+            width: (anchor?.width ?? 0) * frameScale,
+            height: (anchor?.height ?? 0) * frameScale,
             pointerEvents: 'none',
           }}
         />
@@ -660,8 +696,12 @@ export function OverlayCommandPalettePresentational({
         sideOffset={4}
         style={{
           zIndex: Z_INDEX_OVERLAY,
-          width: maxWidth,
-          maxWidth,
+          // A pixel width inside a zoomed element scales with the zoom, which is what it should do —
+          // left unconditional, unlike the maxWidth cap below.
+          width: resolvedMaxWidth,
+          maxWidth: resolvedMaxWidth,
+          ...anchoredZoomStyle,
+          ...(cappedMaxWidth === undefined ? {} : { maxWidth: cappedMaxWidth }),
         }}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
@@ -744,6 +784,14 @@ function localizeCommandPaletteItems(
 
 type OverlayCommandPaletteProps = {
   overlay: Extract<OverlayEntry, { type: 'commandPalette' }>;
+  /**
+   * The requesting pane's content and frame scale, read and supplied by `OverlayHost` — see
+   * {@link OverlayCommandPalettePresentationalProps.contentScale} and
+   * {@link OverlayCommandPalettePresentationalProps.frameScale}. Undefined draws at interface scale,
+   * matching the presentational component's own default.
+   */
+  contentScale?: number;
+  frameScale?: number;
 };
 
 /**
@@ -755,7 +803,11 @@ type OverlayCommandPaletteProps = {
  * use {@link OverlayCommandPalettePresentational} instead, which accepts plain props without
  * requiring an `OverlayEntry`.
  */
-export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
+export function OverlayCommandPalette({
+  overlay,
+  contentScale,
+  frameScale,
+}: OverlayCommandPaletteProps) {
   const hasResolved = useRef(false);
 
   const localizeKeys = useMemo(
@@ -860,6 +912,8 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       listAriaLabel={localizedListAriaLabel}
       maxWidth={overlay.request.maxWidth}
       maxHeight={overlay.request.maxHeight}
+      contentScale={contentScale}
+      frameScale={frameScale}
       passive={overlay.request.passive}
       filterText={overlay.filterText}
       selectedIndex={overlay.selectedIndex}
