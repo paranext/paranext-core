@@ -693,14 +693,15 @@ test.describe('scripture editor content zoom', () => {
       // Radix positions the palette's Arrow by writing a raw pixel offset onto its own wrapper,
       // which is a descendant of PopoverContent. If that wrapper sits inside the zoomed subtree,
       // the browser re-scales the offset on top of Radix's own (already zoom-aware) number, and the
-      // arrow drifts off its trigger — collapsing to the content's own left corner at 150 % and
-      // 200 % (see overlay-command-palette.component.tsx).
+      // arrow drifts off its trigger — collapsing to the content's own left corner (see
+      // overlay-command-palette.component.tsx).
       //
       // "Yahweh" (verse 1, used above) sits close enough to the palette content's own left edge that
       // a collapsed-to-zero offset reads the same as a correct one, so it cannot catch this defect.
-      // "that great city" (verse 2) sits far enough from that edge (about 118px at 100 %) to
-      // discriminate a real offset from a collapsed one — do not swap in a near-edge trigger here, or
-      // this check stops testing anything.
+      // "that great city" (verse 2) sits far enough from that edge to discriminate a real offset
+      // from a collapsed one — the precondition assertion below enforces that distance per factor,
+      // so a trigger swapped in here that drifts back toward the edge fails loudly instead of
+      // silently disabling the check.
       const mainInput = editorFrame.locator('.editor-input').first();
       const text = mainInput.getByText('that great city', { exact: false }).first();
       // Same ambiguity as the width-growth step above: the anchored branch puts
@@ -717,6 +718,10 @@ test.describe('scripture editor content zoom', () => {
       // so this absorbs rounding only. Keep it tight — the defect this guards displaced the arrow
       // by tens of pixels, growing with the zoom, so a wide band would pass against it.
       const arrowCentreTolerancePx = 2;
+      // How far the trigger must sit from the palette's own left edge for a correct arrow (centred
+      // on the trigger) and a collapsed one (pinned to that edge) to be distinguishable at all,
+      // well clear of the tolerance above.
+      const minTriggerOffsetFromPaletteEdgePx = arrowCentreTolerancePx + 20;
       const factors = [1, 1.5, 2];
       // Sequential: each level's palette must be opened, measured and closed before the next.
       /* eslint-disable no-await-in-loop */
@@ -732,12 +737,28 @@ test.describe('scripture editor content zoom', () => {
         await expect(palette).toBeVisible();
         await waitForPopupAnimations(palette);
 
-        const arrowBox = await boxOf(arrow);
-        const arrowCentreX = arrowBox.x + arrowBox.width / 2;
+        // Precondition: the trigger must sit far enough from the palette's own left edge that a
+        // collapsed arrow cannot coincide with a correctly positioned one. Derived from the
+        // trigger's and the palette's own geometry only, never from the arrow itself, so it holds
+        // independent of whether the arrow below turns out correct or collapsed — a collapsed arrow
+        // fails the assertion after this one by construction rather than by luck.
+        const paletteBox = await boxOf(palette);
         expect(
-          Math.abs(arrowCentreX - trigger.x),
-          `arrow centred on its trigger at ${factor * 100}%`,
-        ).toBeLessThanOrEqual(arrowCentreTolerancePx);
+          Math.abs(trigger.x - paletteBox.x),
+          `trigger sits meaningfully away from the palette's left edge at ${factor * 100}%, so a collapsed arrow cannot pass by coincidence`,
+        ).toBeGreaterThan(minTriggerOffsetFromPaletteEdgePx);
+
+        // Radix/floating-ui can still reposition the arrow after the open animation ends
+        // (`autoUpdate`, and the size/shift middleware settle asynchronously), so a single instant
+        // read risks a flake; retry until it settles or the timeout is reached.
+        await expect(async () => {
+          const arrowBox = await boxOf(arrow);
+          const arrowCentreX = arrowBox.x + arrowBox.width / 2;
+          expect(
+            Math.abs(arrowCentreX - trigger.x),
+            `arrow centred on its trigger at ${factor * 100}%`,
+          ).toBeLessThanOrEqual(arrowCentreTolerancePx);
+        }).toPass({ timeout: 5_000 });
 
         await mainPage.keyboard.press('Escape');
         await expect(palette).toBeHidden();
