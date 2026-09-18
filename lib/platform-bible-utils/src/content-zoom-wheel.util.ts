@@ -34,7 +34,9 @@ export type ContentZoomWheelReader = {
  */
 export type ContentZoomWheelReaderOptions = {
   /**
-   * Largest number of steps one event may ask for. Default: the whole 0.5–3.0 range in 0.1 steps.
+   * Largest number of steps one event may ask for. Default: the platform's 0.5–3.0 zoom range
+   * expressed in units of the effective {@link ContentZoomWheelReaderOptions.zoomStep} (25 at the
+   * default step of 0.1) — so overriding `zoomStep` scales this default with it.
    *
    * @experimental This property is unstable and may change shape or disappear without notice
    */
@@ -66,14 +68,13 @@ export type ContentZoomWheelReaderOptions = {
 type LegacyWheelEvent = WheelEvent & { wheelDeltaY?: number };
 
 /**
- * The zoom range measured in steps: however large one delta is, and however many notches one frame
- * of a burst carries, a scope can never be asked for more steps than would take it from one end of
- * the platform's zoom range to the other. Mirrors `MIN_ZOOM_FACTOR`/`MAX_ZOOM_FACTOR`/`ZOOM_STEP`
- * in `@shared/models/content-zoom.model` by value, not by import: this package has no dependency on
- * the app, and the bootstrap script that owns those constants cannot import from here either, since
- * it runs as injected source text inside the web view.
+ * Width of the platform's zoom range in factor units, and its default step. Mirrors
+ * `MIN_ZOOM_FACTOR`/`MAX_ZOOM_FACTOR`/`ZOOM_STEP` in `@shared/models/content-zoom.model` by value,
+ * not by import: this package has no dependency on the app, and the bootstrap script that owns
+ * those constants cannot import from here either, since it runs as injected source text inside the
+ * web view.
  */
-const DEFAULT_MAX_STEPS = Math.ceil((3.0 - 0.5) / 0.1);
+const ZOOM_RANGE_WIDTH = 3.0 - 0.5;
 
 /** Matches the platform's own default content-zoom step. */
 const DEFAULT_ZOOM_STEP = 0.1;
@@ -87,8 +88,12 @@ const DEFAULT_ZOOM_STEP = 0.1;
 export function createContentZoomWheelReader(
   options: ContentZoomWheelReaderOptions = {},
 ): ContentZoomWheelReader {
-  const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const zoomStep = options.zoomStep ?? DEFAULT_ZOOM_STEP;
+  // However large one delta is, and however many notches one frame of a burst carries, a scope can
+  // never be asked for more steps than would take it from one end of the platform's zoom range to
+  // the other, expressed in units of the EFFECTIVE zoom step so overriding `zoomStep` scales this
+  // default with it.
+  const maxSteps = options.maxSteps ?? Math.ceil(ZOOM_RANGE_WIDTH / zoomStep);
   const win: Window | undefined = options.window ?? globalThis.window;
 
   // A wheel is counted in TICKS, the way Chromium's own page zoom counts them
@@ -293,6 +298,15 @@ export function createContentZoomWheelReader(
 
   return {
     read(event: WheelEvent, scopeId: string): number {
+      // A zero-delta event carries no travel of any kind, but reading it as an ordinary one is not
+      // harmless: it still passes `isPinchWheel`'s size test at zero deviation, so it would flip
+      // `stepPinch`'s direction to positive and silently reset whatever a running pinch had already
+      // banked. Returned before either accumulator is touched.
+      if (event.deltaY === 0) return 0;
+      // Line- and page-mode deltas carry small counts of lines or pages, which neither a tick count
+      // nor a scale describes; such an event is one step in its direction and leaves both
+      // accumulators untouched.
+      if (event.deltaMode !== 0) return -clampSteps(event.deltaY < 0 ? -1 : 1);
       const now = performance.now();
       if (isPinchWheel(event, scopeId, now)) return stepPinch(event, scopeId, now);
       return stepWheel(event, scopeId);
