@@ -35,7 +35,8 @@ const DEFAULT_SELECTION: StoredFilterSelection = {
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  // The truthiness check carries the null case, which `typeof` reports as an object.
+  return !!value && typeof value === 'object';
 }
 
 /**
