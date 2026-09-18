@@ -8640,7 +8640,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
-  /** The tabType for the share layout dialog in `share-layout.dialog.tsx` */
+  /** The tabType for the share layout dialog in `team-layout.dialog.tsx` */
   export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */

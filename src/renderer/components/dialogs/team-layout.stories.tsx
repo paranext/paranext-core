@@ -4,13 +4,14 @@ import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import {
-  ShareLayoutDialogContent,
-  ShareLayoutDialogLocalizedStrings,
-} from './share-layout.component';
+  TeamLayoutDialogContent,
+  TeamLayoutDialogLocalizedStrings,
+  TeamLayoutDialogSkeleton,
+} from './team-layout.component';
 
-const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
+const TEAM_LAYOUT_STRINGS: TeamLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_teamLayout_title%': 'Team layout',
-  '%shareLayoutDialog_descriptionWithSync%':
+  '%shareLayoutDialog_reviewAndSyncNotice%':
     "Review what you're about to share with your team before confirming. Saving stores your changes now — they reach your team after you sync, and appear for them on their next sync.",
   '%shareLayoutDialog_modelText_label%': 'Model text',
   '%shareLayoutDialog_modelText_none%': 'None selected',
@@ -21,26 +22,25 @@ const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_activeTab_commentaryResource%': 'Commentaries',
   '%shareLayoutDialog_activeTab_comments%': 'Comments',
   '%shareLayoutDialog_activeTab_textCollection%': 'Text collection',
+  '%shareLayoutDialog_tab_scriptureResources%': 'Bible texts',
+  '%shareLayoutDialog_tab_commentaryResources%': 'Commentaries',
   '%shareLayoutDialog_manageScriptureResources_label%': 'Manage',
   '%shareLayoutDialog_manageCommentaryResources_label%': 'Manage',
   '%shareLayoutDialog_textCollection_hint%':
     'Text collection includes checked resources from all tabs ({count})',
-  '%shareLayoutDialog_teamLock_label%': 'Lock USFM paragraph markers for your team',
-  '%shareLayoutDialog_teamLock_yes%': 'Yes',
-  '%shareLayoutDialog_teamLock_no%': 'No',
+  '%shareLayoutDialog_teamLock_label%': 'Lock USFM structure for your team',
   '%shareLayoutDialog_resources_empty%':
     'Add resources to choose which appear in the text collection.',
   '%shareLayoutDialog_shownByDefault_label%': 'Show {resourceName} by default',
   '%shareLayoutDialog_closePicker_label%': 'Close',
   '%shareLayoutDialog_cancel_label%': 'Cancel',
   '%shareLayoutDialog_saveForTeam_label%': 'Save layout for team',
-  '%shareLayoutDialog_saveForTeam_tooltip%':
-    'Saves now. Your team sees this layout after you sync, then on their next sync.',
   '%shareLayoutDialog_hiddenResources_loadError%':
     "{count} shared resources can't be shown because the list of available resources couldn't be loaded. They will be kept unchanged when you save.",
   '%shareLayoutDialog_hiddenResources_unavailable%':
     "{count} shared resources can't be shown because resource downloads aren't available on this installation. They will be kept unchanged when you save.",
   '%shareLayoutDialog_retry%': 'Try again',
+  '%shareLayoutDialog_loading_label%': 'Loading team layout',
 };
 
 const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
@@ -135,9 +135,9 @@ const MANY_SCRIPTURE_REFERENCES: ResourceReference[] = MANY_SCRIPTURE_RESOURCES.
   }),
 );
 
-const meta: Meta<typeof ShareLayoutDialogContent> = {
-  title: 'Advanced/ShareLayoutDialogContent',
-  component: ShareLayoutDialogContent,
+const meta: Meta<typeof TeamLayoutDialogContent> = {
+  title: 'Advanced/TeamLayoutDialogContent',
+  component: TeamLayoutDialogContent,
   tags: ['autodocs', 'test'],
   decorators: [
     (Story) => (
@@ -164,7 +164,7 @@ const meta: Meta<typeof ShareLayoutDialogContent> = {
     // eslint-disable-next-line no-console
     onRetryResources: () => console.log('Retry requested'),
     resourcePickerLocalizedStrings: RESOURCE_PICKER_STRINGS,
-    localizedStrings: SHARE_LAYOUT_STRINGS,
+    localizedStrings: TEAM_LAYOUT_STRINGS,
     // Storybook story — console.log is the intended demo handler
     // eslint-disable-next-line no-console
     onConfirm: (result) => console.log('Confirmed:', result),
@@ -175,7 +175,7 @@ const meta: Meta<typeof ShareLayoutDialogContent> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof ShareLayoutDialogContent>;
+type Story = StoryObj<typeof TeamLayoutDialogContent>;
 
 export const Default: Story = {};
 export const NoModelTextSelected: Story = { args: { initialModelText: undefined } };
@@ -222,3 +222,11 @@ export const StructureLockedForTeam: Story = {
 
 /** No project name available yet — the middle column drops its heading rather than inventing one. */
 export const NoProjectName: Story = { args: { projectName: undefined } };
+
+/**
+ * The placeholder shown while the layout loads. It holds the card at its full height so the modal
+ * opens at the size it will keep, rather than animating open as a sliver and then jumping.
+ */
+export const Loading: Story = {
+  render: () => <TeamLayoutDialogSkeleton localizedStrings={TEAM_LAYOUT_STRINGS} />,
+};

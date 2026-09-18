@@ -29,7 +29,6 @@ const mockState: StructureProtectionState = {
   adminSettingError: undefined,
   canAdminToggle: false,
   isProtectionActive: true,
-  setAdminProtection: vi.fn(),
   setUserProtection: vi.fn(),
 };
 
@@ -38,28 +37,14 @@ vi.mock('./use-structure-protection-state.hook', () => ({
 }));
 
 const STRINGS = {
-  '%webView_platformScriptureEditor_structureProtection_lockStructure%': 'Lock structure',
-  '%webView_platformScriptureEditor_structureProtection_unlockStructure%': 'Unlock structure',
-  '%webView_platformScriptureEditor_structureProtection_lockStructureForProject%':
-    'Lock structure for project',
-  '%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%':
-    'Unlock structure for project',
   '%webView_platformScriptureEditor_structureProtection_lockedByAdmin%':
     'Structure locked by admin',
   '%webView_platformScriptureEditor_structureProtection_ariaLabel%': 'Toggle structure protection',
-  '%webView_platformScriptureEditor_structureProtection_projectAriaLabel%':
-    'Toggle structure lock for project',
   '%webView_platformScriptureEditor_structureProtection_errorLoading%':
     'Structure protection state unavailable',
   '%webView_platformScriptureEditor_structureProtection_stateEditable%': 'USFM structure editable',
   '%webView_platformScriptureEditor_structureProtection_stateProtected%':
     'USFM structure protected',
-  '%webView_platformScriptureEditor_structureProtection_teamStateUnlocked%':
-    'USFM structure unlocked for team',
-  '%webView_platformScriptureEditor_structureProtection_teamStateLocked%':
-    'USFM structure locked for team',
-  '%webView_platformScriptureEditor_structureProtection_affectsTeam%':
-    'This affects all team members.',
 };
 
 const PERSONAL = 'Toggle structure protection';
@@ -117,7 +102,6 @@ describe('StructureProtectionButton — personal button', () => {
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button', { name: PERSONAL }));
     expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
-    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
   });
 
   it('admin click on the personal button toggles only the user setting', () => {
@@ -125,7 +109,6 @@ describe('StructureProtectionButton — personal button', () => {
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.click(screen.getByRole('button', { name: PERSONAL }));
     expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
-    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
   });
 
   it('is disabled and a no-op for a non-admin on an admin-locked project', () => {
@@ -135,7 +118,6 @@ describe('StructureProtectionButton — personal button', () => {
     expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
-    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
   });
 
   it('is disabled with the error tooltip when the admin setting failed to load', () => {
@@ -145,7 +127,6 @@ describe('StructureProtectionButton — personal button', () => {
     expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
-    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
   });
 
   it('Ctrl+Shift+L toggles the personal user setting when enabled', () => {
@@ -153,7 +134,6 @@ describe('StructureProtectionButton — personal button', () => {
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockState.setUserProtection).toHaveBeenCalledWith(false);
-    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
   });
 
   it('Ctrl+Shift+L is a no-op when the personal button is disabled', () => {
@@ -161,7 +141,6 @@ describe('StructureProtectionButton — personal button', () => {
     render(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
-    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
   });
 
   it('does NOT fire the personal toggle on the admin combo (Ctrl+Alt+Shift+L)', () => {
@@ -297,7 +276,6 @@ describe('StructureProtectionButton — no team lock', () => {
 
     fireEvent.keyDown(window, { key: 'l', ctrlKey: true, shiftKey: true, altKey: true });
 
-    expect(mockState.setAdminProtection).not.toHaveBeenCalled();
     expect(mockState.setUserProtection).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  EmptyState,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -19,16 +20,16 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Switch,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-  ToggleGroup,
-  ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useTruncationTooltip,
 } from 'platform-bible-react';
 import { ResourcePickerDialog } from 'platform-bible-react/experimental';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
@@ -49,31 +50,35 @@ const RESOURCE_PICKER_POPOVER_STYLE = { width: 560, maxHeight: 400 };
  * no rows yet — collapses the whole dialog to a ~30px sliver showing only the close button, plays
  * the open animation at that height, then snaps to full size once the settings arrive. Pinning both
  * states to one height makes the wait a fill-in rather than a resize.
+ *
+ * The number is the measured height of the settled card — the tallest column (tabs, a resource row,
+ * the default-tab label pair and select, and the text-collection hint) plus the card's own padding
+ * — rather than a sum this file can compute, since most of those rows are sized by the design
+ * system. Re-measure it if the card's row structure changes; otherwise the skeleton and the loaded
+ * card stop agreeing and the resize this constant exists to prevent comes back.
  */
 const RESOURCE_CARD_MIN_HEIGHT = 257;
 
-export type ShareLayoutActiveTab =
+export type TeamLayoutActiveTab =
   | 'ScriptureResource'
   | 'CommentaryResource'
   | 'Comments'
   | 'TextCollection';
 
-export type ShareLayoutResult = {
+export type TeamLayoutResult = {
   modelText: ResourceReference | undefined;
-  activeTab: ShareLayoutActiveTab | undefined;
+  activeTab: TeamLayoutActiveTab | undefined;
   scriptureResources: ResourceReference[];
   commentaryResources: ResourceReference[];
   isStructureProtectedForTeam: boolean;
 };
 
-export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
+export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_teamLayout_title%',
-  '%shareLayoutDialog_descriptionWithSync%',
+  '%shareLayoutDialog_reviewAndSyncNotice%',
   '%shareLayoutDialog_modelText_label%',
   '%shareLayoutDialog_modelText_none%',
   '%shareLayoutDialog_teamLock_label%',
-  '%shareLayoutDialog_teamLock_yes%',
-  '%shareLayoutDialog_teamLock_no%',
   '%shareLayoutDialog_activeTab_label%',
   '%shareLayoutDialog_activeTab_sublabel%',
   '%shareLayoutDialog_activeTab_none%',
@@ -81,6 +86,8 @@ export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_activeTab_commentaryResource%',
   '%shareLayoutDialog_activeTab_comments%',
   '%shareLayoutDialog_activeTab_textCollection%',
+  '%shareLayoutDialog_tab_scriptureResources%',
+  '%shareLayoutDialog_tab_commentaryResources%',
   '%shareLayoutDialog_manageScriptureResources_label%',
   '%shareLayoutDialog_manageCommentaryResources_label%',
   '%shareLayoutDialog_textCollection_hint%',
@@ -90,24 +97,23 @@ export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_loading_label%',
   '%shareLayoutDialog_closePicker_label%',
   '%shareLayoutDialog_saveForTeam_label%',
-  '%shareLayoutDialog_saveForTeam_tooltip%',
   '%shareLayoutDialog_hiddenResources_loadError%',
   '%shareLayoutDialog_hiddenResources_unavailable%',
   '%shareLayoutDialog_retry%',
 ] as const);
 
-export type ShareLayoutDialogLocalizedStrings = {
-  [key in (typeof SHARE_LAYOUT_DIALOG_STRING_KEYS)[number]]?: string;
+export type TeamLayoutDialogLocalizedStrings = {
+  [key in (typeof TEAM_LAYOUT_DIALOG_STRING_KEYS)[number]]?: string;
 };
 
-export type ShareLayoutDialogContentProps = {
+export type TeamLayoutDialogContentProps = {
   initialModelText: ResourceReference | undefined;
-  initialActiveTab: ShareLayoutActiveTab | undefined;
+  initialActiveTab: TeamLayoutActiveTab | undefined;
   initialScriptureResources: ResourceReference[];
   initialCommentaryResources: ResourceReference[];
   /**
    * Whether the project's USFM structure is currently locked for the whole team. Snapshotted at
-   * mount like every other list here; {@link ShareLayoutDialogContentProps.onConfirm} reports the
+   * mount like every other list here; {@link TeamLayoutDialogContentProps.onConfirm} reports the
    * edited value, and cancelling discards it.
    */
   initialIsStructureProtectedForTeam: boolean;
@@ -132,14 +138,14 @@ export type ShareLayoutDialogContentProps = {
    */
   hiddenResourceCount: number;
   resourcePickerLocalizedStrings: ResourcePickerDialogLocalizedStrings;
-  localizedStrings: ShareLayoutDialogLocalizedStrings;
-  onConfirm: (result: ShareLayoutResult) => void;
+  localizedStrings: TeamLayoutDialogLocalizedStrings;
+  onConfirm: (result: TeamLayoutResult) => void;
   onCancel: () => void;
 };
 
 function localizeString(
-  strings: ShareLayoutDialogLocalizedStrings,
-  key: keyof ShareLayoutDialogLocalizedStrings,
+  strings: TeamLayoutDialogLocalizedStrings,
+  key: keyof TeamLayoutDialogLocalizedStrings,
 ) {
   return strings[key] ?? key;
 }
@@ -186,7 +192,7 @@ function toResourceReference(resource: DblResourceData): ResourceReference {
   return { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
 }
 
-export function isShareLayoutActiveTab(value: string): value is ShareLayoutActiveTab {
+export function isTeamLayoutActiveTab(value: string): value is TeamLayoutActiveTab {
   return (
     value === 'ScriptureResource' ||
     value === 'CommentaryResource' ||
@@ -199,23 +205,23 @@ type TabKey = 'ScriptureResource' | 'CommentaryResource';
 
 /**
  * The dialog at its real size with its content not yet arrived. Rendered while the project settings
- * and the resource catalog are still in flight — see the mount gate in `share-layout.dialog.tsx`
- * for why the real content cannot mount before then.
+ * and the resource catalog are still in flight — see the mount gate in `team-layout.dialog.tsx` for
+ * why the real content cannot mount before then.
  *
  * Shows the actual title and description rather than placeholders for them: both are available
  * immediately, and they are what tells the reader which dialog they just opened.
  */
-export function ShareLayoutDialogSkeleton({
+export function TeamLayoutDialogSkeleton({
   localizedStrings: strings,
 }: {
-  localizedStrings: ShareLayoutDialogLocalizedStrings;
+  localizedStrings: TeamLayoutDialogLocalizedStrings;
 }) {
   return (
     <>
       <DialogHeader className="tw:p-4 tw:pb-0">
         <DialogTitle>{localizeString(strings, '%shareLayoutDialog_teamLayout_title%')}</DialogTitle>
         <DialogDescription>
-          {localizeString(strings, '%shareLayoutDialog_descriptionWithSync%')}
+          {localizeString(strings, '%shareLayoutDialog_reviewAndSyncNotice%')}
         </DialogDescription>
       </DialogHeader>
 
@@ -224,7 +230,9 @@ export function ShareLayoutDialogSkeleton({
           className="tw:shrink-0 tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30"
           style={{ minHeight: RESOURCE_CARD_MIN_HEIGHT }}
           // One busy region for the whole card, so a screen reader announces the dialog as loading
-          // once instead of once per placeholder bar.
+          // once instead of once per placeholder bar. `role` is required for the label to be
+          // announced at all; `aria-busy` alone conveys nothing without one.
+          role="status"
           aria-busy="true"
           aria-label={localizeString(strings, '%shareLayoutDialog_loading_label%')}
         >
@@ -261,7 +269,7 @@ export function ShareLayoutDialogSkeleton({
   );
 }
 
-export function ShareLayoutDialogContent({
+export function TeamLayoutDialogContent({
   initialModelText,
   initialActiveTab,
   initialScriptureResources,
@@ -278,7 +286,7 @@ export function ShareLayoutDialogContent({
   localizedStrings: strings,
   onConfirm,
   onCancel,
-}: ShareLayoutDialogContentProps) {
+}: TeamLayoutDialogContentProps) {
   const [modelText, setModelText] = useState(initialModelText);
   const [activeTab, setActiveTab] = useState(initialActiveTab);
   const [scriptureResources, setScriptureResources] = useState(initialScriptureResources);
@@ -294,8 +302,15 @@ export function ShareLayoutDialogContent({
   // The default-tab Select has no <label>, so name and describe it from the two spans beside it.
   const activeTabLabelId = useId();
   const activeTabSublabelId = useId();
-  // Same for the team-lock toggle group, which is named by the prose above it.
+  // Same for the team-lock switch, which is named by the text beside it.
   const teamLockLabelId = useId();
+  // The project-name heading truncates, so hovering a clipped one reveals the whole name.
+  const {
+    ref: projectNameRef,
+    open: isProjectNameTooltipOpen,
+    onPointerEnter: onProjectNamePointerEnter,
+    onPointerLeave: onProjectNamePointerLeave,
+  } = useTruncationTooltip<HTMLSpanElement>();
 
   // Any open picker dims and blurs the dialog behind it, so the picker reads as the surface in
   // focus rather than as a panel floating over equally-live content.
@@ -360,14 +375,17 @@ export function ShareLayoutDialogContent({
     (ref) => ref.isInTextCollection,
   ).length;
 
-  const manageLabelKey: Record<TabKey, keyof ShareLayoutDialogLocalizedStrings> = {
+  const manageLabelKey: Record<TabKey, keyof TeamLayoutDialogLocalizedStrings> = {
     ScriptureResource: '%shareLayoutDialog_manageScriptureResources_label%',
     CommentaryResource: '%shareLayoutDialog_manageCommentaryResources_label%',
   };
 
-  const tabLabelKey: Record<TabKey, keyof ShareLayoutDialogLocalizedStrings> = {
-    ScriptureResource: '%shareLayoutDialog_activeTab_scriptureResource%',
-    CommentaryResource: '%shareLayoutDialog_activeTab_commentaryResource%',
+  // Dedicated keys rather than the `activeTab_*` ones the Default-tab select uses: the two controls
+  // happen to read alike today, but they are different sentences in different places, and sharing a
+  // key means rewording one silently rewords the other.
+  const tabLabelKey: Record<TabKey, keyof TeamLayoutDialogLocalizedStrings> = {
+    ScriptureResource: '%shareLayoutDialog_tab_scriptureResources%',
+    CommentaryResource: '%shareLayoutDialog_tab_commentaryResources%',
   };
 
   const renderResourceTabContent = (tab: TabKey, resources: ResourceReference[]) => (
@@ -377,6 +395,10 @@ export function ShareLayoutDialogContent({
       className="tw:flex tw:min-w-0 tw:flex-col tw:gap-3 tw:outline-none"
     >
       <Popover
+        // Modal so the dimmed dialog behind the picker is genuinely inert: focus is trapped in the
+        // picker and the content under the scrim is hidden from assistive technology, matching what
+        // the scrim says. A non-modal picker leaves every control behind it Tab-reachable.
+        modal
         open={openAddPickerTab === tab}
         onOpenChange={(open) => setOpenAddPickerTab(open ? tab : undefined)}
       >
@@ -412,7 +434,7 @@ export function ShareLayoutDialogContent({
             {/*
                 ResourcePickerDialog renders its own DialogTitle internally but has no Dialog.Root
                 of its own by design (it's meant to be embedded in a host-provided Dialog context).
-                Since this popover is rendered inside the outer ShareLayoutDialogContent's
+                Since this popover is rendered inside the outer TeamLayoutDialogContent's
                 Dialog.Root, wrap it in its own isolated Dialog.Root here so its DialogTitle gets a
                 distinct id from the outer dialog's title instead of colliding with it.
               */}
@@ -461,9 +483,10 @@ export function ShareLayoutDialogContent({
       ) : (
         /* An empty tab with nothing in it reads as a failed load rather than as an empty set
            waiting on a choice the admin has not made yet. */
-        <span className="tw:text-xs tw:text-muted-foreground">
-          {localizeString(strings, '%shareLayoutDialog_resources_empty%')}
-        </span>
+        <EmptyState
+          className="tw:text-xs"
+          message={localizeString(strings, '%shareLayoutDialog_resources_empty%')}
+        />
       )}
     </TabsContent>
   );
@@ -473,7 +496,7 @@ export function ShareLayoutDialogContent({
       <DialogHeader className="tw:p-4 tw:pb-0">
         <DialogTitle>{localizeString(strings, '%shareLayoutDialog_teamLayout_title%')}</DialogTitle>
         <DialogDescription>
-          {localizeString(strings, '%shareLayoutDialog_descriptionWithSync%')}
+          {localizeString(strings, '%shareLayoutDialog_reviewAndSyncNotice%')}
         </DialogDescription>
       </DialogHeader>
 
@@ -519,7 +542,8 @@ export function ShareLayoutDialogContent({
               <span className="tw:font-medium">
                 {localizeString(strings, '%shareLayoutDialog_modelText_label%')}
               </span>
-              <Popover open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
+              {/* Modal for the same reason as the tab picker above. */}
+              <Popover modal open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -572,32 +596,37 @@ export function ShareLayoutDialogContent({
                 same slot the other columns put their heading, so the three read as one row of
                 column headings rather than as two labels and a stray field. */}
             <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-3 tw:px-4 tw:py-3">
-              {projectName && <span className="tw:truncate tw:font-medium">{projectName}</span>}
-              <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-2">
+              {projectName && (
+                /* No `delayDuration`: `open` is fully controlled by `useTruncationTooltip`, so the
+                   tooltip appears only when the heading is actually clipped. */
+                <TooltipProvider>
+                  <Tooltip open={isProjectNameTooltipOpen}>
+                    <TooltipTrigger asChild>
+                      <span
+                        ref={projectNameRef}
+                        className="tw:truncate tw:font-medium"
+                        onPointerEnter={onProjectNamePointerEnter}
+                        onPointerLeave={onProjectNamePointerLeave}
+                      >
+                        {projectName}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{projectName}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {/* A switch rather than a pair of Yes/No pills: the lock is one boolean, and a switch
+                  carries its state in the control itself instead of in which of two identical pills
+                  happens to be pressed. */}
+              <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
+                <Switch
+                  checked={isStructureProtectedForTeam}
+                  onCheckedChange={setIsStructureProtectedForTeam}
+                  aria-labelledby={teamLockLabelId}
+                />
                 <span className="tw:text-sm" id={teamLockLabelId}>
                   {localizeString(strings, '%shareLayoutDialog_teamLock_label%')}
                 </span>
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
-                  size="sm"
-                  aria-labelledby={teamLockLabelId}
-                  value={isStructureProtectedForTeam ? 'yes' : 'no'}
-                  // Radix clears the value when the pressed item is re-pressed; an empty string
-                  // here means "the current answer was toggled off", which for a required yes/no
-                  // is not an answer at all — so hold the existing one rather than inventing one.
-                  onValueChange={(value) => {
-                    if (value === 'yes') setIsStructureProtectedForTeam(true);
-                    else if (value === 'no') setIsStructureProtectedForTeam(false);
-                  }}
-                >
-                  <ToggleGroupItem value="yes">
-                    {localizeString(strings, '%shareLayoutDialog_teamLock_yes%')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="no">
-                    {localizeString(strings, '%shareLayoutDialog_teamLock_no%')}
-                  </ToggleGroupItem>
-                </ToggleGroup>
               </div>
             </div>
 
@@ -645,7 +674,7 @@ export function ShareLayoutDialogContent({
                   <Select
                     value={activeTab}
                     onValueChange={(value) => {
-                      if (isShareLayoutActiveTab(value)) setActiveTab(value);
+                      if (isTeamLayoutActiveTab(value)) setActiveTab(value);
                     }}
                   >
                     <SelectTrigger
@@ -694,8 +723,9 @@ export function ShareLayoutDialogContent({
         {/* Dims and blurs the dialog while a picker is open. Local to the dialog's own stacking
             context — the picker portals to `document.body` at `Z_INDEX_ABOVE_DOCK` and never
             competes with this — so a plain low z-index is correct here and a scale tier is not.
-            Deliberately left hit-testable: a click lands on the scrim, which Radix reads as an
-            outside click and closes the picker. */}
+            Purely visual: the pickers are modal, so what makes the content behind them inert is
+            Radix's own focus trap and outside-pointer handling, not this element. Deliberately left
+            hit-testable so a click on it still reads as an outside click and closes the picker. */}
         {isAnyPickerOpen && (
           <div
             className="tw:absolute tw:inset-0 tw:z-10 tw:bg-background/50 tw:backdrop-blur-sm"
@@ -709,21 +739,12 @@ export function ShareLayoutDialogContent({
         <Button variant="outline" onClick={onCancel}>
           {localizeString(strings, '%shareLayoutDialog_cancel_label%')}
         </Button>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button onClick={handleConfirm}>
-                {localizeString(strings, '%shareLayoutDialog_saveForTeam_label%')}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {localizeString(strings, '%shareLayoutDialog_saveForTeam_tooltip%')}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Button onClick={handleConfirm}>
+          {localizeString(strings, '%shareLayoutDialog_saveForTeam_label%')}
+        </Button>
       </div>
     </>
   );
 }
 
-export default ShareLayoutDialogContent;
+export default TeamLayoutDialogContent;

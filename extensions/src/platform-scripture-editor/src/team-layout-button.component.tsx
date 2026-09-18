@@ -14,25 +14,25 @@ import papi from '@papi/frontend';
 const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_teamLayout_ariaLabel%';
 
 /**
- * Localization keys used by {@link ShareLayoutButton}. Spread these into the editor web-view's
+ * Localization keys used by {@link TeamLayoutButton}. Spread these into the editor web-view's
  * localized-strings list so the values are loaded and passed into `localizedStrings`.
  */
-export const SHARE_LAYOUT_BUTTON_STRING_KEYS = Object.freeze([ARIA_LABEL_KEY] as const);
+export const TEAM_LAYOUT_BUTTON_STRING_KEYS = Object.freeze([ARIA_LABEL_KEY] as const);
 
-export type ShareLayoutButtonStringKey = (typeof SHARE_LAYOUT_BUTTON_STRING_KEYS)[number];
+export type TeamLayoutButtonStringKey = (typeof TEAM_LAYOUT_BUTTON_STRING_KEYS)[number];
 
-export type ShareLayoutButtonLocalizedStrings = {
-  [key in ShareLayoutButtonStringKey]?: string;
+export type TeamLayoutButtonLocalizedStrings = {
+  [key in TeamLayoutButtonStringKey]?: string;
 };
 
-const localize = (strings: ShareLayoutButtonLocalizedStrings, key: ShareLayoutButtonStringKey) =>
+const localize = (strings: TeamLayoutButtonLocalizedStrings, key: TeamLayoutButtonStringKey) =>
   strings[key] ?? key;
 
-export type ShareLayoutButtonProps = {
+export type TeamLayoutButtonProps = {
   /** The project whose layout would be shared. */
   projectId: string | undefined;
   /** Localized strings for the tooltip and aria-label. Falls back to the key if not provided. */
-  localizedStrings?: ShareLayoutButtonLocalizedStrings;
+  localizedStrings?: TeamLayoutButtonLocalizedStrings;
   /** CSS class name for the button. */
   className?: string;
 };
@@ -41,24 +41,23 @@ export type ShareLayoutButtonProps = {
  * Toolbar button that opens the Team layout dialog for a project. Renders nothing for non-admins
  * and while the permission check is loading, since the project data provider's
  * `canUserWriteProjectTextConnectionSettings()` (project-admin authority) says non-admins cannot
- * use this action — mirrors `StructureProtectionButton`'s admin-only project lock button, which
- * hides the same way for the same reason. This button previously lived as a "Share Layout with
- * Team…" entry in the scripture editor's native topMenu, but that contribution model has no way to
- * conditionally hide an item, so the action moved here where a permission check can gate it.
+ * use this action. The action lives on the toolbar rather than in the scripture editor's native
+ * topMenu because that contribution model has no way to conditionally hide an item, and a toolbar
+ * button can be gated by a permission check.
  */
-export function ShareLayoutButton({
+export function TeamLayoutButton({
   projectId,
   localizedStrings = {},
   className,
-}: ShareLayoutButtonProps) {
+}: TeamLayoutButtonProps) {
   const textConnectionsPdp = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
   );
 
   // Same canUserWriteProjectTextConnectionSettings()-via-usePromise pattern as the identical check
-  // in share-layout.dialog.tsx's admin gate.
-  const [canShareLayout, isLoading] = usePromise(
+  // in team-layout.dialog.tsx's admin gate.
+  const [canEditTeamLayout, isLoading] = usePromise(
     useCallback(
       async () => textConnectionsPdp?.canUserWriteProjectTextConnectionSettings(),
       [textConnectionsPdp],
@@ -66,7 +65,7 @@ export function ShareLayoutButton({
     undefined,
   );
 
-  if (isLoading || canShareLayout !== true) return undefined;
+  if (isLoading || canEditTeamLayout !== true) return undefined;
 
   const label = localize(localizedStrings, ARIA_LABEL_KEY);
 

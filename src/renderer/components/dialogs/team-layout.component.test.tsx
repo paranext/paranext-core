@@ -1,10 +1,10 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi, describe, it, expect, beforeAll } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import { Dialog } from 'platform-bible-react';
-import { ShareLayoutDialogContent } from './share-layout.component';
+import { TeamLayoutDialogContent } from './team-layout.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
 beforeAll(() => {
@@ -60,12 +60,12 @@ const ALL_RESOURCES: DblResourceData[] = [
   },
 ];
 
-function renderContent(overrides: Partial<Parameters<typeof ShareLayoutDialogContent>[0]> = {}) {
+function renderContent(overrides: Partial<Parameters<typeof TeamLayoutDialogContent>[0]> = {}) {
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
   render(
     <Dialog open>
-      <ShareLayoutDialogContent
+      <TeamLayoutDialogContent
         initialModelText={undefined}
         initialActiveTab="ScriptureResource"
         initialScriptureResources={[ESV, NIV]}
@@ -89,9 +89,10 @@ function renderContent(overrides: Partial<Parameters<typeof ShareLayoutDialogCon
   return { onConfirm, onCancel };
 }
 
-describe('ShareLayoutDialogContent', () => {
+describe('TeamLayoutDialogContent', () => {
   const SAVE_LABEL = '%shareLayoutDialog_saveForTeam_label%';
-  const COMMENTARY_TAB = '%shareLayoutDialog_activeTab_commentaryResource%';
+  const TEAM_LOCK_LABEL = '%shareLayoutDialog_teamLock_label%';
+  const COMMENTARY_TAB = '%shareLayoutDialog_tab_commentaryResources%';
 
   /**
    * Brings the commentary tab's rows into the DOM — Radix mounts only the open tab's panel.
@@ -257,7 +258,7 @@ describe('ShareLayoutDialogContent', () => {
     renderContent();
 
     expect(screen.getByText(SAVE_LABEL)).toBeInTheDocument();
-    expect(screen.getByText('%shareLayoutDialog_descriptionWithSync%')).toBeInTheDocument();
+    expect(screen.getByText('%shareLayoutDialog_reviewAndSyncNotice%')).toBeInTheDocument();
     expect(screen.queryByText('%shareLayoutDialog_confirm_label%')).not.toBeInTheDocument();
   });
 
@@ -349,12 +350,11 @@ describe('ShareLayoutDialogContent', () => {
     expect(result.scriptureResources).toEqual([ESV, NIV]);
   });
 
-  // The team lock moved here from the editor toolbar, where it wrote the project setting on click.
-  // In this dialog it is staged like everything else, so Cancel has to discard it.
+  // The team lock is staged like everything else in this dialog, so Cancel has to discard it.
   it('reports the edited team lock on confirm', () => {
     const { onConfirm } = renderContent({ initialIsStructureProtectedForTeam: false });
 
-    fireEvent.click(screen.getByText('%shareLayoutDialog_teamLock_yes%'));
+    fireEvent.click(screen.getByRole('switch', { name: TEAM_LOCK_LABEL }));
     fireEvent.click(screen.getByText(SAVE_LABEL));
 
     const [result] = onConfirm.mock.calls[0];
@@ -364,23 +364,32 @@ describe('ShareLayoutDialogContent', () => {
   it('does not report the team lock at all when the dialog is cancelled', () => {
     const { onConfirm, onCancel } = renderContent({ initialIsStructureProtectedForTeam: false });
 
-    fireEvent.click(screen.getByText('%shareLayoutDialog_teamLock_yes%'));
+    fireEvent.click(screen.getByRole('switch', { name: TEAM_LOCK_LABEL }));
     fireEvent.click(screen.getByText('%shareLayoutDialog_cancel_label%'));
 
     expect(onCancel).toHaveBeenCalled();
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  // Radix clears a single-select ToggleGroup when the pressed item is pressed again. For a yes/no
-  // that is not an answer, so the current one has to survive it.
-  it('keeps the current team-lock answer when the pressed option is pressed again', () => {
+  // One control carrying the answer in its own state, rather than two look-alike pills where the
+  // answer is whichever one happens to be pressed.
+  it('shows the team lock as a single switch reflecting the current answer', () => {
+    renderContent({ initialIsStructureProtectedForTeam: true });
+
+    const teamLockSwitch = screen.getByRole('switch', { name: TEAM_LOCK_LABEL });
+
+    expect(teamLockSwitch).toBeChecked();
+    expect(screen.getAllByRole('switch')).toHaveLength(1);
+  });
+
+  it('turns the team lock back off when the switch is toggled from on', () => {
     const { onConfirm } = renderContent({ initialIsStructureProtectedForTeam: true });
 
-    fireEvent.click(screen.getByText('%shareLayoutDialog_teamLock_yes%'));
+    fireEvent.click(screen.getByRole('switch', { name: TEAM_LOCK_LABEL }));
     fireEvent.click(screen.getByText(SAVE_LABEL));
 
     const [result] = onConfirm.mock.calls[0];
-    expect(result.isStructureProtectedForTeam).toBe(true);
+    expect(result.isStructureProtectedForTeam).toBe(false);
   });
 
   // The picker overlaps the dialog it was opened from, so the dialog behind it is dimmed and
@@ -403,5 +412,52 @@ describe('ShareLayoutDialogContent', () => {
     fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
 
     expect(screen.getByTestId('resource-picker-scrim')).toBeInTheDocument();
+  });
+
+  // The scrim claims the dialog behind an open picker is inert, so it has to actually be inert. The
+  // picker is modal, which hides what is behind it from assistive technology and traps focus there;
+  // a non-modal one would leave every control behind the scrim Tab-reachable.
+  it('puts the content behind the scrim out of reach while a picker is open', () => {
+    renderContent();
+
+    // Control: both are reachable before the picker opens, so their absence afterwards means
+    // something happened rather than that they were never exposed.
+    expect(screen.getByRole('button', { name: SAVE_LABEL })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: TEAM_LOCK_LABEL })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('%shareLayoutDialog_manageScriptureResources_label%'));
+
+    expect(screen.getByTestId('resource-picker-scrim')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SAVE_LABEL })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: TEAM_LOCK_LABEL })).not.toBeInTheDocument();
+  });
+
+  // Cancel and save are the whole of the footer. A third action here would be a second way out of
+  // the dialog, and the scoped query is what makes that visible rather than lost among the dialog's
+  // other buttons.
+  it('offers exactly two actions in the footer', () => {
+    renderContent();
+
+    const saveButton = screen.getByText(SAVE_LABEL);
+    const footer = saveButton.parentElement;
+    if (!footer) throw new Error('The save button is not inside a footer element.');
+
+    expect(
+      within(footer)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['%shareLayoutDialog_cancel_label%', SAVE_LABEL]);
+  });
+
+  // Choosing a preferred text for commentaries or Bible texts is deliberately not part of this
+  // dialog — it was struck from the requirements as too costly. This is the guard against it
+  // reappearing.
+  it('offers no preferred-text control for commentaries or Bible texts', () => {
+    renderContent({ initialCommentaryResources: [IVP] });
+
+    expect(screen.queryByText(/preferred/i)).not.toBeInTheDocument();
+    // The default-tab select is the dialog's only combobox, so a preferred-text picker — which
+    // would have to be one too — cannot hide inside this count.
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 });

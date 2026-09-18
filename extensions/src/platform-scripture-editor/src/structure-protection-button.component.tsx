@@ -1,4 +1,4 @@
-import { ReactNode, Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   isMacOs,
@@ -11,9 +11,6 @@ import {
 import { Lock, LockOpen } from 'lucide-react';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
-const LOCK_STRUCTURE_KEY = '%webView_platformScriptureEditor_structureProtection_lockStructure%';
-const UNLOCK_STRUCTURE_KEY =
-  '%webView_platformScriptureEditor_structureProtection_unlockStructure%';
 const LOCKED_BY_ADMIN_KEY = '%webView_platformScriptureEditor_structureProtection_lockedByAdmin%';
 const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_structureProtection_ariaLabel%';
 const ERROR_LOADING_KEY = '%webView_platformScriptureEditor_structureProtection_errorLoading%';
@@ -25,8 +22,6 @@ const STATE_PROTECTED_KEY = '%webView_platformScriptureEditor_structureProtectio
  * web-view's localized-strings list so the values are loaded and passed into `localizedStrings`.
  */
 export const STRUCTURE_PROTECTION_BUTTON_STRING_KEYS = Object.freeze([
-  LOCK_STRUCTURE_KEY,
-  UNLOCK_STRUCTURE_KEY,
   LOCKED_BY_ADMIN_KEY,
   ARIA_LABEL_KEY,
   ERROR_LOADING_KEY,
@@ -85,8 +80,6 @@ export type LockToggleButtonViewProps = {
   localizedStrings?: StructureProtectionButtonLocalizedStrings;
   /** CSS class name for the button. */
   className?: string;
-  /** Forwarded to the underlying button. */
-  ref?: Ref<HTMLButtonElement>;
 };
 
 /**
@@ -110,7 +103,6 @@ export function LockToggleButtonView({
   shortcut,
   localizedStrings = {},
   className,
-  ref,
 }: LockToggleButtonViewProps) {
   // The visible state. Drives both the tooltip text and the auto-open trigger, so the two can never
   // disagree. 'disabled' takes precedence because the disabled button shows its own tooltip text
@@ -179,7 +171,6 @@ export function LockToggleButtonView({
       <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
         <TooltipTrigger asChild>
           <Button
-            ref={ref}
             aria-label={localize(localizedStrings, ariaLabelKey)}
             className={className}
             size="icon"

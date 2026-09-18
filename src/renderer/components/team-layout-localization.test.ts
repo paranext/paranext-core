@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SHARE_LAYOUT_DIALOG_STRING_KEYS } from './dialogs/share-layout.component';
+import { TEAM_LAYOUT_DIALOG_STRING_KEYS } from './dialogs/team-layout.component';
 
 // Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to
 // the directory `vitest` happens to be invoked from.
@@ -31,7 +31,7 @@ const spanish = readStrings('es.json');
 
 describe('Team layout dialog localization keys', () => {
   it('has a non-empty English translation for every key the dialog can request', () => {
-    const missingOrInvalidKeys = findUnusableKeys(english, SHARE_LAYOUT_DIALOG_STRING_KEYS);
+    const missingOrInvalidKeys = findUnusableKeys(english, TEAM_LAYOUT_DIALOG_STRING_KEYS);
 
     if (missingOrInvalidKeys.length > 0)
       throw new Error(
@@ -49,7 +49,7 @@ describe('Team layout dialog localization keys', () => {
   // both en AND es"); the remaining shipped locales carry none of this dialog's keys and are
   // translated elsewhere. Nothing in the build enforces en/es parity, so this is the guard.
   it('has a non-empty Spanish translation for every key the dialog can request', () => {
-    const missingOrInvalidKeys = findUnusableKeys(spanish, SHARE_LAYOUT_DIALOG_STRING_KEYS);
+    const missingOrInvalidKeys = findUnusableKeys(spanish, TEAM_LAYOUT_DIALOG_STRING_KEYS);
 
     if (missingOrInvalidKeys.length > 0)
       throw new Error(
@@ -71,5 +71,26 @@ describe('Team layout dialog localization keys', () => {
   // from new ones instead (Localization-Guide.md, "Existing Strings Are Immutable").
   it('leaves the superseded keys untouched rather than redefining them', () => {
     expect(english['%shareLayoutDialog_title%']).toBe('Share layout with team');
+    expect(english['%shareLayoutDialog_description%']).toBe(
+      "Review what you're about to share with your team before confirming.",
+    );
+  });
+
+  // The resource tabs and the default-tab select happen to read alike, so one key could serve both
+  // — until a translator rewords the select and silently reletters two tab headers with it.
+  it('gives the resource tabs their own keys rather than the default-tab select keys', () => {
+    const tabKeys = [
+      '%shareLayoutDialog_tab_scriptureResources%',
+      '%shareLayoutDialog_tab_commentaryResources%',
+    ];
+    const selectKeys = [
+      '%shareLayoutDialog_activeTab_scriptureResource%',
+      '%shareLayoutDialog_activeTab_commentaryResource%',
+    ];
+
+    expect(findUnusableKeys(english, tabKeys)).toHaveLength(0);
+    expect(findUnusableKeys(spanish, tabKeys)).toHaveLength(0);
+    tabKeys.forEach((key) => expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).toContain(key));
+    selectKeys.forEach((key) => expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).toContain(key));
   });
 });

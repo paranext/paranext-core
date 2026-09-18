@@ -27,8 +27,6 @@ export type StructureProtectionState = {
   adminSettingError: PlatformError | undefined;
   /** Whether the current user has write permission on project settings */
   canAdminToggle: boolean;
-  /** Update the admin (project-level) setting. No-op when `!canAdminToggle` */
-  setAdminProtection: (value: boolean) => void;
   /**
    * Update the user's personal preference. Always available regardless of role.
    *
@@ -59,7 +57,7 @@ export type StructureProtectionState = {
 export function useStructureProtectionState(
   projectId: string | undefined,
 ): StructureProtectionState {
-  const [adminSettingPossiblyError, setAdminSetting] = useProjectSetting(
+  const [adminSettingPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.structureProtected',
     false,
@@ -174,14 +172,6 @@ export function useStructureProtectionState(
     userSetting: userSettingState,
   });
 
-  const setAdminProtection = useCallback(
-    (value: boolean) => {
-      if (!isProtectionActive || !canAdminToggle) return;
-      setAdminSetting?.(value);
-    },
-    [isProtectionActive, canAdminToggle, setAdminSetting],
-  );
-
   const setUserProtection = useCallback(
     (value: boolean) => {
       if (!isProtectionActive) return;
@@ -198,7 +188,6 @@ export function useStructureProtectionState(
     adminSettingError: isProtectionActive ? adminSettingError : undefined,
     canAdminToggle: isProtectionActive && canAdminToggle,
     isProtectionActive,
-    setAdminProtection,
     setUserProtection,
   };
 }

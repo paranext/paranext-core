@@ -6,7 +6,7 @@ import type { ResourceReference, ResourceReferenceList } from 'platform-scriptur
 import { Dialog } from 'platform-bible-react';
 import { SHARE_LAYOUT_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { DIALOGS } from '@renderer/components/dialogs/index';
-import { SHARE_LAYOUT_DIALOG } from '@renderer/components/dialogs/share-layout.dialog';
+import { TEAM_LAYOUT_DIALOG } from '@renderer/components/dialogs/team-layout.dialog';
 import { sendCommand } from '@shared/services/command.service';
 
 // Importing the real `DIALOGS` map transitively pulls in `project-picker.dialog.tsx` ->
@@ -74,10 +74,10 @@ const mockTextConnectionsProvider = {
   getUserModelTexts: vi.fn(async () => EMPTY_RESOURCE_LIST),
 };
 
-// Mock only the three PAPI hooks `ShareLayoutDialogWrapper` actually calls
+// Mock only the three PAPI hooks `TeamLayoutDialogWrapper` actually calls
 // (`useLocalizedStrings`, `useProjectSetting`, `useProjectDataProvider`). `usePromise` and
 // `RESOURCE_PICKER_DIALOG_STRING_KEYS` come from the real `platform-bible-react` package (as in
-// `share-layout.component.test.tsx`, which renders the same dialog content against the real
+// `team-layout.component.test.tsx`, which renders the same dialog content against the real
 // package with no extra mocking needed) so the admin-gate's loading -> resolved race is exercised
 // for real instead of simulated.
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -151,7 +151,7 @@ function renderWrapper(
   // reference, so a re-render would not re-read the mocked hook state a test just changed.
   const buildElement = () => (
     <Dialog open modal={false}>
-      <SHARE_LAYOUT_DIALOG.Component
+      <TEAM_LAYOUT_DIALOG.Component
         isDialog
         projectId="proj-1"
         submitDialog={submitDialog}
@@ -184,7 +184,7 @@ beforeEach(() => {
   vi.mocked(sendCommand).mockResolvedValue({ status: 'available', resources: [] });
 });
 
-describe('ShareLayoutDialogWrapper catalog gate', () => {
+describe('TeamLayoutDialogWrapper catalog gate', () => {
   it('waits for the catalog before mounting the body, so Confirm cannot erase the saved resource list', async () => {
     mockState.canWritePromise = Promise.resolve(true);
 
@@ -202,7 +202,7 @@ describe('ShareLayoutDialogWrapper catalog gate', () => {
 
     renderWrapper();
 
-    // The body must not mount yet. `ShareLayoutDialogContent` snapshots its initial lists in
+    // The body must not mount yet. `TeamLayoutDialogContent` snapshots its initial lists in
     // `useState` at mount, and without a catalog `splitResourcesByTab` cannot classify a saved
     // dblResource reference — every one lands in `otherResources`, so the snapshot would be empty.
     await act(async () => {
@@ -391,27 +391,27 @@ describe('ShareLayoutDialogWrapper catalog gate', () => {
   });
 });
 
-describe('SHARE_LAYOUT_DIALOG registration', () => {
+describe('TEAM_LAYOUT_DIALOG registration', () => {
   it('has the expected tabType', () => {
-    expect(SHARE_LAYOUT_DIALOG.tabType).toBe('platform.shareLayoutDialog');
+    expect(TEAM_LAYOUT_DIALOG.tabType).toBe('platform.shareLayoutDialog');
   });
 
   it('is registered in the DIALOGS map under its own tabType', () => {
-    expect(DIALOGS[SHARE_LAYOUT_DIALOG_TYPE]).toBe(SHARE_LAYOUT_DIALOG);
+    expect(DIALOGS[SHARE_LAYOUT_DIALOG_TYPE]).toBe(TEAM_LAYOUT_DIALOG);
   });
 
   it('defines a Component to render', () => {
-    expect(typeof SHARE_LAYOUT_DIALOG.Component).toBe('function');
+    expect(typeof TEAM_LAYOUT_DIALOG.Component).toBe('function');
   });
 
   // The tab title and the DialogTitle inside the dialog body are separate strings that must name
   // the dialog identically; nothing but this ties them together.
   it('titles its tab with the team layout name', () => {
-    expect(SHARE_LAYOUT_DIALOG.defaultTitle).toBe('%shareLayoutDialog_teamLayout_title%');
+    expect(TEAM_LAYOUT_DIALOG.defaultTitle).toBe('%shareLayoutDialog_teamLayout_title%');
   });
 });
 
-describe('ShareLayoutDialogWrapper admin gate', () => {
+describe('TeamLayoutDialogWrapper admin gate', () => {
   it('does not render the dialog content or write any settings while canWrite is loading, and still does not after it resolves false', async () => {
     let resolveCanWrite: (value: boolean) => void = () => {};
     mockState.canWritePromise = new Promise<boolean>((resolve) => {
@@ -472,7 +472,7 @@ describe('ShareLayoutDialogWrapper admin gate', () => {
   });
 });
 
-describe('ShareLayoutDialogWrapper loading state', () => {
+describe('TeamLayoutDialogWrapper loading state', () => {
   // The modal host sizes the dialog from its content, so a loading state with nothing in it
   // collapses the whole dialog to a ~30px sliver showing only the close button, runs the open
   // animation at that height, then snaps to full size. The skeleton holds the real footprint.
@@ -516,7 +516,7 @@ describe('ShareLayoutDialogWrapper loading state', () => {
   });
 });
 
-describe('ShareLayoutDialogWrapper team structure lock', () => {
+describe('TeamLayoutDialogWrapper team structure lock', () => {
   // The lock resolves to `false` while it is still loading — byte-identical to a project that is
   // genuinely unlocked. Mounting the body before it is delivered would snapshot that `false` and a
   // save would unlock the project's structure for the whole team.
@@ -542,7 +542,7 @@ describe('ShareLayoutDialogWrapper team structure lock', () => {
     await screen.findByText('%shareLayoutDialog_modelText_label%');
     const saveButton = screen.getByText('%shareLayoutDialog_saveForTeam_label%');
     act(() => {
-      screen.getByText('%shareLayoutDialog_teamLock_yes%').click();
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
     act(() => {
       saveButton.click();
@@ -559,14 +559,14 @@ describe('ShareLayoutDialogWrapper team structure lock', () => {
 
     await screen.findByText('%shareLayoutDialog_modelText_label%');
     act(() => {
-      screen.getByText('%shareLayoutDialog_teamLock_yes%').click();
+      screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
 
     expect(mockState.setStructureProtected).not.toHaveBeenCalled();
   });
 });
 
-describe('ShareLayoutDialogWrapper confirm-write logic', () => {
+describe('TeamLayoutDialogWrapper confirm-write logic', () => {
   it('writes referencedProjectsAndResources, modelTexts, and sharedLayoutDefaultTab, preserving otherResources the dialog does not model', async () => {
     mockState.canWritePromise = Promise.resolve(true);
 

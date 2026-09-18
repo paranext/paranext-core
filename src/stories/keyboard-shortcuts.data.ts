@@ -350,6 +350,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⇧⌘L', windows: 'Ctrl+Shift+L', linux: 'Ctrl+Shift+L' },
     locations: [
       'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
+      'extensions/src/platform-scripture-editor/src/use-structure-protection-state.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {
