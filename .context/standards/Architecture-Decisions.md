@@ -3923,7 +3923,7 @@ step, no automation. Just a record.
   editor already has its own visibility answer and is the natural owner of its own scroll geometry.
   **Scroll to the verse but bias the offset toward the range** — rejected: a range taller than one
   screen, or a match late in a long verse, still needs the range's own start measured, not an offset
-  guess from the verse marker. **Release `isRangeScrollTarget`'s claim as soon as the jump finishes**
+  guess from the verse marker. **Release `consumeRangeScrollClaimFor`'s claim as soon as the jump finishes**
   — rejected: the verse scroll it stands down for runs on its own delay (`EDITOR_LOAD_DELAY_TIME`)
   and can fire after a fast jump has already landed; releasing early would let it re-scroll to the
   verse start on top of the just-finished range jump.
@@ -3932,7 +3932,9 @@ step, no automation. Just a record.
   scroll happens once its tab is shown, however long that takes. `editorChapterKey` (stamped by
   `setEditorUsj`, see `use-editor-pdp-sync.hook.ts`) gates the whole feature, so any future editor
   code path that legitimately applies new chapter content must also call `setEditorUsj`, or a
-  pending range jump into that chapter hangs with no selection and no scroll. Any future cross-view
+  pending range jump into that chapter never applies its selection: it waits out
+  `SCROLL_MAX_WAIT_MS`, logs a warning, and degrades to the verse-start scroll (or gives up if no
+  verse marker is found) — the imprecise landing this decision exists to prevent. Any future cross-view
   jump into this editor (a new panel type) should route through `selectRange`/`useScrollToRange`
   rather than re-deriving its own scroll, now that the editor is the established owner.
 - **Source:** PT-4541.
