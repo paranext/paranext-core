@@ -58,6 +58,9 @@ type FlagSyncRequest = {
 /** What the sync in `syncInFlight` is doing, so a waiter can tell whether joining it is enough. */
 let syncInFlightRequest: FlagSyncRequest | undefined;
 
+/** Pending re-sync for rows the grace period made this module decline to judge. */
+let gracePeriodCatchUpTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
 async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
   // The contract itself lives in `dbl-catalog.utils`, where it is tested directly; `main.test.ts`
@@ -229,7 +232,11 @@ async function syncFlags({
     await fetchMutex.runExclusive(async () => {
       if (cachedResources === undefined) return;
 
-      const { resources: newCachedResources, isChanged } = reconcileCachedResources(
+      const {
+        resources: newCachedResources,
+        isChanged,
+        hasUnprovenAbsence,
+      } = reconcileCachedResources(
         cachedResources,
         localProjectMetadata.map((localProject) => localProject.id),
         updateStatus,
@@ -244,6 +251,8 @@ async function syncFlags({
         },
       );
 
+      if (hasUnprovenAbsence) scheduleGracePeriodCatchUp();
+
       if (isChanged) {
         cachedResources = newCachedResources;
         if (executionToken)
@@ -257,6 +266,25 @@ async function syncFlags({
   } catch (error: unknown) {
     logger.warn(`Error syncing installed flags: ${getErrorMessage(error)}`);
   }
+}
+
+/**
+ * Books the one re-sync the grace period owes. A sync inside the window leaves rows it may not
+ * judge exactly as they were, and the clock alone never brings anyone back to look again, so the
+ * window would otherwise decide the flags for the rest of the session. Repeat calls collapse into
+ * the single pending catch-up.
+ */
+function scheduleGracePeriodCatchUp(): void {
+  if (gracePeriodCatchUpTimeoutId !== undefined) return;
+  const remainingMs = PROJECT_REGISTRATION_GRACE_PERIOD_MS - performance.now();
+  if (remainingMs <= 0) return;
+
+  gracePeriodCatchUpTimeoutId = setTimeout(() => {
+    gracePeriodCatchUpTimeoutId = undefined;
+    // Fire-and-forget: this is the module catching up with itself, with no caller to report to.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    ensureInstalledFlagsSynced();
+  }, remainingMs);
 }
 
 /**
@@ -626,6 +654,34 @@ export async function activate(context: ExecutionActivationContext) {
   // Need to start async floating promise that continues after activation
   // eslint-disable-next-line @typescript-eslint/no-floating-promises
   startBackgroundFetchResources();
+
+  // The project list is the evidence the derived flags are reconciled against, so a change to it
+  // is the one moment those flags can be known to be wrong. This is also what makes the startup
+  // grace period safe to be wrong about: a row wrongly left installed, or wrongly downgraded before
+  // its project registered, is corrected as soon as that project appears, rather than standing
+  // until the next catalog fetch. C# debounces the emit and watches the project directories, so
+  // out-of-process installs and removals arrive here too.
+  const unsubscribeFromProjectsChanged = papi.network.getNetworkEvent(
+    'platform.onDidChangeProjects',
+  )(() => {
+    // A sync already running read the project list before this change was announced, so joining it
+    // would reconcile against the state this event says is out of date. Fire-and-forget, and never
+    // `updateAvailable`: only the Get Resources list renders that flag and it refreshes the flag
+    // itself, so recomputing it here would put a whole-catalog backend round trip on every project
+    // change for a value nothing reads.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    syncAfterInFlight({ shouldRecomputeUpdateStatus: false });
+  });
+  context.registrations.add({
+    dispose: async () => {
+      unsubscribeFromProjectsChanged();
+      if (gracePeriodCatchUpTimeoutId !== undefined) {
+        clearTimeout(gracePeriodCatchUpTimeoutId);
+        gracePeriodCatchUpTimeoutId = undefined;
+      }
+      return true;
+    },
+  });
 
   const refreshIntervalId = setInterval(() => {
     // The mutex returns a floating promise here; we want fire-and-forget interval behavior

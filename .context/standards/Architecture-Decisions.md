@@ -1111,6 +1111,14 @@ step, no automation. Just a record.
      clears that spinner only when the row reports itself uninstalled. Holding a row back holds back
      `installed` and `projectId` only; the rest of it, `updateAvailable` included, still reconciles,
      or a refresh would pay for the backend's answer and discard it.
+  5. **Every wrong answer gets looked at again.** The window's three proxies are all unsound — one
+     registered project stands for a complete list, extension-host uptime stands for C#'s readiness
+     (`platform.restartExtensionHost` and the dev watcher reset that clock mid-session), and a
+     machine can still be registering past 30 seconds. What makes them tolerable is that no verdict
+     is final: `main.ts` syncs on `platform.onDidChangeProjects`, so a row wrongly downgraded is
+     re-proved the moment its project appears, and a sync that declined to judge absence books a
+     single catch-up for when the window closes, since the clock alone brings nobody back. The event
+     sync starts *after* the announcement rather than joining a sync that read the list before it.
 - **Alternatives:** *Treat the "already installed" message as success in TypeScript* — rejected: a
   cross-process string match that breaks on localization. *Never downgrade `installed`* — rejected:
   that is how an uninstall reaches the Get Resources list. *Always wait for reconciliation* —
@@ -1119,10 +1127,12 @@ step, no automation. Just a record.
   fails, and a panel shows a catalog-load error over a usable catalog.
 - **Consequences:** A stale catalog corrects itself without a remount. Callers cannot tell "installed
   now" from "already there", and none needs to. The startup window mirrors `LOAD_TIME_GRACE_PERIOD_MS`
-  in `project-lookup.service-model.ts`; inside it, a change registers only if its caller names the
-  resource, since nothing re-reads the catalog on a schedule. **Revisit** if a caller needs the
-  install outcome, or if project registration gains a way to report that it has settled — which
-  would retire both the window and the exception.
+  in `project-lookup.service-model.ts`; inside it, a removal registers promptly only if its caller
+  names the resource, and everything else waits for the next project-change event or the catch-up.
+  Syncing on that event costs a project-metadata read per announcement, which C# debounces.
+  **Revisit** if a caller needs the install outcome, or if project registration gains a way to
+  report that it has settled — that would retire the window, the catch-up and the exception
+  together, since all three exist only to cope with not knowing.
 - **Source:** PT-4588.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended

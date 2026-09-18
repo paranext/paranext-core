@@ -7,6 +7,12 @@ export type ReconciledCachedResources = {
   resources: DblResourceData[];
   /** Whether any entry changed, meaning the cache is worth rewriting. */
   isChanged: boolean;
+  /**
+   * Whether any row kept an `installed` flag this reconciliation could not prove, because its
+   * project was missing from a list not yet allowed to settle the question. The caller owes that
+   * row another look once it is — nothing else revisits it.
+   */
+  hasUnprovenAbsence: boolean;
 };
 
 /** Options for {@link reconcileCachedResources}. */
@@ -46,6 +52,7 @@ export function reconcileCachedResources(
   { canTrustAbsence, trustAbsenceFor }: ReconcileCachedResourcesOptions,
 ): ReconciledCachedResources {
   let isChanged = false;
+  let hasUnprovenAbsence = false;
 
   const resources = cachedResources.map((resource) => {
     // Deliberately NOT `doesCatalogRowCoverProject` from `platform-bible-utils`, despite the
@@ -73,6 +80,8 @@ export function reconcileCachedResources(
     // refresh would pay for the backend's answer and then discard it.
     const isAbsenceProof = canTrustAbsence || resource.dblEntryUid === trustAbsenceFor;
     const keepsCachedInstall = !hasLocalProject && resource.installed && !isAbsenceProof;
+
+    if (keepsCachedInstall) hasUnprovenAbsence = true;
 
     const installed = hasLocalProject || keepsCachedInstall;
     const installedChanged = installed !== resource.installed;
@@ -109,5 +118,5 @@ export function reconcileCachedResources(
     return resource;
   });
 
-  return { resources, isChanged };
+  return { resources, isChanged, hasUnprovenAbsence };
 }

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   readUserData: vi.fn(),
   writeUserData: vi.fn(),
   getMetadataForAllProjects: vi.fn(),
+  projectsChangedHandlers: new Set<() => void>(),
 }));
 
 vi.mock('@papi/backend', () => ({
@@ -30,6 +31,12 @@ vi.mock('@papi/backend', () => ({
     dataProviders: { get: mocks.dataProvidersGet },
     storage: { readUserData: mocks.readUserData, writeUserData: mocks.writeUserData },
     projectLookup: { getMetadataForAllProjects: mocks.getMetadataForAllProjects },
+    network: {
+      getNetworkEvent: vi.fn(() => (handler: () => void) => {
+        mocks.projectsChangedHandlers.add(handler);
+        return () => mocks.projectsChangedHandlers.delete(handler);
+      }),
+    },
     settings: { registerValidator: vi.fn(async () => async () => true) },
     webViewProviders: { registerWebViewProvider: vi.fn(async () => async () => true) },
     webViews: { openWebView: vi.fn(async () => 'wv-1') },
@@ -44,6 +51,8 @@ vi.mock('@papi/backend', () => ({
 const AFTER_REGISTRATION_GRACE_MS = 31_000;
 /** Early enough that the project factories may still be registering. */
 const DURING_REGISTRATION_GRACE_MS = 1_000;
+/** Inside the window, but near enough to its end that the catch-up it books lands promptly. */
+const JUST_INSIDE_REGISTRATION_GRACE_MS = 29_900;
 
 function row(dblEntryUid: string, projectId: string): DblResourceData {
   return {
@@ -102,6 +111,7 @@ describe('getCachedResources installed-flag reconciliation', () => {
     // otherwise read as a violation in the next.
     vi.clearAllMocks();
     mocks.registeredCommands.clear();
+    mocks.projectsChangedHandlers.clear();
     mocks.readUserData.mockResolvedValue(undefined);
     mocks.writeUserData.mockResolvedValue(undefined);
     mocks.getMetadataForAllProjects.mockResolvedValue(PARTIAL_PROJECT_LIST);
@@ -261,6 +271,69 @@ describe('getCachedResources installed-flag reconciliation', () => {
       // Still installed, because absence proves nothing yet — and still told what the backend said.
       resources: [REGISTERED, { ...NOT_YET_REGISTERED, updateAvailable: true }],
     });
+  });
+
+  it('corrects a row when the project it was waiting for registers', async () => {
+    // What makes the grace period safe to be wrong about. A row downgraded before its project
+    // registered is re-proved installed the moment the project list changes, rather than standing
+    // wrong until the next catalog fetch — which, offline, may be the next session.
+    vi.spyOn(performance, 'now').mockReturnValue(AFTER_REGISTRATION_GRACE_MS);
+    await activateWithFreshModule();
+    await getCachedResources();
+    await getCachedResources({ waitForInstalledFlagsSync: true });
+    expect(await getCachedResources()).toEqual({
+      status: 'available',
+      resources: [REGISTERED, { ...NOT_YET_REGISTERED, installed: false, projectId: '' }],
+    });
+
+    // The late project finally registers, and C# announces it.
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      ...PARTIAL_PROJECT_LIST,
+      { id: 'BBBB1', isEditable: false },
+    ]);
+    expect(mocks.projectsChangedHandlers.size).toBe(1);
+    const writeCountBeforeEvent = persistedCatalogs().length;
+    mocks.projectsChangedHandlers.forEach((handler) => handler());
+
+    // Watched through what the module persisted, never by re-reading the catalog: a read starts a
+    // background sync of its own, so polling one here would perform the work this is checking for
+    // and pass whether or not the event does anything.
+    await vi.waitFor(() =>
+      expect(persistedCatalogs().length).toBeGreaterThan(writeCountBeforeEvent),
+    );
+    expect(persistedCatalogs().at(-1)).toContainEqual(
+      expect.objectContaining({ dblEntryUid: 'bbbb', installed: true, projectId: 'BBBB1' }),
+    );
+  });
+
+  it('takes the look it owes a held-back row once the grace period ends', async () => {
+    // A sync inside the window declines to judge absence. Nothing else comes back to look, so
+    // without the catch-up the window would settle those flags for the rest of the session — and
+    // the extension host restarts on its own, which resets the clock this window is measured on.
+    // Sitting just inside the window leaves the catch-up a short real wait, rather than mocking the
+    // clock the timer is scheduled against and the sync's own awaits along with it.
+    vi.spyOn(performance, 'now').mockReturnValue(JUST_INSIDE_REGISTRATION_GRACE_MS);
+    await activateWithFreshModule();
+    await getCachedResources();
+    await getCachedResources({ waitForInstalledFlagsSync: true });
+    // Held back, not downgraded: the window is still open.
+    expect(await getCachedResources()).toEqual({
+      status: 'available',
+      resources: [REGISTERED, NOT_YET_REGISTERED],
+    });
+
+    // The project never shows up, and the window closes.
+    const writeCountBeforeWindowClosed = persistedCatalogs().length;
+    vi.spyOn(performance, 'now').mockReturnValue(AFTER_REGISTRATION_GRACE_MS);
+
+    // Watched through what the module persisted rather than by re-reading the catalog, which would
+    // start a sync itself and so pass with no catch-up scheduled at all.
+    await vi.waitFor(() =>
+      expect(persistedCatalogs().length).toBeGreaterThan(writeCountBeforeWindowClosed),
+    );
+    expect(persistedCatalogs().at(-1)).toContainEqual(
+      expect.objectContaining({ dblEntryUid: 'bbbb', installed: false, projectId: '' }),
+    );
   });
 
   it('changes nothing when no resource project has registered yet, even after startup', async () => {
