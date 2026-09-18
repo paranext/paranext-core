@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { formatReplacementString } from 'platform-bible-utils';
+import { formatProjectName, formatReplacementString } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import {
@@ -133,10 +133,12 @@ function hasStringId(ref: ResourceReference): ref is Extract<ResourceReference, 
 }
 
 /**
- * Formats a resource for display as `FULL NAME (SHORT_NAME)`, looking the full name up from the
- * cached DBL catalog by id. Falls back to just the short name when the reference has no id, or the
- * id isn't found in the currently-loaded catalog (e.g. an uncached resource, or a non-dbl reference
- * type).
+ * Formats a resource for display short-name-first through {@link formatProjectName} — `SHORT_NAME -
+ * FULL NAME` — looking the full name up from the cached DBL catalog by id. Falls back to just the
+ * short name when the reference has no id, or the id isn't found in the currently-loaded catalog
+ * (e.g. an uncached resource, or a non-dbl reference type). The helper also drops the full name
+ * when it repeats the short one, which a locally-installed non-DBL resource does (its `fullName`
+ * falls back to its `displayName`).
  */
 function formatResourceDisplayName(
   ref: ResourceReference,
@@ -146,7 +148,7 @@ function formatResourceDisplayName(
   if (!hasStringId(ref)) return shortName;
   const match = allResources.find((r) => r.dblEntryUid === ref.id);
   if (!match) return shortName;
-  return `${match.fullName} (${match.displayName})`;
+  return formatProjectName({ shortName: match.displayName, fullName: match.fullName });
 }
 
 function toResourceReference(resource: DblResourceData): ResourceReference {

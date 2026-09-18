@@ -134,20 +134,12 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
 
   // ---- DBL resource names: a `name`/`displayName`/`fullName` triple, not a project short name ----
   // These carry resource metadata rather than the `platform.name`/`platform.fullName` project
-  // settings the helper is typed for, so short-name-first does not apply to them. The
-  // short-name-first work asks only that Share Layout be left unaffected, and it is.
-  // Whether resource labels should adopt a short-name-first format of their own is an open
-  // question with no ticket yet; if they should, these four entries are the complete site list.
-  {
-    file: 'src/renderer/components/dialogs/share-layout.component.tsx',
-    contains: 'match.fullName',
-    reason: 'DBL resource label — resource metadata, not project names',
-  },
-  {
-    file: 'extensions/src/platform-scripture-editor/src/resource-reference.utils.ts',
-    contains: 'dblData.fullName',
-    reason: 'DBL resource label — resource metadata, not project names',
-  },
+  // settings the helper is typed for. Resource labels a user reads nonetheless lead with the short
+  // name like every other label: the two sites that composed one — `getRefLabel` (the Model Text
+  // tab and the third-column resource tabs) and Share Layout's `formatResourceDisplayName` — call
+  // `formatProjectName` with `displayName` in the `shortName` slot, so they are adopted rather than
+  // exempt. The two entries left below fill a long-name slot the UI renders after the short name,
+  // so they compose no label and have no order to get wrong.
   {
     file: 'extensions/src/platform-scripture-editor/src/scripture-text-grid-contents.utils.ts',
     contains: 'downloadedResource.fullName !== downloadedResource.name',

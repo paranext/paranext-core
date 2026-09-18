@@ -238,6 +238,15 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(3);
   });
 
+  it('labels a catalogued resource short-name-first, and by short name alone when it has no catalog entry', () => {
+    renderContent();
+
+    // ESV is in the catalog, so its row carries both names, short name leading. NIV is not, so it
+    // falls back to the reference's own short name rather than composing a partial label.
+    expect(screen.getByText('ESV - English Standard Version')).toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+  });
+
   it('toggles isInTextCollection on a commentary resource without touching scripture resources', () => {
     const { onConfirm } = renderContent({ initialCommentaryResources: [IVP] });
 

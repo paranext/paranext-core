@@ -2114,7 +2114,15 @@ step, no automation. Just a record.
   the full name would push the short name toward the truncation leading with it is meant to avoid.
   They show the short name alone — short-name-first in its strongest form — which
   `getTabTitleProjectName` now pins to the `platform.name` setting, because `formatEditorTitle`'s
-  tests inject the name and so stay green whichever setting feeds them.
+  tests inject the name and so stay green whichever setting feeds them. DBL resource labels follow
+  the same rule even though a resource carries a `displayName`/`fullName` pair rather than the
+  `platform.name`/`platform.fullName` project settings: the two sites that compose one —
+  `getRefLabel` (the Model Text tab and Simple mode's third-column resource tabs) and Share Layout's
+  `formatResourceDisplayName` — pass `displayName` in the helper's `shortName` slot, which also
+  de-dups the locally-installed non-DBL resources whose `fullName` falls back to their
+  `displayName`. Sites that merely fill a long-name slot the UI renders after the short name
+  (`scripture-text-grid-contents.utils.ts`, `view-options-long-name.utils.ts`) compose no label and
+  stay as they are.
 
 ## adr-project-selector-custom-sections: ProjectSelector takes ordered section descriptors, not a grouping callback
 
