@@ -112,19 +112,28 @@ describe('Enhanced Resources has no private zoom of its own', () => {
     expect(webView).toContain("event.key === 'F7'");
   });
 
-  it('no longer carries a zoom factor of its own', () => {
+  it('no longer carries a zoom factor of its own in the view', () => {
     expect(webView).not.toContain('scripturePaneZoom');
+  });
+
+  it('no longer carries a zoom factor of its own in the scripture pane', () => {
     expect(scripturePane).not.toContain('scripturePaneZoom');
   });
 
   it('no longer handles the zoom chords in the view', () => {
     // The platform owns these chords; the in-view handler never fired on Windows or Linux anyway,
-    // because main claims them before the iframe sees them.
-    expect(webView).not.toMatch(/event\.key === '\+'|event\.key === '='/);
+    // because main claims them before the iframe sees them. Match the modifier-gate SHAPE (Ctrl or
+    // Cmd held) rather than the specific keys, so a reintroduced chord branch is caught however its
+    // keys are spelled.
+    expect(webView).not.toMatch(
+      /event\.ctrlKey\s*\|\|\s*event\.metaKey|event\.metaKey\s*\|\|\s*event\.ctrlKey/,
+    );
   });
 
   it('offers no zoom items in its toolbar menu', () => {
     expect(toolbar).not.toContain('onZoomIn');
+    expect(toolbar).not.toContain('onZoomOut');
+    expect(toolbar).not.toContain('onZoomReset');
     expect(toolbar).not.toContain('toolbar_menu_zoom');
   });
 });
