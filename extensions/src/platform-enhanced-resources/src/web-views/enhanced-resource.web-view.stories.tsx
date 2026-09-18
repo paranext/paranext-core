@@ -188,7 +188,7 @@ type Story = StoryObj<typeof EnhancedResourceWebView>;
  * implementation of the spec's downstream state model. Wires every control with real components and
  * sample data:
  *
- * - Hamburger view-menu (`DropdownMenu` from platform-bible-react) with the 10 menu items from
+ * - Hamburger view-menu (`DropdownMenu` from platform-bible-react) with the 11 menu items from
  *   `ui-spec-marble-form.md` lines 66-79: Show footnotes / Show translations / Hebrew script radios
  *   / Greek script radios / Copyright info / Find / Close. Each item flips story state.
  * - Real `ScrollGroupSelector` driving scroll-group state.
