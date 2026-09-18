@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { SerializedEditorState } from 'lexical';
@@ -483,26 +483,84 @@ describe('CommentThread comment-edit drafts', () => {
     const onDraftChange = vi.fn();
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const reply: LegacyComment = { ...baseComment, id: 'comment-2' };
-    const otherCommentEditorState = { ...NON_EMPTY_EDITOR_STATE };
-    // Pre-seed a stored edit for the reply (comment-2) — as a resumed draft would look after a
-    // remount. It resumes into its own edit-mode display independently of the root, which is why
-    // the root's own "Cancel edit" is picked out by index 0 (document order) rather than `getBy*`.
+    // Pre-seed stored edits for BOTH comments directly, rather than starting the root's edit via
+    // its dropdown as a live user action would: once one comment's edit is resumed, the gate this
+    // thread now enforces (see the "gates every other comment's edit affordance" tests below)
+    // correctly refuses to let a second one be opened that way — this map state can otherwise only
+    // arise from data the thread did not itself create (e.g. carried over from before the gate
+    // fix). Both entries resume into their own independent edit-mode display, which is why the
+    // root's own "Cancel edit" is picked out by index 0 (document order) rather than `getBy*`.
     const { container } = renderThread({
       isSelected: true,
       comments: [baseComment, reply],
       onDraftChange,
       canUserEditOrDeleteCommentCallback: async () => true,
-      draft: { commentEdits: { [reply.id]: otherCommentEditorState } },
+      draft: {
+        commentEdits: {
+          [baseComment.id]: NON_EMPTY_EDITOR_STATE,
+          [reply.id]: NON_EMPTY_EDITOR_STATE,
+        },
+      },
     });
 
-    // Start editing the root comment (comment-1) too — `startEditingFirstComment` targets the
-    // first dropdown trigger in document order, which is the root's.
-    await startEditingFirstComment(container, user);
-    await user.click(screen.getAllByRole('button', { name: 'Cancel edit' })[0]);
+    await user.click(within(container).getAllByRole('button', { name: 'Cancel edit' })[0]);
 
     const [, lastDraft] = onDraftChange.mock.calls.at(-1) ?? [];
     expect(lastDraft.commentEdits?.[reply.id]).toBeDefined();
     expect(lastDraft.commentEdits?.[baseComment.id]).toBeUndefined();
+  });
+
+  it('a persisted comment edit gates every other comment’s edit affordance, with nothing edited this mount', async () => {
+    const reply: LegacyComment = { ...baseComment, id: 'comment-2' };
+    const commonProps = {
+      isSelected: true,
+      comments: [baseComment, reply],
+      canUserEditOrDeleteCommentCallback: async () => true,
+      // Independent of the edit gate, and resolved by the same kind of immediately-resolving async
+      // permission check — used below as a positive-control timing signal that the permission
+      // check tied to `canEditOrDelete` has also had its chance to resolve.
+      canUserResolveThreadCallback: async () => true,
+    };
+
+    // Positive control: with no persisted edit and nothing edited this mount, both comments' edit
+    // affordance appears once the async permission check resolves. Establishes that the "resolve"
+    // signal below is a valid proxy for that resolution, and that the corpus (a rendered trigger)
+    // could in fact appear here — the thing the target assertion needs to be a meaningful negative of.
+    const control = renderThread(commonProps);
+    await control.findByRole('button', { name: 'Resolve thread' });
+    expect(control.container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(
+      2,
+    );
+    control.unmount();
+
+    // Target: a persisted edit for the root comment, with nothing edited this mount (no click, no
+    // onEditingChange call) — as a remount onto a stored draft would look. The gate must still
+    // block every comment's edit affordance, including the reply's.
+    const target = renderThread({
+      ...commonProps,
+      draft: { commentEdits: { [baseComment.id]: NON_EMPTY_EDITOR_STATE } },
+    });
+    await target.findByRole('button', { name: 'Resolve thread' });
+    expect(target.container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(0);
+  });
+
+  it('gates normally with no draft props at all: starting one edit blocks another, uncontrolled', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const reply: LegacyComment = { ...baseComment, id: 'comment-2' };
+    const { container } = renderThread({
+      isSelected: true,
+      comments: [baseComment, reply],
+      canUserEditOrDeleteCommentCallback: async () => true,
+      canUserResolveThreadCallback: async () => true,
+    });
+    await screen.findByRole('button', { name: 'Resolve thread' });
+    expect(container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(2);
+
+    await startEditingFirstComment(container, user);
+
+    // Starting the root's edit this mount must still block the reply's affordance — the ordinary,
+    // pre-remount case the fix must not have changed.
+    expect(container.querySelectorAll('[data-slot="dropdown-menu-trigger"]').length).toBe(0);
   });
 });
 
