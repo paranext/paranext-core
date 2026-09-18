@@ -429,7 +429,7 @@ describe('getViewOptionsTexts', () => {
     const downloaded: DownloadedResource[] = [
       { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
     ];
-    const { bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const { bottom } = getViewOptionsTexts(sources, undefined, { downloaded, dblResources: [] });
     expect(bottom).toContainEqual(
       expect.objectContaining({
         reference: expect.objectContaining({ id: 'proj-kjn' }),
@@ -447,7 +447,10 @@ describe('getViewOptionsTexts', () => {
     const downloaded: DownloadedResource[] = [
       { projectId: 'proj-web', name: 'WEB', fullName: 'World English Bible', language: 'English' },
     ];
-    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, {
+      downloaded,
+      dblResources: [],
+    });
     const allForWeb = [...top, ...bottom].filter((r) => r.reference.id === 'proj-web');
     expect(allForWeb).toHaveLength(1);
   });
@@ -485,17 +488,19 @@ describe('getViewOptionsTexts', () => {
   });
 
   // `downloaded` and `dblResources` are required together, so a caller cannot supply projects
-  // without the rows needed to tell whether they are already listed. Omitting `options` entirely
-  // is the remaining shape, and it appends nothing — which is what PT-4171 has yet to wire up.
-  it('appends nothing when no options are supplied', () => {
+  // without the rows needed to tell whether they are already listed. Omitting `options` entirely is
+  // the remaining shape: the referenced rows still come back, and nothing is appended beside them.
+  // The exact id list is the point — asserting only that the appended row is absent would pass just
+  // as happily against a function that returned nothing at all.
+  it('returns the referenced rows and appends nothing when no options are supplied', () => {
     const sources = makeSources({
       adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
     });
 
     const { top, bottom } = getViewOptionsTexts(sources, undefined);
 
-    const rows = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
-    expect(rows).toHaveLength(0);
+    expect([...top, ...bottom].map((r) => r.reference.id)).toEqual(['dbl-uid-123']);
+    expect(bottom).toHaveLength(0);
   });
 });
 
