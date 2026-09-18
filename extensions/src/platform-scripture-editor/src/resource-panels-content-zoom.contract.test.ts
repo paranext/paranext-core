@@ -52,3 +52,23 @@ describe('content zoom markers (Bible Texts / Commentaries panel)', () => {
     );
   });
 });
+
+describe('content zoom markers (Model Text panel)', () => {
+  const panel = source('model-text-panel.component.tsx');
+
+  it('marks the content below the label row, keeping the 42 px header fixed', () => {
+    expect(panel).toMatch(
+      /<ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"> {renderContent\(\)} <\/ContentZoomRoot>/,
+    );
+  });
+
+  it('leaves the label row outside the marked area', () => {
+    // The row's height is pinned to 42 px to line its bottom edge up with the editor's toolbar and
+    // Column 3's tab bar; scaling it with the content would break that alignment at every level
+    // but 100 %.
+    const labelIndex = panel.indexOf('tw:h-[42px]');
+    const areaIndex = panel.indexOf('<ContentZoomRoot');
+    expect(labelIndex).toBeGreaterThan(-1);
+    expect(areaIndex).toBeGreaterThan(labelIndex);
+  });
+});
