@@ -4783,7 +4783,9 @@ export type ContentZoomWheelReader = {
  */
 export type ContentZoomWheelReaderOptions = {
 	/**
-	 * Largest number of steps one event may ask for. Default: the whole 0.5–3.0 range in 0.1 steps.
+	 * Largest number of steps one event may ask for. Default: the platform's 0.5–3.0 zoom range
+	 * expressed in units of the effective {@link ContentZoomWheelReaderOptions.zoomStep} (25 at the
+	 * default step of 0.1) — so overriding `zoomStep` scales this default with it.
 	 *
 	 * @experimental This property is unstable and may change shape or disappear without notice
 	 */
